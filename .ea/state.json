@@ -13800,6 +13800,21 @@
       "status": "done",
       "updated_at": "2026-09-11T17:12:51.071945Z"
     },
+    "P32-I01-W21": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W21",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W21",
+      "model": null,
+      "scope_id": "P32-I01-W21",
+      "status": "done",
+      "updated_at": "2026-09-16T12:38:46.701937Z"
+    },
     "P32-I01-W22": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -14159,6 +14174,126 @@
       "scope_id": "P32-I01-W46",
       "status": "done",
       "updated_at": "2026-09-11T18:56:41.656156Z"
+    },
+    "P32-I01-W47": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W47",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W47",
+      "model": null,
+      "scope_id": "P32-I01-W47",
+      "status": "done",
+      "updated_at": "2026-09-16T12:40:12.040069Z"
+    },
+    "P32-I01-W48": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W48",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W48",
+      "model": null,
+      "scope_id": "P32-I01-W48",
+      "status": "done",
+      "updated_at": "2026-09-16T12:41:07.813453Z"
+    },
+    "P32-I01-W49": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W49",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W49",
+      "model": null,
+      "scope_id": "P32-I01-W49",
+      "status": "done",
+      "updated_at": "2026-09-16T12:42:01.680883Z"
+    },
+    "P32-I01-W50": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W50",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W50",
+      "model": null,
+      "scope_id": "P32-I01-W50",
+      "status": "done",
+      "updated_at": "2026-09-16T12:48:41.916265Z"
+    },
+    "P32-I01-W51": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W51",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W51",
+      "model": null,
+      "scope_id": "P32-I01-W51",
+      "status": "done",
+      "updated_at": "2026-09-16T13:06:14.181291Z"
+    },
+    "P32-I01-W52": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W52",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W52",
+      "model": null,
+      "scope_id": "P32-I01-W52",
+      "status": "done",
+      "updated_at": "2026-09-16T13:35:28.870265Z"
+    },
+    "P32-I01-W53": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W53",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W53",
+      "model": null,
+      "scope_id": "P32-I01-W53",
+      "status": "done",
+      "updated_at": "2026-09-16T13:49:26.981197Z"
+    },
+    "P32-I01-W54": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P32-I01-W54",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P32-I01-W54",
+      "model": null,
+      "scope_id": "P32-I01-W54",
+      "status": "done",
+      "updated_at": "2026-09-16T14:10:22.167125Z"
     }
   },
   "agent_sessions": {
@@ -17256,15 +17391,15 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-16T12:38:02.300169Z",
       "id": "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W20",
       "started_at": "2026-09-11T17:12:40.996472Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6": {
@@ -17273,15 +17408,15 @@
       "claimed_wave_ids": [
         "P32-I01-W21"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-16T12:38:02.302945Z",
       "id": "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W21",
       "started_at": "2026-09-11T17:16:01.968506Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260911T175913.337019Z-executor-claude-055a7cb3-0f1a-4e7c-a73f-819e90c303bb": {
@@ -17305,15 +17440,15 @@
       "claimed_wave_ids": [
         "P32-I01-W45"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-16T12:38:02.304105Z",
       "id": "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb",
       "role": "polisher",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W45",
       "started_at": "2026-09-11T17:59:34.702349Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282": {
@@ -17322,13 +17457,149 @@
       "claimed_wave_ids": [
         "P32-I01-W46"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-16T12:38:02.305195Z",
       "id": "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W46",
       "started_at": "2026-09-11T18:22:54.099723Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T122650.391424Z-executor-claude-1c48ed80-5aea-4b74-86d1-a2d7758a9264": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W47"
+      ],
+      "ended_at": "2026-09-16T12:38:02.306429Z",
+      "id": "SES-20260916T122650.391424Z-executor-claude-1c48ed80-5aea-4b74-86d1-a2d7758a9264",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W47",
+      "started_at": "2026-09-16T12:26:50.391424Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T122658.326710Z-executor-claude-94ae19af-4ee2-427a-a93a-c563d026c5f1": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W48"
+      ],
+      "ended_at": "2026-09-16T12:38:02.307813Z",
+      "id": "SES-20260916T122658.326710Z-executor-claude-94ae19af-4ee2-427a-a93a-c563d026c5f1",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W48",
+      "started_at": "2026-09-16T12:26:58.326710Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T122659.909734Z-polisher-claude-6f6ebf49-1954-4212-9d38-4d4915af37b9": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W49"
+      ],
+      "ended_at": "2026-09-16T12:38:02.309284Z",
+      "id": "SES-20260916T122659.909734Z-polisher-claude-6f6ebf49-1954-4212-9d38-4d4915af37b9",
+      "role": "polisher",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W49",
+      "started_at": "2026-09-16T12:26:59.909734Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T124222.106709Z-executor-claude-f695709e-d2f4-43d1-8b1c-edda8d08d90f": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W50"
+      ],
+      "ended_at": "2026-09-16T13:05:57.515149Z",
+      "id": "SES-20260916T124222.106709Z-executor-claude-f695709e-d2f4-43d1-8b1c-edda8d08d90f",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W50",
+      "started_at": "2026-09-16T12:42:22.106709Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T130504.427739Z-executor-claude-93849599-d521-4372-9084-1c268438df77": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W51"
+      ],
+      "ended_at": "2026-09-16T13:05:57.517313Z",
+      "id": "SES-20260916T130504.427739Z-executor-claude-93849599-d521-4372-9084-1c268438df77",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W51",
+      "started_at": "2026-09-16T13:05:04.427739Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T133412.400315Z-executor-claude-876ccda4-be36-4259-a92f-040cdb445c1c": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W52"
+      ],
+      "ended_at": "2026-09-16T13:34:45.468044Z",
+      "id": "SES-20260916T133412.400315Z-executor-claude-876ccda4-be36-4259-a92f-040cdb445c1c",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W52",
+      "started_at": "2026-09-16T13:34:12.400315Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260916T134848.584618Z-executor-claude-4073f4d3-1026-44f8-8873-0557d7e80b9a": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W53"
+      ],
+      "ended_at": null,
+      "id": "SES-20260916T134848.584618Z-executor-claude-4073f4d3-1026-44f8-8873-0557d7e80b9a",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W53",
+      "started_at": "2026-09-16T13:48:48.584618Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P32-I01-W54"
+      ],
+      "ended_at": null,
+      "id": "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P32-I01-W54",
+      "started_at": "2026-09-16T14:09:39.458293Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -17974,6 +18245,16 @@
       "size_bytes": 4259,
       "uri": "repo:.ea/artifacts/audits/2026-09-07-A-P31-closeout.md",
       "urn": "urn:eawf:v1:artifact:P31/ART-audit-2026-09-07-p31-closeout"
+    },
+    "ART-audit-2026-09-16-p32-closeout": {
+      "created_at": "2026-09-16T12:49:47.547459Z",
+      "id": "ART-audit-2026-09-16-p32-closeout",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "5a1897f114b852ef33d770a1f561d4f0f409390b885407165e588d7241458c50",
+      "size_bytes": 8493,
+      "uri": "repo:.ea/artifacts/audits/2026-09-16-A-P32-closeout.md",
+      "urn": "urn:eawf:v1:artifact:P32/ART-audit-2026-09-16-p32-closeout"
     },
     "ART-research-2026-05-24-python-package-structure": {
       "created_at": "2026-05-24T00:47:22.443335Z",
@@ -18706,6 +18987,28 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-audit-2026-09-07-p31-closeout",
       "scope_id": "P31-I01",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A-P32-CLOSEOUT": {
+      "check_results": [],
+      "created_at": "2026-09-16T12:49:48.515934Z",
+      "id": "A-P32-CLOSEOUT",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-audit-2026-09-16-p32-closeout",
+      "scope_id": "P32",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A-P32-I01-EVAL": {
+      "check_results": [],
+      "created_at": "2026-09-16T12:49:49.478389Z",
+      "id": "A-P32-I01-EVAL",
+      "integrity_results": [],
+      "kind": "evaluation",
+      "report_artifact_id": "ART-audit-2026-09-16-p32-closeout",
+      "scope_id": "P32-I01",
       "status": "complete",
       "verdict": "minor"
     },
@@ -21372,6 +21675,253 @@
       "status": "closed",
       "title": "eawf sync ignores workspace profile overlays when composing"
     },
+    "B134": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:03.638696Z",
+      "description": "Phase audit F3: W08, W13, W20, W26 and W41-W46 closed with required gates and zero receipts, because the band-scoped close gate skipped them until W48. Their argv now resolve and pass when run by hand, but no verb re-runs a closed wave's gates and binds the receipts, so the store still cannot show they ran. Add that path and run it over these waves.",
+      "id": "B134",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Bind receipts to the P32 waves that closed without running gates"
+    },
+    "B135": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:04.834587Z",
+      "description": "Two defects in one path. A close that fails commits its terminal row before its finally block removes the workspace, so a shutdown in that window cancels a cleanup the executor has not started and leaks the workspace. And cleanup calls git worktree remove on directories git does not list, which reported harness_fault on W44 and W20 after real work finished. Clean up before the terminal commit and remove what the attempt made.",
+      "id": "B135",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Remove a close workspace the way the attempt created it"
+    },
+    "B136": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:06.249038Z",
+      "description": "W16 added generations/ (generations, selection pointer, epoch marker, cutover journal, restore point) with no commit-policy row. It only exists in declared disposable canaries today, so nothing reds, but the native epoch-2 path in P33 puts it in live trees. The tree holds transient .staging-* directories that must never be committed, so a single committed row for the whole directory is wrong; split the classification.",
+      "id": "B136",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Classify the epoch-2 generation tree before the native path lands"
+    },
+    "B137": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:07.468058Z",
+      "description": "W48 fixed the daemon close gate only. The CLI direct-write fallback and the readiness pre-flight still narrow a mechanical non-band wave to advisory under the band-scoped quality profile, so a daemonless close of such a wave runs none of its declared gates. Mirror W48 there, or refuse the daemonless close of a gate-bearing wave.",
+      "id": "B137",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Run a band-narrowed wave's gates on the daemonless close path"
+    },
+    "B138": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:08.902571Z",
+      "description": "Phase audit F4: W44 added Release.adoption and the adopt verb but closed with zero gates and three attested legacy criteria. Its three test files exist and pass (77 tests), so the behaviour is covered, yet nothing at close would have noticed a regression. Attach command gates to the adoption criteria through spec repoint or a follow-up wave.",
+      "id": "B138",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Gate the release adoption path W44 shipped without gates"
+    },
+    "B139": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:10.399869Z",
+      "description": "Phase audit F5: the idle surface is 204 against a 204 ceiling. P32 added validation_rule_payload, ambiguity_label, render_state_diagram, run_census (tools-only caller), compact_terminal_task, recover_store_tree, append_correction and apply_transition, and moved build_receipt_probes still idle. Wire each to its producer as the native epoch-2 path lands, drop the rest, and lower the ceiling; never raise it.",
+      "id": "B139",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Wire or drop the eight idle functions P32 added"
+    },
+    "B140": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:11.909742Z",
+      "description": "Phase audit F6: .pre-commit-config.yaml excludes the whole ^tests/fixtures/migration/ and ^tests/golden/kernel/migration/ prefixes from detect-secrets. A scan found 79 hits, all digests, SHAs and id-shaped strings, and no credential, but the exclusion is open-ended. Replace it with a baseline entry or an enumerated file list.",
+      "id": "B140",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Narrow the migration fixture secrets exclusion to named files"
+    },
+    "B141": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:13.300472Z",
+      "description": "Phase audit F7: skills/audit.py:423, skills/security_review.py:89 and surfaces/cli/commands/evidence_backlog.py:147 still execute gates in process, outside the sandboxed gate child W27 and W40 introduced for the close scorer. Route them through run_gate_out_of_process or document why each is exempt.",
+      "id": "B141",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Move the last in-process gate paths into the sandboxed child"
+    },
+    "B142": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:14.796552Z",
+      "description": "AuditorReportBody requires each criterion echoed verbatim, and the model repeatedly appends (deterministic=true), so three schema re-asks fail and the attempt is typed an infrastructure retry. It cost a full auditor round on W17. Either strip a trailing parenthetical before comparing or stop showing the model an annotated criterion.",
+      "id": "B142",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Normalise the auditor's criterion echo before the verbatim check"
+    },
+    "B143": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:16.175093Z",
+      "description": "Release.adoption shipped in 0.7.0.dev2 without a schema_version bump, which the changelog states as a limitation: a reader pinned to the previous version cannot tell a record written before the field existed from one that was not adopted. Bump the version with a migration note at the next checkpoint.",
+      "id": "B143",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Bump the state schema for the Release.adoption field"
+    },
+    "B144": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:17.529894Z",
+      "description": "The publication runbook's step 2 is hand-assembled JSON because no verb moves a release record from DRAFT to CANDIDATE, so an approval is only as trustworthy as that document. P33-I01-W01 drives dev2 through this edge, so the verb is needed there.",
+      "id": "B144",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Add an operator verb for the release DRAFT to CANDIDATE edge"
+    },
+    "B145": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:19.049964Z",
+      "description": "quiesce_volatile_chrome resets app.degraded but leaves the StateBinding probe running; with no daemon its third failed probe flips degraded about a second after mount, so a golden captured on a slow host within that window can show the degraded banner. W47 parked the probe in one feed test; the harness should detach or park the probe during quiesce.",
+      "id": "B145",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Stop quiesce leaving the state binder's pending degraded flip"
+    },
+    "B146": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:20.942117Z",
+      "description": "The promoted contract metadata uses scale_band for both the environment class and the corpus magnitude, which breaks the one-name-per-concept rule. W20 flagged it rather than renaming mid-wave. Rename one of the two uses and migrate the metadata.",
+      "id": "B146",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Split scale_band into its two concepts"
+    },
+    "B147": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:23.022353Z",
+      "description": "W01, W20 and W44 closed with file_scopes that no longer match the files their commits touched, and wave update refuses a CLOSED wave, so the record stays wrong. Mirror spec repoint-gates: rewrite file_scopes only, under a fingerprint guard, from the landed commit.",
+      "id": "B147",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Allow a bounded file-scope repoint on a closed wave"
+    },
+    "B148": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:30:25.219349Z",
+      "description": "Phase audit F9 and F10: W09 CR-01 names the P14-W02 shorthand, but the ambiguous one in the pinned corpus is P14-W01 (the test covers both). W11's hand-built document.json carries invented P03 archived and B003 closed rows with no marker. Correct the text and mark or split the invented rows.",
+      "id": "B148",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Correct W09's criterion text and mark W11's invented fixture rows"
+    },
+    "B149": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:54:12.831788Z",
+      "description": "state.json is exempt from path-leak-lint and email-leak-lint (_is_state_bookkeeping_path in surfaces/cli/commands/hook.py) and from detect-secrets, yet its free-text fields take arbitrary agent and operator text; that is how the P08 absolute worktree paths went public. Scan only the added lines of the staged diff with the path and email patterns plus targeted token regexes, keep the detect-secrets exclusion, and prove the gate reds on a seeded leak.",
+      "id": "B149",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Lint the lines each commit adds to state.json for paths and tokens"
+    },
+    "B150": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:54:13.680637Z",
+      "description": "Nothing under kernel/state scrubs wave descriptions, outcomes, criteria text, backlog titles, incident text or close failure details on write; only the agent-report store rejects a body that fails scan_text. Reuse that check on the daemon mutation path so a leak is refused at write time rather than caught at commit time.",
+      "id": "B150",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Scrub free text on the daemon's state.json write path"
+    },
+    "B151": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-16T12:54:14.560620Z",
+      "description": "waves[*].sessions[*].session_id, runtime_baseline and runtime_latest session ids carry the Claude Code session UUID, the one value that names a local transcript file, and a few session rows carry subprocess_pid. Neither is needed once a session closes; hash the UUID or drop it and the pid at close.",
+      "id": "B151",
+      "intent": null,
+      "priority": "P3",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Stop persisting vendor session UUIDs and process ids in state"
+    },
+    "B152": {
+      "closed_at": "2026-09-16T13:36:21.622755Z",
+      "commit": "659906a3",
+      "created_at": "2026-09-16T13:11:16.867236Z",
+      "description": "test_doctor_mode_snapshot drifted on the macos-26 leg of PR #39 (run 35098441640): the footer heartbeat dot was blank at capture. quiesce_volatile_chrome forces the dot lit with ack() and captures compositor strips with no frame in between, so the pulse phase still leaks into goldens. Pause the heartbeat's interval timer during quiesce and pump one frame, so the dot is lit and cannot re-blank.",
+      "id": "B152",
+      "intent": null,
+      "priority": "P2",
+      "resolution": "Resolved by P32-I01-W52: the snapshot quiesce now lights the active screen's heartbeat; the filed timer mechanism was never reached because App.query returned the home screen's heartbeat after a mode switch.",
+      "scope_id": "EAWF",
+      "status": "closed",
+      "title": "Freeze the footer heartbeat before a golden capture"
+    },
     "B70": {
       "closed_at": null,
       "commit": null,
@@ -21743,6 +22293,106 @@
       "wave_id": "P31-I01-W36",
       "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
     },
+    "close-21b7ad679c1061955af87c14": {
+      "apply_event_id": "EV-1aa943624f02",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "9a49f8d258c7b26747f148426acc7559b96b5081",
+      "commit_identity_digest": "sha256:76663d1cfb9f6f513157c33e0709cc10488dde0807afa927fdb5a416bc10ccef",
+      "criteria_digest": "ea0bdceb27de466d9dab8c9875ad50e3dd109d1299082e0f5220b8f13509b31e",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "07d307e5f381617c223cea17b78d49e2b216072a99f9fcca3d3f7267e9a361d6",
+      "gate_receipt_ids": [
+        "GR-52bff20b039caddf5c9fbdc9df0d8f1a",
+        "GR-36662c94552c5c2e4e98d5e9cb6ef7bb",
+        "GR-a3650fb3e22fe228850efbdfd69cecd1"
+      ],
+      "generation": 1,
+      "id": "close-21b7ad679c1061955af87c14",
+      "idempotency_key": "6a18a43c803891c0839cc899522da9eed27febd36ff8eb0e7a0bfb69bc575ec7",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "9a49f8d258c7b26747f148426acc7559b96b5081",
+      "integration_id": "integration-d8393ad54ab0dfdf516a7641",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The snapshot quiesce lights the active screen's heartbeat instead of the home screen's, so goldens captured after a mode switch stop riding the pulse phase; a doctor-mode case reds on the old lookup and the 422 TUI snapshot tests pass. Resolves B152.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T13:34:48.382446Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "91619628eeff0320f31ec24254c0588c11c321390e345af7a133612b193f41eb",
+      "started_at": "2026-09-16T13:34:48.739263Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T13:35:29.861343Z",
+      "tokens_consumed": null,
+      "tree_sha": "99231fc5f9df018aff5f958312f9c59b53da4b5d",
+      "updated_at": "2026-09-16T13:35:29.861338Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W52",
+      "wave_revision_digest": "b255ed95cb4d9586949e8f885d9685b448ec2bfea6116476813a6915b09d40f7"
+    },
+    "close-29669f28ce1abdf805bcfe11": {
+      "apply_event_id": "EV-a9ce5ca7172d",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "028dac39f9b166b4fce6b0246249f43d4addb6c7",
+      "commit_identity_digest": "sha256:72dfae2b4df30ec80c25cebec75b894d4a616ec26943149dfcfebb6240c19058",
+      "criteria_digest": "e850a3c66f2b13e05e19f4817c9f8ae532933a30929690cd184eb09cf9df97a5",
+      "dependency_binding_digest": "7d395d118a9986d3f374cf61944dba6576c4a5fd255bffea21d481e48d5f3e48",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "87bd4097c8cae7326862e01ef334ca0076bee71fd628d9c2e5a3f0d48e7d8aec",
+      "gate_receipt_ids": [
+        "GR-bf09f4005f7036e7063f00a46a8b1f32",
+        "GR-1cd4ebfc9274a4b5b3c76a4f7b7a5d05"
+      ],
+      "generation": 1,
+      "id": "close-29669f28ce1abdf805bcfe11",
+      "idempotency_key": "199efef49e646446a3d1d81c6a0650bfeb236c0971f1e8be6ce9dcde579351fc",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "028dac39f9b166b4fce6b0246249f43d4addb6c7",
+      "integration_id": "integration-368c80dafa48eda5081a6c96",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "A mechanical close scores only criteria with an obliged gate, so a sampled wave with an attested gated criterion or an advisory-only gate closes on its decisive gates without reading a verdict; both profile shapes red without the filter. Stale advisory-only wording corrected, the CLI-tree cache keys on the callback function, and eawf init ignores .ea/specs.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T13:05:59.739357Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "455bdc735b6be1bbbd0c0795c605b0fcae2e7ed7e3009d4702c5032c6b7ce08b",
+      "started_at": "2026-09-16T13:06:00.055672Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T13:06:18.970743Z",
+      "tokens_consumed": null,
+      "tree_sha": "0ab8f42f36f8b68b88c884bcc396d3a4eb67f69f",
+      "updated_at": "2026-09-16T13:06:18.970739Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W51",
+      "wave_revision_digest": "f2013413978f66ad89eff6225dd4e9b0719351e24c1b53ac68e76a4e7488401d"
+    },
     "close-2f6b71832b1f283c842c9aa4": {
       "apply_event_id": null,
       "artifact_refs": [
@@ -21883,6 +22533,57 @@
       "waiver_decision_ids": [],
       "wave_id": "P31-I01-W06",
       "wave_revision_digest": "18c7684d498620c6a4dd7653b48fdffdc064ea4d4185cc1d905bee3bae54bfc7"
+    },
+    "close-40983b9ee377453cc2472c4e": {
+      "apply_event_id": "EV-f80469018c83",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "6a57b241c5884f1f76fa16a75f1714fe634988b7",
+      "commit_identity_digest": "sha256:ee6fe097ad2ff35bdec028aaa54fa0f8ee6c3b276e127c9650928e9a1be91cb0",
+      "criteria_digest": "582f4404fa9183bf3d34204573010eb42c862bfa88bcf99b25fd34e0fe8c2b82",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "b310d7475e54a2f60a05fc27fbc685121f549b2d31c58ca29e3abfe65315d2b4",
+      "gate_receipt_ids": [
+        "GR-458007687ab8252bef2ada1c0246eb06",
+        "GR-0638be667a9bab5313448f21d5c3f7c4",
+        "GR-caf5b72ab81b4e6376c6567249663b2b"
+      ],
+      "generation": 1,
+      "id": "close-40983b9ee377453cc2472c4e",
+      "idempotency_key": "d73b68495032d5c88ba8e8b1610c08eaca4fe490404ac78ec070cb61d763bda5",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "6a57b241c5884f1f76fa16a75f1714fe634988b7",
+      "integration_id": "integration-261eeb9a60edbe646e288148",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Coverage workers build each Typer app's Click tree once, cutting coverage-retained memory over a full -n 4 --cov run from 14.0 GB to 0.17 GB; the refused-gate lane waits for the close worker to exit, with a lagging-cleanup case that reds on the old helper; the feed recovery test parks the binder probe, 41/500 to 0/500 failures under load.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T12:39:42.486396Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "c8b89543c879b5be7a1975d962c19a9d8de13f5e86d734aa664aa62c03bac661",
+      "started_at": "2026-09-16T12:39:42.833957Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T12:40:29.342903Z",
+      "tokens_consumed": null,
+      "tree_sha": "3428282f2a31696e4163446a89c5808982a23e64",
+      "updated_at": "2026-09-16T12:40:29.342898Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W47",
+      "wave_revision_digest": "14df11d3e760d7f83aa4c5e16ad2e091aec0f588374ebdaba70299246eee6056"
     },
     "close-427184bc865012866b919ba4": {
       "apply_event_id": "EV-080db4bbabf3",
@@ -22133,6 +22834,57 @@
       "wave_id": "P32-I01-W20",
       "wave_revision_digest": "b2b7c30adefe39ccacfe70d6bcd49b18e8dd6219bba56e49cf52d066748d4835"
     },
+    "close-65f7aa94ffb4258d60ba0af3": {
+      "apply_event_id": "EV-87b0eab3fe19",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "cdd65bec7f5dd4508212565e84ab9881dd4e930b",
+      "commit_identity_digest": "sha256:8837b082861f968b0b66526cd297fc7a93ac552ee5aa59fb78b4c18a9e8a08eb",
+      "criteria_digest": "644f6cd5b6dd9e9ba242e75879031a3c7bcc850e58c81d84ccdb6d57663d7941",
+      "dependency_binding_digest": "4fb8fb48b640f47e89e452e8eebeb69ae37a2e3e046b50de0eed69cbf02216b2",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "3cb43c4b60e4b2b215b0669b3b45be5dd7ef36c95294539fa12148c77749666e",
+      "gate_receipt_ids": [
+        "GR-aadcc517e53a59202a5ba64eafc581d1",
+        "GR-8029726f1b1d44e0941baf3ec34be0b0",
+        "GR-819b73640024619f2567747fb614a413"
+      ],
+      "generation": 1,
+      "id": "close-65f7aa94ffb4258d60ba0af3",
+      "idempotency_key": "e0caa70eb9450ec86fdf9b9d87cc6f30b92326c45297328bf4ba9372ecdcf242",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "cdd65bec7f5dd4508212565e84ab9881dd4e930b",
+      "integration_id": "integration-7a49cbab26d58269cc089e63",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Cut 0.7.0.dev2: version and changelog agree with a section naming the migration limits, REL-0.7.0.dev2 opens as a distinct DRAFT only from the terminal dev1 record behind a succession guard, and the dev2 waiver count and tag chokepoint are bound. Publication and the BAKED observation moved to P33-I01-W01 because approve refuses on an unmerged branch.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T12:38:20.133944Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "81c1d3908429561e5db73f1f4055e1c85988caf4f9ae904405870af3db5f7a01",
+      "started_at": "2026-09-16T12:38:20.504403Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T12:39:03.343282Z",
+      "tokens_consumed": null,
+      "tree_sha": "4f70b9dc7399812fdaaeb2d99ac462659ec823f3",
+      "updated_at": "2026-09-16T12:39:03.343277Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W21",
+      "wave_revision_digest": "55ffc97af97fd8c89061053adf7c20c5ffe658981cddd15442d2258b93089382"
+    },
     "close-6921fa35b87740cf1711e15a": {
       "apply_event_id": "EV-3289ac9b4542",
       "artifact_refs": [],
@@ -22379,6 +23131,55 @@
       "wave_id": "P31-I01-W52",
       "wave_revision_digest": "c62b234e85259563da41d869e00a03765e826241eb06becdca0539126e562818"
     },
+    "close-797d3d2b49c02782a722d006": {
+      "apply_event_id": "EV-8e51ade92a29",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "dd58540162ca9265005b804935733a955c523888",
+      "commit_identity_digest": "sha256:9899e1de97c56a87fdacadf11e26e66c239aa4230cac7edcbe3770709ac1c822",
+      "criteria_digest": "2b8159bc70d1f9939e238222927e6365ab63efcea2debeb443f8e0b0ee292b49",
+      "dependency_binding_digest": "6a0677980e4f0f48027568004d47a89e67e32582f10a9729de951f2596a4eb82",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "fb96d0ea1be186b105ce256bab7b62e97a0cf86ba414fca50687fea275584eda",
+      "gate_receipt_ids": [
+        "GR-79395566f16c9090e532eb6c8a7ddf2c",
+        "GR-61dfaf7fad5a7262ee6743232a06ce32"
+      ],
+      "generation": 1,
+      "id": "close-797d3d2b49c02782a722d006",
+      "idempotency_key": "a369ecd307a15809b1be09d4f08e9e839108747ce805b67408d9948c3d287631",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "dd58540162ca9265005b804935733a955c523888",
+      "integration_id": "integration-73120e8ee68f0bb042a75cd6",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The mode-screen quiesce case stills the heartbeat pulse before mount (160/160 under load, reds on the old lookup), and the portalock heartbeat test reads the lockfile across the empty rewrite window, with an empty-first-read case that reds without the retry.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T14:10:03.236938Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "ddc9062f8d57f2c48f96bc0093affa76f931cdc26688545b8833fec1ca2401fc",
+      "started_at": "2026-09-16T14:10:03.607361Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T14:10:32.528100Z",
+      "tokens_consumed": null,
+      "tree_sha": "8f9fbb41fc08847a69b4d5bfbf75cc5229417650",
+      "updated_at": "2026-09-16T14:10:32.528094Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W54",
+      "wave_revision_digest": "3c64a1ca92044dbb24493a73aaa21b022021b17f6ad5b26bc6d96ae96970847a"
+    },
     "close-7ccdd5358eb39d86bc37fb98": {
       "apply_event_id": null,
       "artifact_refs": [],
@@ -22575,6 +23376,55 @@
       "wave_id": "P31-I01-W36",
       "wave_revision_digest": "28166d383a29b5b00865f50c9ec4ac902b47ca48a1c43f74c48632bdd13375aa"
     },
+    "close-8aa9e1b2581fe14706fedad1": {
+      "apply_event_id": "EV-d401dc41b392",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "ff96aeb5c293a82abbc4cb4e49232fe0ca792ff3",
+      "commit_identity_digest": "sha256:f0d1011fa438fe80f6e6c9808a338edebf0f49d67d8f119c1c3ada98ad6f3d2d",
+      "criteria_digest": "711b7c8c3b7aeb9ab166e2f61fc6cb56de90b72359346ec8cf92d00cbb2384d5",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "f217d8963d84b5b4eec4db6d5fdd1b299e43e2e59fdb5e82767d0ebdb7f61ee4",
+      "gate_receipt_ids": [
+        "GR-e26179fc1d502ba015fa3e451226d6a8",
+        "GR-1d82788a0fe356858c6b392dbaa0e107"
+      ],
+      "generation": 1,
+      "id": "close-8aa9e1b2581fe14706fedad1",
+      "idempotency_key": "44747fd678a6e30535dd2f31b4bc3064ace0493ef4a1e677d72ddf571298fb86",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "ff96aeb5c293a82abbc4cb4e49232fe0ca792ff3",
+      "integration_id": "integration-3af5fbb7b2b98601b077a649",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Error-path tests cover every cross-field validator in the epoch-2 value, batch and track models (100% branch on those modules) and the reversed-edge and self-binding dependency refusals; the state package measures 99.74% line and 98.70% branch over the CI-mirror run, clearing the 98/95 gate.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T12:48:30.420332Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "1643006f8cb5ae1cde31ce49b70d5ef42fdc66e9fe89bdb26de53a94a5ea41cb",
+      "started_at": "2026-09-16T12:48:30.767187Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T12:48:46.505304Z",
+      "tokens_consumed": null,
+      "tree_sha": "f3f660ab58f1f62119fd0ed86e9656cfb7571877",
+      "updated_at": "2026-09-16T12:48:46.505299Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W50",
+      "wave_revision_digest": "e6aba9748f8eda8807b80bb8dc91cdf2c02e64fa447e1015e7a9ef739dc02e8c"
+    },
     "close-94c5faf4525b3547dbc3cf0b": {
       "apply_event_id": "EV-14fe193c3bcb",
       "artifact_refs": [],
@@ -22625,6 +23475,53 @@
       "waiver_decision_ids": [],
       "wave_id": "P32-I01-W07",
       "wave_revision_digest": "e7cca6056505a2bf607e186e6ec98fe7b4d252aa3c266814327391ba50e346d3"
+    },
+    "close-9510de9d0eea4b4248346e82": {
+      "apply_event_id": "EV-d233c1d04515",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "9d1164fb866082c936d54dbcc3fabe653234b1cc",
+      "commit_identity_digest": "sha256:86da7afb603fb64225a3e3d15ac8447be05792a0b03e6a107a606607314801c3",
+      "criteria_digest": "70a29ec97b9578b4926af80c81640eede03c3f80a3e125edd359996526893be4",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "d480025e0dd3039293f3b35ffd13c7f92a3e179972289d13621d8d458f2753a3",
+      "gate_receipt_ids": [
+        "GR-7ec53456f1b21af51fcb0a2cc2cc5156"
+      ],
+      "generation": 1,
+      "id": "close-9510de9d0eea4b4248346e82",
+      "idempotency_key": "dbdd772a6e32171c3f95dcd88dd10d78980a83de47714a3b72d697a2325bb3c8",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "9d1164fb866082c936d54dbcc3fabe653234b1cc",
+      "integration_id": "integration-0ce1c870e6434cc1c2c7beb5",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": ".ea/specs is gitignored and classified not committed with a census test; the dev2 changelog states rollback's boundaries and the apply's eleven crash points correctly; every changelog list takes surrounding blank lines.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T12:41:40.756822Z",
+      "required_gate_ids": [
+        "G-01"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "7771a589c8277a2040e80ee56a4f4601d660696effd074cf4a5c51b9c0a8f239",
+      "started_at": "2026-09-16T12:41:41.624416Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T12:42:03.342738Z",
+      "tokens_consumed": null,
+      "tree_sha": "80d88772e5870d62a8aba86be4258829f75fd9de",
+      "updated_at": "2026-09-16T12:42:03.342731Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W49",
+      "wave_revision_digest": "dff860322ffb56c2bf0faab9f9c3355b5e5203e2522df7728076c900d76d72d6"
     },
     "close-98a66b478dd804addce946c3": {
       "apply_event_id": "EV-69e88f37c2dc",
@@ -22981,6 +23878,57 @@
       "wave_id": "P32-I01-W01",
       "wave_revision_digest": "49e7d21c67ff4946c65413d63dbebf28506e4832457fcf9a053e6fb890caa943"
     },
+    "close-cf927c0e4865ba100e1b5087": {
+      "apply_event_id": "EV-870802c45e3c",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "commit_identity_digest": "sha256:42875e9aa63c88590d9471964d6b3fb3ef5e8791e298c47a0715e2e557ed892e",
+      "criteria_digest": "8b76d0db1518c9171f996640789661d17e38b303add279a8320930b3e1d48a3c",
+      "dependency_binding_digest": "e97fa537578222fcd721af9119ba58a8fb9f4def3d21311e9e5505e7c16e9774",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "879cfb5f19da0aa613c37de74b3d7bb282507d91b1e6c929c120ede1b560ef14",
+      "gate_receipt_ids": [
+        "GR-b12a06b181f300604b249563874ba2d3",
+        "GR-fe6e654d2784a3772a83e6bb93d9bbc8",
+        "GR-c682f47cb699daf9a9d9fa6bde408382"
+      ],
+      "generation": 1,
+      "id": "close-cf927c0e4865ba100e1b5087",
+      "idempotency_key": "57b38cbc045d67316690f8dc7548d65143e8da9ab0b0a2a4e346e34b70be4943",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "integration_id": "integration-df00e9918a4542cdb45947b9",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The close gate returns early only when the merged profile enforces nothing, so a band-narrowed mechanical wave scores its deterministic tier and meets the receipt floor while the jury and auditor stay withdrawn; the close suites run under both profile shapes and the six band-scoped cases red on the old return.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T12:40:33.222567Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "1e99d848ad48660d041db777012271dd13e59725d4d36ad80bfc0118baa2d22f",
+      "started_at": "2026-09-16T12:40:33.734551Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T12:41:37.065270Z",
+      "tokens_consumed": null,
+      "tree_sha": "01c0c83bc5ea6a656d7e209afcda7e2ab97be669",
+      "updated_at": "2026-09-16T12:41:37.065265Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W48",
+      "wave_revision_digest": "6686adeff9be9f105c87a7f20579bea1986ae37848ba44efb7c87eedf4395513"
+    },
     "close-d6a5f6aed70ea3237f1fa08f": {
       "apply_event_id": null,
       "artifact_refs": [],
@@ -23082,6 +24030,55 @@
       "waiver_decision_ids": [],
       "wave_id": "P31-I01-W09",
       "wave_revision_digest": "552a6422cb2fe47dd040b1e69a21913e3440e275df2ed4b0339ae6ed194ef81b"
+    },
+    "close-dca0c5d2aae7b817caec902c": {
+      "apply_event_id": "EV-d6775a493965",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "c66ab89f38c3423f8fd6499e0672507ea10dc953",
+      "commit_identity_digest": "sha256:458fe7490914f0ca6ab1ec1434938a2ec03b95a42b629db08dc8ceceaf413af1",
+      "criteria_digest": "f3a58583770baa27809968418c22cf9b089234cb0a51e1cde9ffdd665d6a4525",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "80e839ac6723eac42e700fba2054c7ed65a243925fd64a6ccbf268599282b9d3",
+      "gate_receipt_ids": [
+        "GR-fb908eee6c26510f6373e826bb9e7707",
+        "GR-b55fcb53c23e8077cb7f6bc05995d46e"
+      ],
+      "generation": 1,
+      "id": "close-dca0c5d2aae7b817caec902c",
+      "idempotency_key": "19d2dfbd5b9b6b16b8a28a8b219200b1e160675ace0a53485f4b51cef46f9dce",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "c66ab89f38c3423f8fd6499e0672507ea10dc953",
+      "integration_id": "integration-157b05280583079f9face076",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The CLI cold-import budget runs only in the serial perf step in CI and in just test and test-all, beside the TUI budget; a placement check reds if either timing suite returns to a parallel run, and both live checks fail on the previous layout.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-16T13:49:11.810082Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "65c8fc495bf6075c57d4cd18c955b4b8a89e72ceb69a8ea69dd3abd869dcbfac",
+      "started_at": "2026-09-16T13:49:12.182204Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-16T13:49:32.342993Z",
+      "tokens_consumed": null,
+      "tree_sha": "889e40b12894a8d07bd372148445c6fd94f86fb3",
+      "updated_at": "2026-09-16T13:49:32.342990Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P32-I01-W53",
+      "wave_revision_digest": "3d809a3538f49481282b844440d1d8abafdb73935ed3c935634b0bc6da843c3c"
     },
     "close-dfc4380d53ee916407644a49": {
       "apply_event_id": "EV-ff10a91721eb",
@@ -23527,14 +24524,10 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260911T171240.996472Z-operator-claude-77a63699-d2f0-4457-9586-cfa8d898d95c",
-      "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6",
-      "SES-20260911T175934.702349Z-polisher-claude-e5d3aa03-fcff-42e4-a9c6-a167ac8f9ceb",
-      "SES-20260911T182254.099723Z-executor-claude-c11b55de-4103-40de-80f1-27803a2ea282"
+      "SES-20260916T134848.584618Z-executor-claude-4073f4d3-1026-44f8-8873-0557d7e80b9a",
+      "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f"
     ],
-    "active_wave_ids": [
-      "P32-I01-W21"
-    ],
+    "active_wave_ids": [],
     "iter_id": "P32-I01",
     "phase_id": "P32",
     "project_code": "EAWF",
@@ -40800,7 +41793,15 @@
         "P32-I01-W43",
         "P32-I01-W44",
         "P32-I01-W45",
-        "P32-I01-W46"
+        "P32-I01-W46",
+        "P32-I01-W47",
+        "P32-I01-W48",
+        "P32-I01-W49",
+        "P32-I01-W50",
+        "P32-I01-W51",
+        "P32-I01-W52",
+        "P32-I01-W53",
+        "P32-I01-W54"
       ]
     },
     "P33-I01": {
@@ -40816,7 +41817,9 @@
       "status": "planned",
       "title": "Land the native epoch-2 path and the console in disposable canaries",
       "trigger": "none",
-      "wave_ids": []
+      "wave_ids": [
+        "P33-I01-W01"
+      ]
     },
     "P34-I01": {
       "audit_id": null,
@@ -42203,7 +43206,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-11T18:57:08.863516Z",
+  "updated_at": "2026-09-16T14:10:53.628302Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -43284,6 +44287,39 @@
       "start_fact_ref": "integration:integration-19ed5c522d08ed4d4c3e4129",
       "tree_sha": "d8f96730eba8b0d756e6e536e06aa1ddecc43688",
       "wave_id": "P32-I01-W21"
+    },
+    "P32-I01-W48::P32-I01-W43": {
+      "bound_at": "2026-09-16T12:26:59.163737Z",
+      "dep_wave_id": "P32-I01-W43",
+      "generation": 1,
+      "integrated_sha": "3774d7b0d8af717429735c92b17cc498b94abcde",
+      "integration_id": "integration-63bd86ec76a3dfc3666c27df",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-63bd86ec76a3dfc3666c27df",
+      "tree_sha": "1927f7e77b12681c1dd17195b6c3748b703cac77",
+      "wave_id": "P32-I01-W48"
+    },
+    "P32-I01-W51::P32-I01-W48": {
+      "bound_at": "2026-09-16T13:05:05.292843Z",
+      "dep_wave_id": "P32-I01-W48",
+      "generation": 1,
+      "integrated_sha": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "integration_id": "integration-df00e9918a4542cdb45947b9",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-df00e9918a4542cdb45947b9",
+      "tree_sha": "01c0c83bc5ea6a656d7e209afcda7e2ab97be669",
+      "wave_id": "P32-I01-W51"
+    },
+    "P32-I01-W54::P32-I01-W52": {
+      "bound_at": "2026-09-16T14:09:40.738860Z",
+      "dep_wave_id": "P32-I01-W52",
+      "generation": 1,
+      "integrated_sha": "9a49f8d258c7b26747f148426acc7559b96b5081",
+      "integration_id": "integration-d8393ad54ab0dfdf516a7641",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-d8393ad54ab0dfdf516a7641",
+      "tree_sha": "99231fc5f9df018aff5f958312f9c59b53da4b5d",
+      "wave_id": "P32-I01-W54"
     }
   },
   "wave_integrations": {
@@ -43319,6 +44355,22 @@
       "tree_sha": "054987ce99495929d9bcc6f6e003cc1cb5f24ab7",
       "wave_id": "P31-I01-W36"
     },
+    "integration-0ce1c870e6434cc1c2c7beb5": {
+      "base_sha": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "candidate_sha": "9d1164fb866082c936d54dbcc3fabe653234b1cc",
+      "created_at": "2026-09-16T12:41:38.750658Z",
+      "diff_digest": "23dd09afd62eee024449e9db4b66f1ea9d9902f7086a1659d75c88ae1cea0e30",
+      "generation": 1,
+      "id": "integration-0ce1c870e6434cc1c2c7beb5",
+      "integrated_sha": "9d1164fb866082c936d54dbcc3fabe653234b1cc",
+      "kind": "adopt",
+      "reason": "inline wave: landed as 9d1164fb on the phase branch",
+      "spec_digest": "7771a589c8277a2040e80ee56a4f4601d660696effd074cf4a5c51b9c0a8f239",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "80d88772e5870d62a8aba86be4258829f75fd9de",
+      "wave_id": "P32-I01-W49"
+    },
     "integration-0d2bf4b2141d7db0baf3d259": {
       "base_sha": "e8e38f8b6feb347b08bc448faa3668d78e0cb04c",
       "candidate_sha": "be1aeebef5932baa857a6e8fdb1762c6b9af7465",
@@ -43350,6 +44402,22 @@
       "supersedes_id": null,
       "tree_sha": "4ddca4ece85b58c139b48af3847fc5e4d66036c4",
       "wave_id": "P31-I01-W07"
+    },
+    "integration-157b05280583079f9face076": {
+      "base_sha": "9704fcd4349d1d899e1029679a441717da208bd4",
+      "candidate_sha": "c66ab89f38c3423f8fd6499e0672507ea10dc953",
+      "created_at": "2026-09-16T13:49:10.597147Z",
+      "diff_digest": "bb7bece7d17046e34967d87044b44621024e359f7869ae429f46207590eff45e",
+      "generation": 1,
+      "id": "integration-157b05280583079f9face076",
+      "integrated_sha": "c66ab89f38c3423f8fd6499e0672507ea10dc953",
+      "kind": "adopt",
+      "reason": "inline wave: landed as c66ab89f on the phase branch",
+      "spec_digest": "65c8fc495bf6075c57d4cd18c955b4b8a89e72ceb69a8ea69dd3abd869dcbfac",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "889e40b12894a8d07bd372148445c6fd94f86fb3",
+      "wave_id": "P32-I01-W53"
     },
     "integration-169d0e37bade6c295f560c3d": {
       "base_sha": "2d7f2bd791a894d369c16193da3ec10e0fc7ff1f",
@@ -43463,6 +44531,22 @@
       "tree_sha": "affb7dcb4d4ebf9301bff66a148a6bd45503576b",
       "wave_id": "P31-I01-W48"
     },
+    "integration-261eeb9a60edbe646e288148": {
+      "base_sha": "aea20ce7b0e1b76257629a83b56f6f5719eb41ba",
+      "candidate_sha": "6a57b241c5884f1f76fa16a75f1714fe634988b7",
+      "created_at": "2026-09-16T12:39:41.360777Z",
+      "diff_digest": "a4a549dd307cb097d34fd166ebab646404fcab31cd9b7dd0a692fc2f28008cef",
+      "generation": 1,
+      "id": "integration-261eeb9a60edbe646e288148",
+      "integrated_sha": "6a57b241c5884f1f76fa16a75f1714fe634988b7",
+      "kind": "adopt",
+      "reason": "inline wave: landed as 6a57b241 on the phase branch",
+      "spec_digest": "c8b89543c879b5be7a1975d962c19a9d8de13f5e86d734aa664aa62c03bac661",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "3428282f2a31696e4163446a89c5808982a23e64",
+      "wave_id": "P32-I01-W47"
+    },
     "integration-27c7ddfee831ad3512a10043": {
       "base_sha": "8e31d9a0d207689023dc03902806e1452da5eb53",
       "candidate_sha": "3dac2fabeacf79ec006b75b4501747fadf801d2f",
@@ -43543,6 +44627,22 @@
       "tree_sha": "042cef9afb9063f3e123b076402fb419f65a483a",
       "wave_id": "P31-I01-W50"
     },
+    "integration-368c80dafa48eda5081a6c96": {
+      "base_sha": "2b458a145310ca959cd7b2d943abe63e84453309",
+      "candidate_sha": "028dac39f9b166b4fce6b0246249f43d4addb6c7",
+      "created_at": "2026-09-16T13:05:58.701364Z",
+      "diff_digest": "92fbbbb5425c8fe84bf4790e39ac847c5fe4d616be78dc7c3f1a2cecf0f05e87",
+      "generation": 1,
+      "id": "integration-368c80dafa48eda5081a6c96",
+      "integrated_sha": "028dac39f9b166b4fce6b0246249f43d4addb6c7",
+      "kind": "adopt",
+      "reason": "inline wave: landed as 028dac39 on the phase branch",
+      "spec_digest": "455bdc735b6be1bbbd0c0795c605b0fcae2e7ed7e3009d4702c5032c6b7ce08b",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "0ab8f42f36f8b68b88c884bcc396d3a4eb67f69f",
+      "wave_id": "P32-I01-W51"
+    },
     "integration-36a2f5c719ad14a1802a1204": {
       "base_sha": "069b69ac109d15ad7312231d73ed4496acc4761f",
       "candidate_sha": "79a437c77620eb6ab4a4378575db416f651ff492",
@@ -43574,6 +44674,22 @@
       "supersedes_id": null,
       "tree_sha": "b2320b8f43926247f85b36a6f49f226c3cabd0ff",
       "wave_id": "P31-I01-W45"
+    },
+    "integration-3af5fbb7b2b98601b077a649": {
+      "base_sha": "1da93dc19bd5bd28344a41aa337a184386fa02e0",
+      "candidate_sha": "ff96aeb5c293a82abbc4cb4e49232fe0ca792ff3",
+      "created_at": "2026-09-16T12:48:29.278055Z",
+      "diff_digest": "a7e3c9d62fa3b7525f0ebaf718ba8d3590bf1c95bed1bfa4f568edea05769b3b",
+      "generation": 1,
+      "id": "integration-3af5fbb7b2b98601b077a649",
+      "integrated_sha": "ff96aeb5c293a82abbc4cb4e49232fe0ca792ff3",
+      "kind": "adopt",
+      "reason": "inline wave: landed as ff96aeb5 on the phase branch",
+      "spec_digest": "1643006f8cb5ae1cde31ce49b70d5ef42fdc66e9fe89bdb26de53a94a5ea41cb",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "f3f660ab58f1f62119fd0ed86e9656cfb7571877",
+      "wave_id": "P32-I01-W50"
     },
     "integration-3b1ba4dd0a32dcf5b7956cfb": {
       "base_sha": "83de370ebbe244d6338d52e5d345912932186f1c",
@@ -43799,6 +44915,22 @@
       "tree_sha": "031efa07dfeaaf593d2e5271da6f0854865706a9",
       "wave_id": "P31-I01-W24"
     },
+    "integration-73120e8ee68f0bb042a75cd6": {
+      "base_sha": "83157cb542e9ddac235420f0a31cf1309cbcc6e4",
+      "candidate_sha": "dd58540162ca9265005b804935733a955c523888",
+      "created_at": "2026-09-16T14:10:02.036903Z",
+      "diff_digest": "2378568ad2b0f19c51400613b1bad82c396dafb3e9d1adadd59a58a00c386af8",
+      "generation": 1,
+      "id": "integration-73120e8ee68f0bb042a75cd6",
+      "integrated_sha": "dd58540162ca9265005b804935733a955c523888",
+      "kind": "adopt",
+      "reason": "inline wave: landed as dd585401 on the phase branch",
+      "spec_digest": "ddc9062f8d57f2c48f96bc0093affa76f931cdc26688545b8833fec1ca2401fc",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "8f9fbb41fc08847a69b4d5bfbf75cc5229417650",
+      "wave_id": "P32-I01-W54"
+    },
     "integration-73ca0621b2b25bd85167529f": {
       "base_sha": "2fa1a7e3772276edb21db2bc0a607f04e5548496",
       "candidate_sha": "0ebc17e050ec6fa24f8483dc525d6d435b0a5771",
@@ -43830,6 +44962,22 @@
       "supersedes_id": null,
       "tree_sha": "1ddd15f89ab0d3f9b08613bc2b1b5ee689ce7432",
       "wave_id": "P32-I01-W01"
+    },
+    "integration-7a49cbab26d58269cc089e63": {
+      "base_sha": "f62aadbb3b8107d16b8c6aa25c4d57449e7d1909",
+      "candidate_sha": "cdd65bec7f5dd4508212565e84ab9881dd4e930b",
+      "created_at": "2026-09-16T12:38:18.968481Z",
+      "diff_digest": "196f08e46869f31aa762190b9c9f94ad7bdabc268041fadd808a690680c1cc2b",
+      "generation": 1,
+      "id": "integration-7a49cbab26d58269cc089e63",
+      "integrated_sha": "cdd65bec7f5dd4508212565e84ab9881dd4e930b",
+      "kind": "adopt",
+      "reason": "inline wave: the dev2 cut landed as cdd65bec on the phase branch before the BAKED leg moved to P33-I01-W01",
+      "spec_digest": "81c1d3908429561e5db73f1f4055e1c85988caf4f9ae904405870af3db5f7a01",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "4f70b9dc7399812fdaaeb2d99ac462659ec823f3",
+      "wave_id": "P32-I01-W21"
     },
     "integration-7f010b9d37affca296e09de3": {
       "base_sha": "bb9d4d81b8e4b10b0baf22ff0d65740f1297d812",
@@ -44263,6 +45411,22 @@
       "tree_sha": "f73776d3a9ff908b1a92f6c828bee939d20406f5",
       "wave_id": "P31-I01-W39"
     },
+    "integration-d8393ad54ab0dfdf516a7641": {
+      "base_sha": "304b93059c0539d8beec21e46f267ce790d33f97",
+      "candidate_sha": "9a49f8d258c7b26747f148426acc7559b96b5081",
+      "created_at": "2026-09-16T13:34:47.065405Z",
+      "diff_digest": "4b855246a944edaba0eb4fe24b1600b35757430447d419e6566f66687cc2ca0c",
+      "generation": 1,
+      "id": "integration-d8393ad54ab0dfdf516a7641",
+      "integrated_sha": "9a49f8d258c7b26747f148426acc7559b96b5081",
+      "kind": "adopt",
+      "reason": "inline wave: landed as 9a49f8d2 on the phase branch",
+      "spec_digest": "91619628eeff0320f31ec24254c0588c11c321390e345af7a133612b193f41eb",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "99231fc5f9df018aff5f958312f9c59b53da4b5d",
+      "wave_id": "P32-I01-W52"
+    },
     "integration-ddf8fb79a77574f81aa4ddda": {
       "base_sha": "43fb36bfcd0814d2522d49d4eefc42547e221cd5",
       "candidate_sha": "f63d70325ec2d95235c2276b2a1ae2b8adb8b0d5",
@@ -44278,6 +45442,22 @@
       "supersedes_id": null,
       "tree_sha": "43b2486662f0cca9a56a11a168563831f651383a",
       "wave_id": "P31-I01-W11"
+    },
+    "integration-df00e9918a4542cdb45947b9": {
+      "base_sha": "6a57b241c5884f1f76fa16a75f1714fe634988b7",
+      "candidate_sha": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "created_at": "2026-09-16T12:40:31.310980Z",
+      "diff_digest": "d4c33d23c23801e76b6433ea1490c666b4e241bcba21edc3d86d95e63c00ce2d",
+      "generation": 1,
+      "id": "integration-df00e9918a4542cdb45947b9",
+      "integrated_sha": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "kind": "adopt",
+      "reason": "inline wave: landed as 404b4cb6 on the phase branch",
+      "spec_digest": "1e99d848ad48660d041db777012271dd13e59725d4d36ad80bfc0118baa2d22f",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "01c0c83bc5ea6a656d7e209afcda7e2ab97be669",
+      "wave_id": "P32-I01-W48"
     },
     "integration-e0deee9049a343362b173cf1": {
       "base_sha": "7db9c303a632697b13c6d28bd0fe6ba1695954db",
@@ -170373,9 +171553,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/workflow/verify",
-              "-k",
-              "dev2_profile"
+              "tests/integration/workflow/verify/test_dev2_profile.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -170394,9 +171572,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/workflow/verify",
-              "-k",
-              "migration_signal"
+              "tests/integration/workflow/verify/test_migration_signal.py"
             ],
             "scope": "all",
             "timeout_class": "quick"
@@ -170539,9 +171715,9 @@
       "blocks": [],
       "claim_session_id": "SES-20260911T171601.968506Z-executor-claude-b312ed7e-19e9-489d-af10-ee00ffeccdc6",
       "claimed_at": "2026-09-11T17:16:02.825124Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-16T12:38:46.701937Z",
+      "commit": "cdd65bec7f5dd4508212565e84ab9881dd4e930b",
+      "commit_identity_digest": "sha256:8837b082861f968b0b66526cd297fc7a93ac552ee5aa59fb78b4c18a9e8a08eb",
       "criteria_floor_waiver": {
         "reason": "staged by roadmap propose; typed criteria land via spec sync",
         "waived_at": "2026-09-03T17:58:45.125964Z",
@@ -170553,16 +171729,21 @@
         "P32-I01-W08",
         "P32-I01-W20"
       ],
-      "description": "Mirrors P31-W26 and the seam wave P31-W32 together because the publication machinery now exists: bump _version.py to 0.7.0.dev2 with a CHANGELOG section naming migrations and limitations, open REL-0.7.0.dev2 as a distinct DRAFT from the BAKED dev1 record (REL-011), pin it, run the dev2 profile with the waiver count and the REL-037 admission check, approve, hand the tag push to the operator, publish to pypi, npm under next and github, observe each target and reach BAKED with the train advanced.",
+      "description": "Bumps the version to 0.7.0.dev2 with a CHANGELOG section naming the migration limitations, opens REL-0.7.0.dev2 as a distinct DRAFT only from the terminal dev1 record behind a succession guard, and binds the dev2 waiver count and the tag chokepoint. Publication and the BAKED observation need the merged branch and the operator's tag push, so they move to P33-I01-W01.",
       "dispatch_history": [],
       "effort_bucket": "M",
       "file_scopes": [
-        "src/eawf/_version.py",
+        ".ea/artifacts",
         "CHANGELOG.md",
-        "pyproject.toml",
+        "src/eawf/_version.py",
+        "src/eawf/runtime/__init__.py",
+        "src/eawf/runtime/daemon/methods/release.py",
+        "src/eawf/runtime/release",
+        "src/eawf/surfaces/cli/commands/release.py",
         "src/eawf/workflow/verify",
-        "tests/integration/workflow/release",
-        ".ea/artifacts"
+        "tests/golden/plugin_install",
+        "tests/integration/runtime/release",
+        "tests/integration/workflow/release"
       ],
       "gates": [
         {
@@ -170629,30 +171810,29 @@
       ],
       "id": "P32-I01-W21",
       "intent": {
-        "desired_outcome": "REL-0.7.0.dev2 is BAKED with three observed_success targets, membership_refs empty, authority_epoch 1 and the train index advanced",
+        "desired_outcome": "REL-0.7.0.dev2 opens as a distinct DRAFT from the terminal dev1 record, version and changelog agree at 0.7.0.dev2, and the tag chokepoint passes on the cut commit",
         "evidence_refs": [],
         "planned_steps": [
           "Bump the version and write the 0.7.0.dev2 CHANGELOG section",
-          "Open the dev2 Release from the terminal dev1 record and pin it",
-          "Run the dev2 preflight to APPROVED with the waiver and admission rows",
-          "Publish, observe and record BAKED after the operator's tag push"
+          "Open the dev2 Release from the terminal dev1 record behind the succession guard",
+          "Run the dev2 preflight with the waiver and admission rows"
         ],
-        "priority_rationale": "BAKED is terminal for a development Release and the train opens dev3 only from it.",
-        "problem": "Every dev2 gate has landed as code but no Release record binds them into the checkpoint the train advances on, and dev3 opens only from a BAKED dev2",
+        "priority_rationale": "The dev2 cut is the phase's headline deliverable and the publication leg cannot start until it is on main.",
+        "problem": "Every dev2 gate has landed as code but no Release record binds them into the checkpoint the train advances on, and dev3 opens only from a terminal dev2",
         "risks": [
-          "BAKED completes only after the operator pushes the tag and the observers see all three targets; the wave closes on the observed record, not on the approve"
+          "Approve on the live record refuses until the branch merges because ancestry is red on an unmerged branch; publication and BAKED therefore live in P33-I01-W01"
         ],
         "source_brief_ids": []
       },
       "iter_id": "P32-I01",
       "opened_at": "2026-09-03T17:58:45.126700Z",
-      "outcome": null,
+      "outcome": "Cut 0.7.0.dev2: version and changelog agree with a section naming the migration limits, REL-0.7.0.dev2 opens as a distinct DRAFT only from the terminal dev1 record behind a succession guard, and the dev2 waiver count and tag chokepoint are bound. Publication and the BAKED observation moved to P33-I01-W01 because approve refuses on an unmerged branch.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -170725,23 +171905,9 @@
           },
           "text": "Version and changelog agree at 0.7.0.dev2 with a section naming the migration limitations, and the tag chokepoint passes on the cut commit; pytest exits 0 over tests/integration/runtime/release/test_tag_chokepoint.py",
           "waiver_reason": null
-        },
-        {
-          "acceptance_style": "binary",
-          "evidence_kind": "attested",
-          "gate_ids": [],
-          "id": "CR-04",
-          "kind": "attested",
-          "measurable_signal": "the operator's wave-close review confirms REL-0.7.0.dev2 BAKED with three observed_success targets and the train index advanced",
-          "oracle_tier": null,
-          "quality_dimension": "functional_suitability",
-          "required": true,
-          "response": null,
-          "text": "BAKED: after publication the record shows observed_success on pypi, npm (dist-tag next) and github, status BAKED, and ReleaseTrain.current_checkpoint_index advanced by one; judged at wave close against eawf release show REL-0.7.0.dev2 --json; human review at wave close",
-          "waiver_reason": null
         }
       ],
-      "title": "Cut, publish and observe the 0.7.0.dev2 checkpoint to BAKED",
+      "title": "Cut the 0.7.0.dev2 checkpoint behind a succession guard",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
@@ -171293,7 +172459,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/verify/test_falsifiable_gates.py",
+              "tests/integration/workflow/verify/test_gate_falsifiability.py",
               "-q"
             ],
             "scope": "touched"
@@ -171312,7 +172478,9 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/verify/test_close_receipts.py",
+              "tests/integration/workflow/verify/test_gate_falsifiability.py",
+              "-k",
+              "receipts_every_gate",
               "-q"
             ],
             "scope": "touched"
@@ -171331,9 +172499,9 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/verify/test_close_receipts.py",
+              "tests/integration/workflow/verify/test_gate_falsifiability.py",
               "-k",
-              "end_to_end",
+              "receipts_every_gate",
               "-q"
             ],
             "scope": "touched"
@@ -173562,7 +174730,7 @@
               "pytest",
               "tests/unit/kernel/migration/test_status_map_and_defaults.py",
               "-k",
-              "every_enum_member",
+              "every_wave_status_member",
               "-q"
             ],
             "scope": "touched"
@@ -173701,7 +174869,7 @@
               "pytest",
               "tests/integration/test_packaging.py",
               "-k",
-              "reds_on_growth",
+              "reds_on_an_oversize",
               "-q"
             ],
             "scope": "touched"
@@ -173793,7 +174961,9 @@
     },
     "P32-I01-W43": {
       "agent_role": "executor",
-      "blocks": [],
+      "blocks": [
+        "P32-I01-W48"
+      ],
       "claim_session_id": "SES-20260911T102048.858877Z-executor-claude-48d9dee4-6322-40d0-b8f1-f3950edd33ac",
       "claimed_at": "2026-09-11T10:20:49.673410Z",
       "closed_at": "2026-09-11T11:30:12.550016Z",
@@ -174427,6 +175597,1285 @@
       "title": "Repair the close-gate regressions this phase introduced",
       "token_budget": null,
       "tokens_consumed": 211882,
+      "worktree_id": null
+    },
+    "P32-I01-W47": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260916T122650.391424Z-executor-claude-1c48ed80-5aea-4b74-86d1-a2d7758a9264",
+      "claimed_at": "2026-09-16T12:26:57.539630Z",
+      "closed_at": "2026-09-16T12:40:12.040069Z",
+      "commit": "6a57b241c5884f1f76fa16a75f1714fe634988b7",
+      "commit_identity_digest": "sha256:ee6fe097ad2ff35bdec028aaa54fa0f8ee6c3b276e127c9650928e9a1be91cb0",
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "The phase PR's ubuntu coverage leg died twice at 31% because the sysmon coverage core retains every code object and each CliRunner invoke re-evaluated about six thousand annotations; the Click tree is now built once per worker. Two twice-green reds were test races: a refused-close lane left the loop before its workspace cleanup started, and the feed test raced the app's own daemon probe.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/conftest.py",
+        "tests/integration/test_typer_command_cache.py",
+        "tests/integration/runtime/daemon/test_headless_close.py",
+        "tests/tui/test_modes_feed.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/test_typer_command_cache.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_headless_close.py",
+              "-k",
+              "refused_gate",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_modes_feed.py",
+              "-k",
+              "recovers_to_live",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W47",
+      "intent": {
+        "desired_outcome": "Coverage workers retain a bounded amount of memory and both racing tests pass deterministically under load",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Cache each Typer app's Click tree once per worker in the test conftest",
+          "Wait for the close worker to exit before a refused-gate lane leaves its loop",
+          "Park the binder daemon probe in the feed notice recovery test"
+        ],
+        "priority_rationale": null,
+        "problem": "The phase PR cannot go green: the ubuntu coverage leg runs out of memory and twice-green fails on a different parallel-load race each run",
+        "risks": [
+          "The cache patches a private typer testing hook; a rename makes the monkeypatch raise at session start rather than silently stop caching"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T12:26:32.155589Z",
+      "outcome": "Coverage workers build each Typer app's Click tree once, cutting coverage-retained memory over a full -n 4 --cov run from 14.0 GB to 0.17 GB; the refused-gate lane waits for the close worker to exit, with a lagging-cleanup case that reds on the old helper; the feed recovery test parks the binder probe, 41/500 to 0/500 failures under load.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/test_typer_command_cache.py -q exits zero with one group build across three invokes",
+          "oracle_tier": 4,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the command-cache suite with one conversion per unchanged app",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A Typer app driven repeatedly through CliRunner is converted to its Click tree once per worker and converted again when its registrations change; pytest exits 0 over tests/integration/test_typer_command_cache.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_headless_close.py -k refused_gate -q exits zero for the prompt and lagging cleanup cases",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the refused-gate lane pairing with prompt and lagging workspace cleanup",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The hosted and interactive lanes of a refused close agree even when the worker's workspace cleanup lags its terminal row; pytest exits 0 over tests/integration/runtime/daemon/test_headless_close.py -k refused_gate",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/tui/test_modes_feed.py -k recovers_to_live -q exits zero with the binder probe parked",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the degraded-to-live feed notice case with the binder probe parked",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The feed pane restores its live-waiting notice after a manual degraded flip without the app's own daemon probe re-flipping it; pytest exits 0 over tests/tui/test_modes_feed.py -k recovers_to_live",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cache the CLI tree and fix two parallel-load test races",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W48": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W51"
+      ],
+      "claim_session_id": "SES-20260916T122658.326710Z-executor-claude-94ae19af-4ee2-427a-a93a-c563d026c5f1",
+      "claimed_at": "2026-09-16T12:26:59.165250Z",
+      "closed_at": "2026-09-16T12:41:07.813453Z",
+      "commit": "404b4cb6599bd42244dd2a6cbd5cbc5eabb6941b",
+      "commit_identity_digest": "sha256:42875e9aa63c88590d9471964d6b3fb3ef5e8791e298c47a0715e2e557ed892e",
+      "criteria_floor_waiver": null,
+      "deps": [
+        "P32-I01-W43"
+      ],
+      "description": "Audit finding F1: under this repository's band-scoped quality profile a mechanical wave outside the bands was narrowed to enforce=False and the close gate returned before the tier choice and the receipt floor, so W43's repair never applied here and nine waves closed with zero receipts. The gate now returns early only when the merged profile enforces nothing.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/methods/state_close.py",
+        "tests/integration/workflow/verify",
+        "CHANGELOG.md"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_gate_execution_stability.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_close_receipt_floor.py",
+              "-k",
+              "receipt_never_bound",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_gate_execution_stability.py",
+              "-k",
+              "never_reaches_the_jury",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W48",
+      "intent": {
+        "desired_outcome": "A band-narrowed mechanical wave executes and receipts its required gates at close while the jury and the auditor stay withdrawn",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Return before the scoring pass only when the merged profile enforces nothing",
+          "Resolve the close tier from whether the band kept the wave enforced",
+          "Run the close gate tests under both profile shapes"
+        ],
+        "priority_rationale": null,
+        "problem": "W43's receipt floor and deterministic tier never run for a mechanical non-band wave under a band-scoped profile, which is the profile this repository enables",
+        "risks": [
+          "Mechanical closes now execute their gates and block on a failing or unreceipted one; a stale gate argv therefore blocks instead of passing unseen"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T12:26:33.038652Z",
+      "outcome": "The close gate returns early only when the merged profile enforces nothing, so a band-narrowed mechanical wave scores its deterministic tier and meets the receipt floor while the jury and auditor stay withdrawn; the close suites run under both profile shapes and the six band-scoped cases red on the old return.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/verify/test_gate_execution_stability.py -q exits zero with both profile shapes receipting every gate",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the stability suite with the band-scoped close receipting every required gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A mechanical wave outside the bands of a band-scoped enforcing profile executes and receipts every required gate at close, as it does under a whole-fleet profile; pytest exits 0 over tests/integration/workflow/verify/test_gate_execution_stability.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/verify/test_close_receipt_floor.py -k receipt_never_bound -q exits zero for both profile shapes",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "the receipt-floor refusal for a band-narrowed close whose gate bound no receipt",
+            "observe": "raises",
+            "quantifier": "single"
+          },
+          "text": "A band-narrowed durable close whose passing gate bound no receipt raises the receipt-floor refusal naming that gate; pytest exits 0 over tests/integration/workflow/verify/test_close_receipt_floor.py -k receipt_never_bound",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/verify/test_gate_execution_stability.py -k never_reaches_the_jury -q exits zero for both profile shapes",
+          "oracle_tier": 4,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the jury-unreached case under both profile shapes",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The band narrowing still withdraws the jury and the auditor: a band-narrowed mechanical close never reaches the jury tier; pytest exits 0 over tests/integration/workflow/verify/test_gate_execution_stability.py -k never_reaches_the_jury",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Run a narrowed wave's deterministic gates under a band-scoped profile",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W49": {
+      "agent_role": "polisher",
+      "blocks": [],
+      "claim_session_id": "SES-20260916T122659.909734Z-polisher-claude-6f6ebf49-1954-4212-9d38-4d4915af37b9",
+      "claimed_at": "2026-09-16T12:27:00.709553Z",
+      "closed_at": "2026-09-16T12:42:01.680883Z",
+      "commit": "9d1164fb866082c936d54dbcc3fabe653234b1cc",
+      "commit_identity_digest": "sha256:86da7afb603fb64225a3e3d15ac8447be05792a0b03e6a107a606607314801c3",
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Polish from ship prep and the phase audit: .ea/specs holds per-wave spec renders that decision D27 keeps out of version control yet shows as untracked noise, so it is gitignored and classified not committed. The dev2 changelog called the apply's eleven durable crash points rollback boundaries; rollback has five boundaries and refuses once crossed.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".gitignore",
+        "src/eawf/kernel/store/commit_policy.py",
+        "tests/lint/test_ea_commit_census.py",
+        "CHANGELOG.md"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_ea_commit_census.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W49",
+      "intent": {
+        "desired_outcome": "The census classifies .ea/specs as not committed and ignored and the changelog states the rollback boundaries correctly",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Ignore .ea/specs and classify it not committed in the census",
+          "Correct the dev2 changelog rollback line"
+        ],
+        "priority_rationale": null,
+        "problem": "The per-wave spec tree shows as untracked noise with no commit-policy row and the dev2 changelog misnames the rollback boundaries",
+        "risks": [
+          "None beyond a census row: no tracked file lives under .ea/specs"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T12:26:33.911868Z",
+      "outcome": ".ea/specs is gitignored and classified not committed with a census test; the dev2 changelog states rollback's boundaries and the apply's eleven crash points correctly; every changelog list takes surrounding blank lines.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/lint/test_ea_commit_census.py -q exits zero with the spec render classified not committed",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the census suite with .ea/specs classified not committed and ignored",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The commit-policy census classifies a per-wave spec render under .ea/specs as not committed and the repository tree agrees with the declaration; pytest exits 0 over tests/lint/test_ea_commit_census.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-02",
+          "kind": "attested",
+          "measurable_signal": "the wave-close review confirms the changelog no longer calls the eleven apply crash points rollback boundaries",
+          "oracle_tier": null,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": null,
+          "text": "The dev2 changelog states that rollback restores the pre-apply snapshot from any recorded boundary short of crossed and that the rehearsal crashes the apply at each of its eleven durable writes; judged at wave close against the CHANGELOG.md source; human review at wave close",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Ignore the per-wave spec tree and correct the rollback changelog line",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W50": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260916T124222.106709Z-executor-claude-f695709e-d2f4-43d1-8b1c-edda8d08d90f",
+      "claimed_at": "2026-09-16T12:42:23.831604Z",
+      "closed_at": "2026-09-16T12:48:41.916265Z",
+      "commit": "ff96aeb5c293a82abbc4cb4e49232fe0ca792ff3",
+      "commit_identity_digest": "sha256:f0d1011fa438fe80f6e6c9808a338edebf0f49d67d8f119c1c3ada98ad6f3d2d",
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Once the ubuntu coverage leg survives, the per-package gate fails: state branch coverage is 93.78% (362/386) against 95%, and main measures 96.49%. The misses are the cross-field validator branches of this phase's epoch-2 value, batch and track models, which had no error-path tests, plus two dependency-map refusals.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/unit/kernel/state/test_epoch2_values.py",
+        "tests/unit/kernel/state/test_delivery_batch_model.py",
+        "tests/unit/kernel/state/test_track_policy.py",
+        "tests/unit/kernel/state/test_wave_dependency_models.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "-n0",
+              "tests/unit/kernel/state/test_epoch2_values.py",
+              "tests/unit/kernel/state/test_delivery_batch_model.py",
+              "tests/unit/kernel/state/test_track_policy.py",
+              "--cov=eawf.kernel.state.epoch2.values",
+              "--cov=eawf.kernel.state.epoch2.batch",
+              "--cov=eawf.kernel.state.epoch2.track",
+              "--cov-branch",
+              "--cov-report=term",
+              "--cov-fail-under=100"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_wave_dependency_models.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W50",
+      "intent": {
+        "desired_outcome": "Every epoch-2 value, batch and track validator branch is exercised and the state branch gate clears 95 percent",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Test each epoch-2 value batch and track validator branch",
+          "Test the reversed-edge and self-binding dependency refusals"
+        ],
+        "priority_rationale": null,
+        "problem": "The state package misses its branch coverage gate because this phase's epoch-2 validators have no error-path tests",
+        "risks": [
+          "Tests only; no production code changes"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T12:42:19.242635Z",
+      "outcome": "Error-path tests cover every cross-field validator in the epoch-2 value, batch and track models (100% branch on those modules) and the reversed-edge and self-binding dependency refusals; the state package measures 99.74% line and 98.70% branch over the CI-mirror run, clearing the 98/95 gate.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the values, batch and track suites with branch coverage of those three modules at 100 exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the three model suites with their modules at full branch coverage",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every cross-field validator branch in the epoch-2 value, batch and track models is exercised, so their branch coverage reaches one hundred percent; pytest exits 0 over the three model suites with --cov-fail-under=100",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_wave_dependency_models.py -q exits zero with the reversed-edge and self-binding refusals asserted",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "a validation error for a reversed-edge key or a self-binding in the wave dependency maps",
+            "observe": "raises",
+            "quantifier": "single"
+          },
+          "text": "A wave dependency binding or barrier keyed by the reversed edge raises, and a self-binding raises; pytest exits 0 over tests/unit/kernel/state/test_wave_dependency_models.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cover the epoch-2 state validators the branch gate counts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W51": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260916T130504.427739Z-executor-claude-93849599-d521-4372-9084-1c268438df77",
+      "claimed_at": "2026-09-16T13:05:05.293045Z",
+      "closed_at": "2026-09-16T13:06:14.181291Z",
+      "commit": "028dac39f9b166b4fce6b0246249f43d4addb6c7",
+      "commit_identity_digest": "sha256:72dfae2b4df30ec80c25cebec75b894d4a616ec26943149dfcfebb6240c19058",
+      "criteria_floor_waiver": null,
+      "deps": [
+        "P32-I01-W48"
+      ],
+      "description": "PR review of the ship pass: after W48 a sampled mechanical wave under the band-scoped profile is refused when a required criterion has gates its deterministic rung cannot decide, an attested criterion with a gate or one whose gates are advisory, because the oracle falls through to an auditor verdict nothing writes. Mechanical closes now score only criteria the receipt floor obliges; plus stale docs, a cache key and the init gitignore.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/state.py",
+        "src/eawf/runtime/daemon/methods/state_close.py",
+        "src/eawf/workflow/verify/readiness.py",
+        "src/eawf/platform/profiles/data/quality.yaml",
+        "src/eawf/platform/install/gitignore_writer.py",
+        "tests/conftest.py",
+        "tests/integration/workflow/verify/test_gate_execution_stability.py",
+        "tests/unit/test_install_wizard.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/verify/test_gate_execution_stability.py",
+              "-k",
+              "sampled",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_install_wizard.py",
+              "-k",
+              "spec_renders",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W51",
+      "intent": {
+        "desired_outcome": "A mechanical close scores exactly the criteria its decisive gates decide and never reads a verdict",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Score only obliged-gate criteria on a mechanical close",
+          "Correct the advisory-only wording the fix made stale",
+          "Ignore .ea/specs in the gitignore eawf init writes"
+        ],
+        "priority_rationale": null,
+        "problem": "W48 made a sampled mechanical close wait on an auditor verdict that no mechanical close ever produces",
+        "risks": [
+          "An attested criterion on a mechanical wave is no longer checked at close at all; that matches the profile's stated contract that such a wave closes on criteria and evidence alone"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T13:05:02.794158Z",
+      "outcome": "A mechanical close scores only criteria with an obliged gate, so a sampled wave with an attested gated criterion or an advisory-only gate closes on its decisive gates without reading a verdict; both profile shapes red without the filter. Stale advisory-only wording corrected, the CLI-tree cache keys on the callback function, and eawf init ignores .ea/specs.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/verify/test_gate_execution_stability.py -k sampled -q exits zero for both profile shapes",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the sampled mechanical close case under both profile shapes",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "A sampled mechanical close under either profile shape skips an attested criterion carrying a gate and a criterion whose only gate is advisory, never reads an auditor verdict, and still receipts its decisive gate; pytest exits 0 over tests/integration/workflow/verify/test_gate_execution_stability.py -k sampled",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/test_install_wizard.py -k spec_renders -q exits zero with .ea/specs/ among the init gitignore patterns",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the init gitignore pattern case for per-wave spec renders",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The managed gitignore block eawf init writes lists .ea/specs/, matching its not-committed commit-policy row; pytest exits 0 over tests/unit/test_install_wizard.py -k spec_renders",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Skip criteria a mechanical close's gates cannot decide",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W52": {
+      "agent_role": "executor",
+      "blocks": [
+        "P32-I01-W54"
+      ],
+      "claim_session_id": "SES-20260916T133412.400315Z-executor-claude-876ccda4-be36-4259-a92f-040cdb445c1c",
+      "claimed_at": "2026-09-16T13:34:13.347796Z",
+      "closed_at": "2026-09-16T13:35:28.870265Z",
+      "commit": "9a49f8d258c7b26747f148426acc7559b96b5081",
+      "commit_identity_digest": "sha256:76663d1cfb9f6f513157c33e0709cc10488dde0807afa927fdb5a416bc10ccef",
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "The macos-26 leg drifted the doctor and trust goldens on a blank footer heartbeat in two consecutive runs. quiesce_volatile_chrome forced heartbeats lit through App.query, which after a mode switch returns the home screen's heartbeat, while the capture reads the active screen; every mode-screen golden rode a pulse coin flip. The quiesce now queries the active screen. Resolves B152.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "src/eawf/surfaces/tui/snapshot/pilot_harness.py",
+        "tests/snapshots/tui/test_pilot_harness_quiesce_w11.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_pilot_harness_quiesce_w11.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "doctor"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-02",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_screen_snapshots.py",
+              "tests/snapshots/tui/test_trust_determinism.py",
+              "-k",
+              "doctor_mode_snapshot or oracle_determinism_ratio",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W52",
+      "intent": {
+        "desired_outcome": "A golden captured on any mode screen always shows its lit heartbeat, so the macos leg stops drifting doctor and trust goldens",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Query the active screen for heartbeats in the quiesce",
+          "Pin the doctor mode heartbeat case in the quiesce suite"
+        ],
+        "priority_rationale": null,
+        "problem": "Mode-screen goldens drift on slow hosts because the snapshot quiesce lights the home screen's heartbeat instead of the captured screen's",
+        "risks": [
+          "Only the snapshot harness changes; the product heartbeat widget is untouched"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T13:34:10.523533Z",
+      "outcome": "The snapshot quiesce lights the active screen's heartbeat instead of the home screen's, so goldens captured after a mode switch stop riding the pulse phase; a doctor-mode case reds on the old lookup and the 422 TUI snapshot tests pass. Resolves B152.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01",
+            "G-02"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/snapshots/tui/test_pilot_harness_quiesce_w11.py -q exits zero with the doctor mode heartbeat lit after quiesce",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the quiesce suite with the active mode screen's heartbeat lit",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Quiescing a mode screen lights that screen's own footer heartbeat, so a capture taken after a mode switch always ends the burn row with the bullet; pytest exits 0 over tests/snapshots/tui/test_pilot_harness_quiesce_w11.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over the doctor mode and trust determinism snapshot tests exits zero against the committed goldens",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "golden",
+            "object": "zero from the doctor mode and trust determinism golden comparisons",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The doctor and trust mode goldens that drifted on the macos-26 leg match the quiesced capture; pytest exits 0 over the doctor mode and oracle determinism snapshot tests",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Light the active screen's heartbeat before a golden capture",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W53": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260916T134848.584618Z-executor-claude-4073f4d3-1026-44f8-8873-0557d7e80b9a",
+      "claimed_at": "2026-09-16T13:48:49.559463Z",
+      "closed_at": "2026-09-16T13:49:26.981197Z",
+      "commit": "c66ab89f38c3423f8fd6499e0672507ea10dc953",
+      "commit_identity_digest": "sha256:458fe7490914f0ca6ab1ec1434938a2ec03b95a42b629db08dc8ceceaf413af1",
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "The twice-green job failed on test_cli_app_cold_import_within_ci_ceiling at 777 ms against a 750 ms ceiling, while the import takes about 300 ms on an idle host. The CLI perf suite ran inside the -n auto pool, whose own load is part of what a wall-clock budget measures; the ceiling had already been raised twice for the same cause. It now runs in the serial perf step beside the TUI budget, in CI and in just.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        ".github/workflows/ci.yaml",
+        "justfile",
+        "tests/lint/test_phase_ci_gates.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_phase_ci_gates.py",
+              "-k",
+              "timing",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "-n0",
+              "tests/perf/surfaces/cli",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W53",
+      "intent": {
+        "desired_outcome": "Both wall-clock budget suites run only serially in CI and just test-all, with a gate that reds if one returns to the pool",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Ignore the CLI perf suite in the parallel runs and name it in the serial perf step",
+          "Add a timing-suite placement check over ci.yaml and just test-all"
+        ],
+        "priority_rationale": null,
+        "problem": "A wall-clock budget runs inside the parallel test pool, so runner load rather than the import graph decides whether it passes",
+        "risks": [
+          "The serial step grows by two quick tests; the structural import guard in the same file moves with them and still runs on every leg"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T13:48:46.521930Z",
+      "outcome": "The CLI cold-import budget runs only in the serial perf step in CI and in just test and test-all, beside the TUI budget; a placement check reds if either timing suite returns to a parallel run, and both live checks fail on the previous layout.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/lint/test_phase_ci_gates.py -k timing -q exits zero with both timing suites serial in ci.yaml and in just test-all",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the timing-suite placement checks over ci.yaml and the justfile",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every CI test leg and just test-all run the wall-clock budget suites only in a serial pytest run, never inside a parallel worker pool; pytest exits 0 over tests/lint/test_phase_ci_gates.py -k timing",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest -n0 tests/perf/surfaces/cli -q exits zero with the cold import under its ceiling",
+          "oracle_tier": 4,
+          "quality_dimension": "performance_efficiency",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the serial cold-import budget suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The cold-import budget suite passes when run serially; pytest exits 0 over tests/perf/surfaces/cli with -n0",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Time the cold-import budget outside the parallel worker pool",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P32-I01-W54": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f",
+      "claimed_at": "2026-09-16T14:09:40.739065Z",
+      "closed_at": "2026-09-16T14:10:22.167125Z",
+      "commit": "dd58540162ca9265005b804935733a955c523888",
+      "commit_identity_digest": "sha256:9899e1de97c56a87fdacadf11e26e66c239aa4230cac7edcbe3770709ac1c822",
+      "criteria_floor_waiver": null,
+      "deps": [
+        "P32-I01-W52"
+      ],
+      "description": "CI on the W53 head failed twice on test readers racing their writers. The new mode-screen quiesce case blanked a heartbeat whose live 1.0 s pulse re-lit it before the first capture on ubuntu. The portalock heartbeat test parsed the lockfile unlocked while the ticker truncated and rewrote it in place, which the five-consecutive-runs harness caught on macOS. Both readers now stay out of the window.",
+      "dispatch_history": [],
+      "effort_bucket": "XS",
+      "file_scopes": [
+        "tests/snapshots/tui/test_pilot_harness_quiesce_w11.py",
+        "tests/unit/test_lock_portalock.py",
+        "tests/property/test_five_consecutive_runs.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/snapshots/tui/test_pilot_harness_quiesce_w11.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_lock_portalock.py",
+              "-k",
+              "heartbeat",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P32-I01-W54",
+      "intent": {
+        "desired_outcome": "The quiesce case and the portalock heartbeat test pass deterministically under load",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Still the heartbeat pulse before mount in the mode-screen quiesce case",
+          "Read the lockfile heartbeat across the empty rewrite window"
+        ],
+        "priority_rationale": null,
+        "problem": "Two tests read state their writers rewrite concurrently, so a loaded runner fails them at random",
+        "risks": [
+          "The lock writer keeps its in-place rewrite on purpose: swapping in a new file would move the inode the advisory lock is bound to"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P32-I01",
+      "opened_at": "2026-09-16T14:09:37.438658Z",
+      "outcome": "The mode-screen quiesce case stills the heartbeat pulse before mount (160/160 under load, reds on the old lookup), and the portalock heartbeat test reads the lockfile across the empty rewrite window, with an empty-first-read case that reds without the retry.",
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "closed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/snapshots/tui/test_pilot_harness_quiesce_w11.py -q exits zero with the pulse stilled for the mode-screen case",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the quiesce suite with the heartbeat pulse stilled",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The mode-screen heartbeat quiesce case stills the pulse before mount, so its blank precondition no longer races a live tick; pytest exits 0 over tests/snapshots/tui/test_pilot_harness_quiesce_w11.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/test_lock_portalock.py -k heartbeat -q exits zero including the empty-read case",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the heartbeat reader cases including a first read that lands mid-rewrite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The lockfile heartbeat reader reads across the empty window of an in-place rewrite instead of raising a decode error; pytest exits 0 over tests/unit/test_lock_portalock.py -k heartbeat",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Keep two test readers out of their writers' race windows",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P33-I01-W01": {
+      "agent_role": "operator",
+      "blocks": [],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Post-merge leg split from P32-I01-W21. On merged main, run the dev2 preflight to APPROVED once ancestry is green, hand the v0.7.0.dev2 tag push to the operator, publish to pypi, npm under next and github, observe each target and record BAKED with the train advanced. dev3 opens only from a terminal dev2, so this wave precedes every other P33 wave.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        ".ea/artifacts"
+      ],
+      "gates": [],
+      "id": "P33-I01-W01",
+      "intent": {
+        "desired_outcome": "REL-0.7.0.dev2 is BAKED with three observed_success targets, membership_refs empty, authority_epoch 1 and the train index advanced",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Run the dev2 preflight to APPROVED on merged main",
+          "Hand the v0.7.0.dev2 tag push to the operator",
+          "Observe pypi npm and github and record BAKED with the train advanced"
+        ],
+        "priority_rationale": "BAKED is terminal for a development Release and the train opens dev3 only from it.",
+        "problem": "The dev2 checkpoint is cut on the phase branch but approve refuses until the branch merges, so no Release record has reached BAKED and dev3 cannot open",
+        "risks": [
+          "BAKED completes only after the operator pushes the tag and the observers see all three targets; the wave closes on the observed record and never on the approve",
+          "A tag must never be force-moved over published artifacts; the dev1 burn is what that costs"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P33-I01",
+      "opened_at": "2026-09-16T11:16:15.931636Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "attested",
+          "gate_ids": [],
+          "id": "CR-01",
+          "kind": "attested",
+          "measurable_signal": "the operator's wave-close review confirms REL-0.7.0.dev2 BAKED with three observed_success targets and the train index advanced",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": null,
+          "text": "BAKED: after publication the record shows observed_success on pypi, npm (dist-tag next) and github, status BAKED, and ReleaseTrain.current_checkpoint_index advanced by one; judged at wave close against eawf release show REL-0.7.0.dev2 --json; human review at wave close",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Publish and observe the 0.7.0.dev2 checkpoint to BAKED",
+      "token_budget": null,
+      "tokens_consumed": 0,
       "worktree_id": null
     }
   },
