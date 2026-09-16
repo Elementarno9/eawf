@@ -89,10 +89,17 @@ def _pin_runtime_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _wait_terminal(ctx: Any, repo: Path, ref: str) -> dict[str, Any]:
-    """Poll durable status until the attempt reports a terminal state."""
+    """Poll durable status until the attempt is terminal and its worker has exited.
+
+    A refused close commits its terminal row before the worker removes the
+    close workspace, so a terminal status alone does not mean the worker is
+    done. Leaving the event loop at that point cancels a cleanup the executor
+    has not started yet, and the next lane then reuses a workspace that still
+    holds this lane's gate log.
+    """
     for _ in range(600):
         result = await status(ctx, {"ref": ref, "repo_root": str(repo)})
-        if result["attempt"]["status"] in {
+        if not result["backgrounded"] and result["attempt"]["status"] in {
             CloseAttemptStatus.CLOSED.value,
             CloseAttemptStatus.BLOCKED.value,
             CloseAttemptStatus.STALE.value,
@@ -182,12 +189,37 @@ def test_close_host_matches_close_submit_over_one_fixture_wave(
     assert hosted_fingerprint == interactive_fingerprint
 
 
+def _delay_cleanup_submission(monkeypatch: pytest.MonkeyPatch, *, seconds: float) -> None:
+    """Hold the worker's workspace cleanup back before it reaches the executor.
+
+    On a loaded runner the executor can still be sitting on the cleanup job
+    when the lane's terminal row is already visible; the delay reproduces
+    that ordering on every run instead of roughly one run in a hundred.
+    """
+    real_to_thread = asyncio.to_thread
+
+    async def _to_thread(func: Any, /, *args: Any, **kwargs: Any) -> Any:
+        if func is close_module.cleanup_close_workspace:
+            await asyncio.sleep(seconds)
+        return await real_to_thread(func, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "to_thread", _to_thread)
+
+
+@pytest.mark.parametrize(
+    "cleanup_lag_s",
+    [0.0, 0.5],
+    ids=["prompt-cleanup", "lagging-cleanup"],
+)
 def test_close_host_matches_close_submit_failure_kind_on_a_refused_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    cleanup_lag_s: float,
 ) -> None:
     """Both lanes refuse a failing gate with the same durable failure kind."""
     _pin_runtime_dir(tmp_path, monkeypatch)
+    if cleanup_lag_s:
+        _delay_cleanup_submission(monkeypatch, seconds=cleanup_lag_s)
     repo, state_path, ctx = _repo_with_state(tmp_path)
     _configure_real_fault_matrix(repo=repo, state_path=state_path, monkeypatch=monkeypatch)
     state = State.model_validate_json(state_path.read_bytes())

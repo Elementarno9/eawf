@@ -56,9 +56,9 @@ test mode="fast" base="origin/main":
           cov_parallel=""
           cov_serial=""
         fi
-        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui $cov_parallel
+        uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli $cov_parallel
         uv run pytest -n 4 tests/snapshots/tui $cov_serial
-        uv run pytest -n0 tests/perf/surfaces/tui $cov_serial
+        uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli $cov_serial
         ;;
       changed)
         scope="$(uv run python tools/changed_scope.py --base "{{base}}" --existing-only)"
@@ -84,9 +84,9 @@ test-all:
     EAWF_RUNTIME_DIR="$(mktemp -d "${TMPDIR:-/tmp}/eawf-rt.XXXXXX")"
     export EAWF_RUNTIME_DIR
     trap 'rm -rf "$EAWF_RUNTIME_DIR"' EXIT
-    uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui
+    uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli
     uv run pytest -n 4 tests/snapshots/tui
-    uv run pytest -n0 tests/perf/surfaces/tui
+    uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli
 
 # TUI render snapshots (4 workers) + perf timing budget (serial: it measures
 # latency, so a contended machine changes the number under test).

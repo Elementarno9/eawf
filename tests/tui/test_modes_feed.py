@@ -406,8 +406,12 @@ def test_feed_pane_degraded_shows_honest_message() -> None:
     asyncio.run(body())
 
 
-def test_feed_pane_degraded_recovers_to_live_notice() -> None:
+def test_feed_pane_degraded_recovers_to_live_notice(monkeypatch: pytest.MonkeyPatch) -> None:
     """A degraded->live flip restores the live-waiting notice wording."""
+    # The flag is flipped by hand here, so the binder's own daemon probe is
+    # parked: its no-daemon trip lands about a second after mount and, on a
+    # slow host, re-flips degraded after the manual recovery.
+    monkeypatch.setenv("EAWF_DAEMON_PROBE_INTERVAL_S", "3600")
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_REPO)

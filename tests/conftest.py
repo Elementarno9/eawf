@@ -12,6 +12,7 @@ from pathlib import Path
 
 import hypothesis
 import pytest
+import typer
 
 from eawf.kernel.spec.common import (
     CriterionSpec,
@@ -351,6 +352,72 @@ def global_config_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Itera
     monkeypatch.setattr(layered, "global_config_path", lambda: isolated_path)
     try:
         yield isolated_path
+    finally:
+        monkeypatch.undo()
+
+
+# --- Click-tree cache for in-process CLI invocations ---------
+#
+# ``typer.testing.CliRunner.invoke`` converts the Typer app to a Click tree on
+# every call, and under postponed annotations each conversion evaluates every
+# parameter annotation -- about six thousand ``eval`` calls for this CLI. The
+# ``sysmon`` coverage core keeps every code object it has seen alive for the
+# life of the worker, so under ``--cov`` each invocation retained about 5 MB,
+# and a full parallel run outgrew a 16 GB CI runner. Building each app's tree
+# once per worker removes the repeated conversions; the tree is rebuilt
+# whenever the app's registrations change, so a test that grows its own app
+# still sees its new commands.
+
+
+def _typer_registry_key(app: typer.Typer) -> tuple[object, ...]:
+    """Return the registration facts a built Click tree depends on.
+
+    Args:
+        app: The Typer app about to be converted.
+
+    Returns:
+        A hashable fingerprint of the app's callbacks, commands and groups,
+        recursing into sub-apps.
+    """
+    return (
+        id(app.registered_callback),
+        id(app.info.callback),
+        tuple((command.name, id(command.callback)) for command in app.registered_commands),
+        tuple(
+            (
+                group.name,
+                None if group.typer_instance is None else _typer_registry_key(group.typer_instance),
+            )
+            for group in app.registered_groups
+        ),
+    )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def typer_command_cache() -> Iterator[None]:
+    """Convert each Typer app to its Click tree once per worker, not per invoke."""
+    import weakref
+
+    import click
+    import typer.testing
+
+    build = typer.testing._get_command
+    cache: weakref.WeakKeyDictionary[typer.Typer, tuple[tuple[object, ...], click.Command]] = (
+        weakref.WeakKeyDictionary()
+    )
+
+    def cached_command(app: typer.Typer) -> click.Command:
+        key = _typer_registry_key(app)
+        hit = cache.get(app)
+        if hit is None or hit[0] != key:
+            hit = (key, build(app))
+            cache[app] = hit
+        return hit[1]
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(typer.testing, "_get_command", cached_command)
+    try:
+        yield
     finally:
         monkeypatch.undo()
 

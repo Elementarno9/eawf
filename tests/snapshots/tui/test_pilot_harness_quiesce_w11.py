@@ -134,6 +134,45 @@ def test_quiesce_forces_degraded_false_and_heartbeat_lit_directly(
     asyncio.run(body())
 
 
+def test_quiesce_lights_the_active_mode_screens_heartbeat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A mode screen's own heartbeat is forced lit, not the home screen's.
+
+    After a mode switch ``App.query`` still returns the home screen's
+    heartbeat while the capture reads the active screen, so lighting the wrong
+    dot left every mode-screen golden on a pulse coin flip; the doctor and
+    trust goldens drifted on the macos-26 leg that way.
+
+    The pulse is stilled before mount so only this test moves the phase: a
+    live 1.0 s tick between the blanking and the first capture re-lights the
+    dot and turns the precondition into the same coin flip.
+    """
+    monkeypatch.setattr(Heartbeat, "_pulse", lambda _self: None)
+
+    async def body() -> None:
+        app = EaApp(scope="repo", state_path=_REPO_STATE)
+        async with app.run_test(size=_SIZE) as raw_pilot:
+            pilot = cast("Pilot[object]", raw_pilot)
+            await settle_screen(pilot)
+            await pilot.press("5")
+            await settle_screen(pilot)
+            active = list(app.screen.query(Heartbeat))
+            assert active
+            for heartbeat in active:
+                heartbeat._lit = False
+                heartbeat._repaint()
+            await pilot.pause()
+            assert "no data•" not in capture_screen_text(app)
+
+            await quiesce_volatile_chrome(pilot)
+
+            assert all(heartbeat._lit for heartbeat in active)
+            assert "no data•" in capture_screen_text(app)
+
+    asyncio.run(body())
+
+
 def test_quiesce_is_noop_on_bare_host_without_eaapp_seams() -> None:
     # Boundary case: a bare Textual App carries none of the EaApp seams
     # (degraded reactive, _sync_degraded_banner, _feed_listeners, Heartbeat).

@@ -541,6 +541,81 @@ def test_twice_green_gate_reds_on_a_missing_job() -> None:
     ]
 
 
+# --- wall-clock budgets run serially -----------------------------------------
+
+#: Test trees that assert a wall-clock budget. Inside a parallel worker pool
+#: the pool's own load becomes part of what they measure: the cold-import
+#: ceiling tripped at 777 ms against 750 ms in a twice-green run while the
+#: same import takes about 300 ms on an idle host.
+_TIMING_SUITES = ("tests/perf/surfaces/tui", "tests/perf/surfaces/cli")
+
+_JUSTFILE = _REPO_ROOT / "justfile"
+
+
+def _pytest_commands(text: str) -> list[str]:
+    """Return every ``uv run pytest`` command line in *text*."""
+    return [line.strip() for line in text.splitlines() if "uv run pytest" in line]
+
+
+def _just_recipe(text: str, name: str) -> str:
+    """Return the body of the justfile recipe *name* (its indented lines)."""
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(f"{name}:"))
+    body: list[str] = []
+    for line in lines[start + 1 :]:
+        if line and not line[0].isspace():
+            break
+        body.append(line)
+    return "\n".join(body)
+
+
+def timing_suite_violations(commands: list[str]) -> list[str]:
+    """Report every timing suite a parallel run includes or no serial run names.
+
+    Args:
+        commands: The ``uv run pytest`` command lines of one test pipeline.
+
+    Returns:
+        One problem per timing suite that a ``-n auto`` run does not ignore,
+        or that no ``-n0`` run names; empty when each runs serially and only
+        serially.
+    """
+    problems: list[str] = []
+    parallel = [command for command in commands if "-n auto" in command]
+    serial = [command for command in commands if "-n0" in command]
+    for suite in _TIMING_SUITES:
+        if any(f"--ignore={suite}" not in command for command in parallel):
+            problems.append(f"a parallel run includes the timing suite {suite}")
+        if not any(suite in command.split() for command in serial):
+            problems.append(f"no serial run names the timing suite {suite}")
+    return problems
+
+
+def test_ci_test_leg_runs_timing_suites_serially() -> None:
+    """The CI test matrix times its budgets outside the parallel pool."""
+    steps = _load_ci()["jobs"]["test"]["steps"]
+    commands = _pytest_commands("\n".join(str(step.get("run", "")) for step in steps))
+    assert timing_suite_violations(commands) == []
+
+
+def test_just_test_all_runs_timing_suites_serially() -> None:
+    """``just test-all``, which twice-green runs, times its budgets serially."""
+    recipe = _just_recipe(_JUSTFILE.read_text(encoding="utf-8"), "test-all")
+    assert timing_suite_violations(_pytest_commands(recipe)) == []
+
+
+def test_timing_suite_gate_reds_on_a_parallel_cold_import_budget() -> None:
+    """The gate fires on the layout that let the cold-import ceiling trip."""
+    commands = [
+        "uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui",
+        "uv run pytest -n0 tests/perf/surfaces/tui",
+    ]
+    assert timing_suite_violations(commands) == [
+        "a parallel run includes the timing suite tests/perf/surfaces/cli",
+        "no serial run names the timing suite tests/perf/surfaces/cli",
+    ]
+
+
 # --- release inventory-and-reproducibility job -------------------------------
 
 

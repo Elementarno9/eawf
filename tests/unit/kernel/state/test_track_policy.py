@@ -1,8 +1,10 @@
 """Track lifecycle closure and the two work-in-progress limits.
 
-Three things are pinned here. A Track has exactly two stored states, so a
+Four things are pinned here. A Track has exactly two stored states, so a
 state a domain profile invents is refused at the loader rather than
 persisted and then found by a transition guard that has no edge for it.
+Its derived Milestone and Campaign indexes name each record at most once,
+so a Track view never counts one child twice.
 The hard batch limit refuses an activation while the advisory milestone
 limit only signals, and the two are separate predicates so a caller
 cannot accidentally treat one as the other. The strict nested policy
@@ -36,6 +38,10 @@ FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "epoch2"
 REPOSITORY_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF"
 OTHER_REPOSITORY_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-DOCS/repository/REP-DOCS"
 TRACK_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME"
+MILESTONE_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030"
+OTHER_MILESTONE_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0031"
+CAMPAIGN_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/campaign/CAM-0003"
+OTHER_CAMPAIGN_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/campaign/CAM-0004"
 
 
 def _policy_document() -> dict[str, Any]:
@@ -114,6 +120,29 @@ def test_track_rejects_an_owner_disagreeing_with_the_policy() -> None:
     owner = {"principal_kind": "operator", "principal_id": "OP-0002"}
     with pytest.raises(ValidationError, match="differs from policy ownership_principal"):
         Track.model_validate(_track_fields(owner=owner))
+
+
+def test_track_accepts_distinct_derived_indexes() -> None:
+    track = Track.model_validate(
+        _track_fields(
+            milestone_refs=[MILESTONE_URN, OTHER_MILESTONE_URN],
+            campaign_refs=[CAMPAIGN_URN, OTHER_CAMPAIGN_URN],
+        )
+    )
+    assert len(track.milestone_refs) == 2
+    assert len(track.campaign_refs) == 2
+
+
+def test_track_rejects_a_repeated_milestone_ref() -> None:
+    fields = _track_fields(milestone_refs=[MILESTONE_URN, MILESTONE_URN])
+    with pytest.raises(ValidationError, match="milestone_refs names the same Milestone twice"):
+        Track.model_validate(fields)
+
+
+def test_track_rejects_a_repeated_campaign_ref() -> None:
+    fields = _track_fields(campaign_refs=[CAMPAIGN_URN, CAMPAIGN_URN])
+    with pytest.raises(ValidationError, match="campaign_refs names the same Campaign twice"):
+        Track.model_validate(fields)
 
 
 def test_track_rejects_a_phrase_declared_both_in_and_out_of_scope() -> None:
