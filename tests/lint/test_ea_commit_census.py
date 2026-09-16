@@ -125,6 +125,12 @@ def test_classify_path_render_cache_beats_the_artifact_family() -> None:
     assert cached.policy is CommitPolicy.NOT_COMMITTED
 
 
+def test_classify_path_spec_render_is_not_committed() -> None:
+    row = classify_path(".ea/specs/P32/P32-I01/P32-I01-W01.md")
+    assert row.policy is CommitPolicy.NOT_COMMITTED
+    assert not row.must_exist
+
+
 def test_classify_path_folds_back_slashes() -> None:
     row = classify_path(".ea\\artifacts\\audits\\2026-09-10-a.md")
     assert row.policy is CommitPolicy.COMMITTED
