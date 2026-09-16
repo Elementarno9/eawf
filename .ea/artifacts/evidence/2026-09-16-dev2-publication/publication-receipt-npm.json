@@ -1,0 +1,9 @@
+{
+  "artifact_digests": {
+    "elementarno-eawf-0.7.0-dev.2.tgz": "sha256:61918412ca618f73dbae226a4777d44640110314bf9f3c2d07129a345bedbd8c"
+  },
+  "job_conclusion": "success",
+  "run_id": "35119940584",
+  "target_id": "npm",
+  "version": "0.7.0-dev.2"
+}

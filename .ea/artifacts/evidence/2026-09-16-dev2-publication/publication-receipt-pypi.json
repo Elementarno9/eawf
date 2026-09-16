@@ -1,0 +1,12 @@
+{
+  "artifact_digests": {
+    "eawf-0.7.0.dev2-py3-none-any.whl": "sha256:d03753d6be17812e68621d2bb0ca1afef5dd07ef0148848c8ab14f239b998da5",
+    "eawf-0.7.0.dev2-py3-none-any.whl.publish.attestation": "sha256:a0038a41f6a3b8cccd0fcdd6c3a5e206a8563b1816436eb7ae60cb0cec665128",
+    "eawf-0.7.0.dev2.tar.gz": "sha256:51218682f4581294f7c0ab1a78ba846b31fee3222b73349402aa985a05a12b78",
+    "eawf-0.7.0.dev2.tar.gz.publish.attestation": "sha256:5d26c7f6143accdff9e91eebd7877302a6f7ae4e17def93717216f53c57300bb"
+  },
+  "job_conclusion": "success",
+  "run_id": "35119940687",
+  "target_id": "pypi",
+  "version": "0.7.0.dev2"
+}

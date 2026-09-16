@@ -1,0 +1,290 @@
+{
+  "channel": "dev",
+  "computed_at": "2026-09-16T15:36:39.073487Z",
+  "gate_profile": "dev2",
+  "gates": [
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "version_consistency",
+      "gate": "version_consistency",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "changelog",
+      "gate": "changelog_entry",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal_component",
+      "evidence_ref": "dependencies.inventory",
+      "gate": "dependency_inventory",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "artifacts",
+      "gate": "artifact_reproducibility",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal_component",
+      "evidence_ref": "dependencies.vulnerability",
+      "gate": "security_review",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:epoch1_stabilization_suite",
+      "gate": "epoch1_stabilization",
+      "remediation": "gate 'epoch1_stabilization' is settled by proof command 'epoch1_stabilization_suite'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:telemetry_turn_cost_record",
+      "gate": "telemetry_producer",
+      "remediation": "gate 'telemetry_producer' is settled by proof command 'telemetry_turn_cost_record'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:front_door_install_smoke",
+      "gate": "front_door_journey",
+      "remediation": "gate 'front_door_journey' is settled by proof command 'front_door_install_smoke'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "migration",
+      "gate": "migration",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:hosted_close_runs_the_gates",
+      "gate": "hosted_gate_runner",
+      "remediation": "gate 'hosted_gate_runner' is settled by proof command 'hosted_close_runs_the_gates'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:epoch2_strictness_census",
+      "gate": "schema_strictness",
+      "remediation": "gate 'schema_strictness' is settled by proof command 'epoch2_strictness_census'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "waiver_block",
+      "evidence_ref": "readiness:waivers",
+      "gate": "waiver_count",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    }
+  ],
+  "ready": true,
+  "release_key": "REL-0.7.0.dev2",
+  "required_signals": [
+    "version_consistency",
+    "changelog",
+    "ancestry",
+    "tree_cleanliness",
+    "migration",
+    "artifacts",
+    "dependencies"
+  ],
+  "schema_version": "release-readiness/v1",
+  "signals": [
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "version:0.7.0.dev2",
+        "npm-version:0.7.0-dev.2"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "version_consistency",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "CHANGELOG.md:0.7.0.dev2"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "changelog",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "ancestor-of:origin/main"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "ancestry",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "git-status:clean"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "tree_cleanliness",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": "membership_unaccepted",
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "no producer is registered for the 'membership' signal at this checkpoint; register a probe or drop the requirement",
+      "signal": "membership",
+      "status": "unavailable"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "rehearsal:empty-repository:imports",
+        "rehearsal:minimal-active:imports",
+        "rehearsal:all-terminal:imports",
+        "rehearsal:multi-root-workspace:imports",
+        "rehearsal:interrupted-close:imports",
+        "rehearsal:open-attention:imports",
+        "rehearsal:corrupt-reference:refuses",
+        "rehearsal:unknown-extension-field:refuses",
+        "rehearsal:p30-i26-history:imports",
+        "rehearsal:largest-supported-state:imports"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "migration",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "source_sha:d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+        "source_date_epoch:1789571840",
+        "artifact:eawf-0.7.0.dev2-py3-none-any.whl:4f7e99c63c3a2507bb8d4f6724b44ec7402496f35e8e3aec19e2a02410655443",
+        "artifact:eawf-0.7.0.dev2.tar.gz:ae305bf3c02d670e8ec4356d8bec65b53727758fc87198df32edc104069d5533"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "artifacts",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "lock_digest:sha256:556bb948fab6e68b73aed30c908461c4bdba8e7e88d1bf2783940c53dd18299c",
+        "locked_packages:50",
+        "undeclared_license:babel",
+        "undeclared_license:backrefs",
+        "undeclared_license:colorama",
+        "undeclared_license:ghp-import",
+        "undeclared_license:markdown",
+        "undeclared_license:mergedeep",
+        "undeclared_license:mkdocs",
+        "undeclared_license:mkdocs-get-deps",
+        "undeclared_license:mkdocs-material",
+        "undeclared_license:mkdocs-material-extensions",
+        "undeclared_license:paginate",
+        "undeclared_license:pymdown-extensions",
+        "undeclared_license:python-dateutil",
+        "undeclared_license:pywin32",
+        "undeclared_license:pyyaml-env-tag",
+        "undeclared_license:six",
+        "undeclared_license:watchdog",
+        "lock_digest:sha256:556bb948fab6e68b73aed30c908461c4bdba8e7e88d1bf2783940c53dd18299c"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "dependencies",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [
+        "ci://eawf/.github/workflows/ci.yaml#linux-jail"
+      ],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": null,
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "",
+      "signal": "platform",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": "provider_claim_unproven",
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "no producer is registered for the 'provider' signal at this checkpoint; register a probe or drop the requirement",
+      "signal": "provider",
+      "status": "unavailable"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": "perfect_realization_failed",
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "module_length_exclusion: all 11 EAWF010 exemption(s) are within their grant, but the remaining realization assertions have no producer at this checkpoint; register one or drop the requirement",
+      "signal": "perfect_realization",
+      "status": "unavailable"
+    },
+    {
+      "computed_at": "2026-09-16T15:36:39.073487Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-16T16:36:39.073487Z",
+      "failure_code": "credential_unavailable",
+      "observed_revision": "d4f71dcffc5833e4d0498289d6d8db7cdafd54ac",
+      "remediation": "no producer is registered for the 'credentials' signal at this checkpoint; register a probe or drop the requirement",
+      "signal": "credentials",
+      "status": "unavailable"
+    }
+  ],
+  "version": "0.7.0.dev2",
+  "waiver_acknowledgements": [],
+  "waiver_count": 0,
+  "waiver_disposition": "none",
+  "waivers": []
+}
