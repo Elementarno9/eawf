@@ -31,6 +31,8 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     ".ea/local/",
     ".ea/worktrees/",
     ".ea/indexes/",
+    # Per-wave spec renders: the typed criteria in state.json are the record.
+    ".ea/specs/",
     ".ea/instrument-probe.json",
     ".ea/telemetry.db",
     "*.db",

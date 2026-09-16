@@ -24,6 +24,13 @@ and the falsifiers the wave itself declared. So the repair narrows the tier
 rather than skipping the pass, and the tests here pin both halves: a mechanical
 wave's gates run and receipt, and its jury stays unreached.
 
+The same skip survived that repair under a band-scoped profile, which is the
+shape this repository actually runs. Its resolver narrows a mechanical
+non-band wave to ``enforce=False``, and the close gate returned on that
+narrowed flag before the tier choice and the receipt floor, so three more waves
+closed receiptless after the repair landed. The close tests therefore run under
+both profile shapes.
+
 Every fixture tree is built under ``tmp_path``; nothing here reads or writes the
 repository's own ``.ea/``.
 """
@@ -47,6 +54,7 @@ from eawf.runtime.daemon.methods.state_close import (
 from eawf.workflow.dispatch.verdict import verdict_requirement
 from eawf.workflow.verify.gate_receipts import RECEIPT_MARKER
 from tests.integration.workflow.verify._close_gate_helpers import (
+    PROFILE_BANDS,
     criterion,
     enforce_verify_block,
     file_exists_gate,
@@ -135,7 +143,7 @@ def test_a_mechanical_wave_resolves_to_the_deterministic_tier_not_a_skip(
     resolved = resolve_close_gate_tier(
         "all",
         wave=_two_gate_wave(effort_bucket),
-        uiux_bands=[],
+        band_enforced=False,
     )
 
     assert resolved == "deterministic"
@@ -149,7 +157,7 @@ def test_a_mechanical_wave_still_earns_no_verdict_tier_pass(effort_bucket: str) 
         resolve_close_gate_tier(
             "verdict",
             wave=_two_gate_wave(effort_bucket),
-            uiux_bands=[],
+            band_enforced=False,
         )
         == CLOSE_GATE_TIER_SKIP
     )
@@ -160,34 +168,37 @@ def test_an_always_wave_keeps_every_requested_tier(effort_bucket: str) -> None:
     """A high-risk wave's tier is never narrowed; it earns the whole ladder."""
     high_risk = _two_gate_wave(effort_bucket)
     for requested in ("all", "deterministic", "verdict"):
-        assert resolve_close_gate_tier(requested, wave=high_risk, uiux_bands=[]) == requested
+        assert resolve_close_gate_tier(requested, wave=high_risk, band_enforced=False) == requested
 
 
-def test_a_band_scoped_profile_keeps_every_requested_tier() -> None:
-    """A non-empty band list is resolved upstream, so the tier is untouched."""
+def test_a_band_enforced_wave_keeps_every_requested_tier() -> None:
+    """A wave a band-scoped profile kept enforcing earns the whole ladder."""
     mechanical = _two_gate_wave("XS")
     for requested in ("all", "deterministic", "verdict"):
-        assert resolve_close_gate_tier(requested, wave=mechanical, uiux_bands=["tui"]) == requested
+        assert resolve_close_gate_tier(requested, wave=mechanical, band_enforced=True) == requested
 
 
 # --- the regression that reds on the named cause ---------------------------
 
 
 @pytest.mark.parametrize("effort_bucket", RECEIPTLESS_BUCKETS)
+@PROFILE_BANDS
 def test_a_mechanical_close_executes_and_receipts_every_required_gate(
     effort_bucket: str,
+    uiux_bands: list[str],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A mechanical wave's gates run, against the real production close gate.
 
     This is the test that reds on the named cause: restoring the risk-weighted
-    early return makes the close gate return before the scoring pass, so no
-    receipt is written and the assertion on the persisted set fails.
+    early return, or returning on the band-narrowed ``enforce`` flag, makes the
+    close gate return before the scoring pass, so no receipt is written and the
+    assertion on the persisted set fails.
     """
     closing = _two_gate_wave(effort_bucket)
     state, state_path = live_tree(tmp_path, monkeypatch, closing=closing)
-    enforce_verify_block(monkeypatch, uiux_bands=[])
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
 
     evidence = score_close(state, state_path=state_path, repo_root=tmp_path)
 
@@ -195,8 +206,9 @@ def test_a_mechanical_close_executes_and_receipts_every_required_gate(
     assert {record.refs[0] for record in evidence} == {"G-01", "G-02"}
 
 
+@PROFILE_BANDS
 def test_a_full_close_records_a_receipt_for_every_required_gate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    uiux_bands: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Every required gate of a closing wave leaves a receipt naming its run.
 
@@ -206,7 +218,7 @@ def test_a_full_close_records_a_receipt_for_every_required_gate(
     """
     closing = _two_gate_wave("M")
     state, state_path = live_tree(tmp_path, monkeypatch, closing=closing)
-    enforce_verify_block(monkeypatch, uiux_bands=[])
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
 
     score_close(state, state_path=state_path, repo_root=tmp_path)
 
@@ -227,8 +239,9 @@ def test_a_full_close_records_a_receipt_for_every_required_gate(
         assert shlex.split(str(metrics["argv"])) == []
 
 
+@PROFILE_BANDS
 def test_a_mechanical_close_never_reaches_the_jury_tier(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    uiux_bands: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """An un-gated criterion on a mechanical wave is dropped, not escalated.
 
@@ -247,7 +260,7 @@ def test_a_mechanical_close_never_reaches_the_jury_tier(
         effort_bucket="M",
     )
     state, state_path = live_tree(tmp_path, monkeypatch, closing=closing)
-    enforce_verify_block(monkeypatch, uiux_bands=[])
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
 
     def _refusing_factory(*_args: object, **_kwargs: object) -> object:
         return lambda _runtime: pytest.fail("a mechanical wave must not convene a jury")
@@ -255,6 +268,61 @@ def test_a_mechanical_close_never_reaches_the_jury_tier(
     monkeypatch.setattr(
         "eawf.runtime.daemon.methods.state._jury_spawn_factory",
         _refusing_factory,
+    )
+
+    evidence = score_close(state, state_path=state_path, repo_root=tmp_path)
+
+    assert [record.refs[0] for record in evidence] == ["G-01"]
+    assert _receipted_gate_ids(state_path) == {"G-01"}
+
+
+def _sampled_wave_id() -> str:
+    """Return a wave id the deterministic risk sampler classifies ``sampled``."""
+    for number in range(1, 100):
+        wave_id = f"P32-I01-W{number:02d}"
+        probe = wave(
+            criteria=[criterion("CR-01", gate_ids=[])],
+            gates=[],
+            effort_bucket="S",
+            wave_id=wave_id,
+        )
+        if verdict_requirement(probe) == "sampled":
+            return wave_id
+    raise AssertionError("no wave id in W01-W99 samples as 'sampled'")
+
+
+@PROFILE_BANDS
+def test_a_sampled_mechanical_close_skips_criteria_its_gates_cannot_decide(
+    uiux_bands: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A mechanical close never waits on a verdict nothing writes.
+
+    An attested criterion that carries a gate, and a deterministic criterion
+    whose only gate is advisory, both get past the deterministic rung
+    undecided. A sampled mechanical wave earns no auditor, so escalating them
+    would refuse the close on a verdict that is never produced. They are
+    skipped, and the one decisive gate still runs and receipts.
+    """
+    closing = wave(
+        criteria=[
+            criterion("CR-01", gate_ids=["G-01"]),
+            criterion("CR-02", gate_ids=["G-02"], evidence_kind="attested"),
+            criterion("CR-03", gate_ids=["G-03"]),
+        ],
+        gates=[
+            file_exists_gate("G-01", criterion_id="CR-01"),
+            file_exists_gate("G-02", criterion_id="CR-02"),
+            file_exists_gate("G-03", criterion_id="CR-03", path="absent.txt", policy="warn"),
+        ],
+        effort_bucket="S",
+        wave_id=_sampled_wave_id(),
+    )
+    assert verdict_requirement(closing) == "sampled"
+    state, state_path = live_tree(tmp_path, monkeypatch, closing=closing)
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
+    monkeypatch.setattr(
+        "eawf.workflow.verify.oracle.verify_wave_verdict_gate",
+        lambda *_args, **_kwargs: pytest.fail("a mechanical close must not read a verdict"),
     )
 
     evidence = score_close(state, state_path=state_path, repo_root=tmp_path)
@@ -272,17 +340,21 @@ def test_resolve_close_gate_tier_on_an_unknown_tier_word_still_narrows() -> None
     Failing open here would hand a future caller's typo the exact behaviour
     this wave exists to remove.
     """
-    assert resolve_close_gate_tier("", wave=_two_gate_wave("XS"), uiux_bands=[]) == "deterministic"
+    assert (
+        resolve_close_gate_tier("", wave=_two_gate_wave("XS"), band_enforced=False)
+        == "deterministic"
+    )
 
 
 def test_resolve_close_gate_tier_rejects_a_non_wave() -> None:
     """A caller that passes something other than a wave fails fast."""
     with pytest.raises(AttributeError):
-        resolve_close_gate_tier("all", wave=object(), uiux_bands=[])  # type: ignore[arg-type]
+        resolve_close_gate_tier("all", wave=object(), band_enforced=False)  # type: ignore[arg-type]
 
 
+@PROFILE_BANDS
 def test_a_close_with_no_gates_at_all_receipts_nothing_and_refuses_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    uiux_bands: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The empty boundary: a wave owing no deterministic proof closes clean."""
     closing = wave(
@@ -291,14 +363,15 @@ def test_a_close_with_no_gates_at_all_receipts_nothing_and_refuses_nothing(
         effort_bucket="XS",
     )
     state, state_path = live_tree(tmp_path, monkeypatch, closing=closing)
-    enforce_verify_block(monkeypatch, uiux_bands=[])
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
 
     assert score_close(state, state_path=state_path, repo_root=tmp_path) == []
     assert _receipted_gate_ids(state_path) == set()
 
 
+@PROFILE_BANDS
 def test_a_single_gate_close_receipts_exactly_that_gate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    uiux_bands: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The single boundary: one gate in, one receipt out."""
     closing = wave(
@@ -307,7 +380,7 @@ def test_a_single_gate_close_receipts_exactly_that_gate(
         effort_bucket="S",
     )
     state, state_path = live_tree(tmp_path, monkeypatch, closing=closing)
-    enforce_verify_block(monkeypatch, uiux_bands=[])
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
 
     score_close(state, state_path=state_path, repo_root=tmp_path)
 

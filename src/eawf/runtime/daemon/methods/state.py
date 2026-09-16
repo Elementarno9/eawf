@@ -583,26 +583,25 @@ async def _enforce_wave_close_gate(
 
     # Band-conditional enforcement: the merged block records the fleet
     # intent; the wave-aware resolver narrows ``enforce`` +
-    # ``cross_vendor_jury`` to the UI/UX band so the gate fires for a band
-    # wave and a non-band wave returns early on the advisory path.
-    verify_block = resolve_wave_verify_block(
-        load_active_verify_block(
-            wave_id,
-            state,
-            repo_root=repo_root,
-            config_root=config_root_for_state_path(state_path),
-        ),
-        wave,
+    # ``cross_vendor_jury`` to the UI/UX band. That narrowing withdraws the
+    # jury and the auditor from a mechanical non-band wave, never the wave's
+    # own deterministic gates, so only a profile that enforces nothing at all
+    # returns before the scoring pass.
+    merged_block = load_active_verify_block(
+        wave_id,
+        state,
+        repo_root=repo_root,
+        config_root=config_root_for_state_path(state_path),
     )
-    if verify_block is None or not verify_block.enforce:
+    verify_block = resolve_wave_verify_block(merged_block, wave)
+    if merged_block is None or verify_block is None or not merged_block.enforce:
         return []
     # High-risk single-auditor gate. The verdict gate is a READ -- it only
     # blocks close when a fresh auditor verdict is already persisted -- so
     # the close path must WRITE that verdict first, but only for the
     # high-risk subset and only when the cross-vendor jury is not opted in.
     # A high-risk wave under an opted-in jury falls through to run_oracle's
-    # jury tier; a mechanical wave takes the risk-weighted early-return or
-    # the run_oracle path below depending on whether the profile is banded.
+    # jury tier; a mechanical wave scores its deterministic tier below.
     # The jury's earned authority is computed BEFORE the single-auditor
     # branch: with the config merge OR-ing cross_vendor_jury across enabled
     # profiles, a bare cross_vendor_jury check let an ADVISORY jury displace
@@ -648,7 +647,9 @@ async def _enforce_wave_close_gate(
         events_path=events_path,
     )
     gate_specs = _load_gate_specs(wave_id, state)
-    tier = resolve_close_gate_tier(tier, wave=wave, uiux_bands=verify_block.uiux_bands)
+    band_enforced = bool(verify_block.uiux_bands) and verify_block.enforce
+    mechanical_close = not band_enforced and verdict_requirement(wave) != "always"
+    tier = resolve_close_gate_tier(tier, wave=wave, band_enforced=band_enforced)
     if tier == "skip":
         return []
     freshness_inputs: dict[str, Any] = {}
@@ -681,6 +682,7 @@ async def _enforce_wave_close_gate(
         before_gate_execute=before_gate_execute,
         on_gate_result=on_gate_result,
         announce_auditing=_announce_auditing,
+        decisive_criteria_only=mechanical_close,
     )
     if high_risk_single_auditor and close_attempt_id and tier in {"all", "verdict"}:
         durable_context = _build_durable_audit_context(

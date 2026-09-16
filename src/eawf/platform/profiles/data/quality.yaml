@@ -69,18 +69,19 @@ render_blocks:
 # (``resolve_wave_verify_block``) narrows them to the banded set: a wave whose
 # file_scopes touch ``surfaces/tui/`` or ``surfaces/render/`` (or whose id /
 # title matches a ``uiux_bands`` token) closes through the spec-jury gate,
-# while every non-band wave keeps the advisory close path. This is a per-wave
-# gate, NOT a fleet-wide flip.
+# while a non-band mechanical wave closes on its decisive deterministic gates
+# alone, with no auditor and no jury. This is a per-wave gate, NOT a
+# fleet-wide flip.
 #
 # The band is broadened beyond the two UI-surface tokens (``tui`` / ``render``)
 # to the judgment-heavy subsystems whose intent resists a deterministic
 # falsifier: ``verify`` / ``eval`` / ``jury`` / ``spec`` waves carry the same
 # lossy-intent risk the 2026-06-02 TUI incident diagnosed, so a wave named for
 # the trust / verification / jury / spec machinery also closes through the
-# cross-vendor jury rather than the advisory path. The ``jury_calibrated``
-# close gate then refuses that jury blocking authority unless its I09
-# calibration metrics clear, so a banded wave is never blocked by an
-# un-validated jury.
+# cross-vendor jury rather than on its deterministic gates alone. The
+# ``jury_calibrated`` close gate then refuses that jury blocking authority
+# unless its I09 calibration metrics clear, so a banded wave is never blocked
+# by an un-validated jury.
 #
 # ``jury_vendors`` records the disjoint cross-vendor panel for the band spec
 # jury (all three spawn runtimes are live). The LIVE multi-vendor invocation

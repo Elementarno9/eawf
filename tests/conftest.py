@@ -380,7 +380,7 @@ def _typer_registry_key(app: typer.Typer) -> tuple[object, ...]:
         recursing into sub-apps.
     """
     return (
-        id(app.registered_callback),
+        None if app.registered_callback is None else id(app.registered_callback.callback),
         id(app.info.callback),
         tuple((command.name, id(command.callback)) for command in app.registered_commands),
         tuple(

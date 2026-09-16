@@ -49,6 +49,7 @@ from tests.integration.workflow.verify._close_gate_helpers import (
     ATTEMPT_ID,
     FIXTURE_DIGEST,
     FIXTURE_SHA,
+    PROFILE_BANDS,
     close_attempt,
     criterion,
     enforce_verify_block,
@@ -247,8 +248,9 @@ def test_a_receipt_floor_refusal_routes_the_attempt_to_blocked_not_closed() -> N
     assert CloseWorkRejectedError.attempt_status is CloseAttemptStatus.BLOCKED
 
 
+@PROFILE_BANDS
 def test_the_close_gate_refuses_a_passing_gate_whose_receipt_never_bound(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    uiux_bands: list[str], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A pass without a receipt is refused, because a pass is not the proof.
 
@@ -266,7 +268,7 @@ def test_the_close_gate_refuses_a_passing_gate_whose_receipt_never_bound(
         closing=closing,
         attempt=close_attempt(wave_id=closing.id, required_gate_ids=["G-01"]),
     )
-    enforce_verify_block(monkeypatch, uiux_bands=[])
+    enforce_verify_block(monkeypatch, uiux_bands=uiux_bands)
     declined: list[str] = []
 
     def _decline_receipt(_criterion_id: str, gate_id: str, _result: Any) -> None:

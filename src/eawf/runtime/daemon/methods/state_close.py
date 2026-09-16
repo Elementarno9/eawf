@@ -508,16 +508,18 @@ def resolve_close_gate_tier(
     tier: str,
     *,
     wave: Wave,
-    uiux_bands: Collection[str],
+    band_enforced: bool,
 ) -> str:
     """Return the oracle tier *wave*'s close gate scores at.
 
-    Whole-fleet ``verify.enforce`` (a profile declaring no ``uiux_bands``) is
-    risk-weighted, and the weighting is about the EXPENSIVE tier: a mechanical
-    wave -- one whose :func:`~eawf.workflow.dispatch.verdict.verdict_requirement`
-    is ``"sampled"`` or ``"skip"`` rather than ``"always"`` -- earns no fresh
+    Enforcement is risk-weighted, and the weighting is about the EXPENSIVE
+    tier: a mechanical wave -- one whose
+    :func:`~eawf.workflow.dispatch.verdict.verdict_requirement` is
+    ``"sampled"`` or ``"skip"`` rather than ``"always"`` -- earns no fresh
     auditor and no cross-vendor jury, because a judgment call on a small
-    executor wave is not worth three vendor spawns.
+    executor wave is not worth three vendor spawns. A whole-fleet profile (no
+    ``uiux_bands``) weights every wave this way; a band-scoped profile weights
+    the waves its resolver narrowed, which are mechanical by construction.
 
     It must not also skip the wave's own deterministic gates. Those are the
     cheap rung of the same escalation ladder and they are the falsifiers the
@@ -529,16 +531,17 @@ def resolve_close_gate_tier(
     in :func:`score_required_criteria` drops every un-gated criterion and so
     keeps the jury tier unreached.
 
-    A band-scoped profile (non-empty *uiux_bands*) is untouched: its resolver
-    has already narrowed ``enforce`` to ``False`` for a non-band wave, so any
-    wave reaching here under a banded block is in-band and keeps *tier*.
+    A wave a band-scoped profile kept enforcing -- in-band, or high-risk by its
+    own gate set -- keeps *tier*: the band is exactly where that profile asks
+    for the whole ladder.
 
     Args:
         tier: The tier the caller asked for (``"all"`` / ``"deterministic"`` /
             ``"verdict"``).
         wave: The closing wave, classified for its verdict requirement.
-        uiux_bands: The resolved verify block's band tokens; empty means a
-            whole-fleet (non-band-scoped) profile.
+        band_enforced: Whether a band-scoped profile kept this wave's
+            enforcement as authored. ``False`` for a whole-fleet profile and
+            for a wave the band resolver narrowed.
 
     Returns:
         The tier to score at, or :data:`CLOSE_GATE_TIER_SKIP` when there is
@@ -547,7 +550,7 @@ def resolve_close_gate_tier(
     """
     from eawf.workflow.dispatch.verdict import verdict_requirement
 
-    if uiux_bands or verdict_requirement(wave) == "always":
+    if band_enforced or verdict_requirement(wave) == "always":
         return tier
     resolved = CLOSE_GATE_TIER_SKIP if tier == "verdict" else "deterministic"
     logger.info(
@@ -637,6 +640,7 @@ async def score_required_criteria(
     before_gate_execute: Callable[[str, str, CheckSpec, str], CheckResult | None] | None,
     on_gate_result: Callable[[str, str, CheckResult], None] | None,
     announce_auditing: Callable[[], None],
+    decisive_criteria_only: bool = False,
 ) -> list[EvidenceRecord]:
     """Score every required criterion of *wave* through the ordered oracle.
 
@@ -644,6 +648,18 @@ async def score_required_criteria(
     resolved the verify block, the jury's earned authority, and the juror spawn
     factory, so this loop only escalates each required criterion from its
     cheapest deterministic gate upward.
+
+    A mechanical close earns no auditor and no jury, so a criterion its
+    deterministic gates cannot decide -- an attested or jury criterion that
+    carries a gate, or one whose gates are all advisory -- would escalate to a
+    verdict nothing writes and refuse the close. *decisive_criteria_only* skips
+    those criteria, scoring exactly the ones the receipt floor holds the close
+    to.
+
+    Args:
+        decisive_criteria_only: Score only criteria with at least one gate
+            whose verdict is decisive (required, blocking, on a deterministic
+            criterion). Set for a mechanical close.
 
     Returns:
         One deterministic-pass :class:`EvidenceRecord` per criterion that scored
@@ -656,6 +672,7 @@ async def score_required_criteria(
             so a repair re-dispatch is fed the concrete falsifier.
     """
     from eawf.kernel.store.kinds.evidence import deterministic_pass_record
+    from eawf.workflow.verify.gate_receipt_floor import obliged_gate_ids
     from eawf.workflow.verify.oracle import run_oracle
 
     deterministic_evidence: list[EvidenceRecord] = []
@@ -663,6 +680,8 @@ async def score_required_criteria(
         if not criterion.required:
             continue
         gates = [g for g in gate_specs if g.criterion_id == criterion.id]
+        if decisive_criteria_only and not obliged_gate_ids(criteria=[criterion], gates=gates):
+            continue
         # D-LOCK-SPLIT tier filter: a gated criterion scores at the
         # deterministic tier (off-lock); an un-gated criterion falls to the
         # verdict / jury tier (under the lock, W08-bounded). tier="all"

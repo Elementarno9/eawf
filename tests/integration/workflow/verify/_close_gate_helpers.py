@@ -252,6 +252,15 @@ def live_tree(
     return State.model_validate(payload), state_path
 
 
+#: The two enforcing profile shapes a mechanical wave closes under: one that
+#: declares no bands, and a band-scoped one -- the shape of the ``quality``
+#: profile this repository enables -- whose band the fixture wave misses, so
+#: the resolver narrows it before the close gate sees it.
+PROFILE_BANDS = pytest.mark.parametrize(
+    "uiux_bands", [[], ["tui"]], ids=["whole-fleet", "band-scoped"]
+)
+
+
 def enforce_verify_block(monkeypatch: pytest.MonkeyPatch, *, uiux_bands: list[str]) -> None:
     """Make the close gate enforcing, as an opted-in profile does.
 
@@ -260,8 +269,9 @@ def enforce_verify_block(monkeypatch: pytest.MonkeyPatch, *, uiux_bands: list[st
 
     Args:
         monkeypatch: Fixture used to install the stub loader.
-        uiux_bands: Band tokens; empty models the whole-fleet profile this
-            repository runs, non-empty models a band-scoped one.
+        uiux_bands: Band tokens; empty models a whole-fleet profile,
+            non-empty a band-scoped one such as the ``quality`` profile this
+            repository enables.
     """
     block = VerifyBlock(enforce=True, uiux_bands=uiux_bands)
     monkeypatch.setattr(
