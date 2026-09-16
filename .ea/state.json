@@ -17576,15 +17576,15 @@
       "claimed_wave_ids": [
         "P32-I01-W53"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-16T14:36:28.016815Z",
       "id": "SES-20260916T134848.584618Z-executor-claude-4073f4d3-1026-44f8-8873-0557d7e80b9a",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W53",
       "started_at": "2026-09-16T13:48:48.584618Z",
-      "status": "active",
-      "summary": null,
+      "status": "closed",
+      "summary": "wave closed inline during the P32 ship pass",
       "worktree_ids": []
     },
     "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f": {
@@ -17593,15 +17593,15 @@
       "claimed_wave_ids": [
         "P32-I01-W54"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-16T14:36:29.002865Z",
       "id": "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f",
       "role": "executor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P32-I01-W54",
       "started_at": "2026-09-16T14:09:39.458293Z",
-      "status": "active",
-      "summary": null,
+      "status": "closed",
+      "summary": "wave closed inline during the P32 ship pass",
       "worktree_ids": []
     }
   },
@@ -24523,13 +24523,10 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260916T134848.584618Z-executor-claude-4073f4d3-1026-44f8-8873-0557d7e80b9a",
-      "SES-20260916T140939.458293Z-executor-claude-f51dd74c-c2a2-4381-ac9f-c6eeb0fed12f"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [],
-    "iter_id": "P32-I01",
-    "phase_id": "P32",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "track_id": null
   },
@@ -41736,16 +41733,16 @@
       ]
     },
     "P32-I01": {
-      "audit_id": null,
+      "audit_id": "A-P32-I01-EVAL",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-09-16T14:35:55.348032Z",
       "description": "One iter: the dev1 bake first, then identity and strict models, storage tiers beside them, the importer as census, mapping, validation, manifest, apply and rollback, the ten golden fixtures, the daemon-hosted gate runner, the dev2 profile binding, the wave that cuts, publishes and observes 0.7.0.dev2 to BAKED, and the console chassis replay as a living fixture.",
       "estimate_id": null,
       "id": "P32-I01",
       "intent": null,
       "opened_at": "2026-09-03T17:58:45.106514Z",
       "phase_id": "P32",
-      "status": "active",
+      "status": "closed",
       "title": "Land the epoch-2 schemas and the importer and cut dev2",
       "trigger": "none",
       "wave_ids": [
@@ -42345,6 +42342,17 @@
       "status": "active",
       "store_record_id": "MEM-P31-I01-close-A-P31-I01-EVAL",
       "summary": "iter P31-I01 closed with audit A-P31-I01-EVAL; waves closed=51; outcomes P31-I01-W01: Reordered assign_oracle_tier so a gate_ref cannot bypass the forall locus check; validate_cri... | P31-I01-W02: Criterion scope-agreement and bounded observation complexity now validate at model_validate, ... | P31-I01-W03: Replaced substring close-failure classification with a closed CloseFailureKind enum persisted...",
+      "tier": "working"
+    },
+    "MEM-P32-I01-close-A-P32-I01-EVAL": {
+      "confidence": "high",
+      "id": "MEM-P32-I01-close-A-P32-I01-EVAL",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-09-16T14:35:55.348032Z",
+      "scope_id": "P32-I01",
+      "status": "active",
+      "store_record_id": "MEM-P32-I01-close-A-P32-I01-EVAL",
+      "summary": "iter P32-I01 closed with audit A-P32-I01-EVAL; waves closed=53; outcomes P32-I01-W01: The terminal release burn is wired to an operator surface and the full walk to PARTIALLY_RELE... | P32-I01-W02: The workspace registry record and resolution ladder land with membership algebra and six pack... | P32-I01-W03: Epoch-2 identity grammar, per-workspace key allocators, workspace-global canonical_sequence a...",
       "tier": "working"
     }
   },
@@ -43046,8 +43054,8 @@
       "track_id": null
     },
     "P32": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A-P32-CLOSEOUT",
+      "closed_at": "2026-09-16T14:36:10.088592Z",
       "depends_on": [
         "P31"
       ],
@@ -43062,7 +43070,7 @@
       "release": null,
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "active",
+      "status": "closed",
       "title": "Ship the 0.7.0.dev2 offline-migration checkpoint",
       "track_id": null
     },
@@ -43206,7 +43214,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-16T14:10:53.628302Z",
+  "updated_at": "2026-09-16T14:36:10.088789Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
