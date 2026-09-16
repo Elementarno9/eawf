@@ -9,7 +9,8 @@ The format is based on Keep a Changelog [1], and this project adheres to Semanti
 This is the second development checkpoint of the v0.7.0 release train. It is the checkpoint that carries the epoch-2 state-tree cutover from a written target shape to running, rehearsed code, and it runs under a twelve-gate profile rather than dev1's eight. It is still a development checkpoint, not a stable release: the limitations below name exactly what remains unproven.
 
 ### Added
-- **The epoch-2 offline migration, in four modes.** `plan` reads the epoch-1 corpus and seals a manifest without writing anything; `apply` performs the cutover behind a journaled twelve-stage transaction; `recover` resumes an apply interrupted mid-stage from its recorded position; `rollback` returns the tree to the pre-apply snapshot across eleven recorded boundaries. A canary fence refuses to touch any repository that has not declared itself disposable, so the destructive modes cannot run against a tree in use by accident.
+
+- **The epoch-2 offline migration, in four modes.** `plan` reads the epoch-1 corpus and seals a manifest without writing anything; `apply` performs the cutover behind a journaled twelve-stage transaction; `recover` resumes an apply interrupted mid-stage from its recorded position; `rollback` returns the tree to the pre-apply snapshot from any recorded boundary short of `crossed`, the point after which a native write would be lost, and the rehearsal crashes the apply at each of its eleven durable writes to prove the recovery path. A canary fence refuses to touch any repository that has not declared itself disposable, so the destructive modes cannot run against a tree in use by accident.
 - **Storage tiers, so the state document stops carrying finished work.** Every record that can never change again compacts into an append-only ledger and the document keeps only what is in flight, with a derived index tier that regenerates byte-identically from the ledgers and is therefore safe to leave out of version control.
 - **The epoch-2 entity model.** An identity grammar with allocators and an alias index; the track, milestone, batch and task entities; the run scope, suspension reason and release leaves; and the lifecycle collections, criteria, runs, measurements and legacy envelopes mapped into their epoch-2 homes.
 - **A guarded transition registry for the epoch-2 lifecycle,** with edge parity against the status vocabulary and an event emitted per guarded move, so a state change that no edge admits cannot happen quietly.
@@ -22,12 +23,14 @@ This is the second development checkpoint of the v0.7.0 release train. It is the
 - **Telemetry session rows derived from session-close events,** and a declared workspace resolved from the user registry.
 
 ### Changed
+
 - **Close gates run in a sandboxed child against a sandboxed runtime directory,** so a gate can no longer read or write the live runtime tree it is judging.
 - **Gate argv that cannot red is refused at plan time, and every gate run is receipted.** A selector matching nothing exits 5 and is rejected as vacuous rather than passing.
 - **Every release verb has an operator surface and exactly one name,** so the publication path an operator can drive is the path the tests exercise.
 - **The npm plugin publishes by OIDC** instead of a long-lived token, and the wheel-size ceiling moved to a measured 4 MiB.
 
 ### Fixed
+
 - **The wave status map is keyed by the in-flight status spelling,** so an in-flight wave is no longer read as absent.
 - **A mechanical wave outside a band-scoped profile's bands runs its own deterministic gates at close.** The band narrowing is meant to withdraw only the jury and the auditor, but the close gate returned on the narrowed flag before the scoring pass and the receipt floor, so under a banded profile such a wave closed with zero receipts. Only a profile that enforces nothing now skips the pass.
 - **The phase-PR signal is read from phase membership** rather than inferred from the iter count.
@@ -35,6 +38,7 @@ This is the second development checkpoint of the v0.7.0 release train. It is the
 - **The release receipt producer runs at all,** and the `credentials` signal is derived from a declared handle instead of asserted against nothing.
 
 ### Migration
+
 - **The epoch-2 cutover is offline, explicit and reversible; it does not run on upgrade.** Installing this checkpoint changes nothing about an existing `.ea/` tree. The cutover is driven by the operator through plan, apply, recover and rollback, and every destructive mode refuses a repository that has not declared itself disposable.
 - **The cutover is rehearsed over ten corpora, four legs each: dry run, apply, idempotent rerun and rollback.** Eight are structural shapes, one is this project's own frozen history and one is the live corpus at cutover scale, 4,638 rows. Two of the ten are refusals rather than imports, and what is proven about them is that the refusal repeats identically and leaves the target byte-identical.
 - **The residual state document is sized by work in flight, not by corpus history.** Over the `epoch1-full` fixture the document falls to 4,940 B holding 3 records while 511 records move into ledgers; over the live corpus it is 396,720 B against a declared 1.6 MB bound.
@@ -42,6 +46,7 @@ This is the second development checkpoint of the v0.7.0 release train. It is the
 - **`Release.adoption` is a new persisted field on the release record,** added so an out-of-band publication can be described truthfully. No `.ea/state.json` schema version changed in this checkpoint.
 
 ### Limitations
+
 - **The state-schema version was not bumped for the new `Release.adoption` field.** A reader pinned to the previous schema version cannot distinguish a record written before the field existed from one written after, so the field's absence is ambiguous rather than meaning "not adopted".
 - **The migration is measured over ten corpora and nothing else.** Nothing here characterises an apply against a tree in use, a concurrent apply, or a corpus in the tens-of-thousands row band; a corpus shape outside the rehearsed set is unmeasured, not passing.
 - **This checkpoint does not apply the cutover to this repository.** The epoch-1 `.ea` tree is what ships at `0.7.0.dev2`; the applied cutover lands at a later rung of the train.
@@ -54,6 +59,7 @@ This is the second development checkpoint of the v0.7.0 release train. It is the
 This is the first development checkpoint of the v0.7.0 release train. It is published to prove the release machinery end to end, not as a stable release: the limitations below name exactly what is unproven at this rung.
 
 ### Added
+
 - **Typed release records and the v0.7.0 release train.** A `Release` record carries one checkpoint's identity, pinned source, manifest digest, per-target publication state and lifecycle status; a `ReleaseTrain` declares the ordered ladder of checkpoints that walks the line to stable. The publication side ships as a separate operation-and-attempt ledger with observer-only writes: an adapter's own success report can never bake a release, only an independent read-back through the target's declared adapter can. Every state move that could land mid-crash runs behind a registered durable boundary, so an interrupted publication resumes from a recorded position instead of a guess.
 - **A twelve-signal release preflight bound to eight named dev1 gates.** The sweep never fail-fasts -- every signal gets a row on every run, so one pass shows the whole repair list rather than the first red row. A signal with no producer reports `unavailable` naming the gap, and a probe that raises reports `blocked`; neither is ever reported as green. The eight gates the dev1 profile declares are a projection of those rows through one authored binding table, so what a gate reads is declared once. `eawf release tag --push` is gated on the same sweep, and the release workflow runs it again before the publish job, so a hand-pushed tag meets it too.
 - **Dependency-inventory and reproducible-artifact receipts, produced in CI and read back.** Neither fact can be computed by a sweep: one needs a resolved environment to read licenses and an advisory database to query, the other needs two clean builds. Both are written by the `inventory-and-reproducibility` job and read back from committed receipt locations, so a missing receipt leaves its row `unavailable` naming the job rather than passing on an absent check.
@@ -63,6 +69,7 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **Module-length exemptions carry expiry dates.** A grandfathered oversized module is a promise to split it later; the grant now states when, the release preflight reds on a lapsed one, and a renewal that names no ratified decision id reds the same way.
 
 ### Changed
+
 - **The repair and infrastructure retry budgets are one typed record.** Two independently tracked counters became one `CloseBudget` with a named axis per exhaustion, so a close that ran out of attempts says which axis ran out.
 - **Close failures are a typed vocabulary derived from the exceptions that raise them.** The failure kind is recorded on the attempt rather than reconstructed from a message.
 - **Wave-close bookkeeping rides the wave commit.** The state mutation a wave close performs is folded into that wave's own commit as a trailer, so a wave is one commit rather than a commit plus a bookkeeping follow-up.
@@ -70,6 +77,7 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **Derived estimate-cache rows are no longer seeded.** A cache row is written when it is computed, not pre-planted for a computation that may never run.
 
 ### Fixed
+
 - **The gated-criterion quantifier bypass.** A criterion whose gate list was quantified over an empty set classified as satisfied; it now classifies as ungated and blocks.
 - **Criterion scope agreement and complexity ceilings.** A criterion naming a scope its wave does not own, or nesting past the ceiling, is refused at plan time instead of at close.
 - **Codex reasoning tokens are no longer summed into output tokens**, so a reasoning-heavy turn no longer reports several times its real output cost.
@@ -83,9 +91,11 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **The TUI splits primary from accent and lifts muted contrast**, so two distinct roles stop rendering as one colour.
 
 ### Migration
+
 - **None required.** No persisted state schema changed in this checkpoint: `.ea/state.json` keeps its schema version, existing repositories load unchanged, and no migration step runs on upgrade. The epoch-2 state-tree target shape was ratified as a written target in this phase, not applied -- the migration that reshapes the tree lands at a later checkpoint of this train.
 
 ### Limitations
+
 - **Four of the eight dev1 gates cannot be settled from a working copy alone.** `dependency_inventory`, `security_review` and `artifact_reproducibility` read receipts the `inventory-and-reproducibility` CI job writes on a tag run, so a local sweep reports them `unavailable`; `credentials` has no producer at this checkpoint at all and is required only because the dev1 configuration declares three required publication targets.
 - **The `ancestry` signal passes only after the checkpoint commit is an ancestor of `origin/main`.** A sweep run on the phase branch before its pull request merges reds this row by design.
 - **The three proof-command gates are settled by running their argv, not by the sweep.** `epoch1_stabilization`, `telemetry_producer` and `front_door_journey` report `unavailable` in a sweep because it never runs them; each is cleared by running its command at the pinned source revision and attaching the receipt.
@@ -94,12 +104,14 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.6.8]
 
 ### Added
+
 - **AGENTS.md opens with what the repo is, before the rules that govern it.** The always-loaded file began with thirty numbered rules and never said what system they belonged to. A new tier-0 block states the phase / iter / wave nesting and points at `eawf status` for the current position, so an agent reading the contract has a frame for it. It is the only tier-0 block that is not itself a rule: a reference pointer would defeat the purpose, since following a link to learn which repo you are in comes after reading the rules it was meant to frame.
 - **Four rules, each stating an obligation that was previously only folklore.** `comment-economy` (comments carry why, not what: no restated signature, no change-log narration, no lifecycle ids); `orchestrator-decision-surface` (surface a consequential choice as an explicit question with visual option previews, never a silent default or a free-text approval); `gate-fire-proof-sunset` (a new gate ships with a test proving it reds on a real defect, and is retired at phase close if it never fired); `commit-granularity` (one commit per deliverable with its tests). All four are reference-placed, so they cost one line each in the always-loaded file.
 - **A `branch_currency` doctor check, so the branch-currency rule has a backstop.** The rule asked for a fetch-and-compare before opening a phase, iter, or wave, but nothing enforced it, and a local base ref left unfetched reads as current while every comparison drawn against it inherits the staleness. The check warns — never fails, since trailing the remote mid-work is ordinary — when the local base branch is behind its remote or the last fetch is over 24 hours old, and it never touches the network itself.
 - **An idle-surface report naming public functions that nothing calls.** Coverage cannot see this class: a function with a thorough unit test and no production caller reads as fully covered. `tools/idle_surface_report.py` lists public functions in `src/` referenced only inside their own module, excluding handlers whose call site is a framework decorator. 525 of 1901 qualify today, pinned by a ceiling that can only ratchet down.
 
 ### Fixed
+
 - **The documented golden-refresh path actually regenerates.** `eawf snapshot update --kind agents_md` re-ran the assertion it was invoked to resolve, because that golden test read no refresh switch at all; `--kind scenarios` read a third environment variable name the command never set, so its working regen path could not be reached; and `--kind scenarios --out` printed a redirect while rewriting the committed tree. This is the gap that makes people hand-edit goldens. A sweep of the whole inventory found the problem is wider than those two: 9 of 15 declared surfaces cannot be regenerated, and 3 (`state`, `spec`, `telemetry`) name golden trees absent from disk, so the snapshot-pairing gate has been guarding an empty set for each. Both facts are pinned by exact set equality, so a repair forces its removal and a newly broken surface still fails.
 - **The snapshot-pairing gate no longer flags its own generator code.** The gate matched any path under a watched golden directory, but `tests/golden/scenarios/` keeps its conftest and test module beside its fixtures, so repairing the generator required relabelling the fix as a `test:` refresh — precisely the mislabelling the gate exists to prevent. Python under a watched directory is now exempt by extension; golden bytes in the same directory still fire.
 - **Rendered agent and skill bodies are markdown-valid, so `plugin sync` stops reporting a hand-edit.** Five headings in the agent bodies followed a list item or a prose line with no blank line between, and two skill paragraphs wrapped onto a continuation line starting with `+ `, which a paragraph unwrapper reads as a list bullet. Every managed repo receives the corrected bodies on its next sync, so a re-render now reproduces the files on disk instead of diverging from them.
@@ -108,6 +120,7 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **The rendered AGENTS.md fits inside that cap with no rule deleted.** A render block may now declare `placement: reference`, which keeps one line in the always-loaded file naming the obligation and linking `docs/rules/<id>.md`, where the full body is written. Twenty-one blocks that justify or elaborate rather than state a working obligation moved, taking the root from 54313 to 29018 bytes against the 32768 cap; every moved block stays reachable and whole. The rules and orientation block added in this release bring it to 31068 bytes, leaving 1700 bytes of headroom.
 
 ### Changed
+
 - **The `-CORE` commit-subject alias is retired, and a subject that uses it now fails.** `[P<NN>-CORE] <type>:` was the pre-`state` spelling of phase-scope bookkeeping; the conventional-commit type `state` has been the semantic signal since, leaving two spellings for one meaning. Both the commit-prefix lint and the snapshot-pairing gate reject it in any position, so a commit subject that passed on 0.6.7 fails on 0.6.8 — rewrite it as `[P<NN>] state: <summary>`. Commits already on the trunk are untouched and still read as the old spelling. The rendered commit-prefix rule text every managed repo receives drops the alias on the next sync.
 - **Moved rule files are drift-checked, not merely labelled "do not hand-edit".** Each `docs/rules/<id>.md` expansion is written inside the same managed-region markers the always-loaded file uses and carries its own manifest row, so `eawf doctor` reports a hand-edited or deleted rule instead of calling the regions hash-stable. A render also refuses to overwrite a same-named file it did not write (a managed repo's own page at that path is safe), and deletes generated expansions no block claims any more, so a rule that returns to the always-loaded file leaves no orphan copy behind.
 - **A render block's one-line summary is capped at 200 characters.** The summary is the only part of a moved rule still charged against the always-loaded byte budget, so an unbounded one would let a body creep back in an edit at a time. Two shipped summaries sat just over the bound and were trimmed without losing the obligation each states.
@@ -119,16 +132,19 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.6.7]
 
 ### Fixed
+
 - **Calibration CLI tests no longer expire at the 90-day window boundary.** CLI fixtures now timestamp their synthetic actual at invocation time, preserving the intended in-window sample on every calendar date and release runner.
 
 ## [0.6.6]
 
 ### Fixed
+
 - **Durable close accepts the model’s GateReceipt evidence alias without weakening the canonical schema.** Exact, criterion-bound `gate_receipt` evidence emitted by a live auditor is canonicalized to `store_record` only at the durable LLM-output boundary. Unbound, non-deterministic, body-level, malformed, and ordinary report aliases remain invalid; persisted reports keep the closed `EvidenceKind` vocabulary.
 
 ## [0.6.5]
 
 ### Fixed
+
 - **Gate receipts no longer commit raw diagnostics.** Durable receipts retain only reproducibility identities, bindings, timing, results, and digests; raw command/output observations move to gitignored local sidecars. Doctor provides an atomic, idempotent scrub for legacy receipt stores while preserving receipt IDs and state references.
 - **Doctor can preview and apply guarded repository repairs.** The CLI and TUI share typed repair plans for configuration normalization, legacy audit dispositions, commit re-pins, managed-rule sync, receipt scrubbing, and supervised-daemon refresh. Historical audit anomalies remain explicitly unverified, and commit repairs require a unique first-parent identity.
 - **Configuration now reflects the active five-stage flow.** Legacy auto-accept leaves migrate to `flow.advance_after.{research,prep,audit,polish}`; deprecated no-op knobs stay hidden; every catalog leaf is classified; workspace profile overlays are composed from the target repository.
@@ -139,11 +155,13 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.6.4]
 
 ### Fixed
+
 - **macOS daemon restarts now wait for launchd to finish unloading the previous LaunchAgent.** The restart path polls the user service domain until the old job disappears before bootstrapping its replacement, preventing the transient `Bootstrap failed: 5: Input/output error` race after a successful `bootout`.
 
 ## [0.6.3]
 
 ### Fixed
+
 - **Daemon upgrades can now be restarted explicitly and safely.** `eawf daemon start` ensures the current release is ready, while `eawf daemon restart` drains and replaces the old process, re-renders installed launchd/systemd services, restarts the Windows service, and recovers stale sockets without spawning a rival daemon.
 - **Service boot no longer requires a repository anchor.** Durable-close recovery treats an absent boot state file as an empty workload, so an upgraded global daemon reaches RPC readiness before any workspace is selected.
 - **Service eviction no longer triggers an accidental cold-spawn.** `eawf daemon stop --evict-service` leaves termination to the supervisor instead of issuing a follow-up RPC that could create an unsupervised replacement.
@@ -151,12 +169,14 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.6.2]
 
 ### Added
+
 - **Wave closure is now a durable exact-revision job.** `wave close` and `wave land` persist an idempotent `CloseAttempt`, verify the integrated commit in a detached worktree, expose `close status|follow|resume|cancel`, survive client disconnects and daemon restarts, and apply at most one terminal close mutation. Interactive close detaches by default; noninteractive close waits unless explicitly detached.
 - **Integration and dependency truth are explicit.** Immutable `WaveIntegration` generations separate landing from closure; `wave integration show|adopt` supports ancestry-verified historical adoption; dependency edges may declare `start_after` and `land_after` thresholds while old edges remain `closed/closed`. Claims bind exact upstream generations, and continuation, landing, closure, graph, scheduler, and TUI reads reject stale bindings.
 - **Deterministic checks produce reusable evidence.** Freshness-bound `GateReceipt` rows carry exact integration, contract, policy, runner, environment, timeout, argv, result, bounded output, digest, and full-log facts. A matching pass executes once and can be reused by close.
 - **Codex attempts now carry provider truth.** The generated plugin uses supported PascalCase hook events under `hooks/hooks.json`; doctor reports hook trust state; uniquely correlated subagent starts/stops create timed `runtime=codex` attempts; readable rollout usage records token classes.
 
 ### Fixed
+
 - **Gate timeouts and failures are diagnosable.** An explicit `timeout_s` overrides the timeout class, malformed gate args fail during ingestion, duplicate execution is removed, and nonzero/timeout results retain stdout/stderr tails plus a full-log reference.
 - **Missing usage no longer looks like zero.** Ambiguous or unreadable Codex usage, token, EU, and cost evidence renders as unavailable with a cause; measured zero remains distinct.
 - **Codex marketplace install guidance matches the current CLI.** Installation now registers the marketplace source first, then installs `eawf@eawf` explicitly; marketplace registration is no longer described as auto-installing the plugin.
@@ -164,6 +184,7 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **Mixed close protocols fail closed.** A v0.6.2 CLI refuses a pre-v0.6.2 daemon with restart/reinstall guidance instead of attempting an unsafe fallback.
 
 ### Known limitations
+
 - **Codex measurement depends on trusted hooks and readable rollout records.** Codex attempt timing and usage are authoritative only when the generated hooks are installed and trusted and the provider rollout remains readable; doctor surfaces the trust state but cannot bypass provider or local filesystem controls.
 - **Unavailable usage stays unavailable.** Missing, ambiguous, or unreadable provider counters are not converted to zero or estimated during close, so some attempts legitimately carry no token, EU, or cost total.
 - **Collection and residual proof must be declared with an expected baseline.** Gates that emit collected-node or residual manifests must pair each artifact path with its expected SHA-256 digest; close compares the produced digest and binds both values into the receipt. v0.6.2 cannot infer undeclared deselection, ownership, or expiry metadata.
@@ -172,19 +193,23 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **Native workflow entities remain deferred to v0.7.** v0.6.2 keeps Phase/Iter/Wave and adds bridge records; native Task/Batch/Run, provider-worker leases, usage receipts, and activity semantics remain a v0.7 cutover.
 
 ### Migration
+
 - **`state.json` `schema_version` advanced 1.19 -> 1.20.** The pure additive migration creates empty `wave_integrations`, `close_attempts`, `wave_dependency_barriers`, and `wave_dependency_bindings` maps. It never inspects Git or provider logs and never fabricates historical integration, close, dependency, or usage facts. Existing work remains behind strict legacy barriers until explicitly adopted. Back up state before migration; 0.6.1 cannot open schema 1.20. Run `eawf migrate`, restart the daemon, and reinstall/refresh generated plugins after upgrading.
 
 ## [0.6.1]
 
 ### Added
+
 - **Layered config values can now be removed through the canonical daemon writer.** `eawf config unset <key> --scope <layer>` validates the key and writable layer, prunes empty parents, safely no-ops when the value is absent, and publishes the same typed config-update envelope as a set.
 
 ### Changed
+
 - **Workflow claims now fail closed across direct dispatch, fleet, advanced claim, and TUI paths.** A claim requires a live role/scope-compatible session, ACTIVE phase, claimable iter, nonempty criteria, satisfied dependencies and ordering, and an available repository-wide capacity slot; live spawn rechecks the parents and CLAIMED/IN_PROGRESS status immediately before each process attempt. Session creation and claim persist atomically, so a rejected preflight cannot leave an orphan ACTIVE session, event, attempt, process, or worktree.
 - **`planning.max_parallel_waves` is now an enforced repository-wide hard cap.** The compatibility default is 4; consumers that intentionally run wider fleets must raise the setting before upgrading. Fleet arm rejects an over-wide concurrency request before persistence, and the TUI offers only widths up to the effective cap.
 - **Verification policy now composes from strict typed leaves.** Config metadata distinguishes production consumers from reserved policy leaves, doctor reports explicit reserved settings, `waiver_mode: disabled` prevents new and historical waivers from satisfying execution gates, and optional strict iter close requires a complete accepted evaluation audit with real evidence. State schema remains 1.19.
 
 ### Fixed
+
 - **Auditor sessions always reach a terminal state and lifecycle mutations publish their typed events.** Validated reports close their sessions; spawn, parse, schema, or store failures mark them failed; event-store failure still terminalizes state best-effort. Phase activation, iter close, and phase close now map to their existing lifecycle event types.
 - **Custom repo-local state layouts now keep their persistent runtime artifacts out of Git.** Init derives exact root-anchored ignores for the selected state file's sibling lock, backups, canonical store locks, event stream, fallback WAL, and actual-session locks without hiding unrelated lockfiles. Existing repositories can run `eawf init --refresh-gitignore --state-path <path>` (or the `eawf repo init` alias) to update only the managed `.gitignore` block.
 - **Daemon guard errors and long-running direct dispatches now preserve their public contracts.** Coded rejections map to `-32002 validation_failed` with structured guard logs and no durable rejection event, while a legitimate runtime spawn uses the mutation timeout policy instead of falsely reporting daemon unreachability after 30 seconds.
@@ -194,10 +219,12 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.6.0]
 
 ### Added
+
 - **The binding pass: every built-but-idle contract is now turned on, captured, or surfaced.** P30's theme was "never ship an idle contract again", and the phase delivers the three corresponding strands. The fleet drive-loop wires the autonomous `/flow` driver so a phase's iters dispatch their wave DAG hands-off through the close gate. The `Track` substrate lands the durable strategy/feature vehicle (the renamed former `Subproject` entity) as a real state record that phases tag via `current.track_id`. Trust-validation un-idles the deterministic close-gate evidence path so each scored criterion mints a real `EvidenceRecord` rather than an empty stub. And the TUI cockpit reskins and binds the operator surfaces — fleet drive view, Track standings, evidence/trust drills, and the cross-repo workspace grid — to the live state the rest of the phase now captures.
 - **Autopilot, the research campaign, the init experience, and Windows are now live.** The fleet drive-loop runs off the daemon event loop with bounded spawn/repair ladders, per-round frontier recompute, watcher liveness, pause-new-dispatches / halt / resume (the repo-wide `dispatch_paused` next-claim flag, not a per-agent stop), and cockpit auto-reattach. The research campaign control plane drives real rounds — round runner, claim/OpenQuestion writers, the `research.run`/`broadcast`/`override` RPCs plus a `research.steer` that queues an operator note for the next round (not a live steer of a running researcher), Round records, the EviBound synthesis gate, and the `eawf research question`/`status` verbs. A stepped, live-executing init wizard (four journeys: first-run, repo init, workspace bootstrap, success) replaces the command-plan chooser. The cosmic-terminal reskin ships a hand-tuned ASCII-art brand seal rendered as theme-portable text across every honest-empty hero. And Windows gains a named-pipe daemon transport (large-frame reassembly, CancelIoEx teardown, owner-only pipe DACL) so `pip install eawf[windows]` runs the daemon natively. See the Windows entry under Fixed: the transport shipped with six defects that no real Windows host could survive, and the `windows-latest` CI job that was supposed to have verified it went green for the first time only after they were fixed.
 
 ### Fixed
+
 - **Validation-repair pass (I21): the autopilot spawn, the research campaign, and the cockpit are corrected against live v0.6.0 validation.** The sandbox jail grants every lane (claude/codex/opencode) a write carve-out for its own state dir, so a jailed agent's Bash tool no longer dies with EPERM at init; the executor report binder unwraps the claude stream-json envelope (a shared helper) so a valid report binds first try instead of being rejected and synthesized, and the Watch tail renders that envelope readably. The research campaign is decoupled from an execution wave — it runs with no active wave, books its researcher spend to the campaign (never inflating a closed wave), streams researcher output + Feed markers, converges to a terminal `CONVERGED` state, closes its researcher sessions, resolves answered `OpenQuestion`s and lets a researcher raise a blocking clarification, and compacts near-duplicate claims. Systemic-perf + UI fixes: one durable event subscription per scope with a resume cursor (no re-subscribe storm), a parked closed-wave redispatch (no stale-run churn), timestamped console logs, disambiguated spawn/bind attempt counters, a de-duplicated research-board footer, a `precision` (was "variance") metric label, a right-aligned header runtime/clock, a running-round progress band, labelled domain tree leaves, and a keyboard drill-in to a claim's full text + evidence.
 - **Headless-dispatch lifecycle consistency (I25): the autopilot lifecycle now behaves identically for codex and headless-claude, pinned by a live cross-runtime e2e gate.** Four live-only bugs — green in the in-process unit suite but broken under a real spawn — are fixed. A dispatch that completes after close-on-behalf no longer persists a phantom `SessionAttempt` (the persist re-reads the terminal `wave.status` under the state lock and drops it, so no attempt/cost/tokens accrue onto a closed wave); a wave wedged before its attempt registered — claimed with no in-flight lane and a dead process group — is reaped to FAILED at the drained-run seam instead of hanging forever; the grounded-repair ladder classifies an environmental floor-gate failure (a bare smoke repo missing `.pre-commit-config.yaml` / a package dir / pytest) as unfixable-by-the-executor and closes-with-followups rather than burning re-dispatch attempts on it; and the interactive-claude Stop-hook capture mints a per-attempt cost row so an interactive wave surfaces per-attempt cost the same way a headless wave does. The new `tests/e2e/test_lifecycle_consistency.py` drives a real codex frontier and a real claude frontier to green — both lanes close on-behalf with one priced attempt each, no post-close dispatch, the wedged orphan reaped, the run drained — and its four invariant assertions run with teeth in CI without a paid spawn.
 - **Honest EU measurement (I25): the runtime a wave records is now the work it did, not the clock the operator left running.** Chasing the lifecycle fixes above surfaced a measurement chain that had never been true, and eight audit cycles converged it. Claude's own per-turn duration replaces a re-derived wall clock; an interrupted turn — whose reported figure is that turn's wall clock, not its work — is excluded outright rather than clamped, which is what let a single transcript row book 76 hours and 152 EU; a transcript that cannot be measured now reports nothing instead of falling back to its own span (the operator's clock, idle included); one session shared by N concurrent waves is divided among its sharers rather than copied to each; a wave spanning several sessions folds its per-session runtimes instead of differencing counters taken against two origins; and every redefinition bumps a `measure_version` so a baseline taken under the old rule re-originates rather than banking the change as work. The zero-runtime close gate now resolves its enforcement from the fleet verify block, so it is live for every wave rather than only for one in the UI band, and a counter reset is pardoned strictly — an honest reset cannot strand a wave, and a stale reset cannot pardon a later silent zero. Finally, an actual whose figure is a floor (re-originated) or a split (shared session) is marked `calibration_excluded` and every consumer that treats an actual as a reference class — the bucket re-fit and both estimate-quality metrics — now skips it, while weekly burn keeps counting it because the row is real spend.
@@ -206,6 +233,7 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **Windows (I21): the named-pipe transport shipped with six defects, none of which a real Windows host could survive.** The `windows-latest` CI job existed but had never gone green, so the transport was released against an unrun test set. Every defect is a call that could not have succeeded even once. `verify_peer_sid` invoked `ImpersonateNamedPipeClient` through `win32pipe`, which does not define it, and compared SIDs with `win32security.EqualSid`, which pywin32 does not have — so the peer-SID check, the second gate of the pipe security model, raised `AttributeError` on every verified connection and the worker closed the pipe. Because the daemon's own ping is SID-verified, no client could complete a round-trip and cold start timed out. `pipe_ready` truth-tested `WaitNamedPipe`, which signals success by RETURNING (pywin32 hands back `None`) and failure by raising, so the readiness probe reported every healthy pipe as unready — including one the next call could round-trip on. `WindowsPipeServer.start` returned before its listener thread had bound the first pipe instance, so a client could connect to a pipe that did not exist yet; `stop` left subscription feeds registered on the bus until a streamer woke from a five-second heartbeat; and a design test asserted a win32 `BOOL` (an int) `is False`, an identity check that can never hold. With these fixed the win32 set passes on a real Windows host (65 passed, 4 skipped), which discharges the real-host validation that `D-WINDOWS-DESCOPE` deferred.
 
 ### Migration
+
 - **`state.json` `schema_version` advanced 1.18 -> 1.19.** Additive: it adds `ActualSummary.calibration_excluded`, which marks an actual that was measured but is not a reference class — its runtime was re-originated by a counter reset (so the figure is a floor, not a measure) or shared across concurrent waves (so the figure is a split, and the split is an approximation whenever the concurrency moved mid-span). Without the flag the exclusion would live in a document rather than in state; the bucket re-fit and both estimate-quality metrics now read it. It defaults to `False`; the `v1_18_to_v1_19` step backfills it on every actual. Run `eawf migrate` to advance an existing repo; the step is idempotent and replay-safe.
 - **`state.json` `schema_version` advanced 1.17 -> 1.18.** Additive: it adds `RuntimeBaseline.shared_wave_count` (inherited by `RuntimeLatest`), recording how many waves were active when a runtime snapshot was captured. One `runtime.capture` writes the same session snapshot to every active wave, so without the count N concurrent waves each difference — and each record — the whole session's runtime. The count is the divisor the close-time delta applies. It defaults to `None` (read as a divisor of one); the `v1_17_to_v1_18` step backfills it on every snapshot. Run `eawf migrate`; the step is idempotent and replay-safe.
 - **`state.json` `schema_version` advanced 1.16 -> 1.17.** Additive: it adds `RuntimeBaseline.measure_version` (inherited by `RuntimeLatest`), recording which definition of the counters produced a snapshot. Cumulative counters are comparable only against a baseline taken under the same definition: when the definition changes, the difference between two snapshots is the change, not work — and a redefinition that RAISES the figure is otherwise indistinguishable from a productive week. It defaults to `None` (a null version falls back to the old direction check); the `v1_16_to_v1_17` step backfills it on every snapshot. Run `eawf migrate`; the step is idempotent and replay-safe.
@@ -221,32 +249,39 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.5.4]
 
 ### Fixed
+
 - **The Codex plugin loader no longer rejects four `SKILL.md` files with `invalid YAML: mapping values are not allowed in this context`.** The `SKILL.md`, agent, and OpenCode-command frontmatter emitted the `description:` value unquoted, so a description containing a `: ` (colon-space) — the `design`, `prep`, `spike`, and `math-explainer` skills each carry one — parsed as a nested mapping under a strict YAML loader. Claude Code's looser frontmatter parser tolerated it; Codex's did not, so those skills failed to load. Every frontmatter `description:` emit site now routes through a shared `json.dumps`-backed double-quoted-scalar helper (`eawf.surfaces.render.frontmatter.yaml_scalar`), and the `SKILL.md` frontmatter test now parses the block as strict YAML rather than only checking key presence — the gap that let the bug ship.
 
 ## [0.5.3]
 
 ### Fixed
+
 - **`uv tool install` / `/plugin install` no longer crashes with `ModuleNotFoundError: No module named 'hypothesis'`.** The `transition_coverage` audit-check kind imported `hypothesis` (a dev/test-only dependency) at module top level, and the audit-DSL registry binds every check-kind eagerly at CLI startup — so importing the installed CLI pulled in a dependency that a runtime-only install (`uv tool install`, which omits the dev dependency-group) does not ship, crashing `eawf` before it could run. The import is now lazy: the Hypothesis state-machine is built inside `_make_machine` only on the machine-driven coverage path, so the CLI starts cleanly without `hypothesis`, and the kind degrades to a failed check (rather than aborting the audit) if the machine path runs without it.
 
 ### Changed
+
 - **Release pipeline now gates publish on green CI and a runtime-only install smoke.** Two prevention gaps let v0.5.2 ship broken: the publish workflows (PyPI + plugin) triggered on the version tag independently of CI, so a red test run never blocked a publish; and CI always installs the dev dependency-group, so its tests could not see a runtime module reaching for a dev-only dependency. Both are closed: a new `tool-install-smoke` CI job installs the built wheel with runtime deps only and exercises the CLI, and the PyPI + plugin publish jobs now require the CI workflow to have concluded `success` for the tagged commit before they run.
 
 ## [0.5.2]
 
 ### Changed
+
 - **Published npm package renamed to the scoped `@elementarno/eawf`.** The npm registry's name-similarity guard rejects the unscoped `eawf` name (deemed too close to an existing package), so the Claude plugin now publishes under the account-scoped `@elementarno/eawf`. This changes only the underlying npm artifact and the marketplace pointer's `source.package`; the plugin and marketplace names stay `eawf`, so the install command remains `/plugin install eawf@eawf`. The direct npm form is `npm install @elementarno/eawf`.
 
 ## [0.5.1]
 
 ### Changed
+
 - **Unified the plugin marketplace name to `eawf` across both runtimes.** The Claude Code and Codex catalogs now register under the same marketplace name `eawf`, so the install command is `/plugin install eawf@eawf` on either runtime; previously the Codex catalog registered as `eawf-codex`. The plugin name was already `eawf` everywhere — only the Codex marketplace identifier changed.
 
 ### Fixed
+
 - **First successful npm publish of the Claude plugin.** The `v0.5.0` tag's `plugin-release` run failed at the npm publish step with `ENEEDAUTH` because the `NPM_TOKEN` repository secret had not been configured yet, and a follow-up `workflow_dispatch` run validates the rendered trees but never publishes by design. The token is now set, and two release-pipeline regressions are fixed alongside it: `actions/upload-artifact` was dropping the hidden `.claude-plugin/` tree from the packaged Claude plugin (so the npm tarball would have been incomplete), and the `phase-release` annotated-tag step had no git identity. `v0.5.1` is the first tag to publish the Claude plugin to npm.
 
 ## [0.5.0]
 
 ### Added
+
 - **Self-hosted plugin marketplace.** Both runtimes now ship committed catalog pointers so operators can install Eä straight from the repo. `.claude-plugin/marketplace.json` declares the Claude Code marketplace (`eawf-local`) backed by the `eawf` npm package; `.agents/plugins/marketplace.json` declares the Codex marketplace (`eawf-local-codex`) backed by a `git-subdir` source at `./plugins/eawf` on the `plugins-dist` branch ref. A tag-triggered `.github/workflows/plugin-release.yaml` packages both runtimes, runs a blocking validate gate over the emitted trees, then publishes the Claude plugin to npm and pushes the Codex plugin to the `plugins-dist` branch.
 - **`/design` and `/spike` registered as first-class plugin skills.** The two skills now render into the packaged plugin trees alongside the existing skill set instead of living only as local conveniences.
 - **`eawf iter candidate-tag` command.** Reads (or, with a value, sets) the proposed `vMAJOR.MINOR.PATCH` release tag carried on the active iter via the new `Iter.candidate_tag` field.
@@ -254,14 +289,17 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 - **Operator-surface (TUI) build-out.** The `tui` surface gained: an evidence-mode close-readiness ledger over typed criteria with a why-peek drill modal and scrub-gated export; trust-mode oracle-determinism, escape-ledger, verifier/calibration drills, and a calibration-readiness tile; a research board with new/cancel campaign bindings and populated unresolved/options/conflicts tabs; a config modal that locks non-writable layers read-only; block-eighths bars + a braille spinner + a determinate ProgressBar with a unicode->ascii render-mode flip; a first-run carousel tour and active-mode help highlight; a workspace portfolio-totals row, cross-repo attention chips, and PR-count column; and a configurable multi-line statusline with glyph/color modes, ctx + rate-window bars, a stale-while-revalidate cache, and a global-install wizard.
 
 ### Changed
+
 - **`Wave.success_criteria` retyped from `list[str]` to `list[CriterionSpec]`.** Wave success criteria are now first-class typed rows (id, text, kind, acceptance style, evidence kind, quality dimension, measurable signal) rather than free-form strings, so the close-readiness loader can score real criteria instead of returning an empty stub. The operator-facing `--success` CLI input (and the daemon `add_wave` / `roadmap revise --add-wave` paths) still accept comma-separated strings; each is wrapped into a grandfathered `CriterionSpec` (`kind="legacy"`) at the boundary so the authoring surface is unchanged. The readiness `_load_criterion_specs` loader is no longer idle: it reads the typed field directly, and grandfathered legacy criteria render through the advisory legacy view path while authored typed criteria route through the gated spec path.
 - **Plugin doctor gained a disk-to-registry orphan drift kind.** The `plugin doctor` walk now reports on-disk skill directories that have no corresponding `SkillSpec` row in the skill registry as an `orphan` drift kind, so an operator can prune stray artifacts per the AGENTS.md deletion rule (it flags only — registry growth stays explicit).
 - **Plugin version derives from `eawf.__version__` across all three runtimes.** The Claude, Codex, and OpenCode adapters now stamp the packaged plugin version from the single `eawf.__version__` source instead of hard-coding it per runtime, so a version bump propagates everywhere automatically.
 
 ### Fixed
+
 - **Four previously idle EAWF lints wired as blocking pre-commit hooks.** `eawf002`, `eawf003`, `eawf010`, and `eawf011` were implemented but unwired; they now run as blocking pre-commit hooks.
 
 ### Migration
+
 - **`state.json` `schema_version` advanced 1.3 -> 1.4.** The bump is additive: it introduces the optional `Iter.candidate_tag` field and is replay-safe via the `v1_3_to_v1_4` migration. Run `eawf migrate` to advance an existing repo; a state document written under 1.3 loads unchanged once migrated, and no field is removed or renamed.
 - **`state.json` `schema_version` advanced 1.6 -> 1.7.** This edge is a real per-wave backfill, not a bare version bump: it retypes `Wave.success_criteria` from `list[str]` to `list[CriterionSpec]` and rewrites every legacy criterion string into a grandfathered `CriterionSpec` row (`id=CR-<n>`, `kind=legacy`, `acceptance_style=binary`, `evidence_kind=attested`, `quality_dimension=functional_suitability`, `measurable_signal` = the text truncated to 300 chars, or a fixed fallback for strings under the 20-char floor). An empty `success_criteria` list migrates to `[]`. Run `eawf migrate` to advance an existing repo; the `v1_6_to_v1_7` migration is replay-safe (an already-typed row passes through untouched) and an un-migrated 1.6 state with bare-string criteria would otherwise reject the typed field on load. The original criterion string is preserved verbatim in `CriterionSpec.text`, so no content is lost.
 - **`state.json` `schema_version` advanced 1.7 -> 1.8.** Additive with a per-wave backfill: it introduces the typed `Wave.gates` list (`GateSpec` rows the deterministic close gate scores against each wave's success criteria) with a model default of `[]`, and the `v1_7_to_v1_8` migration walks every wave to materialise an explicit `gates: []` where the key is absent. Run `eawf migrate` to advance an existing repo; the step is idempotent and replay-safe (a wave that already carries a `gates` list passes through untouched), so an already-1.8 state is a lossless round-trip and no field is removed or renamed.
@@ -269,17 +307,20 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 ## [0.4.1] - 2026-05-29
 
 ### Fixed
+
 - **`click` promoted to an explicit runtime dependency.** `eawf.surfaces.cli.commands.plan` imports `click` directly (it inspects `click.core.ParameterSource` to distinguish CLI-supplied flags from defaults). Pre-0.26 `typer` carried `click` as a hard transitive, so the direct import resolved on every install; `typer >= 0.26` migrated to `typer-slim` and made `click` optional, which broke fresh `uv tool install eawf==0.4.0` / `pip install eawf==0.4.0` with `ModuleNotFoundError: No module named 'click'` on the first CLI invocation. The runtime-deps table now lists `click >= 8.1` explicitly, and the `[tool.deptry.per_rule_ignores] DEP003` list drops the `click` entry that papered over the indirect import. No source changes — the fix is packaging-only.
 
 ## [0.4.0] - 2026-05-29
 
 ### BREAKING
+
 - **`IntentBrief` field set ratified per W24 audit.** The brief schema is now exactly seven fields: required `problem` + `desired_outcome` (each <=200 chars), optional `planned_steps` / `risks` / `priority_rationale`, and the carry-over `evidence_refs` / `source_brief_ids`. The legacy `goal` / `motivation` / `success_signal` fields are removed; any state document still carrying them fails `extra="forbid"` at load time. CLI surface follows: `eawf roadmap revise` and `eawf backlog edit` drop the `--intent-goal` / `--intent-motivation` / `--intent-success-signal` flags. Migration: replace `--intent-goal <X>` with `--intent-problem <Y> --intent-desired-outcome <Z>`; replace `--intent-motivation <X>` with `--intent-priority-rationale <X>`; replace `--intent-success-signal <X>` with `--intent-desired-outcome <X>` (the two fields name the same target state at the schema level). Self-only consumer scope; the staged W59-W60-W61 migration kept the call graph green throughout.
 - **Exit-code surface compressed 0..9 → 0..5 per C05 § 5.3.** The legacy nine-class CLI exit-code taxonomy is replaced by the five canonical buckets `OK (0)`, `USER_ERROR (1)`, `VALIDATION_ERROR (2)`, `STATE_CONFLICT (3)`, `DAEMON_UNREACHABLE (4)`, `INTERNAL_ERROR (5)`. The numeric values under the legacy names (`GENERIC_ERROR`, `NOT_FOUND`, `INVALID_INPUT`, `VALIDATION_FAILED`, `LOCK_CONFLICT`, `INSTRUMENT_MISSING`, `USER_DECLINED`, `INTEGRITY_VIOLATION`, `HOOK_BLOCKED`) have *changed*: each legacy name is now a deprecation alias mapped onto its new bucket per the § 5.3 bucket table. Scripts that pinned specific exit codes (e.g. `if rc == 4` meaning `VALIDATION_FAILED`) update to the new code (`2` for `VALIDATION_ERROR`) or to the alias name. Single-PR cutover — self-only consumer scope; no downstream announce window.
 - **`ErrorEnvelope` JSON shape introduced per C05 § 5.4.** Every non-zero exit emits a typed envelope with `schema_version`, `error` (canonical bucket name), `message`, `exit_code`, `exit_name`, `suggested_next_step`, `data` (carries legacy subclass name as `data.kind` for CI-script pivots), `correlation_id` (set on daemon-mediated errors), `protocol_version` (set on `ProtocolMismatch`), and `timestamp` (UTC ISO-8601). Replaces the prior four-field shape (`error`/`message`/`exit_code`/`exit_name`).
 - **Legacy `CliError` subclasses are now deprecation aliases.** `NotFound`/`InvalidInput`/`InstrumentMissing`/`UserDeclined` → `UserError`; `ValidationFailed` → `ValidationError`; `LockConflict`/`IntegrityViolation`/`HookBlocked` → `StateConflict`. Each remains importable as a subclass of its new bucket so existing `raise errors.NotFound(...)` callsites keep working; the legacy name surfaces through `ErrorEnvelope.data.kind`. Downstream waves retire each callsite to raise the new bucket class directly with `data={"kind": ...}`.
 
 ### Added
+
 - Daemon JSON-RPC error code mapping (C02 `-3200X` codes) folded onto the five-class taxonomy per C05 § 5.3 table; surfaced via `eawf.cli.errors.cli_error_for_rpc(rpc_code, message)`.
 - Per-`data.kind` hint refinement (`_KIND_HINTS`) preserves the legacy nine-class specificity inside the five buckets — operator hint text stays informative even after callsites switch to the new bucket classes.
 
@@ -288,6 +329,7 @@ This is the first development checkpoint of the v0.7.0 release train. It is publ
 This entry backfills the v0.3.0 release, which shipped without a changelog section. v0.3.0 spans phases P14 through P27 (a phase, written `P<NN>`, is eawf's unit of shipped value — one reviewable delivery), so the notes below summarise that arc rather than enumerating every wave.
 
 ### Added
+
 - **Multi-harness support: Codex and OpenCode join Claude Code (P14).** eawf can now dispatch agent work to three coding-agent runtimes, not just Claude Code. The OpenCode plugin ships as untyped `.js` to avoid a TypeScript build step; Goose / Aider / Cursor / Cline were deferred to v0.4 to keep the phase scoped.
 - **Skills surface: `/research` flags, `/blitz`, and the registry seam (P15).** The research skill gained depth flags, the auto-chained follow-up skill `/blitz` (it recurses into `/research` when more than one unknown remains, guarded by a recursion-depth env var), and the skill registry that later phases render plugin trees from.
 - **Artifact chassis and estimation (P16).** Durable research / plan / audit / decision / incident markdown gained the renderer-owned chassis sections (`Summary` / `References` / `Provenance` / `Scrub`) with dense `[N]` citation markers backed by typed `Citation` rows, plus the effort-unit (EU) estimation surface.
@@ -298,12 +340,14 @@ This entry backfills the v0.3.0 release, which shipped without a changelog secti
 - **The C-series kernel rebuild (P22-P27).** The bulk of v0.3 is a ground-up rebuild against an internalised design spec (the `C0N` cluster codes name the spec sections): the bootstrap + state + config + URN + id + validate kernel (P23, `C01`), the `eawfd` daemon keystone with JSON-RPC + smart-spawn + `portalock`-backed atomic writes (P24, `C02`), the spec-infrastructure + runtime-dispatch + VCS-convention contracts (P25, `C03`/`C07`/`C08`), the CLI + workflow/skills/agent/runtime surfaces + the operator TUI (P26, `C04`/`C05`/`C06`), and the observability + operations layer — the quality audit DSL, telemetry, and release/migration ops (P27, `C09`/`C10`).
 
 ### Changed
+
 - **The daemon (`eawfd`) became the sole canonical mutator of `state.json`.** Read access stays free, but every mutation now proxies through the daemon over JSON-RPC, falling back to a direct `portalock` write only when the daemon is unavailable (CI / one-shot / recovery shell). This is the structural backbone the later trust + fleet phases build on.
 - **PR cadence ratified as one-PR-per-phase with rebase-merge.** Decisions D07 (rebase-and-merge, never squash) and D10 (keep one-PR-per-phase) were ratified during this arc, so per-wave `[P<NN>-W<NN>]` history survives on the trunk and each phase reviews as one coherent story.
 
 ## [0.2.0] - 2026-05-11
 
 ### Added
+
 - Phase 7: state-CLI completeness — `audit set-verdict` mutator (B028), `backlog set-priority` mutator + CLI (B026), v0.1 retro-stamp of audits A01..A07, D08 deferring PR-cadence policy revisit to v0.2 ship.
 - Phase 8: orchestration core — subagent prompt renderer (B025), wave land cherry-pick CLI (B027), CI-fix loop wave plan + parser (B040), wave review CLI + findings parser (B041), budget-consume CLI.
 - Phase 9: backlog cleanups — insort dedup refactor, `Wave.blocks` reverse-index invariant validator, cross-platform absoluteness check in worktree path-fix, surface discarded delta in budget-consume rollback error.
@@ -314,6 +358,7 @@ This entry backfills the v0.3.0 release, which shipped without a changelog secti
 - Phase 13: feature cluster + v0.2 ship-gate — end-to-end golden scenarios under `golden_scenarios` pytest marker (B009), self-eval semantic scoring with 0.85 threshold gate (B042), audit-check DSL skeleton with 5 check kinds + YAML runner (B019, D02 resolved), session-level plugin-mode hooks (`SessionStart`/`Stop`/`PreToolUse` /`PostToolUse` on Bash `git commit`/`git push`) wired into `eawf plugin package claude` (B015), user-scope install probe via `eawf doctor --user-scope` + `eawf plugin update claude --check` (B017).
 
 ### Changed
+
 - Backlog hygiene: 13 shipped items (B025, B027, B029-B034, B037-B041) closed against their resolving commits and audit references.
 - `docs/architecture/plugins.md` § hooks rewritten: deferred-to-v0.2 paragraph replaced with the session-level event map; eawf-internal lifecycle events (wave/iter/phase/audit) stay fired by the state CLI through `eawf hook run`.
 - `docs/architecture/profiles.md` + `docs/policy/fixed-decisions.md`: quant/ml stub note refreshed — the audit-check DSL skeleton landed in P13 W04; profile bodies (B006/B007) still pending for v0.3.
@@ -321,11 +366,13 @@ This entry backfills the v0.3.0 release, which shipped without a changelog secti
 - Decisions: D09 defers B005 PyPI publish to v0.3, D10 keeps the one-PR-per-phase cadence through v0.2 close, D11 locks P13 scope at the 7 declared waves.
 
 ### Fixed
+
 - `PrBodyNotFound` N818 lint silenced after P12 close (P12-CORE).
 - Pre-commit hook drift on `state.json` line-numbers absorbed by `.secrets.baseline` refresh in P10/P11 carry-over.
 - Various per-phase PR-review must-fixes (P08/P09/P10).
 
 ### Known limitations (rolled forward to v0.3)
+
 - `state.project.version_target` setter is not yet exposed by the state CLI; the field stays unset for v0.2. Tracked as B048.
 - True user-scope plugin auto-update (background process) deferred; P13 W07 ships the probe (`doctor --user-scope` + `plugin update --check`) only.
 - Quant + ML profile bodies (B006/B007) stay catalog-stubs in v0.2; the DSL is functional, but the profile bodies have not been authored. v0.3 work.
@@ -333,6 +380,7 @@ This entry backfills the v0.3.0 release, which shipped without a changelog secti
 ## [0.1.0] - 2026-05-10
 
 ### Added
+
 - Phase 0: repo bootstrap — pyproject, uv-managed deps, `src/eawf` package skeleton, pytest + Hypothesis scaffolding, GitHub Actions CI matrix (macOS-26/15, Ubuntu-24.04/22.04), pre-commit hooks (ruff, detect-secrets, standard hygiene), and pre-built but gitignored `AGENTS.md` + `.claude/` agent-driven-dev assets.
 - Phase 1: typed state model, ID grammar, URN parser, atomic JSON writer with sibling lockfile, JSONL envelope store with 9 kind payloads, JSON Schema export, `eawf validate --strict` with schema + invariant gates.
 - Phase 2: estimation engine, scope discipline, evidence/audit guards, rollback timestamping, structured CLI error envelopes, portalocked serialisation across mutators, lifecycle event-first ordering.
@@ -343,6 +391,7 @@ This entry backfills the v0.3.0 release, which shipped without a changelog secti
 - Phase 6: spec internalization into `docs/`, packaged CC plugin landing README, `eawf plugin package claude` emitting installable plugin tree, v0.2 roadmap (B019..B043, D02..D06) recorded in `state.json`.
 
 ### Fixed
+
 - Path traversal, fsync, TTY block, header validator (P04 review).
 - Subsystem hardening across worktree/flow/mcp/status/clone (P05).
 - Wizard UX repair + checkpoint envelope hardening (P05).

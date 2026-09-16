@@ -213,6 +213,11 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     ),
     _row(".ea/artifacts/**", _YES, "durable audits, research, decisions and evidence"),
     _row(
+        ".ea/specs/**",
+        _NO,
+        "per-wave spec renders; the typed criteria in state are the record",
+    ),
+    _row(
         ".ea/local/**",
         _NO,
         "machine-local scratch; a clone starts empty by design",

@@ -80,6 +80,9 @@ CLAUDE.md
 # source and stays committed). A view regenerates from the corpus, so
 # committing one only creates a second thing to keep in sync.
 .ea/rules/views/
+# Per-wave spec renders. The typed criteria and gates in state.json are the
+# durable record, so a committed spec would be a second copy to keep in sync.
+.ea/specs/
 .ea/instrument-probe.json
 # instrument-probe cache embeds absolute host paths; the bare glob covers
 # nested copies a doctor / skill run may write under a resolved state dir
