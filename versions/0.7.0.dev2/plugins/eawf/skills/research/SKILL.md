@@ -1,0 +1,49 @@
+---
+name: research
+description: "Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations."
+argument-hint: "<topic-slug> [--depth=shallow|medium|deep|exhaustive] [--final] [--rounds=<n>] [--agents=<n>] [--budget=<tokens>]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /research
+
+## Canonical algorithm
+
+1. Define the question. State the hypothesis or unknown in one sentence.
+2. Survey: read source, run `git log`, fetch external refs as needed.
+3. Compare alternatives — bullet list of options with pros/cons.
+4. Verdict: recommend one path, or recommend "stay open" with the next discriminating experiment.
+5. If `--final`: persist a research brief with `references` and render it through `eawf research show --md`.
+
+## Output contract: `IntentBrief` + dispatch-plan
+
+The brief body conforms to `kernel/spec/intent.IntentBrief` — typed claims with `evidence_refs` (a brief is promotable iff every claim has at least one resolving + entailing reference; the EviBound rung-1 gate in `platform/artifacts/validation.validate_markdown_artifact` enforces this at promotion time, not at ingestion). The session also emits an optional dispatch-plan when the verdict names a follow-up wave the brief informs, so `/prep` and `/roadmap propose` can wire the brief into the next wave's References block automatically.
+
+## Options
+
+- `--depth shallow|medium|deep|exhaustive` — survey budget (file reads, external fetches, cross-wave grep sweeps); read from `ctx.args["depth"]`, then the `research.default_depth` layered-config leaf (reuses `StageProfile`, no new key). Default `medium`.
+- `--final` — persist a research brief with `references` and render it through `eawf research show --md`. Default off.
+- `--rounds <n>` — bound the fan-out iteration count (today the fan-out is depth-derived only). Default `1`.
+- `--agents <n>` — fan-out width; resolves through the `research.agent_count` layered-config leaf. Default `4`.
+- `--budget <tokens>` — recorded on the envelope; enforcement binds once metering rows exist. Default uncapped.
+
+## Spike convention
+
+A *spike* — a short read-only investigation done before claiming a real wave — is run via `/research` and produces a brief under `.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional `.ea/local/research/` sub-directory). The filename follows the `<date>-<slug>.md` stem so it sorts chronologically and slug-matches the wave, iter, or phase it informs. Briefs stay local-only — `.ea/local/` is gitignored — and are promoted to `.ea/artifacts/` only when they inform a decision recorded in `state.json` (the artifact-chassis rule then applies). See `spike-workflow` in AGENTS.md for the full convention.
+
+## Pre-flight checklist
+
+- [ ] No state mutations — read-only.
+- [ ] Cite sources as dense `[N]` references backed by `Citation` rows.
+- [ ] Keep promoted artifact prose scrub-clean and repo-relative.
+- [ ] Distinguish "what the code does" from "what the doc claims".
+- [ ] If this run is a spike, name the brief `<YYYY-MM-DD>-<slug>.md` and place it under `.ea/local/` (or `.ea/local/research/`) so the dispatch renderer can surface it to the next wave's executor.
+
+## Decision surfaces
+
+When the verdict reduces to a small set of named alternatives, surface the choice through `AskUserQuestion` rather than free-text — the operator can pick without retyping the option labels.
+
+## Output contract
+
+Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill = "/research"`. Body carries the structured findings; footer records any persisted brief.
