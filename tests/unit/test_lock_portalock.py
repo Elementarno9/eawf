@@ -103,16 +103,53 @@ def test_acquire_reads_env_lock_timeout_at_runtime(
                 pass
 
 
+def _read_heartbeat_at(path: Path) -> str:
+    """Return the lockfile's ``heartbeat_at``, reading across an in-place rewrite.
+
+    The ticker refreshes the lockfile through the held handle (truncate, then
+    write) and this reader holds no lock, so a read can land in the empty
+    window between the two. Only an unlocked observer can see that window;
+    the writer keeps the inode the advisory lock is bound to, so it must not
+    swap in a new file instead.
+    """
+    for _ in range(200):
+        try:
+            return str(json.loads(path.read_text())["heartbeat_at"])
+        except json.JSONDecodeError:
+            time.sleep(0.001)
+    raise AssertionError(f"lockfile never parsed: {path.read_text()!r}")
+
+
+def test_read_heartbeat_at_reads_across_the_empty_rewrite_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lockfile = tmp_path / "state.json.lock"
+    lockfile.write_text(json.dumps({"heartbeat_at": "2026-09-16T00:00:00+00:00"}))
+    real_read_text = Path.read_text
+    reads: list[int] = []
+
+    def _first_read_mid_rewrite(self: Path, *args: object, **kwargs: object) -> str:
+        reads.append(1)
+        if len(reads) == 1:
+            return ""
+        return real_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", _first_read_mid_rewrite)
+
+    assert _read_heartbeat_at(lockfile) == "2026-09-16T00:00:00+00:00"
+    assert len(reads) == 2
+
+
 def test_ticker_refreshes_heartbeat_during_hold(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")
     with portalock.acquire(
         target, timeout=1.0, heartbeat_interval=0.02, hold_ceiling=100.0
     ) as lock:
-        first = json.loads(lock.path.read_text())["heartbeat_at"]
+        first = _read_heartbeat_at(lock.path)
         time.sleep(0.2)
         # No manual heartbeat() call: the background ticker did the refresh.
-        second = json.loads(lock.path.read_text())["heartbeat_at"]
+        second = _read_heartbeat_at(lock.path)
     assert second > first
 
 

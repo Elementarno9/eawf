@@ -157,8 +157,10 @@ async def quiesce_volatile_chrome(pilot: Pilot[object]) -> None:
     await pilot.pause()
     # Force every heartbeat lit LAST: no further await runs before the caller
     # captures, so the 1.0 s pulse timer cannot toggle the dot back to blank
-    # between this ack and the capture.
-    for heartbeat in app.query(Heartbeat):
+    # between this ack and the capture. The query runs on the active screen,
+    # the one the capture reads: ``App.query`` walks the default screen, so
+    # after a mode switch it would light the home screen's dot instead.
+    for heartbeat in app.screen.query(Heartbeat):
         heartbeat.ack()
 
 

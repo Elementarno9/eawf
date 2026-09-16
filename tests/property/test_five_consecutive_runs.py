@@ -12,11 +12,11 @@ lockfile by ``seek(0)`` / ``truncate()`` / ``write()`` on the held handle,
 so the file is observably empty between the truncate and the write. The
 test reads the same path from the main thread while the ticker thread is
 mid-refresh, which on a loaded runner lands inside that window and raises
-``JSONDecodeError`` rather than failing an assertion. The window is a
-property of the non-atomic rewrite, not of the test: it closes only when
-the writer swaps in a fully-written file. Fixing the writer is outside
-this wave's file scope, so the loop below is the standing witness that the
-window stays narrow enough not to fire.
+``JSONDecodeError`` rather than failing an assertion. The writer cannot swap
+in a fully-written file, because that would move the inode the advisory lock
+is bound to, so the test's unlocked reader retries across the window instead;
+it fired on a loaded macOS runner while the reader still parsed once. The
+loop below is the standing witness that the reader tolerates it.
 
 **Concurrent evidence writes**
 (``test_evidence_concurrent_property.py``). N threads race the same
