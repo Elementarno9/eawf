@@ -29,6 +29,7 @@ This is the second development checkpoint of the v0.7.0 release train. It is the
 
 ### Fixed
 - **The wave status map is keyed by the in-flight status spelling,** so an in-flight wave is no longer read as absent.
+- **A mechanical wave outside a band-scoped profile's bands runs its own deterministic gates at close.** The band narrowing is meant to withdraw only the jury and the auditor, but the close gate returned on the narrowed flag before the scoring pass and the receipt floor, so under a banded profile such a wave closed with zero receipts. Only a profile that enforces nothing now skips the pass.
 - **The phase-PR signal is read from phase membership** rather than inferred from the iter count.
 - **License spellings and SPDX expressions the allowlist means are accepted,** a duplicate advisory row is collapsed, and `idna` moves to 3.19 to clear PYSEC-2026-215.
 - **The release receipt producer runs at all,** and the `credentials` signal is derived from a declared handle instead of asserted against nothing.

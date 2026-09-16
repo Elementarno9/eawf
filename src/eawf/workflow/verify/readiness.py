@@ -989,8 +989,10 @@ def resolve_wave_verify_block(
       This is the third preservation arm -- the band narrowing must never
       down-grade a wave whose verdict is required unconditionally;
     * a **non-band, non-high-risk, non-verdict-always** wave resolves to
-      ``enforce=False`` (and, consequently, no jury) -- it closes exactly as
-      it does today, advisory-only.
+      ``enforce=False`` and no jury. The close gate still scores such a wave's
+      decisive deterministic gates and holds it to the receipt floor, because
+      the merged block enforces; the narrowing withdraws only the auditor and
+      the jury.
 
     A block that does NOT declare ``uiux_bands`` is a whole-fleet enforce
     profile (the pre-W06 shape) and is returned untouched: its operator
