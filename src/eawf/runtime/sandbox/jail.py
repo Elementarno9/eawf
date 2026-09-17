@@ -267,21 +267,21 @@ def build_seatbelt_profile(*, cwd: Path, runtime: str, home: Path | None = None)
         cred_path = (home_dir / rel).resolve(strict=False)
         lines.append(f'(deny file-read* (subpath "{cred_path}"))')
 
-    # Shared egress + TLS floor. A spawned runtime CLI reaches
-    # its model API over direct HTTPS: eawf's UDS egress proxy speaks a custom
-    # CONNECT protocol third-party CLIs (codex / claude) cannot use AND is not
-    # wired into the spawn, so the jail itself must permit outbound network.
-    # TLS server-cert validation needs the keychain / trust daemons (securityd
-    # + trustd); without them the handshake fails with errSecNoKeychain
-    # (-25291). The CLIs stage their runtime sockets + PATH aliases under
-    # ``$TMPDIR``, which the env scrub pins to ``/private/tmp`` (an allowed
-    # write subpath) so the broad Darwin per-user temp (/private/var/folders)
-    # never has to be opened -- keeping write confinement tight. Host-scoped
-    # egress classification for third-party CLIs (a standard HTTP-CONNECT proxy
-    # in front of classify_egress) is the P31 follow-up; until it lands this
-    # trades the (idle, un-wired) egress allow/deny for a functioning spawn,
-    # while the cred-read denies above + the write confinement below stay
-    # intact (the agent still cannot read another tool's credentials).
+    # Shared network + TLS floor. A spawned runtime CLI reaches its model API
+    # over direct HTTPS: eawf's UDS egress proxy speaks a custom CONNECT
+    # protocol third-party CLIs (codex / claude) cannot use AND is started by
+    # no spawn path, so the jail itself must permit outbound network. This
+    # seatbelt therefore restricts NO destination: outbound network is
+    # unrestricted until the provider-native sandbox lands, and the jail's
+    # teeth are the cred-read denies above plus the write confinement below
+    # (the agent still cannot read another tool's credentials or write outside
+    # its tree). TLS server-cert validation needs the keychain / trust daemons
+    # (securityd + trustd); without them the handshake fails with
+    # errSecNoKeychain (-25291). The CLIs stage their runtime sockets + PATH
+    # aliases under ``$TMPDIR``, which the env scrub pins to ``/private/tmp``
+    # (an allowed write subpath) so the broad Darwin per-user temp
+    # (/private/var/folders) never has to be opened -- keeping write
+    # confinement tight.
     lines.append("(allow network*)")
     lines.append("(allow system-socket)")
     lines.append('(allow mach-lookup (global-name "com.apple.SecurityServer"))')

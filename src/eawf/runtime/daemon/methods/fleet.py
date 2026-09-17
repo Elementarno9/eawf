@@ -356,7 +356,7 @@ def _default_fork_evidence(ctx: MethodContext, wave_id: str, reason: FleetForkRe
 
 
 def budget_exhausted(run: FleetRun) -> bool:
-    """Return whether any armed spend cap on *run* is reached -- pure, DL-4.
+    """Return whether any armed claim cap on *run* is reached -- pure, DL-4.
 
     Tests the run's live tallies against its armed caps: the EU cap against
     :attr:`~eawf.kernel.state.models.FleetCounters.spent_eu`, the USD cap
@@ -365,6 +365,13 @@ def budget_exhausted(run: FleetRun) -> bool:
     far under every armed cap -- always reports ``False`` (the negative path).
     The first armed cap that is met returns ``True``; reaching any one cap is
     sufficient to stop claiming.
+
+    The EU and USD figures are claim caps, not spend ceilings: this gate sits
+    on the CLAIM step only, so a reached cap stops new claims and never kills
+    an in-flight lane. Whether the lanes already running are drained or reaped
+    is the separate ``hard_halt`` policy (``_Loop._budget_terminal``), so
+    a capped run can still finish above its dollar figure by the cost of the
+    work already in flight.
 
     Args:
         run: The live :class:`FleetRun` to test against its armed caps.
@@ -411,14 +418,18 @@ class DriveParams(BaseModel):
             frontier empties) or ``kclean`` (stop after K consecutive clean
             rounds).
         kclean_k: K threshold for the ``kclean`` mode. Ignored under ``drain``.
-        eu_cap: Optional cumulative EU spend cap; ``None`` leaves the run
+        eu_cap: Optional cumulative EU claim cap; ``None`` leaves the run
             uncapped. At the cap the loop stops claiming (DL-4).
-        usd_cap: Optional cumulative USD spend cap; ``None`` leaves the run
+        usd_cap: Optional cumulative USD claim cap; ``None`` leaves the run
             uncapped.
         waves_cap: Optional claimed-wave count cap; ``None`` leaves the run
             uncapped.
         hard_halt: The arm-modal budget toggle. ``False`` (the default) drains
             the in-flight lanes at the cap; ``True`` KILLS them (DL-3).
+
+    The three caps gate the claim step alone: a reached cap stops new claims
+    and never kills an in-flight lane by itself, so only ``hard_halt`` decides
+    whether the lanes already running are drained or reaped.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -2199,7 +2210,7 @@ class _Loop:
         ``pgid=None`` (the lane is unkillable). The claimed / dispatched
         counters advance per wave.
 
-        The DL-4 budget cap gates the claim step: once an armed spend cap is
+        The DL-4 budget cap gates the claim step: once an armed claim cap is
         reached (:func:`budget_exhausted`) the fill claims no further wave even
         with free lanes and frontier work remaining, so the run stops growing
         spend past its cap. In-flight lanes are left for the drain / hard-halt
@@ -2207,7 +2218,7 @@ class _Loop:
         """
         while len(self.run.lanes) < self.run.concurrency and self.run.frontier:
             if budget_exhausted(self.run):
-                # A spend cap fired: stop claiming new waves (the in-flight
+                # A claim cap fired: stop claiming new waves (the in-flight
                 # lanes are resolved by the drain / hard-halt branch).
                 break
             wave_id = self.run.frontier.pop(0)
@@ -3118,7 +3129,7 @@ class _Loop:
         in-flight lanes, then test the stop conditions. The loop stops with
         ``DONE`` + ``terminal_reason=converged`` when the ``kclean`` criterion
         is met (before draining to empty), with ``DONE`` +
-        ``terminal_reason=budget`` when a spend cap fires with frontier work
+        ``terminal_reason=budget`` when a claim cap fires with frontier work
         still queued (DL-4 -- graceful-drain or hard-halt per the run toggle),
         and with ``DONE`` + ``terminal_reason=drained`` when the frontier AND
         every lane have emptied. Each transition re-persists the run.
@@ -3203,7 +3214,7 @@ class _Loop:
                 self._persist()
                 return self.run
             if budget_stopped:
-                # A spend cap fired mid-drain with frontier work still queued:
+                # A claim cap fired mid-drain with frontier work still queued:
                 # resolve the still-in-flight lanes (drain or kill) and end on
                 # the budget cap.
                 return self._budget_terminal()
@@ -3244,7 +3255,7 @@ def arm_drive(
     - Otherwise the run transitions IDLE -> DRAINING and the loop fills
       ``min(concurrency, len(frontier))`` lanes, watches them, and advances the
       frontier until it empties (``terminal_reason=drained``), the ``kclean``
-      criterion is met (``terminal_reason=converged``), or a spend cap fires
+      criterion is met (``terminal_reason=converged``), or a claim cap fires
       (``terminal_reason=budget`` -- DL-4).
 
     The run is persisted through the daemon canonical state writer on arm and
@@ -3257,9 +3268,9 @@ def arm_drive(
         concurrency: Maximum lanes held at once.
         convergence: ``drain`` or ``kclean``.
         kclean_k: K threshold for ``kclean``.
-        eu_cap: Optional cumulative EU spend cap; ``None`` leaves the run
+        eu_cap: Optional cumulative EU claim cap; ``None`` leaves the run
             uncapped. At the cap the loop stops claiming new waves (DL-4).
-        usd_cap: Optional cumulative USD spend cap; ``None`` leaves the run
+        usd_cap: Optional cumulative USD claim cap; ``None`` leaves the run
             uncapped.
         waves_cap: Optional claimed-wave count cap; ``None`` leaves the run
             uncapped.
@@ -3400,7 +3411,7 @@ def resume(
     Flips a ``PAUSED`` run back to :data:`FleetRunState.DRAINING` and re-runs
     the loop over the remaining frontier + in-flight lanes. The transition +
     every subsequent round persists through the daemon canonical writer. The
-    DL-4 spend caps carry through on the persisted run, so a resumed run still
+    DL-4 claim caps carry through on the persisted run, so a resumed run still
     halts on a fired budget cap.
 
     Args:
@@ -4404,7 +4415,7 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     background -- the synchronous drain no longer blocks the daemon event loop,
     so a concurrent ``daemon.ping`` answers mid-run. The loop claims, dispatches
     spawn=True, watches, closes-or-forks, and advances the frontier unattended
-    until it empties / converges / hits a spend cap, honouring
+    until it empties / converges / hits a claim cap, honouring
     ``state.dispatch_paused`` (a paused state stays IDLE + claims nothing). Every
     transition is persisted only through the daemon canonical state writer, and
     the run transition is published on the bus (marshalled onto the loop thread
@@ -4414,7 +4425,7 @@ async def drive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         ctx: Daemon method context. Needs ``state_path`` (+ ``event_path`` for
             the live spawn path) to claim + dispatch + persist.
         params: JSON-RPC params per :class:`DriveParams` (including the optional
-            DL-4 ``eu_cap`` / ``usd_cap`` / ``waves_cap`` spend caps + the
+            DL-4 ``eu_cap`` / ``usd_cap`` / ``waves_cap`` claim caps + the
             ``hard_halt`` drain-vs-kill toggle).
 
     Returns:

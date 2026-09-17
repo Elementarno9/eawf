@@ -17,7 +17,8 @@
   │    risk policy  auto-close,      │
   │  fork on fail                    │
   │    convergence  drain to empty   │
-  │  caps  EU --  $ --  waves --     │
+  │  claim caps  EU --  $ --  waves  │
+  │  --                              │
   │  budget stop  drain in-flight    │
   │  lanes                           │
   │  risk matrix  clean auto-close   │

@@ -26,11 +26,11 @@ from eawf.workflow.dispatch.llm_assist import _failure_from_exc
 from eawf.workflow.dispatch.verdict import (
     DurableAuditContext,
     DurableAuditCriterion,
-    _strip_deterministic_annotation,
     _validate_durable_auditor_body,
     build_auditor_prompt,
     parse_auditor_report_body,
 )
+from eawf.workflow.dispatch.verdict_schema import strip_deterministic_annotation
 from tests._criteria_helpers import legacy_criteria
 
 _WAVE_ID = "P41-I01-W03"
@@ -220,7 +220,7 @@ def test_strip_deterministic_annotation_drops_one_trailing_annotation(
     echo: str, expected: str
 ) -> None:
     """Only one exact lowercase annotation at the very end is removed."""
-    assert _strip_deterministic_annotation(echo) == expected
+    assert strip_deterministic_annotation(echo) == expected
 
 
 @pytest.mark.parametrize("flag", ["true", "false"])

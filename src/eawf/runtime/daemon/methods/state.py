@@ -58,7 +58,7 @@ it and are re-exported here so the module's import surface is unchanged:
 
 from __future__ import annotations
 
-import hashlib
+import asyncio
 import logging
 import time
 from collections.abc import Callable
@@ -66,7 +66,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
-import orjson
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
@@ -141,6 +140,7 @@ from eawf.runtime.daemon.methods.state_context import (
     IDEMPOTENCY_TTL_SECONDS,
     bus_for_root,
     config_root_for_state_path,
+    digest_snapshot,
     event_store_path_for,
     evict_expired,
     idempotency_cache,
@@ -160,6 +160,7 @@ from eawf.runtime.daemon.methods.state_events import (
 from eawf.runtime.daemon.methods.state_jury import (
     build_durable_audit_context,
     cross_vendor_lanes_ready,
+    durable_auditor_extra_args,
     jury_spawn_factory,
     load_wave_spec,
     persist_auditor_session_snapshot,
@@ -209,6 +210,7 @@ _compute_wave_close_extras = compute_wave_close_extras
 _compute_wave_close_readiness = compute_wave_close_readiness
 _counters_incomparable = counters_incomparable
 _cross_vendor_lanes_ready = cross_vendor_lanes_ready
+_durable_auditor_extra_args = durable_auditor_extra_args
 _enforce_wave_verdict_gate = enforce_wave_verdict_gate
 _jury_spawn_factory = jury_spawn_factory
 _merge_runtime_latest = merge_runtime_latest
@@ -437,13 +439,15 @@ async def _produce_high_risk_verdict(
         return rows[-1].envelope.id if rows else None
     events_path = store_path(state_path, StoreKind.EVENT)
     # Thread events_path so the single fresh-auditor spawn streams its stdout
-    # live to the auditor's Watch roster row.
+    # live to the auditor's Watch roster row, and the durable close's forced
+    # JSON schema so the answer is constrained rather than merely requested.
     spawn = _jury_spawn_factory(
         state,
         wave,
         repo_root=repo_root,
         timeout_seconds=wall_clock_seconds,
         events_path=events_path,
+        extra_args_by_runtime=_durable_auditor_extra_args(durable_context),
     )("claude-code")
 
     def _persist_live_auditor_session(registered: State) -> None:
@@ -816,6 +820,9 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     appends and publishes a ``wave_elapsed_update`` event without
     mutating ``state.json``.
 
+    The read, parse and validation run on a worker thread so the poll
+    cadence never blocks the loop; only the append and publish run on it.
+
     Args:
         ctx: Server context — ``ctx.state_path`` is consulted only as a
             legacy fallback when *params* omits ``repo_root``.
@@ -826,23 +833,16 @@ async def digest(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """
     args = DigestParams.model_validate(params)
     state_path = resolve_state_path(repo_root=args.repo_root, ctx=ctx)
-    if not state_path.exists():
-        # An absent state file is a digest of empty bytes — keeps the
-        # TUI poll path from faulting on an uninitialised project.
-        return DigestResult(version=hashlib.sha256(b"").hexdigest()[:16]).model_dump(mode="json")
-    raw = state_path.read_bytes()
-    version = hashlib.sha256(raw).hexdigest()[:16]
-    try:
-        payload = orjson.loads(raw)
-        state = State.model_validate(payload)
-    except (orjson.JSONDecodeError, ValidationError) as exc:
-        logger.warning(f"digest_elapsed_update status='skip' err={exc!r}")
-    else:
+    version, state = await asyncio.to_thread(digest_snapshot, state_path)
+    if state is not None:
         event_path = (
             Path(ctx.event_path)
             if args.repo_root is None and ctx.event_path is not None
             else store_path(state_path, StoreKind.EVENT)
         )
+        # The append and the bus publish stay on the event loop: the bus
+        # hands envelopes to per-connection queues that only the loop
+        # drains, so publishing from a worker thread would race it.
         publish_wave_elapsed_updates(
             ctx=ctx,
             state=state,
@@ -872,11 +872,11 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ``ctx.wal_dir`` is missing.
         DaemonValidationError: when the mutation body fails the typed
             contract, a closure-kind or coded claim-session lifecycle guard
-            rejects the mutation, or the post-mutation state fails schema /
-            invariant validation; mapped to ``-32002 validation_failed`` by
-            the server. Other non-closure lifecycle-guard rejections raise a
-            plain ``ValueError`` (``-32602 INVALID_PARAMS``) so the exit code
-            matches the in-process fallback.
+            rejects the mutation, ``state.json`` regressed (``state_regressed``),
+            or the post-mutation state fails schema / invariant validation;
+            mapped to ``-32002 validation_failed``. Other non-closure
+            lifecycle-guard rejections raise a plain ``ValueError`` (``-32602
+            INVALID_PARAMS``) so the exit code matches the in-process fallback.
     """
     try:
         args = MutateParams.model_validate(params)
@@ -953,6 +953,7 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         with portalock.acquire(state_path, timeout=5.0) as generic_lock_handle:
             ctx.active_lock_handle = generic_lock_handle
             state, payload = _read_state(state_path)
+            ctx.refuse_regressed_state(state_path, updated_at=state.updated_at)
             before_version = state_version(payload)
 
             apply_mutation_under_lock(
@@ -1027,19 +1028,13 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # id); a PENDING record would instead be POISONED and the
             # event row silently lost, diverging state from the event log.
             atomic_write_json_locked(state_path, new_payload)
+            ctx.note_state_written(state_path, updated_at=state.updated_at)
             wal.mark_applied(wal_path, mutation.mutation_id)
             append_envelope(event_path, envelope)
             if drift_envelope is not None:
                 append_envelope(event_path, drift_envelope)
             wal.mark_fsynced(wal_path, mutation.mutation_id)
 
-            # Persist the deterministic-pass evidence rows the close gate
-            # minted, AFTER the state write commits. Each row lands in the
-            # sibling ``evidence.jsonl`` (its own portalock, distinct from
-            # the state lock — no deadlock) so the deterministic-evidence
-            # pipeline is no longer write-idle: the trust scorecard reads
-            # these ``deterministic`` / ``pass`` rows to label the wave
-            # ``verified``. Empty on every advisory / non-enforcing close.
             bus = bus_for_root(ctx, state_path)
             if bus is not None:
                 bus.publish(envelope)
@@ -1127,9 +1122,9 @@ async def _mutate_wave_close(
         Dict matching :class:`MutateResult`.
 
     Raises:
-        DaemonValidationError: On a lifecycle / gate / schema rejection, or
-            when the optimistic re-check finds the wave row changed during
-            pre-flight (``close_preflight_stale``).
+        DaemonValidationError: On a lifecycle / gate / schema rejection, a
+            regressed ``state.json`` (``state_regressed``), or a wave row
+            changed during pre-flight (``close_preflight_stale``).
     """
     from functools import partial
 
@@ -1245,6 +1240,7 @@ async def _mutate_wave_close(
         with portalock.acquire(state_path, timeout=5.0) as lock_handle:
             ctx.active_lock_handle = lock_handle
             state, payload = _read_state(state_path)
+            ctx.refuse_regressed_state(state_path, updated_at=state.updated_at)
             before_version = state_version(payload)
             if before_version != preflight_version:
                 # The optimistic re-check: another writer moved state during
@@ -1346,6 +1342,7 @@ async def _mutate_wave_close(
             )
             wal.write_pending(wal_path, record)
             atomic_write_json_locked(state_path, new_payload)
+            ctx.note_state_written(state_path, updated_at=state.updated_at)
             wal.mark_applied(wal_path, mutation.mutation_id)
             append_envelope(event_path, envelope)
             if drift_envelope is not None:

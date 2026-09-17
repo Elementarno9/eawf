@@ -723,6 +723,7 @@ class StoreKind(StrEnum):
     OPERATOR_INPUT = "operator_input"
     JURY_BALLOT = "jury_ballot"
     GATE_RECEIPT = "gate_receipt"
+    GATE_RERECEIPT = "gate_rereceipt"
     LEGACY_AUDIT_DISPOSITION = "legacy_audit_disposition"
     COMMIT_REPIN = "commit_repin"
     RELEASE = "release"

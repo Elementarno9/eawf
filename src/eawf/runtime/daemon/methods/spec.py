@@ -80,6 +80,7 @@ from eawf.runtime.daemon.methods.spec_sync_lints import (
     measure_criteria,
     render_lint_findings,
     require_affordance_parity_for_ui_scope,
+    require_resolvable_eawf_verbs,
     require_transition_coverage_for_ui_transitions,
 )
 from eawf.runtime.daemon.methods.state_context import (
@@ -1037,7 +1038,9 @@ def _apply_sync_locked(
 
     Raises:
         DaemonValidationError: When the wave is not PENDING, a lint finding
-            rejects the criteria, the cross-references do not resolve, the
+            rejects the criteria, a gate argv or a ``measurable_signal`` names
+            an eawf verb the command tree does not resolve, the
+            cross-references do not resolve, the
             wave is UI-scope but its gates omit an ``affordance_parity`` gate,
             a UI-scope ``transitions_to`` response omits a
             ``transition_coverage`` gate, or the post-mutation state fails
@@ -1061,6 +1064,11 @@ def _apply_sync_locked(
     )
     if measurability or coverage:
         raise DaemonValidationError(render_lint_findings(measurability, coverage))
+
+    # A gate argv or a signal naming a verb the CLI does not have syncs clean
+    # and fails only when the gate runs at close, so resolve every named verb
+    # path against the command tree while the wave row is still untouched.
+    require_resolvable_eawf_verbs(wave_id=args.wave_id, criteria=criteria, gates=gates)
 
     # A gated criterion that authored no response clause would land untiered,
     # so derive the clause from its cheapest bound gate first: the validator

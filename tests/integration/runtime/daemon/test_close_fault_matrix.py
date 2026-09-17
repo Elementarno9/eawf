@@ -209,8 +209,9 @@ def _configure_real_fault_matrix(
         repo_root: Path,
         timeout_seconds: float = 600.0,
         events_path: Path | None = None,
+        extra_args_by_runtime: Any = None,
     ) -> Any:
-        del repo_root, timeout_seconds, events_path
+        del repo_root, timeout_seconds, events_path, extra_args_by_runtime
         return lambda _runtime: auditor
 
     monkeypatch.setattr(
@@ -566,13 +567,13 @@ def test_post_ready_governing_drift_fails_final_close_cas(
         monkeypatch=monkeypatch,
     )
     runner_drifted = False
-    real_runner_digest = close_module._runner_environment_digest
+    real_runner_digest = close_module.runner_environment_digest
     if drift_kind == "runner":
 
         def _runner_digest() -> str:
             return "0" * 64 if runner_drifted else real_runner_digest()
 
-        monkeypatch.setattr(close_module, "_runner_environment_digest", _runner_digest)
+        monkeypatch.setattr(close_module, "runner_environment_digest", _runner_digest)
     real_ready = close_module.mark_attempt_ready
 
     def _ready(*args: Any, **kwargs: Any) -> Any:

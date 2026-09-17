@@ -31,6 +31,12 @@ is absent by construction. The gate lane additionally carries the
 runtime directory and ledger a gate reaches rather than granting it
 anything.
 
+What this module does NOT do: the env scrub is the credential half of the
+safety floor alone. Its companion egress proxy is started by no spawn path,
+so outbound network is unrestricted until the provider-native sandbox lands
+-- a scrubbed child still reaches any host it likes, it just reaches it
+without the parent's credentials.
+
 Authoritative Keep/Drop table + auth precedence:
 ``.ea/local/research/2026-05-30-safety-floor.md`` (section "The floor:
 env-scrub + egress proxy").

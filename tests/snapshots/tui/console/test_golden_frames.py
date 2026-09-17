@@ -11,20 +11,28 @@ import asyncio
 
 import pytest
 
-from .console_chassis.chassis.app import ConsoleApp
-from .console_chassis.chassis.fixture import load_fixture
-from .console_chassis.chassis.session import SIZES, FakeClock
-from .console_chassis.harness.capture import capture_cells, capture_rows
-from .console_chassis.harness.replay import Result, load_sequences, visible
-from .console_chassis.harness.settle import settle
+from eawf.surfaces.tui.console.app import ConsoleApp
+from eawf.surfaces.tui.console.clock import FakeClock
+from eawf.surfaces.tui.console.fixture import load_fixture
+from eawf.surfaces.tui.console.harness import (
+    Result,
+    capture_cells,
+    capture_rows,
+    load_contract,
+    settle,
+    visible,
+)
+from eawf.surfaces.tui.console.session import SIZES
 
-_INDEX, _STATES, _JOURNEYS = load_sequences()
+from .goldens import LAYOUT
+
+_CONTRACT = load_contract(LAYOUT.sequences)
 
 #: Every frame id of the tracked contract, in the order the pack files carry them.
-FRAME_IDS: tuple[str, ...] = tuple(state["id"] for state in _STATES)
+FRAME_IDS: tuple[str, ...] = tuple(state.id for state in _CONTRACT.states)
 
 #: Every journey id, whose steps carry their own settle-cycle counts.
-JOURNEY_IDS: tuple[str, ...] = tuple(journey["id"] for journey in _JOURNEYS)
+JOURNEY_IDS: tuple[str, ...] = tuple(journey.id for journey in _CONTRACT.journeys)
 
 #: The contract's census, asserted rather than read from the pack's stale count fields.
 EXPECTED_FRAMES = 261
@@ -66,7 +74,7 @@ def test_capture_probe_settles_to_a_clean_grid(size: tuple[int, int]) -> None:
     width, height = size
 
     async def body() -> None:
-        app = ConsoleApp(load_fixture(), FakeClock())
+        app = ConsoleApp(load_fixture(LAYOUT.fixture), FakeClock())
         async with app.run_test(size=size) as pilot:
             _text, cycles = await settle(pilot)
             rows = capture_rows(app)

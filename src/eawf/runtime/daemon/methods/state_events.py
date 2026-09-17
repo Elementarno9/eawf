@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import threading
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,6 +52,12 @@ _WAVE_ELAPSED_ACTIVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
 _WAVE_ELAPSED_WARN_FRACTION: Final[float] = 0.8
 _WAVE_ELAPSED_ERROR_FRACTION: Final[float] = 1.0
 _WAVE_ELAPSED_LAST_MINUTE: dict[int, dict[str, int]] = {}
+#: The cache is read-then-written by every digest poll, and digest polls now
+#: hand their parse to a worker thread, so two polls over the same wave can
+#: reach the check-and-set concurrently. A process-wide lock keeps the pair
+#: atomic: without it both callers observe the stale minute and each appends
+#: an update for the same minute boundary.
+_WAVE_ELAPSED_CACHE_LOCK: Final[threading.Lock] = threading.Lock()
 
 # ---- Envelope construction --------------------------------------------------
 
@@ -94,6 +101,30 @@ def bucket_drift_extras(state: State) -> dict[str, str | int | float | bool]:
 def _wave_elapsed_cache(ctx: MethodContext) -> dict[str, int]:
     """Return the daemon-local ``wave_id -> elapsed_minute`` publish cache."""
     return _WAVE_ELAPSED_LAST_MINUTE.setdefault(id(ctx), {})
+
+
+def claim_elapsed_minute(*, ctx: MethodContext, cache_key: str, elapsed_minute: int) -> bool:
+    """Claim *elapsed_minute* for *cache_key*, returning True on first claim.
+
+    The whole check-and-set runs under :data:`_WAVE_ELAPSED_CACHE_LOCK`, so
+    exactly one of any number of concurrent callers wins a given minute
+    boundary and the losers skip their append.
+
+    Args:
+        ctx: Server context; keys the daemon-local publish cache.
+        cache_key: Per-root wave key, since wave ids repeat across repos.
+        elapsed_minute: Whole elapsed minutes since the wave was claimed.
+
+    Returns:
+        True when this caller claimed the minute and must publish,
+        False when another caller already published it.
+    """
+    with _WAVE_ELAPSED_CACHE_LOCK:
+        cache = _wave_elapsed_cache(ctx)
+        if cache.get(cache_key) == elapsed_minute:
+            return False
+        cache[cache_key] = elapsed_minute
+        return True
 
 
 def _wave_elapsed_budget_minutes(state: State, wave_id: str) -> float | None:
@@ -192,7 +223,6 @@ def publish_wave_elapsed_updates(
     publish an inflated elapsed clock. A wave without a ``claimed_at``
     (no work-start fact) is skipped, so no elapsed update fires for it.
     """
-    cache = _wave_elapsed_cache(ctx)
     bus = bus_for_root(ctx, state_path)
     for wave in state.waves.values():
         if wave.status not in _WAVE_ELAPSED_ACTIVE_STATUSES or wave.claimed_at is None:
@@ -204,9 +234,8 @@ def publish_wave_elapsed_updates(
         # Wave ids repeat across repos (every repo has a P01-W01), so the
         # dedup cache is keyed per root as well.
         cache_key = f"{state_path}:{wave.id}"
-        if cache.get(cache_key) == elapsed_minute:
+        if not claim_elapsed_minute(ctx=ctx, cache_key=cache_key, elapsed_minute=elapsed_minute):
             continue
-        cache[cache_key] = elapsed_minute
         elapsed_minutes = elapsed_seconds / 60.0
         envelope = _build_wave_elapsed_envelope(
             wave_id=wave.id,

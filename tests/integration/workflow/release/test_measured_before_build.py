@@ -45,7 +45,7 @@ from eawf.runtime.daemon.methods.release import create
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence._io import atomic_write_state, load_state
 from eawf.workflow.evidence.measured_contract import (
-    IMPORTER_CORPUS_SCALE_BAND,
+    IMPORTER_CORPUS_MAGNITUDE,
     LOCAL_SPIKE_ROOT,
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
@@ -180,22 +180,28 @@ def test_the_importer_contract_resolves_by_artifact_urn() -> None:
     assert row.metadata["contract_id"] == CONTRACT_IDS[0]
 
 
-def test_the_importer_contract_is_measured_at_the_thousands_scale_band() -> None:
-    """The importer asserts over the production corpus, in the thousands band."""
+def test_the_importer_contract_is_measured_at_the_thousands_corpus_magnitude() -> None:
+    """The importer asserts over the production corpus, at thousands of rows.
+
+    The two names are separate observations and both are asserted here:
+    ``corpus_magnitude`` says how much data the probe ran over, while the
+    environment's ``scale_band`` says what kind of environment it ran in.
+    """
     rows = assert_measured_contracts(state_with(CONTRACT_IDS), DEV2)
 
     observed = rows[0].metadata["observed"]
-    assert observed["scale_band"] == IMPORTER_CORPUS_SCALE_BAND == "thousands"
+    assert observed["corpus_magnitude"] == IMPORTER_CORPUS_MAGNITUDE == "thousands"
+    assert "scale_band" not in observed
     assert rows[0].metadata["environment"]["scale_band"] == ScaleBand.PRODUCTION.value
 
 
-def test_the_importer_contract_band_matches_the_committed_corpus_pin() -> None:
-    """The band is the one the rehearsal itself is judged against."""
+def test_the_importer_contract_magnitude_matches_the_committed_corpus_pin() -> None:
+    """The magnitude is the one the rehearsal itself is judged against."""
     pin = json.loads(CORPUS_PIN.read_text(encoding="utf-8"))
     rows = assert_measured_contracts(state_with(CONTRACT_IDS), DEV2)
 
     observed = rows[0].metadata["observed"]
-    assert observed["scale_band"] == pin["declared_band"]
+    assert observed["corpus_magnitude"] == pin["declared_magnitude"]
     assert observed["corpus_rows"] == pin["observed_rows"]
     assert observed["observed_at_revision"] == pin["observed_at_revision"]
 

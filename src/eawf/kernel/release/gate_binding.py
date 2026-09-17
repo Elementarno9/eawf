@@ -171,14 +171,33 @@ DEV2_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (
     ReleaseGateName.WAIVER_COUNT,
 )
 
-#: The gate names each profile admits. Only ``dev1`` and ``dev2`` are
-#: authored: the later profiles add their gates with the waves that build
-#: their producers, and an unauthored profile is a loud
-#: :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than a silently
-#: empty gate set.
+#: The three gates ``native_canary`` adds on top of the ``dev2`` twelve.
+#: The first epoch-2 rung is the first that dispatches a real runtime
+#: tuple into a disposable canary repository, so it is the first that can
+#: prove any of them: that the advertised runtimes hold their
+#: conformance, that the acceptance bundles it names were completed, and
+#: that the rehearsal left the production root untouched. The last one is
+#: what makes a canary a canary rather than an experiment run on the
+#: operator's own tree.
+NATIVE_CANARY_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    ReleaseGateName.PROVIDER,
+    ReleaseGateName.MEMBERSHIP,
+    ReleaseGateName.CANARY_ISOLATION,
+)
+
+#: The gate names each profile admits. Only ``dev1``, ``dev2`` and
+#: ``native_canary`` are authored: the later profiles add their gates
+#: with the waves that build their producers, and an unauthored profile
+#: is a loud :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than
+#: a silently empty gate set.
 PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] = {
     ReleaseGateProfile.DEV1: DEV1_GATES,
     ReleaseGateProfile.DEV2: (*DEV1_GATES, *DEV2_ADDED_GATES),
+    ReleaseGateProfile.NATIVE_CANARY: (
+        *DEV1_GATES,
+        *DEV2_ADDED_GATES,
+        *NATIVE_CANARY_ADDED_GATES,
+    ),
 }
 
 
@@ -632,6 +651,7 @@ def resolved_proof_commands(
 __all__ = [
     "DEV1_GATES",
     "DEV2_ADDED_GATES",
+    "NATIVE_CANARY_ADDED_GATES",
     "PROFILE_GATES",
     "PROOF_ARGV_ALLOWLIST",
     "WAIVER_BLOCK_REF",

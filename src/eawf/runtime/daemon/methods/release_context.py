@@ -15,11 +15,13 @@ release family's import graph a layer rather than a tangle.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
 
+from eawf.kernel.release.checkpoint_template import with_membership_refs
 from eawf.kernel.spec.release import Release, validate_release_against_train
 from eawf.kernel.spec.release_config import (
     ReleaseConfig,
@@ -36,18 +38,29 @@ from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 logger = logging.getLogger(__name__)
 
 
-def resolve_config(version: str) -> ReleaseConfig:
+def resolve_config(version: str, *, membership_refs: Sequence[str] = ()) -> ReleaseConfig:
     """Return the loaded configuration for checkpoint *version*.
+
+    From ``dev3`` on, a rung requires non-empty membership bundles, and
+    no rendered configuration can declare them: which bundles were
+    accepted is a fact about the record being cut. So the caller that
+    holds the record passes its refs here, and the loader's
+    cardinality check runs against the record rather than against an
+    empty list the template could never have filled.
 
     Args:
         version: Normalized checkpoint version.
+        membership_refs: The record's acceptance bundle references.
+            Empty for the epoch-1 rungs, which forbid them outright.
 
     Returns:
         The validated :class:`~eawf.kernel.spec.release_config.ReleaseConfig`.
 
     Raises:
         DaemonValidationError: When no configuration is authored for the
-            version, or the authored one is rejected by the loader.
+            version, or the authored one is rejected by the loader --
+            including ``invalid_membership_cardinality`` when a rung that
+            requires membership is resolved without it.
     """
     try:
         source = checkpoint_config_yaml(version)
@@ -55,8 +68,11 @@ def resolve_config(version: str) -> ReleaseConfig:
         raise DaemonValidationError(
             f"validation_failed: no release configuration for {version!r}"
         ) from exc
+    document: str | Mapping[str, Any] = source
+    if membership_refs:
+        document = with_membership_refs(source, membership_refs=membership_refs)
     try:
-        return load_release_config(source, train=V07_TRAIN)
+        return load_release_config(document, train=V07_TRAIN)
     except ReleaseConfigError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
 

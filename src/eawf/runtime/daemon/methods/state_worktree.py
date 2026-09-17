@@ -190,6 +190,12 @@ def commit_worktree_state(
     boot-time ``ctx.state_path`` anchor (the legacy / in-process test
     fallback). A real *repo_root* routes the state + event writes to that
     repo, matching the per-request anchoring the worktree-land handlers use.
+
+    Raises:
+        StateRegressedError: ``state.json`` is older than the one this
+            daemon process last wrote at the path; nothing is written.
+        DaemonValidationError: The mutator or the post-mutation validation
+            refused the write.
     """
     from eawf.runtime.lock import portalock
     from eawf.surfaces.cli import errors as cli_errors
@@ -202,6 +208,7 @@ def commit_worktree_state(
     try:
         with portalock.acquire(state_path, timeout=5.0):
             state, payload = read_state(state_path)
+            ctx.refuse_regressed_state(state_path, updated_at=state.updated_at)
             before_version = state_version(payload)
             try:
                 result = apply_func(state)
@@ -244,6 +251,7 @@ def commit_worktree_state(
             )
             wal.write_pending(wal_path, record)
             atomic_write_json_locked(state_path, new_payload)
+            ctx.note_state_written(state_path, updated_at=state.updated_at)
             wal.mark_applied(wal_path, record_id)
             append_envelope(event_path, envelope)
             wal.mark_fsynced(wal_path, record_id)

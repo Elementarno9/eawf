@@ -308,6 +308,39 @@ def close_resume_cmd(
     _emit_result(result, flags=flags, fail_nonclosed=should_wait)
 
 
+def render_rereceipt(result: dict[str, Any]) -> str:
+    """Render one compact human-readable re-receipt summary."""
+    lines = [
+        (
+            f"rereceipt {result['wave_id']} at {result['landed_sha'][:12]} "
+            f"binding={result['binding_id']}"
+        ),
+        (f"gates passed={result['passed_count']} failed={result['failed_count']}"),
+    ]
+    receipt_ids = result.get("receipt_ids") or []
+    lines.append(f"receipts={', '.join(receipt_ids) if receipt_ids else 'none'}")
+    return "\n".join(lines)
+
+
+@close_app.command("rereceipt")
+def close_rereceipt_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="CLOSED wave whose gates are re-run.")],
+) -> None:
+    """Re-run a closed wave's gates at its landed commit and bind receipts."""
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = call_close_rpc(
+            method="close.rereceipt",
+            params={"wave_id": wave_id},
+            flags=flags,
+        )
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    emit_json_or_text(result, render_rereceipt(result), flags=flags)
+
+
 @close_app.command("cancel")
 def close_cancel_cmd(
     ctx: typer.Context,
@@ -335,6 +368,7 @@ __all__ = [
     "call_close_rpc",
     "close_app",
     "render_close_status",
+    "render_rereceipt",
     "submit_hosted_close",
     "wait_for_close",
 ]

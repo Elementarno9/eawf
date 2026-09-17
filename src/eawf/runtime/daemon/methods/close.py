@@ -206,7 +206,7 @@ def _close_task_key(repo_root: Path, attempt_id: str) -> tuple[Path, str]:
     return repo_root.resolve(), attempt_id
 
 
-def _policy_digest(
+def policy_digest(
     state: State,
     *,
     repo_root: Path,
@@ -235,7 +235,7 @@ def _policy_digest(
     )
 
 
-def _runner_environment_digest() -> str:
+def runner_environment_digest() -> str:
     from eawf.runtime.daemon import gate_execution
     from eawf.workflow.audit_dsl import models as gate_models
     from eawf.workflow.audit_dsl import registry as gate_registry
@@ -261,7 +261,7 @@ def _runner_environment_digest() -> str:
     )
 
 
-def _dependency_binding_digest(state: State, *, wave_id: str) -> str:
+def dependency_binding_digest(state: State, *, wave_id: str) -> str:
     """Digest the exact upstream generations bound to one Wave."""
     rows = sorted(
         (
@@ -369,7 +369,7 @@ def _attempt_digest_mismatches(
             attempt.spec_digest,
         ),
         "verification policy changed": (
-            _policy_digest(
+            policy_digest(
                 state,
                 repo_root=repo_root,
                 wave_id=attempt.wave_id,
@@ -377,11 +377,11 @@ def _attempt_digest_mismatches(
             attempt.policy_digest,
         ),
         "runner environment changed": (
-            _runner_environment_digest(),
+            runner_environment_digest(),
             attempt.runner_environment_digest,
         ),
         "dependency binding changed": (
-            _dependency_binding_digest(state, wave_id=attempt.wave_id),
+            dependency_binding_digest(state, wave_id=attempt.wave_id),
             attempt.dependency_binding_digest,
         ),
     }
@@ -462,13 +462,13 @@ def create_attempt(
     )
     wave_revision_digest = _digest(wave.model_dump(mode="json"))
     gate_manifest_digest = _digest([gate.model_dump(mode="json") for gate in wave.gates])
-    policy_digest = _policy_digest(
+    wave_policy_digest = policy_digest(
         state,
         repo_root=repo_root,
         wave_id=args.wave_id,
     )
-    runner_digest = _runner_environment_digest()
-    dependency_binding_digest = _dependency_binding_digest(
+    runner_digest = runner_environment_digest()
+    wave_dependency_digest = dependency_binding_digest(
         state,
         wave_id=args.wave_id,
     )
@@ -487,8 +487,8 @@ def create_attempt(
             "criteria": criteria_digest,
             "gates": gate_manifest_digest,
             "wave_revision": wave_revision_digest,
-            "dependency_bindings": dependency_binding_digest,
-            "policy": policy_digest,
+            "dependency_bindings": wave_dependency_digest,
+            "policy": wave_policy_digest,
             "runner": runner_digest,
             "outcome": args.outcome,
             "tokens_consumed": args.tokens_consumed,
@@ -527,9 +527,9 @@ def create_attempt(
         spec_digest=integration.spec_digest,
         criteria_digest=criteria_digest,
         gate_manifest_digest=gate_manifest_digest,
-        policy_digest=policy_digest,
+        policy_digest=wave_policy_digest,
         runner_environment_digest=runner_digest,
-        dependency_binding_digest=dependency_binding_digest,
+        dependency_binding_digest=wave_dependency_digest,
         required_gate_ids=[gate.id for gate in wave.gates],
         gate_receipt_ids=[],
         audit_requirement=(
@@ -658,13 +658,13 @@ def _create_repair_attempt(
         )
         gate_manifest_digest = _digest([gate.model_dump(mode="json") for gate in wave.gates])
         wave_revision_digest = _digest(wave.model_dump(mode="json"))
-        policy_digest = _policy_digest(
+        wave_policy_digest = policy_digest(
             state,
             repo_root=repo_root,
             wave_id=source.wave_id,
         )
-        runner_digest = _runner_environment_digest()
-        dependency_binding_digest = _dependency_binding_digest(
+        runner_digest = runner_environment_digest()
+        wave_dependency_digest = dependency_binding_digest(
             state,
             wave_id=source.wave_id,
         )
@@ -680,9 +680,9 @@ def _create_repair_attempt(
                 "wave_revision_digest": wave_revision_digest,
                 "criteria_digest": criteria_digest,
                 "gate_manifest_digest": gate_manifest_digest,
-                "policy_digest": policy_digest,
+                "policy_digest": wave_policy_digest,
                 "runner_environment_digest": runner_digest,
-                "dependency_binding_digest": dependency_binding_digest,
+                "dependency_binding_digest": wave_dependency_digest,
             }
         )
         now = datetime.now(UTC)
@@ -701,9 +701,9 @@ def _create_repair_attempt(
                 "spec_digest": repair_integration.spec_digest,
                 "criteria_digest": criteria_digest,
                 "gate_manifest_digest": gate_manifest_digest,
-                "policy_digest": policy_digest,
+                "policy_digest": wave_policy_digest,
                 "runner_environment_digest": runner_digest,
-                "dependency_binding_digest": dependency_binding_digest,
+                "dependency_binding_digest": wave_dependency_digest,
                 "required_gate_ids": [gate.id for gate in wave.gates],
                 "gate_receipt_ids": [],
                 "audit_requirement": (

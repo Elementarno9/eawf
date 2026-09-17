@@ -14,6 +14,12 @@ for the state-resident artifact row, and a
 append-only evidence store — so the contract becomes addressable as
 ``urn:eawf:v1:artifact:<scope>/MCT-########``.
 
+:func:`refresh_contract_metadata` is the follow-up write. A promoted row
+freezes the contract as it read on promotion day, so correcting the typed
+contract afterwards leaves the registered row serving a stale shape; the
+refresh re-renders the in-code contract over that row's ``metadata``
+without disturbing its identity.
+
 :func:`resolve_contract_citation` is the read side. It accepts an
 artifact id or a full artifact URN, and it refuses a citation that points
 back into ``.ea/local/spikes/``: that path means the contract was never
@@ -166,8 +172,12 @@ _CROSS_PROVIDER_CONFORMANCE = MeasuredContract(
         "codex_version": "codex-cli 0.146.0",
         "opencode_installed": False,
         "capability_rows_per_runtime": 8,
+        "capability_rows_total": 24,
+        "evidence_backed_rows": 6,
         "drift_rows": 2,
-        "unmeasured_rows": 8,
+        "declared_only_rows": 10,
+        "uninstalled_rows": 8,
+        "unmeasured_rows": 18,
     },
     limits=(
         ObservedLimit(
@@ -185,19 +195,35 @@ _CROSS_PROVIDER_CONFORMANCE = MeasuredContract(
             basis="drift.json DRIFT rows: session_resume on claude-code and on codex",
         ),
         ObservedLimit(
+            name="evidence_backed_capability_rows",
+            value=6.0,
+            unit="count",
+            direction="floor",
+            basis=(
+                "drift.json rows resolved through a probe rule: session_resume, tool_use "
+                "and streaming on each of the two installed runtimes"
+            ),
+        ),
+        ObservedLimit(
             name="unmeasured_capability_rows",
-            value=8.0,
+            value=18.0,
             unit="count",
             direction="ceiling",
-            basis="drift.json MISSING rows: all eight opencode rows, binary absent from PATH",
+            basis=(
+                "drift.json rows carrying no probe evidence: eight opencode rows whose "
+                "binary was absent, plus ten declared-only rows across the two installed "
+                "runtimes that no evidence rule covers"
+            ),
         ),
     ),
     boundary=(
         "Measured from --version, --help and config-inspection paths only, with zero "
         "billed generation, so every finding is about what the CLI ADVERTISES rather "
-        "than what it does when driven. Capability rows carrying no probe rule (skills, "
-        "plan_mode, sub_agents, cache_control, error_class_surface) are declared-only and "
-        "were not measured at all. opencode was absent from PATH, so all eight of its "
+        "than what it does when driven. Only six of the twenty-four rows rest on probe "
+        "evidence. Ten rows carry no probe rule (skills, plan_mode, sub_agents, "
+        "cache_control and error_class_surface on each installed runtime); they are "
+        "declared-only and resolve UNKNOWN rather than passing, because the declaration "
+        "is not its own evidence. opencode was absent from PATH, so all eight of its "
         "rows are unmeasured rather than passing. Versions are a point-in-time reading of "
         "one workstation's installs."
     ),
@@ -208,8 +234,9 @@ _CROSS_PROVIDER_CONFORMANCE = MeasuredContract(
     environment=MeasurementEnvironment(
         scale_band=ScaleBand.DEV,
         population=(
-            "3 declared runtimes x 8 capability rows = 24 conformance rows; 16 probed "
-            "against two installed binaries and 8 unmeasured"
+            "3 declared runtimes x 8 capability rows = 24 conformance rows; 6 resolved "
+            "through a probe rule, 10 declared-only against two installed binaries, and "
+            "8 unmeasured because the binary was absent"
         ),
         population_size=24,
         host_platform="darwin",
@@ -303,7 +330,7 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
     ),
     probe_command="uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py -q",
     observed={
-        "scale_band": "thousands",
+        "corpus_magnitude": "thousands",
         "corpus_rows": 4638,
         "generation_multiplier": 1.319,
         "apply_wall_clock_s": 3.849,
@@ -370,7 +397,7 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
     environment=MeasurementEnvironment(
         scale_band=ScaleBand.PRODUCTION,
         population=(
-            "the live epoch-1 corpus at cutover: 4,638 rows in the thousands scale band, "
+            "the live epoch-1 corpus at cutover: 4,638 rows, a thousands corpus magnitude, "
             "rehearsed alongside nine committed corpora covering the empty, terminal, "
             "multi-root, interrupted, attention-bearing, historical and refused shapes"
         ),
@@ -392,9 +419,11 @@ PREFLIGHT_CONTRACTS: Final[Mapping[str, MeasuredContract]] = {
     _IMPORTER_AT_PRODUCTION_CORPUS.contract_id: _IMPORTER_AT_PRODUCTION_CORPUS,
 }
 
-#: The corpus scale band the importer contract asserts over, read off the
-#: same committed pin the rehearsal is judged against.
-IMPORTER_CORPUS_SCALE_BAND: Final[str] = "thousands"
+#: The order-of-magnitude bucket the importer corpus falls in, read off
+#: the same committed pin the rehearsal is judged against. Distinct from
+#: :class:`~eawf.kernel.spec.measured_contract.ScaleBand`, which classes
+#: the *environment* a measurement ran in rather than the corpus size.
+IMPORTER_CORPUS_MAGNITUDE: Final[str] = "thousands"
 
 #: Scale band the implementing checkpoint asserts over, per contract. The
 #: importer checkpoint runs against the real state population, so it
@@ -430,6 +459,29 @@ class ContractPromotion:
     evidence: EvidenceRecord
     artifact_event: Envelope
     evidence_envelope: Envelope
+
+
+@dataclass(frozen=True)
+class ContractMetadataRefresh:
+    """Result of refreshing one registered contract row's metadata.
+
+    Attributes:
+        contract: The in-code contract the row was rewritten from.
+        artifact_id: State-resident artifact id (equals the contract id).
+        urn: Canonical ``urn:eawf:v1:artifact:<scope>/<id>`` address of
+            the row that was rewritten.
+        changed_keys: Metadata keys whose value differed before the
+            rewrite, sorted. Empty when the row already agreed with the
+            in-code contract, which makes the refresh a no-op an operator
+            can tell apart from a real migration.
+        artifact_event: Envelope for the ``artifact.update`` event stream.
+    """
+
+    contract: MeasuredContract
+    artifact_id: str
+    urn: str
+    changed_keys: tuple[str, ...]
+    artifact_event: Envelope
 
 
 def _promotion_command(contract_id: str) -> str:
@@ -529,6 +581,40 @@ def _contract_metadata(contract: MeasuredContract) -> dict[str, object]:
     }
 
 
+def _require_measured_band(contract: MeasuredContract, *, required_band: ScaleBand) -> ScaleBand:
+    """Return the contract's measured band once it clears *required_band*.
+
+    Shared by every write path that puts a contract row into state, so a
+    row can never reach ``state.json`` measured below the band its
+    checkpoint asserts over -- not on first promotion, and not through a
+    later metadata rewrite either.
+
+    Args:
+        contract: Contract about to be written.
+        required_band: Band the implementing checkpoint asserts over.
+
+    Returns:
+        The contract's measured scale band.
+
+    Raises:
+        UserError: ``kind="scale_band_below_checkpoint"`` when the
+            measured band is below *required_band*.
+    """
+    observed_band = contract.environment.scale_band
+    if not scale_band_satisfies(observed_band, required=required_band):
+        logger.warning(
+            f"measured contract reject contract_id={contract.contract_id!r} "
+            f"observed_band={observed_band.value!r} required_band={required_band.value!r}"
+        )
+        raise UserError(
+            f"contract {contract.contract_id} was measured at scale band "
+            f"{observed_band.value!r} but its checkpoint asserts over "
+            f"{required_band.value!r}; re-measure at the larger band before promoting",
+            kind="scale_band_below_checkpoint",
+        )
+    return observed_band
+
+
 def promote_measured_contract(
     state: State,
     *,
@@ -564,18 +650,7 @@ def promote_measured_contract(
             (``kind="InvalidInput"``, raised by the underlying artifact
             mutator).
     """
-    observed_band = contract.environment.scale_band
-    if not scale_band_satisfies(observed_band, required=required_band):
-        logger.warning(
-            f"promote_measured_contract reject contract_id={contract.contract_id!r} "
-            f"observed_band={observed_band.value!r} required_band={required_band.value!r}"
-        )
-        raise UserError(
-            f"contract {contract.contract_id} was measured at scale band "
-            f"{observed_band.value!r} but its checkpoint asserts over "
-            f"{required_band.value!r}; re-measure at the larger band before promoting",
-            kind="scale_band_below_checkpoint",
-        )
+    observed_band = _require_measured_band(contract, required_band=required_band)
 
     artifact_event = add_artifact(
         state,
@@ -629,6 +704,99 @@ def promote_measured_contract(
     )
 
 
+def refresh_contract_metadata(
+    state: State,
+    *,
+    contract: MeasuredContract,
+    required_band: ScaleBand,
+) -> ContractMetadataRefresh:
+    """Rewrite a registered contract row's metadata, mutating *state* in place.
+
+    A promoted row is a snapshot of the contract as it read on promotion
+    day. When the typed contract is later corrected -- a key renamed, an
+    observation re-partitioned -- the registered row keeps serving the
+    stale shape to every consumer that resolves the URN, and the
+    duplicate-id guard means it cannot simply be promoted again. This is
+    the migration path: the in-code contract is re-rendered and written
+    over the row's ``metadata``, leaving identity (``id``, ``kind``,
+    ``uri``, ``urn``, ``created_at``) fixed.
+
+    No evidence row is minted. The promotion already recorded that the
+    measurement exists; a refresh restates the same measurement in the
+    current shape, so it is an artifact event and nothing more.
+
+    The caller appends the returned envelope to the event store inside
+    the same transaction that commits *state*.
+
+    Args:
+        state: Mutable state under transaction.
+        contract: In-code contract the row is rewritten from.
+        required_band: Scale band the implementing checkpoint asserts
+            over, re-checked so a rewrite cannot lower a registered row
+            below the band its checkpoint needs.
+
+    Returns:
+        A :class:`ContractMetadataRefresh` naming the keys that moved.
+
+    Raises:
+        UserError: ``kind="NotFound"`` when the contract has no
+            registered row to refresh (the message names the promotion
+            command); ``kind="scale_band_below_checkpoint"`` when the
+            contract is measured below *required_band*.
+    """
+    _require_measured_band(contract, required_band=required_band)
+
+    registered = state.artifacts.get(contract.contract_id)
+    if registered is None:
+        raise UserError(
+            f"contract {contract.contract_id} has no registered artifact row to refresh; "
+            f"promote it first: {_promotion_command(contract.contract_id)}",
+            kind="NotFound",
+        )
+
+    metadata = _contract_metadata(contract)
+    changed_keys = tuple(
+        key
+        for key in sorted(set(metadata) | set(registered.metadata))
+        if registered.metadata.get(key) != metadata.get(key)
+    )
+
+    now = datetime.now(UTC)
+    artifacts = dict(state.artifacts)
+    artifacts[contract.contract_id] = registered.model_copy(update={"metadata": metadata})
+    state.artifacts = artifacts
+    state.updated_at = now
+
+    scope_id = urn_mod.parse(registered.urn).owner
+    summary = (
+        f"contract {contract.contract_id} metadata refreshed ({len(changed_keys)} key(s) rewritten)"
+    )
+    artifact_event = _io.event_envelope(
+        event_id=f"EVT-artifact-refresh-{contract.contract_id}-{int(now.timestamp() * 1000)}",
+        scope_id=scope_id,
+        event_type="artifact.update",
+        actor="cli",
+        command="artifact promote-contract --refresh-metadata",
+        args={
+            "contract_id": contract.contract_id,
+            "changed_keys": list(changed_keys),
+        },
+        summary=summary,
+        artifact_ids=[contract.contract_id],
+    )
+    logger.info(
+        f"refresh_contract_metadata contract_id={contract.contract_id!r} "
+        f"urn={registered.urn!r} changed_keys={changed_keys!r}"
+    )
+    return ContractMetadataRefresh(
+        contract=contract,
+        artifact_id=contract.contract_id,
+        urn=registered.urn,
+        changed_keys=changed_keys,
+        artifact_event=artifact_event,
+    )
+
+
 def resolve_contract_citation(state: State, citation: str) -> Artifact:
     """Resolve *citation* to a promoted artifact row.
 
@@ -676,11 +844,13 @@ __all__ = [
     "ARTIFACT_URN_PREFIX",
     "CONTRACT_ARTIFACT_KIND",
     "CONTRACT_BODY_URI",
-    "IMPORTER_CORPUS_SCALE_BAND",
+    "IMPORTER_CORPUS_MAGNITUDE",
     "LOCAL_SPIKE_ROOT",
     "PREFLIGHT_CHECKPOINT_BANDS",
     "PREFLIGHT_CONTRACTS",
+    "ContractMetadataRefresh",
     "ContractPromotion",
     "promote_measured_contract",
+    "refresh_contract_metadata",
     "resolve_contract_citation",
 ]

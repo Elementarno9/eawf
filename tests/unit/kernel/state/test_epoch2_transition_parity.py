@@ -10,8 +10,13 @@ by their absence.
 
 The comparison reads the checked-in diagram with an independent parser
 rather than with the renderer that wrote it. Regenerate the fixtures with
-``render_state_diagram`` when the registry legitimately changes; the diff
-in the ``.mmd`` file is the review the gate exists to force.
+:func:`render_state_diagram` when the registry legitimately changes; the
+diff in the ``.mmd`` file is the review the gate exists to force.
+
+The renderer lives here rather than beside the registry because nothing
+in production draws a diagram: its only consumer is the parity check
+below, and a renderer shipped in ``src/`` with no production caller is
+idle surface a reader has to rule out one by one.
 """
 
 from __future__ import annotations
@@ -31,9 +36,8 @@ from eawf.kernel.state.epoch2.transitions import (
     TransitionRow,
     TransitionVerb,
     index_rows,
-    render_guards,
-    render_state_diagram,
     rows_from,
+    statuses_of,
 )
 from eawf.workflow.release.lifecycle import (
     RELEASE_DENIALS,
@@ -49,6 +53,46 @@ from tests.unit.kernel.state._epoch2_transition_fixtures import (
 pytestmark = pytest.mark.unit
 
 ENTITIES = list(LifecycleEntity)
+
+
+def render_guards(guards: tuple[TransitionGuard, ...]) -> str:
+    """Return the diagram spelling of an edge's guard list.
+
+    Args:
+        guards: The guards attached to one edge, in evaluation order.
+
+    Returns:
+        The guard names joined by ``+``, or ``none`` for an unguarded
+        edge. An unguarded edge renders a word rather than an empty
+        bracket so a reader can tell it from a truncated line.
+    """
+    if not guards:
+        return "none"
+    return "+".join(guard.value for guard in guards)
+
+
+def render_state_diagram(entity: LifecycleEntity) -> str:
+    """Return the mermaid state diagram of *entity*'s machine.
+
+    Every status is declared on its own line before the edges, so a
+    terminal state and a state that merely has no edge yet are both
+    visible instead of being implied by their absence.
+
+    Args:
+        entity: The entity to render.
+
+    Returns:
+        The diagram text, newline-terminated.
+    """
+    statuses = statuses_of(entity)
+    lines = [f"%% {entity.value} lifecycle", "stateDiagram-v2"]
+    lines.extend(f"    {status!s}" for status in statuses)
+    for status in statuses:
+        lines.extend(
+            f"    {row.frm!s} --> {row.to!s}: {row.verb.value} [{render_guards(row.guards)}]"
+            for row in rows_from(entity, status)
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _registry_edges(entity: LifecycleEntity) -> set[tuple[str, str, str, tuple[str, ...]]]:

@@ -141,7 +141,8 @@ def test_the_corpus_importer_contract_points_at_a_committed_observation() -> Non
 
     assert not contract.observed_at_ref.startswith(LOCAL_SPIKE_ROOT)
     assert contract.environment.scale_band is ScaleBand.PRODUCTION
-    assert contract.observed["scale_band"] == "thousands"
+    assert contract.observed["corpus_magnitude"] == "thousands"
+    assert "scale_band" not in contract.observed
 
 
 # ---- REL-037: eawf artifact show over the three URNs -----------------------

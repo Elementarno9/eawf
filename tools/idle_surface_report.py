@@ -1,14 +1,21 @@
-"""Report public functions in ``src/`` that nothing in ``src/`` calls.
+"""Report public functions in ``src/`` that no production caller reaches.
 
 Coverage cannot see this class of defect: a function with a thorough unit test
 and no production caller reads as fully covered. The symptom is shipped
 surface that never runs — a renderer nothing renders with, a producer that
 writes no rows.
 
+Production is not only ``src/``. A repo script under ``tools/`` is a real
+consumer, so its call sites count: a reporter blind to them files a wired
+function as idle and the ceiling then measures the scan, not the surface.
+Caller roots contribute references only -- a function DEFINED in one is not
+reported, because a script's own helpers are not shipped surface.
+
 Usage::
 
     uv run python tools/idle_surface_report.py
     uv run python tools/idle_surface_report.py --ceiling 202
+    uv run python tools/idle_surface_report.py --caller-root tools
 """
 
 from __future__ import annotations
@@ -17,7 +24,12 @@ import argparse
 import ast
 import collections
 import sys
+from collections.abc import Sequence
 from pathlib import Path
+
+#: Repo directories that hold production callers but no shipped surface.
+#: Used as the default caller roots so a ``tools/`` script counts as a caller.
+_DEFAULT_CALLER_ROOTS: tuple[Path, ...] = (Path("tools"),)
 
 #: Decorator name fragments that mean "the caller is a framework, not our code".
 #: A Typer handler or a registry entry is referenced only by its decorator, so
@@ -73,21 +85,44 @@ def _reference_counts(tree: ast.AST) -> collections.Counter[str]:
     return counts
 
 
-def find_idle_functions(source_root: Path) -> list[tuple[str, Path]]:
+def find_idle_functions(
+    source_root: Path,
+    *,
+    caller_roots: Sequence[Path] = (),
+) -> list[tuple[str, Path]]:
     """Return ``(name, defining_file)`` for public functions nothing calls.
 
-    A name is idle when no call site names it anywhere under *source_root*
-    outside the body of its own definition. Counting *sites* rather than
-    *files mentioning the name* is what makes a helper called only inside its
-    own defining module non-idle; the file-level proxy reported every such
-    helper, because its definition and its caller share one file.
+    A name is idle when no call site names it anywhere under *source_root* or
+    *caller_roots*, outside the body of its own definition. Counting *sites*
+    rather than *files mentioning the name* is what makes a helper called only
+    inside its own defining module non-idle; the file-level proxy reported
+    every such helper, because its definition and its caller share one file.
 
     References from within the function's own body do not count: a recursive
     call is not evidence that anything reaches the function.
 
     Names defined more than once are skipped — the reference count cannot be
     attributed to one definition.
+
+    Args:
+        source_root: Tree whose public functions are the reported surface.
+            Its modules supply both definitions and references.
+        caller_roots: Extra trees scanned for references only, such as
+            ``tools/``. A definition inside one is never reported.
+
+    Returns:
+        The idle rows, sorted by name.
+
+    Raises:
+        NotADirectoryError: A caller root does not exist. A missing root
+            would scan as empty and silently report wired functions as idle.
+        SyntaxError: A scanned module does not parse. Reading a broken file
+            as empty would silently under-count references.
     """
+    for caller_root in caller_roots:
+        if not caller_root.is_dir():
+            raise NotADirectoryError(f"caller root is not a directory: {caller_root}")
+
     definitions: dict[str, list[Path]] = collections.defaultdict(list)
     references: collections.Counter[str] = collections.Counter()
     self_references: collections.Counter[str] = collections.Counter()
@@ -103,6 +138,10 @@ def find_idle_functions(source_root: Path) -> list[tuple[str, Path]]:
             definitions[node.name].append(path)
             self_references[node.name] += _reference_counts(node)[node.name]
 
+    for caller_root in caller_roots:
+        for path in sorted(caller_root.rglob("*.py")):
+            references.update(_reference_counts(ast.parse(path.read_text(encoding="utf-8"))))
+
     return sorted(
         (name, paths[0])
         for name, paths in definitions.items()
@@ -115,9 +154,11 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-root", type=Path, default=Path("src/eawf"))
     parser.add_argument("--ceiling", type=int, default=None)
+    parser.add_argument("--caller-root", type=Path, action="append", dest="caller_roots")
     args = parser.parse_args(argv[1:])
 
-    idle = find_idle_functions(args.source_root)
+    caller_roots = args.caller_roots if args.caller_roots else list(_DEFAULT_CALLER_ROOTS)
+    idle = find_idle_functions(args.source_root, caller_roots=caller_roots)
     for name, path in idle:
         print(f"{path}:{name}")
     print(f"\n{len(idle)} public function(s) with no caller under {args.source_root}")

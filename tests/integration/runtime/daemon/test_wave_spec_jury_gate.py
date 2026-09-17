@@ -159,6 +159,7 @@ def _patch_jury(
         repo_root: Path,
         timeout_seconds: float = 600.0,
         events_path: Any = None,
+        extra_args_by_runtime: Any = None,
     ) -> Callable[[str], SpawnFn]:
         def _factory(runtime: str) -> SpawnFn:
             return stubs[runtime]  # type: ignore[return-value]

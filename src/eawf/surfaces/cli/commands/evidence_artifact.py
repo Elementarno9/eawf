@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
 
@@ -24,6 +24,10 @@ from eawf.surfaces.cli.commands.evidence import (
     _state_path,
     artifact_app,
 )
+
+if TYPE_CHECKING:
+    from eawf.kernel.spec.measured_contract import MeasuredContract, ScaleBand
+    from eawf.surfaces.cli.flags import GlobalFlags
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +153,70 @@ def artifact_update(
     )
 
 
+def _refresh_contract_metadata(
+    *,
+    contract_id: str,
+    contract: MeasuredContract,
+    required_band: ScaleBand,
+    scope_id: str | None,
+    state_path: Path,
+    flags: GlobalFlags,
+) -> None:
+    """Run the ``--refresh-metadata`` arm of ``artifact promote-contract``.
+
+    One state transaction rewrites the registered row and one artifact
+    event records it; no evidence row is minted, because the measurement
+    the promotion already attested to has not changed.
+
+    Args:
+        contract_id: Measured-contract id the operator named.
+        contract: The in-code contract the row is rewritten from.
+        required_band: Band the implementing checkpoint asserts over.
+        scope_id: The operator's ``--scope-id``, refused when supplied.
+        state_path: Resolved ``state.json`` location.
+        flags: Resolved global flags for output and error emission.
+    """
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.evidence import measured_contract as contract_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
+
+    if scope_id is not None:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                "--scope-id is not accepted with --refresh-metadata: the registered row's "
+                "urn already pins the owning scope",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
+
+    try:
+        with state_transaction(state_path) as state:
+            refresh = contract_evi.refresh_contract_metadata(
+                state,
+                contract=contract,
+                required_band=required_band,
+            )
+            append_jsonl(store_paths(state_path)[StoreKind.EVENT], refresh.artifact_event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "contract_id": contract_id,
+            "urn": refresh.urn,
+            "changed_keys": list(refresh.changed_keys),
+            "scale_band": refresh.contract.environment.scale_band.value,
+            "required_band": required_band.value,
+        },
+        f"contract {contract_id} metadata refreshed urn={refresh.urn} "
+        f"changed={','.join(refresh.changed_keys) or 'none'}",
+        flags,
+    )
+
+
 @artifact_app.command("promote-contract")
 def artifact_promote_contract(
     ctx: typer.Context,
@@ -160,6 +228,16 @@ def artifact_promote_contract(
         str | None,
         typer.Option("--scope-id", help="Owning scope (defaults to project code)."),
     ] = None,
+    refresh_metadata: Annotated[
+        bool,
+        typer.Option(
+            "--refresh-metadata",
+            help=(
+                "Rewrite an already-registered contract row's metadata from the "
+                "in-code contract instead of registering a new row."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Promote a measured contract onto the evidence path.
 
@@ -168,6 +246,12 @@ def artifact_promote_contract(
     evidence (EVD) row recording the promotion. Refuses a contract whose
     measured scale band is below the band its implementing checkpoint
     asserts over.
+
+    ``--refresh-metadata`` is the migration mode for a row that was
+    promoted before the typed contract was corrected: it rewrites that
+    row's ``metadata`` in one state transaction and appends one artifact
+    event, minting no second evidence row. The registered row's URN
+    already pins the owning scope, so ``--scope-id`` is refused with it.
     """
     from eawf.surfaces.cli._mutation import state_transaction
     from eawf.workflow.evidence import measured_contract as contract_evi
@@ -188,6 +272,17 @@ def artifact_promote_contract(
         )
         return
     required_band = contract_evi.PREFLIGHT_CHECKPOINT_BANDS[contract_id]
+
+    if refresh_metadata:
+        _refresh_contract_metadata(
+            contract_id=contract_id,
+            contract=contract,
+            required_band=required_band,
+            scope_id=scope_id,
+            state_path=state_path,
+            flags=flags,
+        )
+        return
 
     try:
         with state_transaction(state_path) as state:

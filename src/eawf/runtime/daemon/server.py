@@ -35,6 +35,7 @@ import orjson
 import eawf.runtime.daemon.methods.agent
 import eawf.runtime.daemon.methods.close  # registers durable close control methods
 import eawf.runtime.daemon.methods.close_hosted  # registers close.host (P32-I01-W19)
+import eawf.runtime.daemon.methods.close_rereceipt  # registers close.rereceipt
 import eawf.runtime.daemon.methods.config  # registers config read/write methods
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.doctor  # registers doctor.apply_repair
@@ -48,12 +49,13 @@ import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,res
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.registry_workspace  # registers registry.workspace.*
 import eawf.runtime.daemon.methods.release  # registers the nine release.* record verbs
+import eawf.runtime.daemon.methods.release_candidate  # registers release.candidate
 import eawf.runtime.daemon.methods.release_disposition  # registers release.adopt / release.cancel
 import eawf.runtime.daemon.methods.release_receipts  # registers the two train-walking verbs
 import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.spec_convert  # registers spec.convert_legacy (P30-I23-W24)
-import eawf.runtime.daemon.methods.spec_repoint  # registers spec.repoint_gates
+import eawf.runtime.daemon.methods.spec_repoint  # registers spec.repoint_{gates,scopes}
 import eawf.runtime.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.runtime.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
 from eawf.kernel.store.envelope import Envelope

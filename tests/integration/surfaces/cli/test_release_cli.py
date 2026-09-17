@@ -21,6 +21,11 @@ The thirteenth, ``release.produce_receipts``, is the producer the train
 advance reads from. ``receipts`` and ``advance`` take no record file,
 because both act on the stored record.
 
+The fourteenth, ``release.candidate``, is the pin between the open and
+the approval: it freezes the manifest from the publication receipts and
+records the CANDIDATE. It takes no record file either, for the same
+reason -- the record it advances is the stored one.
+
 Two things are pinned here. The parity test asserts the registered set
 and the reachable set are the same set, so an eleventh verb lands broken
 rather than lands unreachable. The dispatch tests drive each subcommand
@@ -189,6 +194,14 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
         "show": ["show", "0.7.0.dev1"],
         "readiness": ["readiness", "0.7.0.dev1", "--release", record],
         "create": ["create", "0.7.0.dev2", "--membership-ref", "bundle://dev2"],
+        "candidate": [
+            "candidate",
+            "0.7.0.dev2",
+            "--receipts",
+            str(tmp_path),
+            "--source",
+            "a" * 40,
+        ],
         "approve": [
             "approve",
             RELEASE_KEY,
@@ -276,7 +289,7 @@ def test_every_mapped_subcommand_is_registered_on_the_release_app() -> None:
 
 def test_the_release_namespace_is_not_empty() -> None:
     """The parity assertion is over a non-empty set, not two empty ones."""
-    assert len(RELEASE_RPC_METHODS) == 13
+    assert len(RELEASE_RPC_METHODS) == 14
 
 
 # --- dispatch -------------------------------------------------------------

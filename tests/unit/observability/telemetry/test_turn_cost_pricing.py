@@ -1,13 +1,12 @@
 """Price-provenance and token-summand tests for the turn-cost producer.
 
-Two independent filters guard the cost sums. A row with no price source is
-counted as unpriced and never summed as zero, because "cost nothing" and
-"cost unknown" are different facts and collapsing them understates spend.
-A row from a runtime that reports reasoning tokens as a summand on top of
-output is flagged and excluded, because its token total is not comparable
-with the runtimes that report reasoning inside output. No supported runtime
-does that, so the filter matches nothing and a codex row sums like any
-other.
+One filter guards the cost sums: a row with no price source is counted as
+unpriced and never summed as zero, because "cost nothing" and "cost
+unknown" are different facts and collapsing them understates spend.
+
+Reasoning tokens need no filter of their own. Every supported runtime
+reports them inside its output total, so the four-class token sum already
+excludes them by construction and a codex row sums like any other.
 """
 
 from __future__ import annotations
@@ -21,7 +20,6 @@ from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.models import RuntimeName
 from eawf.observability.telemetry.turn_cost import (
-    REASONING_UNSETTLED_RUNTIMES,
     CompletedUnitRun,
     PriceSource,
     TurnCostRecord,
@@ -165,16 +163,16 @@ def test_codex_rows_are_summed_into_the_cost_and_token_totals() -> None:
     assert record.token_total == 1_129
 
 
-def test_record_is_not_flagged_when_no_unsettled_runtime_appears() -> None:
-    """The flag is off by default and only a real row turns it on."""
+def test_record_reads_settled_for_a_single_row_corpus() -> None:
+    """The two fields are constants on the record, not a live verdict."""
     record = _build([_run("run-claude", cost_usd="0.40")])
 
     assert record.reasoning_summand_unsettled is False
     assert record.reasoning_summand_unsettled_run_count == 0
 
 
-def test_unpriced_codex_row_is_counted_as_unpriced_not_unsettled() -> None:
-    """With codex lifted, an unpriced codex row falls to the next rung."""
+def test_unpriced_codex_row_is_counted_as_unpriced() -> None:
+    """Price provenance is the only exclusion a codex row can trip."""
     record = _build(
         [
             _run("run-claude", cost_usd="0.40"),
@@ -185,9 +183,3 @@ def test_unpriced_codex_row_is_counted_as_unpriced_not_unsettled() -> None:
     assert record.reasoning_summand_unsettled_run_count == 0
     assert record.unpriced_run_count == 1
     assert record.execution_cost_usd == Decimal("0.40")
-
-
-def test_unsettled_runtime_set_no_longer_names_codex() -> None:
-    """The exclusion set is the single declared source of the runtime list."""
-    assert "codex" not in REASONING_UNSETTLED_RUNTIMES
-    assert frozenset() == REASONING_UNSETTLED_RUNTIMES

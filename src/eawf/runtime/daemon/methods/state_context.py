@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import orjson
+from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
     StoreKind,
@@ -212,6 +213,37 @@ def read_state(state_path: Path) -> tuple[State, dict[str, Any]]:
     if report.state is None:
         raise ValueError("state schema invalid: " + "; ".join(report.schema_errors[:3]))
     return report.state, payload
+
+
+def digest_snapshot(state_path: Path) -> tuple[str, State | None]:
+    """Hash and validate the on-disk state, returning ``(version, state)``.
+
+    Callers run this on a worker thread: ``state.json`` grows into the
+    multi-megabyte range, and reading, parsing and validating it is
+    blocking work that would otherwise stall the daemon event loop for
+    the whole duration of a digest poll.
+
+    Args:
+        state_path: Path of the repo's ``state.json``.
+
+    Returns:
+        The 16-hex-char digest of the raw bytes plus the validated state.
+        The state is ``None`` when the file is absent or fails to parse
+        or validate, which lets the poll path degrade to a bare digest
+        instead of faulting; an absent file digests as empty bytes so an
+        uninitialised project still answers.
+    """
+    try:
+        raw = state_path.read_bytes()
+    except FileNotFoundError:
+        return hashlib.sha256(b"").hexdigest()[:16], None
+    version = hashlib.sha256(raw).hexdigest()[:16]
+    try:
+        state = State.model_validate(orjson.loads(raw))
+    except (orjson.JSONDecodeError, ValidationError) as exc:
+        logger.warning(f"digest_elapsed_update status='skip' err={exc!r}")
+        return version, None
+    return version, state
 
 
 def args_hash(mutation: Mutation) -> str:

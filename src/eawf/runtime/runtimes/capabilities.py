@@ -22,6 +22,9 @@ Drift kinds
 -----------
 
 ``OK``       — declared cell matches the probe verdict for the capability.
+               Only a capability that carries a probe rule can reach this
+               status, so an ``OK`` row always rests on evidence the probe
+               produced rather than on the declaration being checked.
 ``DRIFT``    — declared cell and probe verdict disagree (e.g. matrix says
                ``supported`` but the probe reports the binary lacks the
                flag); operator surface flags it as a contract break.
@@ -29,9 +32,22 @@ Drift kinds
                false``); declared cells are reported as ``MISSING`` so the
                operator distinguishes "no binary" from "binary present
                but capability gone".
-``UNKNOWN``  — probe carries no evidence either way (``unknown`` cell in
-               the matrix). Surfaced as a passing row so operator
-               attention focuses on actionable drift.
+``UNKNOWN``  — probe carries no evidence either way: the matrix cell is
+               ``unknown``, or the capability carries no probe rule at all.
+               Surfaced as a non-actionable row so operator attention
+               focuses on drift, never as a pass.
+
+Evidence totality
+-----------------
+
+Capability evidence is total over the declared set: every declared
+capability resolves to a row, and a row reaches ``OK`` only through a
+probe rule. A capability with no rule used to resolve ``OK`` on the
+authority of its own declaration, which made a green conformance run
+largely the matrix agreeing with itself and produced a tautological pass
+citable as conformance evidence. :attr:`DriftRow.probe_rule` carries the
+tokens the rule consulted, so a consumer can tell an evidenced verdict
+from an unevidenced one without parsing :attr:`DriftRow.detail`.
 """
 
 from __future__ import annotations
@@ -347,12 +363,11 @@ class ProbeResult:
 
 # Per-capability evidence rules used by :func:`detect_drift`. Each rule
 # is a tuple of flag substrings that, when present in ``observed_flags``,
-# constitute evidence that the runtime *exposes* the capability. The
-# rules are deliberately conservative: missing evidence does NOT imply
-# the capability is absent (the brief documents per-capability surface),
-# only that the probe carries no positive signal. The detector treats
-# missing evidence as ``UNKNOWN`` when the declared cell is
-# ``supported`` and the runtime binary is installed.
+# constitute evidence that the runtime *exposes* the capability. A
+# capability absent from this mapping carries no rule, so the detector
+# can only resolve it ``UNKNOWN``: there is nothing to check the
+# declaration against, and passing it would mean certifying the
+# declaration on its own authority.
 _CAPABILITY_EVIDENCE: Final[Mapping[str, Mapping[str, tuple[str, ...]]]] = {
     "session_resume": {
         "claude-code": ("--continue", "--session-id", "--resume"),
@@ -374,12 +389,25 @@ _CAPABILITY_EVIDENCE: Final[Mapping[str, Mapping[str, tuple[str, ...]]]] = {
 
 @dataclasses.dataclass(frozen=True)
 class DriftRow:
-    """One drift-detection row for a single capability x runtime."""
+    """One drift-detection row for a single capability x runtime.
+
+    Attributes:
+        capability: Capability row name.
+        declared: The cell the matrix declares for this capability x
+            runtime.
+        status: The drift verdict.
+        detail: Operator-facing explanation of the verdict.
+        probe_rule: The flag tokens the evidence rule consulted. Empty
+            when the capability carries no rule, which is exactly the
+            case where the verdict rests on no evidence: a row with an
+            empty ``probe_rule`` can never be ``OK``.
+    """
 
     capability: str
     declared: CapabilityCell
     status: DriftStatus
     detail: str
+    probe_rule: tuple[str, ...] = ()
 
 
 def detect_drift(
@@ -396,13 +424,15 @@ def detect_drift(
     * ``MISSING`` — probe reports ``installed=False`` (covers every
       capability for that runtime; the operator's first action is to
       install the binary, not to diff cells).
-    * ``OK`` — declared cell matches the probe verdict, OR no probe
-      rule is defined for this capability (declared cell is treated as
-      authoritative).
+    * ``OK`` — a probe rule exists for this capability and the declared
+      cell matches the verdict that rule produced.
     * ``DRIFT`` — declared cell says ``supported`` but the probe shows
       none of the expected flag tokens (capability appears to be gone
       from the live binary).
-    * ``UNKNOWN`` — declared cell is ``unknown``; probe is silent.
+    * ``UNKNOWN`` — the probe carries no verdict: the declared cell is
+      ``unknown``, or the capability has no probe rule. An unruled
+      capability is never ``OK``, because the only thing vouching for it
+      would be the declaration under test.
 
     Args:
         runtime_id: Canonical runtime id whose cells are being probed.
@@ -456,13 +486,15 @@ def detect_drift(
 
         evidence = _CAPABILITY_EVIDENCE.get(cap_name, {}).get(runtime_id, ())
         if not evidence:
-            # No probe rule — declared cell is authoritative.
             rows.append(
                 DriftRow(
                     capability=cap_name,
                     declared=declared,
-                    status="OK",
-                    detail=f"declared={declared!r}; no probe rule",
+                    status="UNKNOWN",
+                    detail=(
+                        f"declared={declared!r} but no probe rule covers this "
+                        f"capability; the declaration is not its own evidence"
+                    ),
                 )
             )
             continue
@@ -479,6 +511,7 @@ def detect_drift(
                         f"declared=supported but probe shows none of "
                         f"{list(evidence)!r} in observed_flags"
                     ),
+                    probe_rule=evidence,
                 )
             )
             continue
@@ -496,6 +529,7 @@ def detect_drift(
                     detail=(
                         f"declared={declared!r} but probe found {list(matched)!r} in observed_flags"
                     ),
+                    probe_rule=evidence,
                 )
             )
             continue
@@ -506,6 +540,7 @@ def detect_drift(
                 declared=declared,
                 status="OK",
                 detail=f"declared={declared!r} matches probe evidence",
+                probe_rule=evidence,
             )
         )
 

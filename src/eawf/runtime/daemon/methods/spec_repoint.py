@@ -1,20 +1,22 @@
-"""``spec.repoint_gates`` JSON-RPC method: repair a closed wave's gate argv.
+"""``spec.repoint_*`` JSON-RPC methods: repair a recorded wave row.
 
 Sibling of :mod:`eawf.runtime.daemon.methods.spec_convert`, split out of
 :mod:`eawf.runtime.daemon.methods.spec` for the same reason (module-length
-budget): the repoint verb owns its params / result models and its locked
-write transaction, and reuses the shared spec-method plumbing
+budget): the repoint verbs own their params / result models and their
+locked write transactions, and reuse the shared spec-method plumbing
 (idempotency cache, mutator-path resolution, post-mutation validation,
 publish bus) so every spec mutator rides one implementation.
 
-Unlike ``spec.sync`` this mutation deliberately targets a CLOSED wave --
-that is the whole point. A wave's recorded gates are its verification
-record, and a later test-tree move leaves that record naming paths which
-no longer resolve, so replaying it exits on a usage error. The repoint
-keeps the record re-runnable without reopening the wave; the bounded
-mutation itself lives in
-:mod:`eawf.workflow.lifecycle.gate_repoint`, which refuses any edit that
-moves anything other than gate argv.
+Unlike ``spec.sync`` these mutations deliberately target a wave past
+plan time -- that is the whole point. ``spec.repoint_gates`` repairs a
+verification record whose gate argv names a path a later test-tree move
+retired, so replaying it exits on a usage error. ``spec.repoint_scopes``
+repairs the other two after-the-fact defects: ``file_scopes`` that the
+wave's own pinned commit contradicts, and the prose of a named success
+criterion. Both keep the record usable without reopening the wave; the
+bounded mutations live in :mod:`eawf.workflow.lifecycle.gate_repoint`
+and :mod:`eawf.workflow.lifecycle.scope_repoint`, which refuse any edit
+that moves anything outside the field each verb owns.
 """
 
 from __future__ import annotations
@@ -54,6 +56,11 @@ from eawf.workflow.lifecycle.gate_repoint import (
     GateRepointReport,
     build_argv_repoint,
     repoint_closed_wave_gates,
+)
+from eawf.workflow.lifecycle.scope_repoint import (
+    CriterionTextRepoint,
+    ScopeRepointReport,
+    repoint_closed_wave_record,
 )
 
 logger = logging.getLogger(__name__)
@@ -367,8 +374,362 @@ def _build_repoint_envelope(
     )
 
 
+class RepointScopesParams(BaseModel):
+    """Params for :func:`repoint_scopes`.
+
+    Attributes:
+        wave_id: ``P##-I##-W##`` -- the wave whose recorded row is
+            repointed. Phase / iter scopes are refused: a repoint is
+            record repair and is authorised one wave at a time.
+        from_commit: When ``True`` the wave's ``file_scopes`` are
+            re-derived from its pinned commit (CLOSED waves only).
+        criterion_texts: Per-criterion prose rewrites; may be empty when
+            only the scopes are repointed.
+        reason: Why the prose rewrite is warranted. Required (non-blank)
+            whenever *criterion_texts* is non-empty, and recorded on the
+            event row so the repair is auditable.
+        dry_run: When ``True`` the repoint is computed against an
+            in-memory copy and reported with no state write.
+        repo_root: Optional absolute repo working-tree path (default cwd).
+            Also the tree the ``from_commit`` derivation reads.
+        idempotency_key: Optional caller-supplied retry key.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wave_id: str = Field(min_length=1)
+    from_commit: bool = False
+    criterion_texts: list[CriterionTextRepoint] = Field(default_factory=list)
+    reason: str | None = None
+    dry_run: bool = False
+    repo_root: str | None = None
+    idempotency_key: str | None = None
+
+
+class SpecRepointScopesResult(BaseModel):
+    """Result shape for the :func:`repoint_scopes` RPC."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: str
+    wave_id: str
+    dry_run: bool
+    scopes_changed: bool
+    scopes_before: list[str]
+    scopes_after: list[str]
+    changed_count: int
+    changed_criteria: list[dict[str, Any]]
+    unchanged_criterion_ids: list[str]
+    reason: str | None
+    before_version: str | None
+    after_version: str | None
+    envelope: dict[str, Any] | None
+    idempotent_replay: bool = False
+
+
+def _apply_scope_repoint(
+    state: State,
+    args: RepointScopesParams,
+    *,
+    repo_root: Path,
+) -> ScopeRepointReport:
+    """Run the bounded record repoint against *state*, mapping refusals to RPC errors.
+
+    Args:
+        state: Loaded state to mutate in place.
+        args: Validated repoint params.
+        repo_root: Working tree the pinned-commit derivation reads.
+
+    Returns:
+        The lifecycle report naming what moved.
+
+    Raises:
+        DaemonValidationError: When the wave is unknown, its status does
+            not permit the requested leg, a text repoint carries no
+            reason, a named criterion is not recorded, the derivation
+            fails, or the replacement would change anything other than
+            the file scopes and the named criterion text (``-32002``).
+    """
+    if args.wave_id not in state.waves:
+        raise DaemonValidationError(f"validation_failed: unknown wave: {args.wave_id!r}")
+    try:
+        return repoint_closed_wave_record(
+            state,
+            wave_id=args.wave_id,
+            scope_source=repo_root if args.from_commit else None,
+            criterion_texts=list(args.criterion_texts),
+            reason=args.reason,
+        )
+    except LifecycleError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+
+@register("spec.repoint_scopes")
+async def repoint_scopes(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Repoint a wave's file scopes and named criterion text, and nothing else.
+
+    The audited repair path for a wave row whose recorded ``file_scopes``
+    its own pinned commit contradicts, or whose criterion prose names the
+    wrong thing (rule 4: the daemon is the canonical writer). The wave
+    keeps its status, its outcome, its commit pin and its gates; the
+    lifecycle guard refuses the whole mutation when anything outside the
+    requested fields moves.
+
+    Args:
+        ctx: Server context. ``ctx.wal_dir`` MUST be configured for a
+            non-dry-run call.
+        params: JSON-RPC params per :class:`RepointScopesParams`.
+
+    Returns:
+        Dict matching :class:`SpecRepointScopesResult`; ``dry_run=True``
+        reports the would-change set with no state write
+        (``before_version`` / ``after_version`` / ``envelope`` are
+        ``None``).
+
+    Raises:
+        ValueError: When the params do not validate or *wave_id* is not a
+            wave scope (mapped to ``-32602``).
+        DaemonValidationError: When the repoint is refused or the
+            post-mutation state fails schema / invariant validation
+            (mapped to ``-32002``).
+    """
+    try:
+        args = RepointScopesParams.model_validate(params)
+    except ValidationError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+    try:
+        kind = spec_writer.classify_scope(args.wave_id)
+    except ValueError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+    if kind != "wave":
+        raise ValueError(
+            f"validation_failed: scope repoint targets a wave scope, got {args.wave_id!r}"
+        )
+
+    replay = idempotent_replay(ctx, args.idempotency_key)
+    if replay is not None:
+        logger.info(f"repoint_scopes idempotent_replay wave={args.wave_id!r}")
+        return replay
+
+    state_path, event_path, wal_path = resolve_mutator_paths(
+        repo_root=args.repo_root,
+        ctx=ctx,
+    )
+    # The pinned commit is read from the tree that owns the resolved state
+    # file (``<root>/.ea/state.json``), never the daemon's cwd: a
+    # cross-root serve must derive scopes from the repo it is mutating.
+    repo_root = state_path.parent.parent
+
+    if args.dry_run:
+        state, _payload = read_state(state_path)
+        report = _apply_scope_repoint(state.model_copy(deep=True), args, repo_root=repo_root)
+        return _scope_repoint_result(args, report, before=None, after=None, envelope=None)
+
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(state_path, timeout=5.0):
+            result = _apply_scope_repoint_locked(
+                ctx,
+                args=args,
+                state_path=state_path,
+                event_path=event_path,
+                wal_path=wal_path,
+                repo_root=repo_root,
+            )
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        return result
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
+def _apply_scope_repoint_locked(
+    ctx: MethodContext,
+    *,
+    args: RepointScopesParams,
+    state_path: Path,
+    event_path: Path,
+    wal_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    """Run the locked record repoint transaction: repoint, validate, write.
+
+    The caller holds the state-path portalock. Mirrors the gate-repoint
+    transaction (WAL -> atomic write -> event append -> publish); when the
+    record already matches the request, nothing is written and the report
+    alone is returned so a replayed repair is a true no-op.
+
+    Args:
+        ctx: Server context (publish bus).
+        args: Validated repoint params.
+        state_path: Path to ``state.json``.
+        event_path: Path to the event JSONL store.
+        wal_path: Path to the daemon WAL directory.
+        repo_root: Working tree the pinned-commit derivation reads.
+
+    Returns:
+        Dict matching :class:`SpecRepointScopesResult`.
+
+    Raises:
+        DaemonValidationError: When the repoint is refused or the
+            post-mutation state fails schema / invariant validation.
+    """
+    state, _payload = read_state(state_path)
+    before_version = state_version(state.model_dump(mode="json"))
+    report = _apply_scope_repoint(state, args, repo_root=repo_root)
+    if not report.changed_criteria and not report.scopes_changed:
+        return _scope_repoint_result(
+            args, report, before=before_version, after=before_version, envelope=None
+        )
+
+    state.updated_at = datetime.now(UTC)
+    new_payload = state.model_dump(mode="json")
+    after_version = validate_post_sync(new_payload)
+
+    mutation_id = uuid.uuid4().hex
+    envelope = _build_scope_repoint_envelope(
+        wave_id=args.wave_id,
+        report=report,
+        reason=args.reason,
+        before_version=before_version,
+        after_version=after_version,
+    )
+    record = WalRecord(
+        record_id=mutation_id,
+        envelope=envelope,
+        idempotency_key=args.idempotency_key,
+        written_at=datetime.now(UTC),
+        before_state_version=before_version,
+        after_state_version=after_version,
+        state_path=str(state_path),
+    )
+    wal.write_pending(wal_path, record)
+    atomic_write_json_locked(state_path, new_payload)
+    wal.mark_applied(wal_path, mutation_id)
+    append_envelope(event_path, envelope)
+    wal.mark_fsynced(wal_path, mutation_id)
+    publish_envelope(ctx, envelope)
+    logger.info(
+        f"repoint_scopes ok wave={args.wave_id} scopes_changed={report.scopes_changed} "
+        f"texts_changed={len(report.changed_criteria)} "
+        f"before={before_version} after={after_version}"
+    )
+    return _scope_repoint_result(
+        args,
+        report,
+        before=before_version,
+        after=after_version,
+        envelope=envelope.model_dump(mode="json"),
+    )
+
+
+def _scope_repoint_result(
+    args: RepointScopesParams,
+    report: ScopeRepointReport,
+    *,
+    before: str | None,
+    after: str | None,
+    envelope: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble the :class:`SpecRepointScopesResult` payload dict.
+
+    Args:
+        args: Validated repoint params.
+        report: The lifecycle repoint report.
+        before: State digest before the write, ``None`` under dry-run.
+        after: State digest after the write, ``None`` under dry-run.
+        envelope: The canonical event envelope, ``None`` when nothing was
+            written.
+
+    Returns:
+        The JSON-safe result dict.
+    """
+    return SpecRepointScopesResult(
+        operation="repoint_scopes",
+        wave_id=args.wave_id,
+        dry_run=args.dry_run,
+        scopes_changed=report.scopes_changed,
+        scopes_before=list(report.scopes_before),
+        scopes_after=list(report.scopes_after),
+        changed_count=len(report.changed_criteria),
+        changed_criteria=[change.model_dump(mode="json") for change in report.changed_criteria],
+        unchanged_criterion_ids=list(report.unchanged_criterion_ids),
+        reason=args.reason,
+        before_version=before,
+        after_version=after,
+        envelope=envelope,
+    ).model_dump(mode="json")
+
+
+def _build_scope_repoint_envelope(
+    *,
+    wave_id: str,
+    report: ScopeRepointReport,
+    reason: str | None,
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build the canonical event envelope for a record repoint.
+
+    The envelope is what makes the repair audited rather than silent: it
+    names the wave, whether the scopes moved, the exact criterion ids
+    whose prose moved and the operator's reason for moving it, so the
+    event log alone reconstructs which records were repaired and why.
+
+    Args:
+        wave_id: The wave that was repointed.
+        report: The lifecycle report naming what moved.
+        reason: The operator's reason, carried verbatim.
+        before_version: State digest before the write.
+        after_version: State digest after the write.
+
+    Returns:
+        The canonical event envelope, ready for the WAL + event log.
+    """
+    now = datetime.now(UTC)
+    changed_ids = [change.criterion_id for change in report.changed_criteria]
+    summary = (
+        f"spec.repoint_scopes wave={wave_id} scopes_changed={report.scopes_changed} "
+        f"criteria={len(changed_ids)}"
+    )
+    payload = EventPayload(
+        timestamp=now,
+        event_type="state.mutate.spec_repoint_scopes",
+        actor="daemon",
+        command="spec.repoint_scopes",
+        args_hash="",
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="ok",
+        message=summary,
+        extras={
+            "scopes_changed": report.scopes_changed,
+            # ``extras`` is a scalar map, so the id list rides as a joined
+            # string rather than being dropped from the audit trail.
+            "changed_criterion_ids": ",".join(changed_ids),
+            "reason": reason or "",
+        },
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
 __all__ = [
     "RepointGatesParams",
+    "RepointScopesParams",
     "SpecRepointGatesResult",
+    "SpecRepointScopesResult",
     "repoint_gates",
+    "repoint_scopes",
 ]

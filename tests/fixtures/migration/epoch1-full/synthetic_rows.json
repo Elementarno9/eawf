@@ -1,0 +1,19 @@
+{
+  "fixture": "tests/fixtures/migration/epoch1-full/snapshot/document.json",
+  "added_by": "P32-I01-W11",
+  "note": "Rows listed here were invented for the epoch1-full snapshot: no observed epoch-1 corpus supplied them. Every other row in the snapshot is census-derived. Read this file before treating a snapshot row as evidence of what epoch 1 actually recorded.",
+  "rows": [
+    {
+      "collection": "phases",
+      "id": "P03",
+      "status": "archived",
+      "reason": "An archived phase is the only epoch-1 shape that maps to a CANCELLED milestone, and the observed corpus recorded none, so the CANCELLED arm of the phase status map had no fixture data to exercise."
+    },
+    {
+      "collection": "backlog",
+      "id": "B003",
+      "status": "closed",
+      "reason": "A closed backlog row is the only epoch-1 shape that maps to a DROPPED task, and the observed corpus recorded none, so the DROPPED arm of the backlog status map had no fixture data to exercise."
+    }
+  ]
+}

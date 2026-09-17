@@ -1,6 +1,6 @@
 {
  "apply_timeout_budget_s": 30.0,
- "declared_band": "thousands",
+ "declared_magnitude": "thousands",
  "multiplier_ceiling": 1.6,
  "observed_apply_s": 3.849,
  "observed_at_revision": "4a0659cbba0e",

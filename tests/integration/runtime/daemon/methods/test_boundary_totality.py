@@ -54,6 +54,7 @@ pytestmark = pytest.mark.integration
 #: different scan result.
 EXPECTED_SITES = frozenset(
     {
+        "candidate:pin_candidate",
         "ledger:record_operation",
         "lifecycle:advance_release",
         "lifecycle:cancel_release",

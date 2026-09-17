@@ -324,18 +324,26 @@ def test_detect_drift_missing_when_runtime_not_installed() -> None:
 
 
 def test_detect_drift_ok_when_evidence_present() -> None:
-    """OK row when probe flags match the declared cell for every capability."""
+    """OK row when probe flags match the declared cell of every ruled capability."""
     # ``--allowedTools`` + ``--output-format`` cover tool_use + streaming (both
     # declared ``supported``). session_resume is declared ``unsupported``, so the
-    # absence of a ``--continue`` flag is expected and stays OK (not DRIFT); the
-    # remaining rows have no probe rule and default to OK against the declared cell.
+    # absence of a ``--continue`` flag is expected and stays OK (not DRIFT). The
+    # remaining rows carry no probe rule, so they resolve UNKNOWN rather than
+    # passing on the authority of the declaration under test.
     probe = _probe(
         "claude-code",
         installed=True,
         flags=("--allowedTools", "--output-format"),
     )
     rows = detect_drift("claude-code", probe)
-    assert {row.status for row in rows} <= {"OK"}
+    by_capability = {row.capability: row for row in rows}
+    ruled = {"session_resume", "tool_use", "streaming"}
+    assert {row.capability for row in rows if row.status == "OK"} == ruled
+    assert {row.capability for row in rows if row.status == "UNKNOWN"} == set(
+        CAPABILITY_NAMES
+    ) - ruled
+    assert by_capability["plan_mode"].probe_rule == ()
+    assert "no probe rule" in by_capability["plan_mode"].detail
 
 
 def test_detect_drift_flags_drift_on_missing_evidence() -> None:
@@ -376,9 +384,11 @@ def test_detect_drift_unknown_when_cell_is_unknown(
         _probe("claude-code", installed=True),
         matrix=matrix,
     )
-    unknown_rows = [r for r in rows if r.status == "UNKNOWN"]
-    assert len(unknown_rows) == 1
-    assert unknown_rows[0].capability == "skills"
+    skills_row = next(r for r in rows if r.capability == "skills")
+    assert skills_row.status == "UNKNOWN"
+    # The cell itself is unknown, so the row is silent for that reason
+    # rather than for the missing-probe-rule one.
+    assert "declared=unknown" in skills_row.detail
 
 
 def test_detect_drift_rejects_runtime_id_mismatch() -> None:

@@ -43,7 +43,6 @@ from eawf.kernel.migration.epoch2.lifecycle import (
     map_wave_row,
 )
 from eawf.kernel.migration.epoch2.measurements import MeasurementImportPlan
-from eawf.kernel.migration.epoch2.registry import mapping_rule_index
 from eawf.kernel.migration.epoch2.rules import MappingRuleVersion, StrictMigrationModel
 from eawf.kernel.migration.epoch2.runs import MintedRun, report_ledger_rows
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
@@ -121,6 +120,11 @@ class BacklogImportPlan(StrictMigrationModel):
                 outside the map, cannot default its intent, or reaches no
                 classifier arm.
         """
+        # Imported here rather than at module scope: the rule registry digests
+        # the validation tables, which this module's own importer stages feed,
+        # so a module-level edge would close an import cycle.
+        from eawf.kernel.migration.epoch2.registry import mapping_rule_index
+
         allowlist = load_legacy_symbol_allowlist(allowlist_path)
         rules = tuple(mapping_rule_index(allowlist).values())
 

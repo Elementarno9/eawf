@@ -60,7 +60,6 @@ from eawf.kernel.migration.epoch2.lifecycle import (
 )
 from eawf.kernel.migration.epoch2.measurements import TASK_REF_FIELD, ImportedMeasurement
 from eawf.kernel.migration.epoch2.plan import CorpusImportPlan
-from eawf.kernel.migration.epoch2.registry import mapping_rule_index
 from eawf.kernel.migration.epoch2.rules import (
     MappingRuleVersion,
     StrictMigrationModel,
@@ -1138,6 +1137,11 @@ class ImportValidationReport(StrictMigrationModel):
                 of a rule that must be total.
             ValidationError: When a source row is unreadable.
         """
+        # Imported here rather than at module scope: the rule registry digests
+        # this module's validation tables, so a module-level edge in this
+        # direction would close an import cycle.
+        from eawf.kernel.migration.epoch2.registry import mapping_rule_index
+
         plan = CorpusImportPlan.build(snapshot=snapshot, allowlist_path=allowlist_path)
         staged = StagedImport.reduce(plan=plan, snapshot=snapshot)
         aliases = ImportAliasIndex.build(staged=staged, identity=identity)

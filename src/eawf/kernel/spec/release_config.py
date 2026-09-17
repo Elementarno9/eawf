@@ -167,6 +167,11 @@ class ReleaseGateName(StrEnum):
         SCHEMA_STRICTNESS: The epoch-2 strictness census proof command.
         WAIVER_COUNT: The checkpoint's waiver block, read off the
             readiness receipt rather than off a signal row.
+        PROVIDER: Every advertised runtime tuple passes its conformance.
+        MEMBERSHIP: Every acceptance bundle the checkpoint names is
+            complete and exact.
+        CANARY_ISOLATION: The canary-isolation proof command -- a native
+            rehearsal leaves the production root byte-identical.
     """
 
     VERSION_CONSISTENCY = "version_consistency"
@@ -181,6 +186,9 @@ class ReleaseGateName(StrEnum):
     HOSTED_GATE_RUNNER = "hosted_gate_runner"
     SCHEMA_STRICTNESS = "schema_strictness"
     WAIVER_COUNT = "waiver_count"
+    PROVIDER = "provider"
+    MEMBERSHIP = "membership"
+    CANARY_ISOLATION = "canary_isolation"
 
 
 class ReleaseTargetConfig(_StrictModel):
@@ -190,6 +198,12 @@ class ReleaseTargetConfig(_StrictModel):
         target_id: Target identity, e.g. ``pypi``.
         required: Whether the checkpoint cannot bake without this target.
         artifact_kinds: Non-empty set of artifact kinds published here.
+        identity: External name the registry carries this project under
+            -- the PyPI project, the npm package, the ``owner/repo``
+            pair. Optional on the model so a configuration written
+            before the field existed still loads; the manifest freeze
+            refuses a target that declares none, because an identity
+            invented at freeze time is an identity nobody configured.
         observe_adapter: Adapter the target is independently read back
             through. Mandatory: a target with no observer can report
             success but can never be observed, so the release could
@@ -215,6 +229,7 @@ class ReleaseTargetConfig(_StrictModel):
     target_id: TargetIdStr
     required: bool = True
     artifact_kinds: Annotated[tuple[ReleaseArtifactKind, ...], Field(min_length=1)]
+    identity: Annotated[str, Field(min_length=1, max_length=200)] | None = None
     observe_adapter: ObservationAdapter
     timeout_seconds: Annotated[int, Field(gt=0)]
     retry_limit: Annotated[int, Field(ge=0)]

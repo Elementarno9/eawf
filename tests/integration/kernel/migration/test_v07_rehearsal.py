@@ -90,11 +90,11 @@ from tests.integration.kernel.migration._historical_freeze import (
 from tests.integration.kernel.migration._live_corpus import (
     LIVE_STORE_LOCATOR,
     PIN_FILENAME,
+    CorpusMagnitude,
     LiveCorpusPin,
-    ScaleBand,
-    band_for,
     committed_sources,
     is_committed,
+    magnitude_for,
     stage_live_corpus,
 )
 from tests.integration.kernel.migration._rehearsal import (
@@ -854,34 +854,34 @@ def largest_pin() -> LiveCorpusPin:
     return LiveCorpusPin.load(LIVE_CORPUS_ROOT / PIN_FILENAME)
 
 
-def test_largest_supported_state_is_the_live_corpus_at_the_declared_band(
+def test_largest_supported_state_is_the_live_corpus_at_the_declared_magnitude(
     largest_pin: LiveCorpusPin, rehearsed: Callable[[RehearsalFixture], RehearsalRecord]
 ) -> None:
-    """The band is asserted over the corpus that was actually imported.
+    """The magnitude is asserted over the corpus that was actually imported.
 
-    Asserting the band rather than a row count is what lets the live
-    corpus grow without loosening the claim: a measurement taken over
-    four thousand rows still backs a statement about thousands, and one
-    taken over four hundred does not.
+    Asserting an order of magnitude rather than a row count is what lets
+    the live corpus grow without loosening the claim: a measurement taken
+    over four thousand rows still backs a statement about thousands, and
+    one taken over four hundred does not.
 
-    The band is the one assertion here that a growing corpus eventually
-    reds, and that is deliberate. Crossing ten thousand rows means the
-    rehearsal now backs a *stronger* claim than the one declared, and
-    re-declaring it is the point at which someone re-derives the ceilings
-    over the bigger population instead of inheriting numbers measured
-    over a smaller one.
+    The magnitude is the one assertion here that a growing corpus
+    eventually reds, and that is deliberate. Crossing ten thousand rows
+    means the rehearsal now backs a *stronger* claim than the one
+    declared, and re-declaring it is the point at which someone
+    re-derives the ceilings over the bigger population instead of
+    inheriting numbers measured over a smaller one.
     """
     record = rehearsed(LARGEST_FIXTURE)
     assert record.dry_run is not None
-    observed = band_for(record.dry_run.source_rows)
-    assert observed is largest_pin.declared_band, (
-        f"the live corpus censuses {record.dry_run.source_rows} rows, which is band "
-        f"{observed.value}, not the {largest_pin.declared_band.value} the pin declares; "
-        f"re-measure the corpus and re-declare declared_band in {PIN_FILENAME}"
+    observed = magnitude_for(record.dry_run.source_rows)
+    assert observed is largest_pin.declared_magnitude, (
+        f"the live corpus censuses {record.dry_run.source_rows} rows, which is magnitude "
+        f"{observed.value}, not the {largest_pin.declared_magnitude.value} the pin declares; "
+        f"re-measure the corpus and re-declare declared_magnitude in {PIN_FILENAME}"
     )
-    assert largest_pin.declared_band is ScaleBand.THOUSANDS, (
+    assert largest_pin.declared_magnitude is CorpusMagnitude.THOUSANDS, (
         f"the rehearsal's published claim is a thousands-row cutover; raising "
-        f"declared_band in {PIN_FILENAME} means raising it here too"
+        f"declared_magnitude in {PIN_FILENAME} means raising it here too"
     )
 
 
@@ -951,7 +951,7 @@ def test_largest_supported_state_pin_records_what_was_observed(
     assert largest_pin.observed_multiplier < largest_pin.multiplier_ceiling
     assert largest_pin.observed_apply_s < largest_pin.apply_timeout_budget_s
     assert largest_pin.observed_residual_bytes < largest_pin.residual_document_ceiling_bytes
-    assert band_for(largest_pin.observed_rows) is largest_pin.declared_band
+    assert magnitude_for(largest_pin.observed_rows) is largest_pin.declared_magnitude
 
 
 def test_the_live_corpus_stages_only_paths_the_commit_policy_carries() -> None:

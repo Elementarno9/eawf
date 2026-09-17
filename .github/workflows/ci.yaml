@@ -136,6 +136,14 @@ jobs:
         # session_count and duration-p50 assertions live inside the named
         # test rather than as inline shell here, so a local run reproduces
         # the CI signal exactly.
+        #
+        # Sunset review: KEEP. A gate that never fires is retired at phase
+        # close, and this one is the exception that earns its slot -- the
+        # empty-cohort regression it guards is silent (green suite, unusable
+        # numbers), so the only evidence it is still working is that it runs.
+        # Its fire proof is tests/integration/test_metrics_cli.py, which reds
+        # on an ingestion path that writes no rows. Reviewed and kept; the
+        # companion review row is tests/lint/test_gate_sunset_review.py.
         run: uv run pytest -n0 tests/integration/test_metrics_cli.py
 
       - name: Coverage gate (per-package C09 §5.2 + TUI behavioural floor)

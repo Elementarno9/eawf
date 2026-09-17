@@ -133,6 +133,7 @@ Submit, inspect, follow, resume, or cancel durable wave closure.
 |---|---|
 | `cancel` | Cancel a close attempt before its APPLYING stage. |
 | `follow` | Follow a close attempt until it reaches a terminal state. |
+| `rereceipt` | Re-run a closed wave's gates at its landed commit and bind receipts. |
 | `resume` | Resume an interrupted or infrastructure-failed close attempt. |
 | `status` | Show durable close status without waiting. |
 | `submit` | Submit an idempotent exact-revision close attempt. |
@@ -472,6 +473,7 @@ Tag releases and drive the release train's checkpoint records.
 | `approve` | Approve a candidate against a readiness sweep, and record it. |
 | `burn` | Burn the version: record the spent checkpoint as partially released. |
 | `cancel` | Abandon a checkpoint that never touched a registry, or refuse. |
+| `candidate` | Freeze the manifest from the receipts and record the CANDIDATE. |
 | `changelog` | Mine the current ``CHANGELOG.md`` unreleased section. |
 | `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `notes` | Render a scrubbed release-notes draft. |
@@ -572,6 +574,7 @@ Manage phase / iter / wave specs (init / validate / promote / archive / show).
 | `init` | Scaffold a new spec via daemon proxy (or in-process fallback). |
 | `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
 | `repoint-gates` | Rewrite the recorded gate argv of a CLOSED wave after a tree move. |
+| `repoint-scopes` | Re-derive a wave's file scopes and rewrite a named criterion's text. |
 | `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
 | `sync` | Parse a wave spec body + materialise its criteria + gates onto state. |
 | `validate` | Re-hash the on-disk spec body + refresh the daemon cache row. |

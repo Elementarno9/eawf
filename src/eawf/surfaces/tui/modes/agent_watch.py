@@ -29,7 +29,10 @@ spawn engine registers one EXECUTOR session per dispatch), falling back to
 the most-recent executor session of any status when none is ACTIVE. When the
 scope has no dispatched executor session at all the pane renders the
 honest-empty :data:`EMPTY_NOTICE` banner rather than implying a stream is
-flowing.
+flowing. A picked session the daemon never dispatched -- no session-attempt
+row, no dispatch annotation, no forwarded output chunk -- reads as
+:data:`WATCH_EXTERNAL_DISPATCH` instead, because its events are emitted in
+another harness and reach this pane only if that harness forwards them.
 
 The raw-output tail (FA4 zoom)
 ------------------------------
@@ -158,6 +161,12 @@ EMPTY_NOTICE: str = "no active dispatched session"
 #: global degraded banner's calm "daemon unreachable, reconnecting" lead, then
 #: states the pane-specific consequence.
 WATCH_DEGRADED: str = "daemon unreachable, reconnecting -- session stream paused until it returns"
+
+#: Notice for a watched session the daemon never dispatched. Its events are
+#: emitted inside another harness, so nothing reaches this pane unless that
+#: harness forwards its output; saying "waiting for session events" would
+#: promise a stream that never arrives.
+WATCH_EXTERNAL_DISPATCH: str = "externally dispatched; stream only if forwarded"
 
 #: Result line before any cancel has been issued (the idle cancel surface).
 CANCEL_IDLE: str = "press x to cancel the watched session"
@@ -799,6 +808,78 @@ def _log_handle(state: State, *, wave_id: str, attempt: int) -> str | None:
         return None
     row = wave.sessions.get(attempt)
     return row.session_log_handle if row is not None else None
+
+
+def has_daemon_dispatch_record(state: State | None, *, wave_id: str, attempt: int) -> bool:
+    """Return whether the daemon recorded dispatching *wave_id* attempt *attempt*.
+
+    The daemon stamps two rows for every spawn it drives: the wave-local
+    :class:`~eawf.kernel.state.models.SessionAttempt` under ``wave.sessions``
+    and the matching :class:`~eawf.kernel.state.models.DispatchAnnotation` in
+    ``wave.dispatch_history``. A session registered by an outside harness (a
+    subagent the operator's own agent spawned) leaves both absent, so their
+    absence is the honest signal that this pane is not the surface that session
+    streams to.
+
+    Both rows land when the spawn exits, so an in-flight daemon dispatch has
+    neither yet; the caller therefore treats already-forwarded output chunks as
+    dispatch evidence of their own rather than labelling a live spawn external.
+
+    Args:
+        state: The bound read-only state, or ``None`` (fresh / user scope).
+        wave_id: The watched session's scope.
+        attempt: The watched attempt number.
+
+    Returns:
+        ``True`` when a session-attempt row or a dispatch annotation exists for
+        the attempt, else ``False``.
+    """
+    if state is None:
+        return False
+    wave = state.waves.get(wave_id)
+    if wave is None:
+        return False
+    if attempt in wave.sessions:
+        return True
+    return any(annotation.attempt == attempt for annotation in wave.dispatch_history)
+
+
+def watch_empty_notice(
+    target: WatchTarget | None,
+    *,
+    degraded: bool,
+    state: State | None,
+    forwarded_chunks: bool,
+) -> str:
+    """Return the stream's empty-notice text for *target* under the bound *state*.
+
+    Four honest states, in precedence order: nothing watched, the daemon
+    unreachable, a session no daemon dispatch record covers, and the
+    live-waiting default. The external case is last-resort on purpose -- it
+    claims knowledge about WHERE the session runs, so any forwarded output
+    (:func:`load_output_chunk_batch` lines already on the pane) outranks it and
+    keeps the waiting wording, since a stream that is arriving is a stream.
+
+    Args:
+        target: The watched session, or ``None`` when nothing is watched.
+        degraded: Whether the host App reports the daemon unreachable.
+        state: The bound read-only state the dispatch record is read from.
+        forwarded_chunks: Whether output chunks for the target already reached
+            this pane.
+
+    Returns:
+        The notice text: :data:`EMPTY_NOTICE`, :data:`WATCH_DEGRADED`, the
+        :data:`WATCH_EXTERNAL_DISPATCH` line, or the live-waiting wording.
+    """
+    if target is None:
+        return EMPTY_NOTICE
+    if degraded:
+        return WATCH_DEGRADED
+    if not forwarded_chunks and not has_daemon_dispatch_record(
+        state, wave_id=target.wave_id, attempt=target.attempt
+    ):
+        return f"watching {target.label} -- {WATCH_EXTERNAL_DISPATCH}"
+    return f"watching {target.label} -- waiting for session events..."
 
 
 def _wave_executor_session(state: State, wave_id: str) -> AgentSession | None:
@@ -2813,6 +2894,12 @@ class AgentWatchModeScreen(ScopeScreen):
     #: rather than resetting to the top; ``None`` before any zoom.
     _last_watched_session_id: str | None = None
 
+    #: Whether output chunks for the watched wave have reached this pane (from
+    #: the persisted store or a live push). Forwarded output proves the session
+    #: streams here, so the empty notice keeps the live-waiting wording instead
+    #: of the externally-dispatched one. Reset per recompose with the tail.
+    _forwarded_chunks_seen: bool = False
+
     def compose_body(self) -> ComposeResult:
         """Yield the fleet verdict rollup then the FA3 lane grid, parity grid, OR zoom.
 
@@ -2851,6 +2938,7 @@ class AgentWatchModeScreen(ScopeScreen):
         self._output_store_cursor = 0
         self._output_synced_wave = None
         self._legacy_output_notice_shown = False
+        self._forwarded_chunks_seen = False
         yield VerdictRollupPane(self._fleet_verdict_rollup(), mode=mode)
         # An explicit roster request (the ``l`` key -> ``action_open_roster``)
         # surfaces the browsable session picker over WHATEVER the body would
@@ -3090,6 +3178,10 @@ class AgentWatchModeScreen(ScopeScreen):
         # the store yields nothing, so the tail never double-renders a line.
         if not self._sync_output_from_store():
             self._seed_output_from_buffer()
+        # The notice was composed before the seed ran, so re-render it now that
+        # forwarded output (or its absence) is known -- a seeded chunk must not
+        # leave the pane claiming the session only streams elsewhere.
+        self.refresh_empty_notice()
         # Always-on event-store poll backstop: the tail's push path is
         # gated off once the store takes authority and its only other re-sync
         # trigger (_on_app_state) fires on a state.json mtime change -- but a
@@ -3164,6 +3256,9 @@ class AgentWatchModeScreen(ScopeScreen):
         lines = [line for wave_id, line in buffer if wave_id == self.target.wave_id]
         tail = self.query(f"#{WATCH_OUTPUT_ID}")
         if lines and tail:
+            # Buffered output reached this pane, so the empty notice stops
+            # offering the externally-dispatched wording.
+            self._forwarded_chunks_seen = True
             tail.first(OutputTail).extend(lines)
 
     def _sync_output_from_store(self) -> bool:
@@ -3215,6 +3310,7 @@ class AgentWatchModeScreen(ScopeScreen):
             self._output_store_cursor = 0
             self._output_synced_wave = wave_id
             self._legacy_output_notice_shown = False
+            self._forwarded_chunks_seen = False
         identity_target = (
             self.target
             if self.target is not None and self.target.wave_id == wave_id
@@ -3234,6 +3330,9 @@ class AgentWatchModeScreen(ScopeScreen):
         self._output_store_cursor = batch.byte_cursor
         if not batch.lines:
             return False
+        # Forwarded output is proof the session streams to this pane, so the
+        # empty notice stops offering the externally-dispatched wording.
+        self._forwarded_chunks_seen = True
         lines = list(batch.lines)
         if batch.legacy_scope_fallback and not self._legacy_output_notice_shown:
             lines.insert(0, LEGACY_SCOPE_OUTPUT_NOTICE)
@@ -3486,6 +3585,9 @@ class AgentWatchModeScreen(ScopeScreen):
         # double-render. Defer to the store while its cursor is advanced.
         if self._output_store_cursor > 0:
             return
+        # A pushed line is forwarded output too, so the empty notice stops
+        # offering the externally-dispatched wording.
+        self._forwarded_chunks_seen = True
         tail.first(OutputTail).append_line(line)
         logger.debug(f"append_output wave={wave_id} len={len(line)}")
 
@@ -3886,14 +3988,17 @@ class AgentWatchModeScreen(ScopeScreen):
 
         Returns:
             :data:`EMPTY_NOTICE` when nothing is watched; the degraded wording
-            when the App reports degraded (daemon unreachable); else the
+            when the App reports degraded (daemon unreachable); the
+            :data:`WATCH_EXTERNAL_DISPATCH` wording when no daemon dispatch
+            record and no forwarded chunk covers the target; else the
             live-waiting wording naming the watched target.
         """
-        if self.target is None:
-            return EMPTY_NOTICE
-        if getattr(self.app, "degraded", False):
-            return WATCH_DEGRADED
-        return f"watching {self.target.label} -- waiting for session events..."
+        return watch_empty_notice(
+            self.target,
+            degraded=bool(getattr(self.app, "degraded", False)),
+            state=self._current_state(),
+            forwarded_chunks=self._forwarded_chunks_seen,
+        )
 
     def _empty_hero(self, *, with_sigil: bool = True) -> str:
         """Return the centered honest-empty hero body for the session stream.
@@ -4121,6 +4226,7 @@ __all__ = [
     "SYNTHESIZED_BADGE",
     "WATCH_DEGRADED",
     "WATCH_EMPTY_ID",
+    "WATCH_EXTERNAL_DISPATCH",
     "WATCH_GRID_EMPTY_ID",
     "WATCH_GRID_ID",
     "WATCH_HEADER_ID",
@@ -4149,6 +4255,7 @@ __all__ = [
     "active_watchable_sessions",
     "cancel_mark",
     "frame_replay_lines",
+    "has_daemon_dispatch_record",
     "is_watched_event",
     "lane_grid_rows",
     "lane_parity_key",
@@ -4167,4 +4274,5 @@ __all__ = [
     "tile_dom_id",
     "verdict_sigil_markup",
     "watch_display_label",
+    "watch_empty_notice",
 ]

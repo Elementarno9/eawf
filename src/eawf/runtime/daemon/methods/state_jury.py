@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -140,6 +141,41 @@ def cross_vendor_lanes_ready(*, quorum: int) -> bool:
     return ready
 
 
+def durable_auditor_extra_args(
+    durable_context: DurableAuditContext | None,
+) -> dict[str, tuple[str, ...]]:
+    """Return the per-runtime spawn flags that force a durable auditor's answer.
+
+    The claude CLI accepts ``--json-schema`` and returns the forced object as
+    its result text, so a durable close auditor can be constrained to the
+    report body instead of asked for it in prose -- the criterion echo becomes
+    a value the runtime supplies rather than one the model reproduces. No other
+    vendor CLI takes the flag, so only the claude lane is mapped and every
+    other juror keeps its argv.
+
+    Args:
+        durable_context: The frozen close context, or ``None`` for a
+            non-durable spawn.
+
+    Returns:
+        A ``runtime -> extra argv`` map; empty for a non-durable spawn or a
+        context whose criteria cannot be pinned to an exact schema.
+    """
+    from eawf.workflow.dispatch.verdict import durable_auditor_json_schema
+
+    if durable_context is None:
+        return {}
+    schema = durable_auditor_json_schema(durable_context)
+    if schema is None:
+        return {}
+    rendered = orjson.dumps(schema).decode("utf-8")
+    logger.info(
+        f"durable_auditor_extra_args wave={durable_context.wave_id!r} "
+        f"flag='--json-schema' bytes={len(rendered)}"
+    )
+    return {"claude-code": ("--json-schema", rendered)}
+
+
 def jury_spawn_factory(
     state: State,
     wave: Wave,
@@ -147,6 +183,7 @@ def jury_spawn_factory(
     repo_root: Path,
     timeout_seconds: float = 600.0,
     events_path: Path | None = None,
+    extra_args_by_runtime: Mapping[str, Sequence[str]] | None = None,
 ) -> Any:
     """Return the production per-runtime spawn factory for the jury convener.
 
@@ -177,6 +214,9 @@ def jury_spawn_factory(
         timeout_seconds: Per-juror spawn wall-clock ceiling.
         events_path: Optional ``event.jsonl`` path -- when set, juror stdout
             streams live to the auditor's Watch row; when ``None``, no live tail.
+        extra_args_by_runtime: Optional per-runtime verbatim argv tail (the
+            structured-output escape hatch). A runtime absent from the map
+            spawns with an unchanged argv.
 
     Returns:
         A :data:`~eawf.observability.eval.cross_vendor_jury.SpawnFactory` -- a
@@ -207,6 +247,7 @@ def jury_spawn_factory(
         triple = _JURY_RUNTIME_TRIPLE.get(runtime, "claude")
         model = model_for_runtime(role, effort, triple, runtime_models=runtime_models)
         adapter = select_adapter(runtime)
+        extra_args = tuple((extra_args_by_runtime or {}).get(runtime, ()))
 
         async def _spawn(prompt: str) -> SpawnResult:
             if events_path is None:
@@ -214,6 +255,7 @@ def jury_spawn_factory(
                     prompt,
                     model=model,
                     cwd=cwd,
+                    extra_args=extra_args,
                     denied_tools=denied,
                     timeout=timeout_seconds,
                 )
@@ -251,6 +293,7 @@ def jury_spawn_factory(
                     prompt,
                     model=model,
                     cwd=cwd,
+                    extra_args=extra_args,
                     denied_tools=denied,
                     timeout=timeout_seconds,
                     on_chunk=_on_chunk,

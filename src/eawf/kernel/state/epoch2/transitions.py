@@ -23,10 +23,12 @@ carries a fabricated terminal status to hide the ambiguity behind.
 unresolved.
 
 The diagrams under ``tests/fixtures/epoch2/transitions`` are the
-human-readable rendering of this table. :func:`render_state_diagram`
-produces them and the parity test refuses any difference in either
-direction, so an edge cannot be added to the code without appearing in
-the diagram a reader reviews.
+human-readable rendering of this table. The renderer that produces them
+lives with the parity test that consumes it
+(``tests/unit/kernel/state/test_epoch2_transition_parity.py``), because
+nothing in production draws a diagram; the parity test refuses any
+difference in either direction, so an edge cannot be added to the code
+without appearing in the diagram a reader reviews.
 """
 
 from __future__ import annotations
@@ -1104,46 +1106,6 @@ def ambiguity_label(entity: LifecycleEntity, status: LifecycleStatus) -> Ambigui
     return AMBIGUOUS_STATES.get((entity, str(status)))
 
 
-def render_guards(guards: tuple[TransitionGuard, ...]) -> str:
-    """Return the diagram spelling of an edge's guard list.
-
-    Args:
-        guards: The guards attached to one edge, in evaluation order.
-
-    Returns:
-        The guard names joined by ``+``, or ``none`` for an unguarded
-        edge. An unguarded edge renders a word rather than an empty
-        bracket so a reader can tell it from a truncated line.
-    """
-    if not guards:
-        return "none"
-    return "+".join(guard.value for guard in guards)
-
-
-def render_state_diagram(entity: LifecycleEntity) -> str:
-    """Return the mermaid state diagram of *entity*'s machine.
-
-    Every status is declared on its own line before the edges, so a
-    terminal state and a state that merely has no edge yet are both
-    visible instead of being implied by their absence.
-
-    Args:
-        entity: The entity to render.
-
-    Returns:
-        The diagram text, newline-terminated.
-    """
-    statuses = statuses_of(entity)
-    lines = [f"%% {entity.value} lifecycle", "stateDiagram-v2"]
-    lines.extend(f"    {status!s}" for status in statuses)
-    for status in statuses:
-        lines.extend(
-            f"    {row.frm!s} --> {row.to!s}: {row.verb.value} [{render_guards(row.guards)}]"
-            for row in rows_from(entity, status)
-        )
-    return "\n".join(lines) + "\n"
-
-
 __all__ = [
     "AMBIGUOUS_STATES",
     "DENIAL_REMEDIATION",
@@ -1165,8 +1127,6 @@ __all__ = [
     "ambiguity_label",
     "index_rows",
     "is_terminal",
-    "render_guards",
-    "render_state_diagram",
     "row_for",
     "rows_from",
     "statuses_of",

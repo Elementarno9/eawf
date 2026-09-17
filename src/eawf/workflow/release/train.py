@@ -109,7 +109,8 @@ V07_TRAIN: Final[ReleaseTrain] = ReleaseTrain(
 #: The authored ``0.7.0.dev1`` checkpoint configuration. ``membership_refs``
 #: is omitted rather than written empty because the checkpoint forbids it
 #: outright, and the three publication targets each declare the adapter
-#: their observation is read back through. The single platform claim is
+#: their observation is read back through plus the external identity the
+#: registry carries the project under. The single platform claim is
 #: what makes the ``platform`` row compute at ``dev1``: the Linux
 #: real-bwrap CI job is the only advertised platform whose journey runs
 #: on a real host rather than through an argv-shape stub.
@@ -126,12 +127,14 @@ release:
     - target_id: pypi
       required: true
       artifact_kinds: [wheel, sdist]
+      identity: eawf
       observe_adapter: package_index
       timeout_seconds: 1800
       retry_limit: 2
     - target_id: npm
       required: true
       artifact_kinds: [codex_plugin]
+      identity: "@elementarno/eawf"
       observe_adapter: npm_registry
       prerelease_dist_tag: next
       stable_dist_tag: latest
@@ -140,6 +143,7 @@ release:
     - target_id: github
       required: true
       artifact_kinds: [release_notes, checksums, plugin_bundle]
+      identity: Elementarno9/eawf
       observe_adapter: source_host_release
       timeout_seconds: 1800
       retry_limit: 2
@@ -176,6 +180,7 @@ V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
             "target_id": "pypi",
             "required": True,
             "artifact_kinds": ["wheel", "sdist"],
+            "identity": "eawf",
             "observe_adapter": "package_index",
             "timeout_seconds": 1800,
             "retry_limit": 2,
@@ -184,6 +189,7 @@ V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
             "target_id": "npm",
             "required": True,
             "artifact_kinds": ["codex_plugin"],
+            "identity": "@elementarno/eawf",
             "observe_adapter": "npm_registry",
             "prerelease_dist_tag": "next",
             "stable_dist_tag": "latest",
@@ -194,6 +200,7 @@ V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
             "target_id": "github",
             "required": True,
             "artifact_kinds": ["release_notes", "checksums", "plugin_bundle"],
+            "identity": "Elementarno9/eawf",
             "observe_adapter": "source_host_release",
             "timeout_seconds": 1800,
             "retry_limit": 2,
@@ -217,6 +224,16 @@ DEV2_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The ``0.7.0.dev3`` checkpoint configuration, rendered the same way
+#: ``dev2`` is. It carries no ``membership_refs``: which acceptance
+#: bundles the canary Milestone completed is a fact about the record
+#: being cut rather than about the train, so the rung requires the list
+#: and the resolver overlays it from the record.
+DEV3_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0.dev3"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -224,6 +241,7 @@ DEV2_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
 CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0.dev1": DEV1_RELEASE_CONFIG_YAML,
     "0.7.0.dev2": DEV2_RELEASE_CONFIG_YAML,
+    "0.7.0.dev3": DEV3_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -325,12 +343,49 @@ DEV2_GATE_BINDINGS_YAML: Final[str] = (
 """
 )
 
-#: Authored gate binding tables by profile. ``dev1`` and ``dev2`` are
-#: authored; the later profiles land with the waves that build their
-#: producers.
+#: What each of the three gates ``native_canary`` adds on top of ``dev2``
+#: reads.
+#:
+#: ``provider`` and ``membership`` are whole rows, and both rows are
+#: train-wide names that no earlier rung could require. ``provider``
+#: goes green only on a runner-written conformance record for every
+#: advertised runtime tuple, so an advertised tuple nobody ran leaves
+#: the row red rather than absent. ``membership`` is the acceptance side
+#: of the same story: the bundles the record names must be complete and
+#: exact, which is the check that stops a canary Milestone from being
+#: claimed before it finished.
+#:
+#: ``canary_isolation`` is a proof command because there is no fact about
+#: a checkout that settles it -- only a run. The rehearsal drives a whole
+#: native Milestone inside a disposable repository and the proof is that
+#: the production root is byte-identical afterwards. Its test lands with
+#: the rehearsal wave, so the gate reports red until then, which is the
+#: honest state of a protection that has not been demonstrated.
+NATIVE_CANARY_GATE_BINDINGS_YAML: Final[str] = (
+    DEV2_GATE_BINDINGS_YAML
+    + """\
+  - gate: provider
+    kind: signal
+    signal: provider
+  - gate: membership
+    kind: signal
+    signal: membership
+  - gate: canary_isolation
+    kind: proof_command
+    proof:
+      command_id: canary_leaves_production_untouched
+      argv: [uv, run, pytest, tests/integration/workflow/release/test_dev3_canary_isolation.py, -q]
+      timeout_seconds: 1800
+"""
+)
+
+#: Authored gate binding tables by profile. ``dev1``, ``dev2`` and
+#: ``native_canary`` are authored; the later profiles land with the waves
+#: that build their producers.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
     ReleaseGateProfile.DEV2: DEV2_GATE_BINDINGS_YAML,
+    ReleaseGateProfile.NATIVE_CANARY: NATIVE_CANARY_GATE_BINDINGS_YAML,
 }
 
 
@@ -403,6 +458,8 @@ __all__ = [
     "DEV1_RELEASE_CONFIG_YAML",
     "DEV2_GATE_BINDINGS_YAML",
     "DEV2_RELEASE_CONFIG_YAML",
+    "DEV3_RELEASE_CONFIG_YAML",
+    "NATIVE_CANARY_GATE_BINDINGS_YAML",
     "PROFILE_GATE_BINDINGS",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
