@@ -12,8 +12,8 @@ Implements the §14 algorithm for ``/audit``:
    - Either kind may be requested explicitly via ``ctx.args["kind"]``.
 4. Build a check plan from the target wave's success criteria + the
    caller-supplied per-criterion check directives.
-5. **Run the checks for real** via the audit-check DSL
-   (:func:`eawf.workflow.audit_dsl.runner.run_checks`). Two flavours feed the
+5. **Run the checks for real** in a sandboxed child via the audit-check DSL
+   (:func:`eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`). Two flavours feed the
    plan: criterion-vs-diff checks (``criterion_in_diff`` — does the
    shipped source reflect the criterion?) and behavioural smoke checks
    (``command_exit_zero`` — does running the changed surface still
@@ -65,7 +65,6 @@ import orjson
 from eawf.kernel.state.models import State, Wave
 from eawf.surfaces.render.envelope import EnvelopeStatus, EnvelopeWarning, SkillName
 from eawf.workflow.audit_dsl.models import CheckSpec
-from eawf.workflow.audit_dsl.runner import run_checks
 from eawf.workflow.skills._common import (
     emit_event,
     has_research_profile,
@@ -419,8 +418,17 @@ class AuditSkill(Skill):
 
         # Step 5 — run the checks for real. cwd is the repo root (state
         # lives at <repo>/.ea/state.json so its grandparent is the root).
+        # A check is routinely a test suite that drives eawf's own RPCs, so
+        # it runs against a sandboxed copy of the ledger, never the live one.
+        # Imported here because eawf.workflow.verify imports this module.
+        from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
+
         repo_root = state_path.parent.parent
-        results = run_checks(criterion_specs, cwd=repo_root)
+        results = run_checks_out_of_process(
+            criterion_specs,
+            cwd=repo_root,
+            live_state_path=state_path,
+        )
         runs: list[AuditCheckRun] = []
         findings: list[AuditFinding] = []
         for spec, result in zip(criterion_specs, results, strict=True):

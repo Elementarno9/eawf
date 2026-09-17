@@ -236,10 +236,9 @@ def green_probes(monkeypatch: pytest.MonkeyPatch) -> None:
     def passing(context: ReleaseSignalContext) -> ReleaseSignalOutcome:
         return ReleaseSignalOutcome(status=ReleaseSignalStatus.PASS, remediation="")
 
-    monkeypatch.setattr(
-        "eawf.workflow.verify.release_readiness.DEFAULT_RELEASE_PROBES",
-        dict.fromkeys(ReleaseSignalName, passing),
-    )
+    registry = dict.fromkeys(ReleaseSignalName, passing)
+    monkeypatch.setattr("eawf.runtime.release.chokepoint.build_tag_probes", lambda _: registry)
+    monkeypatch.setattr("eawf.runtime.release.chokepoint.build_receipt_probes", lambda _: registry)
 
 
 @pytest.fixture

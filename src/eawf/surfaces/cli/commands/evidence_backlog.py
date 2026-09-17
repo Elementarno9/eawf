@@ -141,10 +141,15 @@ def audit_run(
 
         check_results_payload: list[dict[str, Any]] | None = None
         if checks is not None:
-            from eawf.workflow.audit_dsl.runner import load_spec, run_checks
+            from eawf.workflow.audit_dsl.runner import load_spec
+            from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
 
             specs = load_spec(checks)
-            results = run_checks(specs, cwd=state_path.parent.parent)
+            results = run_checks_out_of_process(
+                specs,
+                cwd=state_path.parent.parent,
+                live_state_path=state_path,
+            )
             check_results_payload = [
                 {"name": r.name, "passed": r.passed, "details": r.details} for r in results
             ]

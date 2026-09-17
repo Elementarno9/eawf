@@ -19,12 +19,16 @@ The bare ``~/`` shape is deliberately absent: state text legitimately names
 
 Every token pattern is anchored on its left edge, because an unanchored
 ``sk-`` run also matches inside ordinary words such as ``task-...``.
+
+The commit-time lints scan the lines a commit adds; the state writers apply
+the same set earlier, to the strings a write adds (:func:`diff_state_leaks`).
 """
 
 from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -67,6 +71,11 @@ _RESERVED_EMAIL_DOMAINS: Final = frozenset(
     {"example.com", "example.org", "example.net", "example.edu"}
 )
 _RESERVED_EMAIL_TLDS: Final = (".example", ".invalid", ".localhost", ".test")
+
+# A workspace index records where each linked repo is checked out, so that
+# field holds a local absolute path by design. Only the home-path shape is
+# waived there; an email or token in it is still a leak.
+_LOCAL_CHECKOUT_FIELD: Final[re.Pattern[str]] = re.compile(r"workspace\.repos\.[^.\[]+\.path")
 
 
 class StateLeakKind(StrEnum):
@@ -177,14 +186,165 @@ def scan_state_leaks(text: str, *, allowed_emails: frozenset[str]) -> list[State
     return hits
 
 
+@dataclass(frozen=True)
+class StateStringLeak:
+    """A leak shape carried by one string a state write adds or changes.
+
+    Attributes:
+        field_path: Where the string sits in the state payload: object keys
+            joined by dots, list positions in brackets, such as
+            ``waves.P01-I01-W01.success_criteria[0].text``.
+        hit: The leak shape the string carries.
+    """
+
+    field_path: str
+    hit: StateLeakHit
+
+
+def diff_state_leaks(
+    old: object, new: object, *, allowed_emails: frozenset[str]
+) -> list[StateStringLeak]:
+    """Return the leak shapes in the strings a state write adds or changes.
+
+    A state write re-serialises the whole payload, so scanning every string
+    would re-flag text that predates the write and cost a full walk of a
+    multi-megabyte payload. Only a string that differs from the value at the
+    same place in ``old`` is scanned. A subtree equal to its old counterpart
+    is skipped without being walked, and a list item equal to any item of the
+    old list is treated as moved rather than new, so an insertion does not
+    re-flag the items it shifts.
+
+    Args:
+        old: The decoded JSON payload on disk before the write.
+        new: The decoded JSON payload about to be written. Neither argument
+            is modified.
+        allowed_emails: Casefolded addresses that are not leaks, normally
+            :func:`default_allowed_emails`.
+
+    Returns:
+        One entry per hit, in payload walk order. Empty when every added or
+        changed string is clean. Dict keys are not scanned; only values are.
+        A home path in a workspace repo checkout path
+        (``workspace.repos.<code>.path``) is not reported.
+    """
+    leaks: list[StateStringLeak] = []
+    _collect_string_leaks(old, new, field_path="", allowed_emails=allowed_emails, leaks=leaks)
+    return leaks
+
+
+def _collect_string_leaks(
+    old: object,
+    new: object,
+    *,
+    field_path: str,
+    allowed_emails: frozenset[str],
+    leaks: list[StateStringLeak],
+) -> None:
+    """Append the leaks of ``new``'s added or changed strings to ``leaks``.
+
+    Args:
+        old: The counterpart of ``new`` in the old payload, or ``None`` when
+            the location is new.
+        new: The value about to be written at ``field_path``.
+        field_path: The location of ``new``; empty for the payload root.
+        allowed_emails: Casefolded addresses that are not leaks.
+        leaks: The accumulator the hits are appended to.
+    """
+    if new == old:
+        return
+    if isinstance(new, str):
+        checkout_path = _LOCAL_CHECKOUT_FIELD.fullmatch(field_path) is not None
+        leaks.extend(
+            StateStringLeak(field_path=field_path, hit=hit)
+            for hit in scan_state_leaks(new, allowed_emails=allowed_emails)
+            if not (checkout_path and hit.kind is StateLeakKind.HOME_PATH)
+        )
+    elif isinstance(new, dict):
+        old_object = old if isinstance(old, dict) else {}
+        for key, value in new.items():
+            _collect_string_leaks(
+                old_object.get(key),
+                value,
+                field_path=f"{field_path}.{key}" if field_path else str(key),
+                allowed_emails=allowed_emails,
+                leaks=leaks,
+            )
+    elif isinstance(new, list):
+        old_list = old if isinstance(old, list) else []
+        for index, item in enumerate(new):
+            counterpart = old_list[index] if index < len(old_list) else None
+            # The positional check runs first so an unchanged list never pays
+            # the quadratic membership scan.
+            if item == counterpart or item in old_list:
+                continue
+            _collect_string_leaks(
+                counterpart,
+                item,
+                field_path=f"{field_path}[{index}]",
+                allowed_emails=allowed_emails,
+                leaks=leaks,
+            )
+
+
+def describe_state_leaks(leaks: Sequence[StateStringLeak]) -> str:
+    """Return the refusal detail for a state write that adds leak shapes.
+
+    The matched text is left out on purpose: the refusal travels to
+    terminals and daemon logs, and repeating the leak there would spread it.
+    The field path and the leak kind are enough to find what to remove.
+
+    Args:
+        leaks: The non-empty result of :func:`diff_state_leaks`.
+
+    Returns:
+        ``state_leak_refused:`` followed by each distinct field path, in
+        first-seen order, with its leak kinds in parentheses.
+
+    Raises:
+        ValueError: When ``leaks`` is empty, because there is nothing to
+            refuse.
+    """
+    if not leaks:
+        raise ValueError("describe_state_leaks needs at least one leak")
+    kinds_by_path: dict[str, list[str]] = {}
+    for leak in leaks:
+        kinds = kinds_by_path.setdefault(leak.field_path, [])
+        if leak.hit.kind.value not in kinds:
+            kinds.append(leak.hit.kind.value)
+    fields = "; ".join(f"{path} ({', '.join(kinds)})" for path, kinds in kinds_by_path.items())
+    return f"state_leak_refused: {fields}"
+
+
+def state_leak_refusal(old: object, new: object) -> str | None:
+    """Return why a state write must be refused for leaks, if it must be.
+
+    The one check every canonical state writer runs between validating the
+    new payload and writing it, so the writers cannot drift apart.
+
+    Args:
+        old: The decoded JSON payload on disk before the write.
+        new: The decoded JSON payload about to be written.
+
+    Returns:
+        The :func:`describe_state_leaks` detail when an added or changed
+        string carries a leak shape, or ``None`` when the write may proceed.
+    """
+    leaks = diff_state_leaks(old, new, allowed_emails=default_allowed_emails())
+    return describe_state_leaks(leaks) if leaks else None
+
+
 __all__ = [
     "EMAIL_PATTERN",
     "HOME_PATH_PATTERNS",
     "TOKEN_PATTERNS",
     "StateLeakHit",
     "StateLeakKind",
+    "StateStringLeak",
     "default_allowed_emails",
+    "describe_state_leaks",
+    "diff_state_leaks",
     "is_placeholder_or_nonemail",
     "is_placeholder_path",
     "scan_state_leaks",
+    "state_leak_refusal",
 ]

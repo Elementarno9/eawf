@@ -105,6 +105,7 @@ class _FakeRegistryClient:
         repo_id: str,
         fields: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
+        registry_path: str | None = None,
     ) -> dict[str, Any]:
         _FakeRegistryClient.calls.append(
             {
@@ -112,6 +113,7 @@ class _FakeRegistryClient:
                 "repo_id": repo_id,
                 "fields": dict(fields) if fields else {},
                 "idempotency_key": idempotency_key,
+                "registry_path": registry_path,
             }
         )
         return {
@@ -140,6 +142,8 @@ def test_persist_registry_proxies_through_daemon_when_enabled(
     assert len(_FakeRegistryClient.calls) == 1
     assert _FakeRegistryClient.calls[0]["operation"] == "add"
     assert _FakeRegistryClient.calls[0]["repo_id"] == "ABC"
+    # The override travels on the wire; the daemon never sees the CLI's env.
+    assert _FakeRegistryClient.calls[0]["registry_path"] == str(registry_path)
     # CLI side did NOT write the file — the (fake) daemon owns the disk.
     assert not registry_path.exists()
 

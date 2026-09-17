@@ -13,8 +13,8 @@ Algorithm -- the transaction lifecycle:
 3. Read + decode + validate ``state.json`` -> :class:`State`.
 4. Dispatch the :class:`MutationKind` to its per-kind apply function;
    on success the candidate :class:`State` carries the mutation.
-5. Re-validate the post-mutation state -> on failure return
-   ``-32002 validation_failed`` and leave ``state.json`` untouched.
+5. Re-validate the post-mutation state and refuse new leak-shaped strings
+   -> on failure return ``-32002 validation_failed``, ``state.json`` untouched.
 6. Build the canonical event envelope (``EventPayload`` body) +
    write the WAL ``.pending.json`` record.
 7. Atomic-write ``state.json`` (existing
@@ -87,6 +87,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     VALIDATION_FAILED,
@@ -975,6 +976,8 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
                 raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
+            if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+                raise DaemonValidationError(f"validation_failed: {leak_refusal}")
             after_version = state_version(new_payload)
 
             # W06 advisory: compute close-readiness AFTER the apply
@@ -1303,6 +1306,8 @@ async def _mutate_wave_close(
                 raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
+            if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+                raise DaemonValidationError(f"validation_failed: {leak_refusal}")
             after_version = state_version(new_payload)
 
             extras = _compute_wave_close_extras(

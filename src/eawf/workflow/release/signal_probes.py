@@ -23,6 +23,12 @@ therefore produced in CI and *read back* from the receipts named in
 :mod:`eawf.workflow.release.pipeline_receipts`. A receipt the CI job did not
 write leaves its row ``unavailable`` naming the job, which is the
 honest reading -- an absent producer is not a passing check.
+
+The receipt probes are not defaults. They read one checkout's receipts,
+and a default has no checkout to name but the process's working
+directory, which is whatever directory the daemon happened to start in.
+A sweep that wants them binds them to its repository through
+:func:`build_receipt_probes`.
 """
 
 from __future__ import annotations
@@ -183,7 +189,7 @@ def _checkout_lock_digest(repo_root: Path) -> str | None:
 def dependencies_probe(
     context: ReleaseSignalContext,
     *,
-    repo_root: Path | None = None,
+    repo_root: Path,
 ) -> ReleaseSignalOutcome:
     """Return the ``dependencies`` verdict from the two written receipts.
 
@@ -196,21 +202,18 @@ def dependencies_probe(
 
     Args:
         context: The signal request.
-        repo_root: Checkout the receipts and the lock are read from;
-            defaults to the working directory, which is the repo root
-            in every path that sweeps a release.
+        repo_root: Checkout the receipts and the lock are read from.
 
     Returns:
         The row's outcome.
     """
-    root = repo_root or Path.cwd()
-    manifest: ReleaseDependencyManifest | None = read_dependency_manifest(root)
+    manifest: ReleaseDependencyManifest | None = read_dependency_manifest(repo_root)
     if manifest is None:
         return _missing_receipt("dependency-manifest")
-    report = read_vulnerability_report(root)
+    report = read_vulnerability_report(repo_root)
     if report is None:
         return _missing_receipt("vulnerability-report")
-    built_digest = _checkout_lock_digest(root) or manifest.lock_digest
+    built_digest = _checkout_lock_digest(repo_root) or manifest.lock_digest
     logger.info(
         f"dependencies_probe release_key={context.config.release_key!r} "
         f"packages={len(manifest.packages)} advisories={len(report.advisories)}"
@@ -226,21 +229,19 @@ def dependencies_probe(
 def artifacts_probe(
     context: ReleaseSignalContext,
     *,
-    repo_root: Path | None = None,
+    repo_root: Path,
 ) -> ReleaseSignalOutcome:
     """Return the ``artifacts`` verdict from the double-build receipt.
 
     Args:
         context: The signal request.
-        repo_root: Checkout the receipt is read from; defaults to the
-            working directory.
+        repo_root: Checkout the receipt is read from.
 
     Returns:
         The row's outcome: ``unavailable`` with no receipt, ``fail``
         naming the divergent artifact, ``pass`` otherwise.
     """
-    root = repo_root or Path.cwd()
-    receipt = read_build_receipt(root)
+    receipt = read_build_receipt(repo_root)
     if receipt is None:
         return _missing_receipt("reproducible-build-receipt")
     outcome = artifacts_component(receipt)
@@ -270,13 +271,12 @@ def build_receipt_probes(repo_root: Path) -> dict[ReleaseSignalName, ReleaseSign
     }
 
 
-#: Probes this project ships, by signal. A caller's own probe for the
-#: same signal wins: injection is how a test pins a verdict and how a
-#: later checkpoint swaps in a stronger check without editing this map.
+#: Probes that need nothing but the checkpoint, by signal. A caller's own
+#: probe for the same signal wins: injection is how a test pins a verdict
+#: and how a later checkpoint swaps in a stronger check without editing
+#: this map. Probes that read a checkout are bound by the caller instead.
 DEFAULT_RELEASE_PROBES: Final[Mapping[ReleaseSignalName, ReleaseSignalProbe]] = {
     ReleaseSignalName.PLATFORM: platform_probe,
-    ReleaseSignalName.DEPENDENCIES: dependencies_probe,
-    ReleaseSignalName.ARTIFACTS: artifacts_probe,
 }
 
 

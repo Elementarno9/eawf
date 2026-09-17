@@ -4,7 +4,8 @@ The verb shells out to git, so each test drives it inside a throwaway
 git repo under ``tmp_path``. Covers the dry-run plan, real annotated-tag
 creation, the already-exists guard, the dirty-tree refusal and its
 waiver, and the readiness sweep ``--push`` is gated on -- including the
-working-copy probes that sweep produces its verdict from.
+working-copy probes that sweep produces its verdict from, and the same
+probes pinned to a commit, which is how a publish sweep reads them.
 
 The push path is never exercised against a real remote here: every
 ``--push`` case is refused by the preflight before a tag is created, and
@@ -23,6 +24,7 @@ import yaml
 from typer.testing import CliRunner
 
 from eawf.kernel.spec.release_config import load_release_config
+from eawf.runtime.release import sweep_for_tag
 from eawf.surfaces.cli.app import app
 from eawf.workflow.evidence.migration_rehearsal import (
     REHEARSAL_EVIDENCE_DIR,
@@ -30,15 +32,18 @@ from eawf.workflow.evidence.migration_rehearsal import (
 )
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.verify.release_probes import (
+    VERSION_MODULE_PATH,
     TagPreflightInputs,
     _changelog_section,
     build_tag_probes,
 )
 from eawf.workflow.verify.release_readiness import (
+    ReleaseSignalContext,
     ReleaseSignalName,
     ReleaseSignalStatus,
     compute_readiness,
 )
+from tests._release_helpers import stage_passing_receipts
 
 runner = CliRunner()
 
@@ -123,6 +128,28 @@ def _init_published_repo(tmp_path: Path, *, rehearsed: bool = True) -> Path:
     _git(["push", "origin", "main"], work)
     _git(["fetch", "origin"], work)
     return work
+
+
+def _pinned_inputs(repo_root: Path, source_sha: str | None) -> TagPreflightInputs:
+    return TagPreflightInputs(
+        repo_root=repo_root,
+        version=DEV1_VERSION,
+        tag=f"v{DEV1_VERSION}",
+        remote="origin",
+        source_sha=source_sha,
+    )
+
+
+def _commit_version_module(work: Path, version: str) -> str:
+    """Commit *version* into the version module, publish it, return HEAD."""
+    path = work / VERSION_MODULE_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f'__version__ = "{version}"\n', encoding="utf-8")
+    _git(["add", "--all"], work)
+    _git(["commit", "-m", f"version {version}"], work)
+    _git(["push", "origin", "main"], work)
+    _git(["fetch", "origin"], work)
+    return _git(["rev-parse", "HEAD"], work).strip()
 
 
 def _ready_inputs(repo_root: Path) -> TagPreflightInputs:
@@ -350,16 +377,34 @@ def test_tag_preflight_leaves_producerless_signals_unavailable(
     ``credentials`` is no longer in this set: it has a producer, so an
     absent handle is a FAIL it can name rather than a gap it cannot see.
 
-    The tag probes leave the receipt rows to the default probes, which read
-    ``dist/release-receipts`` under the working directory; running from an
-    empty one keeps the no-receipt precondition true in any checkout.
+    Passing receipts sit in the working directory on purpose. No probe
+    reads the working directory any more: the tag probes leave the
+    receipt rows alone, and the shared sweep reads them only from the
+    checkout it is bound to, which carries none.
     """
-    empty_cwd = tmp_path / "cwd"
-    empty_cwd.mkdir()
-    monkeypatch.chdir(empty_cwd)
-    statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
+    receipts_cwd = tmp_path / "cwd"
+    receipts_cwd.mkdir()
+    stage_passing_receipts(receipts_cwd, version=DEV1_VERSION, source_sha="c" * 40)
+    monkeypatch.chdir(receipts_cwd)
+    work = _init_published_repo(tmp_path)
+    statuses = _sweep(_ready_inputs(work))
     assert statuses[ReleaseSignalName.DEPENDENCIES] is ReleaseSignalStatus.UNAVAILABLE
     assert statuses[ReleaseSignalName.ARTIFACTS] is ReleaseSignalStatus.UNAVAILABLE
+
+    readiness = sweep_for_tag(
+        load_release_config(yaml.safe_load(checkpoint_config_yaml(DEV1_VERSION)), train=V07_TRAIN),
+        version=DEV1_VERSION,
+        repo_root=work,
+        remote="origin",
+        source=None,
+        waiver_count=0,
+        computed_at=datetime.now(UTC),
+        package_version=DEV1_VERSION,
+    )
+    for signal in (ReleaseSignalName.DEPENDENCIES, ReleaseSignalName.ARTIFACTS):
+        row = readiness.row(signal)
+        assert row.status is ReleaseSignalStatus.UNAVAILABLE
+        assert "inventory-and-reproducibility" in row.remediation
 
 
 def test_tag_preflight_credentials_reports_no_producer(tmp_path: Path) -> None:
@@ -458,6 +503,89 @@ def test_tag_preflight_migration_is_unproven_without_the_rehearsal(tmp_path: Pat
     assert statuses[ReleaseSignalName.MIGRATION] is ReleaseSignalStatus.UNAVAILABLE
 
 
+# --- the same probes pinned to a commit --------------------------------------
+
+
+def test_tag_preflight_pinned_source_reads_the_committed_facts(tmp_path: Path) -> None:
+    """A pinned sweep reads the commit, so a later HEAD cannot change it."""
+    work = _init_published_repo(tmp_path)
+    pinned = _commit_version_module(work, DEV1_VERSION)
+    (work / "CHANGELOG.md").unlink()
+    _commit_version_module(work, "0.7.0.dev2")
+
+    statuses = _sweep(_pinned_inputs(work, pinned))
+
+    for signal in (
+        ReleaseSignalName.VERSION_CONSISTENCY,
+        ReleaseSignalName.CHANGELOG,
+        ReleaseSignalName.MIGRATION,
+        ReleaseSignalName.ANCESTRY,
+        ReleaseSignalName.TREE_CLEANLINESS,
+    ):
+        assert statuses[signal] is ReleaseSignalStatus.PASS, signal
+
+
+def test_tag_preflight_unpinned_commit_source_reads_head(tmp_path: Path) -> None:
+    """With no pin and no package version, the commit HEAD names is read."""
+    work = _init_published_repo(tmp_path)
+    _commit_version_module(work, DEV1_VERSION)
+    (work / "CHANGELOG.md").unlink()
+    _commit_version_module(work, "0.7.0.dev2")
+
+    statuses = _sweep(_pinned_inputs(work, None))
+
+    assert statuses[ReleaseSignalName.VERSION_CONSISTENCY] is ReleaseSignalStatus.FAIL
+    assert statuses[ReleaseSignalName.CHANGELOG] is ReleaseSignalStatus.FAIL
+    assert statuses[ReleaseSignalName.ANCESTRY] is ReleaseSignalStatus.PASS
+
+
+def test_tag_preflight_pinned_source_reds_without_a_version_literal(tmp_path: Path) -> None:
+    """A pinned commit that carries no version module cannot agree with the config."""
+    work = _init_published_repo(tmp_path)
+    head = _git(["rev-parse", "HEAD"], work).strip()
+    probe = build_tag_probes(_pinned_inputs(work, head))[ReleaseSignalName.VERSION_CONSISTENCY]
+    config = load_release_config(
+        yaml.safe_load(checkpoint_config_yaml(DEV1_VERSION)), train=V07_TRAIN
+    )
+
+    outcome = probe(ReleaseSignalContext(config, ReleaseSignalName.VERSION_CONSISTENCY, head))
+
+    assert outcome.status is ReleaseSignalStatus.FAIL
+    assert f"{VERSION_MODULE_PATH} at {head[:12]} declares no __version__ literal" in (
+        outcome.remediation
+    )
+
+
+def test_tag_preflight_pinned_source_the_checkout_lacks_reds_every_read(tmp_path: Path) -> None:
+    """A commit git cannot show proves nothing, so none of its rows pass."""
+    work = _init_published_repo(tmp_path)
+    _commit_version_module(work, DEV1_VERSION)
+
+    statuses = _sweep(_pinned_inputs(work, "f" * 40))
+
+    for signal in (
+        ReleaseSignalName.VERSION_CONSISTENCY,
+        ReleaseSignalName.CHANGELOG,
+        ReleaseSignalName.MIGRATION,
+        ReleaseSignalName.ANCESTRY,
+    ):
+        assert statuses[signal] is ReleaseSignalStatus.FAIL, signal
+
+
+def test_tag_preflight_ancestry_reds_a_pin_the_remote_lacks(tmp_path: Path) -> None:
+    """The pinned commit, not HEAD, is what the remote must carry."""
+    work = _init_published_repo(tmp_path)
+    (work / "later.txt").write_text("unpublished\n", encoding="utf-8")
+    _git(["add", "later.txt"], work)
+    _git(["commit", "-m", "later"], work)
+    unpublished = _git(["rev-parse", "HEAD"], work).strip()
+    _git(["reset", "--hard", "HEAD~1"], work)
+
+    statuses = _sweep(_pinned_inputs(work, unpublished))
+
+    assert statuses[ReleaseSignalName.ANCESTRY] is ReleaseSignalStatus.FAIL
+
+
 @pytest.mark.parametrize("blank", ["", "   "])
 def test_tag_preflight_inputs_reject_a_blank_version(tmp_path: Path, blank: str) -> None:
     with pytest.raises(ValueError, match="version must not be blank"):
@@ -479,6 +607,30 @@ def test_tag_preflight_inputs_reject_a_blank_remote(tmp_path: Path) -> None:
             package_version=DEV1_VERSION,
             remote="",
         )
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_tag_preflight_inputs_reject_a_blank_source_sha(tmp_path: Path, blank: str) -> None:
+    with pytest.raises(ValueError, match="source_sha must not be blank"):
+        _pinned_inputs(tmp_path, blank)
+
+
+def test_tag_preflight_inputs_reject_a_package_version_beside_a_pin(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="not both"):
+        TagPreflightInputs(
+            repo_root=tmp_path,
+            version=DEV1_VERSION,
+            tag=f"v{DEV1_VERSION}",
+            remote="origin",
+            package_version=DEV1_VERSION,
+            source_sha="a" * 40,
+        )
+
+
+def test_tag_preflight_inputs_revision_names_what_the_probes_read(tmp_path: Path) -> None:
+    assert _ready_inputs(tmp_path).revision is None
+    assert _pinned_inputs(tmp_path, "a" * 40).revision == "a" * 40
+    assert _pinned_inputs(tmp_path, None).revision == "HEAD"
 
 
 def test_changelog_section_returns_nothing_for_an_absent_version() -> None:

@@ -16,6 +16,12 @@ The probes read their subject out of a frozen
 ``release preflight`` verb and the tests all drive one code path over a
 repository each of them names.
 
+A record can also pin a commit. Publication runs long after the tag was
+cut, and HEAD has usually moved on by then -- often to the next version
+bump -- so a publish sweep reads the version module and the changelog out
+of the pinned commit and proves ancestry for that commit rather than for
+whatever the checkout now carries.
+
 A probe answers only what a checkout can prove. Dependency inventory,
 artifact reproducibility and credential availability need producers that
 run outside the working copy, so they stay unregistered here and keep
@@ -60,6 +66,15 @@ logger = logging.getLogger(__name__)
 #: Changelog the release section is mined from, relative to the repo root.
 CHANGELOG_FILENAME: Final[str] = "CHANGELOG.md"
 
+#: Version module a pinned sweep reads the package version out of,
+#: relative to the repo root. The build backend reads the same file.
+VERSION_MODULE_PATH: Final[str] = "src/eawf/_version.py"
+
+#: Release stores the release verbs append to while a release is in
+#: flight, relative to the repo root. A tree check that counted them
+#: would red the very sweep whose verbs wrote them.
+RELEASE_STORE_GLOB: Final[str] = ".ea/store/release*.jsonl"
+
 #: Wall-clock ceiling on one git invocation. A probe that hangs would
 #: stall the whole sweep, which is the one way this module could stop
 #: being total.
@@ -72,6 +87,11 @@ _SECTION_HEADING = "^##\\s+\\[?{version}\\]?\\s*(?:-.*)?$"
 #: no migration says so in one line; silence is not a claim.
 _MIGRATION_RE: Final[re.Pattern[str]] = re.compile(r"\bmigrat(?:e|ed|ion|ions)\b", re.IGNORECASE)
 
+#: The ``__version__ = "..."`` literal of the version module.
+_VERSION_LITERAL_RE: Final[re.Pattern[str]] = re.compile(
+    r'^__version__\s*=\s*"(?P<value>[^"]+)"\s*$', re.MULTILINE
+)
+
 
 @dataclass(frozen=True, slots=True)
 class TagPreflightInputs:
@@ -81,8 +101,15 @@ class TagPreflightInputs:
         repo_root: Working copy the facts are read from.
         version: Version being tagged, e.g. ``0.7.0.dev1``.
         tag: Tag the version spells, e.g. ``v0.7.0.dev1``.
-        package_version: ``eawf.__version__`` of the tagging checkout.
         remote: Remote whose branch the source must be reachable from.
+        package_version: ``eawf.__version__`` of the tagging checkout.
+            When set, the changelog is read from the working copy and
+            ancestry is proven for HEAD. ``None`` reads the version
+            module and the changelog out of a commit instead.
+        source_sha: Commit a ``None`` *package_version* reads from;
+            ``None`` there means the commit HEAD names. Refused beside
+            a *package_version*, because the running package cannot
+            vouch for a commit it was not built from.
         today: Date the calendar-sensitive probes judge against.
             Injected rather than read at the point of use so a sweep is
             reproducible against a pinned day.
@@ -91,19 +118,39 @@ class TagPreflightInputs:
     repo_root: Path
     version: str
     tag: str
-    package_version: str
     remote: str
+    package_version: str | None = None
+    source_sha: str | None = None
     today: date = field(default_factory=lambda: datetime.now(UTC).date())
 
     def __post_init__(self) -> None:
         """Reject inputs no probe could produce a verdict from.
 
         Raises:
-            ValueError: When any field is blank.
+            ValueError: When any supplied field is blank, or both
+                *package_version* and *source_sha* are set.
         """
-        for name in ("version", "tag", "package_version", "remote"):
-            if not str(getattr(self, name)).strip():
+        for name in ("version", "tag", "remote", "package_version", "source_sha"):
+            value = getattr(self, name)
+            if value is not None and not str(value).strip():
                 raise ValueError(f"TagPreflightInputs.{name} must not be blank")
+        if self.package_version is not None and self.source_sha is not None:
+            raise ValueError(
+                "TagPreflightInputs takes package_version (the working copy) or "
+                "source_sha (a pinned commit), not both"
+            )
+
+    @property
+    def revision(self) -> str | None:
+        """Return the commit the version and changelog are read at.
+
+        Returns:
+            ``None`` when the working copy is read, otherwise the pinned
+            commit, or ``HEAD`` when none is pinned.
+        """
+        if self.package_version is not None:
+            return None
+        return self.source_sha or "HEAD"
 
 
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -124,6 +171,70 @@ def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         check=False,
         timeout=GIT_TIMEOUT_SECONDS,
     )
+
+
+def release_tree_status(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    """Return ``git status --porcelain`` of *repo_root*, minus the release stores.
+
+    Untracked files are listed one by one, because git otherwise folds an
+    untracked directory into a single line and a fresh ``.ea/store/``
+    holding nothing but a release store would still read dirty.
+
+    Args:
+        repo_root: Working copy to inspect.
+
+    Returns:
+        The completed process; one stdout line per dirty path.
+    """
+    return _git(
+        repo_root,
+        "status",
+        "--porcelain",
+        "--untracked-files=all",
+        "--",
+        f":(top,exclude,glob){RELEASE_STORE_GLOB}",
+    )
+
+
+def _source_text(inputs: TagPreflightInputs, relative: str) -> str | None:
+    """Return *relative* as the swept source carries it.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the source.
+        relative: Repo-relative path of the file.
+
+    Returns:
+        The file's text, or ``None`` when the source does not carry it.
+    """
+    revision = inputs.revision
+    if revision is None:
+        path = inputs.repo_root / relative
+        return path.read_text(encoding="utf-8") if path.is_file() else None
+    shown = _git(inputs.repo_root, "show", f"{revision}:{relative}")
+    return shown.stdout if shown.returncode == 0 else None
+
+
+def _source_label(inputs: TagPreflightInputs) -> str:
+    """Return how a remediation names the swept source."""
+    return inputs.repo_root.name if inputs.revision is None else inputs.revision[:12]
+
+
+def _package_version(inputs: TagPreflightInputs) -> str | None:
+    """Return the package version the swept source declares.
+
+    Args:
+        inputs: The chokepoint's inputs.
+
+    Returns:
+        The running package's version for a working-copy sweep, the
+        version module's literal for a pinned one, or ``None`` when the
+        pinned commit carries no such literal.
+    """
+    if inputs.package_version is not None:
+        return inputs.package_version
+    text = _source_text(inputs, VERSION_MODULE_PATH)
+    match = None if text is None else _VERSION_LITERAL_RE.search(text)
+    return None if match is None else match.group("value")
 
 
 def _passing(*evidence: str) -> ReleaseSignalOutcome:
@@ -187,10 +298,11 @@ def _probe_tree_cleanliness(
             property of the checkout, not of the checkpoint).
 
     Returns:
-        Passing when ``git status --porcelain`` is empty.
+        Passing when ``git status --porcelain`` is empty once the release
+        stores are set aside.
     """
     del context
-    status = _git(inputs.repo_root, "status", "--porcelain")
+    status = release_tree_status(inputs.repo_root)
     dirty = tuple(line for line in status.stdout.splitlines() if line.strip())
     if status.returncode != 0:
         return _failing(f"git status failed in {inputs.repo_root.name}: {status.stderr.strip()}")
@@ -206,27 +318,29 @@ def _probe_tree_cleanliness(
 def _probe_ancestry(
     inputs: TagPreflightInputs, context: ReleaseSignalContext
 ) -> ReleaseSignalOutcome:
-    """Report whether HEAD is reachable from the configured source branch.
+    """Report whether the source is reachable from the configured source branch.
 
     Args:
-        inputs: The chokepoint's inputs.
+        inputs: The chokepoint's inputs; the source is the pinned commit
+            when one is set, HEAD otherwise.
         context: The sweep's context; its configuration names the
             source branch the remote must already carry.
 
     Returns:
-        Passing when ``<remote>/<source_branch>`` exists and HEAD is an
-        ancestor of it.
+        Passing when ``<remote>/<source_branch>`` exists and the source
+        is an ancestor of it.
     """
     branch = context.config.source_branch
     ref = f"{inputs.remote}/{branch}"
+    source = inputs.revision or "HEAD"
     if _git(inputs.repo_root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode:
         return _failing(
             f"remote-tracking ref {ref!r} is absent; run `git fetch {inputs.remote} {branch}` "
             f"so the source can be proven publishable"
         )
-    if _git(inputs.repo_root, "merge-base", "--is-ancestor", "HEAD", ref).returncode:
+    if _git(inputs.repo_root, "merge-base", "--is-ancestor", source, ref).returncode:
         return _failing(
-            f"HEAD is not an ancestor of {ref!r}; publish from a commit the remote "
+            f"{source} is not an ancestor of {ref!r}; publish from a commit the remote "
             f"branch already carries"
         )
     return _passing(f"ancestor-of:{ref}")
@@ -254,11 +368,16 @@ def _probe_version_consistency(
         by the configured version and its npm channel spelling.
     """
     configured = context.config.version
+    package_version = _package_version(inputs)
     mismatches: list[str] = []
     if inputs.version != configured:
         mismatches.append(f"requested {inputs.version!r} != configured {configured!r}")
-    if inputs.package_version != configured:
-        mismatches.append(f"package {inputs.package_version!r} != configured {configured!r}")
+    if package_version is None:
+        mismatches.append(
+            f"{VERSION_MODULE_PATH} at {_source_label(inputs)} declares no __version__ literal"
+        )
+    elif package_version != configured:
+        mismatches.append(f"package {package_version!r} != configured {configured!r}")
     if inputs.tag != f"v{configured}":
         mismatches.append(f"tag {inputs.tag!r} != 'v{configured}'")
     if mismatches:
@@ -283,10 +402,10 @@ def _probe_changelog(
         Passing when the section exists and carries at least one bullet.
     """
     del context
-    path = inputs.repo_root / CHANGELOG_FILENAME
-    if not path.exists():
-        return _failing(f"{CHANGELOG_FILENAME} is absent from {inputs.repo_root.name}; add it")
-    section = _changelog_section(path.read_text(encoding="utf-8"), inputs.version)
+    text = _source_text(inputs, CHANGELOG_FILENAME)
+    if text is None:
+        return _failing(f"{CHANGELOG_FILENAME} is absent from {_source_label(inputs)}; add it")
+    section = _changelog_section(text, inputs.version)
     if not section:
         return _failing(
             f"{CHANGELOG_FILENAME} has no section for {inputs.version!r}; add "
@@ -314,10 +433,10 @@ def _migration_note_gap(inputs: TagPreflightInputs) -> str:
         The gap in one line, or ``""`` when the section names the
         migration outcome.
     """
-    path = inputs.repo_root / CHANGELOG_FILENAME
-    if not path.exists():
+    text = _source_text(inputs, CHANGELOG_FILENAME)
+    if text is None:
         return f"{CHANGELOG_FILENAME} is absent, so the migration outcome is unstated"
-    section = _changelog_section(path.read_text(encoding="utf-8"), inputs.version)
+    section = _changelog_section(text, inputs.version)
     if not any(_MIGRATION_RE.search(line) for line in section):
         return (
             f"the {inputs.version!r} changelog section states no migration outcome; name "
@@ -480,6 +599,9 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
 __all__ = [
     "CHANGELOG_FILENAME",
     "GIT_TIMEOUT_SECONDS",
+    "RELEASE_STORE_GLOB",
+    "VERSION_MODULE_PATH",
     "TagPreflightInputs",
     "build_tag_probes",
+    "release_tree_status",
 ]

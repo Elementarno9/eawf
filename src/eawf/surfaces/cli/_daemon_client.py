@@ -408,6 +408,7 @@ class DaemonClient:
         repo_id: str,
         fields: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
+        registry_path: str | None = None,
     ) -> dict[str, Any]:
         """Proxy a registry mutation through ``registry.update``.
 
@@ -417,6 +418,10 @@ class DaemonClient:
             fields: Operation-specific extras (e.g. ``path`` + ``title``
                 for ``add``; ``new_code`` for ``rename``).
             idempotency_key: Optional retry key.
+            registry_path: The registry file the daemon mutates. Sent on
+                the wire because the daemon is a separate process: an
+                override held only in the caller's environment never
+                reaches it, and the daemon then writes its default file.
 
         Returns:
             Dict matching :class:`eawf.runtime.daemon.methods.registry.UpdateResult`.
@@ -428,6 +433,8 @@ class DaemonClient:
         }
         if idempotency_key is not None:
             params["idempotency_key"] = idempotency_key
+        if registry_path is not None:
+            params["registry_path"] = registry_path
         return self.call("registry.update", params)
 
     def spec_init(

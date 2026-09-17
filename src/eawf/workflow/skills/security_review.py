@@ -7,9 +7,10 @@ profile is ``security`` (a profile contribution), this skill is a
 required gate for ``phase close``.
 
 The skill loads a caller-supplied audit spec (a YAML file of declarative
-checks) via :func:`eawf.workflow.audit_dsl.runner.load_spec`, dispatches every
-check through :func:`eawf.workflow.audit_dsl.runner.run_checks`, and folds the
-pass/fail tally into a dict envelope body. The terminal status reflects
+checks) via :func:`eawf.workflow.audit_dsl.runner.load_spec`, runs every check
+in a sandboxed child through
+:func:`eawf.workflow.verify.sandboxed_checks.run_checks_out_of_process`, and
+folds the pass/fail tally into a dict envelope body. The terminal status reflects
 the run: ``ok`` when every check passes, ``failed`` when any check fails
 (with the failing check names surfaced as repair commands). A missing or
 unreadable spec degrades to ``status=needs_user`` so the operator can
@@ -20,7 +21,8 @@ Honoured args:
 - ``spec_path`` — path to the declarative audit spec (required; a
   missing path degrades to ``status=needs_user``).
 - ``cwd`` — optional directory the checks run against; defaults to the
-  process working tree (mirrors ``run_checks``).
+  process working directory, resolved before the checks are handed to the
+  sandboxed child.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ from typing import Any
 
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.surfaces.render.envelope import EnvelopeStatus, SkillName
-from eawf.workflow.audit_dsl.runner import load_spec, run_checks
+from eawf.workflow.audit_dsl.runner import load_spec
 from eawf.workflow.skills._common import (
     emit_event,
     probe_skill_instruments,
@@ -82,11 +84,15 @@ class SecurityReviewSkill(Skill):
                 next_valid_actions=["eawf audit run --spec <path>"],
             )
 
+        # Imported here so loading the skill registry stays free of the
+        # verify package and its gate machinery.
+        from eawf.workflow.verify.sandboxed_checks import run_checks_out_of_process
+
         cwd_arg = args.get("cwd")
-        cwd = Path(str(cwd_arg)) if cwd_arg else None
+        cwd = Path(str(cwd_arg)) if cwd_arg else Path.cwd()
 
         specs = load_spec(Path(spec_path))
-        results = run_checks(specs, cwd=cwd)
+        results = run_checks_out_of_process(specs, cwd=cwd, live_state_path=state_path)
         findings = [{"name": r.name, "passed": r.passed, "details": r.details} for r in results]
         failed = [r.name for r in results if not r.passed]
 

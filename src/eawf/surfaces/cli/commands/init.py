@@ -20,6 +20,12 @@ Surface contract:
   ``.ea/state.json`` or ``.ea/config.yaml`` (otherwise init refuses).
 - ``eawf init --refresh-gitignore`` updates only the managed ignore block
   for ``--state-path`` and skips the wizard pipeline.
+- ``eawf init --epoch2-canary provision --target <dir>`` lays down a
+  fresh project at ``<dir>``, declares it a disposable canary born at
+  authority epoch 2, allocates it a fresh daemon runtime directory and
+  registers it; ``--epoch2-canary teardown --target <dir>`` removes the
+  registry row, the runtime directory and the tree. Neither changes what
+  a plain ``eawf init`` writes.
 
 Exit codes (mapped via :class:`eawf.surfaces.cli.errors.CliError` subclasses):
 
@@ -38,6 +44,9 @@ emission — see ``AGENTS.md`` rule 1 (CLI is dispatch; library implements).
 from __future__ import annotations
 
 import logging
+import shutil
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -54,6 +63,13 @@ if TYPE_CHECKING:
     from eawf.platform.install.wizard import WizardAnswers, WizardResult
 
 logger = logging.getLogger(__name__)
+
+
+class CanaryAction(StrEnum):
+    """What ``--epoch2-canary`` does with the tree at ``--target``."""
+
+    PROVISION = "provision"
+    TEARDOWN = "teardown"
 
 
 def _friendly_validation_message(exc: ValidationError) -> str:
@@ -250,6 +266,175 @@ def _result_to_payload(result: WizardResult) -> dict[str, object]:
     }
 
 
+def _provision_canary(
+    target_dir: Path,
+    *,
+    project_code: str,
+    runtime: str,
+    lifecycle_depth: str,
+    registry_path: Path | None,
+) -> tuple[dict[str, object], str]:
+    """Provision a disposable epoch-2 canary at *target_dir*.
+
+    Every refusal the library can raise before a write -- a malformed or
+    taken code, a directory that is not fresh -- runs first. A failure
+    after the tree exists removes the tree again, so a refused provision
+    never leaves a half-built canary behind.
+
+    Returns:
+        ``(payload, text)`` for :func:`emit_json_or_text`.
+
+    Raises:
+        CanaryProvisionError: A pre-write refusal.
+        CliError: The wizard or the registry write failed.
+    """
+    from eawf.platform.install.canary import (
+        canary_ref,
+        discard_canary,
+        provision_canary,
+        register_canary,
+        require_code_unregistered,
+        require_fresh_root,
+    )
+    from eawf.platform.install.wizard import run_wizard_no_input
+    from eawf.surfaces.cli.commands.repo import (
+        _persist_registry,
+        _read_registry_for_write,
+        _resolve_registry_path,
+    )
+
+    ref = canary_ref(project_code)
+    require_fresh_root(target_dir)
+    registry_file = _resolve_registry_path(registry_path)
+    require_code_unregistered(_read_registry_for_write(registry_file), ref)
+    answers = _build_answers(
+        state_path=Path(".ea/state.json"),
+        project_code=project_code,
+        project_title=f"epoch-2 canary {project_code}",
+        profiles=None,
+        runtime=runtime,
+        lifecycle_depth=lifecycle_depth,
+        plugins=None,
+        mcp=None,
+        auto_install_plugins=False,
+        acceptance_tests=True,
+        acceptance_lint=True,
+        acceptance_typecheck=True,
+    )
+    try:
+        result = run_wizard_no_input(answers, target_dir)
+        provision = provision_canary(
+            repo_root=target_dir, ref=ref, provisioned_at=datetime.now(UTC)
+        )
+    except Exception:
+        shutil.rmtree(target_dir, ignore_errors=True)
+        raise
+    try:
+        registry = _read_registry_for_write(registry_file)
+        _persist_registry(register_canary(registry, provision), registry_file)
+    except Exception:
+        discard_canary(provision, removed_registry_codes=())
+        raise
+    payload: dict[str, object] = {
+        "action": CanaryAction.PROVISION.value,
+        "canary": provision.ref.model_dump(mode="json"),
+        "epoch": 2,
+        "generation_id": provision.generation_id,
+        "registry_path": str(registry_file),
+        "root": str(provision.root),
+        "runtime_dir": str(provision.runtime_dir),
+        "state_path": str(result.state_path),
+    }
+    text = (
+        f"eawf init: epoch-2 canary {project_code} at {provision.root}; serve it with "
+        f"EAWF_RUNTIME_DIR={provision.runtime_dir}"
+    )
+    return payload, text
+
+
+def _teardown_canary(
+    target_dir: Path, *, registry_path: Path | None
+) -> tuple[dict[str, object], str]:
+    """Tear down the canary at *target_dir*, registry row first.
+
+    Returns:
+        ``(payload, text)`` for :func:`emit_json_or_text`.
+
+    Raises:
+        CanaryProvisionError: The tree is not a canary provisioned by
+            ``eawf init``, or its daemon may still be running.
+        CliError: The registry write failed.
+    """
+    from eawf.platform.install.canary import (
+        discard_canary,
+        read_provision,
+        require_no_live_daemon,
+        unregister_canary,
+    )
+    from eawf.surfaces.cli.commands.repo import (
+        _persist_registry,
+        _read_registry_for_write,
+        _resolve_registry_path,
+    )
+
+    provision = read_provision(target_dir)
+    require_no_live_daemon(provision)
+    registry_file = _resolve_registry_path(registry_path)
+    updated, removed = unregister_canary(_read_registry_for_write(registry_file), provision)
+    if removed:
+        _persist_registry(updated, registry_file)
+    teardown = discard_canary(provision, removed_registry_codes=removed)
+    payload: dict[str, object] = {
+        "action": CanaryAction.TEARDOWN.value,
+        "canary": teardown.ref.model_dump(mode="json"),
+        "registry_path": str(registry_file),
+        "removed_registry_codes": list(teardown.removed_registry_codes),
+        "root": str(provision.root),
+        "runtime_dir_removed": teardown.runtime_dir_removed,
+    }
+    text = (
+        f"eawf init: tore down epoch-2 canary {teardown.ref.project_code}; "
+        f"registry rows removed={list(teardown.removed_registry_codes)}"
+    )
+    return payload, text
+
+
+def _run_epoch2_canary(
+    action: CanaryAction,
+    *,
+    target_dir: Path,
+    project_code: str | None,
+    runtime: str,
+    lifecycle_depth: str,
+    registry_path: Path | None,
+    flags: GlobalFlags,
+) -> None:
+    """Dispatch ``--epoch2-canary`` and emit its envelope or its error."""
+    from eawf.platform.install.canary import DEFAULT_CANARY_CODE, CanaryProvisionError
+
+    try:
+        if action is CanaryAction.PROVISION:
+            payload, text = _provision_canary(
+                target_dir,
+                project_code=project_code or DEFAULT_CANARY_CODE,
+                runtime=runtime,
+                lifecycle_depth=lifecycle_depth,
+                registry_path=registry_path,
+            )
+        else:
+            payload, text = _teardown_canary(target_dir, registry_path=registry_path)
+    except CanaryProvisionError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
+        return
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+    except portalock.LockTimeout as exc:
+        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
+        return
+    emit_json_or_text(payload, text, flags=flags)
+
+
 def init_cmd(
     ctx: typer.Context,
     target: Annotated[
@@ -396,10 +581,39 @@ def init_cmd(
             help="Overwrite existing .ea/ canonical files.",
         ),
     ] = False,
+    epoch2_canary: Annotated[
+        CanaryAction | None,
+        typer.Option(
+            "--epoch2-canary",
+            help=(
+                "Provision a disposable epoch-2 canary repository at --target "
+                "(--project-code names it, default CANARY), or tear one down."
+            ),
+        ),
+    ] = None,
+    registry_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--registry-path",
+            help="Override ``~/.eawf/registry.json`` for --epoch2-canary (tests).",
+        ),
+    ] = None,
 ) -> None:
     """Initialise a new Eä Workflow workspace at *target*."""
     flags: GlobalFlags = ctx.obj
     target_dir = (target or Path.cwd()).resolve()
+
+    if epoch2_canary is not None:
+        _run_epoch2_canary(
+            epoch2_canary,
+            target_dir=target_dir,
+            project_code=project_code,
+            runtime=runtime,
+            lifecycle_depth=lifecycle_depth,
+            registry_path=registry_path,
+            flags=flags,
+        )
+        return
 
     if refresh_gitignore:
         from eawf.platform.install.gitignore_writer import write_gitignore

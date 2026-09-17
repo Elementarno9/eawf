@@ -5,16 +5,19 @@ than from the repo's own ``uv.lock``: the checked-in lock changes with
 every dependency bump, and a test that reads it would either drift or
 pin the tree, neither of which says anything about the classifier.
 
-The wiring cases at the end are the ones that matter most. A producer
-that exists but is not in
-:data:`~eawf.workflow.release.signal_probes.DEFAULT_RELEASE_PROBES` leaves
-the ``dependencies`` row exactly as ``unavailable`` as it was before the
-producer was written.
+The wiring cases at the end are the ones that matter most. The producer
+reads one checkout's receipts, so it is reached only through
+:func:`~eawf.workflow.release.signal_probes.build_receipt_probes` bound to
+that checkout. A default registered in
+:data:`~eawf.workflow.release.signal_probes.DEFAULT_RELEASE_PROBES` could
+only name the process's working directory, which is whatever directory a
+daemon happened to start in.
 """
 
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -45,11 +48,12 @@ from eawf.workflow.release.dependencies import (
 from eawf.workflow.release.pipeline_receipts import receipt_path, write_receipt
 from eawf.workflow.release.signal_probes import (
     DEFAULT_RELEASE_PROBES,
+    artifacts_probe,
     build_receipt_probes,
     dependencies_probe,
 )
 from eawf.workflow.release.vulnerability import VulnerabilityReport
-from tests._release_helpers import dev1_config
+from tests._release_helpers import dev1_config, stage_passing_receipts
 
 pytestmark = pytest.mark.unit
 
@@ -403,9 +407,39 @@ def _context() -> ReleaseSignalContext:
     return ReleaseSignalContext(dev1_config(), ReleaseSignalName.DEPENDENCIES, None)
 
 
-def test_default_release_probes_registers_the_dependencies_producer() -> None:
-    """The sweep reads this producer without any injection."""
-    assert DEFAULT_RELEASE_PROBES[ReleaseSignalName.DEPENDENCIES] is dependencies_probe
+def test_default_release_probes_hold_the_platform_probe_only() -> None:
+    """No default reads a checkout, so no default can fall back to the cwd."""
+    assert set(DEFAULT_RELEASE_PROBES) == {ReleaseSignalName.PLATFORM}
+
+
+def test_build_receipt_probes_binds_both_receipt_rows(tmp_path: Path) -> None:
+    """Each receipt row reads the bound checkout and passes on its receipts."""
+    stage_passing_receipts(tmp_path, version="0.7.0.dev1", source_sha="c" * 40)
+    probes = build_receipt_probes(tmp_path)
+    assert set(probes) == {ReleaseSignalName.DEPENDENCIES, ReleaseSignalName.ARTIFACTS}
+    for signal, probe in probes.items():
+        outcome = probe(ReleaseSignalContext(dev1_config(), signal, None))
+        assert outcome.status is ReleaseSignalStatus.PASS, signal
+
+
+def test_build_receipt_probes_ignores_receipts_in_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passing receipts beside the process never reach a probe bound elsewhere."""
+    stage_passing_receipts(tmp_path, version="0.7.0.dev1", source_sha="c" * 40)
+    monkeypatch.chdir(tmp_path)
+    bound = tmp_path / "checkout"
+    bound.mkdir()
+    for signal, probe in build_receipt_probes(bound).items():
+        outcome = probe(ReleaseSignalContext(dev1_config(), signal, None))
+        assert outcome.status is ReleaseSignalStatus.UNAVAILABLE, signal
+
+
+@pytest.mark.parametrize("probe", [dependencies_probe, artifacts_probe])
+def test_receipt_probes_require_a_repo_root(probe: Callable[..., object]) -> None:
+    """A receipt probe has no working-directory default to fall back on."""
+    with pytest.raises(TypeError, match="repo_root"):
+        probe(_context())
 
 
 def test_dependencies_probe_is_unavailable_when_no_receipt_was_written() -> None:
