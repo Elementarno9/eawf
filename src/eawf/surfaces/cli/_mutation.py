@@ -50,6 +50,7 @@ import orjson
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.validate.strict import validate_state
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli import errors as cli_errors
 
@@ -150,8 +151,9 @@ def state_transaction(
     3. ``yield`` the typed :class:`State` to the caller for in-place
        mutation.
     4. On caller success, re-validate the mutated state (schema +
-       invariants). Failures raise :class:`ValidationError` and the
-       on-disk file is left unchanged.
+       invariants), then refuse any added or changed string that matches
+       the state leak patterns. Failures raise :class:`ValidationError`
+       and the on-disk file is left unchanged.
     5. ``atomic_write_json_locked`` persists the new payload while
        the lock is still held.
 
@@ -169,8 +171,9 @@ def state_transaction(
             cannot run daemonless); or when *state_path* does not exist
             (``kind="NotFound"``).
         ValidationError: When the loaded payload fails schema
-            validation, or the post-mutation payload fails schema
-            or invariant checks.
+            validation, the post-mutation payload fails schema or
+            invariant checks, or the mutation adds a string carrying a
+            state leak shape (the message names its field path).
         StateConflict: When the sibling lock cannot be acquired within
             *timeout* (``kind="LockConflict"``).
 
@@ -216,6 +219,10 @@ def state_transaction(
                 raise cli_errors.ValidationError(
                     f"post-mutation invariants violated: {violation_codes}"
                 )
+            # The prefix matches what the daemon path surfaces for the same
+            # refusal, so a proxied and a fallback write fail identically.
+            if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+                raise cli_errors.ValidationError(f"validation_failed: {leak_refusal}")
             atomic_write_json_locked(state_path, new_payload)
     except portalock.LockTimeout as exc:
         raise cli_errors.StateConflict(str(exc), kind="LockConflict") from exc

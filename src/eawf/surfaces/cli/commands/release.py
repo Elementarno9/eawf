@@ -192,7 +192,10 @@ def _refuse_unready(readiness: ReleaseReadiness, *, tag: str) -> None:
 
 
 def _dirty_paths(repo_root: Path) -> tuple[str, ...]:
-    """Return the porcelain status lines of *repo_root*.
+    """Return the porcelain status lines of *repo_root*, minus the release stores.
+
+    The tree check shares its git query with the ``tree_cleanliness``
+    probe, so a release store the release verbs wrote refuses neither.
 
     Args:
         repo_root: Working copy to inspect.
@@ -203,14 +206,10 @@ def _dirty_paths(repo_root: Path) -> tuple[str, ...]:
     Raises:
         subprocess.CalledProcessError: When git refuses to report.
     """
-    import subprocess
+    from eawf.workflow.verify.release_probes import release_tree_status
 
-    status = subprocess.run(
-        ["git", "-C", str(repo_root), "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    status = release_tree_status(repo_root)
+    status.check_returncode()
     return tuple(line for line in status.stdout.splitlines() if line.strip())
 
 
@@ -748,8 +747,9 @@ def release_preflight(
 
     It runs the tag probes against the working copy, which is what makes
     it the tag chokepoint. ``eawf release readiness`` asks the daemon for
-    the same sweep without them, and is the verb to reach for when the
-    question is which status a candidate record would land in.
+    the same sweep at the commit a candidate record pins, and is the verb
+    to reach for when the question is which status that record would
+    land in.
     """
     flags: GlobalFlags = ctx.obj
     try:

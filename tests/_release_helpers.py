@@ -41,17 +41,30 @@ from eawf.kernel.spec.release import (
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
 from eawf.workflow.release.advance import draft_release_for
+from eawf.workflow.release.dependencies import (
+    LicenseDisposition,
+    LockedPackage,
+    ReleaseDependencyManifest,
+)
 from eawf.workflow.release.observation import (
     FrozenManifest,
     ObservationRequest,
     RecordedResponse,
     observation_request,
 )
+from eawf.workflow.release.pipeline_receipts import write_receipt
+from eawf.workflow.release.reproducibility import (
+    ArtifactDigest,
+    ArtifactKind,
+    BuildAttempt,
+    ReproducibleBuildReceipt,
+)
 from eawf.workflow.release.train import (
     DEV1_GATE_BINDINGS_YAML,
     DEV1_RELEASE_CONFIG_YAML,
     V07_TRAIN,
 )
+from eawf.workflow.release.vulnerability import VulnerabilityReport
 
 #: Instant every sweep in this package is computed at.
 NOW = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
@@ -240,3 +253,53 @@ def fixed_probe(status: ReleaseSignalStatus) -> ReleaseSignalProbe:
 def all_passing() -> dict[ReleaseSignalName, ReleaseSignalProbe]:
     """Return a probe registry in which every signal passes."""
     return dict.fromkeys(ReleaseSignalName, fixed_probe(ReleaseSignalStatus.PASS))
+
+
+def stage_passing_receipts(repo_root: Path, *, version: str, source_sha: str) -> None:
+    """Write the three receipts a clean CI run leaves under *repo_root*.
+
+    The dependency manifest pins its own lock digest, so a checkout that
+    carries no ``uv.lock`` agrees with it and the ``dependencies`` row
+    passes on the receipts alone.
+
+    Args:
+        repo_root: Directory the receipts are written under.
+        version: Version the built artifacts are named for.
+        source_sha: The 40-hex commit both builds were made from.
+    """
+    lock_digest = f"sha256:{'e' * 64}"
+    manifest = ReleaseDependencyManifest(
+        lock_digest=lock_digest,
+        packages=(
+            LockedPackage(
+                name="pydantic",
+                version="2.12.0",
+                license_id="MIT",
+                disposition=LicenseDisposition.ALLOWED,
+            ),
+        ),
+        imported_distributions=("pydantic",),
+        locked_distributions=("pydantic",),
+    )
+    artifacts = (
+        ArtifactDigest(
+            filename=f"eawf-{version}-py3-none-any.whl", kind=ArtifactKind.WHEEL, sha256="a" * 64
+        ),
+        ArtifactDigest(filename=f"eawf-{version}.tar.gz", kind=ArtifactKind.SDIST, sha256="b" * 64),
+    )
+    epoch = 1757592000
+    write_receipt(repo_root, "dependency-manifest", manifest)
+    write_receipt(repo_root, "vulnerability-report", VulnerabilityReport(lock_digest=lock_digest))
+    write_receipt(
+        repo_root,
+        "reproducible-build-receipt",
+        ReproducibleBuildReceipt(
+            source_sha=source_sha,
+            source_date_epoch=epoch,
+            attempts=(
+                BuildAttempt(attempt=1, source_date_epoch=epoch, artifacts=artifacts),
+                BuildAttempt(attempt=2, source_date_epoch=epoch, artifacts=artifacts),
+            ),
+            reproduced=True,
+        ),
+    )

@@ -50,7 +50,7 @@ rejection.
 from __future__ import annotations
 
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -67,7 +67,7 @@ from eawf.workflow.audit_dsl.kinds.backlog_resolution import (
     BACKLOG_RESOLUTION_KIND,
     check_backlog_resolution,
 )
-from eawf.workflow.audit_dsl.models import CheckSpec
+from eawf.workflow.audit_dsl.models import CheckSpec, GateFreshnessInput
 from eawf.workflow.lifecycle._errors import LifecycleError, check_disabled_waiver_policy
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 from eawf.workflow.verify.compile import compile_floor_pack, compile_gate
@@ -413,6 +413,7 @@ def _run_deterministic_gate(
     runner_cwd: Path,
     gate_context: GateExecutionContext | None = None,
     live_state_path: Path | None = None,
+    freshness: GateFreshnessInput | None = None,
 ) -> str:
     """Compile + execute *gate* via the W15-hardened audit-DSL runner.
 
@@ -458,11 +459,17 @@ def _run_deterministic_gate(
             sandbox ledger is snapshotted from, so the gate reads a
             faithful copy. ``None`` seeds an empty ledger rather than
             guessing one from the process environment.
+        freshness: The close attempt's frozen facts for *gate*, compiled
+            into the spec so the gate resolves the freshness key the close
+            oracle already claimed. ``None`` compiles the unfrozen spec.
 
     Returns:
         One of ``"pass"`` / ``"fail"`` / ``"blocked"``.
     """
-    compiled = compile_gate(gate, criterion=criterion)
+    if freshness is None:
+        compiled = compile_gate(gate, criterion=criterion)
+    else:
+        compiled = compile_gate(gate, criterion=criterion, freshness=freshness)
     if compiled is None:
         logger.debug(
             f"_run_deterministic_gate gate_id={gate.id!r} status=blocked reason=compile-none"
@@ -499,6 +506,7 @@ def _build_spec_views(
     prevalidated_gate_ids: Collection[str] = (),
     gate_context: GateExecutionContext | None = None,
     live_state_path: Path | None = None,
+    gate_freshness: Mapping[str, GateFreshnessInput] | None = None,
 ) -> tuple[list[CriterionView], list[str]]:
     """Convert typed CriterionSpec / GateSpec into :class:`CriterionView` rows.
 
@@ -540,6 +548,9 @@ def _build_spec_views(
         live_state_path: Forwarded to :func:`_run_deterministic_gate`;
             names the live ledger the advisory lane's sandbox is
             snapshotted from.
+        gate_freshness: The close attempt's frozen facts keyed by gate id;
+            each gate compiles with its entry, stamped with the parent
+            criterion id. ``None`` or a missing entry compiles unfrozen.
 
     Returns:
         ``(views, waived_gate_ids)``.
@@ -574,12 +585,20 @@ def _build_spec_views(
                         status = "pass"
                         was_waived = True
                     else:
+                        # Stamped per criterion exactly as the close oracle
+                        # stamps it, so both compile the same spec.
+                        frozen = (gate_freshness or {}).get(gate.id)
                         status = _run_deterministic_gate(
                             gate,
                             criterion,
                             runner_cwd=runner_cwd,
                             gate_context=gate_context,
                             live_state_path=live_state_path,
+                            freshness=(
+                                frozen.model_copy(update={"criterion_id": criterion.id})
+                                if frozen is not None
+                                else None
+                            ),
                         )
                         was_waived = False
             else:
@@ -1604,6 +1623,39 @@ def _enforce_readiness(
     raise LifecycleError(f"readiness enforcement failed for wave {scope_id!r}: {details}")
 
 
+def _bound_gate_context(
+    state: State,
+) -> tuple[GateExecutionContext | None, dict[str, GateFreshnessInput]]:
+    """Return the durable close identity in force, with its frozen gate facts.
+
+    A daemon close binds its attempt around the whole mutation, so the close
+    oracle and this projection score the same attempt against the same tree,
+    the verification workspace pinned to that attempt. Compiling each gate
+    with the attempt's frozen facts gives it the freshness key the oracle
+    already claimed, so the gate child hands back the claimed result instead
+    of running the gate again.
+
+    A caller-supplied context gets no such facts: that caller scores its own
+    working tree, which a recorded attempt need not describe, and a key that
+    matched anyway would reuse a receipt observed on a different tree.
+
+    Args:
+        state: Validated state; read for the bound attempt's frozen facts.
+
+    Returns:
+        ``(context, facts)`` where *facts* maps gate id to the attempt's
+        frozen facts, or ``(None, {})`` when no durable close is in force.
+        A bound attempt absent from *state* yields an empty mapping.
+    """
+    from eawf.runtime.daemon.gate_execution import current_gate_context
+    from eawf.runtime.daemon.methods.close_evidence import gate_freshness_inputs
+
+    context = current_gate_context()
+    if context is None:
+        return None, {}
+    return context, gate_freshness_inputs(state, attempt_id=context.attempt_id)
+
+
 def compute(
     scope_id: str,
     *,
@@ -1679,8 +1731,13 @@ def compute(
         gate_context: Durable identity for the shared out-of-process gate
             runner. The daemonless close lane passes one so its
             deterministic gates run through the SAME runner the daemon
-            drives (claiming the same freshness key, resolving the same
-            receipt id). ``None`` keeps the legacy in-process execution.
+            drives, claiming each gate's freshness key under
+            ``.ea/local/gate-claims``. ``None`` defaults to the identity the
+            daemon bound for the close in progress, compiled with that
+            attempt's frozen facts so an already-claimed gate reuses its
+            claimed result rather than running a second time. With no
+            close bound either, gates run in the receipt-free sandboxed
+            runner.
 
     Returns:
         A :class:`CloseReadiness` view. Empty waves (no typed specs +
@@ -1746,6 +1803,10 @@ def compute(
     # serving several repositories would resolve the wrong one otherwise.
     live_state_path = store_dir.parent / "state.json"
 
+    gate_freshness: dict[str, GateFreshnessInput] = {}
+    if gate_context is None:
+        gate_context, gate_freshness = _bound_gate_context(state)
+
     spec_views, waived_gate_ids = _build_spec_views(
         criterion_specs,
         gate_specs,
@@ -1754,6 +1815,7 @@ def compute(
         prevalidated_gate_ids=prevalidated_gate_ids,
         gate_context=gate_context,
         live_state_path=live_state_path,
+        gate_freshness=gate_freshness,
     )
     legacy_views, legacy_warnings = _build_legacy_views(wave)
     # Profile-fed floor pack. Floor checks render only

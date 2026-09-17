@@ -418,6 +418,7 @@ def _persist_registry_via_daemon(validated: Registry, registry_path: Path) -> bo
                         operation=operation,
                         repo_id=repo_id,
                         fields=fields,
+                        registry_path=str(registry_path),
                     )
                 except DaemonRpcError as exc:
                     if exc.code == -32601:

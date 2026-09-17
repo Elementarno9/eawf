@@ -154,7 +154,7 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.7 hash=b43803334553edb8 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.8 hash=b43803334553edb8 -->
 `commit-prefix` — Wave commits are written ``<type>: <summary>`` plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer; the bracket prefix form still passes but warns, and ``[P<NN>] state:`` keeps its bracket. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
@@ -269,7 +269,7 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->
 `gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
 <!-- END EAWF:managed id=gate-fire-proof-sunset -->
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.1 hash=df917983dc831b9e -->
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.2 hash=df917983dc831b9e -->
 `commit-granularity` — One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
 <!-- END EAWF:managed id=commit-granularity -->
 <!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=d92fc4c83b8d1338 -->

@@ -11,6 +11,11 @@ JSON. Three methods land here:
 * ``release.approve`` -- the approval guard, which denies
   ``release_not_ready`` naming the first red signal.
 
+``release.compute_readiness`` and ``release.publish`` both run the
+shared sweep of :mod:`eawf.runtime.release.chokepoint` over the checkout
+that holds the daemon's state root, at the source commit the record
+pins. The daemon's own working directory and HEAD never enter it.
+
 A counted waiver is only ever explained by the rows the caller supplies,
 so ``release.compute_readiness`` and ``release.publish`` both carry
 ``waivers`` and ``acknowledgements`` beside the bare ``waiver_count``.
@@ -96,6 +101,7 @@ from eawf.kernel.spec.release import (
     ReleaseTargetStatus,
     semver_equivalent,
 )
+from eawf.kernel.spec.release_config import ReleaseConfig
 from eawf.kernel.state.models import State
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.release_context import (
@@ -105,6 +111,7 @@ from eawf.runtime.daemon.methods.release_context import (
     validated_release,
 )
 from eawf.runtime.daemon.methods.release_disposition import burn_adopted_record
+from eawf.runtime.release.chokepoint import sweep_pinned_source
 from eawf.surfaces.cli.errors import CliError, UserError
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.release.adapters import collect_observation
@@ -162,7 +169,6 @@ from eawf.workflow.verify.release_readiness import (
     DEFAULT_SIGNAL_TTL_SECONDS,
     ReleaseReadiness,
     WaiverAcknowledgement,
-    compute_readiness,
 )
 
 logger = logging.getLogger(__name__)
@@ -185,7 +191,9 @@ class ComputeReadinessParams(BaseModel):
 
     Attributes:
         version: Normalized checkpoint version to preflight.
-        observed_revision: Source revision the sweep is computed against.
+        observed_revision: Source commit the sweep is computed against.
+            A supplied :attr:`release` pins it already, so here it may
+            only repeat that pin. With neither, the sweep reads HEAD.
         ttl_seconds: Freshness window stamped on each row.
         waiver_count: Gate waivers recorded against the checkpoint.
             Left at zero it is derived from :attr:`waivers`, so a caller
@@ -310,12 +318,52 @@ def _rung_for(version: str) -> ReleaseCheckpoint:
         ) from exc
 
 
+def _sweep(
+    state_path: Path,
+    config: ReleaseConfig,
+    *,
+    version: str,
+    pinned: str | None,
+    args: ComputeReadinessParams | PublishParams,
+    computed_at: datetime,
+) -> ReleaseReadiness:
+    """Run the shared chokepoint sweep for one daemon verb.
+
+    Args:
+        state_path: Path to ``state.json``; names the checkout swept.
+        config: The checkpoint configuration the sweep is judged against.
+        version: Checkpoint version the verb names.
+        pinned: The ``source_sha`` the verb's record carries, if any.
+        args: The verb's params: observed revision, ttl and waiver block.
+        computed_at: Timezone-aware UTC instant the sweep runs at.
+
+    Returns:
+        The total readiness sweep.
+
+    Raises:
+        ValueError: When the observed revision contradicts *pinned*, or
+            the sweep rejects its inputs.
+    """
+    return sweep_pinned_source(
+        config,
+        version=version,
+        state_path=state_path,
+        pinned=pinned,
+        observed_revision=args.observed_revision,
+        waiver_count=args.waiver_count,
+        computed_at=computed_at,
+        ttl_seconds=args.ttl_seconds,
+        waivers=args.waivers,
+        acknowledgements=args.acknowledgements,
+    )
+
+
 @register("release.compute_readiness")
 async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Compute the twelve-signal preflight sweep for one checkpoint.
 
     Args:
-        ctx: Server context; unused, the sweep is a pure projection.
+        ctx: Server context; its state root names the checkout swept.
         params: JSON-RPC params per :class:`ComputeReadinessParams`.
 
     Returns:
@@ -323,21 +371,25 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
         when a candidate record was supplied.
 
     Raises:
-        DaemonValidationError: When the checkpoint has no configuration,
-            the supplied record is invalid or disagrees with the train,
-            or the record is not in a state preflight applies to.
+        DaemonValidationError: When the daemon has no state root, the
+            checkpoint has no configuration, the supplied record is
+            invalid or disagrees with the train, the observed revision
+            contradicts the record's pin, or the record is not in a
+            state preflight applies to.
     """
     args = ComputeReadinessParams.model_validate(params)
+    state_path = require_state_path(ctx)
     config = resolve_config(args.version)
+    candidate = None if args.release is None else validated_release(args.release)
+    pinned = None if candidate is None else candidate.source_sha
     try:
-        readiness = compute_readiness(
+        readiness = _sweep(
+            state_path,
             config,
-            observed_revision=args.observed_revision,
+            version=args.version,
+            pinned=pinned,
+            args=args,
             computed_at=datetime.now(UTC),
-            ttl_seconds=args.ttl_seconds,
-            waiver_count=args.waiver_count,
-            waivers=args.waivers,
-            acknowledgements=args.acknowledgements,
         )
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
@@ -345,8 +397,7 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
         "readiness": readiness.model_dump(mode="json"),
         "first_red": None if readiness.first_red is None else readiness.first_red.value,
     }
-    if args.release is not None:
-        candidate = validated_release(args.release)
+    if candidate is not None:
         try:
             result["next_status"] = record_preflight_result(candidate, readiness).status.value
         except (ReleaseTransitionError, ValueError) as exc:
@@ -440,7 +491,9 @@ class PublishParams(_PublicationParams):
     Attributes:
         approved_manifest_digest: The manifest digest the approval bound.
         proof_digest: Digest binding the exact artifact set.
-        observed_revision: Source revision the chokepoint sweep runs at.
+        observed_revision: Source commit the chokepoint sweep runs at.
+            The record's ``source_sha`` already pins it, so this may only
+            repeat that pin.
         ttl_seconds: Freshness window stamped on each readiness row.
         waiver_count: Gate waivers recorded against the checkpoint.
         waivers: The counted waiver rows. Carried here as well as at
@@ -656,10 +709,13 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     The chokepoint sweep is recomputed here rather than trusted from the
     approval: the whole point of the tag chokepoint is that the last
-    thing to run before external effect is a fresh preflight. Only once
-    it recomputes green does the operation open, and the handler returns
-    the operation reference immediately -- the legs are queued, not
-    awaited, so a slow registry cannot hold the RPC open.
+    thing to run before external effect is a fresh preflight. It sweeps
+    the record's pinned ``source_sha`` in the checkout holding the state
+    root, so a version bump committed on HEAD since the approval does
+    not stale it. Only once it recomputes green does the operation open,
+    and the handler returns the operation reference immediately -- the
+    legs are queued, not awaited, so a slow registry cannot hold the RPC
+    open.
 
     Args:
         ctx: Server context; supplies the state root the ledger lives in.
@@ -671,9 +727,9 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
-            conflict, an invalid record, or a denied transition (the
-            message leads with ``approval_stale`` when the approval no
-            longer binds).
+            conflict, an invalid record, an observed revision other than
+            the pinned source, or a denied transition (the message leads
+            with ``approval_stale`` when the approval no longer binds).
     """
     args = PublishParams.model_validate(params)
     state_path = require_state_path(ctx)
@@ -686,14 +742,13 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     config = resolve_config(release.version)
     now = datetime.now(UTC)
     try:
-        readiness = compute_readiness(
+        readiness = _sweep(
+            state_path,
             config,
-            observed_revision=args.observed_revision,
+            version=release.version,
+            pinned=release.source_sha,
+            args=args,
             computed_at=now,
-            ttl_seconds=args.ttl_seconds,
-            waiver_count=args.waiver_count,
-            waivers=args.waivers,
-            acknowledgements=args.acknowledgements,
         )
         published, operation = begin_publication(
             release,

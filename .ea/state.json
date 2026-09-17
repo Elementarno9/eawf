@@ -14295,6 +14295,21 @@
       "status": "done",
       "updated_at": "2026-09-16T14:10:22.167125Z"
     },
+    "P33-I01-W02": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P33-I01-W02",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P33-I01-W02",
+      "model": null,
+      "scope_id": "P33-I01-W02",
+      "status": "done",
+      "updated_at": "2026-09-17T15:52:16.574105Z"
+    },
     "P33-I01-W06": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -14309,6 +14324,21 @@
       "scope_id": "P33-I01-W06",
       "status": "done",
       "updated_at": "2026-09-17T15:35:41.970346Z"
+    },
+    "P33-I01-W13": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P33-I01-W13",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P33-I01-W13",
+      "model": null,
+      "scope_id": "P33-I01-W13",
+      "status": "done",
+      "updated_at": "2026-09-17T15:55:21.164563Z"
     },
     "P33-I01-W14": {
       "actual_cost_usd": 0.0,
@@ -14339,6 +14369,51 @@
       "scope_id": "P33-I01-W29",
       "status": "done",
       "updated_at": "2026-09-17T15:36:29.283418Z"
+    },
+    "P33-I01-W40": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P33-I01-W40",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P33-I01-W40",
+      "model": null,
+      "scope_id": "P33-I01-W40",
+      "status": "done",
+      "updated_at": "2026-09-17T15:56:55.562335Z"
+    },
+    "P33-I01-W42": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P33-I01-W42",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P33-I01-W42",
+      "model": null,
+      "scope_id": "P33-I01-W42",
+      "status": "done",
+      "updated_at": "2026-09-17T15:51:27.996349Z"
+    },
+    "P33-I01-W44": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P33-I01-W44",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P33-I01-W44",
+      "model": null,
+      "scope_id": "P33-I01-W44",
+      "status": "done",
+      "updated_at": "2026-09-17T15:50:32.507096Z"
     },
     "P33-I01-W87": {
       "actual_cost_usd": 0.0,
@@ -17896,6 +17971,170 @@
       "runtime_session_id": null,
       "scope_id": "P33-I01-W04",
       "started_at": "2026-09-17T15:36:38.826609Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T154711.964028Z-executor-claude-9e1ae115-57ca-4910-9e0d-91974be86598": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W43"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T154711.964028Z-executor-claude-9e1ae115-57ca-4910-9e0d-91974be86598",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W43",
+      "started_at": "2026-09-17T15:47:11.964028Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T154713.899878Z-auditor-claude-code-7bb15ce0-2f4f-4fbe-9e4b-f7f640d3f7ee": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-17T15:51:26.386986Z",
+      "id": "SES-20260917T154713.899878Z-auditor-claude-code-7bb15ce0-2f4f-4fbe-9e4b-f7f640d3f7ee",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W42::audit",
+      "started_at": "2026-09-17T15:47:13.899878Z",
+      "status": "closed",
+      "summary": "auditor report appended",
+      "worktree_ids": []
+    },
+    "SES-20260917T154938.745098Z-executor-claude-17ba1e06-6d30-4ce7-9707-7a1eb32fbba7": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W32"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T154938.745098Z-executor-claude-17ba1e06-6d30-4ce7-9707-7a1eb32fbba7",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W32",
+      "started_at": "2026-09-17T15:49:38.745098Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T155117.050320Z-executor-claude-722b654c-5ac7-41a7-bad8-1cacf1e47b37": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W45"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T155117.050320Z-executor-claude-722b654c-5ac7-41a7-bad8-1cacf1e47b37",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W45",
+      "started_at": "2026-09-17T15:51:17.050320Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T155118.764219Z-executor-claude-4de95dac-0331-4805-846f-01092e6ff472": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W49"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T155118.764219Z-executor-claude-4de95dac-0331-4805-846f-01092e6ff472",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W49",
+      "started_at": "2026-09-17T15:51:18.764219Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T155152.056319Z-auditor-claude-code-bd352751-5749-4d9b-b145-d39a5ec71a6d": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-17T15:55:19.703487Z",
+      "id": "SES-20260917T155152.056319Z-auditor-claude-code-bd352751-5749-4d9b-b145-d39a5ec71a6d",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W13::audit",
+      "started_at": "2026-09-17T15:51:52.056319Z",
+      "status": "closed",
+      "summary": "auditor report appended",
+      "worktree_ids": []
+    },
+    "SES-20260917T155515.117740Z-executor-claude-b2f946f8-dde2-4680-a5f8-899166895c86": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W03"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T155515.117740Z-executor-claude-b2f946f8-dde2-4680-a5f8-899166895c86",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W03",
+      "started_at": "2026-09-17T15:55:15.117740Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T155528.651383Z-auditor-claude-code-59cef4af-bea2-477c-b8ac-b5816b6603b3": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": "2026-09-17T15:57:06.944208Z",
+      "id": "SES-20260917T155528.651383Z-auditor-claude-code-59cef4af-bea2-477c-b8ac-b5816b6603b3",
+      "role": "auditor",
+      "runtime": "claude-code",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W07::audit",
+      "started_at": "2026-09-17T15:55:28.651383Z",
+      "status": "failed",
+      "summary": "auditor attempt failed before report append",
+      "worktree_ids": []
+    },
+    "SES-20260917T155645.021714Z-executor-claude-61d431a7-94a1-42ba-8075-47552f5830a5": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W48"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T155645.021714Z-executor-claude-61d431a7-94a1-42ba-8075-47552f5830a5",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W48",
+      "started_at": "2026-09-17T15:56:45.021714Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
+    },
+    "SES-20260917T155935.188070Z-executor-claude-a5cf1a00-2022-45dc-af6a-6148a57d99e0": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P33-I01-W89"
+      ],
+      "ended_at": null,
+      "id": "SES-20260917T155935.188070Z-executor-claude-a5cf1a00-2022-45dc-af6a-6148a57d99e0",
+      "role": "executor",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P33-I01-W89",
+      "started_at": "2026-09-17T15:59:35.188070Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -22879,6 +23118,110 @@
       "wave_id": "P31-I01-W06",
       "wave_revision_digest": "18c7684d498620c6a4dd7653b48fdffdc064ea4d4185cc1d905bee3bae54bfc7"
     },
+    "close-3a63431a7b08abeb66df5c6e": {
+      "apply_event_id": "EV-30c0581a1ffb",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "commit_identity_digest": "sha256:64f883ce9c08a0e09f178a7b86b9cd83aedaa3ef68455ce6dcdb1184ed5121b0",
+      "criteria_digest": "2fa538b75fde9f2ac9d8c24c1604bad4da36c42c81da1cf22545b3520313f8c6",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "781ff7b0b4036c2ba19ef29395103d9cc299fa3ecbc06a358698e8d8072900ea",
+      "gate_receipt_ids": [
+        "GR-db369ea4703f1e0e0a3fe6e5c96f58a5",
+        "GR-394d4f16c2e9911eacf0f4efb734d109",
+        "GR-cf6d9d20b39b3540e878c00e6f1b2332",
+        "GR-964df6b3e4eae72e01f0e1658538d3d9"
+      ],
+      "generation": 1,
+      "id": "close-3a63431a7b08abeb66df5c6e",
+      "idempotency_key": "63a68acca3d74b52f8ae80954772e150c7e7cabaaca0d205c5d8a8691cdf4e6d",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "integration_id": "integration-6c0f7a283e2181474578e21c",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The console chassis is ported into src/eawf/surfaces/tui/console: glyph tokens with ASCII twins, a narrow-policy East Asian width oracle that measures clip and pad in cells, a RouteRegistry that derives every index from its rows and rejects duplicate or doorless routes, and a strict SessionSetup whose reset restores every declared field.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-17T15:49:24.284983Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03",
+        "G-04"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "3d5fff08e8698a5ca56c00b0773306df65ce6cf2ac66656eb1876f2528643c25",
+      "started_at": "2026-09-17T15:49:24.670891Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-17T15:50:33.969359Z",
+      "tokens_consumed": null,
+      "tree_sha": "ec7b8c40d2b815ec9c3927dff9c99ee35b856583",
+      "updated_at": "2026-09-17T15:50:33.969352Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P33-I01-W44",
+      "wave_revision_digest": "47ed10d03cb06a0dc823aeff82e861e427898423d256e1db9044dc2786f4391c"
+    },
+    "close-3f20db81f0a78dc01874c840": {
+      "apply_event_id": "EV-5d0bc5440416",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P33-I01-W13-01",
+      "audit_requirement": "required",
+      "candidate_sha": "559140c0c5a93c578d8fa752a1fb7932eadf3dc3",
+      "commit_identity_digest": "sha256:092cefe6e78aa806ee3b826ad24840c55b754c4bcd444547e76f75a35f5e2a91",
+      "criteria_digest": "4f33b567a7d553d031f110df9d55fc0c11040193a2c7379189f2c3968bfda37e",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "40818202da692dc1d4d2a0903cb322edcba826182234f84877ae3eee80ebee3c",
+      "gate_receipt_ids": [
+        "GR-6d025e91c182f66213fc9da6369e8750",
+        "GR-a9783adc2b7c8726d8c0d9c71ec1a564",
+        "GR-4992fa864c120cf05de059be820efbb8"
+      ],
+      "generation": 1,
+      "id": "close-3f20db81f0a78dc01874c840",
+      "idempotency_key": "d30c4eefb08c12110203c5da637858b2ebb7576d70d7b1c0e125dd4ff55cbd10",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "559140c0c5a93c578d8fa752a1fb7932eadf3dc3",
+      "integration_id": "integration-cae08366b4e6278dd758cbaf",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The audit skill, the security-review skill and the evidence-backlog verb now run their checks through run_checks_out_of_process against a sandbox seeded from the live state, a lint forbids new in-process run_checks callers, and readiness.compute defaults its gate context from the bound daemon close and compiles gates with the attempt's frozen facts so a claimed gate is reused in one child.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-17T15:50:59.105517Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "1b82db6ed3a8082a95863b220e86f7adfaad7f52c3b5d17b7f0bb8eb71a573af",
+      "started_at": "2026-09-17T15:50:59.497309Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-17T15:55:22.437104Z",
+      "tokens_consumed": null,
+      "tree_sha": "e0220b1abc1220a5806b163c392f5ac93249fe76",
+      "updated_at": "2026-09-17T15:55:22.437100Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P33-I01-W13",
+      "wave_revision_digest": "f9eb205e8b827e2e67d3a61a8c46f039235c9a52d2cf8a10635b05e50d25ca58"
+    },
     "close-40983b9ee377453cc2472c4e": {
       "apply_event_id": "EV-f80469018c83",
       "artifact_refs": [],
@@ -23123,6 +23466,55 @@
       "waiver_decision_ids": [],
       "wave_id": "P33-I01-W14",
       "wave_revision_digest": "3269dcfa14da314a64dabf46c58ae098066069a0e344142163e40f73aae82c8b"
+    },
+    "close-618e2c811ecdf26a8270b8f3": {
+      "apply_event_id": null,
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "required",
+      "candidate_sha": "e78d5a1d48dbe7a834178596e30fb02e0e1e71fd",
+      "commit_identity_digest": "sha256:edf1368833a941a359e6608529edc78be38ab406f0aa813f246fad96e17e6db2",
+      "criteria_digest": "143192fe5061a3360aae1b8ca371abd875c26ad9a0576924d472e2c9456d3c0d",
+      "dependency_binding_digest": "177e2a003975152fe6d580c0d1b6a7901fa50fe15e3ce6d3112021241a54df70",
+      "failure_detail_ref": ".ea/local/close-logs/close-618e2c811ecdf26a8270b8f3.log",
+      "failure_kind": "work_rejected",
+      "gate_manifest_digest": "646ca86ea5ecd3ab50ff9d30fed44cf9ce2ae2004edb6315499f3dc67bcec232",
+      "gate_receipt_ids": [
+        "GR-28e73910088ea1d0e72cb27a23b1a381",
+        "GR-4dfb7f648e1b7c10c829f8d164e80f68"
+      ],
+      "generation": 1,
+      "id": "close-618e2c811ecdf26a8270b8f3",
+      "idempotency_key": "ea79c2e4c77f2d1a46a555e42b8c82b0dd0bf54c3b2c1bc45f22eebae53039c7",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "e78d5a1d48dbe7a834178596e30fb02e0e1e71fd",
+      "integration_id": "integration-931ce64ed013a9e575497d62",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "The daemon single-lock commit, the WAVE_CLOSE commit and the CLI fallback transaction now diff the new state against the old and refuse, before the WAL record or atomic write, any added or changed string value that carries a home path, a non-allowlisted email or a token (validation_failed: state_leak_refused naming the field, never the text); clean writes stay byte-identical.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-17T15:55:12.448512Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "7af276c8daf63b195ec0562188b00f51aaa47872cd2ba901dfc039e3c32c1ebe",
+      "started_at": "2026-09-17T15:55:12.876100Z",
+      "status": "blocked",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-17T15:57:07.292665Z",
+      "tokens_consumed": null,
+      "tree_sha": "7d238faf221410a33c5346ac72acb733d096aa4f",
+      "updated_at": "2026-09-17T15:57:07.396332Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P33-I01-W07",
+      "wave_revision_digest": "62f939019861a0f4d7134b0722f353df929ba83551664fcb57b7bc7fe49e63b2"
     },
     "close-61fa18e40ccb1d80c11ab019": {
       "apply_event_id": null,
@@ -24161,6 +24553,57 @@
       "wave_id": "P32-I01-W06",
       "wave_revision_digest": "23a510345a6a4266a243cbeaa61e44fc4c62e3491d247f25f4ab56ade24d93fd"
     },
+    "close-a3d3382c1b7b1b43794bdb9a": {
+      "apply_event_id": "EV-c85f406c3a1f",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "commit_identity_digest": "sha256:2a81990503bbe4b03e1c5fc92bd99e123340b7cc0e26ef80d06f24894035add5",
+      "criteria_digest": "be04894382c1ea2979b87212058be72bfe38827c6d47f1e9a92a4bd4d99b3452",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "c002085f6227dcc5f4ad7053da401c0dbf1b965fefee271b472d70897b906af8",
+      "gate_receipt_ids": [
+        "GR-9dbb000e5220c1f0396c574a9e6cd115",
+        "GR-afce92e9efe09f82d8cbdfe780de6ae6",
+        "GR-cac54f8c088293b8d855748f41b9d336"
+      ],
+      "generation": 1,
+      "id": "close-a3d3382c1b7b1b43794bdb9a",
+      "idempotency_key": "bd88e22ed70b78d73f1ce42d3504883561fac96f90ff456a44a82f4caa8d824f",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "integration_id": "integration-714e64610062e3c51ea14435",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Publish and readiness now sweep the record's pinned source with the tag and receipt probes (sweep_pinned_source reads the version module and CHANGELOG at source_sha via git show and checks ancestry on the pin), so a version bump on HEAD no longer reds publish; the tree-cleanliness probe and the CLI dirty-path check exclude the release store ledgers.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-17T15:50:49.913055Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "0f7800dd77bc0f35353c954f78d8352967e5931755d488cc45098ddd467d27dc",
+      "started_at": "2026-09-17T15:50:50.309355Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-17T15:53:10.260478Z",
+      "tokens_consumed": null,
+      "tree_sha": "e1c9159a15e48afe259da80cff5037fee619c845",
+      "updated_at": "2026-09-17T15:53:10.260474Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P33-I01-W02",
+      "wave_revision_digest": "beda2a30fb7aa2039faebf1309dac74ba78c1cbf3a2ffc132f46d121d4a2ce83"
+    },
     "close-a51bdf4cfe40028c67dad363": {
       "apply_event_id": "EV-d0f9774cc109",
       "artifact_refs": [],
@@ -24268,6 +24711,57 @@
       "waiver_decision_ids": [],
       "wave_id": "P31-I01-W39",
       "wave_revision_digest": "fab212ba1f2d185fe01f464168075d8ad0fff7b7e58d185004a181103b08b342"
+    },
+    "close-ab7322160eea2fcc6b5a7071": {
+      "apply_event_id": "EV-1892aefe5f96",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "eeea6bd87376553510dcbee2cb6a2e88669e296e",
+      "commit_identity_digest": "sha256:323b97fa4356b00f6ef9b2587a59c93e9c81d4c43af59b3650b3aa9b5c855d70",
+      "criteria_digest": "fc57bf5bdd5dad238fccd030e4956acc95ff693730400ce5aeeadfe9ea0a269f",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "3748906ef132ebb61a5674dc95c4b15fd0d813fbff8b6748c53304facdb61041",
+      "gate_receipt_ids": [
+        "GR-1f2700a0da913a93b9c84110beaf6900",
+        "GR-8197ed6456a8135bd3cca282851f1ebc",
+        "GR-0f42e59d7ac3a864bfccbcdc7bf8206e"
+      ],
+      "generation": 1,
+      "id": "close-ab7322160eea2fcc6b5a7071",
+      "idempotency_key": "548e67d040eb1b24e2fc51f180cdef9435bae27cfceb50f7628363a1c14ccc60",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "eeea6bd87376553510dcbee2cb6a2e88669e296e",
+      "integration_id": "integration-8ed4c4e0eb1d218fa07238e3",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Native (epoch-2) mutations are fenced: resolve_authority grants epoch 2 only when a disposable-canary declaration and marker both parse, native_mutator wraps registered handlers so an epoch-1 root is refused with native_authority_required and zero writes, and init --epoch2-canary provision|teardown builds and removes a registered disposable canary; the CLI registry proxy now forwards registry_path to the daemon.",
+      "policy_digest": "d2b0f6e9d559d5e4f03b9dbb4b32abe0ad23d4e3c25d83ebb707cc60a98b544a",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-17T15:56:32.269872Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "1cc45a46db473c1005ac7b9d479cfea1624d6c9ef35e2822673638868e04a216",
+      "started_at": "2026-09-17T15:56:33.118971Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-17T15:57:04.180824Z",
+      "tokens_consumed": null,
+      "tree_sha": "00ab37c239d66acb5de5684ba27169f572d8bafd",
+      "updated_at": "2026-09-17T15:57:04.180819Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P33-I01-W40",
+      "wave_revision_digest": "60ee2660015edd1f9d98e84f7ab36d151aeb428b9af5ee2d97f3e421dd1537d8"
     },
     "close-c22efe6ebdbffb3d79e521bc": {
       "apply_event_id": null,
@@ -24469,6 +24963,57 @@
       "waiver_decision_ids": [],
       "wave_id": "P33-I01-W87",
       "wave_revision_digest": "9062e958a5518507beaf2973533bae2585f4641a13728a64cf0ae90f10ada939"
+    },
+    "close-d5982189b0c2ff2455248d48": {
+      "apply_event_id": "EV-bad9cf454233",
+      "artifact_refs": [],
+      "audit_report_id": "AR-auditor-P33-I01-W42-01",
+      "audit_requirement": "required",
+      "candidate_sha": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "commit_identity_digest": "sha256:ebb585ca46d51af18702c745aa8ac1fbfae8077247e6908aa0d13c27cdea42f9",
+      "criteria_digest": "34bfb03ab4a26eb14ad7c8a66c1e132174afee7a59b9f751560599756b4524b5",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "ed1173b909abe1880992a06f0fba138642ab6423d7949fe57e2d905317791fa9",
+      "gate_receipt_ids": [
+        "GR-88116743548024b4d654f7393e757466",
+        "GR-cbe389f7865519f3f494d70d4e615ad6",
+        "GR-aa9cb9cef8e8a0ddc05a3ccddea14388"
+      ],
+      "generation": 1,
+      "id": "close-d5982189b0c2ff2455248d48",
+      "idempotency_key": "b127c15ff21126217fe916ae68b07189aa3877bddd3b26ec6d5836a730ba6452",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "integration_id": "integration-36c22456497ff4fb5e8ad294",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Criteria authoring is validated before compile (quantifier, locus, scope, uncovered promise, complexity, deterministic-to-jury) and compile_execution_contracts raises on any finding; ProofFreshnessKey digests eight inputs with an import-time totality check, ProofReceipt rejects a mismatched key, require_fresh_receipt names stale inputs, and decide_receipt_reuse returns a reused/reruns/unavailable plan with a per-component reason.",
+      "policy_digest": "4cea5e97aebfdb9d181c799193c1207db34e2849fdbd5486f95bf779c274424e",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-17T15:46:58.532323Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "7b182316391c5cf66be1b90b44a8cb28fa7956549d5495787a89a8b5137c0ac5",
+      "spec_digest": "31874e386888ade6a105d95aa28d2ba51a4e1649b6ec9d9181d573283b5a71a2",
+      "started_at": "2026-09-17T15:46:58.955120Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-17T15:51:29.694021Z",
+      "tokens_consumed": null,
+      "tree_sha": "24b79b8518fc8af6a40554c2c7f9e3ae5db8c0a9",
+      "updated_at": "2026-09-17T15:51:29.694015Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P33-I01-W42",
+      "wave_revision_digest": "4faa3879a13b649370520fc0441f9a7ca11c4d892d6d68df93e89f7c6adfaf09"
     },
     "close-d6a5f6aed70ea3237f1fa08f": {
       "apply_event_id": null,
@@ -25077,17 +25622,26 @@
       "SES-20260917T152159.967055Z-executor-claude-068074ca-99bc-4c88-a611-ba1f97da8b2e",
       "SES-20260917T153456.031040Z-executor-claude-950d47ca-f102-40aa-8c8d-04612f0e109c",
       "SES-20260917T153637.058506Z-executor-claude-df405acf-d3d4-4d00-bb33-5c61a14881a6",
-      "SES-20260917T153638.826609Z-executor-claude-4ed84ed3-0b45-418c-abbd-a48815199c69"
+      "SES-20260917T153638.826609Z-executor-claude-4ed84ed3-0b45-418c-abbd-a48815199c69",
+      "SES-20260917T154711.964028Z-executor-claude-9e1ae115-57ca-4910-9e0d-91974be86598",
+      "SES-20260917T154938.745098Z-executor-claude-17ba1e06-6d30-4ce7-9707-7a1eb32fbba7",
+      "SES-20260917T155117.050320Z-executor-claude-722b654c-5ac7-41a7-bad8-1cacf1e47b37",
+      "SES-20260917T155118.764219Z-executor-claude-4de95dac-0331-4805-846f-01092e6ff472",
+      "SES-20260917T155515.117740Z-executor-claude-b2f946f8-dde2-4680-a5f8-899166895c86",
+      "SES-20260917T155645.021714Z-executor-claude-61d431a7-94a1-42ba-8075-47552f5830a5",
+      "SES-20260917T155935.188070Z-executor-claude-a5cf1a00-2022-45dc-af6a-6148a57d99e0"
     ],
     "active_wave_ids": [
-      "P33-I01-W02",
+      "P33-I01-W03",
       "P33-I01-W04",
       "P33-I01-W07",
-      "P33-I01-W13",
-      "P33-I01-W40",
+      "P33-I01-W32",
       "P33-I01-W41",
-      "P33-I01-W42",
-      "P33-I01-W44"
+      "P33-I01-W43",
+      "P33-I01-W45",
+      "P33-I01-W48",
+      "P33-I01-W49",
+      "P33-I01-W89"
     ],
     "iter_id": "P33-I01",
     "phase_id": "P33",
@@ -42560,7 +43114,8 @@
         "P33-I01-W85",
         "P33-I01-W86",
         "P33-I01-W87",
-        "P33-I01-W88"
+        "P33-I01-W88",
+        "P33-I01-W89"
       ]
     },
     "P34-I01": {
@@ -43959,7 +44514,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-17T15:36:43.200869Z",
+  "updated_at": "2026-09-17T15:59:38.524137Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -45074,6 +45629,17 @@
       "tree_sha": "99231fc5f9df018aff5f958312f9c59b53da4b5d",
       "wave_id": "P32-I01-W54"
     },
+    "P33-I01-W03::P33-I01-W02": {
+      "bound_at": "2026-09-17T15:55:16.177332Z",
+      "dep_wave_id": "P33-I01-W02",
+      "generation": 1,
+      "integrated_sha": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "integration_id": "integration-714e64610062e3c51ea14435",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-714e64610062e3c51ea14435",
+      "tree_sha": "e1c9159a15e48afe259da80cff5037fee619c845",
+      "wave_id": "P33-I01-W03"
+    },
     "P33-I01-W07::P33-I01-W06": {
       "bound_at": "2026-09-17T15:36:37.965013Z",
       "dep_wave_id": "P33-I01-W06",
@@ -45084,6 +45650,61 @@
       "start_fact_ref": "integration:integration-8aa067c41898f4b5cf19f2cc",
       "tree_sha": "2de467427608b946b13968b2f2f65e0e34aaeeb6",
       "wave_id": "P33-I01-W07"
+    },
+    "P33-I01-W32::P33-I01-W29": {
+      "bound_at": "2026-09-17T15:49:40.971369Z",
+      "dep_wave_id": "P33-I01-W29",
+      "generation": 1,
+      "integrated_sha": "b31cc3180848f37642965f9f4c10492f05b41dce",
+      "integration_id": "integration-c18bcb1296bc70fc360efc67",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-c18bcb1296bc70fc360efc67",
+      "tree_sha": "809b9fa51cc5385c9daf387781cf687554b1d310",
+      "wave_id": "P33-I01-W32"
+    },
+    "P33-I01-W45::P33-I01-W44": {
+      "bound_at": "2026-09-17T15:51:17.982436Z",
+      "dep_wave_id": "P33-I01-W44",
+      "generation": 1,
+      "integrated_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "integration_id": "integration-6c0f7a283e2181474578e21c",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-6c0f7a283e2181474578e21c",
+      "tree_sha": "ec7b8c40d2b815ec9c3927dff9c99ee35b856583",
+      "wave_id": "P33-I01-W45"
+    },
+    "P33-I01-W48::P33-I01-W13": {
+      "bound_at": "2026-09-17T15:56:46.661051Z",
+      "dep_wave_id": "P33-I01-W13",
+      "generation": 1,
+      "integrated_sha": "559140c0c5a93c578d8fa752a1fb7932eadf3dc3",
+      "integration_id": "integration-cae08366b4e6278dd758cbaf",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-cae08366b4e6278dd758cbaf",
+      "tree_sha": "e0220b1abc1220a5806b163c392f5ac93249fe76",
+      "wave_id": "P33-I01-W48"
+    },
+    "P33-I01-W48::P33-I01-W42": {
+      "bound_at": "2026-09-17T15:56:46.661051Z",
+      "dep_wave_id": "P33-I01-W42",
+      "generation": 1,
+      "integrated_sha": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "integration_id": "integration-36c22456497ff4fb5e8ad294",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-36c22456497ff4fb5e8ad294",
+      "tree_sha": "24b79b8518fc8af6a40554c2c7f9e3ae5db8c0a9",
+      "wave_id": "P33-I01-W48"
+    },
+    "P33-I01-W49::P33-I01-W44": {
+      "bound_at": "2026-09-17T15:51:28.826006Z",
+      "dep_wave_id": "P33-I01-W44",
+      "generation": 1,
+      "integrated_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "integration_id": "integration-6c0f7a283e2181474578e21c",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-6c0f7a283e2181474578e21c",
+      "tree_sha": "ec7b8c40d2b815ec9c3927dff9c99ee35b856583",
+      "wave_id": "P33-I01-W49"
     }
   },
   "wave_integrations": {
@@ -45439,6 +46060,22 @@
       "tree_sha": "34f00863337312f39928a9a02d376c67eb7a9457",
       "wave_id": "P31-I01-W44"
     },
+    "integration-36c22456497ff4fb5e8ad294": {
+      "base_sha": "5258a06ebf0102de012c8e889e6f913ccccaf014",
+      "candidate_sha": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "created_at": "2026-09-17T15:46:57.389297Z",
+      "diff_digest": "bccf685334e4c1cc1ebf07f2df73c86b6e1bc4c0edb0fbcb9c63ed39b972ddc4",
+      "generation": 1,
+      "id": "integration-36c22456497ff4fb5e8ad294",
+      "integrated_sha": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "kind": "adopt",
+      "reason": "cherry-picked from the per-wave worktree branch by the operator",
+      "spec_digest": "31874e386888ade6a105d95aa28d2ba51a4e1649b6ec9d9181d573283b5a71a2",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "24b79b8518fc8af6a40554c2c7f9e3ae5db8c0a9",
+      "wave_id": "P33-I01-W42"
+    },
     "integration-38dc3e930ff5c2ffd48cb1b0": {
       "base_sha": "29d7061d188184e020fb081fa8bf98da10e0049b",
       "candidate_sha": "52d1752a0c8042c0ca1a7f11e9e208abd1eb05f9",
@@ -45663,6 +46300,22 @@
       "tree_sha": "1927f7e77b12681c1dd17195b6c3748b703cac77",
       "wave_id": "P32-I01-W43"
     },
+    "integration-6c0f7a283e2181474578e21c": {
+      "base_sha": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "candidate_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "created_at": "2026-09-17T15:49:23.129130Z",
+      "diff_digest": "d8a36abe4d0dae69c9ef2fd639c7bc1794ef48bc2af4125af0feaffa235f3e5b",
+      "generation": 1,
+      "id": "integration-6c0f7a283e2181474578e21c",
+      "integrated_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "kind": "adopt",
+      "reason": "cherry-picked from the per-wave worktree branch by the operator",
+      "spec_digest": "3d5fff08e8698a5ca56c00b0773306df65ce6cf2ac66656eb1876f2528643c25",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "ec7b8c40d2b815ec9c3927dff9c99ee35b856583",
+      "wave_id": "P33-I01-W44"
+    },
     "integration-6c983b528b14d30526c8e8c4": {
       "base_sha": "e715bc001b4324547595102bba6b712a6f0ae93e",
       "candidate_sha": "6ed9b1ca9fa918de2b675ac857f17338dbc1f8bd",
@@ -45694,6 +46347,22 @@
       "supersedes_id": null,
       "tree_sha": "031efa07dfeaaf593d2e5271da6f0854865706a9",
       "wave_id": "P31-I01-W24"
+    },
+    "integration-714e64610062e3c51ea14435": {
+      "base_sha": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "candidate_sha": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "created_at": "2026-09-17T15:50:48.643703Z",
+      "diff_digest": "2e9527f217c06f2f11533603a97f1316e6bf19c06bf08e4a3eb7555ec6ff7ab6",
+      "generation": 1,
+      "id": "integration-714e64610062e3c51ea14435",
+      "integrated_sha": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "kind": "adopt",
+      "reason": "cherry-picked from the per-wave worktree branch by the operator",
+      "spec_digest": "0f7800dd77bc0f35353c954f78d8352967e5931755d488cc45098ddd467d27dc",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "e1c9159a15e48afe259da80cff5037fee619c845",
+      "wave_id": "P33-I01-W02"
     },
     "integration-73120e8ee68f0bb042a75cd6": {
       "base_sha": "83157cb542e9ddac235420f0a31cf1309cbcc6e4",
@@ -45839,6 +46508,22 @@
       "tree_sha": "24a366d6b42721e3f0e01ce927596c8f731b973d",
       "wave_id": "P31-I01-W37"
     },
+    "integration-8ed4c4e0eb1d218fa07238e3": {
+      "base_sha": "594dda46d86b21062e5b66b138fd82368336c9a5",
+      "candidate_sha": "eeea6bd87376553510dcbee2cb6a2e88669e296e",
+      "created_at": "2026-09-17T15:56:30.211378Z",
+      "diff_digest": "7118951c0681cf5f681b0185eaca1b1db8cb280d42be8ca99839f350889ab3b2",
+      "generation": 1,
+      "id": "integration-8ed4c4e0eb1d218fa07238e3",
+      "integrated_sha": "eeea6bd87376553510dcbee2cb6a2e88669e296e",
+      "kind": "adopt",
+      "reason": "cherry-picked from the per-wave worktree branch by the operator",
+      "spec_digest": "1cc45a46db473c1005ac7b9d479cfea1624d6c9ef35e2822673638868e04a216",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "00ab37c239d66acb5de5684ba27169f572d8bafd",
+      "wave_id": "P33-I01-W40"
+    },
     "integration-8f5fd836d61e950cd17b0133": {
       "base_sha": "5c672387b5182fbe878db0cc3c86c861fa39fd14",
       "candidate_sha": "b4f0bde8920f33954acc9b6de36a352fe8f96b10",
@@ -45870,6 +46555,22 @@
       "supersedes_id": null,
       "tree_sha": "ee086ed88637fc58b4cb7fe48f20646a4de23f71",
       "wave_id": "P31-I01-W27"
+    },
+    "integration-931ce64ed013a9e575497d62": {
+      "base_sha": "03a66cd5e0dcf6c987c7c2714c31811fbbe7fae9",
+      "candidate_sha": "e78d5a1d48dbe7a834178596e30fb02e0e1e71fd",
+      "created_at": "2026-09-17T15:55:11.201284Z",
+      "diff_digest": "0005e5a7edb33a2a80f3ddab194ceb74239065306c64bd9c45869e00ee56a51e",
+      "generation": 1,
+      "id": "integration-931ce64ed013a9e575497d62",
+      "integrated_sha": "e78d5a1d48dbe7a834178596e30fb02e0e1e71fd",
+      "kind": "adopt",
+      "reason": "cherry-picked from the per-wave worktree branch by the operator",
+      "spec_digest": "7af276c8daf63b195ec0562188b00f51aaa47872cd2ba901dfc039e3c32c1ebe",
+      "status": "integrated",
+      "supersedes_id": null,
+      "tree_sha": "7d238faf221410a33c5346ac72acb733d096aa4f",
+      "wave_id": "P33-I01-W07"
     },
     "integration-96076f8afa0c4f77cb128677": {
       "base_sha": "f63d70325ec2d95235c2276b2a1ae2b8adb8b0d5",
@@ -46222,6 +46923,22 @@
       "supersedes_id": null,
       "tree_sha": "fec4da10cbb7cac5a51170acd187dc55340ef7f5",
       "wave_id": "P31-I01-W51"
+    },
+    "integration-cae08366b4e6278dd758cbaf": {
+      "base_sha": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "candidate_sha": "559140c0c5a93c578d8fa752a1fb7932eadf3dc3",
+      "created_at": "2026-09-17T15:50:57.978402Z",
+      "diff_digest": "13f46587b283aae15873cf91f22c2a4cf44705fffff60facb62f5c78544e6225",
+      "generation": 1,
+      "id": "integration-cae08366b4e6278dd758cbaf",
+      "integrated_sha": "559140c0c5a93c578d8fa752a1fb7932eadf3dc3",
+      "kind": "adopt",
+      "reason": "cherry-picked from the per-wave worktree branch by the operator",
+      "spec_digest": "1b82db6ed3a8082a95863b220e86f7adfaad7f52c3b5d17b7f0bb8eb71a573af",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "e0220b1abc1220a5806b163c392f5ac93249fe76",
+      "wave_id": "P33-I01-W13"
     },
     "integration-d27bb5b185bc28a8842309e3": {
       "base_sha": "63e3c63b4b3519fd528a26cd9303d7984199355a",
@@ -177843,9 +178560,9 @@
       ],
       "claim_session_id": "SES-20260917T152158.227428Z-executor-claude-82b07ae0-f3d1-4074-b191-c77a732e822c",
       "claimed_at": "2026-09-17T15:21:59.155581Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-17T15:52:16.574105Z",
+      "commit": "7c232eb051c361a4c2f943ee7ea66e80ee527413",
+      "commit_identity_digest": "sha256:2a81990503bbe4b03e1c5fc92bd99e123340b7cc0e26ef80d06f24894035add5",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "release.publish and release.compute_readiness call compute_readiness with no probes so the sweep falls back to cwd-bound receipt probes and never computes the five working-copy rows; the approved REL-0.7.0.dev2 record is refused as approval_stale. Compose the tag and receipt probes through one shared sweep bound to the repo root under the state path and to the approval's pinned source_sha; drop the cwd default; keep .ea/store/release*.jsonl out of both dirty-tree checks.",
@@ -177860,7 +178577,12 @@
         "tests/integration/runtime/daemon/methods/test_publish_sweep.py",
         "tests/integration/runtime/release/test_release_store_cleanliness.py",
         "tests/integration/test_cli_release_tag.py",
-        "tests/unit/kernel/release/test_dependency_inventory.py"
+        "tests/unit/kernel/release/test_dependency_inventory.py",
+        "tests/_release_helpers.py",
+        "tests/integration/runtime/daemon/methods/conftest.py",
+        "tests/integration/runtime/daemon/methods/test_observe_cli.py",
+        "tests/integration/runtime/daemon/methods/test_publish_rpc.py",
+        "tests/integration/workflow/verify/test_release_readiness.py"
       ],
       "gates": [
         {
@@ -177953,13 +178675,13 @@
       },
       "iter_id": "P33-I01",
       "opened_at": "2026-09-16T18:00:06.693796Z",
-      "outcome": null,
+      "outcome": "Publish and readiness now sweep the record's pinned source with the tag and receipt probes (sweep_pinned_source reads the version module and CHANGELOG at source_sha via git show and checks ancestry on the pin), so a version bump on HEAD no longer reds publish; the tree-cleanliness probe and the CLI dirty-path check exclude the release store ledgers.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -178045,8 +178767,8 @@
         "P33-I01-W05",
         "P33-I01-W01"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260917T155515.117740Z-executor-claude-b2f946f8-dde2-4680-a5f8-899166895c86",
+      "claimed_at": "2026-09-17T15:55:16.177457Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -178183,7 +178905,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -178285,7 +179007,7 @@
       "title": "Dispatch verify and persist release records through registry verbs",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P33-I01-W03-1789660518"
     },
     "P33-I01-W04": {
       "agent_role": "executor",
@@ -179867,9 +180589,9 @@
       ],
       "claim_session_id": "SES-20260917T152154.801386Z-executor-claude-8fe08b28-5dfa-4709-8a95-5270b765f261",
       "claimed_at": "2026-09-17T15:21:55.704161Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-17T15:55:21.164563Z",
+      "commit": "559140c0c5a93c578d8fa752a1fb7932eadf3dc3",
+      "commit_identity_digest": "sha256:092cefe6e78aa806ee3b826ad24840c55b754c4bcd444547e76f75a35f5e2a91",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "B141 and polish item H1. Three production callers (skills/audit.py, skills/security_review.py, cli evidence_backlog.py) still run gates in process outside the sandboxed child. Route them through run_checks_out_of_process and pin it with an AST lint that allows run_checks only in the sandbox child and the gate runner, proven by a seeded violation. Also default the readiness gate context from current_gate_context() so a daemon close never spawns a second child for a claimed gate.",
@@ -179972,13 +180694,13 @@
       },
       "iter_id": "P33-I01",
       "opened_at": "2026-09-16T18:00:16.862245Z",
-      "outcome": null,
+      "outcome": "The audit skill, the security-review skill and the evidence-backlog verb now run their checks through run_checks_out_of_process against a sandbox seeded from the live state, a lint forbids new in-process run_checks callers, and readiness.compute defaults its gate context from the bound daemon close and compiles gates with the attempt's frozen facts so a claimed gate is reused in one child.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -183023,8 +183745,8 @@
       "blocks": [
         "P33-I01-W35"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260917T154938.745098Z-executor-claude-17ba1e06-6d30-4ce7-9707-7a1eb32fbba7",
+      "claimed_at": "2026-09-17T15:49:40.971583Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -183139,7 +183861,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -183194,7 +183916,7 @@
       "title": "Rewrite the ship rules for squashed state commits and batched pushes",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P33-I01-W32-1789660185"
     },
     "P33-I01-W33": {
       "agent_role": "executor",
@@ -184478,9 +185200,9 @@
       ],
       "claim_session_id": "SES-20260917T153456.031040Z-executor-claude-950d47ca-f102-40aa-8c8d-04612f0e109c",
       "claimed_at": "2026-09-17T15:34:56.916170Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-17T15:56:55.562335Z",
+      "commit": "eeea6bd87376553510dcbee2cb6a2e88669e296e",
+      "commit_identity_digest": "sha256:323b97fa4356b00f6ef9b2587a59c93e9c81d4c43af59b3650b3aa9b5c855d70",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "C01 (REL-012 AUTH-008). A resolver grants epoch 2 only to a root carrying both the canary declaration and the EPOCH2_ACTIVE marker; a native mutator on an epoch-1 root is refused with a new stable code native_authority_required and zero writes. Init provisions a disposable canary under a fresh EAWF_RUNTIME_DIR and returns the typed canary reference N24 declares in the dev3 config; teardown leaves no registry row. Reuses canary.py and generation.py. State schema: no bump.",
@@ -184494,7 +185216,10 @@
         "tests/unit/kernel/state/test_epoch2_authority.py",
         "tests/integration/runtime/daemon/test_native_mutation_fence.py",
         "tests/integration/surfaces/cli/test_init_epoch2_canary.py",
-        "docs/reference/autogen/cli.md"
+        "docs/reference/autogen/cli.md",
+        "src/eawf/surfaces/cli/_daemon_client.py",
+        "src/eawf/surfaces/cli/commands/repo.py",
+        "tests/unit/surfaces/cli/test_registry_proxy.py"
       ],
       "gates": [
         {
@@ -184583,13 +185308,13 @@
       },
       "iter_id": "P33-I01",
       "opened_at": "2026-09-16T18:00:45.836976Z",
-      "outcome": null,
+      "outcome": "Native (epoch-2) mutations are fenced: resolve_authority grants epoch 2 only when a disposable-canary declaration and marker both parse, native_mutator wraps registered handlers so an epoch-1 root is refused with native_authority_required and zero writes, and init --epoch2-canary provision|teardown builds and removes a registered disposable canary; the CLI registry proxy now forwards registry_path to the daemon.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -184926,9 +185651,9 @@
       ],
       "claim_session_id": "SES-20260917T152153.112826Z-executor-claude-9612efcd-da9e-427e-ba87-1ab73c7fcbfc",
       "claimed_at": "2026-09-17T15:21:54.014350Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-17T15:51:27.996349Z",
+      "commit": "ad68162cee7e2093c71ef7e889ecf53b664d9809",
+      "commit_identity_digest": "sha256:ebb585ca46d51af18702c745aa8ac1fbfae8077247e6908aa0d13c27cdea42f9",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "C12 part 1 (DEL-002 DEL-006 DEL-011 DEL-012 PLAN-011). Authoring validation and digest-bound execution-contract compile over the reused CriterionSpec and GateSpec; RevisionBinding and the ProofFreshnessKey; ReceiptReuseDecision. New kernel/delivery workflow/delivery and runtime/verification packages. B093: the evidence-provenance gate's CI wiring is superseded by these digest-bound receipts (with N09). Models only: state schema no bump; the epoch-1 gate receipt kind is unchanged.",
@@ -185032,13 +185757,13 @@
       },
       "iter_id": "P33-I01",
       "opened_at": "2026-09-16T18:00:48.942645Z",
-      "outcome": null,
+      "outcome": "Criteria authoring is validated before compile (quantifier, locus, scope, uncovered promise, complexity, deterministic-to-jury) and compile_execution_contracts raises on any finding; ProofFreshnessKey digests eight inputs with an import-time totality check, ProofReceipt rejects a mismatched key, require_fresh_receipt names stale inputs, and decide_receipt_reuse returns a reused/reruns/unavailable plan with a per-component reason.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -185123,8 +185848,8 @@
       "blocks": [
         "P33-I01-W77"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260917T154711.964028Z-executor-claude-9e1ae115-57ca-4910-9e0d-91974be86598",
+      "claimed_at": "2026-09-17T15:47:13.004930Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -185235,7 +185960,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -185313,7 +186038,7 @@
       "title": "Add the integration attempt with its generation and conflict records",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P33-I01-W43-1789660036"
     },
     "P33-I01-W44": {
       "agent_role": "executor",
@@ -185325,9 +186050,9 @@
       ],
       "claim_session_id": "SES-20260917T152156.521194Z-executor-claude-20591985-6836-4f4b-a6ea-78365a5618cb",
       "claimed_at": "2026-09-17T15:21:57.424177Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-17T15:50:32.507096Z",
+      "commit": "5f8096b268846c0ac4795246397a9dcde914d2de",
+      "commit_identity_digest": "sha256:64f883ce9c08a0e09f178a7b86b9cd83aedaa3ef68455ce6dcdb1184ed5121b0",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "C16 steps 1-2 (CON-116 CON-121 CON-122 CON-144). Creates the real src/eawf/surfaces/tui/console/ package so tests/tui/surfaces/tui/console/ pairs under EAWF025 then ports the tokens width oracle route registry and session model from the tracked test-only chassis, which stays until N15. The epoch-1 theme.tcss rules the colour spike called D1 D3 D4 are not deleted (rc1). Session state is in-memory: no persisted model and no schema bump.",
@@ -185450,13 +186175,13 @@
       },
       "iter_id": "P33-I01",
       "opened_at": "2026-09-16T18:00:51.626377Z",
-      "outcome": null,
+      "outcome": "The console chassis is ported into src/eawf/surfaces/tui/console: glyph tokens with ASCII twins, a narrow-policy East Asian width oracle that measures clip and pad in cells, a RouteRegistry that derives every index from its rows and rejects duplicate or doorless routes, and a strict SessionSetup whose reset restores every declared field.",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -185543,8 +186268,8 @@
         "P33-I01-W54",
         "P33-I01-W57"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260917T155117.050320Z-executor-claude-722b654c-5ac7-41a7-bad8-1cacf1e47b37",
+      "claimed_at": "2026-09-17T15:51:17.982539Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -185650,7 +186375,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -185705,7 +186430,7 @@
       "title": "Add ProjectionHeader and TruthField with the route read-model registry",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P33-I01-W45-1789660281"
     },
     "P33-I01-W46": {
       "agent_role": "executor",
@@ -186102,8 +186827,8 @@
       "blocks": [
         "P33-I01-W78"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260917T155645.021714Z-executor-claude-61d431a7-94a1-42ba-8075-47552f5830a5",
+      "claimed_at": "2026-09-17T15:56:46.661204Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -186215,7 +186940,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -186293,15 +187018,15 @@
       "title": "Write a durable progress manifest from the running gate command",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P33-I01-W48-1789660608"
     },
     "P33-I01-W49": {
       "agent_role": "executor",
       "blocks": [
         "P33-I01-W54"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260917T155118.764219Z-executor-claude-4de95dac-0331-4805-846f-01092e6ff472",
+      "claimed_at": "2026-09-17T15:51:28.826261Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -186470,7 +187195,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -186551,7 +187276,7 @@
       "title": "Port the console header keybar palette action menu and clock",
       "token_budget": null,
       "tokens_consumed": 0,
-      "worktree_id": null
+      "worktree_id": "WT-P33-I01-W49-1789660298"
     },
     "P33-I01-W50": {
       "agent_role": "executor",
@@ -194086,6 +194811,173 @@
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
+    },
+    "P33-I01-W89": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260917T155935.188070Z-executor-claude-a5cf1a00-2022-45dc-af6a-6148a57d99e0",
+      "claimed_at": "2026-09-17T15:59:36.167711Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "A durable close audit ends work_rejected when the auditor report quotes a home path or private IP, because append_agent_report scrubs the body only after the bounded re-ask loop accepted it. Run the same scrub inside the auditor validator so a leaking body is re-asked with the finding kinds named, and tell the auditor prompt to describe such values generically.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/workflow/dispatch/verdict.py",
+        "src/eawf/workflow/agent_report/store.py",
+        "tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py",
+              "-k",
+              "prompt",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py",
+              "-k",
+              "reask",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/dispatch/test_verdict.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P33-I01-W89",
+      "intent": {
+        "desired_outcome": "A leaking auditor body is re-asked with the finding kinds named and the prompt tells the auditor to describe such values generically so the close proceeds",
+        "evidence_refs": [
+          "src/eawf/workflow/dispatch/verdict.py:1093",
+          "src/eawf/workflow/agent_report/store.py:115",
+          "src/eawf/workflow/dispatch/llm_assist.py:276"
+        ],
+        "planned_steps": [
+          "Check each auditor body against the agent report scrub inside the bounded re-ask loop so a leaking body is re-asked with the finding kinds named",
+          "Expose the scrub findings check from the agent report store for the auditor validator",
+          "Render a rule in both auditor prompts telling the auditor to describe home-directory paths and IP addresses and email addresses and tokens generically",
+          "Prove the prompt rule and the re-asked clean body and the exhausted leaking body with pytest"
+        ],
+        "priority_rationale": "Blocks the W07 close and every later always-audit wave whose diff carries leak-shaped test fixtures; found when the W07 close attempt ended work_rejected.",
+        "problem": "A durable close audit is rejected when the auditor report quotes a home path or private IP because the scrub runs after the re-ask loop accepted the body",
+        "risks": [
+          "A leak kind the auditor cannot avoid quoting would exhaust the re-ask budget and still reject the close"
+        ],
+        "source_brief_ids": []
+      },
+      "iter_id": "P33-I01",
+      "opened_at": "2026-09-17T15:59:25.565584Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py -k prompt -q exits zero with the generic-description rule present in both rendered auditor prompts",
+          "oracle_tier": 4,
+          "quality_dimension": "security",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the auditor prompt rule tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "build_auditor_prompt renders a rule telling the auditor to describe home-directory paths, IP addresses, email addresses and tokens generically instead of quoting them, for both the plain and the durable-close prompt; pytest exits 0 over tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py -k prompt",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02",
+            "G-03"
+          ],
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py -k reask -q exits zero for the re-asked clean body and the exhausted leaking body",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the leak re-ask tests and the verdict suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "produce_wave_verdict checks each auditor body against the agent report scrub inside the bounded re-ask loop, so a first body carrying a home path or a private IP is re-asked with the finding kinds named and a clean second body is appended, while a body that still fails at max_attempts raises LLMAssistError and appends no report; pytest exits 0 over tests/unit/workflow/dispatch/test_auditor_report_leak_reask.py -k reask and the existing verdict suite",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Re-ask the auditor when its report fails the leak check",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": "WT-P33-I01-W89-1789660778"
     }
   },
   "workspace": null,
@@ -197794,8 +198686,19 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T152158.227428Z-executor-claude-82b07ae0-f3d1-4074-b191-c77a732e822c",
       "path": ".ea/worktrees/p33-w02",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W02"
+    },
+    "WT-P33-I01-W03-1789660518": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w03",
+      "created_at": "2026-09-17T15:55:18.167146Z",
+      "id": "WT-P33-I01-W03-1789660518",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T155515.117740Z-executor-claude-b2f946f8-dde2-4680-a5f8-899166895c86",
+      "path": ".ea/worktrees/p33-w03",
+      "status": "active",
+      "wave_id": "P33-I01-W03"
     },
     "WT-P33-I01-W04-1789659403": {
       "base_branch": "feature/eawf-v0.7",
@@ -197838,7 +198741,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T152154.801386Z-executor-claude-8fe08b28-5dfa-4709-8a95-5270b765f261",
       "path": ".ea/worktrees/p33-w13",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W13"
     },
     "WT-P33-I01-W14-1789658554": {
@@ -197860,8 +198763,19 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T152159.967055Z-executor-claude-068074ca-99bc-4c88-a611-ba1f97da8b2e",
       "path": ".ea/worktrees/p33-w29",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W29"
+    },
+    "WT-P33-I01-W32-1789660185": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w32",
+      "created_at": "2026-09-17T15:49:45.711862Z",
+      "id": "WT-P33-I01-W32-1789660185",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T154938.745098Z-executor-claude-17ba1e06-6d30-4ce7-9707-7a1eb32fbba7",
+      "path": ".ea/worktrees/p33-w32",
+      "status": "active",
+      "wave_id": "P33-I01-W32"
     },
     "WT-P33-I01-W40-1789659298": {
       "base_branch": "feature/eawf-v0.7",
@@ -197871,7 +198785,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T153456.031040Z-executor-claude-950d47ca-f102-40aa-8c8d-04612f0e109c",
       "path": ".ea/worktrees/p33-w40",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W40"
     },
     "WT-P33-I01-W41-1789658556": {
@@ -197893,8 +198807,19 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T152153.112826Z-executor-claude-9612efcd-da9e-427e-ba87-1ab73c7fcbfc",
       "path": ".ea/worktrees/p33-w42",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W42"
+    },
+    "WT-P33-I01-W43-1789660036": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w43",
+      "created_at": "2026-09-17T15:47:16.833638Z",
+      "id": "WT-P33-I01-W43-1789660036",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T154711.964028Z-executor-claude-9e1ae115-57ca-4910-9e0d-91974be86598",
+      "path": ".ea/worktrees/p33-w43",
+      "status": "active",
+      "wave_id": "P33-I01-W43"
     },
     "WT-P33-I01-W44-1789658560": {
       "base_branch": "feature/eawf-v0.7",
@@ -197904,8 +198829,52 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T152156.521194Z-executor-claude-20591985-6836-4f4b-a6ea-78365a5618cb",
       "path": ".ea/worktrees/p33-w44",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W44"
+    },
+    "WT-P33-I01-W45-1789660281": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w45",
+      "created_at": "2026-09-17T15:51:21.677986Z",
+      "id": "WT-P33-I01-W45-1789660281",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T155117.050320Z-executor-claude-722b654c-5ac7-41a7-bad8-1cacf1e47b37",
+      "path": ".ea/worktrees/p33-w45",
+      "status": "active",
+      "wave_id": "P33-I01-W45"
+    },
+    "WT-P33-I01-W48-1789660608": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w48",
+      "created_at": "2026-09-17T15:56:48.703848Z",
+      "id": "WT-P33-I01-W48-1789660608",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T155645.021714Z-executor-claude-61d431a7-94a1-42ba-8075-47552f5830a5",
+      "path": ".ea/worktrees/p33-w48",
+      "status": "active",
+      "wave_id": "P33-I01-W48"
+    },
+    "WT-P33-I01-W49-1789660298": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w49",
+      "created_at": "2026-09-17T15:51:38.385063Z",
+      "id": "WT-P33-I01-W49-1789660298",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T155118.764219Z-executor-claude-4de95dac-0331-4805-846f-01092e6ff472",
+      "path": ".ea/worktrees/p33-w49",
+      "status": "active",
+      "wave_id": "P33-I01-W49"
+    },
+    "WT-P33-I01-W89-1789660778": {
+      "base_branch": "feature/eawf-v0.7",
+      "branch": "feature/eawf-v0.7-p33-w89",
+      "created_at": "2026-09-17T15:59:38.524137Z",
+      "id": "WT-P33-I01-W89-1789660778",
+      "merged_commit": null,
+      "owner_session_id": "SES-20260917T155935.188070Z-executor-claude-a5cf1a00-2022-45dc-af6a-6148a57d99e0",
+      "path": ".ea/worktrees/p33-w89",
+      "status": "active",
+      "wave_id": "P33-I01-W89"
     }
   }
 }
