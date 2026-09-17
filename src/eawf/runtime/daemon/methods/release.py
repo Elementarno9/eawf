@@ -81,12 +81,16 @@ writes a record row and no ledger row at all. The entry checks both
 modules run first are in
 :mod:`eawf.runtime.daemon.methods.release_context`.
 
-Two ladder verbs sit beside them. ``release.create`` opens a checkpoint's
-DRAFT record only once every measured contract the checkpoint asserts
-over is promoted (:mod:`eawf.workflow.release.admission`), and
-``release.advance_train`` walks the ladder forward only from a finished
-checkpoint whose gate receipts still bind its exact source
-(:mod:`eawf.workflow.release.advance`).
+``release.create`` is the one way into a checkpoint record. It opens a
+DRAFT only once every measured contract the checkpoint asserts over is
+promoted (:mod:`eawf.workflow.release.admission`), and only once the rung
+below is finished with: a predecessor that shipped also needs its
+recorded train advance. The two verbs that walk the train past a
+finished checkpoint, ``release.produce_receipts`` and
+``release.advance_train``, live in
+:mod:`eawf.runtime.daemon.methods.release_receipts`. ``release.show``
+reports the open rung the way those verbs judge it, derived from the
+stored records and advances.
 """
 
 from __future__ import annotations
@@ -111,6 +115,7 @@ from eawf.kernel.spec.release import (
     Release,
     ReleaseCheckpoint,
     ReleaseTargetStatus,
+    ReleaseTrain,
     semver_equivalent,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
@@ -139,12 +144,7 @@ from eawf.workflow.release.admission import (
     create_checkpoint_release,
     required_contract_ids,
 )
-from eawf.workflow.release.advance import (
-    CheckpointGateReceipt,
-    TrainAdvanceError,
-    advance_train,
-    render_train_ladder,
-)
+from eawf.workflow.release.advance import derive_train
 from eawf.workflow.release.ledger import record_operation
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
 from eawf.workflow.release.observation import (
@@ -167,12 +167,14 @@ from eawf.workflow.release.publication_receipt import (
 )
 from eawf.workflow.release.records import (
     read_release_record,
+    read_release_records,
     record_envelope_id,
     record_release,
 )
 from eawf.workflow.release.settlement import follow_guarded_edges, observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN
+from eawf.workflow.release.train_store import read_train_advances
 from eawf.workflow.verify.checkpoint_succession import (
     CheckpointSuccessionError,
     assert_predecessor_terminal,
@@ -192,7 +194,7 @@ class ShowParams(BaseModel):
 
     Attributes:
         version: Normalized checkpoint version to describe. ``None``
-            describes the rung the train currently has open.
+            describes the rung the stores place the train on.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -252,59 +254,67 @@ class ApproveParams(BaseModel):
 async def show(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Describe the train ladder, one checkpoint rung, and its record.
 
-    The ladder is source-resident, but "which rung exists" and "has that
-    rung been cut" are different questions, and an operator asking the
-    second one should not have to read a store file. So the reply also
-    carries the recorded record for the rung, or ``None`` when the
-    checkpoint has never been opened.
+    The ladder is source-resident, but "which rung exists", "which rung
+    is open" and "has that rung been cut" are different questions, and an
+    operator asking the last two should not have to read a store file.
+    So the open index is derived from the stored records and advances,
+    and the reply also carries the recorded record for the rung, or
+    ``None`` when the checkpoint has never been opened.
 
     Args:
-        ctx: Server context; its state root supplies the recorded
-            record. A daemon without one answers ``record: None`` rather
-            than refusing: describing the ladder is useful even where
-            nothing is recorded.
+        ctx: Server context; its state root supplies the stored records
+            and advances. A daemon without one answers from the
+            source-declared ladder with ``record: None`` rather than
+            refusing: describing the ladder is useful even where nothing
+            is recorded.
         params: JSON-RPC params per :class:`ShowParams`.
 
     Returns:
-        The train id, target version, the ordered ladder, the requested
-        rung, and the record standing at it.
+        The train id, target version, the derived open index, the
+        ordered ladder, the requested rung (the open one when no version
+        is named), and the record standing at it.
 
     Raises:
-        DaemonValidationError: When the train declares no such rung.
+        DaemonValidationError: When the train declares no such rung, or
+            a store is corrupt.
     """
     args = ShowParams.model_validate(params)
-    rung = V07_TRAIN.current_checkpoint if args.version is None else _rung_for(args.version)
-    record = _recorded_release(ctx, rung.release_key)
+    records, train = _recorded_train(ctx)
+    rung = train.current_checkpoint if args.version is None else _rung_for(args.version)
+    record = records.get(rung.release_key)
     return {
-        "train_id": V07_TRAIN.train_id,
-        "target_version": V07_TRAIN.target_version,
-        "current_checkpoint_index": V07_TRAIN.current_checkpoint_index,
-        "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in V07_TRAIN.checkpoints],
+        "train_id": train.train_id,
+        "target_version": train.target_version,
+        "current_checkpoint_index": train.current_checkpoint_index,
+        "checkpoints": [checkpoint.model_dump(mode="json") for checkpoint in train.checkpoints],
         "checkpoint": rung.model_dump(mode="json"),
         "record": None if record is None else record.model_dump(mode="json"),
     }
 
 
-def _recorded_release(ctx: MethodContext, release_key: str) -> Release | None:
-    """Return the record filed under *release_key*, or ``None``.
+def _recorded_train(ctx: MethodContext) -> tuple[dict[str, Release], ReleaseTrain]:
+    """Return the stored records and the train standing where they put it.
 
     Args:
         ctx: Server context; ``state_path`` may be unset.
-        release_key: ``REL-<version>`` key to look up.
 
     Returns:
-        The current record, or ``None`` when the daemon has no state
-        root or the collection carries no row for the key.
+        The current record of every stored release, and the train at
+        its derived open index. Without a state root, no records and the
+        source-declared train.
 
     Raises:
-        DaemonValidationError: When the collection exists but is
-            corrupt. A checkpoint reported as never opened because its
-            row could not be parsed is the one wrong answer here.
+        DaemonValidationError: When a store exists but is corrupt. A
+            checkpoint reported as never opened because its row could not
+            be parsed is the one wrong answer here.
     """
     if ctx.state_path is None:
-        return None
+        return {}, V07_TRAIN
+    state_path = Path(ctx.state_path)
     try:
-        return read_release_record(Path(ctx.state_path), release_key)
+        records = read_release_records(state_path)
+        advances = read_train_advances(state_path)
+        return records, derive_train(V07_TRAIN, recorded_keys=records, advances=advances)
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
@@ -1107,23 +1117,6 @@ class CreateParams(BaseModel):
     membership_refs: list[str] = Field(default_factory=list)
 
 
-class AdvanceTrainParams(BaseModel):
-    """Params for :func:`advance`.
-
-    Attributes:
-        release: Serialized record standing at the open checkpoint.
-        receipts: The open checkpoint's gate receipts, each binding its
-            source and manifest.
-        membership_refs: Milestone acceptance bundles for the rung being
-            opened.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    release: dict[str, Any]
-    receipts: list[dict[str, Any]] = Field(default_factory=list)
-    membership_refs: list[str] = Field(default_factory=list)
-
-
 def _require_state(ctx: MethodContext) -> State:
     """Return the daemon's typed state, or refuse the verb.
 
@@ -1163,16 +1156,25 @@ def _terminal_predecessor(state_path: Path, version: str) -> Release | None:
     Raises:
         DaemonValidationError: With ``predecessor_unrecorded`` when the
             rung below has no record, ``predecessor_live`` when it has
-            one that can still move, or naming the train when no rung is
-            declared for *version*.
+            one that can still move, ``predecessor_not_advanced`` when it
+            shipped and no train advance past it is recorded, naming the
+            train when no rung is declared for *version*, or when a store
+            is corrupt.
     """
     try:
         rung = predecessor_rung(V07_TRAIN, version)
+        recorded = None if rung is None else read_release_record(state_path, rung.release_key)
+        advanced = {
+            row.closed_key
+            for row in read_train_advances(state_path)
+            if row.train_id == V07_TRAIN.train_id
+        }
     except (KeyError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    recorded = None if rung is None else read_release_record(state_path, rung.release_key)
     try:
-        assert_predecessor_terminal(V07_TRAIN, version=version, predecessor=recorded)
+        assert_predecessor_terminal(
+            V07_TRAIN, version=version, predecessor=recorded, advanced_keys=advanced
+        )
     except CheckpointSuccessionError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     return recorded
@@ -1186,11 +1188,13 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     asserts over must be promoted and resolvable, and the rung below must
     be recorded and finished with, so two records never claim one line at
     once and the reply can name the predecessor the new record
-    supersedes. Each refusal names the single thing that is missing plus
-    the command that repairs it, so the operator's next action is in the
-    error. Admission is asked first because it is a question about this
-    checkpoint's own evidence, which the operator is here to supply; the
-    succession answer sends them somewhere else entirely.
+    supersedes. A predecessor that shipped counts as finished with only
+    once the train advance past it is recorded. Each refusal names the
+    single thing that is missing plus the command that repairs it, so the
+    operator's next action is in the error. Admission is asked first
+    because it is a question about this checkpoint's own evidence, which
+    the operator is here to supply; the succession answer sends them
+    somewhere else entirely.
 
     The admitted record is persisted before the reply is built. A record
     that existed only in one RPC response could not be found again, so
@@ -1211,9 +1215,9 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Raises:
         DaemonValidationError: With ``measured_contract_missing`` when a
             required contract is not promoted, with
-            ``predecessor_unrecorded`` / ``predecessor_live`` when the
-            rung below has not finished, or when the train declares no
-            such rung.
+            ``predecessor_unrecorded`` / ``predecessor_live`` /
+            ``predecessor_not_advanced`` when the rung below has not
+            finished, or when the train declares no such rung.
     """
     args = CreateParams.model_validate(params)
     state = _require_state(ctx)
@@ -1246,62 +1250,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@register("release.advance_train")
-async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Walk the train onto its next rung, or refuse and change nothing.
-
-    The index moves only from a ``baked`` or ``released`` checkpoint
-    whose every required gate receipt still binds its exact source and
-    manifest. The closing record is returned unchanged beside the new
-    DRAFT record, so the caller can assert the prior rung was not
-    rewritten.
-
-    Args:
-        ctx: Server context; unused, the advance is a pure projection
-            over the records the caller supplies.
-        params: JSON-RPC params per :class:`AdvanceTrainParams`.
-
-    Returns:
-        The rendered ladder at the new index, the opened DRAFT record,
-        the unchanged closing record and the validated receipt refs.
-
-    Raises:
-        DaemonValidationError: With the named denial
-            (``checkpoint_not_terminal``, ``prerequisite_receipt_stale``,
-            ...) when the advance is refused.
-    """
-    args = AdvanceTrainParams.model_validate(params)
-    current = validated_release(args.release)
-    config = resolve_config(current.version)
-    try:
-        receipts = [CheckpointGateReceipt.model_validate(row) for row in args.receipts]
-        result = advance_train(
-            V07_TRAIN,
-            current=current,
-            config=config,
-            receipts=receipts,
-            now=datetime.now(UTC),
-            next_uid=uuid4(),
-            membership_refs=tuple(args.membership_refs),
-        )
-    except TrainAdvanceError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
-    except (ValidationError, ValueError) as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    logger.info(
-        f"advance closed={result.closed.key!r} opened={result.opened.key!r} "
-        f"index={result.train.current_checkpoint_index}"
-    )
-    return {
-        "train": render_train_ladder(result.train),
-        "closed": result.closed.model_dump(mode="json"),
-        "opened": result.opened.model_dump(mode="json"),
-        "receipt_refs": list(result.receipt_refs),
-    }
-
-
 __all__ = [
-    "AdvanceTrainParams",
     "ApproveParams",
     "BurnParams",
     "ComputeReadinessParams",
@@ -1311,7 +1260,6 @@ __all__ = [
     "ReconcileParams",
     "RetryTargetParams",
     "ShowParams",
-    "advance",
     "approve",
     "burn",
     "compute_readiness_method",

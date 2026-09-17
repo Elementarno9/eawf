@@ -37,6 +37,7 @@ from eawf.runtime.daemon.close_workspace import (
     CloseWorkspaceError,
     cleanup_close_workspace,
     prepare_close_workspace,
+    remove_close_workspace_to_completion,
 )
 from eawf.runtime.daemon.gate_execution import (
     GateExecutionContext,
@@ -1055,6 +1056,11 @@ async def _run_attempt(  # noqa: C901
             apply_func=_finish,
         )
     except asyncio.CancelledError:
+        if workspace_created:
+            removed, _ = await remove_close_workspace_to_completion(
+                repo_root, attempt_id=attempt_id
+            )
+            workspace_created = not removed
         cancelled_status = (
             CloseAttemptStatus.QUEUED if _SHUTTING_DOWN else CloseAttemptStatus.CANCELLED
         )
@@ -1084,6 +1090,14 @@ async def _run_attempt(  # noqa: C901
             f"_run_attempt failure=exception attempt={attempt_id!r} "
             f"status={status.value!r} detail_ref={failure_ref!r}"
         )
+        # The removal precedes the auto-retry decision below, so a shutdown
+        # that begins while it runs already suppresses the retry.
+        cancellation_held = False
+        if workspace_created:
+            removed, cancellation_held = await remove_close_workspace_to_completion(
+                repo_root, attempt_id=attempt_id
+            )
+            workspace_created = not removed
         current_attempt = _load_state(ctx, repo_root).close_attempts.get(attempt_id)
         auto_retry = (
             status is CloseAttemptStatus.FAILED
@@ -1140,9 +1154,13 @@ async def _run_attempt(  # noqa: C901
                 },
                 command="close.failed",
             )
-            infrastructure_retry_queued = auto_retry
+            # A cancelled worker must not fork a retry: the canceller owns
+            # the row's next state once this task ends.
+            infrastructure_retry_queued = auto_retry and not cancellation_held
         except Exception:
             logger.exception(f"_run_attempt status=terminal-persist-failed attempt={attempt_id!r}")
+        if cancellation_held:
+            raise asyncio.CancelledError from exc
     finally:
         if workspace_created:
             with contextlib.suppress(CloseWorkspaceError):

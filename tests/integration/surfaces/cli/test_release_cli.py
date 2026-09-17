@@ -17,6 +17,10 @@ the pair for a publication this machinery never ran: one writes the
 observed facts of it onto the record, the other is the refusal those
 facts earn. ``cancelled`` had no operator surface at all before them.
 
+The thirteenth, ``release.produce_receipts``, is the producer the train
+advance reads from. ``receipts`` and ``advance`` take no record file,
+because both act on the stored record.
+
 Two things are pinned here. The parity test asserts the registered set
 and the reachable set are the same set, so an eleventh verb lands broken
 rather than lands unreachable. The dispatch tests drive each subcommand
@@ -82,9 +86,17 @@ FAKE_REPLY: dict[str, Any] = {
         "detail": "every frozen artifact is exposed at its frozen digest",
     },
     "closed": {"key": RELEASE_KEY, "status": "baked"},
-    "opened": {"key": "REL-0.7.0.dev2", "status": "draft"},
-    "train": {"current_checkpoint_index": 1},
+    "train": {
+        "current_checkpoint_index": 1,
+        "current_checkpoint": "REL-0.7.0.dev2",
+        "checkpoints": [{"version": "0.7.0.dev2", "status": "open"}],
+    },
+    "advance": {"closed_key": RELEASE_KEY, "opened_key": "REL-0.7.0.dev2"},
     "receipt_refs": ["receipt://gate/dev1"],
+    "release_key": RELEASE_KEY,
+    "source_sha": "a" * 40,
+    "receipts": [],
+    "refused": [],
     "next_status": "candidate",
     "observed_targets": {"pypi": "observed_mismatch"},
     "unconfigured_targets": ["plugins_dist"],
@@ -241,14 +253,8 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             "--reason",
             "nothing was ever published under it",
         ],
-        "advance": [
-            "advance",
-            RELEASE_KEY,
-            "--release",
-            record,
-            "--receipt",
-            _write(tmp_path / "receipt.json", {"gate": "tests"}),
-        ],
+        "advance": ["advance", RELEASE_KEY],
+        "receipts": ["receipts", "0.7.0.dev1"],
     }
     return ["release", *table[subcommand]]
 
@@ -270,7 +276,7 @@ def test_every_mapped_subcommand_is_registered_on_the_release_app() -> None:
 
 def test_the_release_namespace_is_not_empty() -> None:
     """The parity assertion is over a non-empty set, not two empty ones."""
-    assert len(RELEASE_RPC_METHODS) == 12
+    assert len(RELEASE_RPC_METHODS) == 13
 
 
 # --- dispatch -------------------------------------------------------------
@@ -411,7 +417,7 @@ def test_reconcile_refuses_neither_result_source(
     assert calls == []
 
 
-@pytest.mark.parametrize("subcommand", ("approve", "publish", "retry", "reconcile", "advance"))
+@pytest.mark.parametrize("subcommand", ("approve", "publish", "retry", "reconcile"))
 def test_a_record_for_another_release_is_refused(
     subcommand: str, tmp_path: Path, calls: list[dict[str, Any]]
 ) -> None:
@@ -451,7 +457,7 @@ def test_an_unparseable_record_file_is_refused(tmp_path: Path, calls: list[dict[
     broken.write_text("{not json", encoding="utf-8")
     result = CliRunner().invoke(
         app,
-        ["release", "advance", RELEASE_KEY, "--release", str(broken)],
+        ["release", "cancel", RELEASE_KEY, "--release", str(broken), "--reason", "spent"],
     )
     assert result.exit_code != 0
     assert "release record is not valid JSON" in result.output
@@ -466,7 +472,7 @@ def test_a_record_file_holding_a_json_array_is_refused(
     listed.write_text("[]", encoding="utf-8")
     result = CliRunner().invoke(
         app,
-        ["release", "advance", RELEASE_KEY, "--release", str(listed)],
+        ["release", "cancel", RELEASE_KEY, "--release", str(listed), "--reason", "spent"],
     )
     assert result.exit_code != 0
     assert "must be a JSON object" in result.output

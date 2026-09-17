@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
 DEFAULT_EU_MINUTES = 30.0
 DEFAULT_TOKENS_PER_EU = 200_000.0
@@ -55,6 +56,9 @@ def rollup_wave_sessions(
 ) -> WaveSessionRollup:
     """Return telemetry joined to ``wave.sessions`` by runtime session id.
 
+    State stores the vendor session id hashed while a telemetry row carries it
+    raw, so both sides are compared through the same hash.
+
     Args:
         wave: State wave carrying daemon ``SessionAttempt`` rows.
         telemetry_sessions: Projected telemetry session rows.
@@ -69,10 +73,12 @@ def rollup_wave_sessions(
     """
     if eu_minutes <= 0:
         raise ValueError(f"eu_minutes must be positive: {eu_minutes!r}")
-    by_session_id = {row.session_id: row for row in telemetry_sessions}
+    by_session_id = {
+        hash_vendor_session_id(row.session_id): row for row in telemetry_sessions if row.session_id
+    }
     attempts: list[WaveAttemptRollup] = []
     for attempt_no, attempt in sorted(wave.sessions.items()):
-        telemetry = by_session_id.get(attempt.session_id)
+        telemetry = by_session_id.get(hash_vendor_session_id(attempt.session_id))
         if telemetry is None:
             continue
         attempts.append(

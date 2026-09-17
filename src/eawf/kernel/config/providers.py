@@ -265,6 +265,10 @@ def _check_route(
 ) -> None:
     """Refuse a route naming unknown profiles or routing writes unmanaged.
 
+    A route counts as mutating whenever it can select a mutating Run,
+    including a match that leaves ``requires_mutation`` unset and lists
+    no purpose (see :attr:`~eawf.kernel.runtime.provider.RouteMatch.mutating`).
+
     Raises:
         ProviderConfigError: A profile is unknown, a capability is not
             certifiable, or a mutating route allows a profile without a
@@ -285,8 +289,9 @@ def _check_route(
         if sandbox.mode != "workspace_write" or sandbox.filesystem_policy_ref is None:
             raise ProviderConfigError(
                 ProviderConfigRejection.MUTATING_ROUTE_UNMANAGED,
-                f"{where} routes writes to {profile_id!r}, which lacks a workspace_write "
-                f"sandbox under a filesystem policy",
+                f"{where} can route writes to {profile_id!r}, which lacks a workspace_write "
+                f"sandbox under a filesystem policy; a read-only route sets "
+                f"requires_mutation false or lists only read-only purposes",
             )
 
 

@@ -13,6 +13,10 @@ src/eawf/_data/
 .ruff_cache/
 .mypy_cache/
 .coverage
+# A parallel run writes one shard per worker (.coverage.<host>.<pid>.<nonce>)
+# and only folds them into .coverage on demand, so without this rule every
+# `just test ci` leaves the tree dirty and the tag cleanliness probe reds.
+.coverage.*
 coverage.xml
 htmlcov/
 # mutmut rewrites source + writes its CI/CD stats into this sandbox dir

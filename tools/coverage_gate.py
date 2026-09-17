@@ -17,7 +17,9 @@ fires the moment a screen snapshot or a flow is deleted without replacement.
 The gate logic lives here as importable functions (``aggregate``,
 ``evaluate_package_gates``, ``evaluate_tui_behavioural``) so the negative-control
 tests can drive it with injected config + fixture trees without touching the real
-coverage.xml. ``main`` is the CLI shim CI invokes.
+coverage.xml. ``head_commit_time`` and ``coverage_xml_is_stale`` let a caller
+tell whether a ``coverage.xml`` left on the tree still measures HEAD. ``main``
+is the CLI shim CI invokes.
 
 Invocation:
 
@@ -36,6 +38,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import re
+import subprocess
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
@@ -257,6 +260,52 @@ def evaluate_tui_behavioural(
     if flows < min_flows:
         failures.append(f"tui.flows: {flows} operator-journey flows < floor {min_flows}")
     return report, failures
+
+
+def head_commit_time(repo_root: Path) -> int | None:
+    """Return the committer time of HEAD in *repo_root* as a Unix timestamp.
+
+    Args:
+        repo_root: A directory inside the git work tree to ask.
+
+    Returns:
+        The HEAD committer timestamp, or ``None`` when *repo_root* is not in a
+        git work tree, the repository has no commit yet, or ``git`` is not
+        installed, so a caller on an exported source tree can skip instead of
+        failing.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(repo_root), "log", "-1", "--format=%ct"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    if completed.returncode != 0:
+        return None
+    return int(completed.stdout)
+
+
+def coverage_xml_is_stale(coverage_xml: Path, *, head_committed_at: int) -> bool:
+    """Return whether *coverage_xml* was written before the HEAD commit.
+
+    A report older than HEAD measured an earlier tree, so checking the
+    committed floors against it says nothing about the checked-out code.
+
+    Args:
+        coverage_xml: Path to an existing Cobertura ``coverage.xml``.
+        head_committed_at: HEAD committer time from :func:`head_commit_time`.
+
+    Returns:
+        ``True`` when the report's mtime is earlier than *head_committed_at*;
+        a report written in the commit's own second or later is fresh.
+
+    Raises:
+        FileNotFoundError: When *coverage_xml* does not exist.
+    """
+    return coverage_xml.stat().st_mtime < head_committed_at
 
 
 def run_gate(coverage_xml: Path, pyproject_path: Path, repo_root: Path) -> GateOutcome:

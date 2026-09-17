@@ -81,9 +81,10 @@ def test_dark_theme_ports_the_wong_palette_with_green_accent() -> None:
 
     The cosmic-terminal reskin rotates ``accent`` teal -> green and lifts
     ``primary`` to its brighter sibling so the focused-pane border reads as
-    a ring; ``muted`` moves to the blue-grey that clears 4.5:1 on the panel.
-    Every lifecycle ``status-*`` tint and the ok/warn/err bands stay at their
-    exact pre-migration hex. ``status-claimed`` keeps the cool teal
+    a ring; ``muted`` and ``status-pending`` take the packet oracle's
+    blue-grey that clears 4.5:1 on the panel. Every other lifecycle
+    ``status-*`` tint and the ok/warn/err bands stay at their exact
+    pre-migration hex. ``status-claimed`` keeps the cool teal
     ``#56b6c2`` so it reads distinct from the green accent and the green
     ``status-closed``.
     """
@@ -94,7 +95,7 @@ def test_dark_theme_ports_the_wong_palette_with_green_accent() -> None:
     assert variables["warn"] == "#e69f00"
     assert variables["err"] == "#d55e00"
     assert variables["muted"] == "#828a94"
-    assert variables["status-pending"] == "#6c6c6c"
+    assert variables["status-pending"] == "#828a94"
     assert variables["status-claimed"] == "#56b6c2"
     assert variables["status-in-progress"] == "#e69f00"
     assert variables["status-closed"] == "#009e73"

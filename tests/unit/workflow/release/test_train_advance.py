@@ -8,15 +8,24 @@ did. These tests pin that the move happens only from ``baked`` or
 statuses that mean *abandoned* -- denies ``checkpoint_not_terminal``,
 and that a denied advance leaves the train's index and the closing
 record exactly as they were.
+
+They also pin what the advance no longer does. It opens no DRAFT, so the
+only way into the next checkpoint's record is ``release create`` and its
+measured admission. And the receipts it judges are the newest ones the
+store holds, so a stale stored receipt refuses the move exactly as a
+stale offered one does.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from datetime import datetime, timedelta
+from pathlib import Path
 from uuid import UUID
 
 import pytest
+from pydantic import ValidationError
 
 from eawf.kernel.spec.release import (
     Release,
@@ -31,11 +40,17 @@ from eawf.workflow.release.advance import (
     TrainAdvance,
     TrainAdvanceDenialCode,
     TrainAdvanceError,
+    TrainAdvanceRecord,
     advance_train,
     assert_checkpoint_terminal,
     draft_release_for,
 )
 from eawf.workflow.release.train import V07_TRAIN
+from eawf.workflow.release.train_store import (
+    checkpoint_receipts_path,
+    read_checkpoint_receipts,
+    record_checkpoint_receipt,
+)
 from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
@@ -44,7 +59,7 @@ from tests._release_helpers import (
     release_record,
 )
 
-#: Identity minted for the record the advance opens.
+#: Identity minted for a DRAFT record of the next rung.
 NEXT_UID = UUID(int=31)
 
 #: The approval every post-APPROVED status requires.
@@ -69,8 +84,15 @@ def gate_receipts(
     source_sha: str = SOURCE_SHA,
     manifest_digest: str = MANIFEST_DIGEST,
     gates: Sequence[ReleaseGateName] | None = None,
+    issued_at: datetime | None = None,
+    expires_at: datetime | None = None,
+    ref_suffix: str = "",
 ) -> list[CheckpointGateReceipt]:
-    """Return one fresh receipt per required dev1 gate."""
+    """Return one receipt per required dev1 gate, fresh at ``NOW`` by default.
+
+    *ref_suffix* keeps the refs of two issues of one gate distinct, as the
+    store's row ids must be.
+    """
     required = dev1_config().gates.required if gates is None else gates
     return [
         CheckpointGateReceipt(
@@ -78,9 +100,9 @@ def gate_receipts(
             release_key=release_key,
             source_sha=source_sha,
             manifest_digest=manifest_digest,
-            issued_at=NOW - timedelta(hours=1),
-            expires_at=NOW + timedelta(hours=1),
-            receipt_ref=f"receipt://gate/{gate.value}",
+            issued_at=NOW - timedelta(hours=1) if issued_at is None else issued_at,
+            expires_at=NOW + timedelta(hours=1) if expires_at is None else expires_at,
+            receipt_ref=f"receipt://gate/{gate.value}{ref_suffix}",
         )
         for gate in required
     ]
@@ -104,8 +126,13 @@ def advance(
         config=dev1_config(),
         receipts=gate_receipts() if receipts is None else receipts,
         now=NOW if now is None else now,
-        next_uid=NEXT_UID,
     )
+
+
+def store_receipts(state_path: Path, receipts: Sequence[CheckpointGateReceipt]) -> None:
+    """Append *receipts* to the checkpoint receipt collection under *state_path*."""
+    for receipt in receipts:
+        record_checkpoint_receipt(state_path, receipt, recorded_at=NOW, summary="seeded")
 
 
 # --- the advancing statuses --------------------------------------------------
@@ -117,15 +144,56 @@ def test_advancing_statuses_are_exactly_baked_and_released() -> None:
 
 
 @pytest.mark.parametrize("status", sorted(ADVANCING_STATUSES, key=lambda s: s.value))
-def test_advance_train_opens_the_next_rung_from_a_shipped_checkpoint(
+def test_advance_train_moves_onto_the_next_rung_from_a_shipped_checkpoint(
     status: ReleaseStatus,
 ) -> None:
     """A baked or released dev1 moves the index onto dev2."""
     result = advance(finished(status))
 
     assert result.train.current_checkpoint_index == 1
-    assert result.opened.key == "REL-0.7.0.dev2"
-    assert result.opened.status is ReleaseStatus.DRAFT
+    assert result.record.closed_key == "REL-0.7.0.dev1"
+    assert result.record.opened_key == "REL-0.7.0.dev2"
+
+
+def test_advance_train_opens_no_draft_record() -> None:
+    """The result names the next rung but carries no record for it."""
+    result = advance(finished())
+
+    assert [field.name for field in dataclasses.fields(TrainAdvance)] == [
+        "train",
+        "closed",
+        "record",
+    ]
+    assert not hasattr(result, "opened")
+
+
+def test_advance_train_never_builds_a_draft(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The advance succeeds with the DRAFT builder unusable, so it never calls it.
+
+    ``draft_release_for`` performs no measured admission itself; only
+    ``release create`` wraps it in one. An advance that still called it
+    would be a way into a checkpoint record that skips admission.
+    """
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("advance_train built a DRAFT record")
+
+    monkeypatch.setattr("eawf.workflow.release.advance.draft_release_for", refuse)
+
+    assert advance(finished()).train.current_checkpoint_index == 1
+
+
+def test_advance_train_record_names_the_revisions_it_judged() -> None:
+    """The persisted row carries the closed revision and the new train revision."""
+    closing = release_record(status=ReleaseStatus.BAKED, approval_ref=APPROVAL_REF, revision=9)
+
+    record = advance(closing).record
+
+    assert record.train_id == V07_TRAIN.train_id
+    assert record.closed_revision == 9
+    assert record.train_revision == V07_TRAIN.revision + 1
+    assert record.advanced_at == NOW
+    assert record.receipt_refs == advance(closing).receipt_refs
 
 
 def test_advance_train_bumps_the_train_revision() -> None:
@@ -207,7 +275,6 @@ def test_advance_train_refuses_at_the_last_rung() -> None:
             config=dev1_config(),
             receipts=gate_receipts(),
             now=NOW,
-            next_uid=NEXT_UID,
         )
 
     assert excinfo.value.code is TrainAdvanceDenialCode.LADDER_EXHAUSTED
@@ -233,7 +300,6 @@ def test_advance_train_rejects_a_configuration_for_another_checkpoint() -> None:
             config=mismatched,
             receipts=gate_receipts(),
             now=NOW,
-            next_uid=NEXT_UID,
         )
 
 
@@ -243,6 +309,148 @@ def test_advance_train_rejects_a_gate_offered_twice() -> None:
 
     with pytest.raises(ValueError, match="two receipts offered"):
         advance(finished(), receipts=doubled)
+
+
+def test_advance_train_refuses_an_expired_receipt_as_stale() -> None:
+    """A receipt past its window is stale even though it binds the source."""
+    expired = gate_receipts(issued_at=NOW - timedelta(days=2), expires_at=NOW - timedelta(days=1))
+
+    with pytest.raises(TrainAdvanceError) as excinfo:
+        advance(finished(), receipts=expired)
+
+    assert excinfo.value.code is TrainAdvanceDenialCode.PREREQUISITE_RECEIPT_STALE
+    assert excinfo.value.gate is dev1_config().gates.required[0]
+
+
+def test_advance_train_refuses_a_receipt_expiring_exactly_now() -> None:
+    """The window is half-open: a receipt expiring at the judged instant is stale."""
+    boundary = gate_receipts(expires_at=NOW)
+
+    with pytest.raises(TrainAdvanceError) as excinfo:
+        advance(finished(), receipts=boundary)
+
+    assert excinfo.value.code is TrainAdvanceDenialCode.PREREQUISITE_RECEIPT_STALE
+
+
+def test_advance_train_refuses_a_gate_with_no_receipt() -> None:
+    """One required gate left unproven refuses the move and names the gate."""
+    required = dev1_config().gates.required
+
+    with pytest.raises(TrainAdvanceError) as excinfo:
+        advance(finished(), receipts=gate_receipts(gates=required[:-1]))
+
+    assert excinfo.value.code is TrainAdvanceDenialCode.PREREQUISITE_RECEIPT_MISSING
+    assert excinfo.value.gate is required[-1]
+
+
+# --- the stored receipts -----------------------------------------------------
+
+
+def test_advance_train_accepts_the_newest_stored_receipts(tmp_path: Path) -> None:
+    """An expired receipt stored first is superseded by the fresh one after it."""
+    state_path = tmp_path / ".ea" / "state.json"
+    store_receipts(
+        state_path,
+        gate_receipts(
+            issued_at=NOW - timedelta(days=3),
+            expires_at=NOW - timedelta(days=2),
+            ref_suffix="/old",
+        ),
+    )
+    store_receipts(state_path, gate_receipts(ref_suffix="/new"))
+
+    stored = read_checkpoint_receipts(state_path, "REL-0.7.0.dev1")
+    result = advance(finished(), receipts=stored)
+
+    assert len(stored) == len(dev1_config().gates.required)
+    assert result.train.current_checkpoint_index == 1
+
+
+def test_advance_train_refuses_when_the_newest_stored_receipt_expired(tmp_path: Path) -> None:
+    """A fresh receipt stored before an expired one does not speak for the gate."""
+    state_path = tmp_path / ".ea" / "state.json"
+    store_receipts(
+        state_path, gate_receipts(issued_at=NOW - timedelta(minutes=30), ref_suffix="/old")
+    )
+    store_receipts(
+        state_path,
+        gate_receipts(
+            issued_at=NOW - timedelta(minutes=10),
+            expires_at=NOW - timedelta(minutes=5),
+            ref_suffix="/new",
+        ),
+    )
+
+    with pytest.raises(TrainAdvanceError) as excinfo:
+        advance(finished(), receipts=read_checkpoint_receipts(state_path, "REL-0.7.0.dev1"))
+
+    assert excinfo.value.code is TrainAdvanceDenialCode.PREREQUISITE_RECEIPT_STALE
+
+
+def test_read_checkpoint_receipts_skips_other_checkpoints(tmp_path: Path) -> None:
+    """Receipts earned by another checkpoint are not this one's."""
+    state_path = tmp_path / ".ea" / "state.json"
+    store_receipts(state_path, gate_receipts(release_key="REL-0.7.0.dev2"))
+
+    assert read_checkpoint_receipts(state_path, "REL-0.7.0.dev1") == ()
+
+
+def test_read_checkpoint_receipts_reads_nothing_before_the_first_write(tmp_path: Path) -> None:
+    """An absent collection is empty, not an error."""
+    assert read_checkpoint_receipts(tmp_path / ".ea" / "state.json", "REL-0.7.0.dev1") == ()
+
+
+def test_read_checkpoint_receipts_refuses_a_corrupt_row(tmp_path: Path) -> None:
+    """A line that is not an envelope is a refusal, never a skipped gate."""
+    state_path = tmp_path / ".ea" / "state.json"
+    path = checkpoint_receipts_path(state_path)
+    path.parent.mkdir(parents=True)
+    path.write_text('{"not": "an envelope"}\n', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="is not an envelope"):
+        read_checkpoint_receipts(state_path, "REL-0.7.0.dev1")
+
+
+def test_record_checkpoint_receipt_refuses_a_naive_instant(tmp_path: Path) -> None:
+    """A row whose instant carries no zone cannot be ordered, so it is refused."""
+    with pytest.raises(ValueError, match="timezone-aware"):
+        record_checkpoint_receipt(
+            tmp_path / ".ea" / "state.json",
+            gate_receipts()[0],
+            recorded_at=NOW.replace(tzinfo=None),
+            summary="naive",
+        )
+
+
+# --- the advance row ---------------------------------------------------------
+
+
+def test_train_advance_record_refuses_closing_and_opening_one_rung() -> None:
+    """An advance that stays on its rung is not an advance."""
+    with pytest.raises(ValidationError, match="closes and opens the same rung"):
+        TrainAdvanceRecord(
+            train_id="TRAIN-0.7.0",
+            closed_key="REL-0.7.0.dev2",
+            closed_revision=3,
+            opened_key="REL-0.7.0.dev2",
+            receipt_refs=("receipt://gate/migration",),
+            advanced_at=NOW,
+            train_revision=1,
+        )
+
+
+def test_train_advance_record_refuses_a_train_revision_of_zero() -> None:
+    """Revision zero is the train before any advance, so no advance can carry it."""
+    with pytest.raises(ValidationError):
+        TrainAdvanceRecord(
+            train_id="TRAIN-0.7.0",
+            closed_key="REL-0.7.0.dev2",
+            closed_revision=3,
+            opened_key="REL-0.7.0.dev3",
+            receipt_refs=("receipt://gate/migration",),
+            advanced_at=NOW,
+            train_revision=0,
+        )
 
 
 # --- the terminal predicate --------------------------------------------------

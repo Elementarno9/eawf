@@ -610,8 +610,16 @@ class RouteMatch(RuntimeRecord):
 
     @property
     def mutating(self) -> bool:
-        """Whether a Run this route matches may change a repository."""
-        return self.requires_mutation is True or any(p in MUTATING_PURPOSES for p in self.purpose)
+        """Whether a Run this route matches may change a repository.
+
+        An explicit ``requires_mutation`` decides. Without it, a match that
+        lists no purpose also selects mutating Runs, so it counts as
+        mutating; only a purpose list with no mutating member rules writes
+        out.
+        """
+        if self.requires_mutation is not None:
+            return self.requires_mutation
+        return not self.purpose or not MUTATING_PURPOSES.isdisjoint(self.purpose)
 
     @model_validator(mode="after")
     def _not_wholly_wildcard(self) -> Self:

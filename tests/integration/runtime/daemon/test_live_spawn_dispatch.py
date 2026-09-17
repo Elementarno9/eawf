@@ -73,6 +73,7 @@ from eawf.runtime.runtimes.adapter import (
     SpawnResult,
 )
 from eawf.runtime.runtimes.cancel import CancelResult
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.lifecycle.integration import (
     bind_start_dependencies,
@@ -1197,10 +1198,10 @@ def test_dispatch_spawn_plan_carries_captured_pid(
     assert result["pid"] != 0
 
 
-def test_dispatch_spawn_persists_session_attempt_pid(
+def test_dispatch_spawn_persists_session_attempt_without_pid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The live dispatch persists the captured pid on Wave.sessions."""
+    """The live dispatch persists a hashed vendor session and no pid on Wave.sessions."""
     state_path = _write_state(tmp_path)
     event_path = tmp_path / ".ea" / "store" / "event.jsonl"
     _patch_adapter(monkeypatch, _StubAdapter())
@@ -1210,18 +1211,18 @@ def test_dispatch_spawn_persists_session_attempt_pid(
 
     wave = load_state(state_path).waves[_WAVE_ID]
     attempt = wave.sessions[result["attempt"]]
-    assert attempt.subprocess_pid == _STUB_PID
-    assert attempt.session_id == "sess-live-abc123"
+    assert attempt.subprocess_pid is None
+    assert attempt.session_id == hash_vendor_session_id("sess-live-abc123")
     assert attempt.session_id != result["session_id"]
-    assert result["session_attempt"]["subprocess_pid"] == _STUB_PID
-    assert result["session_attempt"]["session_id"] == "sess-live-abc123"
+    assert result["session_attempt"]["subprocess_pid"] is None
+    assert result["session_attempt"]["session_id"] == hash_vendor_session_id("sess-live-abc123")
     assert wave.dispatch_history[-1].attempt == result["attempt"]
 
 
-def test_dispatch_then_kill_uses_persisted_session_pid(
+def test_kill_uses_pid_recorded_on_legacy_session_attempt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A non-fleet live dispatch can be killed through its SessionAttempt pid."""
+    """A non-fleet kill still signals a pid an older attempt row recorded."""
     state_path = _write_state(tmp_path)
     event_path = tmp_path / ".ea" / "store" / "event.jsonl"
     _patch_adapter(monkeypatch, _StubAdapter())
@@ -1233,6 +1234,9 @@ def test_dispatch_then_kill_uses_persisted_session_pid(
         return CancelResult(pgid=pgid, signal_sent=9 if hard else 15, delivered=True)
 
     _run(dispatch(ctx, {"wave_id": _WAVE_ID, "spawn": True}))
+    legacy = load_state(state_path)
+    legacy.waves[_WAVE_ID].sessions[1].subprocess_pid = _STUB_PID
+    state_path.write_text(legacy.model_dump_json(), encoding="utf-8")
     monkeypatch.setattr("eawf.runtime.daemon.methods.fleet.cancel_process_group", _fake_cancel)
 
     result: dict[str, Any] = _run(kill(ctx, {"wave_id": _WAVE_ID, "attempt": 1, "signal": "kill"}))
@@ -1728,7 +1732,6 @@ def test_persist_live_session_attempt_drops_when_wave_terminal(
         serving_runtime=runtime,
         session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-late-xyz789",
         spawn_result=_terminal_spawn_result(runtime=runtime),
-        pid=_STUB_PID,
     )
 
     # 1. The persist is dropped -- the caller gets the terminal sentinel.
@@ -1765,7 +1768,6 @@ def test_persist_live_session_attempt_persists_when_wave_active(
         serving_runtime=runtime,
         session_log_handle=f"urn:eawf:v1:session-log:{runtime}:sess-late-xyz789",
         spawn_result=_terminal_spawn_result(runtime=runtime),
-        pid=_STUB_PID,
     )
 
     assert result is not None
@@ -1773,7 +1775,7 @@ def test_persist_live_session_attempt_persists_when_wave_active(
     assert attempt == 1
     wave = load_state(state_path).waves[_WAVE_ID]
     assert set(wave.sessions) == {1}
-    assert wave.sessions[1].session_id == "sess-late-xyz789"
+    assert wave.sessions[1].session_id == hash_vendor_session_id("sess-late-xyz789")
     # The persisted attempt's cost matches the returned session-attempt row.
     assert wave.sessions[1].cost_usd == pytest.approx(float(session_attempt.cost_usd))
     # A headless runtime fires no runtime.capture RPC, so the persist credits
@@ -1809,7 +1811,6 @@ def test_persist_live_codex_attempt_preserves_missing_usage(
         serving_runtime="codex",
         session_log_handle="urn:eawf:v1:session-log:codex:sess-late-xyz789",
         spawn_result=spawn_result,
-        pid=_STUB_PID,
     )
 
     assert result is not None

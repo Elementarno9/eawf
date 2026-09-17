@@ -387,7 +387,8 @@ def test_route_match_reports_mutation_from_purpose_or_flag() -> None:
     assert RouteMatch(purpose=(RunPurpose.IMPLEMENT,)).mutating
     assert RouteMatch(requires_mutation=True).mutating
     assert not RouteMatch(purpose=(RunPurpose.REVIEW,)).mutating
-    assert not RouteMatch(scope_kind="task").mutating
+    assert not RouteMatch(scope_kind="task", requires_mutation=False).mutating
+    assert RouteMatch(scope_kind="task").mutating
 
 
 def test_route_policy_rejects_post_acceptance_fallback() -> None:

@@ -1,0 +1,129 @@
+{
+  "theme": "ea-dark",
+  "size": [
+    40,
+    30
+  ],
+  "surfaces": {
+    "canvas": {
+      "channel": "background",
+      "token": "surface",
+      "fg": "#c2c9d1",
+      "bg": "#0c0e11"
+    },
+    "text": {
+      "channel": "color",
+      "token": "foreground",
+      "fg": "#c2c9d1",
+      "bg": "#0c0e11"
+    },
+    "band": {
+      "channel": "background",
+      "token": "panel",
+      "fg": "#c2c9d1",
+      "bg": "#12161b"
+    },
+    "hint": {
+      "channel": "color",
+      "token": "muted",
+      "fg": "#828a94",
+      "bg": "#0c0e11"
+    },
+    "brand": {
+      "channel": "color",
+      "token": "accent",
+      "fg": "#16b384",
+      "bg": "#0c0e11"
+    },
+    "live": {
+      "channel": "color",
+      "token": "accent",
+      "fg": "#16b384",
+      "bg": "#0c0e11"
+    },
+    "rule": {
+      "channel": "color",
+      "token": "muted",
+      "fg": "#828a94",
+      "bg": "#0c0e11"
+    },
+    "rail": {
+      "channel": "color",
+      "token": "faint",
+      "fg": "#5b636d",
+      "bg": "#0c0e11"
+    },
+    "dim": {
+      "channel": "color",
+      "token": "faint",
+      "fg": "#5b636d",
+      "bg": "#0c0e11"
+    },
+    "frame": {
+      "channel": "border",
+      "token": "border",
+      "fg": "#242a32",
+      "bg": "#0c0e11"
+    },
+    "focus": {
+      "channel": "border",
+      "token": "primary",
+      "fg": "#5ce8bb",
+      "bg": "#0c0e11"
+    },
+    "ok": {
+      "channel": "color",
+      "token": "ok",
+      "fg": "#009e73",
+      "bg": "#0c0e11"
+    },
+    "info": {
+      "channel": "color",
+      "token": "status-claimed",
+      "fg": "#56b6c2",
+      "bg": "#0c0e11"
+    },
+    "warn": {
+      "channel": "color",
+      "token": "warn",
+      "fg": "#e69f00",
+      "bg": "#0c0e11"
+    },
+    "err": {
+      "channel": "color",
+      "token": "err",
+      "fg": "#d55e00",
+      "bg": "#0c0e11"
+    },
+    "pending": {
+      "channel": "color",
+      "token": "status-pending",
+      "fg": "#828a94",
+      "bg": "#0c0e11"
+    },
+    "claimed": {
+      "channel": "color",
+      "token": "status-claimed",
+      "fg": "#56b6c2",
+      "bg": "#0c0e11"
+    },
+    "in-progress": {
+      "channel": "color",
+      "token": "status-in-progress",
+      "fg": "#e69f00",
+      "bg": "#0c0e11"
+    },
+    "closed": {
+      "channel": "color",
+      "token": "status-closed",
+      "fg": "#009e73",
+      "bg": "#0c0e11"
+    },
+    "failed": {
+      "channel": "color",
+      "token": "status-failed",
+      "fg": "#d55e00",
+      "bg": "#0c0e11"
+    }
+  }
+}

@@ -95,7 +95,10 @@ V07_CHECKPOINTS: Final[tuple[ReleaseCheckpoint, ...]] = (
     ),
 )
 
-#: The v0.7.0 train, opened at its first rung.
+#: The v0.7.0 train as source declares it, standing at its first rung.
+#: Where it stands now is read off the stores by
+#: :func:`~eawf.workflow.release.advance.derive_train`, so this index is
+#: a starting point and never written.
 V07_TRAIN: Final[ReleaseTrain] = ReleaseTrain(
     train_id=f"TRAIN-{V07_TARGET_VERSION}",
     target_version=V07_TARGET_VERSION,

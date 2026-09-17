@@ -29,6 +29,7 @@ from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.kinds.spec_updated import SpecUpdatedPayload
 from eawf.kernel.store.kinds.subscription_lag import SubscriptionLagPayload
+from eawf.workflow.release.advance import CheckpointGateReceipt, TrainAdvanceRecord
 
 PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.RESEARCH: ResearchPayload,
@@ -67,4 +68,9 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     # ledger's: ledger rows are addressed by idempotency key, record rows
     # by release revision, and one id namespace could collide the two.
     StoreKind.RELEASE_RECORD: Release,
+    # Receipts and advances are the two facts the train walks on. Each
+    # keeps its own kind because each is read back on its own: receipts
+    # by checkpoint and gate, advances by train.
+    StoreKind.RELEASE_CHECKPOINT_RECEIPT: CheckpointGateReceipt,
+    StoreKind.RELEASE_TRAIN_ADVANCE: TrainAdvanceRecord,
 }

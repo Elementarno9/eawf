@@ -118,9 +118,14 @@ async def quiesce_volatile_chrome(pilot: Pilot[object]) -> None:
       the Header row -- :func:`normalize_snapshot` then drops the banner line,
       so the captured frame loses the Header (brand ``Eä``) and a 40-row
       golden reads back as 39 -- and flips every ``app.degraded``-reading pane
-      into its degraded notice. Forcing ``degraded`` back to ``False``,
-      re-syncing the banner (hidden), and refreshing the feed notices pins the
-      frame to the deterministic non-degraded shape every golden holds.
+      into its degraded notice. The binder's daemon probe is parked first
+      (:meth:`~eawf.surfaces.tui.state_binding.StateBinding.park_daemon_probe`),
+      so a failure count still climbing cannot flip the flag back after this
+      call; then forcing ``degraded`` back to ``False``, re-syncing the banner
+      (hidden), and refreshing the feed notices pins the frame to the
+      deterministic non-degraded shape every golden holds. A test that needs
+      the degraded frame drives ``_on_degraded`` itself, which the park does
+      not block.
     * **The footer heartbeat pulse.** The footer ``•`` dot blanks to a bare
       space every 1.0 s pulse; a blank cell is rstripped by
       :func:`capture_screen_text`, dropping the trailing bullet from the
@@ -143,6 +148,9 @@ async def quiesce_volatile_chrome(pilot: Pilot[object]) -> None:
     from eawf.surfaces.tui.widgets.heartbeat import Heartbeat
 
     app = pilot.app
+    park_probe = getattr(getattr(app, "_binding", None), "park_daemon_probe", None)
+    if callable(park_probe):
+        await park_probe()
     if hasattr(app, "degraded"):
         app.degraded = False
     sync_banner = getattr(app, "_sync_degraded_banner", None)

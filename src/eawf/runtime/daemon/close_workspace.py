@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +18,7 @@ _GIT_TIMEOUT_SECONDS = 30.0
 
 
 class CloseWorkspaceError(RuntimeError):
-    """Raised when an exact-revision close workspace cannot be prepared."""
+    """Raised when an exact-revision close workspace cannot be prepared or removed."""
 
 
 @dataclass(frozen=True)
@@ -137,25 +139,113 @@ def prepare_close_workspace(
     )
 
 
+def _listed_worktree_paths(repo_root: Path) -> set[Path]:
+    """Return the resolved path of every worktree Git lists for *repo_root*."""
+    listing = _require_git_ok(
+        _git(repo_root, "worktree", "list", "--porcelain", "-z"),
+        operation="list worktrees",
+    )
+    return {
+        Path(field.removeprefix("worktree ")).resolve()
+        for field in listing.split("\0")
+        if field.startswith("worktree ")
+    }
+
+
 def cleanup_close_workspace(
     repo_root: Path,
     *,
     attempt_id: str,
 ) -> bool:
-    """Remove one daemon-owned close worktree through Git.
+    """Remove one daemon-owned close workspace.
 
-    Returns ``False`` when the path is already absent. No recursive filesystem
-    deletion is used; Git validates that the target is one of its worktrees.
+    A worktree Git lists is removed through Git, which also drops its admin
+    entry. A directory Git no longer lists (its admin entry was pruned, or
+    creation stopped half way) cannot be removed that way, so it is deleted
+    recursively instead. Recursive deletion is confined to the attempt
+    directory itself: the attempt id cannot carry a separator, and a target
+    whose resolved path is not exactly this attempt's directory (a symlink
+    at the attempt path) is refused rather than followed.
+
+    Args:
+        repo_root: Repository that owns the close workspace.
+        attempt_id: Attempt whose workspace is removed.
+
+    Returns:
+        ``True`` when a workspace was removed, ``False`` when the path is
+        already absent.
+
+    Raises:
+        ValueError: *attempt_id* is not a valid close attempt id.
+        CloseWorkspaceError: The target escapes the close root, or Git or
+            the filesystem refused the removal.
     """
     path = workspace_path(repo_root, attempt_id)
     if not path.exists():
         return False
-    _require_git_ok(
-        _git(repo_root, "worktree", "remove", "--force", str(path)),
-        operation="remove close worktree",
-    )
-    logger.info(f"cleanup_close_workspace attempt={attempt_id!r} removed=True")
+    close_root = path.parent.resolve()
+    resolved = path.resolve()
+    if resolved != close_root / attempt_id:
+        raise CloseWorkspaceError(
+            f"refusing to remove close workspace {attempt_id!r}: "
+            "it does not resolve to its own directory under .ea/worktrees/close/"
+        )
+    if resolved in _listed_worktree_paths(repo_root):
+        _require_git_ok(
+            _git(repo_root, "worktree", "remove", "--force", str(path)),
+            operation="remove close worktree",
+        )
+        method = "git"
+    else:
+        try:
+            shutil.rmtree(path)
+        except OSError as exc:
+            raise CloseWorkspaceError(f"remove unlisted close workspace failed: {exc!s}") from exc
+        method = "unlisted"
+    logger.info(f"cleanup_close_workspace attempt={attempt_id!r} removed=True method={method}")
     return True
+
+
+async def remove_close_workspace_to_completion(
+    repo_root: Path,
+    *,
+    attempt_id: str,
+) -> tuple[bool, bool]:
+    """Remove one close workspace, finishing even if the caller is cancelled.
+
+    Callers run this right before the commit that ends an attempt, because a
+    watcher reads that row as "the attempt is over" and the workspace must
+    already be gone. The removal thread is always awaited to completion: a
+    cancellation that lands meanwhile is held and reported, since abandoning
+    the thread would let the caller's commit race a removal in progress. A
+    removal fault is logged rather than raised so it cannot replace the
+    outcome the caller is about to persist.
+
+    Args:
+        repo_root: Repository that owns the close workspace.
+        attempt_id: Attempt whose workspace is removed.
+
+    Returns:
+        ``(removed, cancelled)``: whether the workspace is now absent, and
+        whether a cancellation arrived while the removal ran. The caller
+        re-raises a held cancellation once its own commit is written.
+    """
+    removal = asyncio.ensure_future(
+        asyncio.to_thread(cleanup_close_workspace, repo_root, attempt_id=attempt_id)
+    )
+    cancelled = False
+    while not removal.done():
+        try:
+            await asyncio.wait({removal})
+        except asyncio.CancelledError:
+            cancelled = True
+    fault = removal.exception()
+    if fault is not None:
+        logger.warning(
+            f"remove_close_workspace_to_completion attempt={attempt_id!r} "
+            f"removed=False error={fault!r}"
+        )
+    return fault is None, cancelled
 
 
 __all__ = [
@@ -163,6 +253,7 @@ __all__ = [
     "CloseWorkspaceError",
     "cleanup_close_workspace",
     "prepare_close_workspace",
+    "remove_close_workspace_to_completion",
     "resolve_exact_revision",
     "workspace_path",
 ]

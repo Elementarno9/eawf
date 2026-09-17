@@ -29,10 +29,11 @@ _default:
 #            loop; mirrors CI's parallel leg without the slow / flaky tiers.
 #   ci       reproduces .github/workflows/ci.yaml's three Pytest steps VERBATIM
 #            (parallel core, TUI render on 4 workers, then serial perf timing),
-#            including
-#            the ubuntu-only `--cov` gate -- the coverage flags are appended
-#            here when `uname -s` is Linux, matching the workflow's
+#            including the ubuntu-only `--cov` gate -- the coverage flags are
+#            appended here when `uname -s` is Linux, matching the workflow's
 #            `startsWith(matrix.os, 'ubuntu-')` conditional (empty elsewhere).
+#            The console goldens are ignored for the same reason CI ignores
+#            them: console-replay.yaml owns that contract in one process.
 #   changed  pytest only the scope the `BASE...HEAD` diff touches, computed by
 #            the stateless tools/changed_scope.py selector (BASE default
 #            origin/main). A non-.py change pulls the whole golden tier; a
@@ -57,7 +58,7 @@ test mode="fast" base="origin/main":
           cov_serial=""
         fi
         uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli $cov_parallel
-        uv run pytest -n 4 tests/snapshots/tui $cov_serial
+        uv run pytest -n 4 tests/snapshots/tui --ignore=tests/snapshots/tui/console $cov_serial
         uv run pytest -n0 tests/perf/surfaces/tui tests/perf/surfaces/cli $cov_serial
         ;;
       changed)

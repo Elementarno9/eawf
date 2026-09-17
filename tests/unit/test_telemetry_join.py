@@ -11,6 +11,7 @@ from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.observability.telemetry.join import rollup_wave_sessions
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 
 
 def _attempt(attempt: int, session_id: str) -> SessionAttempt:
@@ -92,3 +93,15 @@ def test_rollup_wave_sessions_returns_no_attention_without_durations() -> None:
 def test_rollup_wave_sessions_rejects_non_positive_eu_minutes() -> None:
     with pytest.raises(ValueError, match="eu_minutes must be positive"):
         rollup_wave_sessions(_wave(), [], eu_minutes=0.0)
+
+
+def test_rollup_wave_sessions_joins_hashed_attempt_to_raw_telemetry_row() -> None:
+    wave = _wave().model_copy(
+        update={"sessions": {1: _attempt(1, hash_vendor_session_id("sess-1"))}}
+    )
+
+    rollup = rollup_wave_sessions(wave, [_telemetry("", 60_000), _telemetry("sess-1", 1_800_000)])
+
+    assert [attempt.attempt for attempt in rollup.attempts] == [1]
+    assert rollup.attempts[0].telemetry_session_id == "sess-1"
+    assert rollup.duration_ms == 1_800_000

@@ -10,9 +10,12 @@ falsifiers (the strategy-campaign 38/40 bypass). This drives the REAL
   ``command_exit_zero`` gate under an enforcing profile aborts non-zero with NO
   state write and NO waiver -- the W06 pre-flight runs the deterministic gate
   and BLOCKS on the grounded gate failure (not the blunt gate-bearing door).
-* **CR-02 (waiver door preserved).** The same close succeeds with the
-  ``--no-runtime`` operator waiver, flips the wave CLOSED, and stamps the
+* **CR-02 (waiver door preserved).** The same close succeeds once the operator
+  waives the failing gate itself (``--waive``) and passes ``--no-runtime`` for
+  the gate-bearing daemonless door; it flips the wave CLOSED and stamps the
   ``close_mechanism = daemonless-waiver`` bypass event + close-event extra.
+  ``--no-runtime`` alone no longer waives the gate failure (see
+  :mod:`tests.integration.surfaces.cli.test_daemonless_close_full_gate`).
 * **CR-03 (verdict READ gate).** A verdict-always wave with no fresh persisted
   auditor verdict is refused -- the synchronous verdict read gate runs
   in-process (the daemonless path cannot spawn the auditor) and the refusal
@@ -24,8 +27,9 @@ lives in :mod:`tests.unit.surfaces.cli.test_daemonless_close_waiver`.
 
 from __future__ import annotations
 
+import subprocess
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +40,7 @@ from typer.testing import CliRunner
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
-from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.state.models import AgentSession, RuntimeBaseline, RuntimeLatest, State
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon.gate_execution import (
     GateExecutionClaim,
@@ -209,6 +213,22 @@ def _attach_operator_session(workspace: Path) -> None:
     _state_path(workspace).write_text(state.model_dump_json(), encoding="utf-8")
 
 
+def _seed_captured_runtime(workspace: Path) -> None:
+    """Record a measured runtime so an enforcing close needs no runtime waiver.
+
+    ``--no-runtime`` also lifts the verdict read gate, so the tests that pin
+    verdict or lock behaviour measure a runtime instead of waiving it.
+    """
+    state = State.model_validate(orjson.loads(_state_path(workspace).read_bytes()))
+    wave = state.waves[_WAVE_ID]
+    claimed_at = datetime(2026, 6, 11, tzinfo=UTC)
+    wave.runtime_baseline = RuntimeBaseline(api_duration_ms=0, captured_at=claimed_at)
+    wave.runtime_latest = RuntimeLatest(
+        api_duration_ms=600_000, captured_at=claimed_at + timedelta(minutes=20)
+    )
+    _state_path(workspace).write_text(state.model_dump_json(), encoding="utf-8")
+
+
 def _close_events(workspace: Path) -> list[dict[str, Any]]:
     """Decode the ``wave close`` mutation event rows (excludes the waiver row)."""
     path = _event_path(workspace)
@@ -275,16 +295,45 @@ def test_daemonless_failing_gate_close_blocks_with_no_state_and_no_waiver(
 
 
 def test_daemonless_failing_gate_close_succeeds_with_waiver(workspace: Path) -> None:
-    """CR-02: the same failing-gate close succeeds with ``--no-runtime``, flips
-    the wave CLOSED, and stamps ``close_mechanism = daemonless-waiver`` on both
-    the bypass event and the close event.
+    """CR-02: the same failing-gate close succeeds with the gate waived and
+    ``--no-runtime`` passed, flips the wave CLOSED, and stamps
+    ``close_mechanism = daemonless-waiver`` on both the bypass event and the
+    close event.
     """
     _bootstrap_claimed_wave(workspace)
     _write_enforce_profile(workspace)
     _attach_failing_command_gate(workspace)
     _attach_operator_session(workspace)
+    # A gate waiver binds to the wave's commit; with none it reads as stale.
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(workspace),
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            f"fix: land the wave\n\nEawf-Wave: {_WAVE_ID}",
+        ],
+        check=True,
+    )
 
-    res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done", "--no-runtime"])
+    res = runner.invoke(
+        app,
+        [
+            "wave",
+            "close",
+            _WAVE_ID,
+            "--outcome",
+            "done",
+            "--waive",
+            "GATE-01",
+            "--reason",
+            "the ref is pruned upstream; checked by hand",
+            "--no-runtime",
+        ],
+    )
 
     assert res.exit_code == 0, res.stdout
     assert _wave_status(workspace) == "closed"
@@ -343,6 +392,7 @@ def test_daemonless_mechanical_wave_not_verdict_gated(workspace: Path) -> None:
     """
     _bootstrap_claimed_wave(workspace, effort_bucket="S")
     _write_enforce_profile(workspace)
+    _seed_captured_runtime(workspace)
 
     res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
 
@@ -358,6 +408,7 @@ def test_daemonless_close_preflight_does_not_hold_state_lock(
     """The fallback verifier can acquire the state lock while it runs."""
     _bootstrap_claimed_wave(workspace, effort_bucket="XL")
     _write_enforce_profile(workspace)
+    _seed_captured_runtime(workspace)
     calls = 0
 
     def _probe(
@@ -493,6 +544,7 @@ def test_daemonless_non_gate_bearing_close_claims_nothing(workspace: Path) -> No
     """
     _bootstrap_claimed_wave(workspace, effort_bucket="S")
     _write_enforce_profile(workspace)
+    _seed_captured_runtime(workspace)
 
     res = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done"])
 

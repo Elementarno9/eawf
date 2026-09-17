@@ -44,6 +44,7 @@ from eawf.runtime.daemon.methods import (
     register,
 )
 from eawf.runtime.daemon.wal import WalRecord
+from eawf.runtime.session.vendor_id import hash_vendor_session_id, same_vendor_session
 from eawf.workflow.lifecycle.wave import compute_runtime_delta
 
 if TYPE_CHECKING:
@@ -174,7 +175,7 @@ def _resolve_runtime_capture_wave_ids(  # noqa: C901
         for session in state.agent_sessions.values():
             if (
                 session.runtime != "codex"
-                or session.runtime_session_id != params.session_id
+                or not same_vendor_session(session.runtime_session_id, params.session_id)
                 or session.status != "active"
             ):
                 continue
@@ -363,13 +364,16 @@ def rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | No
     over-count -- the safer error, and the honest one.
 
     A capture with no session id, or one matching the baseline's session, leaves
-    the snapshots alone. A baseline predating the session stamp (schema < 1.15)
-    adopts the capturing session when nothing has been captured against it yet.
+    the snapshots alone. The match goes through the vendor-id hash, so a baseline
+    that still carries a raw id matches the same session's hashed capture
+    instead of folding it as a new one. A baseline predating the
+    session stamp (schema < 1.15) adopts the capturing session when nothing has
+    been captured against it yet.
     """
     baseline = wave.runtime_baseline
     if baseline is None or session_id is None:
         return
-    if baseline.session_id == session_id:
+    if same_vendor_session(baseline.session_id, session_id):
         return
     if baseline.session_id is None and wave.runtime_latest is None:
         # A baseline predating the session stamp with nothing captured against it
@@ -488,16 +492,19 @@ def upsert_interactive_session_attempt(
     attempt in place (preserving its ``attempt`` number + ``started_at``) rather
     than appending a duplicate. The dedup key is the capture ``session_id``,
     synthesised per-wave when the hook omits it so a session-less capture still
-    dedupes onto a single attempt. A capture carrying no priced cost, or one with
-    no baseline to difference against, is a no-op: there is nothing wave-scoped to
-    surface, so the wave-level snapshot stays the only record.
+    dedupes onto a single attempt. Keys are compared through the vendor-id hash,
+    so an attempt written with a raw id is updated, not duplicated. A capture
+    carrying no priced cost, or one with no baseline to difference against, is a
+    no-op: there is nothing wave-scoped to surface, so the wave-level snapshot
+    stays the only record.
 
     Args:
         wave: The active wave whose ``runtime_latest`` this capture stamped.
         latest: The runtime snapshot the same capture produced; the wave's delta
             against it feeds the attempt.
         session_id: The interactive Claude Code session id off the capture,
-            or ``None`` when the Stop hook omitted it.
+            already hashed by the RPC, or ``None`` when the Stop hook omitted
+            it.
     """
     if latest.cost_usd is None:
         return
@@ -516,7 +523,11 @@ def upsert_interactive_session_attempt(
     handle_id = session_id or f"interactive:{wave.id}"
     runtime = latest.harness or "claude-code"
     existing_no = next(
-        (no for no, sess in wave.sessions.items() if sess.session_id == handle_id),
+        (
+            no
+            for no, sess in wave.sessions.items()
+            if same_vendor_session(sess.session_id, handle_id)
+        ),
         None,
     )
     if existing_no is not None:
@@ -558,6 +569,9 @@ def upsert_interactive_session_attempt(
 async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Persist latest runtime counters onto one exactly correlated active wave.
 
+    The capture's vendor ``session_id`` is hashed before any lookup or write,
+    so state and the event store only ever carry its digest.
+
     Args:
         ctx: Server context; state, event, and WAL paths are resolved the same
             way as ``state.mutate``.
@@ -575,6 +589,12 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         args = RuntimeCaptureParams.model_validate(params)
     except ValidationError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    # The raw id names the runtime's local transcript, so only its digest may
+    # reach the snapshots, the attempt row and the event. An empty id names no
+    # session and is treated as absent.
+    args = args.model_copy(
+        update={"session_id": hash_vendor_session_id(args.session_id) if args.session_id else None}
+    )
 
     state_path, event_path, wal_path = resolve_mutator_paths(
         repo_root=args.repo_root,

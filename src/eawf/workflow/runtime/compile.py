@@ -4,8 +4,9 @@ The compiler is the gate a Run passes before anything is persisted or
 spawned. It refuses a mutating purpose outside a task scope, selects the
 highest-priority matching route and its first eligible profile, merges
 the layer stack under least authority (:mod:`eawf.workflow.runtime.merge`),
-pins the model, negotiates capabilities, and seals the result. Every
-refusal carries one :class:`CompileRejection` member.
+pins the model, negotiates capabilities, refuses a writable sandbox no
+filesystem policy bounds, and seals the result. Every refusal carries one
+:class:`CompileRejection` member.
 """
 
 from __future__ import annotations
@@ -80,6 +81,7 @@ class CompileRejection(StrEnum):
     MODEL_UNCERTIFIED = "model_uncertified"
     REQUIRED_CAPABILITY_UNAVAILABLE = "required_capability_unavailable"
     POLICY_BOUNDS_CONFLICT = "policy_bounds_conflict"
+    MUTATING_ROUTE_UNMANAGED = "mutating_route_unmanaged"
 
 
 class RunCompileError(ValueError):
@@ -372,6 +374,25 @@ def _sections(profile: AgentProviderProfile, merged: MergedPolicy) -> dict[str, 
     return built
 
 
+def _check_write_sandbox(sandbox: SandboxPolicy, *, route_id: str, profile_id: str) -> None:
+    """Refuse a writable sandbox that no filesystem policy bounds.
+
+    The provider loader refuses the route that would produce one, but a
+    configuration can be built without the loader, and the compiled spec
+    is the last point before a provider receives the workspace.
+
+    Raises:
+        RunCompileError: The compiled sandbox is ``workspace_write`` and
+            names no filesystem policy.
+    """
+    if sandbox.mode == "workspace_write" and sandbox.filesystem_policy_ref is None:
+        raise RunCompileError(
+            CompileRejection.MUTATING_ROUTE_UNMANAGED,
+            f"route {route_id!r} would give profile {profile_id!r} a workspace_write "
+            f"sandbox without a filesystem policy",
+        )
+
+
 def _source_map(
     merged: MergedPolicy, profile: LayeredProfile, route: LayeredRoute
 ) -> tuple[ResolvedFieldSource, ...]:
@@ -473,6 +494,9 @@ def compile_run_spec(
         "compiled_at": compiled_at,
         "compiler_version": COMPILER_VERSION,
     }
+    _check_write_sandbox(
+        fields["sandbox"], route_id=route.route.route_id, profile_id=profile.profile_id
+    )
     spec = CompiledRunSpec.seal(fields)
     logger.info(
         f"run spec compiled run={request.run_ref} route={route.route.route_id} "

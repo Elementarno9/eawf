@@ -1,0 +1,118 @@
+{
+  "source": ".ea/local/packet/handoff-v0.7-packet/stages/stage.css",
+  "notes": "Solid colour custom properties copied from the final packet stylesheet's two :root blocks. Three-digit hex is expanded to six digits; nothing else is changed.",
+  "oracle": {
+    "dark": {
+      "selector": ":root,:root[data-theme=dark]",
+      "vars": {
+        "void": "#14181d",
+        "surface": "#0c0e11",
+        "panel": "#12161b",
+        "panel-2": "#171c22",
+        "border": "#242a32",
+        "border-soft": "#1d2229",
+        "border-lit": "#2b313a",
+        "text": "#c2c9d1",
+        "muted": "#828a94",
+        "faint": "#5b636d",
+        "ghost": "#343b44",
+        "accent": "#16b384",
+        "accent-deep": "#009e73",
+        "accent-dim": "#0c5a44",
+        "logo": "#22cf97",
+        "st-pending": "#828a94",
+        "st-info": "#56b6c2",
+        "warn": "#e69f00",
+        "st-closed": "#16b384",
+        "err": "#d55e00"
+      }
+    },
+    "light": {
+      "selector": ":root[data-theme=light],body.theme-light",
+      "vars": {
+        "void": "#e7eaee",
+        "surface": "#f3f5f7",
+        "panel": "#ffffff",
+        "panel-2": "#f6f8fa",
+        "border": "#d3d7dc",
+        "border-soft": "#e0e4e8",
+        "border-lit": "#b9c0c8",
+        "text": "#1a1d21",
+        "muted": "#5b636d",
+        "faint": "#6f7883",
+        "ghost": "#c9ced4",
+        "accent": "#0a7a52",
+        "accent-deep": "#0a7a52",
+        "accent-dim": "#bfe0d2",
+        "logo": "#0a7a52",
+        "st-pending": "#5b636d",
+        "st-info": "#0a7a87",
+        "warn": "#9a5600",
+        "st-closed": "#0a7a52",
+        "err": "#a8331a"
+      }
+    }
+  },
+  "non_solid": ["accent-glow", "shadow", "star"],
+  "bindings": {
+    "chrome": {
+      "void": "void",
+      "surface": "surface",
+      "panel": "panel",
+      "panel-2": "panel-2",
+      "border": "border",
+      "border-soft": "border-soft",
+      "border-lit": "border-lit",
+      "foreground": "text",
+      "faint": "faint",
+      "ghost": "ghost"
+    },
+    "semantic": {
+      "accent": "accent",
+      "ok": "st-closed",
+      "warn": "warn",
+      "err": "err",
+      "muted": "muted",
+      "status-pending": "st-pending",
+      "status-claimed": "st-info",
+      "status-in-progress": "warn",
+      "status-closed": "st-closed",
+      "status-failed": "err"
+    }
+  },
+  "unbound_oracle_vars": {
+    "accent-deep": "The green the dark theme ships for st-closed; see divergences.",
+    "accent-dim": "The selection fill; the TUI pins one selection tint for every theme.",
+    "logo": "The document wordmark glow; the TUI wordmark renders in accent."
+  },
+  "unbound_theme_vars": {
+    "primary": "The packet folds focus into accent, so the focus-ring colour is product-authored to stay distinct from accent."
+  },
+  "divergences": [
+    {
+      "theme": "dark",
+      "oracle_var": "st-closed",
+      "oracle": "#16b384",
+      "shipped": "#009e73",
+      "shipped_as": "accent-deep",
+      "rationale": "The packet gives st-closed the accent green, so a closed or ok cell would render identical to the brand accent. The dark theme ships the packet's own accent-deep instead, keeping status green and brand green apart."
+    }
+  ],
+  "product_authored": {
+    "cb": {
+      "basis": "The packet ships dark and light only. The colour-blind theme is a dark theme with hue-neutral chrome, so it reuses the dark chrome and changes only the semantic hues.",
+      "chrome": {
+        "void": "#14181d",
+        "surface": "#0c0e11",
+        "panel": "#12161b",
+        "panel-2": "#171c22",
+        "border": "#242a32",
+        "border-soft": "#1d2229",
+        "border-lit": "#2b313a",
+        "foreground": "#c2c9d1",
+        "faint": "#5b636d",
+        "ghost": "#343b44"
+      }
+    }
+  }
+}

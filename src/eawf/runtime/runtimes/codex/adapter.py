@@ -499,8 +499,10 @@ def _scan_codex_events(
         (``None`` when no ``turn.completed`` usage was seen).
 
     Raises:
-        RuntimeSpawnError: an ``error`` / ``turn.failed`` event was seen,
-            or the stream carried no ``agent_message`` item.
+        RuntimeSpawnError: an ``error`` / ``turn.failed`` event was seen
+            (the unwrapped event detail rides on ``stderr`` so the failure
+            classifies by its own message), or the stream carried no
+            ``agent_message`` item.
     """
     session_id = ""
     text: str | None = None
@@ -509,12 +511,22 @@ def _scan_codex_events(
         event_type = event.get("type")
         if event_type == "error":
             detail = _unwrap_codex_error_message(event.get("message"))
-            raise RuntimeSpawnError(f"codex reported an error event: {detail!r}")
+            # Codex can report an auth or rate-limit failure as a stream event
+            # while still exiting zero, and parse_error keys on stderr -- carry
+            # the event detail there so the failure classifies by its own
+            # message instead of falling through to the generic API default.
+            raise RuntimeSpawnError(
+                f"codex reported an error event: {detail!r}",
+                stderr=detail.encode(),
+            )
         if event_type == "turn.failed":
             err = event.get("error")
             raw = err.get("message") if isinstance(err, dict) else None
             detail = _unwrap_codex_error_message(raw)
-            raise RuntimeSpawnError(f"codex turn failed: {detail!r}")
+            raise RuntimeSpawnError(
+                f"codex turn failed: {detail!r}",
+                stderr=detail.encode(),
+            )
         if event_type == "thread.started":
             session_id = str(event.get("thread_id") or "")
         elif event_type == "item.completed":

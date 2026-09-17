@@ -188,6 +188,7 @@ def test_classify_push_state_only_diff_reports_no_code(mod: ModuleType, tmp_path
     assert verdict.code is False
     assert "only state bookkeeping" in verdict.reason
     assert _GREEN[:12] in verdict.reason
+    assert verdict.green == _GREEN
 
 
 def test_classify_push_identical_tree_reports_no_code(mod: ModuleType, tmp_path: Path) -> None:
@@ -225,6 +226,7 @@ def test_classify_push_missing_baseline_reports_code(mod: ModuleType, tmp_path: 
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs()))
     assert verdict.code is True
     assert "no green baseline" in verdict.reason
+    assert verdict.green == ""
     assert git.calls == []
 
 
@@ -367,6 +369,7 @@ def test_classify_pull_request_state_only_head_and_base_reports_no_code(
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "head and base branch" in verdict.reason
+    assert verdict.green == _GREEN
 
 
 def test_classify_pull_request_unchanged_head_and_base_reports_no_code(
@@ -385,6 +388,7 @@ def test_classify_pull_request_head_code_change_reports_code(
     assert verdict.code is True
     assert "the head since green" in verdict.reason
     assert "tools/ci_changes.py" in verdict.reason
+    assert verdict.green == _GREEN
 
 
 def test_classify_pull_request_base_code_change_reports_code(
@@ -482,7 +486,7 @@ def test_main_appends_code_false_to_github_output(
     output.write_text("earlier=1\n", encoding="utf-8")
     git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/state.json")})
     assert mod.main(env, git=git, fetch=FakeFetch(_runs(_run(_GREEN)))) == 0
-    assert output.read_text(encoding="utf-8") == "earlier=1\ncode=false\n"
+    assert output.read_text(encoding="utf-8") == f"earlier=1\ncode=false\ngreen={_GREEN}\n"
     assert capsys.readouterr().out.startswith("code=false: ")
 
 
@@ -491,7 +495,7 @@ def test_main_writes_code_true_when_the_baseline_is_missing(
 ) -> None:
     env = _push_env(tmp_path)
     assert mod.main(env, git=FakeGit(mod, {}), fetch=FakeFetch(_runs())) == 0
-    assert Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8") == "code=true\n"
+    assert Path(env["GITHUB_OUTPUT"]).read_text(encoding="utf-8") == "code=true\ngreen=\n"
 
 
 def test_main_writes_code_true_for_a_scheduled_run(
@@ -500,7 +504,7 @@ def test_main_writes_code_true_for_a_scheduled_run(
     output = tmp_path / "github_output"
     env = {"GITHUB_EVENT_NAME": "schedule", "GITHUB_OUTPUT": str(output)}
     assert mod.main(env, git=FakeGit(mod, {}), fetch=FakeFetch(_runs())) == 0
-    assert output.read_text(encoding="utf-8") == "code=true\n"
+    assert output.read_text(encoding="utf-8") == "code=true\ngreen=\n"
     assert capsys.readouterr().out == "code=true: a schedule run re-proves the whole tree\n"
 
 

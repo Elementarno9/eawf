@@ -1,0 +1,129 @@
+{
+  "theme": "ea-light",
+  "size": [
+    40,
+    30
+  ],
+  "surfaces": {
+    "canvas": {
+      "channel": "background",
+      "token": "surface",
+      "fg": "#1a1d21",
+      "bg": "#f3f5f7"
+    },
+    "text": {
+      "channel": "color",
+      "token": "foreground",
+      "fg": "#1a1d21",
+      "bg": "#f3f5f7"
+    },
+    "band": {
+      "channel": "background",
+      "token": "panel",
+      "fg": "#1a1d21",
+      "bg": "#ffffff"
+    },
+    "hint": {
+      "channel": "color",
+      "token": "muted",
+      "fg": "#5b636d",
+      "bg": "#f3f5f7"
+    },
+    "brand": {
+      "channel": "color",
+      "token": "accent",
+      "fg": "#0a7a52",
+      "bg": "#f3f5f7"
+    },
+    "live": {
+      "channel": "color",
+      "token": "accent",
+      "fg": "#0a7a52",
+      "bg": "#f3f5f7"
+    },
+    "rule": {
+      "channel": "color",
+      "token": "muted",
+      "fg": "#5b636d",
+      "bg": "#f3f5f7"
+    },
+    "rail": {
+      "channel": "color",
+      "token": "faint",
+      "fg": "#6f7883",
+      "bg": "#f3f5f7"
+    },
+    "dim": {
+      "channel": "color",
+      "token": "faint",
+      "fg": "#6f7883",
+      "bg": "#f3f5f7"
+    },
+    "frame": {
+      "channel": "border",
+      "token": "border",
+      "fg": "#d3d7dc",
+      "bg": "#f3f5f7"
+    },
+    "focus": {
+      "channel": "border",
+      "token": "primary",
+      "fg": "#00503a",
+      "bg": "#f3f5f7"
+    },
+    "ok": {
+      "channel": "color",
+      "token": "ok",
+      "fg": "#0a7a52",
+      "bg": "#f3f5f7"
+    },
+    "info": {
+      "channel": "color",
+      "token": "status-claimed",
+      "fg": "#0a7a87",
+      "bg": "#f3f5f7"
+    },
+    "warn": {
+      "channel": "color",
+      "token": "warn",
+      "fg": "#9a5600",
+      "bg": "#f3f5f7"
+    },
+    "err": {
+      "channel": "color",
+      "token": "err",
+      "fg": "#a8331a",
+      "bg": "#f3f5f7"
+    },
+    "pending": {
+      "channel": "color",
+      "token": "status-pending",
+      "fg": "#5b636d",
+      "bg": "#f3f5f7"
+    },
+    "claimed": {
+      "channel": "color",
+      "token": "status-claimed",
+      "fg": "#0a7a87",
+      "bg": "#f3f5f7"
+    },
+    "in-progress": {
+      "channel": "color",
+      "token": "status-in-progress",
+      "fg": "#9a5600",
+      "bg": "#f3f5f7"
+    },
+    "closed": {
+      "channel": "color",
+      "token": "status-closed",
+      "fg": "#0a7a52",
+      "bg": "#f3f5f7"
+    },
+    "failed": {
+      "channel": "color",
+      "token": "status-failed",
+      "fg": "#a8331a",
+      "bg": "#f3f5f7"
+    }
+  }
+}

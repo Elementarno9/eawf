@@ -1,12 +1,14 @@
 """Hardcoded-baseline regression for the lifecycle status-tint hexes.
 
-The green-accent rotation moves ONLY ``accent`` / ``primary``
-in the per-theme palettes; the Wong/IBM lifecycle ``status-*`` tints and
-the ``ok`` / ``warn`` / ``err`` band hexes stay byte-identical. The
-sibling :mod:`tests.tui.test_widgets_status_tint` suite proves the maps
-DERIVE from :data:`~eawf.surfaces.tui.theme.WONG_VARIABLES` (the DRY
-contract), but that derivation tracks any WONG retune silently -- a future
-edit that recolours a Wong ``status-*`` hex would keep those tests green.
+The green-accent rotation moved ONLY ``accent`` / ``primary`` in the
+per-theme palettes, and the packet colour-oracle binding moved only the
+dark ``status-pending`` grey onto the packet's ``#828a94``; every other
+Wong/IBM lifecycle ``status-*`` tint and the ``ok`` / ``warn`` / ``err``
+band hexes stay byte-identical. The sibling
+:mod:`tests.tui.test_widgets_status_tint` suite proves the maps DERIVE
+from :data:`~eawf.surfaces.tui.theme.WONG_VARIABLES` (the DRY contract),
+but that derivation tracks any WONG retune silently -- a future edit that
+recolours a Wong ``status-*`` hex would keep those tests green.
 
 This suite is the byte-baseline backstop: it hardcodes the documented
 prior hexes so an accidental tint move (in the Wong palette OR in the
@@ -20,18 +22,18 @@ from __future__ import annotations
 from eawf.surfaces.tui.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX, STATUS_COLOURS
 
-#: The documented prior Wong deuteranopia-safe lifecycle tints. These MUST
-#: NOT change under the green-accent rotation -- only ``accent`` /
-#: ``primary`` move. Hardcoded (not derived) so a WONG retune reds this.
+#: The documented Wong deuteranopia-safe lifecycle tints, with the pending
+#: grey bound to the packet oracle. Hardcoded (not derived) so a WONG
+#: retune reds this.
 _EXPECTED_STATUS_HEX: dict[str, str] = {
-    "pending": "#6c6c6c",
-    "planned": "#6c6c6c",
+    "pending": "#828a94",
+    "planned": "#828a94",
     "claimed": "#56b6c2",
     "in_progress": "#e69f00",
     "active": "#e69f00",
     "closed": "#009e73",
-    "abandoned": "#6c6c6c",
-    "archived": "#6c6c6c",
+    "abandoned": "#828a94",
+    "archived": "#828a94",
     "failed": "#d55e00",
 }
 
@@ -78,8 +80,8 @@ def test_accent_primary_rotated_to_green_but_tints_untouched() -> None:
     """
     assert WONG_VARIABLES["accent"] == "#16b384"
     assert WONG_VARIABLES["primary"] == "#5ce8bb"
-    # The named tints did not ride the rotation.
-    assert WONG_VARIABLES["status-pending"] == "#6c6c6c"
+    # The named tints did not ride the rotation; pending took the oracle grey.
+    assert WONG_VARIABLES["status-pending"] == "#828a94"
     assert WONG_VARIABLES["status-in-progress"] == "#e69f00"
     assert WONG_VARIABLES["status-closed"] == "#009e73"
     assert WONG_VARIABLES["status-failed"] == "#d55e00"
