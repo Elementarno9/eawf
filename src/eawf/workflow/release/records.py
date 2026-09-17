@@ -20,6 +20,12 @@ idempotent for a replayed transition (same key, same revision, same
 envelope id) while the lineage from DRAFT to APPROVED stays readable.
 The collection reads back the highest revision per release key, which is
 the record's current state.
+
+Rows under either record tag load, and each keeps the tag it was written
+under. Every row appended here is tagged
+:data:`~eawf.kernel.spec.release.RELEASE_SCHEMA_VERSION`, including a
+revision derived from a ``release/v1`` row: a transition copies the tag
+forward, but the bytes this writer produces are the current shape.
 """
 
 from __future__ import annotations
@@ -30,7 +36,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from eawf.kernel.spec.release import Release
+from eawf.kernel.spec.release import RELEASE_SCHEMA_VERSION, Release
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -73,7 +79,7 @@ def record_release(
     recorded_at: datetime,
     summary: str,
 ) -> Release:
-    """Append *release* to the collection and return it unchanged.
+    """Append *release* under the current record tag and return what was written.
 
     Args:
         state_path: Path to ``state.json``.
@@ -82,7 +88,10 @@ def record_release(
         summary: One-line operator-facing description.
 
     Returns:
-        *release*, so a caller can persist and return in one expression.
+        *release* tagged
+        :data:`~eawf.kernel.spec.release.RELEASE_SCHEMA_VERSION`, which
+        is the record the appended row carries, so a caller can persist
+        and return in one expression.
 
     Raises:
         TypeError: When *release* is not a
@@ -95,22 +104,23 @@ def record_release(
         raise TypeError(f"release must be Release; got {type(release).__name__}")
     if recorded_at.tzinfo is None:
         raise ValueError("recorded_at must be timezone-aware")
+    written = release.model_copy(update={"schema_version": RELEASE_SCHEMA_VERSION})
     append_envelope(
         release_records_path(state_path),
         Envelope(
-            id=record_envelope_id(release),
+            id=record_envelope_id(written),
             kind=StoreKind.RELEASE_RECORD,
-            scope_id=release.key,
+            scope_id=written.key,
             created_at=recorded_at,
             summary=summary[:500],
-            payload=release.model_dump(mode="json"),
+            payload=written.model_dump(mode="json"),
         ),
     )
     logger.info(
-        f"record_release key={release.key!r} status={release.status.value!r} "
-        f"revision={release.revision}"
+        f"record_release key={written.key!r} status={written.status.value!r} "
+        f"revision={written.revision} source_schema_version={release.schema_version!r}"
     )
-    return release
+    return written
 
 
 def read_release_records(state_path: Path) -> dict[str, Release]:
@@ -121,13 +131,15 @@ def read_release_records(state_path: Path) -> dict[str, Release]:
 
     Returns:
         A mapping of ``REL-<version>`` key to the highest-revision
-        record written under it. Empty when nothing has been recorded.
+        record written under it, carrying the tag of the row it was
+        read from. Empty when nothing has been recorded.
 
     Raises:
         ValueError: When a line is not a valid envelope, is filed under
-            another store kind, or does not carry a release record. A
-            corrupt collection is a refusal rather than a skipped line:
-            skipping is how an approval quietly disappears.
+            another store kind, or does not carry a release record, an
+            unknown record tag included. A corrupt collection is a
+            refusal rather than a skipped line: skipping is how an
+            approval quietly disappears.
     """
     path = release_records_path(state_path)
     if not path.exists():

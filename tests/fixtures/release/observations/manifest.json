@@ -16,7 +16,7 @@
         },
         {
           "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
-          "filename": "eawf-plugin-0.7.0.dev1.zip",
+          "filename": "eawf-plugin-0.7.0.dev1.tar.gz",
           "kind": "plugin_bundle"
         }
       ],
@@ -25,8 +25,8 @@
     "npm": {
       "artifacts": [
         {
-          "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
-          "filename": "eawf-0.7.0-dev.1.tgz",
+          "digest": "sha256:59b05d254cb3d41ada2e698497b49a2419337ff7f49cd47b959654c1dcaae6f8",
+          "filename": "elementarno-eawf-0.7.0-dev.1.tgz",
           "kind": "codex_plugin"
         }
       ],

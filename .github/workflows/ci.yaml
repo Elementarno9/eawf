@@ -4,14 +4,58 @@ on:
   push:
     branches: [main, release, "release/**"]
   pull_request:
+  # The nightly and hand-started runs carry the twice-green proof between
+  # pushes. GitHub fires a schedule on the default branch only.
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # The event name keeps a nightly or dispatched run on main out of the push
+  # group, so a merge to main and the nightly run never cancel each other.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Classify changes since the last green tree
+    # A phase close pushes state-only commits onto a tree CI already proved
+    # green, and re-running the matrix and twice-green on it costs about half
+    # an hour per push. This job compares the checkout with the last green
+    # ci.yaml run on the same ref and exposes code=false only when every
+    # changed path is state bookkeeping; the heavy jobs gate on that output.
+    # It must stay unconditional and must not swallow a failure: a skipped or
+    # crashed classifier would leave the output empty and skip the matrix.
+    # Every lookup failure fails open to code=true inside the tool, and a
+    # scheduled or dispatched run, which has no diff to classify, always
+    # reports code=true.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read # list this workflow's green runs
+      contents: read
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        # The runner's system Python: the tool is stdlib-only, so the job
+        # needs no uv install or dependency sync.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/ci_changes.py
+
   test:
     name: ${{ matrix.os }} / py${{ matrix.python }}
+    needs: changes
+    # Skipped only when the changes job proved the code tree is the one the
+    # last green run tested.
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -226,6 +270,19 @@ jobs:
     # means by reproducibly green. The two runs are separate steps on
     # purpose: GitHub fails the job on the first non-zero step, so each
     # run's exit code is asserted independently.
+    # Cadence: the REL-026 proof runs on main and release pushes plus
+    # nightly and manual runs, never on a pull request. On every pull
+    # request push it bounded CI wall-clock while its second run never
+    # caught a defect the first run missed, so a flake it finds now
+    # surfaces after merge and holds the release gate until fixed. A push
+    # still skips it when the changes job proved the code tree already
+    # went green. A scheduled or dispatched run has no diff to classify and
+    # exists to re-prove the whole tree, so the changes gate does not apply
+    # to it and it always runs.
+    needs: changes
+    if: >-
+      (github.event_name == 'push' && needs.changes.outputs.code == 'true')
+      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:

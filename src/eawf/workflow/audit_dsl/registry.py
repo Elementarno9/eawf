@@ -666,6 +666,23 @@ def _write_full_log(
     target.write_text(payload, encoding="utf-8")
 
 
+def resolve_timeout_seconds(args: CommandExitZeroArgs) -> int:
+    """Return the subprocess budget a command gate runs under.
+
+    One home for the budget, so a progress manifest publishes exactly the
+    deadline the runner enforces.
+
+    Args:
+        args: Validated command-gate arguments.
+
+    Returns:
+        ``timeout_s`` when the gate sets one, else its class default.
+    """
+    if args.timeout_s is not None:
+        return args.timeout_s
+    return _TIMEOUT_CLASS_SECONDS[args.timeout_class]
+
+
 def _check_command_exit_zero(
     spec: CheckSpec,
     cwd: Path,
@@ -713,9 +730,7 @@ def _check_command_exit_zero(
             f"check {spec.name!r} kind=command_exit_zero: argv rejected by L0 policy: {exc}"
         ) from exc
     timeout_class = args.timeout_class
-    seconds = (
-        args.timeout_s if args.timeout_s is not None else _TIMEOUT_CLASS_SECONDS[timeout_class]
-    )
+    seconds = resolve_timeout_seconds(args)
 
     diff_base = "all" if args.scope == "all" else derive_diff_base(args.wave_id, repo_root=cwd)
     selected_files = _resolve_scope_files(
@@ -1219,4 +1234,5 @@ __all__ = [
     "CheckFn",
     "execute_check",
     "registered_audit_dsl_kinds",
+    "resolve_timeout_seconds",
 ]

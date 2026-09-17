@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from eawf.kernel.config.schema import VcsConventionsConfig
+from eawf.kernel.config.schema import IntegrationCommitUnit, TaskReference, VcsConventionsConfig
 
 CoauthorMode = Literal["runtime", "project", "disabled"]
 
@@ -109,6 +109,8 @@ class VcsConfig(BaseModel):
     require_ci_green: bool
     require_review_before_merge: bool
     force_push: str
+    integration_commit_unit: IntegrationCommitUnit = "batch"
+    task_reference: TaskReference = "trailer"
     conventions: VcsConventionsConfig = Field(default_factory=VcsConventionsConfig)
     coauthor: CoauthorConfig = Field(default_factory=CoauthorConfig)
 

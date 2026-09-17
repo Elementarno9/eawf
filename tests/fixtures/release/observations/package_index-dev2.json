@@ -1,0 +1,23 @@
+{
+  "payload": {
+    "info": {
+      "name": "eawf",
+      "version": "0.7.0.dev2"
+    },
+    "urls": [
+      {
+        "digests": {
+          "sha256": "d03753d6be17812e68621d2bb0ca1afef5dd07ef0148848c8ab14f239b998da5"
+        },
+        "filename": "eawf-0.7.0.dev2-py3-none-any.whl"
+      },
+      {
+        "digests": {
+          "sha256": "51218682f4581294f7c0ab1a78ba846b31fee3222b73349402aa985a05a12b78"
+        },
+        "filename": "eawf-0.7.0.dev2.tar.gz"
+      }
+    ]
+  },
+  "status": 200
+}

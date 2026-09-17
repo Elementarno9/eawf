@@ -590,6 +590,50 @@ def _release_document(path: Path, release_key: str) -> dict[str, Any]:
     return record
 
 
+def _current_record(
+    release_file: Path | None,
+    release_key: str,
+    *,
+    workspace: Path | None,
+) -> dict[str, Any]:
+    """Return the record a registry verb acts on: the file, else the stored one.
+
+    Every registry verb records the record it produces, so the store
+    holds the revision the next verb must present, whereas a file saved
+    one step early is a stale revision.
+
+    Args:
+        release_file: The ``--release`` path, or ``None`` for the store.
+        release_key: The key the operator named on the command line.
+        workspace: The ``--workspace`` root, or ``None``.
+
+    Returns:
+        The serialized record.
+
+    Raises:
+        cli_errors.UserError: When the file is unreadable or holds
+            another release, or nothing is stored for the key.
+        cli_errors.ValidationError: When the file is not a JSON object
+            or the record collection is corrupt.
+    """
+    from eawf.workflow.release.records import read_release_record
+
+    if release_file is not None:
+        return _release_document(release_file, release_key)
+    state_path, _reason = resolve_with_reason(workspace)
+    try:
+        record = read_release_record(state_path, release_key)
+    except ValueError as exc:
+        raise cli_errors.ValidationError(f"release record collection is corrupt: {exc}") from exc
+    if record is None:
+        raise cli_errors.UserError(
+            f"no release record is stored for {release_key!r}; open the checkpoint with "
+            f"`eawf release create`, or pass --release <file>",
+            kind="NotFound",
+        )
+    return record.model_dump(mode="json")
+
+
 def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
     """Call one ``release.*`` JSON-RPC method and return its result.
 
@@ -649,10 +693,6 @@ def release_observe(
     target: Annotated[
         str, typer.Option("--target", help="Publication target to read back, e.g. pypi.")
     ],
-    release_file: Annotated[
-        Path,
-        typer.Option("--release", help="Path to the serialized Release record being observed."),
-    ],
     manifest_file: Annotated[
         Path,
         typer.Option("--manifest", help="Path to the frozen manifest the release approved."),
@@ -660,6 +700,10 @@ def release_observe(
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this read-back.")
     ],
+    release_file: Annotated[
+        Path | None,
+        typer.Option("--release", help="Record file (default: the stored record)."),
+    ] = None,
     response_file: Annotated[
         Path | None,
         typer.Option("--response", help="Recorded registry answer to judge, as JSON."),
@@ -682,14 +726,16 @@ def release_observe(
     target set bakes it. A read-back that settled nothing refuses with
     ``observation_inconclusive`` rather than guessing.
 
-    No HTTP client ships here yet, so ``--response`` is how the recorded
-    registry answer reaches the adapter. Without it the leg's reader
-    reports ``registry_unreachable`` and the verb refuses -- which is the
-    honest answer for a registry nobody queried.
+    Without ``--response`` the daemon reads the registry live; a version
+    still missing inside the propagation window of the leg's reported
+    success refuses as ``observation_inconclusive``. A ``--response``
+    must carry what the reader adds (npm tarball digest, repository).
+
+    Without ``--release`` it observes the record the store holds.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _release_document(release_file, release_key)
+        record = _current_record(release_file, release_key, workspace=flags.workspace)
         params: dict[str, Any] = {
             "release": record,
             "expected_revision": record.get("revision", 0),
@@ -974,10 +1020,6 @@ def release_publish(
     release_key: Annotated[
         str, typer.Argument(help="Release key to publish, e.g. REL-0.7.0.dev1.")
     ],
-    release_file: Annotated[
-        Path,
-        typer.Option("--release", help="Path to the serialized approved record."),
-    ],
     approved_manifest_digest: Annotated[
         str, typer.Option("--approved-manifest-digest", help="Manifest digest the approval bound.")
     ],
@@ -987,6 +1029,10 @@ def release_publish(
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this publication.")
     ],
+    release_file: Annotated[
+        Path | None,
+        typer.Option("--release", help="Record file (default: the stored record)."),
+    ] = None,
     source: Annotated[
         str | None,
         typer.Option("--source", help="Source revision the chokepoint sweep runs at."),
@@ -1003,12 +1049,14 @@ def release_publish(
     be a fresh preflight. The legs are queued, not awaited, so the verb
     returns the operation reference immediately and a slow registry
     cannot hold the call open. Replaying the same idempotency key with
-    the same payload returns the original receipt instead of publishing
-    twice.
+    the same request returns the original receipt instead of publishing
+    twice, even after the record has moved on.
+
+    Without ``--release`` it publishes the record the store holds.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _release_document(release_file, release_key)
+        record = _current_record(release_file, release_key, workspace=flags.workspace)
         result = _dispatch(
             RELEASE_RPC_METHODS["publish"],
             {
@@ -1032,10 +1080,6 @@ def release_retry(
     ctx: typer.Context,
     release_key: Annotated[str, typer.Argument(help="Release key whose leg is re-queued.")],
     target: Annotated[str, typer.Option("--target", help="The single leg to re-queue.")],
-    release_file: Annotated[
-        Path,
-        typer.Option("--release", help="Path to the serialized record being retried."),
-    ],
     proof_digest: Annotated[
         str,
         typer.Option("--proof-digest", help="Artifact-set digest; must equal the operation's."),
@@ -1043,6 +1087,10 @@ def release_retry(
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this retry.")
     ],
+    release_file: Annotated[
+        Path | None,
+        typer.Option("--release", help="Record file (default: the stored record)."),
+    ] = None,
 ) -> None:
     """Re-queue one leg of the open episode under the idempotency proof.
 
@@ -1050,10 +1098,12 @@ def release_retry(
     different artifact set is a different publication wearing the same
     version, and the verb refuses it ``unsafe_release_retry`` rather than
     letting one version mean two builds.
+
+    Without ``--release`` it retries the record the store holds.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _release_document(release_file, release_key)
+        record = _current_record(release_file, release_key, workspace=flags.workspace)
         result = _dispatch(
             RELEASE_RPC_METHODS["retry"],
             {
@@ -1075,13 +1125,13 @@ def release_reconcile(
     ctx: typer.Context,
     release_key: Annotated[str, typer.Argument(help="Release key whose leg is settled.")],
     target: Annotated[str, typer.Option("--target", help="The leg whose adapter reported late.")],
-    release_file: Annotated[
-        Path,
-        typer.Option("--release", help="Path to the serialized record being reconciled."),
-    ],
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this reconciliation.")
     ],
+    release_file: Annotated[
+        Path | None,
+        typer.Option("--release", help="Record file (default: the stored record)."),
+    ] = None,
     status: Annotated[
         str | None,
         typer.Option(
@@ -1104,6 +1154,10 @@ def release_reconcile(
     receipt to a failure claim would leave the ledger holding the claim.
     Neither door reaches an ``observed_*`` status -- confirming an
     artifact is really on the registry is ``eawf release observe``.
+
+    A ``--receipt`` names the run that published the leg, so it also
+    settles a leg nothing marked as dispatched. Without ``--release`` it
+    reconciles the record the store holds.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -1113,7 +1167,7 @@ def release_reconcile(
                 "(the publish job's own, which decides the status)",
                 kind="InvalidInput",
             )
-        record = _release_document(release_file, release_key)
+        record = _current_record(release_file, release_key, workspace=flags.workspace)
         params: dict[str, Any] = {
             "release": record,
             "expected_revision": record.get("revision", 0),

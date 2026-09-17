@@ -1,10 +1,10 @@
 name: Phase Release
 
-# phase-release.yaml ships: post-merge per-phase release automation.
-# Reads a phase-close commit subject annotation like ``(release=v0.4.0)``,
-# verifies the source version matches, creates the annotated tag, and publishes
-# release notes from the merged phase PR body. The tag push then triggers the
-# existing Release workflow for package build / publish.
+# phase-release.yaml ships: post-merge per-phase release check. Reads a
+# phase-close commit subject annotation like ``(release=v0.4.0)``, verifies the
+# source version matches, and prints the ``eawf release tag --push`` command.
+# It pushes no tag: a tag pushed with this job's token starts no workflow run,
+# so release.yaml and plugin-release.yaml would never publish it.
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: read
 
 concurrency:
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   phase-release:
-    name: Tag phase release
+    name: Check phase release annotation
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -106,31 +106,28 @@ jobs:
           print(f"version source agrees with the annotation: {normalise(actual)}")
           PY
 
-      - name: Create annotated tag
+      - name: Print the release tag command
         if: steps.annotation.outputs.release_required == 'true'
+        # The operator tags from a clean checkout of the merge commit: the
+        # verb sweeps readiness before it tags, and a push made with the
+        # operator's own credentials is what starts the publish workflows.
+        # No release object is made here either. plugin-release.yaml creates
+        # or edits it with the prerelease flag, where one made here would
+        # advertise a dev tag as the latest release. The notice lands on the
+        # run page because nothing publishes until the tag is pushed.
         env:
-          TAG: ${{ steps.annotation.outputs.tag }}
+          VERSION: ${{ steps.annotation.outputs.version }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           set -euo pipefail
-          # The runner has no git identity by default, and ``git tag -a`` needs
-          # one (else "fatal: empty ident name"); set the github-actions bot.
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "tag $TAG already exists" >&2
-            exit 1
-          fi
-          git tag -a "$TAG" "$MERGE_SHA" -m "Release $TAG"
-          git push origin "$TAG"
-
-      - name: Publish phase release notes
-        if: steps.annotation.outputs.release_required == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.annotation.outputs.tag }}
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          printf '%s\n' "$PR_BODY" > release-notes.md
-          gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
+          command="eawf release tag ${VERSION} --push"
+          echo "::notice title=Tag the phase release::Nothing is published yet. From a clean checkout of ${MERGE_SHA}, run: ${command}"
+          {
+            echo "## Tag the phase release"
+            echo
+            echo "Nothing is published yet. From a clean checkout of the merge commit \`${MERGE_SHA}\`, run:"
+            echo
+            echo '```'
+            echo "${command}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

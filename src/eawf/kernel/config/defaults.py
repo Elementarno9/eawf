@@ -337,6 +337,8 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "require_ci_green": True,
         "require_review_before_merge": True,
         "force_push": "forbidden_protected",
+        "integration_commit_unit": "batch",
+        "task_reference": "trailer",
         "coauthor": {
             "mode": "runtime",
             "default_runtime": "claude",

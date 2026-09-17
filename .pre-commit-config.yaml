@@ -54,7 +54,13 @@ repos:
         # Whether a given digest trips the Hex-High-Entropy plugin depends on
         # the digest's own bytes, so a regenerated golden can start tripping
         # for a fixture that did not before -- the baseline could never settle.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/|^tests/golden/kernel/migration/'
+        #
+        # The live release-observation captures (``*-dev2.json``) are the
+        # same class: public registry bodies recorded to pin the published
+        # artifacts' real sha256 digests. They are trimmed to the fields the
+        # readers read, which test_observe_adapters enforces, so nothing but
+        # names, URLs and digests can land in them.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/|^tests/golden/kernel/migration/|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0

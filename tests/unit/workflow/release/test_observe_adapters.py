@@ -1,12 +1,16 @@
 """REL-018: the three publication observation adapters.
 
-Under test: every adapter queried against a committed recorded response
-and answering with a :class:`PublicationObservation` that names the
-externally queried identity, the digests it read back, the digest
-pinning the response it read them out of, and an evidence reference
-that reconstructs the read-back. The match / missing / mismatch /
-unknown quartet is driven for all three adapters off the same fixture
-set, so a new adapter cannot ship with only its happy path recorded.
+Under test: every adapter queried against a committed registry body --
+recorded from the live registries and passed through the leg's live
+reader -- and answering with a :class:`PublicationObservation` that
+names the externally queried identity, the digests it read back, the
+digest pinning the response it read them out of, and an evidence
+reference that reconstructs the read-back. The match / missing /
+mismatch / unknown quartet is driven for all three adapters off the same
+fixture set, so a new adapter cannot ship with only its happy path
+recorded. The fixtures carry the live shapes: no ``dist.files`` on the
+npm packument, and no ``repository`` on the source-host release object,
+whose asset digests are ``sha256:``-prefixed.
 
 Also under test: the adapter is resolved from the target's declared
 ``observe_adapter`` and nothing else -- an undeclared adapter name is
@@ -16,6 +20,7 @@ total over the adapter enum, so a runtime fallback has nowhere to hide.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import datetime
@@ -48,13 +53,29 @@ from eawf.workflow.release.observation import (
     evidence_reference,
     observation_request,
 )
+from eawf.workflow.release.registry_readers import (
+    NPM_TARBALL_DIGESTS_FIELD,
+    SOURCE_HOST_REPOSITORY_FIELD,
+    HttpReply,
+    NpmRegistryReader,
+    PackageIndexReader,
+    SourceHostReleaseReader,
+    UrllibOpener,
+)
 from tests._release_helpers import (
     ADAPTER_STEMS,
+    FROZEN_NPM_TARBALL,
     NOW,
+    OBSERVATION_FIXTURES,
+    REPUBLISHED_NPM_TARBALL,
+    RecordedRegistry,
     dev1_config,
     frozen_manifest,
     read_back_request,
+    recorded_registry,
     recorded_response,
+    registry_answer,
+    registry_reader,
     release_record,
 )
 
@@ -105,9 +126,24 @@ def test_a_match_reports_every_frozen_digest_it_read_back(target_id: str) -> Non
 
 @pytest.mark.parametrize("target_id", TARGET_IDS)
 def test_a_mismatch_names_the_digest_that_disagreed(target_id: str) -> None:
+    frozen = {
+        artifact.filename: artifact.digest for artifact in read_back_request(target_id).artifacts
+    }
     observation = observe(target_id, "mismatch")
+    disagreeing = {
+        name: digest
+        for name, digest in observation.observed_digests.items()
+        if digest != frozen[name]
+    }
     assert observation.code is ObservationCode.DIGEST_MISMATCH
-    assert f"sha256:{'9' * 64}" in observation.detail
+    assert len(disagreeing) == 1
+    assert next(iter(disagreeing.values())) in observation.detail
+
+
+def test_the_npm_mismatch_is_the_digest_of_the_tarball_the_registry_served() -> None:
+    observation = observe("npm", "mismatch")
+    served = f"sha256:{hashlib.sha256(REPUBLISHED_NPM_TARBALL).hexdigest()}"
+    assert dict(observation.observed_digests) == {"elementarno-eawf-0.7.0-dev.1.tgz": served}
 
 
 @pytest.mark.parametrize("target_id", TARGET_IDS)
@@ -210,6 +246,33 @@ def test_npm_registry_answering_about_another_package_is_an_identity_mismatch() 
     assert observation.code is ObservationCode.IDENTITY_MISMATCH
 
 
+def test_observe_npm_registry_matches_through_the_readers_tarball_digest() -> None:
+    frozen = read_back_request("npm").artifacts[0]
+    response = recorded_response("npm", "match")
+    assert response.payload is not None
+    entry = response.payload["versions"]["0.7.0-dev.1"]
+    assert entry["dist"][NPM_TARBALL_DIGESTS_FIELD] == {frozen.filename: frozen.digest}
+    assert frozen.digest == f"sha256:{hashlib.sha256(FROZEN_NPM_TARBALL).hexdigest()}"
+
+
+def test_observe_npm_registry_on_a_packument_the_reader_never_hashed_is_artifact_absent() -> None:
+    status, payload = registry_answer("npm", "match")
+    observation = collect_observation(
+        read_back_request("npm"),
+        response=RecordedResponse(status=status, payload=payload),
+        observed_at=NOW,
+    )
+    assert observation.code is ObservationCode.ARTIFACT_ABSENT
+    assert "exposed: []" in observation.detail
+
+
+def test_observe_npm_registry_on_a_stale_packument_is_version_absent() -> None:
+    observation = observe("npm", "stale")
+    assert observation.code is ObservationCode.VERSION_ABSENT
+    assert "0.7.0-dev.1" in observation.detail
+    assert "0.6.8" in observation.detail
+
+
 def test_npm_registry_reads_the_semver_spelling_of_the_checkpoint() -> None:
     payload = json.loads(json.dumps(recorded_response("npm", "match").payload))
     payload["versions"] = {"0.7.0.dev1": payload["versions"]["0.7.0-dev.1"]}
@@ -219,6 +282,26 @@ def test_npm_registry_reads_the_semver_spelling_of_the_checkpoint() -> None:
         observed_at=NOW,
     )
     assert observation.code is ObservationCode.VERSION_ABSENT
+
+
+def test_observe_source_host_release_matches_through_the_injected_repository() -> None:
+    response = recorded_response("github", "match")
+    assert response.payload is not None
+    assert response.payload[SOURCE_HOST_REPOSITORY_FIELD] == read_back_request("github").identity
+    assert observe("github", "match").code is ObservationCode.MATCHED
+
+
+def test_observe_source_host_release_on_a_body_the_reader_never_saw_is_an_identity_mismatch() -> (
+    None
+):
+    status, payload = registry_answer("github", "match")
+    observation = collect_observation(
+        read_back_request("github"),
+        response=RecordedResponse(status=status, payload=payload),
+        observed_at=NOW,
+    )
+    assert observation.code is ObservationCode.IDENTITY_MISMATCH
+    assert "repository None" in observation.detail
 
 
 def test_source_host_release_hanging_off_another_tag_is_an_identity_mismatch() -> None:
@@ -303,9 +386,119 @@ def test_an_undeclared_adapter_is_refused_at_configuration_load() -> None:
     assert excinfo.value.code is ReleaseConfigRejection.MISSING_OBSERVATION_ADAPTER
 
 
-def test_the_default_reader_reports_an_unreachable_registry() -> None:
-    observation = collect_observation(read_back_request("pypi"), observed_at=NOW)
+@pytest.mark.parametrize(
+    ("adapter", "reader_type"),
+    (
+        (ObservationAdapter.PACKAGE_INDEX, PackageIndexReader),
+        (ObservationAdapter.NPM_REGISTRY, NpmRegistryReader),
+        (ObservationAdapter.SOURCE_HOST_RELEASE, SourceHostReleaseReader),
+    ),
+)
+def test_the_default_readers_query_the_live_registries_through_urllib(
+    adapter: ObservationAdapter,
+    reader_type: type[PackageIndexReader | NpmRegistryReader | SourceHostReleaseReader],
+) -> None:
+    reader = DEFAULT_REGISTRY_READERS[adapter]
+    assert isinstance(reader, reader_type)
+    assert isinstance(reader.opener, UrllibOpener)
+
+
+@pytest.mark.parametrize("target_id", TARGET_IDS)
+def test_collect_observation_asks_the_leg_reader_when_no_response_is_given(target_id: str) -> None:
+    request = read_back_request(target_id)
+    registry = recorded_registry(target_id, "match", request)
+    readers = {request.target.observe_adapter: registry_reader(target_id, registry)}
+    observation = collect_observation(request, observed_at=NOW, readers=readers)
+    assert observation.code is ObservationCode.MATCHED
+    assert registry.requests
+
+
+@pytest.mark.parametrize("target_id", TARGET_IDS)
+def test_collect_observation_over_an_unanswering_registry_is_unreachable(target_id: str) -> None:
+    request = read_back_request(target_id)
+    recorded = recorded_registry(target_id, "match", request)
+    silent = RecordedRegistry(answers=dict.fromkeys(recorded.answers, HttpReply(status=0)))
+    readers = {request.target.observe_adapter: registry_reader(target_id, silent)}
+    observation = collect_observation(request, observed_at=NOW, readers=readers)
     assert observation.code is ObservationCode.REGISTRY_UNREACHABLE
+    assert observation.conclusive is False
+
+
+# --- the recorded bodies keep the live registry shapes --------------------
+
+
+#: Every field a recorded registry body may carry: what the readers and
+#: adapters read, and nothing else. ``*`` stands for a map's own keys (a
+#: dist-tag, a version). Anything more -- a maintainer, an uploader, an
+#: avatar -- is personal data the recording should have trimmed.
+RECORDED_FIELDS = {
+    "package_index": {
+        "info",
+        "info.name",
+        "info.version",
+        "urls",
+        "urls[].filename",
+        "urls[].digests",
+        "urls[].digests.sha256",
+    },
+    "npm_registry": {
+        "name",
+        "dist-tags",
+        "dist-tags.*",
+        "versions",
+        "versions.*",
+        "versions.*.dist",
+        "versions.*.dist.tarball",
+    },
+    "source_host_release": {
+        "tag_name",
+        "prerelease",
+        "assets",
+        "assets[].name",
+        "assets[].digest",
+    },
+}
+
+
+def field_paths(value: object, prefix: str = "") -> set[str]:
+    """Return the dotted field paths of a decoded body, maps keyed by ``*``."""
+    paths: set[str] = set()
+    if isinstance(value, dict):
+        opaque = prefix in {"dist-tags", "versions"}
+        for key, child in value.items():
+            path = f"{prefix}.{'*' if opaque else key}" if prefix else key
+            paths |= {path} | field_paths(child, path)
+    elif isinstance(value, list):
+        for child in value:
+            paths |= field_paths(child, f"{prefix}[]")
+    return paths
+
+
+@pytest.mark.parametrize("stem", sorted(RECORDED_FIELDS))
+def test_the_recorded_bodies_carry_only_the_fields_that_are_read(stem: str) -> None:
+    paths = sorted(OBSERVATION_FIXTURES.glob(f"{stem}-*.json"))
+    assert len(paths) >= 5
+    for path in paths:
+        payload = json.loads(path.read_text(encoding="utf-8"))["payload"]
+        assert field_paths(payload or {}) <= RECORDED_FIELDS[stem], path.name
+
+
+def test_the_recorded_npm_packuments_carry_no_dist_files() -> None:
+    for path in sorted(OBSERVATION_FIXTURES.glob("npm_registry-*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))["payload"] or {}
+        for entry in payload.get("versions", {}).values():
+            assert "files" not in entry["dist"], path.name
+            assert NPM_TARBALL_DIGESTS_FIELD not in entry["dist"], path.name
+            assert entry["dist"]["tarball"].startswith("https://registry.npmjs.org/"), path.name
+
+
+def test_the_recorded_release_objects_carry_no_repository_and_prefixed_digests() -> None:
+    for path in sorted(OBSERVATION_FIXTURES.glob("source_host_release-*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))["payload"]
+        if payload is None:
+            continue
+        assert SOURCE_HOST_REPOSITORY_FIELD not in payload, path.name
+        assert all(asset["digest"].startswith("sha256:") for asset in payload["assets"]), path.name
 
 
 def test_a_naive_observation_instant_is_refused() -> None:
@@ -360,7 +553,7 @@ def test_the_manifest_digest_changes_when_a_frozen_digest_changes() -> None:
                     "artifacts": [
                         {
                             "kind": "codex_plugin",
-                            "filename": "eawf-0.7.0-dev.1.tgz",
+                            "filename": "elementarno-eawf-0.7.0-dev.1.tgz",
                             "digest": f"sha256:{'7' * 64}",
                         }
                     ],

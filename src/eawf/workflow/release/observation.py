@@ -102,7 +102,10 @@ class ObservationCode(StrEnum):
 
     Values:
         MATCHED: Every frozen artifact is exposed at its frozen digest.
-        VERSION_ABSENT: The registry exposes no such version.
+        VERSION_ABSENT: The registry exposes no such version. Settlement
+            treats it as a retry while the leg is still inside its
+            propagation window, because a cached answer can predate
+            the upload.
         IDENTITY_MISMATCH: The registry answered about a different
             project, package or repository than the one queried.
         DIGEST_MISMATCH: An exposed artifact carries a digest the
@@ -306,11 +309,14 @@ def assert_manifest_binds(release: Release, manifest: FrozenManifest) -> None:
 
 
 class RecordedResponse(_StrictModel):
-    """One registry answer, recorded exactly as it was read.
+    """One registry answer, recorded as its reader returned it.
 
     Adapters are pure functions of this record, which is what lets the
     same fixtures drive the match, missing, mismatch and unknown paths
-    of every adapter without a network.
+    of every adapter without a network. The payload is the registry's
+    body plus the fields only a reader can supply (the npm tarball's
+    sha256, the source-host release's repository), so a response handed
+    in by an operator has to carry them too.
 
     Attributes:
         status: Transport status of the query. ``200`` carries a

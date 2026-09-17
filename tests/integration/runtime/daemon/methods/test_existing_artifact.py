@@ -14,11 +14,11 @@ counting publisher here proves the discrimination costs no second
 upload -- the leg is settled from the ledger plus one observation, never
 by publishing again to see what happens.
 
-The counting publisher stands in for an upload no adapter performs yet
-(:data:`~eawf.workflow.release.adapters.DEFAULT_REGISTRY_READERS` reports
-every registry unreachable), so what it counts is the dispatch the
-ledger owes: one external call per queued attempt row, and none for a
-row the ledger already shows in flight.
+The counting publisher stands in for an upload no adapter performs yet,
+so what it counts is the dispatch the ledger owes: one external call per
+queued attempt row, and none for a row the ledger already shows in
+flight. A leg reports success at its dispatch instant, so a closed
+propagation window lets a missing read-back settle at once.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def _reported(operation: PublicationOperation, *, target_id: str) -> Publication
         operation,
         target=configured_target(dev1_config(), target_id),
         to=ReleaseTargetStatus.REPORTED_SUCCESS,
-        now=require_attempt(operation, target_id).deadline_at,
+        now=require_attempt(operation, target_id).started_at,
         effect_receipt_ref=EFFECT,
     )
 
@@ -115,7 +115,7 @@ def test_an_identical_artifact_already_present_is_observed_without_a_second_uplo
 
 @pytest.mark.parametrize("case", ("mismatch", "missing"))
 def test_a_different_artifact_under_the_same_name_recovers_without_a_second_upload(
-    ctx: MethodContext, green_probes: None, case: str
+    ctx: MethodContext, green_probes: None, closed_propagation_window: None, case: str
 ) -> None:
     async def body() -> None:
         publisher = CountingPublisher()

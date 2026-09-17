@@ -14,6 +14,11 @@ A route exists only with a way in. The ``g`` letter and palette doors come from 
 own columns, a drill door from the entity-id prefix tables, and a light-verb or route-key
 door is declared on the row; :func:`unreachable_routes` is the reachability audit, and a
 registry holding a route with no door refuses to build.
+
+Each row also names the read model it renders. The kernel's read-model declarations name
+the routes each model serves, and a registry whose binding disagrees with them in either
+direction refuses to build; a row with no read model is a specification hole the registry
+lists in :attr:`RouteRegistry.read_model_holes`.
 """
 
 from __future__ import annotations
@@ -22,6 +27,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
+
+from eawf.kernel.projection.read_models import (
+    READ_MODEL_BY_KIND,
+    ReadModelKind,
+    route_binding_mismatches,
+)
 
 
 class RouteFamily(StrEnum):
@@ -107,6 +118,7 @@ class RouteSpec:
         overlay_backed: Whether the route draws over its own backdrop, like an overlay,
             while staying a route.
         doors: The light-verb and route-key doors other routes bind to this one.
+        read_model: The read model the route renders; ``None`` marks a specification hole.
 
     Raises:
         ValueError: ``doors`` declares a ``g``, palette or drill door, which the row's
@@ -127,6 +139,7 @@ class RouteSpec:
     fixed_subject: str | None = None
     overlay_backed: bool = False
     doors: tuple[Door, ...] = ()
+    read_model: ReadModelKind | None = None
 
     def __post_init__(self) -> None:
         """Default the key to the id and keep derived doors in the columns that own them."""
@@ -252,7 +265,8 @@ def _validate(routes: tuple[RouteSpec, ...]) -> None:
 
     Raises:
         ValueError: two rows share an id, key or ``g`` letter; a parent, door origin or
-            drill target names an unregistered route; or a row has no door.
+            drill target names an unregistered route; a row has no door; or the rows'
+            read-model binding disagrees with the kernel declarations.
     """
     columns = (
         ("id", [spec.id for spec in routes]),
@@ -272,6 +286,10 @@ def _validate(routes: tuple[RouteSpec, ...]) -> None:
     orphans = unreachable_routes(routes)
     if orphans:
         raise ValueError(f"routes with no door: {', '.join(orphans)}")
+    binding = {spec.key: spec.read_model for spec in routes if spec.read_model is not None}
+    mismatches = route_binding_mismatches(binding, READ_MODEL_BY_KIND)
+    if mismatches:
+        raise ValueError(f"route read-model binding disagrees: {'; '.join(mismatches)}")
 
 
 class RouteRegistry:
@@ -289,10 +307,13 @@ class RouteRegistry:
         parents: Fixed ``(route, subject)`` parent per route that declares one.
         tab_owners: Tab region per route that declares one.
         overlay_routes: The routes drawn over their own backdrop.
+        read_models: Read model per route that declares one.
+        read_model_holes: The routes with no read model, in registry order.
 
     Raises:
         ValueError: the rows fail the registry checks (duplicate id, key or ``g``
-            letter; a reference to an unregistered route; a route with no door).
+            letter; a reference to an unregistered route; a route with no door; a
+            read-model binding the kernel declarations do not mirror).
     """
 
     def __init__(self, routes: Sequence[RouteSpec]) -> None:
@@ -321,6 +342,12 @@ class RouteRegistry:
         )
         self.overlay_routes: frozenset[str] = frozenset(
             s.id for s in self.routes if s.overlay_backed
+        )
+        self.read_models: Mapping[str, ReadModelKind] = MappingProxyType(
+            {s.id: s.read_model for s in self.routes if s.read_model is not None}
+        )
+        self.read_model_holes: tuple[str, ...] = tuple(
+            s.id for s in self.routes if s.read_model is None
         )
 
     def route_word(self, route: str) -> str:
@@ -373,6 +400,7 @@ def kind_of(entity_id: str | None) -> str:
 
 
 _RUN_PARENT = ("run.detail", "RUN-538453eb")
+_RM = ReadModelKind
 
 ROUTES: tuple[RouteSpec, ...] = (
     RouteSpec(
@@ -381,6 +409,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         palette_visible=True,
         tab_owner="path",
         word="attach workspace",
+        read_model=_RM.PROCESS_FRAME,
     ),
     RouteSpec(
         id="scope.home",
@@ -389,16 +418,35 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="h",
         step_leaf="",
         word="home",
+        read_model=_RM.SCOPE_HOME_VIEW,
     ),
-    RouteSpec(id="track", family=RouteFamily.SPINE, subject_required=True, step_leaf="Runtime"),
-    RouteSpec(id="batch.detail", family=RouteFamily.SPINE, subject_required=True),
-    RouteSpec(id="task.detail", family=RouteFamily.SPINE, subject_required=True, word="task"),
+    RouteSpec(
+        id="track",
+        family=RouteFamily.SPINE,
+        subject_required=True,
+        step_leaf="Runtime",
+        read_model=_RM.ENTITY_DETAIL_VIEW,
+    ),
+    RouteSpec(
+        id="batch.detail",
+        family=RouteFamily.SPINE,
+        subject_required=True,
+        read_model=_RM.ENTITY_DETAIL_VIEW,
+    ),
+    RouteSpec(
+        id="task.detail",
+        family=RouteFamily.SPINE,
+        subject_required=True,
+        word="task",
+        read_model=_RM.ENTITY_DETAIL_VIEW,
+    ),
     RouteSpec(
         id="git.pr",
         family=RouteFamily.SPINE,
         step_leaf="Git",
         parent=_RUN_PARENT,
         doors=(Door(kind=DoorKind.LIGHT_VERB, key="b", origin="run.detail"),),
+        read_model=_RM.GIT_PR_VIEW,
     ),
     RouteSpec(
         id="activity",
@@ -408,8 +456,15 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="Activity",
         tab_owner="buckets",
         via_leaf="Activity",
+        read_model=_RM.FLEET_QUERY_PAGE,
     ),
-    RouteSpec(id="run.detail", family=RouteFamily.LIVE, subject_required=True, word="run"),
+    RouteSpec(
+        id="run.detail",
+        family=RouteFamily.LIVE,
+        subject_required=True,
+        word="run",
+        read_model=_RM.RUN_DETAIL_VIEW,
+    ),
     RouteSpec(
         id="attention",
         family=RouteFamily.LIVE,
@@ -417,6 +472,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="n",
         step_leaf="Needs you",
         via_leaf="Needs you",
+        read_model=_RM.ATTENTION_PAGE,
     ),
     RouteSpec(
         id="transcript",
@@ -424,6 +480,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="Transcript",
         parent=_RUN_PARENT,
         doors=(Door(kind=DoorKind.LIGHT_VERB, key="l", origin="run.detail"),),
+        read_model=_RM.TRANSCRIPT_VIEW,
     ),
     RouteSpec(
         id="cost.ceiling",
@@ -431,6 +488,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="Cost ceiling",
         via_leaf="Cost ceiling",
         doors=(Door(kind=DoorKind.LIGHT_VERB, key="m", origin="run.detail"),),
+        read_model=_RM.COST_CEILING_VIEW,
     ),
     RouteSpec(
         id="crash.recovery",
@@ -438,12 +496,14 @@ ROUTES: tuple[RouteSpec, ...] = (
         palette_visible=True,
         step_leaf="Recovery",
         word="recovery",
+        read_model=_RM.CRASH_RECOVERY_VIEW,
     ),
     RouteSpec(
         id="milestone",
         family=RouteFamily.ACCEPTANCE,
         subject_required=True,
         tab_owner="section",
+        read_model=_RM.ACCEPTANCE_BUNDLE_VIEW,
     ),
     RouteSpec(
         id="release",
@@ -452,6 +512,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="r",
         step_leaf="REL-0001",
         tab_owner="section",
+        read_model=_RM.RELEASE_READINESS_VIEW,
     ),
     RouteSpec(
         id="timeline",
@@ -461,6 +522,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="t",
         step_leaf="Timeline",
         via_leaf="Timeline",
+        read_model=_RM.ROADMAP_VIEW,
     ),
     RouteSpec(
         id="backlog",
@@ -469,6 +531,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="b",
         step_leaf="Backlog",
         tab_owner="groups",
+        read_model=_RM.BACKLOG_VIEW,
     ),
     RouteSpec(
         id="campaign",
@@ -476,6 +539,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         subject_required=True,
         step_leaf="CAM-0001",
         tab_owner="sections",
+        read_model=_RM.CAMPAIGN_VIEW,
     ),
     RouteSpec(
         id="history",
@@ -484,6 +548,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="y",
         step_leaf="History",
         via_leaf="History",
+        read_model=_RM.HISTORY_PAGE,
     ),
     RouteSpec(
         id="settings",
@@ -492,6 +557,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="s",
         step_leaf="Settings",
         tab_owner="rail",
+        read_model=_RM.EFFECTIVE_SETTINGS_VIEW,
     ),
     RouteSpec(
         id="search",
@@ -499,6 +565,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         palette_visible=True,
         step_leaf="Search",
         via_leaf="Search",
+        read_model=_RM.SEARCH_PAGE,
     ),
     RouteSpec(
         id="history.diff",
@@ -506,6 +573,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="Diff",
         parent=("history", None),
         doors=(Door(kind=DoorKind.LIGHT_VERB, key="d", origin="history"),),
+        read_model=_RM.HISTORY_DIFF_VIEW,
     ),
     RouteSpec(
         id="trust",
@@ -514,6 +582,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         parent=("milestone", "MLS-0007"),
         fixed_subject="MLS-0007",
         doors=(Door(kind=DoorKind.LIGHT_VERB, key="v", origin="milestone"),),
+        read_model=_RM.TRUST_VIEW,
     ),
     RouteSpec(
         id="evidence",
@@ -522,6 +591,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="CLM-0004",
         parent=("campaign", "CAM-0001"),
         fixed_subject="CLM-0004",
+        read_model=_RM.EVIDENCE_VIEW,
     ),
     RouteSpec(
         id="health",
@@ -530,6 +600,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="d",
         step_leaf="Health",
         via_leaf="Health",
+        read_model=_RM.HEALTH_VIEW,
     ),
     RouteSpec(
         id="sandbox.log",
@@ -539,6 +610,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="Sandbox log",
         via_leaf="Sandbox log",
         word="sandbox log",
+        read_model=_RM.SANDBOX_LOG_PAGE,
     ),
     RouteSpec(
         id="unattended",
@@ -547,12 +619,14 @@ ROUTES: tuple[RouteSpec, ...] = (
         go_letter="u",
         step_leaf="Unattended",
         via_leaf="Unattended",
+        read_model=_RM.UNATTENDED_VIEW,
     ),
     RouteSpec(
         id="evidence.digest",
         family=RouteFamily.ENTITY_SUB_SURFACES,
         overlay_backed=True,
         doors=(Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="evidence"),),
+        read_model=_RM.EVIDENCE_RUNG_RECORD,
     ),
     RouteSpec(
         id="settings.stack",
@@ -561,6 +635,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         parent=("settings", None),
         overlay_backed=True,
         doors=(Door(kind=DoorKind.ROUTE_KEY, key="i", origin="settings"),),
+        read_model=_RM.SETTINGS_LAYER_STACK,
     ),
     RouteSpec(
         id="notifications",
@@ -570,6 +645,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="Notifications",
         via_leaf="Notifications",
         overlay_backed=True,
+        read_model=_RM.NOTIFICATION_MATRIX_VIEW,
     ),
     RouteSpec(
         id="merge.conflict",
@@ -578,6 +654,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         parent=("git.pr", None),
         overlay_backed=True,
         doors=(Door(kind=DoorKind.ROUTE_KEY, key="m", origin="git.pr"),),
+        read_model=_RM.MERGE_CONFLICT_VIEW,
     ),
     RouteSpec(
         id="export",
@@ -587,13 +664,20 @@ ROUTES: tuple[RouteSpec, ...] = (
         overlay_backed=True,
         # the Run's action menu offers the report, but the design binds it no letter yet
         doors=(Door(kind=DoorKind.LIGHT_VERB, origin="run.detail"),),
+        read_model=_RM.RUN_REPORT_PLAN,
     ),
-    RouteSpec(id="receipt", family=RouteFamily.ENTITY_SUB_SURFACES, subject_required=True),
+    RouteSpec(
+        id="receipt",
+        family=RouteFamily.ENTITY_SUB_SURFACES,
+        subject_required=True,
+        read_model=_RM.CRITERION_RECEIPT_VIEW,
+    ),
     RouteSpec(
         id="campaign.step",
         family=RouteFamily.ENTITY_SUB_SURFACES,
         overlay_backed=True,
         doors=(Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="campaign"),),
+        read_model=_RM.CAMPAIGN_PLAN_STEP,
     ),
     RouteSpec(
         id="campaign.artifact",
@@ -603,6 +687,7 @@ ROUTES: tuple[RouteSpec, ...] = (
             Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="campaign"),
             Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="campaign.step"),
         ),
+        read_model=_RM.ARTIFACT_CARD_VIEW,
     ),
 )
 

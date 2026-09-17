@@ -29,26 +29,21 @@ from eawf.workflow.release.observation import (
     PublicationObservation,
     RecordedResponse,
 )
-from eawf.workflow.release.publication import begin_publication, begin_verification
-from eawf.workflow.release.settlement import bake_release, observe_target
-from eawf.workflow.release.target_machine import advance_target_attempt
-from eawf.workflow.verify.release_readiness import compute_readiness
+from eawf.workflow.release.settlement import (
+    bake_release,
+    observe_target,
+    propagation_window_end,
+)
 from tests._release_helpers import (
-    MANIFEST_DIGEST,
     NOW,
-    all_passing,
-    dev1_config,
     read_back_request,
     recorded_response,
-    release_record,
+    verifying_publication,
 )
 
 pytestmark = pytest.mark.unit
 
 OPERATION_ID = UUID(int=16)
-PROOF_DIGEST = f"sha256:{'1' * 64}"
-IDEMPOTENCY_KEY = "publish-0.7.0.dev1-16"
-EFFECT = "receipt://target/effect"
 
 #: The two legs whose registries have a stable default channel. A
 #: package index has none -- an installer resolves a prerelease only when
@@ -65,30 +60,7 @@ def observation(target_id: str, case: str) -> PublicationObservation:
 
 def verifying() -> tuple[Release, PublicationOperation, ReleaseConfig]:
     """Return a record at VERIFYING with every leg at reported_success."""
-    config = dev1_config()
-    published, operation = begin_publication(
-        release_record(status=ReleaseStatus.APPROVED, approval_ref="receipt://approval/dev1"),
-        config,
-        compute_readiness(config, probes=all_passing(), computed_at=NOW),
-        operation_id=OPERATION_ID,
-        approved_manifest_digest=MANIFEST_DIGEST,
-        idempotency_key=IDEMPOTENCY_KEY,
-        proof_digest=PROOF_DIGEST,
-        opened_at=NOW,
-    )
-    for target in config.targets:
-        row = require_attempt(operation, target.target_id)
-        operation = advance_target_attempt(
-            operation, target=target, to=ReleaseTargetStatus.IN_FLIGHT, now=row.started_at
-        )
-        operation = advance_target_attempt(
-            operation,
-            target=target,
-            to=ReleaseTargetStatus.REPORTED_SUCCESS,
-            now=row.deadline_at,
-            effect_receipt_ref=EFFECT,
-        )
-    return begin_verification(published, config, operation), operation, config
+    return verifying_publication(operation_id=OPERATION_ID)
 
 
 # --- a prerelease exposed on the stable default channel -------------------
@@ -190,8 +162,10 @@ def test_a_version_that_vanished_after_reporting_success_routes_to_recovering(
     target_id: str,
 ) -> None:
     release, operation, config = verifying()
+    window_end = propagation_window_end(operation, target_id)
+    assert window_end is not None
     recovering, settled = observe_target(
-        release, config, operation, observation=observation(target_id, "missing"), now=NOW
+        release, config, operation, observation=observation(target_id, "missing"), now=window_end
     )
     assert recovering.status is ReleaseStatus.RECOVERING
     assert require_attempt(settled, target_id).status is ReleaseTargetStatus.OBSERVED_MISMATCH

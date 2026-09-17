@@ -29,7 +29,11 @@ Three rules follow from that and are enforced here rather than trusted:
   not reach the registry, or could not read its answer, raises
   :class:`InconclusiveObservationError` instead of writing a status.
   Turning "we did not find out" into either verdict is how a release
-  bakes on evidence nobody collected.
+  bakes on evidence nobody collected. The same holds for a version the
+  registry does not expose yet while the leg is inside
+  :data:`PROPAGATION_WINDOW` of its reported success: registries answer
+  through caches, and a copy filled before the upload is not evidence
+  that the upload failed.
 * **A contradiction routes to recovery, it does not merely annotate.**
   A mismatching or missing read-back moves the release to
   ``RECOVERING`` in the same step that settles the leg, because the
@@ -49,10 +53,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Final
 
-from eawf.kernel.spec.publication import PublicationOperation
+from eawf.kernel.spec.publication import PublicationOperation, latest_attempt
 from eawf.kernel.spec.release import (
     Release,
     ReleaseStatus,
@@ -63,11 +67,16 @@ from eawf.kernel.spec.release_config import ReleaseConfig
 from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 from eawf.workflow.release.lifecycle import ReleaseGuardContext, advance_release
 from eawf.workflow.release.observation import (
+    ObservationCode,
     ObservationResult,
     PublicationObservation,
     configured_target,
 )
-from eawf.workflow.release.publication import projected_target_statuses
+from eawf.workflow.release.publication import (
+    begin_verification,
+    projected_target_statuses,
+    target_results_complete,
+)
 from eawf.workflow.release.target_machine import (
     advance_target_attempt,
     current_target_status,
@@ -77,14 +86,28 @@ logger = logging.getLogger(__name__)
 
 #: The target status each conclusive read-back result writes. ``MISSING``
 #: shares ``observed_mismatch`` with ``MISMATCH`` deliberately: a leg
-#: that reported success and cannot be found afterwards contradicts its
-#: own report exactly as a wrong digest does, and both are recovery
-#: questions. ``UNKNOWN`` is absent because it settles nothing.
+#: that reported success and still cannot be found once its propagation
+#: window has closed contradicts its own report exactly as a wrong digest
+#: does, and both are recovery questions. ``UNKNOWN`` is absent because
+#: it settles nothing.
 OBSERVED_STATUS_FOR_RESULT: Final[Mapping[ObservationResult, ReleaseTargetStatus]] = {
     ObservationResult.MATCH: ReleaseTargetStatus.OBSERVED_SUCCESS,
     ObservationResult.MISMATCH: ReleaseTargetStatus.OBSERVED_MISMATCH,
     ObservationResult.MISSING: ReleaseTargetStatus.OBSERVED_MISMATCH,
 }
+
+#: How long after a leg reports success an absent version is still a
+#: retry rather than a miss. The registries serve read-backs from caches
+#: that live up to 900 s (the package index's JSON API; npm's packument
+#: lives 300 s, the source host's release object 60 s), so a copy cached
+#: just before the upload can outlive the report by that much. Twice the
+#: longest lifetime also absorbs the index's own processing lag, and it
+#: matches the 1800 s publish timeout the release train's targets carry,
+#: so a leg gets as long to appear as it had to be published. A time
+#: window rather than a retry count, because staleness is a property of
+#: elapsed time: a count would let an operator exhaust it in seconds, or
+#: keep a real miss open for hours.
+PROPAGATION_WINDOW: Final[timedelta] = timedelta(minutes=30)
 
 
 class InconclusiveObservationError(ValueError):
@@ -93,17 +116,60 @@ class InconclusiveObservationError(ValueError):
     Attributes:
         target_id: The leg the read-back addressed.
         code: The observation code naming why nothing was settled.
+        retry_after: When a version still propagating stops being a
+            retry, or ``None`` when the read-back learned nothing at all.
     """
 
-    def __init__(self, observation: PublicationObservation) -> None:
-        """Store the leg and the code alongside the operator message."""
+    def __init__(
+        self,
+        observation: PublicationObservation,
+        *,
+        retry_after: datetime | None = None,
+    ) -> None:
+        """Store the leg, the code and the retry instant with the message."""
+        propagating = (
+            ""
+            if retry_after is None
+            else (
+                f"; the version may still be propagating after the leg's reported "
+                f"success, so read it back again at or after {retry_after.isoformat()}"
+            )
+        )
         super().__init__(
             f"observation_inconclusive: the read-back of target "
             f"{observation.target_id!r} answered {observation.code.value!r} and "
-            f"settles nothing; {observation.detail}"
+            f"settles nothing; {observation.detail}{propagating}"
         )
         self.target_id = observation.target_id
         self.code = observation.code
+        self.retry_after = retry_after
+
+
+def propagation_window_end(operation: PublicationOperation, target_id: str) -> datetime | None:
+    """Return when an absent version of *target_id* stops being a retry.
+
+    The window is measured from the leg's reported success, the instant
+    its adapter said the upload landed. A leg that never reported
+    success -- including one that timed out as ``unknown`` -- has no such
+    instant, so an absent version there is conclusive at once.
+
+    Args:
+        operation: The operation whose ledger is read.
+        target_id: The leg to place.
+
+    Returns:
+        The reported success plus :data:`PROPAGATION_WINDOW`, or ``None``
+        when the leg's latest attempt does not stand at
+        ``reported_success``.
+    """
+    row = latest_attempt(operation, target_id)
+    if (
+        row is None
+        or row.status is not ReleaseTargetStatus.REPORTED_SUCCESS
+        or row.settled_at is None
+    ):
+        return None
+    return row.settled_at + PROPAGATION_WINDOW
 
 
 def required_targets_observed(config: ReleaseConfig, operation: PublicationOperation) -> bool:
@@ -156,7 +222,9 @@ def observe_target(
         The routed record and the operation with that leg observed.
 
     Raises:
-        InconclusiveObservationError: When the read-back settled nothing.
+        InconclusiveObservationError: When the read-back settled nothing,
+            or found the version absent inside the leg's propagation
+            window.
         KeyError: When the observation names an unconfigured target, or
             the operation has never attempted it.
         TargetTransitionError: When the leg cannot be observed from
@@ -172,6 +240,17 @@ def observe_target(
     if not observation.conclusive:
         raise InconclusiveObservationError(observation)
     target = configured_target(config, observation.target_id)
+    window_end = propagation_window_end(operation, observation.target_id)
+    if (
+        observation.code is ObservationCode.VERSION_ABSENT
+        and window_end is not None
+        and now < window_end
+    ):
+        logger.info(
+            f"observe_target_propagating key={release.key!r} target={observation.target_id!r} "
+            f"retry_after={window_end.isoformat()!r}"
+        )
+        raise InconclusiveObservationError(observation, retry_after=window_end)
     settled = advance_target_attempt(
         operation,
         target=target,
@@ -279,11 +358,55 @@ def bake_release(
     return baked
 
 
+def follow_guarded_edges(
+    release: Release,
+    config: ReleaseConfig,
+    operation: PublicationOperation,
+) -> tuple[Release, ...]:
+    """Return the records *release* walks through on the edges its ledger now opens.
+
+    Settling a leg moves the leg, not the release. Without this step a
+    record whose last required leg reported success would stay at
+    PUBLISHING, and one whose legs were all read back while it was still
+    publishing could never bake at all, because an observed leg is
+    terminal and nothing would ever settle it again. So after every leg
+    settlement the two guarded forward edges are tried in order:
+    PUBLISHING to VERIFYING once :func:`target_results_complete` holds,
+    then VERIFYING to its finished status once
+    :func:`required_targets_observed` holds.
+
+    Args:
+        release: The record the leg settlement produced.
+        config: Loaded checkpoint configuration naming every target.
+        operation: The operation with that leg already settled.
+
+    Returns:
+        Each successor record, oldest first. Empty when neither guard
+        holds or the record is at neither status.
+    """
+    walked: list[Release] = []
+    current = release
+    if current.status is ReleaseStatus.PUBLISHING and target_results_complete(config, operation):
+        current = begin_verification(current, config, operation)
+        walked.append(current)
+    if current.status is ReleaseStatus.VERIFYING and required_targets_observed(config, operation):
+        current = bake_release(current, config, operation)
+        walked.append(current)
+    logger.info(
+        f"follow_guarded_edges key={release.key!r} frm={release.status.value!r} "
+        f"to={current.status.value!r} steps={len(walked)}"
+    )
+    return tuple(walked)
+
+
 __all__ = [
     "OBSERVED_STATUS_FOR_RESULT",
+    "PROPAGATION_WINDOW",
     "InconclusiveObservationError",
     "bake_release",
+    "follow_guarded_edges",
     "observe_target",
+    "propagation_window_end",
     "required_targets_observed",
     "route_after_observation",
 ]

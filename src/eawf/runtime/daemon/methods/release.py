@@ -36,13 +36,26 @@ readiness sweep can be run against a proposed record before anything is
 persisted; the four registry verbs append to
 ``<state_dir>/store/release.jsonl`` through
 :mod:`eawf.workflow.release.ledger`, because a verb that touches an
-external registry has to remember what it already did.
+external registry has to remember what it already did. Their shared
+replay and persistence plumbing is
+:mod:`eawf.runtime.daemon.methods.release_keyed`.
 
-``release.create`` and ``release.approve`` persist too, into the
-separate record collection of :mod:`eawf.workflow.release.records`. They
-touch no registry, but they are the two verbs that open and authorise a
-checkpoint, and a record only a single RPC reply ever carried could not
-be read back by anything -- so neither runs without a state root.
+Every verb that moves a record also persists it, into the separate
+record collection of :mod:`eawf.workflow.release.records`, one row per
+revision it produced: ``release.create`` and ``release.approve`` open
+and authorise a checkpoint, and the four registry verbs carry it on to
+BAKED. A record only a single RPC reply ever carried could not be read
+back by anything -- ``release.show`` would go on reporting ``approved``
+after a publish -- so none of them runs without a state root.
+
+A leg settling does not move the release by itself, so
+``release.reconcile`` and ``release.observe_target`` both follow up with
+:func:`~eawf.workflow.release.settlement.follow_guarded_edges`: the
+reconcile that completes the required reports opens verification, and
+the observation that completes the required read-backs bakes. A
+reconcile that carries the publish job's receipt also moves a queued
+leg into flight first, because the receipt's run id proves the dispatch
+nothing else recorded.
 
 ``release.reconcile`` and ``release.observe_target`` are deliberately
 separate verbs rather than one with a flag. Reconciliation records what
@@ -94,7 +107,6 @@ from pydantic import (
 )
 
 from eawf.kernel.release.waiver import ReleaseWaiver
-from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.spec.release import (
     Release,
     ReleaseCheckpoint,
@@ -111,6 +123,14 @@ from eawf.runtime.daemon.methods.release_context import (
     validated_release,
 )
 from eawf.runtime.daemon.methods.release_disposition import burn_adopted_record
+from eawf.runtime.daemon.methods.release_keyed import (
+    keyed_reply,
+    open_operation,
+    persist_walk,
+    replay_record,
+    replayed_operation,
+    request_identity,
+)
 from eawf.runtime.release.chokepoint import sweep_pinned_source
 from eawf.surfaces.cli.errors import CliError, UserError
 from eawf.workflow.evidence._io import load_state
@@ -125,13 +145,7 @@ from eawf.workflow.release.advance import (
     advance_train,
     render_train_ladder,
 )
-from eawf.workflow.release.ledger import (
-    IdempotencyConflictError,
-    current_operation,
-    record_operation,
-    replayed_receipt,
-    request_fingerprint,
-)
+from eawf.workflow.release.ledger import record_operation
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
 from eawf.workflow.release.observation import (
     FrozenManifest,
@@ -143,7 +157,6 @@ from eawf.workflow.release.preflight import approve_release, record_preflight_re
 from eawf.workflow.release.publication import (
     begin_publication,
     burn_release,
-    operation_reference,
     reconcile_target,
     retry_publication,
 )
@@ -157,7 +170,7 @@ from eawf.workflow.release.records import (
     record_envelope_id,
     record_release,
 )
-from eawf.workflow.release.settlement import observe_target
+from eawf.workflow.release.settlement import follow_guarded_edges, observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.verify.checkpoint_succession import (
@@ -595,9 +608,8 @@ class ObserveTargetParams(_PublicationParams):
         manifest: Serialized frozen manifest. Its recomputed digest must
             be the one the release approved, so an observation cannot be
             collected against a manifest nobody signed off.
-        response: A recorded registry answer already in hand. ``None``
-            asks the leg's reader, which reports ``registry_unreachable``
-            until a live client ships.
+        response: A reader's recorded answer already in hand. ``None``
+            asks the leg's live reader to query its registry.
         effect_receipt_ref: The adapter's receipt, for observing a leg
             that timed out without one.
     """
@@ -606,101 +618,6 @@ class ObserveTargetParams(_PublicationParams):
     manifest: dict[str, Any]
     response: dict[str, Any] | None = None
     effect_receipt_ref: str | None = None
-
-
-def _receipt(
-    operation: PublicationOperation,
-    release: Release,
-    *,
-    replayed: bool,
-) -> dict[str, Any]:
-    """Return the wire shape every publication verb answers with.
-
-    Args:
-        operation: The operation snapshot the call produced.
-        release: The record the call produced.
-        replayed: Whether this is the original receipt of an earlier
-            identical call rather than fresh work.
-
-    Returns:
-        The operation reference, both records and the replay flag.
-    """
-    return {
-        "operation_ref": operation_reference(operation),
-        "operation": operation.model_dump(mode="json"),
-        "release": release.model_dump(mode="json"),
-        "replayed": replayed,
-    }
-
-
-def _fingerprint(method: str, params: dict[str, Any]) -> str:
-    """Return the request digest of *params*, minus the replay key.
-
-    Args:
-        method: JSON-RPC method name.
-        params: Raw request params.
-
-    Returns:
-        The digest the idempotency index compares against.
-    """
-    return request_fingerprint(
-        method, {key: value for key, value in params.items() if key != "idempotency_key"}
-    )
-
-
-def _replay(
-    state_path: Path,
-    *,
-    idempotency_key: str,
-    fingerprint: str,
-) -> PublicationOperation | None:
-    """Return the receipt an earlier identical call produced, if any.
-
-    Args:
-        state_path: Path to ``state.json``.
-        idempotency_key: The key the caller presented.
-        fingerprint: Digest of the request the caller presented.
-
-    Returns:
-        The recorded snapshot, or ``None`` when the key is new.
-
-    Raises:
-        DaemonValidationError: When the key was reused with a different
-            payload (``idempotency_conflict``), or the ledger is corrupt.
-    """
-    try:
-        return replayed_receipt(
-            state_path, idempotency_key=idempotency_key, fingerprint=fingerprint
-        )
-    except IdempotencyConflictError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    except ValueError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-
-def _open_operation(state_path: Path, release: Release) -> PublicationOperation:
-    """Return the operation already open for *release*, or refuse.
-
-    Args:
-        state_path: Path to ``state.json``.
-        release: The record whose episode is looked up.
-
-    Returns:
-        The highest-revision snapshot recorded for that release.
-
-    Raises:
-        DaemonValidationError: When no episode has been opened, or the
-            ledger is corrupt.
-    """
-    try:
-        operation = current_operation(state_path, release.key)
-    except ValueError as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-    if operation is None:
-        raise DaemonValidationError(
-            f"validation_failed: no publication operation is open for {release.key!r}"
-        )
-    return operation
 
 
 @register("release.publish")
@@ -715,15 +632,16 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     not stale it. Only once it recomputes green does the operation open,
     and the handler returns the operation reference immediately -- the
     legs are queued, not awaited, so a slow registry cannot hold the RPC
-    open.
+    open. The record at PUBLISHING is persisted after the ledger row, so
+    ``release.show`` stops reporting ``approved``.
 
     Args:
-        ctx: Server context; supplies the state root the ledger lives in.
+        ctx: Server context; supplies the state root both stores live in.
         params: JSON-RPC params per :class:`PublishParams`.
 
     Returns:
         The operation reference, the operation, the record at PUBLISHING
-        and whether this was a replay.
+        (the recorded record on a replay) and whether this was a replay.
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
@@ -734,10 +652,12 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     args = PublishParams.model_validate(params)
     state_path = require_state_path(ctx)
     release = validated_release(args.release)
-    fingerprint = _fingerprint("release.publish", params)
-    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    fingerprint = request_identity("release.publish", params, release_key=release.key)
+    replayed = replayed_operation(
+        state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint
+    )
     if replayed is not None:
-        return _receipt(replayed, release, replayed=True)
+        return keyed_reply(replayed, replay_record(state_path, release), replayed=True)
     assert_revision(release, args.expected_revision)
     config = resolve_config(release.version)
     now = datetime.now(UTC)
@@ -772,21 +692,25 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         recorded_at=now,
         summary=f"publish {release.key} to {len(config.targets)} target(s)",
     )
+    persist_walk(state_path, (published,), recorded_at=now, summary=f"publish {release.key}")
     logger.info(f"publish key={release.key!r} operation_id={recorded.operation_id}")
-    return _receipt(recorded, published, replayed=False)
+    return keyed_reply(recorded, published, replayed=False)
 
 
 @register("release.retry_target")
 async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Re-queue one leg of the open episode under the idempotency proof.
 
+    The record back at PUBLISHING is persisted after the ledger row.
+
     Args:
-        ctx: Server context; supplies the state root the ledger lives in.
+        ctx: Server context; supplies the state root both stores live in.
         params: JSON-RPC params per :class:`RetryTargetParams`.
 
     Returns:
         The operation reference, the operation, the record back at
-        PUBLISHING and whether this was a replay.
+        PUBLISHING (the recorded record on a replay) and whether this was
+        a replay.
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
@@ -796,13 +720,15 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     args = RetryTargetParams.model_validate(params)
     state_path = require_state_path(ctx)
     release = validated_release(args.release)
-    fingerprint = _fingerprint("release.retry_target", params)
-    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    fingerprint = request_identity("release.retry_target", params, release_key=release.key)
+    replayed = replayed_operation(
+        state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint
+    )
     if replayed is not None:
-        return _receipt(replayed, release, replayed=True)
+        return keyed_reply(replayed, replay_record(state_path, release), replayed=True)
     assert_revision(release, args.expected_revision)
     config = resolve_config(release.version)
-    operation = _open_operation(state_path, release)
+    operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
         republished, retried = retry_publication(
@@ -828,7 +754,13 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
         recorded_at=now,
         summary=f"retry {release.key} target {args.target_id}",
     )
-    return _receipt(recorded, republished, replayed=False)
+    persist_walk(
+        state_path,
+        (republished,),
+        recorded_at=now,
+        summary=f"retry {release.key} target {args.target_id}",
+    )
+    return keyed_reply(recorded, republished, replayed=False)
 
 
 @register("release.burn")
@@ -843,10 +775,11 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     that could explain it, and a burned version whose record does not
     say why reads as an outcome rather than as an abandonment.
 
-    The burned record is persisted here, unlike at the other publication
-    verbs: the burn is where the checkpoint stops moving, so a reader
-    asking ``eawf release show`` after it must be answered
-    ``partially_released`` and not the status the record left behind.
+    The burned record is persisted here like every other record move,
+    and it matters most here: the burn is where the checkpoint stops
+    moving, so a reader asking ``eawf release show`` after it must be
+    answered ``partially_released`` and not the status the record left
+    behind.
 
     What the verb deliberately does NOT write is any claim about the
     publication's outcome. :func:`~eawf.workflow.release.publication.burn_release`
@@ -855,11 +788,9 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     an annotation beside them rather than a revision of them.
 
     A replay answers with the *recorded* record rather than the payload
-    the caller presented, because after a burn the recorded one is the
-    burned one and echoing the pre-burn status back would report the
-    checkpoint as still moving. It falls back to the presented payload
-    only where the collection holds nothing for the key, which is the
-    torn-write case of a ledger row landing without its record row.
+    the caller presented, as every keyed verb's replay does, because
+    after a burn the recorded one is the burned one and echoing the
+    pre-burn status back would report the checkpoint as still moving.
 
     Args:
         ctx: Server context; supplies the state root both stores live in.
@@ -893,18 +824,20 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             reason=args.reason,
             expected_revision=args.expected_revision,
         )
-    fingerprint = _fingerprint("release.burn", params)
-    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    fingerprint = request_identity("release.burn", params, release_key=release.key)
+    replayed = replayed_operation(
+        state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint
+    )
     if replayed is not None:
-        settled = read_release_record(state_path, release.key) or release
+        settled = replay_record(state_path, release)
         return {
-            **_receipt(replayed, settled, replayed=True),
+            **keyed_reply(replayed, settled, replayed=True),
             "reason": args.reason,
             "release_record_id": record_envelope_id(settled),
         }
     assert_revision(release, args.expected_revision)
     config = resolve_config(release.version)
-    operation = _open_operation(state_path, release)
+    operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
         burned, abandoned = burn_release(release, config, operation)
@@ -928,7 +861,7 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         f"status={burned.status.value!r} reason={args.reason!r}"
     )
     return {
-        **_receipt(recorded, burned, replayed=False),
+        **keyed_reply(recorded, burned, replayed=False),
         "reason": args.reason,
         "release_record_id": record_envelope_id(burned),
     }
@@ -991,14 +924,21 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     ``publication-receipt-<target>.json``, the caller downloads the
     tag's run artifacts, and the ``job_conclusion`` inside decides
     between ``reported_success``, ``reported_failure`` and ``unknown``.
+    The receipt's run id also proves the leg was dispatched, so a leg
+    still queued is moved into flight before the report settles it.
+
+    Once the settled leg completes the required reports, the record moves
+    on to VERIFYING in the same call. Every revision the call produced is
+    persisted after the ledger row.
 
     Args:
-        ctx: Server context; supplies the state root the ledger lives in.
+        ctx: Server context; supplies the state root both stores live in.
         params: JSON-RPC params per :class:`ReconcileParams`.
 
     Returns:
         The operation reference, the operation with that leg settled,
-        the re-projected record and whether this was a replay.
+        the last record the call produced (the recorded record on a
+        replay) and whether this was a replay.
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
@@ -1011,13 +951,15 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     args = ReconcileParams.model_validate(params)
     state_path = require_state_path(ctx)
     release = validated_release(args.release)
-    fingerprint = _fingerprint("release.reconcile", params)
-    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    fingerprint = request_identity("release.reconcile", params, release_key=release.key)
+    replayed = replayed_operation(
+        state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint
+    )
     if replayed is not None:
-        return _receipt(replayed, release, replayed=True)
+        return keyed_reply(replayed, replay_record(state_path, release), replayed=True)
     assert_revision(release, args.expected_revision)
     config = resolve_config(release.version)
-    operation = _open_operation(state_path, release)
+    operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
         status, effect_receipt_ref = _receipt_result(args, release)
@@ -1029,20 +971,30 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
             status=status,
             effect_receipt_ref=effect_receipt_ref,
             now=now,
+            dispatch_proven=args.receipt is not None,
         )
+        walked = (reconciled, *follow_guarded_edges(reconciled, config, settled))
+    except ReleaseTransitionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
     except TargetTransitionError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
     except (KeyError, ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    summary = f"reconcile {release.key} target {args.target_id}"
     recorded = record_operation(
         state_path,
         settled,
         idempotency_key=args.idempotency_key,
         fingerprint=fingerprint,
         recorded_at=now,
-        summary=f"reconcile {release.key} target {args.target_id}",
+        summary=summary,
     )
-    return _receipt(recorded, reconciled, replayed=False)
+    current = persist_walk(state_path, walked, recorded_at=now, summary=summary)
+    logger.info(
+        f"reconcile key={release.key!r} target={args.target_id!r} "
+        f"leg={status.value!r} status={current.status.value!r}"
+    )
+    return keyed_reply(recorded, current, replayed=False)
 
 
 @register("release.observe_target")
@@ -1057,18 +1009,23 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     A contradicted or missing read-back routes the record to
     ``RECOVERING``; the matched read-back that completes the required set
-    bakes it. An inconclusive read-back writes nothing and answers
-    ``observation_inconclusive``.
+    bakes it. A leg read back while the record is still PUBLISHING (a
+    timed-out leg resolved by observation) can complete the required
+    reports too, so the record then opens verification and, when every
+    required leg is observed, bakes in the same call. An inconclusive
+    read-back writes nothing and answers ``observation_inconclusive``.
+    Every revision the call produced is persisted after the ledger row.
 
     Args:
-        ctx: Server context; supplies the state root the ledger lives in.
+        ctx: Server context; supplies the state root both stores live in.
         params: JSON-RPC params per :class:`ObserveTargetParams`.
 
     Returns:
         The operation reference, the operation with that leg observed,
-        the routed record, the replay flag, and the observation itself
-        (``None`` on a replay, which returns the original receipt rather
-        than re-judging the registry).
+        the last record the call produced, the replay flag, and the
+        observation itself. A replay answers with the recorded record
+        and ``observation: None``, returning the original receipt rather
+        than re-judging the registry.
 
     Raises:
         DaemonValidationError: On a stale revision, an idempotency
@@ -1079,13 +1036,16 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     args = ObserveTargetParams.model_validate(params)
     state_path = require_state_path(ctx)
     release = validated_release(args.release)
-    fingerprint = _fingerprint("release.observe_target", params)
-    replayed = _replay(state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint)
+    fingerprint = request_identity("release.observe_target", params, release_key=release.key)
+    replayed = replayed_operation(
+        state_path, idempotency_key=args.idempotency_key, fingerprint=fingerprint
+    )
     if replayed is not None:
-        return {**_receipt(replayed, release, replayed=True), "observation": None}
+        settled_record = replay_record(state_path, release)
+        return {**keyed_reply(replayed, settled_record, replayed=True), "observation": None}
     assert_revision(release, args.expected_revision)
     config = resolve_config(release.version)
-    operation = _open_operation(state_path, release)
+    operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
         manifest = FrozenManifest.model_validate(args.manifest)
@@ -1105,26 +1065,29 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             now=now,
             effect_receipt_ref=args.effect_receipt_ref,
         )
+        walked = (observed, *follow_guarded_edges(observed, config, settled))
     except ReleaseTransitionError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
     except TargetTransitionError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
     except (KeyError, ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    summary = f"observe {release.key} target {args.target_id}: {observation.code.value}"
     recorded = record_operation(
         state_path,
         settled,
         idempotency_key=args.idempotency_key,
         fingerprint=fingerprint,
         recorded_at=now,
-        summary=f"observe {release.key} target {args.target_id}: {observation.code.value}",
+        summary=summary,
     )
+    current = persist_walk(state_path, walked, recorded_at=now, summary=summary)
     logger.info(
         f"observe key={release.key!r} target={args.target_id!r} "
-        f"code={observation.code.value!r} status={observed.status.value!r}"
+        f"code={observation.code.value!r} status={current.status.value!r}"
     )
     return {
-        **_receipt(recorded, observed, replayed=False),
+        **keyed_reply(recorded, current, replayed=False),
         "observation": observation.model_dump(mode="json"),
     }
 

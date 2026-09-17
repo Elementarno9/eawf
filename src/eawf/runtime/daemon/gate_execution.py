@@ -14,6 +14,12 @@ leaves exactly the orphaned claim the recovery path reads as indeterminate.
 This module doubles as that child's entry point (``python -m
 eawf.runtime.daemon.gate_execution --run-gate <request> <response>``).
 
+The child that wins a claim also publishes the leg's durable progress
+manifest (:mod:`eawf.runtime.verification.progress`) while the gate runs,
+and on request resumes a timed-out leg from the residue that manifest
+proves (:mod:`eawf.runtime.verification.resume`). A child that did not win
+the claim publishes nothing.
+
 A child interpreter would otherwise INHERIT the daemon's runtime directory and
 state path, so a gate suite that drives eawf's own RPCs would drive them
 against the live ledger and the live dispatch loop. Every child therefore runs
@@ -39,7 +45,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,10 +62,15 @@ from eawf.runtime.daemon.gate_receipt_hygiene import (
 )
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.runtime.lock import portalock
+from eawf.runtime.verification.progress import PROGRESS_CHANNEL_ENTRIES
 from eawf.workflow.audit_dsl.models import (
     CheckResult,
     CheckSpec,
 )
+
+if TYPE_CHECKING:
+    from eawf.runtime.verification.progress import LegOutcome, ProgressManifest, ProgressPublisher
+    from eawf.runtime.verification.resume import ResumePlan
 
 logger = logging.getLogger(__name__)
 
@@ -102,6 +113,22 @@ def _load_claim(path: Path) -> GateExecutionClaim | None:
         return GateExecutionClaim.model_validate(orjson.loads(path.read_bytes()))
     except (OSError, orjson.JSONDecodeError, ValueError) as exc:
         raise ValueError(f"gate execution claim unreadable: {path.name!r}") from exc
+
+
+def load_gate_claim(state_path: Path, freshness_key: str) -> GateExecutionClaim | None:
+    """Return the durable claim for *freshness_key*, or ``None`` when unclaimed.
+
+    Args:
+        state_path: The live ``state.json`` whose ``.ea/local`` holds claims.
+        freshness_key: The claimed freshness key.
+
+    Returns:
+        The claim, or ``None`` when no claim file exists.
+
+    Raises:
+        ValueError: A claim file exists but is unreadable.
+    """
+    return _load_claim(claim_path(state_path, attempt_id="", freshness_key=freshness_key))
 
 
 def _load_receipt(state_path: Path, receipt_id: str) -> GateReceipt | None:
@@ -376,6 +403,9 @@ class _GateChildRequest(BaseModel):
     attempt_id: str = Field(min_length=1)
     criterion_id: str = Field(min_length=1)
     gate_id: str = Field(min_length=1)
+    #: Sandbox runtime directory the child offers its progress channel in.
+    channel_dir: Path | None = None
+    resume: bool = False
 
 
 class _GateChildResponse(BaseModel):
@@ -457,14 +487,16 @@ def _snapshot_ignore(directory: str, names: list[str]) -> set[str]:
         names: Entry names inside *directory*.
 
     Returns:
-        The subset of *names* to skip: live-daemon handles, anything that is
-        not a regular file or directory (a Unix socket cannot be copied at
-        all), and regular files above :data:`SNAPSHOT_FILE_BYTE_CAP`.
+        The subset of *names* to skip: live-daemon handles, an enclosing
+        leg's progress channel (a nested command must not publish into it),
+        anything that is not a regular file or directory (a Unix socket
+        cannot be copied at all), and regular files above
+        :data:`SNAPSHOT_FILE_BYTE_CAP`.
     """
     base = Path(directory)
     skipped: set[str] = set()
     for name in names:
-        if name in _LIVE_DAEMON_HANDLES:
+        if name in _LIVE_DAEMON_HANDLES or name in PROGRESS_CHANNEL_ENTRIES:
             skipped.add(name)
             continue
         entry = base / name
@@ -614,11 +646,24 @@ def run_gate_out_of_process(
     context: GateExecutionContext,
     criterion_id: str,
     gate_id: str,
+    resume: bool = False,
 ) -> CheckResult:
     """Run one deterministic gate in a child interpreter and return its receipt.
 
     The child claims its own freshness key before executing, so the durable
-    at-most-once property holds across the process boundary.
+    at-most-once property holds across the process boundary. While the gate
+    runs, the child publishes the leg's progress manifest under that claim.
+
+    Args:
+        spec: The compiled gate.
+        cwd: Working directory the gate runs against.
+        context: Durable identity the child claims under.
+        criterion_id: The criterion the gate proves.
+        gate_id: The gate's id.
+        resume: Continue the timed-out leg *spec* describes from the residue
+            its manifest proves, under a residue-bound freshness key. A leg
+            whose residue cannot be proved is not run and comes back
+            ``blocked``, so the full leg restarts only when a caller asks.
 
     Raises:
         GateChildCrashError: The child died without a terminal result.
@@ -630,17 +675,19 @@ def run_gate_out_of_process(
     token = uuid.uuid4().hex
     request_path = workdir / f"{token}.request.json"
     response_path = workdir / f"{token}.response.json"
-    request = _GateChildRequest(
-        spec=spec,
-        cwd=cwd,
-        state_path=context.state_path,
-        attempt_id=context.attempt_id,
-        criterion_id=criterion_id,
-        gate_id=gate_id,
-    )
     try:
-        request_path.write_bytes(orjson.dumps(request.model_dump(mode="json")))
         with gate_sandbox(live_state_path=context.state_path) as sandbox:
+            request = _GateChildRequest(
+                spec=spec,
+                cwd=cwd,
+                state_path=context.state_path,
+                attempt_id=context.attempt_id,
+                criterion_id=criterion_id,
+                gate_id=gate_id,
+                channel_dir=sandbox.runtime_dir,
+                resume=resume,
+            )
+            request_path.write_bytes(orjson.dumps(request.model_dump(mode="json")))
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -686,28 +733,227 @@ def _read_child_response(response_path: Path) -> _GateChildResponse | None:
         return None
 
 
-def _execute_child_request(request_path: Path, response_path: Path) -> None:
-    """Claim, run, and report one gate from inside the child interpreter."""
+def _resolved_timeout_seconds(spec: CheckSpec) -> int | None:
+    """Return the budget a command gate runs under, or ``None`` for other kinds."""
+    from eawf.workflow.audit_dsl.models import CommandExitZeroArgs
+    from eawf.workflow.audit_dsl.registry import resolve_timeout_seconds
+
+    if spec.kind != "command_exit_zero":
+        return None
+    return resolve_timeout_seconds(CommandExitZeroArgs.model_validate(spec.args))
+
+
+def _leg_outcome(result: CheckResult) -> LegOutcome:
+    """Map a terminal gate result onto the manifest's outcome.
+
+    A command gate reports a timeout as ``blocked`` with no exit status after
+    its full budget elapsed; the timing, not the detail text, identifies it.
+    """
+    from eawf.runtime.verification.progress import LegOutcome
+
+    if result.status == "pass":
+        return LegOutcome.PASSED
+    if result.status == "fail":
+        return LegOutcome.FAILED
+    budget = result.resolved_timeout_seconds
+    if (
+        result.exit_status is None
+        and budget is not None
+        and result.duration_ms is not None
+        and result.duration_ms >= budget * 1_000
+    ):
+        return LegOutcome.TIMED_OUT
+    return LegOutcome.BLOCKED
+
+
+def _probe_freshness_key(spec: CheckSpec, *, cwd: Path) -> str:
+    """Return the freshness key *spec* would claim now, without running it."""
     from eawf.workflow.audit_dsl.runner import run_checks
 
-    request = _GateChildRequest.model_validate(orjson.loads(request_path.read_bytes()))
+    keys: list[str] = []
 
-    def _before_execute(spec: CheckSpec, freshness_key: str) -> CheckResult | None:
-        return claim_gate_execution(
+    def _record(checked: CheckSpec, freshness_key: str) -> CheckResult:
+        keys.append(freshness_key)
+        return CheckResult(
+            name=checked.name,
+            kind=checked.kind,
+            passed=False,
+            status="blocked",
+            details="freshness probe",
+        )
+
+    run_checks([spec], cwd=cwd, before_execute=_record)
+    if len(keys) != 1:
+        raise ValueError(f"gate {spec.name!r} produced {len(keys)} freshness keys, expected 1")
+    return keys[0]
+
+
+def _resume_refused_result(spec: CheckSpec, plan: ResumePlan) -> CheckResult:
+    """Describe a resume that could not prove its residue; nothing ran."""
+    return CheckResult(
+        name=spec.name,
+        kind=spec.kind,
+        passed=False,
+        status="blocked",
+        details=(
+            f"resume refused ({plan.reason.value}): no provable residue for "
+            f"{gate_receipt_id(plan.source_freshness_key)}; restart the full leg explicitly"
+        ),
+        freshness_key=plan.source_freshness_key,
+        freshness=spec.freshness,
+    )
+
+
+class _LegObservation:
+    """What the claim callback learned: whether this child runs the leg, and its publisher."""
+
+    def __init__(self) -> None:
+        self.executed = False
+        self.publisher: ProgressPublisher | None = None
+
+
+def _open_publisher(
+    request: _GateChildRequest,
+    *,
+    spec: CheckSpec,
+    freshness_key: str,
+    plan: ResumePlan | None,
+) -> ProgressPublisher | None:
+    """Start publishing the claimed leg's manifest; progress never fails the gate."""
+    from eawf.kernel.delivery.receipts import canonical_digest
+    from eawf.runtime.verification.progress import (
+        LegIdentity,
+        ProgressPublisher,
+        UnclaimedProgressError,
+    )
+
+    try:
+        claim = load_gate_claim(request.state_path, freshness_key)
+        if claim is None:
+            raise UnclaimedProgressError(f"no durable claim for {gate_receipt_id(freshness_key)}")
+        publisher = ProgressPublisher(
+            state_path=request.state_path,
+            leg=LegIdentity(
+                attempt_id=claim.attempt_id,
+                criterion_id=claim.criterion_id,
+                gate_id=claim.gate_id,
+                freshness_key=claim.freshness_key,
+                claimed_at=claim.claimed_at,
+            ),
+            producer_digest=canonical_digest(spec.model_dump(mode="json")),
+            resolved_timeout_seconds=_resolved_timeout_seconds(spec),
+            channel_dir=request.channel_dir,
+            seed=None if plan is None else plan.seed(),
+        )
+        publisher.open()
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            f"_open_publisher gate_id={request.gate_id!r} status='progress-unavailable' "
+            f"detail={exc!s}"
+        )
+        return None
+    return publisher
+
+
+def _close_publisher(
+    publisher: ProgressPublisher,
+    *,
+    outcome: LegOutcome,
+    result: CheckResult | None,
+) -> ProgressManifest | None:
+    """Publish the terminal manifest, or ``None`` when that write failed."""
+    try:
+        return publisher.close(
+            outcome=outcome,
+            stdout_tail=None if result is None else result.stdout_tail,
+            stderr_tail=None if result is None else result.stderr_tail,
+        )
+    except (OSError, ValueError) as exc:
+        logger.warning(f"_close_publisher status='progress-unavailable' detail={exc!s}")
+        return None
+
+
+def _run_claimed_leg(request: _GateChildRequest) -> CheckResult:
+    """Claim, run and observe one gate inside the child interpreter.
+
+    Returns:
+        The gate's result. A resumed leg whose manifest does not prove its
+        whole collection passed comes back ``blocked`` even when its command
+        exited zero, because the command proved only the residue it ran.
+    """
+    from eawf.runtime.verification.progress import LegOutcome, read_progress_manifest
+    from eawf.runtime.verification.resume import (
+        ResumeKind,
+        plan_resume,
+        residue_proven,
+        with_residue,
+    )
+    from eawf.workflow.audit_dsl.runner import run_checks
+
+    spec = request.spec
+    plan: ResumePlan | None = None
+    if request.resume:
+        base_key = _probe_freshness_key(spec, cwd=request.cwd)
+        plan = plan_resume(
+            read_progress_manifest(request.state_path, base_key),
+            expected_freshness_key=base_key,
+        )
+        if plan.kind is not ResumeKind.RESIDUE:
+            return _resume_refused_result(spec, plan)
+        spec = with_residue(spec, plan)
+    observation = _LegObservation()
+
+    def _before_execute(checked: CheckSpec, freshness_key: str) -> CheckResult | None:
+        claimed = claim_gate_execution(
             request.state_path,
             attempt_id=request.attempt_id,
             criterion_id=request.criterion_id,
             gate_id=request.gate_id,
-            spec=spec,
+            spec=checked,
             freshness_key=freshness_key,
         )
+        if claimed is None:
+            observation.executed = True
+            observation.publisher = _open_publisher(
+                request, spec=checked, freshness_key=freshness_key, plan=plan
+            )
+        return claimed
 
     try:
-        result = run_checks(
-            [request.spec],
-            cwd=request.cwd,
-            before_execute=_before_execute,
-        )[0]
+        result = run_checks([spec], cwd=request.cwd, before_execute=_before_execute)[0]
+    except BaseException:
+        if observation.publisher is not None:
+            _close_publisher(observation.publisher, outcome=LegOutcome.ERRORED, result=None)
+        raise
+    manifest = (
+        None
+        if observation.publisher is None
+        else _close_publisher(observation.publisher, outcome=_leg_outcome(result), result=result)
+    )
+    if (
+        plan is not None
+        and observation.executed
+        and result.passed
+        and (manifest is None or not residue_proven(manifest, plan))
+    ):
+        return result.model_copy(
+            update={
+                "passed": False,
+                "status": "blocked",
+                "details": (
+                    f"{result.details or ''} resumed leg exited zero but its progress "
+                    "manifest does not prove the whole collection passed"
+                ).strip(),
+            }
+        )
+    return result
+
+
+def _execute_child_request(request_path: Path, response_path: Path) -> None:
+    """Claim, run, and report one gate from inside the child interpreter."""
+    request = _GateChildRequest.model_validate(orjson.loads(request_path.read_bytes()))
+    try:
+        result = _run_claimed_leg(request)
     except Exception as exc:
         response = _GateChildResponse(ok=False, error=f"{type(exc).__name__}: {exc!s}")
     else:
@@ -744,6 +990,7 @@ __all__ = [
     "gate_child_env",
     "gate_receipt_id",
     "gate_sandbox",
+    "load_gate_claim",
     "run_gate_out_of_process",
     "seed_gate_sandbox",
 ]

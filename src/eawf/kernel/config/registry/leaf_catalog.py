@@ -1197,6 +1197,30 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
+        key="vcs.integration_commit_unit",
+        domain="vcs",
+        type="literal",
+        default="batch",
+        writable_layers=_WRITABLE_GWR,
+        choices=("batch", "task"),
+        description=(
+            "Unit of one verified delivery commit: 'batch' squashes a Batch's sealed "
+            "candidates at integration; 'task' keeps one delivery commit per Task."
+        ),
+    ),
+    LeafKey(
+        key="vcs.task_reference",
+        domain="vcs",
+        type="literal",
+        default="trailer",
+        writable_layers=_WRITABLE_GWR,
+        choices=("trailer", "subject", "none"),
+        description=(
+            "How a delivery commit names its Task: a 'Task:' trailer, an in-subject "
+            "identifier, or nothing beyond the provenance manifest."
+        ),
+    ),
+    LeafKey(
         key="vcs.conventions.subject_style",
         domain="vcs",
         type="literal",

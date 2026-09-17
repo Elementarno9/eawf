@@ -18,6 +18,7 @@ from __future__ import annotations
 import copy
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -32,14 +33,18 @@ from eawf.kernel.release.signals import (
     ReleaseSignalProbe,
     ReleaseSignalStatus,
 )
+from eawf.kernel.spec.publication import PublicationOperation, require_attempt
 from eawf.kernel.spec.release import (
     AdoptedTargetObservation,
     Release,
     ReleaseAdoption,
     ReleaseChannel,
     ReleaseStatus,
+    ReleaseTargetStatus,
+    semver_equivalent,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
+from eawf.workflow.release.adapters import RegistryReader
 from eawf.workflow.release.advance import draft_release_for
 from eawf.workflow.release.dependencies import (
     LicenseDisposition,
@@ -53,18 +58,31 @@ from eawf.workflow.release.observation import (
     observation_request,
 )
 from eawf.workflow.release.pipeline_receipts import write_receipt
+from eawf.workflow.release.publication import begin_publication, begin_verification
+from eawf.workflow.release.registry_readers import (
+    HttpOpener,
+    HttpReply,
+    NpmRegistryReader,
+    PackageIndexReader,
+    SourceHostReleaseReader,
+    npm_packument_url,
+    package_index_url,
+    source_host_release_url,
+)
 from eawf.workflow.release.reproducibility import (
     ArtifactDigest,
     ArtifactKind,
     BuildAttempt,
     ReproducibleBuildReceipt,
 )
+from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.release.train import (
     DEV1_GATE_BINDINGS_YAML,
     DEV1_RELEASE_CONFIG_YAML,
     V07_TRAIN,
 )
 from eawf.workflow.release.vulnerability import VulnerabilityReport
+from eawf.workflow.verify.release_readiness import compute_readiness
 
 #: Instant every sweep in this package is computed at.
 NOW = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
@@ -74,9 +92,18 @@ SOURCE_SHA = "a" * 40
 TREE_SHA = "b" * 40
 MANIFEST_DIGEST = f"sha256:{'c' * 64}"
 
-#: Recorded registry answers and the frozen manifest they are judged
+#: Recorded registry answers and the frozen manifests they are judged
 #: against. Committed rather than generated so a fixture drifting from
 #: what an adapter reads shows up as a diff, not as a passing test.
+#:
+#: Each ``<stem>-<case>.json`` is a registry's raw answer (status and
+#: decoded body), trimmed to the fields the readers and adapters read.
+#: The ``-dev2`` bodies are the live ``0.7.0.dev2`` answers captured on
+#: 2026-09-17 and ``manifest-dev2.json`` is the manifest that release
+#: approved. The case bodies drive the ``0.7.0.dev1`` checkpoint the
+#: suite walks: the npm packument is the live one, and the index and
+#: release bodies are the live ones respelled onto ``0.7.0.dev1`` with
+#: the digests ``manifest.json`` pins.
 OBSERVATION_FIXTURES = Path(__file__).parent / "fixtures" / "release" / "observations"
 
 #: The recorded-response stem of each adapter, by target id.
@@ -84,6 +111,22 @@ ADAPTER_STEMS: Mapping[str, str] = {
     "pypi": "package_index",
     "npm": "npm_registry",
     "github": "source_host_release",
+}
+
+#: The tarball bodies the recorded npm registry serves. The live
+#: tarballs are not committed, so ``manifest.json`` pins the sha256 of
+#: the frozen stand-in. The npm ``mismatch`` packument is the ``match``
+#: one: a packument names its tarball but never its sha256, so only the
+#: served bytes can differ -- which is why the reader has to hash them.
+FROZEN_NPM_TARBALL = b"stand-in tarball: the frozen @elementarno/eawf 0.7.0-dev.1 build\n"
+REPUBLISHED_NPM_TARBALL = b"stand-in tarball: a different @elementarno/eawf 0.7.0-dev.1 build\n"
+
+#: The tarball each npm case serves; cases absent here fetch none.
+NPM_TARBALLS: Mapping[str, bytes] = {
+    "match": FROZEN_NPM_TARBALL,
+    "default-channel": FROZEN_NPM_TARBALL,
+    "mismatch": REPUBLISHED_NPM_TARBALL,
+    "dev2": FROZEN_NPM_TARBALL,
 }
 
 
@@ -94,18 +137,101 @@ def frozen_manifest() -> FrozenManifest:
     )
 
 
-def recorded_response(target_id: str, case: str) -> RecordedResponse:
-    """Return the recorded registry answer for *target_id* in *case*.
+def registry_answer(target_id: str, case: str) -> tuple[int, Any]:
+    """Return the recorded registry status and decoded body.
 
     Args:
-        target_id: Publication target whose adapter recorded it.
+        target_id: Publication target whose registry answered.
         case: Fixture case stem, e.g. ``match`` or ``default-channel``.
+
+    Returns:
+        The transport status and the decoded body (``None`` for none).
+    """
+    path = OBSERVATION_FIXTURES / f"{ADAPTER_STEMS[target_id]}-{case}.json"
+    recorded = json.loads(path.read_text(encoding="utf-8"))
+    return recorded["status"], recorded["payload"]
+
+
+@dataclass
+class RecordedRegistry:
+    """An :class:`HttpOpener` answering from recorded bodies.
+
+    A request for any URL it holds no answer for fails the test, so a
+    reader cannot quietly ask for something nobody recorded.
+
+    Attributes:
+        answers: The reply served for each URL.
+        requests: Every ``(url, headers)`` asked, in order.
+    """
+
+    answers: dict[str, HttpReply]
+    requests: list[tuple[str, dict[str, str]]] = field(default_factory=list)
+
+    def __call__(self, url: str, *, headers: Mapping[str, str]) -> HttpReply:
+        """Return the recorded answer for *url*."""
+        self.requests.append((url, dict(headers)))
+        if url not in self.answers:
+            raise AssertionError(
+                f"unrecorded registry request {url!r}; recorded {sorted(self.answers)}"
+            )
+        return self.answers[url]
+
+
+def recorded_registry(target_id: str, case: str, request: ObservationRequest) -> RecordedRegistry:
+    """Return a registry serving the *case* answer to *request*'s reader.
+
+    Args:
+        target_id: Publication target whose registry is recorded.
+        case: Fixture case stem.
+        request: The read-back request the reader will be asked.
+
+    Returns:
+        The registry, also serving the npm tarball the case names.
+    """
+    urls = {"pypi": package_index_url, "npm": npm_packument_url, "github": source_host_release_url}
+    status, payload = registry_answer(target_id, case)
+    body = b"" if payload is None else json.dumps(payload).encode("utf-8")
+    registry = RecordedRegistry(answers={urls[target_id](request): HttpReply(status, body)})
+    if target_id == "npm" and case in NPM_TARBALLS:
+        dist = payload["versions"][semver_equivalent(request.version)]["dist"]
+        registry.answers[dist["tarball"]] = HttpReply(200, NPM_TARBALLS[case])
+    return registry
+
+
+def registry_reader(target_id: str, opener: HttpOpener) -> RegistryReader:
+    """Return the live reader for *target_id*'s adapter over *opener*."""
+    readers: Mapping[
+        str, type[PackageIndexReader] | type[NpmRegistryReader] | type[SourceHostReleaseReader]
+    ] = {
+        "pypi": PackageIndexReader,
+        "npm": NpmRegistryReader,
+        "github": SourceHostReleaseReader,
+    }
+    return readers[target_id](opener=opener)
+
+
+def recorded_response(
+    target_id: str,
+    case: str,
+    *,
+    request: ObservationRequest | None = None,
+) -> RecordedResponse:
+    """Return the reader's answer when the registry serves *case*.
+
+    The raw fixture is passed through the target's live reader, so the
+    response carries the fields only a reader adds, exactly as the
+    daemon's reader would record it.
+
+    Args:
+        target_id: Publication target whose adapter judges it.
+        case: Fixture case stem, e.g. ``match`` or ``default-channel``.
+        request: The read-back request; defaults to the dev1 request.
 
     Returns:
         The recorded answer.
     """
-    path = OBSERVATION_FIXTURES / f"{ADAPTER_STEMS[target_id]}-{case}.json"
-    return RecordedResponse.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    asked = request or read_back_request(target_id)
+    return registry_reader(target_id, recorded_registry(target_id, case, asked))(asked)
 
 
 def read_back_request(target_id: str, *, config: ReleaseConfig | None = None) -> ObservationRequest:
@@ -238,6 +364,46 @@ def dev1_draft(uid: UUID | None = None) -> Release:
     return draft_release_for(
         V07_TRAIN.checkpoint_for_version("0.7.0.dev1"), uid=uid or DEV1_DRAFT_UID
     )
+
+
+def verifying_publication(
+    *,
+    operation_id: UUID,
+    config: ReleaseConfig | None = None,
+) -> tuple[Release, PublicationOperation, ReleaseConfig]:
+    """Return a dev1 record at VERIFYING, every leg reported at its deadline.
+
+    Args:
+        operation_id: Identity of the publication episode opened.
+        config: Checkpoint configuration; defaults to the dev1 one.
+
+    Returns:
+        The verifying record, its operation and the configuration.
+    """
+    checkpoint = config or dev1_config()
+    published, operation = begin_publication(
+        release_record(status=ReleaseStatus.APPROVED, approval_ref="receipt://approval/dev1"),
+        checkpoint,
+        compute_readiness(checkpoint, probes=all_passing(), computed_at=NOW),
+        operation_id=operation_id,
+        approved_manifest_digest=MANIFEST_DIGEST,
+        idempotency_key=f"publish-0.7.0.dev1-{operation_id.int}",
+        proof_digest=f"sha256:{'1' * 64}",
+        opened_at=NOW,
+    )
+    for target in checkpoint.targets:
+        row = require_attempt(operation, target.target_id)
+        operation = advance_target_attempt(
+            operation, target=target, to=ReleaseTargetStatus.IN_FLIGHT, now=row.started_at
+        )
+        operation = advance_target_attempt(
+            operation,
+            target=target,
+            to=ReleaseTargetStatus.REPORTED_SUCCESS,
+            now=row.deadline_at,
+            effect_receipt_ref="receipt://target/effect",
+        )
+    return begin_verification(published, checkpoint, operation), operation, checkpoint
 
 
 def fixed_probe(status: ReleaseSignalStatus) -> ReleaseSignalProbe:
