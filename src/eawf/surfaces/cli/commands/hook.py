@@ -54,6 +54,7 @@ from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
+    from eawf.observability.logging.state_leak import StateLeakKind
     from eawf.platform.lint import LintConfig
     from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
     from eawf.runtime.hooks.runner import HookResult
@@ -441,8 +442,8 @@ def _seed_agent_end_verdict(
 # --- Diff-scoped lint gates (hooks 16-19 per C09 §5.3) ---------------------
 # Each gate is a thin CLI dispatcher: it resolves the files to inspect
 # (explicit args, else the conditional diff scan) and delegates the
-# actual detection to a library surface (the scrubber patterns reused
-# from ``eawf.observability.logging.scrub`` for leaks, the EAWF001 rule for log
+# actual detection to a library surface (the shared pattern set in
+# ``eawf.observability.logging.state_leak`` for leaks, the EAWF001 rule for log
 # format, ``plugin doctor --strict`` for plugin drift). The conditional
 # diff scan keeps each gate a no-op when nothing relevant changed.
 
@@ -485,89 +486,6 @@ class LeakFinding:
         return f"{self.path}:{self.lineno}: {self.snippet}"
 
 
-def _path_leak_patterns() -> tuple[re.Pattern[str], ...]:
-    """Return the home-directory path patterns reused from the scrubber.
-
-    The three home-directory anchors (macOS, Windows, Linux) are the
-    leak shapes the path gate rejects; they are sourced from
-    :data:`eawf.observability.logging.scrub.SensitiveScrubber.PATTERNS` so the gate
-    and the emit-time scrubber never drift.
-    """
-    from eawf.observability.logging.scrub import SensitiveScrubber
-
-    return tuple(
-        p for p in SensitiveScrubber.PATTERNS if "Users" in p.pattern or "home" in p.pattern
-    )
-
-
-def _email_leak_pattern() -> re.Pattern[str]:
-    """Return the email pattern reused from the scrubber."""
-    from eawf.observability.logging.scrub import SensitiveScrubber
-
-    return next(p for p in SensitiveScrubber.PATTERNS if "@" in p.pattern)
-
-
-def _allowed_emails() -> frozenset[str]:
-    """Return the canonical email allowlist (no-reply + pyproject authors).
-
-    Reuses the scrubber's allowlist derivation so the gate accepts
-    exactly the addresses the emit-time filter preserves: the no-reply
-    co-author addresses plus the canonical ``pyproject.toml`` author
-    rows.
-    """
-    from eawf.observability.logging.scrub import _DEFAULT_ALLOWED_EMAILS, _eawf_author_emails
-
-    return frozenset(e.casefold() for e in (_DEFAULT_ALLOWED_EMAILS | _eawf_author_emails()))
-
-
-# RFC 2606 / 6761 reserved domains used in fixtures + docs; never real PII.
-_RESERVED_EMAIL_DOMAINS = frozenset({"example.com", "example.org", "example.net", "example.edu"})
-_RESERVED_EMAIL_TLDS = (".example", ".invalid", ".localhost", ".test")
-
-
-def _is_placeholder_or_nonemail(addr: str) -> bool:
-    """Return ``True`` for reserved placeholders and ``@``-refs that are not emails.
-
-    Guards the email-leak gate against two false-positive classes the
-    scrubber's loose address-shaped pattern would otherwise flag:
-
-    - RFC 2606 / 6761 reserved example domains (test fixtures, docs) such
-      as ``test@example.com``; and
-    - version / action pins like ``setup-uv@v8.1.0`` whose top-level
-      label is not an alphabetic TLD.
-    """
-    _, _, domain = addr.partition("@")
-    domain = domain.casefold()
-    if not domain:
-        return True
-    if domain in _RESERVED_EMAIL_DOMAINS or domain.endswith(_RESERVED_EMAIL_TLDS):
-        return True
-    tld = domain.rsplit(".", 1)[-1]
-    return not (tld.isalpha() and len(tld) >= 2)
-
-
-def _is_placeholder_path(snippet: str) -> bool:
-    """Return ``True`` for documented home-dir placeholders, not real path leaks.
-
-    The path-leak gate's loose home-directory anchors (macOS, Windows,
-    Linux, tilde) match the pedagogical "do NOT commit these" examples
-    that the secrets-hygiene rule body and rendered ``AGENTS.md`` carry
-    verbatim — ``/Users/<name>``, ``C:\\Users\\...``, ``~/Workspace/...``.
-    Those are documentation, not leaks, so the gate skips them. This is
-    the symmetric counterpart to :func:`_is_placeholder_or_nonemail`,
-    which already shields the email gate from reserved-domain and
-    version-pin false positives.
-
-    A matched ``snippet`` is treated as a placeholder when it carries an
-    angle bracket (``<`` or ``>``) — the convention for a name to be
-    filled in (``/Users/<name>``) — or an ellipsis (``...``) — the
-    convention for an elided tail (``C:\\Users\\...``). A concrete
-    home-dir path with a real username after the anchor carries neither
-    token and is still flagged as a leak.
-    """
-    return any(token in snippet for token in ("<", ">", "..."))
-
-
 def _read_text_lines(path: Path) -> list[str] | None:
     """Return ``path``'s text lines, or ``None`` for unreadable/binary files.
 
@@ -582,43 +500,80 @@ def _read_text_lines(path: Path) -> list[str] | None:
         return None
 
 
-def _scan_path_leaks(paths: list[str], *, cwd: Path) -> list[LeakFinding]:
-    """Return home-directory path-literal findings across ``paths``."""
-    patterns = _path_leak_patterns()
-    findings: list[LeakFinding] = []
-    for rel in paths:
-        lines = _read_text_lines(cwd / rel)
-        if lines is None:
-            continue
-        for lineno, line in enumerate(lines, start=1):
-            if _line_is_allowlisted(line):
-                continue
-            for pattern in patterns:
-                for match in pattern.finditer(line):
-                    if _is_placeholder_path(match.group(0)):
-                        continue
-                    findings.append(LeakFinding(path=rel, lineno=lineno, snippet=match.group(0)))
-    return findings
+def _scan_path_leaks(paths: list[str], *, cwd: Path, diff_scoped: bool) -> list[LeakFinding]:
+    """Return home-directory path-literal findings across ``paths``.
+
+    On the state file the gate also reports credential-shaped tokens:
+    detect-secrets is excluded from that file, so no other gate would.
+    """
+    from eawf.observability.logging.state_leak import StateLeakKind
+
+    return _scan_leaks(
+        paths,
+        cwd=cwd,
+        diff_scoped=diff_scoped,
+        kinds=frozenset({StateLeakKind.HOME_PATH}),
+        state_kinds=frozenset({StateLeakKind.HOME_PATH, StateLeakKind.TOKEN}),
+    )
 
 
-def _scan_email_leaks(paths: list[str], *, cwd: Path) -> list[LeakFinding]:
+def _scan_email_leaks(paths: list[str], *, cwd: Path, diff_scoped: bool) -> list[LeakFinding]:
     """Return non-allowlisted email findings across ``paths``."""
-    pattern = _email_leak_pattern()
-    allowed = _allowed_emails()
+    from eawf.observability.logging.state_leak import StateLeakKind
+
+    kinds = frozenset({StateLeakKind.EMAIL})
+    return _scan_leaks(paths, cwd=cwd, diff_scoped=diff_scoped, kinds=kinds, state_kinds=kinds)
+
+
+def _scan_leaks(
+    paths: list[str],
+    *,
+    cwd: Path,
+    diff_scoped: bool,
+    kinds: frozenset[StateLeakKind],
+    state_kinds: frozenset[StateLeakKind],
+) -> list[LeakFinding]:
+    """Return the shared-pattern-set hits of the wanted kinds across ``paths``.
+
+    Args:
+        paths: Repo-relative (or absolute) files to scan.
+        cwd: Repository root the paths resolve against.
+        diff_scoped: ``True`` when ``paths`` came from the staged scan rather
+            than from explicit arguments.
+        kinds: Hit kinds reported for an ordinary file.
+        state_kinds: Hit kinds reported for the state file.
+
+    Returns:
+        One finding per hit, in file, line and pattern order. On a
+        diff-scoped scan the state file contributes only the lines the staged
+        diff adds: its offsets churn on every mutation and its older rows
+        predate this scan, so a whole-file pass would re-flag text the commit
+        never touched.
+    """
+    from eawf.observability.logging.state_leak import default_allowed_emails, scan_state_leaks
+
+    allowed = default_allowed_emails()
     findings: list[LeakFinding] = []
     for rel in paths:
         lines = _read_text_lines(cwd / rel)
         if lines is None:
             continue
+        is_state = _is_state_bookkeeping_path(rel)
+        wanted = state_kinds if is_state else kinds
+        added = _staged_added_line_candidates(rel, cwd=cwd) if is_state and diff_scoped else None
         for lineno, line in enumerate(lines, start=1):
+            if added is not None and lineno not in added:
+                continue
             if _line_is_allowlisted(line):
                 continue
-            for match in pattern.finditer(line):
-                if match.group(0).casefold() in allowed:
-                    continue
-                if _is_placeholder_or_nonemail(match.group(0)):
-                    continue
-                findings.append(LeakFinding(path=rel, lineno=lineno, snippet=match.group(0)))
+            # JSON escapes a backslash as two, which would hide a Windows home
+            # path from its single-backslash anchor.
+            text = line.replace("\\\\", "\\") if is_state else line
+            findings.extend(
+                LeakFinding(path=rel, lineno=lineno, snippet=hit.snippet)
+                for hit in scan_state_leaks(text, allowed_emails=allowed)
+                if hit.kind in wanted
+            )
     return findings
 
 
@@ -646,7 +601,7 @@ def _resolve_scan_paths(
         return files
     candidates = relevant_for_hook(hook_name, base, cwd=cwd, staged=True)
     relocated = _pure_relocation_destinations(cwd=cwd)
-    return [p for p in candidates if not _is_state_bookkeeping_path(p) and p not in relocated]
+    return [p for p in candidates if p not in relocated]
 
 
 _PURE_RENAME_STATUS_RE = re.compile(r"^R100\t(?P<old>.+)\t(?P<new>.+)$")
@@ -749,22 +704,21 @@ def _staged_added_line_candidates(rel: str, *, cwd: Path) -> set[int]:
 
 
 def _is_state_bookkeeping_path(rel: str) -> bool:
-    """Return ``True`` for daemon-managed bookkeeping files excluded from leak scans.
+    """Return ``True`` for the state file, whose leak scan is limited to added lines.
 
-    Only ``.ea/state.json`` is exempt. Its content is machine-written, its line
-    offsets churn on every mutation, and its free-text fields (backlog titles,
-    outcomes, rule prose) legitimately carry home-directory path SHAPES as
-    placeholders -- ``/Users/<name>`` in a rule that explains the leak lint is
-    not a leak.
+    Only ``.ea/state.json`` gets the narrower scan. Its line offsets churn on
+    every mutation and its older rows predate the scan, so the leak gates read
+    only the lines a commit adds to it. It is not exempt: its free-text fields
+    (backlog titles, outcomes, rule prose) take agent and operator text, and an
+    exemption once let a worktree path reach a public commit through exactly
+    those fields. Its documented placeholders (``/Users/<name>`` in a rule that
+    explains the leak lint) pass through the shared placeholder skip instead.
 
-    The typed stores under ``.ea/store/`` are NOT exempt. They used to be, on the
-    premise that a daemon-written file cannot carry user secrets; that premise
-    held until a store began carrying the raw stdout of spawned agents, at which
-    point the exemption made the one file that could leak the one file nobody
-    scanned. The event store is now untracked entirely, and the typed stores that
-    remain (audit / decision / evidence / role reports) are structured rows the
-    daemon composes -- so scanning them costs nothing today and catches the next
-    free-text field somebody adds to one.
+    The typed stores under ``.ea/store/`` are scanned in full. They were exempt
+    once, on the premise that a daemon-written file cannot carry user secrets;
+    that premise held until a store began carrying the raw stdout of spawned
+    agents, at which point the exemption made the one file that could leak the
+    one file nobody scanned.
     """
     return rel.replace("\\", "/") == ".ea/state.json"
 
@@ -1083,7 +1037,9 @@ def path_leak_lint(
     """Reject home-directory path literals (macOS, Windows, and Linux home roots).
 
     Scans the given files (or, when none are given, only the staged
-    files relevant to this gate per the conditional scan). A line
+    files relevant to this gate per the conditional scan). A staged
+    ``.ea/state.json`` is scanned only on the lines the commit adds,
+    for credential-shaped tokens as well as home paths. A line
     carrying the ``pragma: allowlist secret`` marker is exempt (for
     by-design fixtures / pattern source). Exits 1 when a leak is found,
     0 on a clean scan.
@@ -1091,7 +1047,7 @@ def path_leak_lint(
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
     paths = _resolve_scan_paths(files, hook_name="path-leak-lint", base=base, cwd=cwd)
-    findings = _scan_path_leaks(paths, cwd=cwd)
+    findings = _scan_path_leaks(paths, cwd=cwd, diff_scoped=not files)
     _emit_leak_result(
         hook_name="path-leak-lint", findings=findings, scanned=len(paths), flags=flags
     )
@@ -1108,12 +1064,14 @@ def email_leak_lint(
     Scans the given files (or, when none are given, only the changed
     files relevant to this gate per the conditional diff scan). The
     allowlist is the no-reply co-author addresses plus the
-    ``pyproject.toml`` author rows. Exits 1 on a leak, 0 on a clean scan.
+    ``pyproject.toml`` author rows. A staged ``.ea/state.json`` is
+    scanned only on the lines the commit adds. Exits 1 on a leak, 0 on
+    a clean scan.
     """
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
     paths = _resolve_scan_paths(files, hook_name="email-leak-lint", base=base, cwd=cwd)
-    findings = _scan_email_leaks(paths, cwd=cwd)
+    findings = _scan_email_leaks(paths, cwd=cwd, diff_scoped=not files)
     _emit_leak_result(
         hook_name="email-leak-lint", findings=findings, scanned=len(paths), flags=flags
     )

@@ -199,7 +199,7 @@ def test_path_leak_lint_staged_fallback_flags_staged_leak(tmp_path: Path) -> Non
 
 
 # The path-leak gate scans only the macOS / Windows / Linux home anchors
-# (``_path_leak_patterns`` filters ``SensitiveScrubber.PATTERNS`` to those
+# (``state_leak.HOME_PATH_PATTERNS`` selects the ``SensitiveScrubber.PATTERNS``
 # whose source mentions ``Users`` or ``home``); the bare ``~/`` tilde shape
 # is intentionally outside the gate's scan set, so the CLI-level cases below
 # exercise only the gate-covered anchors. The tilde placeholder/leak
@@ -244,16 +244,16 @@ def test_path_leak_lint_still_flags_real_path(tmp_path: Path, real_path: str) ->
 
 
 def test_is_placeholder_path_discriminates_placeholder_from_leak() -> None:
-    from eawf.surfaces.cli.commands.hook import _is_placeholder_path
+    from eawf.observability.logging.state_leak import is_placeholder_path
 
-    assert _is_placeholder_path("/Users/<name>")
-    assert _is_placeholder_path("/Users/<name>/...")
-    assert _is_placeholder_path("C:\\Users\\...")
-    assert _is_placeholder_path("~/Workspace/...")
-    assert _is_placeholder_path("/home/<user>")
-    assert not _is_placeholder_path("/Users/realuser")  # pragma: allowlist secret
-    assert not _is_placeholder_path("C:\\Users\\Bob")  # pragma: allowlist secret
-    assert not _is_placeholder_path("~/Workspace/myproject")  # pragma: allowlist secret
+    assert is_placeholder_path("/Users/<name>")
+    assert is_placeholder_path("/Users/<name>/...")
+    assert is_placeholder_path("C:\\Users\\...")
+    assert is_placeholder_path("~/Workspace/...")
+    assert is_placeholder_path("/home/<user>")
+    assert not is_placeholder_path("/Users/realuser")  # pragma: allowlist secret
+    assert not is_placeholder_path("C:\\Users\\Bob")  # pragma: allowlist secret
+    assert not is_placeholder_path("~/Workspace/myproject")  # pragma: allowlist secret
 
 
 # --- email-leak-lint ------------------------------------------------------
@@ -284,15 +284,13 @@ def test_email_leak_lint_skips_action_version_ref(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
-def test_is_state_bookkeeping_path_exempts_only_state_json() -> None:
-    """Only state.json is exempt from the leak scans; the stores are NOT.
+def test_is_state_bookkeeping_path_matches_only_state_json() -> None:
+    """Only state.json gets the added-lines leak scan; the stores are scanned in full.
 
-    The stores used to be exempt too, on the premise that a daemon-written file
+    The stores were once exempt, on the premise that a daemon-written file
     cannot carry user secrets. That held until one began carrying the raw stdout
     of spawned agents -- at which point the one file that could leak was the one
-    file nobody scanned, and a home path reached a public repo. state.json keeps
-    its exemption because its path-SHAPED hits are placeholders in rule prose
-    that explains this very lint.
+    file nobody scanned, and a home path reached a public repo.
     """
     from eawf.surfaces.cli.commands.hook import _is_state_bookkeeping_path
 

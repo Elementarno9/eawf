@@ -35,12 +35,18 @@ Enforces:
      the bare ``[P##(-I##)?] state|docs:`` form is exempt because it
      advances no single wave and so has no trailer to carry.
 
-     A bare ``<type>: <subject>`` with NO ``Eawf-Wave`` trailer is
-     accepted only when ``state.current.phase_id`` is ``None`` (no
-     ACTIVE phase) — an out-of-phase commit advances no wave, so
-     neither carrier has anything to name. With an ACTIVE phase it is
-     rejected: under ``trailer`` for the missing trailer, under
-     ``bracket`` for the missing bracket prefix.
+     **Open-phase trailer rule.** A non-``state`` commit with neither an
+     ``Eawf-Wave`` trailer nor a bracket prefix names no wave, so it is
+     accepted only when every phase in ``state.json`` is CLOSED (or
+     ARCHIVED) and ``state.current.phase_id`` is ``None``. While any
+     phase is PLANNED or ACTIVE it is rejected: under ``trailer`` for
+     the missing trailer, under ``bracket`` for the missing bracket
+     prefix. PLANNED counts because the stretch between one phase's
+     close and the next phase's activation is exactly where
+     unattributed repair commits used to land. A bare ``state:``
+     subject keeps the narrower rule and is rejected only while
+     ``state.current.phase_id`` is set, since the bookkeeping that
+     brings a PLANNED phase into being has no wave to name yet.
 
    ``W00`` and ``I00`` are rejected in the bracketed forms: wave /
    iter indices are 1-based by convention, and reactive waves get the
@@ -62,7 +68,12 @@ Enforces:
 
    Bare ``[P##(-I##)?] docs:`` commits are similarly path-gated:
    they MUST touch only ``.ea/artifacts/**`` (promoted documentation
-   artifacts). Wave-form ``[P##-W##] docs:`` commits are unrestricted.
+   artifacts). A bare docs commit that stages at least one artifact
+   path may also stage ``.ea/state.json`` and ``.secrets.baseline``:
+   rewriting an artifact body re-pins its digest in state, and the
+   baseline tracks state.json line numbers. Without an artifact path
+   those two stay rejected, so a docs subject never carries bare
+   bookkeeping. Wave-form ``[P##-W##] docs:`` commits are unrestricted.
 
 3. A recognized Claude or Codex ``Co-Authored-By`` trailer MUST be
    present (the ``prepare-commit-msg`` stage hook auto-inserts it when
@@ -70,21 +81,31 @@ Enforces:
    the trailer was hand-deleted).
 
 4. Wave-close bookkeeping rides the wave commit. A ``state``-typed
-   subject that closes exactly one wave — ``[P31-I01] state: close
-   W27`` — is rejected: those close records belong on that wave's own
-   commit, staged and folded in with ``git commit --amend``. A claim
-   batch, an iter close, or a phase close names no single wave and
-   stays a bare ``[P##] state:`` commit.
+   subject whose close verb governs exactly one wave token, such as
+   ``[P31-I01] state: close W27`` or ``close W02 and claim W01``, is
+   rejected: those close records belong on that wave's own commit,
+   staged and folded in with ``git commit --amend``. A close verb
+   governs the wave tokens that directly follow it, separated only by
+   punctuation, ``and`` or the word ``wave(s)``; the participle
+   ``closed`` also governs the run just before it (``W27 closed``). A
+   wave that only an add or claim verb names is not closed, so
+   ``add and claim W03 to close B152`` passes. A claim batch, a
+   multi-wave close, an iter close, or a phase close closes no single
+   wave and stays a bare ``[P##] state:`` commit.
 
 5. One commit per wave. A commit naming a wave that already has a
    commit reachable from ``HEAD`` is rejected. Exempt: a commit whose
    staged paths are all on the state-bookkeeping whitelist (that IS
    the fold amend), an amend of ``HEAD`` itself (which rewrites the
    wave's commit rather than adding one, so the wave still ends up with
-   exactly one), and the ``state`` / ``test`` types (bookkeeping and
-   the managed-golden refresh the snapshot-pairing gate forces into its
-   own paired commit). Genuinely new work appends a reactive wave and
-   commits under its own ``W##`` id.
+   exactly one), the ``state`` type (bookkeeping, already path-gated),
+   and the **golden-only** ``test`` commit: one whose every staged path
+   is a managed snapshot golden, which the snapshot-pairing gate forces
+   into its own paired commit. A ``test`` commit that stages anything
+   else (a unit test, the Python that generates a golden, an unmanaged
+   golden tree such as ``tests/golden/cli/``) is capped like any other
+   type. Genuinely new work appends a reactive wave and commits under
+   its own ``W##`` id.
 
 6. Wave-source authorization. A non-``state`` commit naming a wave must
    prove that wave is CLAIMED or IN_PROGRESS in the **canonical**
@@ -111,7 +132,7 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -137,9 +158,9 @@ _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 #    (restricted to ``.ea/artifacts/**``).
 # 3. Trailer form: ``<type>: <subject>`` with no bracket prefix — the
 #    default written form, carrying the wave in an ``Eawf-Wave`` body
-#    trailer. Without that trailer it is accepted ONLY when
-#    ``state.current.phase_id`` is ``None`` (no ACTIVE phase), because
-#    an out-of-phase commit advances no wave to name.
+#    trailer. Without that trailer a non-state commit is accepted ONLY
+#    when no phase is PLANNED or ACTIVE, because only then does it
+#    advance no wave to name.
 #
 # The negative lookaheads ``(?!00)`` on both the iter and wave digit
 # pairs reject ``I00`` / ``W00``: wave and iter indices are 1-based
@@ -234,6 +255,14 @@ _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
 # the promoted-artifact tree; wave-produced docs use the
 # ``[P##-W##] docs:`` wave form, which accepts any path.
 _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
+# Rewriting a promoted artifact's body re-pins its digest in state.json, and
+# the detect-secrets baseline follows state.json line numbers, so both ride a
+# bare docs commit - but only beside an artifact whose digest they refresh.
+_DOCS_DIGEST_COMPANIONS = (".ea/state.json", ".secrets.baseline")
+# CLOSED and ARCHIVED are the terminal phase statuses. Any other status,
+# PLANNED included, means lifecycle work is still in flight; an unrecognised
+# status reads as in flight too, so a malformed row never waves a commit through.
+_TERMINAL_PHASE_STATUSES = frozenset({"closed", "archived"})
 _CLAIMED_PROOF_STATUSES = frozenset({"claimed", "in_progress"})
 # The fold amend stages only state-bookkeeping paths, and the records it folds
 # in - the close row plus its evidence - exist only once the wave is CLOSED.
@@ -242,14 +271,40 @@ _CLAIMED_PROOF_STATUSES = frozenset({"claimed", "in_progress"})
 # shape alone; an amend that adds deliverable bytes still needs a live wave.
 _FOLD_PROOF_STATUSES = _CLAIMED_PROOF_STATUSES | {"closed"}
 
-# A state subject that names exactly one wave AND a close verb is the
-# per-wave close record the fold moved onto the wave commit itself.
-_CLOSE_VERB_RE = re.compile(r"\bclos(?:e|es|ed|ing)\b", re.IGNORECASE)
-_WAVE_TOKEN_RE = re.compile(r"\bW\d{2,}\b")
-# ``state`` is the bookkeeping surface, already gated by the path whitelist;
-# ``test`` carries the managed-golden refresh that the snapshot-pairing gate
-# forces into its own paired commit (the commit-granularity exception).
-_WAVE_COMMIT_CAP_EXEMPT_TYPES = frozenset({"state", "test"})
+# A state subject whose close verb governs exactly one wave token is the
+# per-wave close record the fold moved onto the wave commit itself. The
+# summary is read as words so punctuation between wave tokens drops out, and a
+# verb's run of wave tokens stops at the first other word: in ``close W02 and
+# claim W01`` the claim verb ends the run before ``W01``.
+_SUMMARY_WORD_RE = re.compile(r"[A-Za-z0-9]+")
+_CLOSE_VERB_RE = re.compile(r"clos(?:e|es|ed|ing)", re.IGNORECASE)
+_CLOSE_PARTICIPLE = "closed"
+_WAVE_TOKEN_RE = re.compile(r"W\d{2,}")
+_WAVE_RUN_CONNECTIVES = frozenset({"and", "wave", "waves"})
+# Mirrors the ``golden_dir`` of every surface in ``SNAPSHOT_SURFACES``
+# (src/eawf/surfaces/cli/commands/snapshot.py), the inventory the
+# snapshot-pairing gate watches. The hook runs under system Python and cannot
+# import the package, so tests/unit/test_commit_prefix_lint_open_phase.py pins
+# this copy against the inventory: a stale copy would cap the very golden
+# refresh the pairing gate demands. The trailing slash keeps a sibling
+# directory that merely shares a prefix out of the set.
+_MANAGED_GOLDEN_DIRS = (
+    "tests/golden/agent_report/",
+    "tests/golden/agents_md/",
+    "tests/golden/audit_dsl/",
+    "tests/golden/dispatch/",
+    "tests/golden/envelope/",
+    "tests/golden/metrics_export/",
+    "tests/golden/plugin_install/",
+    "tests/golden/spec/",
+    "tests/golden/state/",
+    "tests/golden/surfaces/cli/scenarios/",
+    "tests/golden/surfaces/render/plan_view/",
+    "tests/golden/telemetry/",
+    "tests/golden/tui_config_modal/",
+    "tests/snapshots/svg/golden/",
+    "tests/snapshots/tui/golden/",
+)
 _WAVE_LOG_TIMEOUT_SECONDS = 20.0
 
 
@@ -343,15 +398,22 @@ def _load_managed_state(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     return raw, None
 
 
-def _current_phase_active(state_path: Path | None = None) -> bool:
-    """Return True when ``state.current.phase_id`` is non-null.
+def _blocking_phase_ids(state_path: Path | None, *, commit_type: str) -> list[str]:
+    """Return the phases that forbid a subject with neither wave carrier.
 
-    Walks upward from cwd to find ``.ea/state.json`` when *state_path*
-    is omitted. Missing file, unreadable JSON, or null ``phase_id``
-    all read as "no ACTIVE phase" (returns ``False``), which is the
-    safe default — it lets the pre-flight chore commit subject parse
-    in fresh checkouts and in environments where the lint runs
-    outside a state-resident project.
+    Walks upward from cwd to find ``.ea/state.json`` when *state_path* is
+    omitted. A missing file or unreadable JSON reads as "nothing in flight",
+    which lets a fresh checkout, or a repo the lint runs in without managed
+    state, commit a bare subject.
+
+    Args:
+        state_path: The managed ``state.json``, or ``None`` to search from cwd.
+        commit_type: Conventional-commit type of the bare subject.
+
+    Returns:
+        Sorted ids of the blocking phases: the current phase, plus, for any
+        type but ``state``, every phase whose status is not terminal. Empty
+        when the bare subject is acceptable.
     """
     if state_path is None:
         cwd = Path.cwd()
@@ -361,14 +423,21 @@ def _current_phase_active(state_path: Path | None = None) -> bool:
                 state_path = candidate
                 break
     if state_path is None or not state_path.is_file():
-        return False
+        return []
     data, error = _load_managed_state(state_path)
     if error is not None or data is None:
-        return False
-    current = data.get("current")
-    if not isinstance(current, dict):
-        return False
-    return current.get("phase_id") is not None
+        return []
+    blocking: set[str] = set()
+    current_phase = data["current"].get("phase_id")
+    if current_phase is not None:
+        blocking.add(str(current_phase))
+    if commit_type != "state":
+        blocking.update(
+            phase_id
+            for phase_id, phase in data["phases"].items()
+            if not isinstance(phase, dict) or phase.get("status") not in _TERMINAL_PHASE_STATUSES
+        )
+    return sorted(blocking)
 
 
 def _subject_scope_ref(subject: str) -> _ScopeRef | None:
@@ -638,6 +707,25 @@ def _is_docs_bare_path(path: str) -> bool:
     return any(path.startswith(p) for p in _DOCS_BARE_PREFIXES)
 
 
+def _docs_bare_strays(staged: list[str]) -> list[str]:
+    """Return the staged paths a bare docs commit may not carry.
+
+    Args:
+        staged: Paths staged for the commit.
+
+    Returns:
+        Every path outside ``.ea/artifacts/**``, except the digest companions
+        when at least one artifact path is staged beside them.
+    """
+    carries_artifact = any(_is_docs_bare_path(path) for path in staged)
+    return [
+        path
+        for path in staged
+        if not _is_docs_bare_path(path)
+        and not (carries_artifact and path in _DOCS_DIGEST_COMPANIONS)
+    ]
+
+
 def _check_scoped_paths(
     *, commit_type: str, staged: list[str], is_bare: bool
 ) -> tuple[int, str] | None:
@@ -645,8 +733,10 @@ def _check_scoped_paths(
 
     State-scoped commits (``type == 'state'``) must touch only
     state-bookkeeping paths. Bare ``[P##(-I##)?] docs:`` commits must touch
-    only ``.ea/artifacts/**``. Wave-form ``[P##-W##] docs:`` commits are
-    unrestricted (hence the *is_bare* gate on the docs branch).
+    only ``.ea/artifacts/**``, plus ``.ea/state.json`` and
+    ``.secrets.baseline`` when an artifact path is staged too. Wave-form
+    ``[P##-W##] docs:`` commits are unrestricted (hence the *is_bare* gate on
+    the docs branch).
 
     Returns a ``(1, diagnostic)`` rejection when a scoped commit strays
     outside its whitelist, else ``None``.
@@ -660,25 +750,68 @@ def _check_scoped_paths(
                 ".ea/store/**, .secrets.baseline, or .ea/specs/**"
             )
     elif is_bare and commit_type == "docs":
-        bad = [p for p in staged if not _is_docs_bare_path(p)]
+        bad = _docs_bare_strays(staged)
         if bad:
             return 1, (
                 f"bare [P##] docs: commit touches non-artifact paths: {bad}\n"
                 "bare-prefix docs commits carry phase/iter-scoped artifacts "
-                "under .ea/artifacts/** only; wave-produced docs use the "
-                "[P##-W##] docs: wave form"
+                "under .ea/artifacts/** only; .ea/state.json and "
+                ".secrets.baseline may ride along solely to refresh the digest "
+                "of an artifact staged in the same commit; wave-produced docs "
+                "use the [P##-W##] docs: wave form"
             )
     return None
 
 
+def _wave_run(words: Iterable[str]) -> list[str]:
+    """Return the wave tokens at the head of *words*, skipping connectives.
+
+    Args:
+        words: Summary words in reading order away from a close verb.
+
+    Returns:
+        The wave tokens met before the first word that is neither a wave
+        token nor a connective.
+    """
+    run: list[str] = []
+    for word in words:
+        if _WAVE_TOKEN_RE.fullmatch(word):
+            run.append(word)
+        elif word.lower() not in _WAVE_RUN_CONNECTIVES:
+            break
+    return run
+
+
+def _closed_wave_tokens(summary: str) -> set[str]:
+    """Return the wave tokens a close verb in *summary* governs.
+
+    Args:
+        summary: The subject with its bracket scope prefix removed.
+
+    Returns:
+        Every wave token that directly follows a close verb, plus the run
+        directly before the participle ``closed``. A wave that only an add
+        or claim verb names is absent.
+    """
+    words = _SUMMARY_WORD_RE.findall(summary)
+    closed: set[str] = set()
+    for index, word in enumerate(words):
+        if _CLOSE_VERB_RE.fullmatch(word) is None:
+            continue
+        closed.update(_wave_run(words[index + 1 :]))
+        if word.lower() == _CLOSE_PARTICIPLE:
+            closed.update(_wave_run(reversed(words[:index])))
+    return closed
+
+
 def _single_wave_close_rejection(subject: str, *, commit_type: str) -> tuple[int, str] | None:
-    """Reject a state subject whose summary closes exactly one wave.
+    """Reject a state subject whose close verb governs exactly one wave.
 
     Per-wave close records ride the wave commit, so the state-typed subjects
-    left over are the ones that name no single wave: a claim batch, an iter
-    close, a phase close. The bracket prefix is stripped first — the wave a
-    commit is *scoped to* is not a wave it *closes*, so
-    ``[P30-I21-W22] state: close iter + phase`` stays accepted.
+    left over are the ones that close no single wave: a claim batch, a
+    multi-wave close, an iter close, a phase close. The bracket prefix is
+    stripped first - the wave a commit is *scoped to* is not a wave it
+    *closes*, so ``[P30-I21-W22] state: close iter + phase`` stays accepted.
 
     Returns a ``(1, diagnostic)`` rejection naming the wave commit the records
     belong on, else ``None``.
@@ -686,9 +819,7 @@ def _single_wave_close_rejection(subject: str, *, commit_type: str) -> tuple[int
     if commit_type != "state":
         return None
     summary = _BRACKET_SCOPE_RE.sub("", subject, count=1)
-    if not _CLOSE_VERB_RE.search(summary):
-        return None
-    waves = sorted(set(_WAVE_TOKEN_RE.findall(summary)))
+    waves = sorted(_closed_wave_tokens(summary))
     if len(waves) != 1:
         return None
     return 1, (
@@ -696,9 +827,11 @@ def _single_wave_close_rejection(subject: str, *, commit_type: str) -> tuple[int
         f"the close records for {waves[0]} ride that wave's own commit: stage "
         ".ea/state.json (plus the typed stores under .ea/store/) onto the "
         "cherry-picked wave commit and fold them in with 'git commit --amend', "
-        "instead of writing a separate state commit. A bare '[P##] state:' "
-        "commit stays correct for a claim batch, an iter close, or a phase "
-        "close — none of those names a single wave."
+        "instead of writing a separate state commit; an add or claim may ride "
+        "the wave commit as well. A bare '[P##] state:' commit stays correct "
+        "for a subject that only adds or claims waves, a multi-wave close, an "
+        "iter close, or a phase close, because none of those closes a single "
+        "wave."
     )
 
 
@@ -836,6 +969,15 @@ def _amends_head(
     return head_sha in prior and head_epoch == env_epoch
 
 
+def _is_managed_golden(path: str) -> bool:
+    """Return whether *path* is golden bytes inside a managed snapshot surface.
+
+    Python under a surface directory is the suite that produces the goldens,
+    not a golden, matching the snapshot-pairing gate's own reading.
+    """
+    return not path.endswith(".py") and path.startswith(_MANAGED_GOLDEN_DIRS)
+
+
 def _check_wave_commit_cap(
     *,
     ref: _ScopeRef | None,
@@ -852,7 +994,12 @@ def _check_wave_commit_cap(
     """
     if ref is None or ref.wave_id is None:
         return None
-    if commit_type in _WAVE_COMMIT_CAP_EXEMPT_TYPES:
+    if commit_type == "state":
+        # Bookkeeping, already confined by the state path whitelist.
+        return None
+    if commit_type == "test" and all(_is_managed_golden(path) for path in staged):
+        # The snapshot-pairing gate forces a managed golden refresh into its
+        # own paired ``test:`` commit, the one second commit a wave may have.
         return None
     if all(_is_state_only_path(path) for path in staged):
         # The fold amend (and a bare reword, which stages nothing) adds no
@@ -867,11 +1014,18 @@ def _check_wave_commit_cap(
         # so the wave still ends up with exactly one commit. Rejecting it would
         # refuse the remedy the diagnostic below prescribes.
         return None
+    golden_note = (
+        "\na test commit follows the wave commit only when every path it "
+        "stages is a managed snapshot golden (the 'eawf snapshot list' "
+        "inventory); other test changes ride the wave commit."
+        if commit_type == "test"
+        else ""
+    )
     return 1, (
         f"second commit for wave {ref.wave_id}: {prior[0][:12]} already carries it\n"
         "one commit per wave: fold this change into the wave commit with "
         "'git commit --amend', or — when it is genuinely new work — append a "
-        "reactive wave and commit it under that wave's own W## id."
+        f"reactive wave and commit it under that wave's own W## id.{golden_note}"
     )
 
 
@@ -894,8 +1048,9 @@ def _match_subject(
     """Return (match, is_bare_state_or_docs, error_diag).
 
     Tries the three accepted forms in order. The bare conventional-commits
-    form is rejected when an ACTIVE phase exists; in that case the returned
-    match is ``None`` and *error_diag* carries the rejection text. The
+    form with no wave carrier is rejected while a phase is PLANNED or ACTIVE
+    (see :func:`_blocking_phase_ids`); in that case the returned match is
+    ``None`` and *error_diag* carries the rejection text. The
     ``is_bare_state_or_docs`` flag tells callers whether the matched form
     is the bracketed bare ``[P##(-I##)?] state|docs:`` form (which still
     needs path-whitelist enforcement).
@@ -909,19 +1064,24 @@ def _match_subject(
     if bare_conventional is not None:
         if subject_style == _SUBJECT_STYLE_TRAILER and has_wave_trailer:
             return bare_conventional, False, ""
-        if not _current_phase_active(state_path):
-            # An out-of-phase commit advances no wave, so neither carrier has
-            # anything to name: the bracket prefix and the Eawf-Wave trailer
-            # are both vacuous and the bare subject is the only honest form.
+        blocking = _blocking_phase_ids(state_path, commit_type=bare_conventional.group("type"))
+        if not blocking:
+            # With nothing in flight the commit advances no wave, so neither
+            # carrier has anything to name: the bracket prefix and the
+            # Eawf-Wave trailer are both vacuous and the bare subject is the
+            # only honest form.
             return bare_conventional, False, ""
+        in_flight = ", ".join(blocking)
         if subject_style == _SUBJECT_STYLE_TRAILER:
             return (
                 None,
                 False,
                 (
                     f"trailer-style commit missing {_WAVE_TRAILER_NAME} trailer: {subject!r}\n"
-                    f"set '{_WAVE_TRAILER_NAME}: P##-I##-W##' in the commit body, "
-                    "or switch vcs.conventions.subject_style back to 'bracket'"
+                    f"a PLANNED or ACTIVE phase exists ({in_flight}), so the commit "
+                    f"must name the wave it advances: set '{_WAVE_TRAILER_NAME}: "
+                    "P##-I##-W##' in the commit body, or switch "
+                    "vcs.conventions.subject_style back to 'bracket'"
                 ),
             )
         return (
@@ -929,11 +1089,11 @@ def _match_subject(
             False,
             (
                 f"bare conventional-commits subject rejected: {subject!r}\n"
-                "an ACTIVE phase exists (state.current.phase_id is set); "
+                f"a PLANNED or ACTIVE phase exists ({in_flight}); "
                 "commits MUST carry a bracketed [P##-W##] / [P##-I##-W##] / "
                 "[P##] / [P##-I##] prefix so lifecycle bookkeeping stays "
                 "attributable. Bare '<type>: <subject>' is reserved for "
-                "out-of-phase commits (state.current.phase_id is None)."
+                "commits made while every phase in state.json is CLOSED."
             ),
         )
     return (
@@ -945,7 +1105,7 @@ def _match_subject(
             "'[P##] state: <summary>' (canonical bookkeeping form), "
             "'[P##] docs: <summary>' (phase/iter-scoped artifact docs), "
             "or '<type>: <summary>' (bare conventional-commits, only when "
-            "no ACTIVE phase is set in state.json) "
+            "no phase in state.json is PLANNED or ACTIVE) "
             "(W00 and I00 rejected — wave/iter indices are 1-based; "
             "type ∈ feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state; "
             "bare [P##] accepted only for type=state or type=docs)"

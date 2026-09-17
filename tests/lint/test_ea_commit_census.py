@@ -142,12 +142,69 @@ def test_classify_path_single_star_does_not_cross_a_separator() -> None:
         classify_path(".ea/store/nested/deep.jsonl")
 
 
+@pytest.mark.parametrize(
+    ("path", "tier"),
+    [
+        (".ea/generations/selected.json", None),
+        (".ea/generations/EPOCH2_ACTIVE.json", None),
+        (".ea/generations/gen-0123456789abcdef/state.json", StorageTier.DOCUMENT),
+        (".ea/generations/gen-0123456789abcdef/ledger/task.jsonl", StorageTier.LEDGER),
+    ],
+)
+def test_classify_path_generation_committed_rows(path: str, tier: StorageTier | None) -> None:
+    row = classify_path(path)
+    assert row.policy is CommitPolicy.COMMITTED
+    assert row.tier is tier
+    assert not row.must_exist
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".ea/generations/gen-0123456789abcdef/indexes/task.index.json",
+        ".ea/generations/.staging-a/x",
+        ".ea/generations/.staging-b/ledger/task.jsonl",
+        ".ea/generations/.staging-a/state.json",
+        ".ea/generations/restore/restore-manifest.json",
+        ".ea/generations/restore/store/event.jsonl",
+        ".ea/generations/restore/telemetry.db",
+        ".ea/generations/journal.jsonl",
+        ".ea/epoch2-disposable-canary.json",
+    ],
+)
+def test_classify_path_generation_ignored_rows(path: str) -> None:
+    assert classify_path(path).policy is CommitPolicy.NOT_COMMITTED
+
+
+def test_classify_path_generation_index_is_derived() -> None:
+    row = classify_path(".ea/generations/gen-0123456789abcdef/indexes/task.index.json")
+    assert row.tier is StorageTier.DERIVED
+
+
+def test_classify_path_generation_ledger_star_does_not_cross_a_separator() -> None:
+    """A nested ledger file is undeclared rather than silently committed."""
+    with pytest.raises(UndeclaredPathError):
+        classify_path(".ea/generations/gen-0123456789abcdef/ledger/nested/task.jsonl")
+
+
+def test_classify_path_generation_lockfile_stays_not_committed() -> None:
+    """A heartbeat beside a committed ledger is still a lockfile."""
+    row = classify_path(".ea/generations/gen-0123456789abcdef/ledger/task.jsonl.lock")
+    assert row.policy is CommitPolicy.NOT_COMMITTED
+
+
 # --- classification: error paths -------------------------------------------
 
 
 def test_classify_path_undeclared_directory_raises() -> None:
     with pytest.raises(UndeclaredPathError, match="matches no declared row"):
         classify_path(".ea/mystery/thing.bin")
+
+
+def test_classify_path_generation_undeclared_file_raises() -> None:
+    """The generation tree is declared file family by file family, not as a whole."""
+    with pytest.raises(UndeclaredPathError, match="matches no declared row"):
+        classify_path(".ea/generations/unexpected.json")
 
 
 def test_classify_path_outside_the_surface_raises() -> None:
