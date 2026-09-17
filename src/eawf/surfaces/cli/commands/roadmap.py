@@ -149,6 +149,44 @@ def _split_csv(value: str | None) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+#: Shortest ``--success`` string that can serve as its own
+#: ``measurable_signal``. A shorter string silently takes the
+#: grandfathered fallback signal, which hides a criterion with no real
+#: signal behind a passing plan, so the CLI refuses it at the boundary.
+_SUCCESS_FLOOR_CHARS = 20
+
+
+def _validated_success_criteria(values: list[str] | None) -> list[str]:
+    """Return the ``--success`` strings in flag order, refusing short ones.
+
+    Each flag carries exactly one whole criterion and the value is never
+    split, so a criterion may contain commas.
+
+    Args:
+        values: Raw ``--success`` values in flag order; ``None`` when the
+            flag was omitted.
+
+    Returns:
+        The stripped criterion strings, one per flag, in flag order.
+
+    Raises:
+        eawf.surfaces.cli.errors.UserError: When a value is blank or
+            shorter than :data:`_SUCCESS_FLOOR_CHARS` characters.
+    """
+    criteria: list[str] = []
+    for raw in values or []:
+        text = raw.strip()
+        if len(text) < _SUCCESS_FLOOR_CHARS:
+            raise cli_errors.UserError(
+                f"--success value {raw!r} is {len(text)} chars; a criterion needs at "
+                f"least {_SUCCESS_FLOOR_CHARS}. Pass one --success flag per whole "
+                "criterion; values are never split on commas.",
+                kind="InvalidInput",
+            )
+        criteria.append(text)
+    return criteria
+
+
 #: Sentinel returned by :func:`_build_intent_from_flags` when the caller
 #: passed an ``--intent-*`` flag without one of the required canonical
 #: pair (``--intent-problem`` + ``--intent-desired-outcome``). The CLI
@@ -803,10 +841,14 @@ def roadmap_revise_cmd(
         typer.Option("--deps", help="Comma-separated dep wave ids (only with --add-wave)."),
     ] = None,
     success: Annotated[
-        str | None,
+        list[str] | None,
         typer.Option(
             "--success",
-            help="Comma-separated success-criterion strings (only with --add-wave).",
+            help=(
+                "One whole success criterion (only with --add-wave). Repeatable: "
+                "pass --success once per criterion. The value is never split on "
+                "commas and must be at least 20 characters."
+            ),
         ),
     ] = None,
     criteria_floor_waiver: Annotated[
@@ -955,6 +997,12 @@ def roadmap_revise_cmd(
             ),
             flags=flags,
         )
+        return
+
+    try:
+        success_criteria = _validated_success_criteria(success)
+    except cli_errors.UserError as bad_success:
+        cli_errors.emit_error(bad_success, flags=flags)
         return
 
     intent_result = _build_intent_from_flags(
@@ -1127,7 +1175,7 @@ def roadmap_revise_cmd(
                         ],
                         success_criteria=[
                             grandfather_criterion(text, index=idx)
-                            for idx, text in enumerate(_split_csv(success), start=1)
+                            for idx, text in enumerate(success_criteria, start=1)
                         ],
                         agent_role=role,
                         effort_bucket=bucket,

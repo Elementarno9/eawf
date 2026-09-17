@@ -516,6 +516,9 @@ def test_store_kind_values() -> None:
         # P30-I23-W17 — persisted per-juror ballots (calibration substrate).
         "jury_ballot",
         "gate_receipt",
+        # The append-only binding of a closed wave's gate re-run to its
+        # landed commit; distinct from the receipts it names.
+        "gate_rereceipt",
         "legacy_audit_disposition",
         "commit_repin",
         # P31-I01-W27 -- publication operations + per-target attempt ledger.
@@ -523,6 +526,10 @@ def test_store_kind_values() -> None:
         # The checkpoint record itself, kept apart from the publication
         # ledger so the two never share an envelope id namespace.
         "release_record",
+        # The two facts the release train walks on: per-checkpoint gate
+        # receipts and per-train advances.
+        "release_checkpoint_receipt",
+        "release_train_advance",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

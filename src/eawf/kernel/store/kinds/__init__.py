@@ -18,6 +18,7 @@ from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.kinds.flow import FlowPayload
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt
+from eawf.kernel.store.kinds.gate_rereceipt import GateRereceiptBinding
 from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.kinds.jury_ballot import JuryBallotPayload
 from eawf.kernel.store.kinds.legacy_audit_disposition import LegacyAuditDisposition
@@ -59,6 +60,10 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.OPERATOR_INPUT: OperatorInputPayload,
     StoreKind.JURY_BALLOT: JuryBallotPayload,
     StoreKind.GATE_RECEIPT: GateReceipt,
+    # The re-receipt binding keeps its own kind rather than riding the
+    # receipt store: a receipt is addressed by freshness key, a binding by
+    # the wave and the landed commit its run replayed.
+    StoreKind.GATE_RERECEIPT: GateRereceiptBinding,
     StoreKind.LEGACY_AUDIT_DISPOSITION: LegacyAuditDisposition,
     StoreKind.COMMIT_REPIN: CommitRepinProvenance,
     # The publication ledger reuses the kernel record rather than

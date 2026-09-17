@@ -26,8 +26,8 @@ The corpus is not committed a second time. It is already in the
 repository at ``.ea/``, it is 6.9 MB, and the repository's own
 ``check-added-large-files`` hook caps a committed file at 1 MB, so a
 frozen copy could not be committed even if duplicating it were a good
-idea. What is committed instead is the **pin**: the scale band the
-corpus has to be in, the ceiling the published tree may not exceed
+idea. What is committed instead is the **pin**: the order of magnitude
+the corpus has to be at, the ceiling the published tree may not exceed
 relative to its source, the wall-clock budget the apply has to finish
 inside, and the size the residual document has to stay under. Those four
 numbers are the contract; the corpus behind them grows, and the contract
@@ -74,13 +74,20 @@ LIVE_CONFIG_LOCATOR: Final = ".ea/config.yaml"
 PIN_FILENAME: Final = "corpus-pin.json"
 
 
-class ScaleBand(StrEnum):
-    """The order-of-magnitude band a corpus's row count falls in.
+class CorpusMagnitude(StrEnum):
+    """The order of magnitude a corpus's row count falls in.
 
     Coarse on purpose. The question a consumer asks is "was this measured
     over a corpus at least as big as mine", which is an ordering
     question, and an order of magnitude is the finest resolution at which
     that ordering stays stable as a live corpus grows.
+
+    Distinct from
+    :class:`~eawf.kernel.spec.measured_contract.ScaleBand`, which classes
+    the environment a measurement ran in (toy, dev, production, fleet)
+    rather than how much data it ran over. One corpus magnitude can be
+    reached in either environment, so the two orderings never substitute
+    for one another.
     """
 
     UNITS = "units"
@@ -90,26 +97,26 @@ class ScaleBand(StrEnum):
     TENS_OF_THOUSANDS = "tens_of_thousands"
 
 
-#: The lower bound of each band, in rows. A count at or above the last
-#: entry's bound is in that band.
-BAND_FLOORS: Final[tuple[tuple[ScaleBand, int], ...]] = (
-    (ScaleBand.UNITS, 1),
-    (ScaleBand.TENS, 10),
-    (ScaleBand.HUNDREDS, 100),
-    (ScaleBand.THOUSANDS, 1_000),
-    (ScaleBand.TENS_OF_THOUSANDS, 10_000),
+#: The lower bound of each magnitude, in rows. A count at or above the
+#: last entry's bound is at that magnitude.
+MAGNITUDE_FLOORS: Final[tuple[tuple[CorpusMagnitude, int], ...]] = (
+    (CorpusMagnitude.UNITS, 1),
+    (CorpusMagnitude.TENS, 10),
+    (CorpusMagnitude.HUNDREDS, 100),
+    (CorpusMagnitude.THOUSANDS, 1_000),
+    (CorpusMagnitude.TENS_OF_THOUSANDS, 10_000),
 )
 
 
-def band_for(rows: int) -> ScaleBand:
-    """Return the scale band a row count falls in.
+def magnitude_for(rows: int) -> CorpusMagnitude:
+    """Return the corpus magnitude a row count falls in.
 
     Args:
         rows: How many rows the corpus holds.
 
     Returns:
-        The band. A count below one row is reported as ``UNITS`` rather
-        than raising: an empty corpus is a real shape, and the
+        The magnitude. A count below one row is reported as ``UNITS``
+        rather than raising: an empty corpus is a real shape, and the
         empty-repository fixture is where it is rehearsed.
 
     Raises:
@@ -117,21 +124,21 @@ def band_for(rows: int) -> ScaleBand:
     """
     if rows < 0:
         raise ValueError(f"a corpus cannot hold {rows} rows")
-    band = ScaleBand.UNITS
-    for candidate, floor in BAND_FLOORS:
+    magnitude = CorpusMagnitude.UNITS
+    for candidate, floor in MAGNITUDE_FLOORS:
         if rows >= floor:
-            band = candidate
-    return band
+            magnitude = candidate
+    return magnitude
 
 
 class LiveCorpusPin(BaseModel):
     """The committed contract the live corpus has to keep satisfying.
 
     Attributes:
-        declared_band: The scale band the corpus is asserted at. The
-            rehearsal refuses a corpus below it, because a measurement
-            taken over a smaller population would not back the claim the
-            band makes.
+        declared_magnitude: The order of magnitude the corpus is asserted
+            at. The rehearsal refuses a corpus below it, because a
+            measurement taken over a smaller population would not back
+            the claim the magnitude makes.
         multiplier_ceiling: The largest factor by which the published
             epoch-2 generation may exceed the epoch-1 corpus it was built
             from. An importer change that inflates the tree past this
@@ -152,7 +159,7 @@ class LiveCorpusPin(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    declared_band: ScaleBand
+    declared_magnitude: CorpusMagnitude
     multiplier_ceiling: Annotated[float, Field(gt=1.0)]
     apply_timeout_budget_s: Annotated[float, Field(gt=0.0)]
     residual_document_ceiling_bytes: Annotated[int, Field(gt=0)]
@@ -317,18 +324,18 @@ def _write_json(path: Path, payload: object) -> None:
 
 
 __all__ = [
-    "BAND_FLOORS",
     "LIVE_CONFIG_LOCATOR",
     "LIVE_STATE_LOCATOR",
     "LIVE_STORE_LOCATOR",
+    "MAGNITUDE_FLOORS",
     "PIN_FILENAME",
+    "CorpusMagnitude",
     "LiveCorpusPin",
-    "ScaleBand",
     "StagedSource",
-    "band_for",
     "committed_sources",
     "corpus_bytes",
     "is_committed",
+    "magnitude_for",
     "require_committed",
     "stage_live_corpus",
 ]

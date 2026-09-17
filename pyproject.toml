@@ -637,9 +637,12 @@ service_templates = [
 # YAMLs, and the two service templates above -- so the ceiling is a bloat
 # alarm: it catches an accidental bundle of the plugin trees, the rendered
 # docs subset, or the golden fixtures, and is not a cap on legitimate source
-# growth. Measured 3713148 bytes (~3.54 MiB) on 2026-09-10; 4 MiB (4194304)
-# leaves ~13% headroom over that measurement, enough for ordinary module
-# growth while any data-tree bundling overshoots by whole megabytes. Raise it
-# only against a fresh ``uv build --wheel`` measurement, and read the archive
-# member list first to confirm the growth really is package code.
-wheel_max_bytes = 4194304
+# growth. Measured 4244747 bytes (~4.05 MiB) on 2026-09-17, after the console
+# port moved its renderers, overlays and replay harness into
+# ``eawf/surfaces/tui/console/``: every member the build gained is package
+# code under that tree and no data tree entered the archive. 4.5 MiB
+# (4718592) leaves ~11% headroom over that measurement, enough for ordinary
+# module growth while any data-tree bundling overshoots by whole megabytes.
+# Raise it only against a fresh ``uv build --wheel`` measurement, and read the
+# archive member list first to confirm the growth really is package code.
+wheel_max_bytes = 4718592

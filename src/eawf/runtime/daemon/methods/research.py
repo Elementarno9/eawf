@@ -2642,9 +2642,11 @@ async def steer(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Push an operator steer note onto a running campaign's channel.
 
     The honest steer surface the board's ``t`` key routes to: it appends a
-    typed ``steer`` :class:`OperatorInput` to the daemon-owned append-log so the
-    next round's fold sees it (a steer is between-rounds feedback, not a
-    blocking interrupt). The board's ``t`` key now lands a real row.
+    typed ``steer`` :class:`OperatorInput` to the daemon-owned append-log (a
+    steer is between-rounds feedback, not a blocking interrupt). The note is
+    recorded and never reaches a running round -- every researcher is already
+    spawned when the channel is read -- so it lands on the ``steer_notes`` of a
+    round record rather than in any researcher's prompt.
 
     Args:
         ctx: Server context -- needs ``state_path``.
@@ -2672,12 +2674,15 @@ async def steer(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
 @register("research.broadcast")
 async def broadcast(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Fan an operator notice to every running round of a campaign.
+    """Record an operator notice on a campaign's channel.
 
     The honest broadcast surface the board's ``b`` key routes to: it appends a
     typed ``notice-broadcast`` :class:`OperatorInput` (no payload -- the note
-    carries the broadcast) to the daemon-owned append-log so the orchestrator
-    distributes it on the next task. The board's ``b`` key now lands a real row.
+    carries the broadcast) to the daemon-owned append-log. The notice is
+    recorded and never reaches a running round: no fan-out re-prompts a live
+    researcher, so the note surfaces on the ``steer_notes`` of the round record
+    the loop writes next. The board's ``b`` key lands a real row, not a live
+    interrupt.
 
     Args:
         ctx: Server context -- needs ``state_path``.

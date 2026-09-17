@@ -17,7 +17,7 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -58,6 +58,30 @@ class DaemonValidationError(ValueError):
     catch this subclass first to pick the more specific wire code. The
     ``validation_failed: `` message prefix is preserved by every raiser.
     """
+
+
+#: Stable refusal code for a daemon state write over a ``state.json`` that
+#: is older than the one this daemon process last wrote at the same path.
+STATE_REGRESSED: Final[str] = "state_regressed"
+
+
+class StateRegressedError(DaemonValidationError):
+    """Raised when a daemon state write would build on a restored older file.
+
+    Something outside the daemon -- a ``git checkout``, a pre-commit stash
+    restore -- put back a ``state.json`` whose ``updated_at`` predates the
+    one this process last wrote at the path. Writing over that copy would
+    silently drop every daemon write the copy predates, so the write is
+    refused before anything (state, WAL record, event row) is persisted.
+
+    The record of what this process wrote lives only in process memory, so
+    a daemon restart is how an operator accepts a deliberate restore.
+
+    Attributes:
+        code: The stable refusal code carried in every message.
+    """
+
+    code: ClassVar[str] = STATE_REGRESSED
 
 
 @dataclass
@@ -153,6 +177,11 @@ class MethodContext:
     #: epoch-1 anchors above, so attaching a native root never changes how
     #: an epoch-1 request resolves its state file, event log or WAL.
     native_roots: dict[str, Epoch2RootContext] = field(default_factory=dict)
+    #: The ``updated_at`` of the ``state.json`` this process last wrote,
+    #: keyed by resolved state path. Every daemon writer stamps the current
+    #: time, so a file on disk carrying an older stamp than this entry was
+    #: put there by something other than the daemon.
+    state_written_at: dict[Path, datetime] = field(default_factory=dict)
 
     def native_root_context(self, tree_root: Path) -> Epoch2RootContext:
         """Return the native context of the epoch-2 tree at ``tree_root``.
@@ -203,6 +232,58 @@ class MethodContext:
         :class:`eawf.runtime.daemon.idle.IdleTimeoutWatchdog`.
         """
         self.last_activity = time.monotonic()
+
+    def refuse_regressed_state(self, state_path: Path, *, updated_at: datetime) -> None:
+        """Refuse a write over a state file older than this process's last write.
+
+        Call this under the state lock, after the read and before anything
+        is written, so a refusal leaves the state bytes, the WAL and the
+        event log exactly as they were.
+
+        An equal stamp passes: a CLI fallback write that kept the daemon's
+        ``updated_at`` lost nothing, and a later one moved the file forward.
+
+        Args:
+            state_path: The ``state.json`` about to be written.
+            updated_at: The ``updated_at`` of the file as it was just read.
+
+        Raises:
+            StateRegressedError: The on-disk file is older than the one this
+                process last wrote at *state_path*.
+        """
+        written_at = self.state_written_at.get(state_path.resolve())
+        if written_at is None or updated_at >= written_at:
+            return
+        logger.warning(
+            f"refuse_regressed_state state_path={str(state_path)!r} "
+            f"on_disk={updated_at.isoformat()} last_written={written_at.isoformat()}"
+        )
+        raise StateRegressedError(
+            f"validation_failed: {STATE_REGRESSED}: state.json carries updated_at "
+            f"{updated_at.isoformat()}, older than the {written_at.isoformat()} this "
+            "daemon last wrote there; something outside the daemon (a git checkout, a "
+            "stash restore) put an older copy back, and writing over it would drop "
+            "every daemon write that copy predates. Put the newer state.json back, or "
+            "run `eawf daemon restart` to accept a deliberate restore"
+        )
+
+    def note_state_written(self, state_path: Path, *, updated_at: datetime) -> None:
+        """Record the ``updated_at`` this process just wrote to *state_path*.
+
+        Call this immediately after the atomic state write, under the same
+        lock hold, so the next read of that path is compared against what
+        this process actually left on disk.
+
+        The newest write replaces the entry outright rather than being
+        maxed into it: a wall clock stepping backwards would otherwise make
+        the file this process just wrote look regressed and refuse every
+        subsequent write until the clock caught up.
+
+        Args:
+            state_path: The ``state.json`` that was written.
+            updated_at: The ``updated_at`` stamped into the written payload.
+        """
+        self.state_written_at[state_path.resolve()] = updated_at
 
 
 def note_cross_root_serve(

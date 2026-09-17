@@ -5,6 +5,9 @@ single app instance: the frames must still match in a session twenty-five journe
 navigation have left deep in state, which is what proves the one canonical reset. A
 session-scoped fixture is therefore the only honest shape -- a per-test app would prove
 the resets independently and the ordering rule not at all.
+
+The replay runs through the product console's own golden harness; the test-only chassis
+that used to carry it is gone.
 """
 
 from __future__ import annotations
@@ -13,17 +16,25 @@ import asyncio
 
 import pytest
 
-from .console_chassis.harness.replay import Result, load_sequences, run
+from eawf.surfaces.tui.console import harness
+from eawf.surfaces.tui.console.harness import Contract, Result, load_contract
+
+from .goldens import LAYOUT
+
+
+@pytest.fixture(scope="session")
+def contract() -> Contract:
+    """Return the tracked contract: its index, frame states and journeys."""
+    return load_contract(LAYOUT.sequences)
 
 
 @pytest.fixture(scope="session")
 def replay() -> dict[str, Result]:
     """Return one replay result per journey id and per frame id."""
-    return {result.id: result for result in asyncio.run(run())}
+    return {result.id: result for result in asyncio.run(harness.replay(LAYOUT))}
 
 
 @pytest.fixture(scope="session")
-def contract_ids() -> tuple[str, ...]:
+def contract_ids(contract: Contract) -> tuple[str, ...]:
     """Return every journey id then every frame id of the tracked contract."""
-    _index, states, journeys = load_sequences()
-    return tuple(journey["id"] for journey in journeys) + tuple(state["id"] for state in states)
+    return contract.ids

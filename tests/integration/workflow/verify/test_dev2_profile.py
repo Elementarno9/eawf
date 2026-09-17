@@ -405,7 +405,7 @@ def test_dev2_profile_binding_table_is_not_accepted_under_dev1() -> None:
 
 def test_dev2_profile_rendering_refuses_a_rung_whose_profile_is_unauthored() -> None:
     """A rung whose profile has no gate set cannot be configured yet."""
-    unauthored = V07_TRAIN.checkpoint_for_version("0.7.0.dev3")
+    unauthored = V07_TRAIN.checkpoint_for_version("0.7.0.dev4")
 
     with pytest.raises(GateBindingError) as excinfo:
         render_checkpoint_config(rung=unauthored, template=V07_CONFIG_TEMPLATE)
@@ -416,4 +416,4 @@ def test_dev2_profile_rendering_refuses_a_rung_whose_profile_is_unauthored() -> 
 def test_dev2_profile_gates_lookup_refuses_an_unauthored_profile() -> None:
     """profile_gates is the fail-fast boundary for an unauthored profile."""
     with pytest.raises(GateBindingError, match="no gate set is declared"):
-        profile_gates(ReleaseGateProfile.STABLE)
+        profile_gates(ReleaseGateProfile.PRODUCT_CANARY)

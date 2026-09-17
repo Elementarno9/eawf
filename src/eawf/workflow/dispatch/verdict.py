@@ -57,7 +57,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, TypeAdapter, ValidationError
 from pydantic_core import InitErrorDetails, PydanticCustomError
@@ -89,6 +89,11 @@ from eawf.workflow.dispatch.llm_assist import (
     LLMAssistResult,
     SpawnFn,
     assist_with_schema,
+)
+from eawf.workflow.dispatch.verdict_schema import (
+    auditor_report_json_schema,
+    reorder_criterion_rows,
+    strip_deterministic_annotation,
 )
 from eawf.workflow.lifecycle.wave_sha import derive_diff_base
 
@@ -690,18 +695,6 @@ def _validate_durable_auditor_aggregate(body: AuditorReportBody) -> None:
         )
 
 
-#: An auditor that has seen a criterion next to its deterministic flag tends to
-#: echo both. The flag is not part of the criterion, so exactly one trailing
-#: annotation is dropped before the verbatim comparison; a second annotation,
-#: a different spelling or any other edit still fails it.
-_DETERMINISTIC_ANNOTATION: re.Pattern[str] = re.compile(r" ?\(deterministic=(?:true|false)\)\Z")
-
-
-def _strip_deterministic_annotation(echo: str) -> str:
-    """Return *echo* without one trailing ``(deterministic=...)`` annotation."""
-    return _DETERMINISTIC_ANNOTATION.sub("", echo, count=1)
-
-
 def _validate_durable_auditor_body(
     body: AuditorReportBody,
     *,
@@ -736,7 +729,7 @@ def _validate_durable_auditor_body(
         )
     rows: list[CriterionVerdict] = []
     for row, criterion in zip(body.criteria, expected, strict=True):
-        if criterion.text not in (row.criterion, _strip_deterministic_annotation(row.criterion)):
+        if criterion.text not in (row.criterion, strip_deterministic_annotation(row.criterion)):
             raise ValueError(
                 f"durable audit criterion mismatch for {criterion.criterion_id!r}: "
                 f"set `criterion` to exactly {_json_string(criterion.text)}, copied "
@@ -775,6 +768,26 @@ def _validate_durable_auditor_body(
     return body.model_copy(update={"criteria": rows})
 
 
+def durable_auditor_json_schema(context: DurableAuditContext) -> dict[str, Any] | None:
+    """Return the JSON schema a durable close auditor's answer is forced through.
+
+    Args:
+        context: The frozen close context naming the required criteria and the
+            GateReceipt URNs each deterministic row must cite.
+
+    Returns:
+        The schema, or ``None`` when the criteria cannot be pinned exactly (see
+        :func:`~eawf.workflow.dispatch.verdict_schema.auditor_report_json_schema`).
+    """
+    return auditor_report_json_schema(
+        target_id=context.wave_id,
+        criteria=tuple(
+            (row.text, row.gate_receipt_urns if row.deterministic else ())
+            for row in context.criteria
+        ),
+    )
+
+
 def parse_auditor_report_body(
     raw: object,
     *,
@@ -808,6 +821,10 @@ def parse_auditor_report_body(
     normalized = _coerce_confidence(raw)
     if durable_context is None:
         return _AUDITOR_BODY_ADAPTER.validate_python(normalized)
+    normalized = reorder_criterion_rows(
+        normalized,
+        texts=[row.text for row in durable_context.criteria],
+    )
     normalized = _coerce_durable_gate_receipt_evidence(
         normalized,
         context=durable_context,
@@ -1343,6 +1360,7 @@ __all__ = [
     "WaveVerdictResult",
     "assert_not_executor_self_report",
     "build_auditor_prompt",
+    "durable_auditor_json_schema",
     "parse_auditor_report_body",
     "produce_wave_verdict",
     "verdict_requirement",

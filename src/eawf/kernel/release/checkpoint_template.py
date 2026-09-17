@@ -29,6 +29,7 @@ rejection of the rendered configuration downstream.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping, Sequence
 from typing import Annotated, Final
 
 import yaml
@@ -127,8 +128,56 @@ def render_checkpoint_config(
     return rendered
 
 
+def with_membership_refs(
+    source: str,
+    *,
+    membership_refs: Sequence[str],
+) -> dict[str, object]:
+    """Return the configuration in *source* carrying *membership_refs*.
+
+    A rendered configuration cannot declare its membership bundles. Which
+    acceptance bundles a checkpoint accepts is a fact about the record
+    being cut, not about the train, so the template has nowhere to read
+    them from and the rendered text leaves the list absent. Overlaying
+    them here -- at the one boundary that holds both the rendered
+    document and the record -- keeps the rung's own gate set rendered
+    while still letting the loader run its membership-cardinality check
+    against real refs.
+
+    Args:
+        source: Rendered or authored configuration text, wrapped in the
+            :data:`CONFIG_ROOT_KEY` key.
+        membership_refs: The record's acceptance bundle references. An
+            empty sequence leaves the list empty, which the loader
+            refuses for a rung that requires membership.
+
+    Returns:
+        The decoded document, ready for
+        :func:`~eawf.kernel.spec.release_config.load_release_config`.
+
+    Raises:
+        ValueError: When *source* is not a mapping carrying a
+            :data:`CONFIG_ROOT_KEY` mapping.
+    """
+    decoded = yaml.safe_load(source)
+    if not isinstance(decoded, Mapping):
+        raise ValueError(
+            f"checkpoint configuration must be a mapping, got {type(decoded).__name__}"
+        )
+    body = decoded.get(CONFIG_ROOT_KEY)
+    if not isinstance(body, Mapping):
+        raise ValueError(
+            f"checkpoint configuration must carry a {CONFIG_ROOT_KEY!r} mapping, "
+            f"got {type(body).__name__}"
+        )
+    overlaid = dict(body)
+    overlaid["membership_refs"] = list(membership_refs)
+    return {CONFIG_ROOT_KEY: overlaid}
+
+
 __all__ = [
     "CONFIG_ROOT_KEY",
     "CheckpointConfigTemplate",
     "render_checkpoint_config",
+    "with_membership_refs",
 ]

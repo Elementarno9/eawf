@@ -159,6 +159,7 @@ from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
 from eawf.kernel.state.enums import EffortBucket, ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
 from eawf.platform.lint import eawf024_test_tier_contract as eawf024
+from eawf.platform.lint import eawf025_test_placement as eawf025
 from eawf.platform.lint.eawf023_artifact_placement import check_artifact_path
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
@@ -230,6 +231,7 @@ class GateFailure(StrEnum):
     CAMPAIGN_CARRYOVER_PRUNE_IDLE = "campaign_carryover_prune_idle"
     EAWF023_ARTIFACT_PLACEMENT_IDLE = "eawf023_artifact_placement_idle"
     EAWF024_TEST_TIER_IDLE = "eawf024_test_tier_idle"
+    EAWF025_TEST_PLACEMENT_IDLE = "eawf025_test_placement_idle"
     COVERAGE_GATE_IDLE = "coverage_gate_idle"
     CAMPAIGN_PRODUCER_STUB_IDLE = "campaign_producer_stub_idle"
 
@@ -1314,6 +1316,61 @@ def check_eawf024_test_tier_wired(
             "EAWF024 test-tier check is idle or toothless: "
             f"good={good!r} bad={bad!r}; check_source must be called by the "
             "always-on idle gate and must reject a subprocess/textual/CliRunner import"
+        ),
+    )
+
+
+#: A conforming test path: ``tests/unit/`` names a declared kind and
+#: ``kernel/state`` mirrors a real package under ``src/eawf/``. Used as the
+#: positive control for the EAWF025 test-placement check.
+_EAWF025_GOOD_PATH = "tests/unit/kernel/state/test_epoch2_transition_parity.py"
+
+#: A violating test path: ``tools`` is a repo directory, not a package under
+#: ``src/eawf/``, so the mirror chain resolves to nothing. Used as the negative
+#: control.
+_EAWF025_BAD_PATH = "tests/unit/tools/test_idle_surface_report.py"
+
+
+def check_eawf025_test_placement_wired(
+    *,
+    check_paths_fn: Callable[..., Sequence[object]] = eawf025.check_test_paths,
+) -> GateResult:
+    """Assert the EAWF025 test-placement check flags an unmirrored path.
+
+    The EAWF025 hook is diff-scoped: it sees only the paths a commit adds,
+    so on a commit that adds no test the rule never executes and a
+    regression in it would surface much later, on someone else's commit.
+    This row calls :func:`check_test_paths` directly against a conforming
+    path and a path whose mirror chain names no source package, giving the
+    checker a live non-test call-site and a negative control.
+
+    Args:
+        check_paths_fn: Placement checker. Defaults to the live
+            :func:`eawf.platform.lint.eawf025_test_placement.check_test_paths`.
+
+    Returns:
+        A :class:`GateResult` that passes only when the conforming path
+        yields no violation and the unmirrored path yields exactly one.
+    """
+    source_packages = eawf025.source_package_paths(_REPO_ROOT)
+    good = check_paths_fn([_EAWF025_GOOD_PATH], source_packages=source_packages)
+    bad = check_paths_fn([_EAWF025_BAD_PATH], source_packages=source_packages)
+    if not good and len(bad) == 1:
+        return GateResult(
+            passed=True,
+            failure=None,
+            message=(
+                "idle-contract gate: ok (EAWF025 check_test_paths has a live gate "
+                "call-site and flags an unmirrored test path)"
+            ),
+        )
+    return GateResult(
+        passed=False,
+        failure=GateFailure.EAWF025_TEST_PLACEMENT_IDLE,
+        message=(
+            "EAWF025 test-placement check is idle or toothless: "
+            f"good={good!r} bad={bad!r}; check_test_paths must be called by the "
+            "always-on idle gate and must reject a path mirroring no source package"
         ),
     )
 
@@ -2644,9 +2701,12 @@ def main(argv: list[str]) -> int:
         failed |= _report_result(source_scan_check)
 
     # P30-I20 honest-close rows: close the meta-gate holes for EAWF023's
-    # single-path helper and the coverage-gate private matcher/runner.
+    # single-path helper and the coverage-gate private matcher/runner. EAWF025
+    # joins them because it is diff-scoped: a commit that adds no test never
+    # runs the rule, so only an always-on row keeps the checker honest.
     failed |= _report_result(check_eawf023_artifact_placement_wired())
     failed |= _report_result(check_eawf024_test_tier_wired())
+    failed |= _report_result(check_eawf025_test_placement_wired())
     failed |= _report_result(check_coverage_gate_helpers_wired())
 
     failed |= _report_result(check_runtime_gate_is_not_idle())

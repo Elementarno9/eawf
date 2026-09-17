@@ -1078,7 +1078,7 @@ def test_cli_wave_plan_disabled_rejects_floor_waiver_without_state_or_event_writ
             "--files",
             "src/",
             "--success",
-            "legacy success text",
+            "legacy success criterion text",
             "--criteria-floor-waiver",
             "temporary typed criteria repair waiver",
             "--effort-bucket",

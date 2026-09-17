@@ -8,19 +8,20 @@ Mutating verbs plus one read-only recovery verb:
 * ``eawf spec archive <scope-id> --repo-code ...``
 * ``eawf spec sync <wave-id> [--spec-path PATH]``
 * ``eawf spec repoint-gates <wave-id> --gate 'G-01=<argv>'``
+* ``eawf spec repoint-scopes <wave-id> [--from-commit] [--criterion 'CR-01=<text>' --reason ...]``
 * ``eawf spec show <urn> [--from-git]`` (read-only)
 
 Every verb but ``show`` is a mutator and routes through the daemon's
-``spec.{init,validate,promote,archive,sync,repoint_gates}`` JSON-RPC methods per
-authority-map row 9-10. The dispatch matches the existing
+``spec.{init,validate,promote,archive,sync,repoint_gates,repoint_scopes}``
+JSON-RPC methods per authority-map row 9-10. The dispatch matches the existing
 ``_persist_registry`` shape: daemon-proxy arm by default; the
 daemonless carve-out (``EAWF_DAEMONLESS=1`` or daemon unreachable)
 falls back to the in-process writer for the operations that do not
 require a running daemon. ``archive`` always requires the daemon up because the
 ``git rm`` + cache atomicity is daemon-owned. ``sync`` is likewise always
 daemon-mediated because materialising the parsed criteria + gates onto
-``state.json`` is a canonical state mutation (AGENTS rule 4), and
-``repoint-gates`` for the same reason.
+``state.json`` is a canonical state mutation (AGENTS rule 4), and both
+``repoint-gates`` and ``repoint-scopes`` for the same reason.
 
 ``show`` is the recovery surface: it reads the daemon-resident cache
 to find ``file_path`` + ``file_sha``, then either reads the file from
@@ -650,6 +651,143 @@ def spec_repoint_gates_cmd(
         raise
     result["proxied"] = True
     _emit_repoint_result(result, flags=flags)
+
+
+def parse_criterion_repoint(spec: str) -> dict[str, Any]:
+    """Parse one ``--criterion CRITERION_ID=<text>`` value into a repoint row.
+
+    The text half is taken verbatim (whitespace-stripped) rather than
+    tokenised: a criterion is prose, so splitting it on whitespace or
+    quotes would corrupt it.
+
+    Args:
+        spec: The raw option value, ``<criterion-id>=<text>``.
+
+    Returns:
+        A ``{"criterion_id": ..., "text": ...}`` row for the RPC params.
+
+    Raises:
+        typer.BadParameter: When the value carries no ``=``, names an
+            empty criterion id, or supplies an empty text.
+    """
+    criterion_id, separator, text = spec.partition("=")
+    if not separator:
+        raise typer.BadParameter(f"expected <criterion-id>=<text>, got {spec!r}")
+    criterion_id = criterion_id.strip()
+    if not criterion_id:
+        raise typer.BadParameter(f"empty criterion id in {spec!r}")
+    text = text.strip()
+    if not text:
+        raise typer.BadParameter(f"empty text for criterion {criterion_id!r}")
+    return {"criterion_id": criterion_id, "text": text}
+
+
+def _emit_scope_repoint_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
+    """Emit the ``spec.repoint_scopes`` RPC result as JSON or terse text."""
+    mode = "dry-run" if payload.get("dry_run") else "applied"
+    lines = [
+        f"repoint-scopes {mode} wave={payload.get('wave_id')!r} "
+        f"scopes_changed={payload.get('scopes_changed')} "
+        f"criteria={payload.get('changed_count')}"
+    ]
+    if payload.get("scopes_changed"):
+        before_scopes = payload.get("scopes_before", [])
+        after_scopes = payload.get("scopes_after", [])
+        lines.append(f"  scopes: {len(before_scopes)} -> {len(after_scopes)} path(s)")
+        for path in after_scopes:
+            lines.append(f"    {path}")
+    for row in payload.get("changed_criteria", []):
+        lines.append(f"  {row.get('criterion_id')}: {row.get('before_text')}")
+        lines.append(f"    -> {row.get('after_text')}")
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+@spec_app.command("repoint-scopes")
+def spec_repoint_scopes_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Wave id: P##-I##-W##.")],
+    from_commit: Annotated[
+        bool,
+        typer.Option(
+            "--from-commit",
+            help="Re-derive file_scopes from the wave's pinned commit (CLOSED waves).",
+        ),
+    ] = False,
+    criterion: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--criterion",
+            help="Repoint one criterion's text: 'CR-01=<new text>'. Repeatable.",
+        ),
+    ] = None,
+    reason: Annotated[
+        str,
+        typer.Option("--reason", help="Why the criterion text is rewritten. Required with it."),
+    ] = "",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report the would-change set without writing state."),
+    ] = False,
+) -> None:
+    """Re-derive a wave's file scopes and rewrite a named criterion's text.
+
+    Two after-the-fact record defects, one bounded verb.
+    ``--from-commit`` replaces ``file_scopes`` with the non-``.ea/`` paths
+    the wave's own pinned commit touched, so the recorded scope can only
+    move toward what the commit did. ``--criterion`` rewrites the prose of
+    a criterion the wave already records, under a mandatory ``--reason``
+    that lands on the event row.
+
+    Everything else in the row is frozen: the mutation is refused outright
+    if it would move the status, the outcome, ``closed_at``, the commit
+    pin, the gates, an unnamed criterion, or any non-text field of a named
+    one. The scope leg needs a CLOSED wave (it reads the pinned commit);
+    the text leg also runs on a CLAIMED or IN_PROGRESS wave, which is when
+    prose that blocks its own close is found.
+
+    Always daemon-mediated: the state mutation is daemon-owned, so there
+    is no in-process fallback.
+    """
+    from eawf.surfaces.cli._mutation import _daemon_reachable
+
+    flags: GlobalFlags = ctx.obj
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+
+    criterion_texts = [parse_criterion_repoint(entry) for entry in criterion or []]
+    if not from_commit and not criterion_texts:
+        raise cli_errors.UserError(
+            "spec repoint-scopes needs --from-commit or at least one --criterion",
+            kind="InvalidInput",
+        )
+    if criterion_texts and not reason.strip():
+        raise cli_errors.UserError(
+            "spec repoint-scopes needs a non-empty --reason for a --criterion rewrite",
+            kind="InvalidInput",
+        )
+
+    if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
+        raise cli_errors.StateConflict(
+            "daemon_required: spec repoint-scopes requires the daemon up; run `eawf daemon start`",
+            kind="IntegrityViolation",
+        )
+
+    params: dict[str, Any] = {
+        "wave_id": wave_id,
+        "from_commit": from_commit,
+        "criterion_texts": criterion_texts,
+        "reason": reason or None,
+        "dry_run": dry_run,
+        "repo_root": str(repo_root),
+    }
+    try:
+        with DaemonClient() as client:
+            result = client.call("spec.repoint_scopes", params)
+    except DaemonRpcError as exc:
+        if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise
+    result["proxied"] = True
+    _emit_scope_repoint_result(result, flags=flags)
 
 
 # ---- Read-only surface ----------------------------------------------------

@@ -23,7 +23,7 @@
       "entry": "entry simulator pair",
       "pack": "keybar pair [ ] state and subtitle · state N of 8",
       "port": "removed; the entry suite is parametrised over the eight states",
-      "golden_ids": ["entry/*", "J14"],
+      "golden_ids": ["entry/*", "route/entry@*", "J14"],
       "rulings": ["S2-38", "S6-17", "S9-06"]
     },
     {
@@ -93,7 +93,7 @@
       "entry": "window indicator",
       "pack": "... (N more)",
       "port": "… N above / … N below",
-      "golden_ids": ["overlay/palette@*", "palette/scrolled@*", "J20"],
+      "golden_ids": ["overlay/palette@*", "palette/top@*", "palette/scrolled@*", "J7", "J8", "J20", "J22"],
       "rulings": ["X-23"]
     },
     {
@@ -107,8 +107,15 @@
       "entry": "activity keybar and rail",
       "pack": "PgUp PgDn page; . actions; seven buckets with queued folded into running",
       "port": "PageUp PageDown page; . actions dropped at 80; eight buckets with sub-buckets at 120 and 160",
-      "golden_ids": ["route/activity@*", "buckets/filtered@*", "verbose/activity@*", "conn/*/activity"],
+      "golden_ids": ["route/activity@*", "buckets/filtered@*", "verbose/activity@*", "conn/*/activity", "overlay/help@*", "J3", "J6", "J13", "J15", "J16", "J21"],
       "rulings": ["X-29", "X-01"]
+    },
+    {
+      "entry": "settings editor keybar",
+      "pack": "slashed pairs ↑/↓ choose, ↑/↓ move, ↑/↓ row, ↑/↓ step and J/K order in the settings editor",
+      "port": "one entry naming the verb once: ↑↓ choose, ↑↓ move, ↑↓ row, ↑↓ step and J K order",
+      "golden_ids": ["J9"],
+      "rulings": ["CON-090"]
     },
     {
       "entry": "go drawer",

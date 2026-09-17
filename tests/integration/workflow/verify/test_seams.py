@@ -155,7 +155,7 @@ def test_close_preflight_calls_compute_before_close_wave(
                 "--files",
                 "src/",
                 "--success",
-                "legacy a",
+                "legacy criterion fixture text",
                 "--criteria-floor-waiver",
                 "test fixture models a migration-era legacy wave",
                 "--effort-bucket",

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from .console_chassis.harness.replay import Result, load_sequences, visible
+from eawf.surfaces.tui.console.harness import Result, load_contract, visible
 
-_INDEX, _STATES, _JOURNEYS = load_sequences()
+from .goldens import LAYOUT
+
+_CONTRACT = load_contract(LAYOUT.sequences)
 
 #: Every journey id of the tracked contract.
-JOURNEY_IDS: tuple[str, ...] = tuple(journey["id"] for journey in _JOURNEYS)
+JOURNEY_IDS: tuple[str, ...] = tuple(journey.id for journey in _CONTRACT.journeys)
 
 #: Steps summed over the 25 journeys, asserted rather than read from a stale count field.
 EXPECTED_STEPS = 188
@@ -22,7 +24,7 @@ EXPECTED_STEPS = 188
 
 def test_tracked_journeys_carry_every_step() -> None:
     assert len(JOURNEY_IDS) == 25
-    assert sum(len(journey["steps"]) for journey in _JOURNEYS) == EXPECTED_STEPS
+    assert sum(len(journey.steps) for journey in _CONTRACT.journeys) == EXPECTED_STEPS
 
 
 @pytest.mark.parametrize("journey_id", JOURNEY_IDS)
@@ -43,5 +45,5 @@ def test_golden_journey_matches_projection_and_frame(
 def test_golden_journey_replays_every_recorded_step(
     journey_id: str, replay: dict[str, Result]
 ) -> None:
-    recorded = next(journey for journey in _JOURNEYS if journey["id"] == journey_id)
-    assert len(replay[journey_id].steps) == len(recorded["steps"])
+    recorded = next(j for j in _CONTRACT.journeys if j.id == journey_id)
+    assert len(replay[journey_id].steps) == len(recorded.steps)

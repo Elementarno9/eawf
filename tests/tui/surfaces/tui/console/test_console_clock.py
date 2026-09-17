@@ -35,6 +35,12 @@ from eawf.surfaces.tui.console.tokens import Severity
 
 CONSOLE_DIR = Path(console_clock.__file__).resolve().parent
 CLOCK_MODULE = "clock.py"
+APP_MODULE = "app.py"
+
+# The clock reads the one time source, and the app hands the toolkit the one interval
+# that sweeps the rack and the go prefix under a live clock. Every other module is held
+# to reading neither, and both exemptions are pinned by their own case below.
+_EXEMPT = frozenset({CLOCK_MODULE, APP_MODULE})
 
 # Calls that read a time source or schedule a callback outside the console clock.
 _TIME_CALLS = frozenset(
@@ -280,7 +286,7 @@ def test_console_modules_read_time_only_through_the_clock() -> None:
     offenders = {
         path.relative_to(CONSOLE_DIR).as_posix(): hits
         for path in sorted(CONSOLE_DIR.rglob("*.py"))
-        if path.name != CLOCK_MODULE
+        if path.name not in _EXEMPT
         and (hits := _time_reads(ast.parse(path.read_text(encoding="utf-8"))))
     }
     assert offenders == {}
@@ -291,3 +297,12 @@ def test_console_clock_reads_time_but_schedules_nothing() -> None:
     calls = {ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)}
     assert "time.monotonic" in calls
     assert not {call.rsplit(".", 1)[-1] for call in calls} & _SCHEDULERS
+
+
+def test_the_app_schedules_the_one_sweep_and_reads_no_clock() -> None:
+    """The app's exemption is one interval; it never reads a time source of its own."""
+    tree = ast.parse((CONSOLE_DIR / APP_MODULE).read_text(encoding="utf-8"))
+    calls = [ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    scheduled = [call for call in calls if call.rsplit(".", 1)[-1] in _SCHEDULERS]
+    assert scheduled == ["self.set_interval"]
+    assert not [call for call in calls if any(call.endswith(read) for read in _TIME_CALLS)]

@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import subprocess
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -112,6 +113,7 @@ from eawf.kernel.validate.invariants import check_agent_report_invariants
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.platform.scrub.scan import rewrite_text
+from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
 from eawf.runtime.daemon.dispatch_runner import (
     DispatchResult,
@@ -1421,6 +1423,7 @@ async def _bind_or_synthesize_report(
     prompt: str,
     serving_runtime: str,
     spawn_once: Callable[[str], Awaitable[SpawnResult]],
+    working_dir: Path,
 ) -> AgentReportBody:
     """Bind the spawned agent's output to a report body, synthesizing on exhaustion.
 
@@ -1433,6 +1436,17 @@ async def _bind_or_synthesize_report(
     dispatch always completes and the degrade is auditable -- never a green
     PASS, since a synthesized body was not authored by the agent (see
     :func:`_synthesize_role_report`).
+
+    Args:
+        accepted: The completed spawn whose output is bound.
+        state: The state the binding was claimed against.
+        binding: The live claim naming the session, role and scope.
+        wave_id: The dispatched wave.
+        prompt: The dispatch prompt the spawn answered.
+        serving_runtime: The runtime the accepted spawn ran on.
+        spawn_once: Spawns one correction prompt for a re-ask.
+        working_dir: The directory the spawn ran in, scanned for the files a
+            synthesized body reports as changed.
 
     Returns:
         The bound role-specific :class:`AgentReportBody`, or a synthesized
@@ -1455,6 +1469,7 @@ async def _bind_or_synthesize_report(
             role=binding.role,
             phase_id=state.iters[state.waves[wave_id].iter_id].phase_id,
             exc=exc,
+            working_dir=working_dir,
         )
         body = _validate_live_report_body(
             body.model_dump(mode="json"),
@@ -1589,6 +1604,71 @@ def _redact_report_body(body: AgentReportBody) -> AgentReportBody:
     return _validate_report_body(redacted, role=AgentSessionRole(body.role))
 
 
+#: Wall-clock ceiling for one working-tree scan subcommand. The scan runs on
+#: the degrade path of a dispatch that already cost real money, so a pathologic
+#: repository must not hold the daemon: the scan gives up and reports nothing.
+_TREE_SCAN_TIMEOUT_S: float = 10.0
+
+
+def _git_paths(working_dir: Path, args: list[str]) -> list[str] | None:
+    """Run a path-listing ``git`` subcommand in *working_dir*.
+
+    Args:
+        working_dir: The directory the subcommand runs against (``git -C``).
+        args: The git argv past the executable.
+
+    Returns:
+        The command's non-empty output lines, or ``None`` when git is absent,
+        exceeded :data:`_TREE_SCAN_TIMEOUT_S`, or refused the command (the
+        caller reads ``None`` as "no answer", which is what a directory outside
+        a work tree returns).
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(working_dir), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_TREE_SCAN_TIMEOUT_S,
+            **no_window_kwargs(),
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        logger.debug(f"_git_paths args={args} status=unavailable cause={exc!r}")
+        return None
+    if completed.returncode != 0:
+        logger.debug(f"_git_paths args={args} rc={completed.returncode}")
+        return None
+    return [line for line in completed.stdout.splitlines() if line]
+
+
+def _spawn_changed_files(working_dir: Path) -> list[str]:
+    """Return the repo-relative paths the spawn left changed in *working_dir*.
+
+    A synthesized report carries no agent-authored file list, so the spawn's
+    own working tree is the only evidence of what it touched: tracked edits
+    (``git diff --name-only`` against ``HEAD``, so a file the spawn staged
+    still counts) plus untracked, non-ignored files. Reporting an empty list
+    while the spawn edited files hides exactly the diff a reviewer of a BLOCKED
+    wave needs first.
+
+    Args:
+        working_dir: The directory the spawn ran in.
+
+    Returns:
+        The sorted, de-duplicated repo-relative paths, or an empty list when
+        *working_dir* is outside a git work tree (or the host has no git).
+    """
+    tracked = _git_paths(working_dir, ["diff", "--name-only", "HEAD"])
+    if tracked is None:
+        # A repository whose first commit has not landed has no HEAD to diff
+        # against; the index-relative diff still names the spawn's edits.
+        tracked = _git_paths(working_dir, ["diff", "--name-only"])
+    untracked = _git_paths(working_dir, ["ls-files", "--others", "--exclude-standard"])
+    if tracked is None and untracked is None:
+        return []
+    return sorted({*(tracked or []), *(untracked or [])})
+
+
 def _synthesize_role_report(
     accepted: SpawnResult,
     *,
@@ -1596,6 +1676,7 @@ def _synthesize_role_report(
     role: AgentSessionRole,
     phase_id: str,
     exc: LLMAssistError,
+    working_dir: Path,
 ) -> AgentReportBody:
     """Synthesize a typed role body when the assist loop exhausts its re-asks.
 
@@ -1622,13 +1703,22 @@ def _synthesize_role_report(
     :func:`~eawf.runtime.daemon.dispatch_runner._build_completion_body` so the
     synthetic path mints the same typed shape as the rich-output path.
 
+    ``files_changed`` is scanned off the spawn's own working tree
+    (:func:`_spawn_changed_files`) rather than left empty: the agent authored no
+    file list, but it may well have edited files, and a report that drops them
+    hides the diff the reviewer of a BLOCKED wave needs first.
+
     Args:
         accepted: The already-completed, already-priced spawn whose exit status
             is recorded in the synthesized prose (but never drives the verdict).
         wave_id: The wave the synthesized report scopes.
+        role: The dispatched session role the body must match.
+        phase_id: The wave's parent phase, required by an operator body.
         exc: The exhausted-assist error carrying the attempt ceiling and the
             ordered rejection trail (the last failure's ``reason`` is named in
             the synthesized prose + the follow-up).
+        working_dir: The directory the spawn ran in, scanned for the files it
+            changed.
 
     Returns:
         A typed role-specific body carrying the BLOCKED synth verdict, LOW
@@ -1655,7 +1745,7 @@ def _synthesize_role_report(
         wave_id=wave_id,
         commit_sha="0000000",
         outcome=outcome,
-        files_changed=[],
+        files_changed=_spawn_changed_files(working_dir),
         tests_run=[],
         verdict=verdict,
         confidence=Confidence.LOW,
@@ -1755,6 +1845,9 @@ async def _spawn_and_dispatch(
     if ctx.state_path is None or ctx.event_path is None:
         raise LiveSpawnError(f"live spawn requires state_path + event_path for wave: {wave_id!r}")
     state_path = Path(ctx.state_path)
+    # The repo root holding ``.ea/state.json``: every spawn of this dispatch
+    # runs here, so a synthesized report scans this same tree for its files.
+    spawn_cwd = state_path.parent.parent
 
     # 1. Resolve the authoritative runtime + model, register/reuse the live
     # session, and claim the wave under one lock + one state write. Adapter/model
@@ -1879,7 +1972,7 @@ async def _spawn_and_dispatch(
         return await spawn_adapter.spawn_session(
             envelope.prompt,
             model=spawn_model,
-            cwd=str(state_path.parent.parent),
+            cwd=str(spawn_cwd),
             denied_tools=sorted(denied),
             on_spawn=captured_pid.append,
             on_chunk=_on_chunk,
@@ -1934,7 +2027,7 @@ async def _spawn_and_dispatch(
         return await adapter.spawn_session(
             reask_prompt,
             model=serving_model,
-            cwd=str(state_path.parent.parent),
+            cwd=str(spawn_cwd),
             denied_tools=sorted(denied),
             on_spawn=captured_pid.append,
         )
@@ -1950,6 +2043,7 @@ async def _spawn_and_dispatch(
         prompt=envelope.prompt,
         serving_runtime=serving_runtime,
         spawn_once=_spawn_correction,
+        working_dir=spawn_cwd,
     )
     # Redact local/sensitive tokens from the agent's own report prose before the
     # store scrub runs: a headless agent may cite an absolute path in its
@@ -2309,6 +2403,8 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool, repo_root: str | N
         RuntimeError: When neither *repo_root* nor ``ctx.state_path``
             resolves a state path (the toggle cannot persist without an
             on-disk state).
+        StateRegressedError: When ``state.json`` is older than the one this
+            daemon process last wrote at the path; nothing is written.
     """
     if repo_root:
         state_path = Path(repo_root) / ".ea" / "state.json"
@@ -2326,12 +2422,14 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool, repo_root: str | N
     summary = f"{command} dispatch_paused={paused}"
     with portalock.acquire(state_path, timeout=5.0):
         state = load_state(state_path)
+        ctx.refuse_regressed_state(state_path, updated_at=state.updated_at)
         before_version = state_version(state.model_dump(mode="json"))
         state.dispatch_paused = paused
         state.updated_at = datetime.now(UTC)
         new_payload = state.model_dump(mode="json")
         after_version = state_version(new_payload)
         atomic_write_json_locked(state_path, new_payload)
+        ctx.note_state_written(state_path, updated_at=state.updated_at)
         now = datetime.now(UTC)
         args_hash = hashlib.sha256(
             orjson.dumps({"paused": paused}, option=orjson.OPT_SORT_KEYS)

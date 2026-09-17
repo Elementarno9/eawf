@@ -11,6 +11,7 @@ runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -25,6 +26,16 @@ from eawf.workflow.evidence import _io
 from eawf.workflow.evidence.guards import require_complete_audit
 
 logger = logging.getLogger(__name__)
+
+#: The id grammar every NEW backlog item must match: ``B`` plus a
+#: zero-padded ordinal of three or more digits, as documented in
+#: :mod:`eawf.kernel.state.ids`. The width is load-bearing rather than
+#: cosmetic: a two-digit id is a prefix of a three-digit one, so the two
+#: read as the same row in prose and one item was already closed carrying
+#: another item's resolution. Enforcing the grammar at the add boundary
+#: keeps the collision from recurring; rows already on disk keep their
+#: historical ids because the model's id type stays permissive.
+RE_BACKLOG_ID = re.compile(r"^B\d{3,}$")
 
 
 class BacklogTitleRow(BaseModel):
@@ -79,10 +90,16 @@ def add_backlog(
             item title-only.
 
     Raises:
-        UserError: when ``item_id`` already exists (``kind="InvalidInput"``),
-            or when ``title`` / ``description`` violate the
-            :class:`BacklogItem` bounds (``kind="InvalidInput"``).
+        UserError: when ``item_id`` does not match :data:`RE_BACKLOG_ID`, when
+            it already exists, or when ``title`` / ``description`` violate the
+            :class:`BacklogItem` bounds (all ``kind="InvalidInput"``).
     """
+    if RE_BACKLOG_ID.fullmatch(item_id) is None:
+        raise UserError(
+            f"invalid backlog id {item_id!r}: expected {RE_BACKLOG_ID.pattern} (e.g. 'B001')",
+            kind="InvalidInput",
+        )
+
     backlog: dict[str, BacklogItem] = dict(state.backlog or {})
     if item_id in backlog:
         raise UserError(f"backlog item {item_id!r} already exists", kind="InvalidInput")

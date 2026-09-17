@@ -39,12 +39,20 @@ from eawf.kernel.migration.epoch2.rules import (
 )
 from eawf.kernel.migration.epoch2.runs import run_rule_payload
 from eawf.kernel.migration.epoch2.status_map import status_rule_payload
+from eawf.kernel.migration.epoch2.validation import validation_rule_payload
 
 logger = logging.getLogger(__name__)
 
 
 def totality_rule_payload() -> dict[str, Any]:
-    """Return the digestable form of every table that makes the import total."""
+    """Return the digestable form of every table that makes the import total.
+
+    The validation tables are part of the totality statement rather than a
+    separate rule: the reference kinds, the lifecycle entity kinds and the
+    fabrication reasons decide whether an imported row is entailed by the
+    source, so editing one of them changes what "total" means and must move
+    the published digest with it.
+    """
     return {
         "dispositions": disposition_rule_payload(),
         "status": status_rule_payload(),
@@ -53,6 +61,7 @@ def totality_rule_payload() -> dict[str, Any]:
         "lifecycle": lifecycle_rule_payload(),
         "envelopes": envelope_rule_payload(),
         "measurements": measurement_rule_payload(),
+        "validation": validation_rule_payload(),
     }
 
 

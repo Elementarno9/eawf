@@ -402,9 +402,12 @@ async def compute_readiness_method(ctx: MethodContext, params: dict[str, Any]) -
     """
     args = ComputeReadinessParams.model_validate(params)
     state_path = require_state_path(ctx)
-    config = resolve_config(args.version)
     candidate = None if args.release is None else validated_release(args.release)
     pinned = None if candidate is None else candidate.source_sha
+    config = resolve_config(
+        args.version,
+        membership_refs=() if candidate is None else candidate.membership_refs,
+    )
     try:
         readiness = _sweep(
             state_path,
@@ -669,7 +672,7 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     if replayed is not None:
         return keyed_reply(replayed, replay_record(state_path, release), replayed=True)
     assert_revision(release, args.expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     now = datetime.now(UTC)
     try:
         readiness = _sweep(
@@ -737,7 +740,7 @@ async def retry_target(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     if replayed is not None:
         return keyed_reply(replayed, replay_record(state_path, release), replayed=True)
     assert_revision(release, args.expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -846,7 +849,7 @@ async def burn(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             "release_record_id": record_envelope_id(settled),
         }
     assert_revision(release, args.expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -968,7 +971,7 @@ async def reconcile(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     if replayed is not None:
         return keyed_reply(replayed, replay_record(state_path, release), replayed=True)
     assert_revision(release, args.expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -1054,7 +1057,7 @@ async def observe(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         settled_record = replay_record(state_path, release)
         return {**keyed_reply(replayed, settled_record, replayed=True), "observation": None}
     assert_revision(release, args.expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     operation = open_operation(state_path, release)
     now = datetime.now(UTC)
     try:
@@ -1180,6 +1183,34 @@ def _terminal_predecessor(state_path: Path, version: str) -> Release | None:
     return recorded
 
 
+def _superseding(record: Release, predecessor_key: str) -> Release:
+    """Return *record* carrying the lineage back to *predecessor_key*.
+
+    The reply named the predecessor from the first, but the stored row
+    did not, so the correction lineage lived in one RPC response and
+    nowhere else: every later reader -- the candidate pin, the burn, the
+    operator asking what a version replaced -- saw a record that
+    superseded nothing. Re-validating rather than copying is what keeps
+    the self-supersede invariant enforced on the way in.
+
+    Args:
+        record: The freshly opened DRAFT.
+        predecessor_key: Key of the terminal rung it succeeds.
+
+    Returns:
+        The same record with
+        :attr:`~eawf.kernel.spec.release.Release.supersedes_release_ref`
+        set.
+
+    Raises:
+        ValidationError: When the lineage contradicts a record
+            invariant, e.g. a record superseding itself.
+    """
+    return Release.model_validate(
+        {**record.model_dump(mode="json"), "supersedes_release_ref": predecessor_key}
+    )
+
+
 @register("release.create")
 async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Open the DRAFT record of one checkpoint, after measured admission.
@@ -1196,10 +1227,12 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     the operator is here to supply; the succession answer sends them
     somewhere else entirely.
 
-    The admitted record is persisted before the reply is built. A record
-    that existed only in one RPC response could not be found again, so
-    every later verb would have to be handed the record it is acting on
-    and no reader could tell an opened checkpoint from an imagined one.
+    The admitted record is persisted before the reply is built, carrying
+    the predecessor it supersedes. A record that existed only in one RPC
+    response could not be found again, so every later verb would have to
+    be handed the record it is acting on and no reader could tell an
+    opened checkpoint from an imagined one -- and a lineage that lived
+    only in the reply was lost the same way.
 
     Args:
         ctx: Server context; supplies the state the citations resolve
@@ -1235,6 +1268,8 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     except (KeyError, ValidationError, ValueError) as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
     predecessor = _terminal_predecessor(state_path, args.version)
+    if predecessor is not None:
+        record = _superseding(record, predecessor.key)
     record_release(
         state_path,
         record,

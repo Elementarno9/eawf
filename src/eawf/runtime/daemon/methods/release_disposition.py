@@ -143,7 +143,7 @@ def burn_adopted_record(
             "release_record_id": record_envelope_id(settled),
         }
     assert_revision(release, expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     try:
         burned, _abandoned = burn_release(release, config, None)
     except ReleaseTransitionError as exc:
@@ -212,7 +212,7 @@ async def adopt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     state_path = require_state_path(ctx)
     release = validated_release(args.release)
     assert_revision(release, args.expected_revision)
-    config = resolve_config(release.version)
+    config = resolve_config(release.version, membership_refs=release.membership_refs)
     try:
         adoption = ReleaseAdoption.model_validate(args.adoption)
         adopted = adopt_publication(release, config, adoption=adoption)

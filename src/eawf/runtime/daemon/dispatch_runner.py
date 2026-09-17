@@ -361,8 +361,9 @@ def persist_enforcement_event(
 ) -> str:
     """Persist one sandbox-enforcement event to the event feed.
 
-    The sandbox boundary (egress proxy, env-scrub, argv-policy, cwd-guard)
-    hands its :class:`~eawf.runtime.sandbox.egress_proxy.SandboxEnforcementEvent`
+    The wired sandbox boundary (env-scrub, argv-policy, cwd-guard, and the OS
+    jail) hands its
+    :class:`~eawf.runtime.sandbox.egress_proxy.SandboxEnforcementEvent`
     here; the runner folds it into the generic
     :class:`~eawf.kernel.store.envelope.Envelope` as a flat
     :class:`~eawf.kernel.store.kinds.event.EventPayload` and appends it
@@ -372,6 +373,11 @@ def persist_enforcement_event(
     enforcement fields (``ts``, ``session``, ``kind``, ``target``,
     ``severity``) ride the payload's ``extras`` map so a TUI denial-timeline
     surface can read the row off the event feed without a parallel store.
+
+    No egress-proxy row reaches this writer: the UDS proxy is started by no
+    spawn path, so outbound network is unrestricted until the provider-native
+    sandbox lands. A timeline reader must not take an empty egress band as
+    proof that nothing dialled out.
 
     Args:
         ctx: Daemon method context -- supplies ``event_path`` + ``bus``.
@@ -435,8 +441,10 @@ def enforcement_sink(ctx: MethodContext) -> Callable[[SandboxEnforcementEvent], 
     returns ``None``; this binds that sink to the daemon context so a
     boundary fire persists through :func:`persist_enforcement_event` (the
     canonical event-feed writer). Wiring the boundary with this sink is how
-    a spawned session's argv-deny / egress-block / env-scrub / cwd-guard
-    decisions reach the TUI denial timeline.
+    a spawned session's argv-deny / env-scrub / cwd-guard decisions reach the
+    TUI denial timeline. The egress-block kind is a live event shape with no
+    live producer -- nothing starts the UDS proxy, so outbound network is
+    unrestricted until the provider-native sandbox lands.
 
     Args:
         ctx: Daemon method context the persisted events are written through.

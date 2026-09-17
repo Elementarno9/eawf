@@ -1373,7 +1373,7 @@ def test_seams_dont_block_on_failing_deterministic_gate(
                 "--files",
                 "src/",
                 "--success",
-                "legacy",
+                "legacy criterion fixture text",
                 "--criteria-floor-waiver",
                 "test fixture models a migration-era legacy wave",
                 "--effort-bucket",

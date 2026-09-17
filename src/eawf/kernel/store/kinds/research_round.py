@@ -39,11 +39,13 @@ class ResearchRoundPayload(BaseModel):
         claim_ids: The Claim row ids the round-end reconcile wrote.
         saturated: Whether the round's saturation reducer declared the
             campaign dry.
-        steer_notes: The operator steer / override notes folded in *before*
-            this round ran (the active channel inputs that shaped the round's
-            dispatch set). Empty when the operator pushed nothing -- a mid-run
-            steer surfaces here on the next round, so a steer visibly changes
-            the round it lands before.
+        steer_notes: The operator steer / override notes read off the channel
+            when this round's findings were reconciled. Empty when the operator
+            pushed nothing. The notes are recorded and never reach a running
+            round: every researcher is spawned before the channel is read, so a
+            note queued mid-round lands on this record without altering the
+            dispatch set of any round -- it is an audit trail of the operator's
+            asks, not a live steering input.
         checkpoint: Whether the round coincided with an operator-review
             checkpoint (per the run's checkpoint policy).
         recorded_at: When the round record was persisted (UTC).

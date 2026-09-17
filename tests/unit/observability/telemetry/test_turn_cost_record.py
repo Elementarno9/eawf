@@ -1,9 +1,9 @@
 """Strict-validation tests for :class:`TurnCostRecord` and its run row.
 
-The producer cases at the end pin the reasoning-unsettled exclusion
-bookkeeping: the counter reads zero for a corpus whose only runtime is
-codex, and a row whose runtime the exclusion set actually names is still
-counted once and kept out of both the cost and the token sums.
+The producer cases at the end pin the reasoning-summand bookkeeping: the
+two counters read false and zero whatever runtime a corpus mixes, because
+every supported runtime reports reasoning tokens inside its output total
+and no run is excluded for token accounting.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
-from eawf.observability.telemetry import turn_cost
 from eawf.observability.telemetry.models import RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
@@ -246,28 +245,26 @@ def test_single_codex_run_is_the_lower_boundary_of_a_summed_corpus() -> None:
     assert record.p50_cost_usd == Decimal("0.50")
 
 
-def test_listed_runtime_is_still_excluded_and_counted(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The filter still fires for whatever runtime the set names."""
-    monkeypatch.setattr(turn_cost, "REASONING_UNSETTLED_RUNTIMES", frozenset({"opencode"}))
-
+def test_every_runtime_sums_the_same_way() -> None:
+    """No runtime is excluded for token accounting, so all three sum."""
     record = _build(
-        [_run_on("run-claude", runtime="claude"), _run_on("run-listed", runtime="opencode")]
+        [
+            _run_on("run-claude", runtime="claude"),
+            _run_on("run-codex", runtime="codex"),
+            _run_on("run-opencode", runtime="opencode"),
+        ]
     )
 
-    assert record.reasoning_summand_unsettled is True
-    assert record.reasoning_summand_unsettled_run_count == 1
-    assert record.execution_cost_usd == Decimal("0.50")
-    assert record.token_total == 130
-    assert record.p50_wall_clock_ms == 2_000
+    assert record.reasoning_summand_unsettled is False
+    assert record.reasoning_summand_unsettled_run_count == 0
+    assert record.execution_cost_usd == Decimal("1.50")
+    assert record.token_total == 390
 
 
-def test_listed_runtime_row_is_not_also_counted_as_unpriced(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The exclusion ladder puts each run in exactly one bucket."""
-    monkeypatch.setattr(turn_cost, "REASONING_UNSETTLED_RUNTIMES", frozenset({"opencode"}))
+def test_an_unpriced_row_still_falls_to_the_unpriced_bucket() -> None:
+    """With the runtime filter gone, price provenance is the only exclusion."""
+    record = _build([_run_on("run-opencode", runtime="opencode", price_source=None)])
 
-    record = _build([_run_on("run-listed", runtime="opencode", price_source=None)])
-
-    assert record.reasoning_summand_unsettled_run_count == 1
-    assert record.unpriced_run_count == 0
+    assert record.unpriced_run_count == 1
+    assert record.reasoning_summand_unsettled_run_count == 0
+    assert record.execution_cost_usd == Decimal("0")

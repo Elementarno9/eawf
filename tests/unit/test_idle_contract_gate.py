@@ -300,6 +300,40 @@ def test_eawf024_test_tier_gate_reds_when_check_toothless(mod) -> None:
     assert result.failure is mod.GateFailure.EAWF024_TEST_TIER_IDLE
 
 
+def test_eawf025_test_placement_gate_passes_on_live_check(mod) -> None:
+    result = mod.check_eawf025_test_placement_wired()
+    assert result.passed is True
+
+
+def test_eawf025_test_placement_gate_calls_check_with_good_and_bad(mod) -> None:
+    calls: list[list[str]] = []
+
+    def _check(paths: list[str], *, source_packages: frozenset[str]) -> list[object]:
+        calls.append(paths)
+        assert "kernel/state" in source_packages
+        return [object()] if "tools" in paths[0] else []
+
+    result = mod.check_eawf025_test_placement_wired(check_paths_fn=_check)
+    assert result.passed is True
+    assert calls == [[mod._EAWF025_GOOD_PATH], [mod._EAWF025_BAD_PATH]]
+
+
+def test_eawf025_test_placement_gate_reds_when_checker_stubbed(mod) -> None:
+    result = mod.check_eawf025_test_placement_wired(
+        check_paths_fn=lambda _paths, *, source_packages: []
+    )
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.EAWF025_TEST_PLACEMENT_IDLE
+
+
+def test_eawf025_test_placement_gate_reds_when_the_good_path_is_flagged(mod) -> None:
+    result = mod.check_eawf025_test_placement_wired(
+        check_paths_fn=lambda _paths, *, source_packages: [object()]
+    )
+    assert result.passed is False
+    assert result.failure is mod.GateFailure.EAWF025_TEST_PLACEMENT_IDLE
+
+
 def test_coverage_gate_helpers_wired_passes(mod) -> None:
     result = mod.check_coverage_gate_helpers_wired()
     assert result.passed is True

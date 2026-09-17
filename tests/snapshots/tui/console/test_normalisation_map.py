@@ -4,13 +4,12 @@ Three things are asserted. The map loads strict, so an unknown key or a half-wri
 entry is a load failure rather than a silently ignored field. Every entry is applied at
 least once -- an entry whose golden ids select nothing is a dead admission that would
 survive a regeneration unnoticed -- and the residual diff over the replayed contract is
-empty. Finally the two classification corrections the map carries are bound in the
-tracked route registry rather than restated in a second hand-maintained table.
+empty. Finally the two classification corrections the map carries are bound in the port's
+route registry rather than restated in a second hand-maintained table.
 """
 
 from __future__ import annotations
 
-import fnmatch
 import json
 from pathlib import Path
 from typing import Any
@@ -18,21 +17,24 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from .console_chassis.chassis import registry
-from .console_chassis.goldens import NORMALISATION_MAP
-from .console_chassis.harness.replay import Result
-from .console_chassis.normalisation import (
+from eawf.surfaces.tui.console import registry
+from eawf.surfaces.tui.console.harness import Result
+from eawf.surfaces.tui.console.normalisation import (
     NormalisationEntry,
     NormalisationMap,
     load_map,
+    unknown_golden_ids,
 )
 
-MAP = load_map()
+from .goldens import LAYOUT
+
+MAP = load_map(LAYOUT.normalisation_map)
 
 
 def _raw() -> dict[str, Any]:
     """Return the tracked map as plain JSON, for the mutation cases below."""
-    return json.loads(NORMALISATION_MAP.read_text(encoding="utf-8"))
+    data: dict[str, Any] = json.loads(LAYOUT.normalisation_map.read_text(encoding="utf-8"))
+    return data
 
 
 def _entry(**overrides: Any) -> dict[str, Any]:
@@ -55,7 +57,6 @@ def test_tracked_map_loads_strict() -> None:
 
 
 def test_load_map_raises_for_a_missing_file(tmp_path: Path) -> None:
-    load_map.cache_clear()
     with pytest.raises(FileNotFoundError):
         load_map(tmp_path / "absent.json")
 
@@ -114,12 +115,7 @@ def test_every_entry_is_applied_at_least_once(contract_ids: tuple[str, ...]) -> 
 def test_every_golden_id_pattern_selects_at_least_one_record(
     contract_ids: tuple[str, ...],
 ) -> None:
-    dead = [
-        f"{entry.entry}: {pattern}"
-        for entry in MAP.entries
-        for pattern in entry.golden_ids
-        if not any(fnmatch.fnmatchcase(contract_id, pattern) for contract_id in contract_ids)
-    ]
+    dead = unknown_golden_ids(MAP, contract_ids)
     assert not dead, f"golden id patterns selecting nothing: {'; '.join(dead)}"
 
 
@@ -131,24 +127,24 @@ def test_residual_diff_is_empty(replay: dict[str, Result]) -> None:
 
 
 def test_roadmap_is_the_planning_route_key() -> None:
-    spec = registry.ROUTE_BY_KEY["roadmap"]
-    assert spec.family == "planning"
+    spec = registry.REGISTRY.by_key["roadmap"]
+    assert spec.family == registry.RouteFamily.PLANNING
     assert spec.id == "timeline"
-    assert "timeline" not in registry.ROUTE_BY_KEY
+    assert "timeline" not in registry.REGISTRY.by_key
 
 
 def test_notifications_is_a_global_diagnostics_route() -> None:
-    spec = registry.ROUTE_BY_KEY["notifications"]
-    assert spec.family == "diagnostics"
+    spec = registry.REGISTRY.by_key["notifications"]
+    assert spec.family == registry.RouteFamily.DIAGNOSTICS
     assert not spec.subject_required
-    assert spec.family != "entity_sub_surfaces"
+    assert spec.family != registry.RouteFamily.ENTITY_SUB_SURFACES
 
 
-def test_every_route_correction_is_bound_in_the_tracked_registry() -> None:
+def test_every_route_correction_is_bound_in_the_port_registry() -> None:
     corrections = MAP.route_corrections()
     assert corrections, "the map carries no classification correction"
     for route_id, correction in corrections.items():
-        spec = registry.ROUTE_BY_ID[route_id]
+        spec = registry.REGISTRY.by_id[route_id]
         assert spec.key == correction.key
         assert spec.family == correction.family
 

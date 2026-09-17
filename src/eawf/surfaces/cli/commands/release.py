@@ -12,8 +12,10 @@ a verb added to the daemon without an operator surface reds the parity
 test rather than shipping as substrate nobody can call.
 
 The two train-walking verbs, ``receipts`` and ``advance``, live in
-:mod:`eawf.surfaces.cli.commands.release_train`, which attaches them to
-:data:`release_app` when this module is imported.
+:mod:`eawf.surfaces.cli.commands.release_train`, and the manifest pin,
+``candidate``, lives in
+:mod:`eawf.surfaces.cli.commands.release_candidate`. Both attach their
+verbs to :data:`release_app` when this module is imported.
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ RELEASE_RPC_METHODS: Final[Mapping[str, str]] = {
     "show": "release.show",
     "readiness": "release.compute_readiness",
     "create": "release.create",
+    "candidate": "release.candidate",
     "approve": "release.approve",
     "publish": "release.publish",
     "retry": "release.retry_target",
@@ -1362,9 +1365,10 @@ def release_cancel(
 
 
 # ---- command registration ---------------------------------------------------
-# Importing the sibling runs its ``@release_app.command(...)`` decorators so
-# the app carries every verb the parity map names. The import sits after
-# every shared symbol is defined, so the sibling can import them from here.
+# Importing the siblings runs their ``@release_app.command(...)`` decorators so
+# the app carries every verb the parity map names. The imports sit after
+# every shared symbol is defined, so the siblings can import them from here.
+from eawf.surfaces.cli.commands import release_candidate as _release_candidate  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_train as _release_train  # noqa: E402, F401
 
 __all__ = ["RELEASE_RPC_METHODS", "release_app"]

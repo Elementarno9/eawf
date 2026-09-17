@@ -34,7 +34,7 @@ from eawf.surfaces.tui.console.token_map import TOKEN_MAP, Channel, render_css
 from eawf.surfaces.tui.snapshot.pilot_harness import SNAPSHOT_REGEN_ENV
 from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 
-from .console_chassis.goldens import GOLDEN_ROOT
+from .goldens import GOLDEN_ROOT
 
 STYLED_ROOT = GOLDEN_ROOT / "styled"
 ORACLE: dict[str, Any] = json.loads(

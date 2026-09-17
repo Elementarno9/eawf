@@ -16,7 +16,8 @@ The form is a vertical stack of five cycle-on-change config groups, one per
 launch dimension, each a closed enum the operator forward-cycles through:
 
 * **scope** -- how wide the drain reaches: this iter / this phase / cross-repo.
-* **budget** -- the EU / $ / per-wave caps tier the run runs under.
+* **budget** -- the EU / $ / per-wave claim-cap tier the run runs under. An
+  armed cap stops new claims and never kills an in-flight lane.
 * **concurrency** -- the lane width (how many waves drain at once).
 * **risk policy** -- the auto-close vs fork-tier disposition plus the hard-halt
   toggle (a fork that fails stops the whole fleet).
@@ -109,8 +110,9 @@ HINT_ID: str = "arm-hint"
 #: order so the cursor cycles narrow -> broad.
 SCOPE_OPTIONS: tuple[str, ...] = ("this iter", "this phase", "cross-repo")
 
-#: Budget-cap tier options (group 2) -- the EU / $ / per-wave caps the run runs
-#: under. ``unbounded`` runs with no cap; the named tiers tighten from there.
+#: Budget-cap tier options (group 2) -- the EU / $ / per-wave claim caps the run
+#: runs under. ``unbounded`` runs with no cap; the named tiers tighten from
+#: there.
 BUDGET_OPTIONS: tuple[str, ...] = ("unbounded", "lenient", "standard", "strict")
 
 
@@ -153,13 +155,15 @@ RISK_OPTIONS: tuple[str, ...] = (
 #: rounds. Maps to the ``fleet.drive`` ``convergence`` param.
 CONVERGENCE_OPTIONS: tuple[str, ...] = ("drain to empty", "K-clean rounds")
 
-#: The EU / USD / waves spend-cap triple each :data:`BUDGET_OPTIONS` tier maps to
+#: The EU / USD / waves claim-cap triple each :data:`BUDGET_OPTIONS` tier maps to
 #: -- the ``fleet.drive`` ``eu_cap`` / ``usd_cap`` / ``waves_cap`` params (DL-4).
 #: ``unbounded`` leaves every cap ``None`` (the run never HALTs on spend); the
 #: named tiers tighten from lenient down to strict so an operator can bound a run
 #: by effort, dollars, AND wave count at once. The figures are deliberately round
 #: so the cockpit's ``$ used/cap`` + EU block-bar read cleanly; the daemon loop
-#: HALTs at the FIRST cap any axis reaches (the ``budget_exhausted`` DL-4 gate).
+#: gates the CLAIM step at the FIRST cap any axis reaches (the
+#: ``budget_exhausted`` DL-4 gate), so a cap stops new claims and never kills an
+#: in-flight lane -- reaping a running lane is the separate hard-halt policy.
 _BUDGET_CAPS: dict[str, tuple[float | None, float | None, int | None]] = {
     "unbounded": (None, None, None),
     "lenient": (40.0, 80.0, 32),
@@ -192,10 +196,10 @@ class ArmSpec(BaseModel):
             selected risk policy).
         convergence: The ``fleet.drive`` convergence mode -- ``drain`` or
             ``kclean`` -- derived from the selected convergence option.
-        eu_cap: The cumulative EU spend cap (DL-4), derived from the budget
+        eu_cap: The cumulative EU claim cap (DL-4), derived from the budget
             tier; ``None`` under the ``unbounded`` tier so the run never HALTs
             on EU spend.
-        usd_cap: The cumulative USD spend cap, derived from the budget tier;
+        usd_cap: The cumulative USD claim cap, derived from the budget tier;
             ``None`` under ``unbounded``.
         waves_cap: The claimed-wave count cap, derived from the budget tier;
             ``None`` under ``unbounded``.
@@ -228,7 +232,7 @@ def build_arm_spec(
 
     Maps the human-readable selections onto the typed ``fleet.drive`` params:
     the concurrency option resolves to its integer lane width, the budget tier
-    resolves the DL-4 EU / USD / waves spend caps (``unbounded`` leaves them
+    resolves the DL-4 EU / USD / waves claim caps (``unbounded`` leaves them
     ``None``), the risk policy resolves the hard-halt toggle (a ``hard-halt``
     label sets it), and the convergence option resolves the ``drain`` /
     ``kclean`` mode plus the ``kclean`` K threshold. Every derived field rides
@@ -316,7 +320,7 @@ def issue_drive(spec: ArmSpec, frontier: list[str], *, daemon_available: bool) -
     fix -- no field is dropped): the scope-filtered *frontier*
     (:func:`scope_frontier`) in claim order, the lane concurrency, the
     convergence mode + its ``kclean_k`` threshold, the DL-4 EU / USD / waves
-    spend caps, and the hard-halt toggle. The call routes through the
+    claim caps, and the hard-halt toggle. The call routes through the
     :class:`~eawf.surfaces.cli._daemon_client.DaemonClient` seam when the daemon
     is reachable. The line reports the cockpit flipped to ``DRAINING``, or the
     honest unavailable / rejected line rather than a faked arm. An empty
@@ -346,7 +350,7 @@ def issue_drive(spec: ArmSpec, frontier: list[str], *, daemon_available: bool) -
         "kclean_k": spec.kclean_k,
         "hard_halt": spec.hard_halt,
     }
-    # Only send the spend caps that are armed -- an unbounded tier leaves them
+    # Only send the claim caps that are armed -- an unbounded tier leaves them
     # unset so the strict ``DriveParams`` (gt=0.0 / ge=1) never sees a None it
     # would otherwise have to allow as an explicit key.
     if spec.eu_cap is not None:
@@ -404,11 +408,29 @@ def _format_cap(value: float | int | None) -> str:
     return f"{value:g}"
 
 
+#: Caption of the arm preview cap row. Reads ``claim caps`` rather than the
+#: older bare ``caps`` because the figures bound only what the drive loop may
+#: CLAIM next, not what the run may spend: an armed cap stops new claims and
+#: never kills an in-flight lane. The paired budget-stop row
+#: (:func:`render_halt_row`) is what tells the operator whether the running
+#: lanes drain or are reaped, so the two rows together no longer read as a
+#: spend ceiling the daemon does not enforce.
+CAPS_ROW_CAPTION: str = "claim caps"
+
+
 def render_caps_row(budget: str) -> str:
-    """Render the EU / USD / waves caps for *budget*."""
+    """Render the EU / USD / waves claim caps for *budget*.
+
+    Args:
+        budget: The selected budget tier (one of :data:`BUDGET_OPTIONS`); an
+            unknown tier renders every axis uncapped.
+
+    Returns:
+        A content-markup preview row captioned :data:`CAPS_ROW_CAPTION`.
+    """
     eu_cap, usd_cap, waves_cap = _BUDGET_CAPS.get(budget, (None, None, None))
     return (
-        f"[$muted]caps[/]  EU [$accent]{_format_cap(eu_cap)}[/]  "
+        f"[$muted]{CAPS_ROW_CAPTION}[/]  EU [$accent]{_format_cap(eu_cap)}[/]  "
         f"$ [$accent]{_format_cap(usd_cap)}[/]  "
         f"waves [$accent]{_format_cap(waves_cap)}[/]"
     )
@@ -466,6 +488,12 @@ class ArmModal(ModalScreen["ArmSpec | None"]):
     frontier is dry the form refuses to arm: it shows the honest
     :data:`NOTHING_TO_DRAIN` banner and ``Enter`` dismisses ``None`` rather than
     returning a spec, so the autopilot pane never fires a doomed ``fleet.drive``.
+
+    The budget group arms CLAIM caps, not a spend ceiling: an armed EU or USD
+    cap stops new claims and never kills an in-flight lane, so a run can finish
+    past its dollar figure by the cost of the lanes already running. Reaping a
+    running lane at the cap is the separate hard-halt risk policy, which the
+    form's budget-stop row states on its own line.
 
     The overlay holds NO arming logic -- it returns a typed config (or ``None``);
     issuing the ``fleet.drive`` RPC + flipping the cockpit to ``DRAINING`` is the
@@ -684,6 +712,7 @@ __all__ = [
     "ARM_TITLE",
     "BUDGET_GROUP_ID",
     "BUDGET_OPTIONS",
+    "CAPS_ROW_CAPTION",
     "CAPS_ROW_ID",
     "CONCURRENCY_GROUP_ID",
     "CONCURRENCY_OPTIONS",

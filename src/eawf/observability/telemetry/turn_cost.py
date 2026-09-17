@@ -10,19 +10,21 @@ invariant :func:`build_turn_cost_record` is written to hold: the same wave
 expressed as one run or as three summing runs produces a byte-identical
 record.
 
-Three exclusion rules apply to the runs inside a unit, in this order:
+Two exclusion rules apply to the runs inside a unit, in this order:
 
 1. A run whose role attributes to the ``UNATTRIBUTED`` member of
    :class:`~eawf.observability.telemetry.cost_class.CostClass` is counted and
    dropped from both cost sums. A run with no role at all raises instead
    of being charged to execution.
-2. A run on a runtime whose reasoning-token accounting is unsettled is
-   counted and dropped. No supported runtime is listed today, so the rule
-   is an escape hatch held ready for a runtime that reports reasoning
-   tokens as a summand on top of its output total rather than inside it.
-3. A run with no ``price_source`` is counted as unpriced and dropped. It is
+2. A run with no ``price_source`` is counted as unpriced and dropped. It is
    never summed as zero, because a zero-cost row and an unpriced row are
    different facts and averaging them together understates real spend.
+
+Every supported runtime reports reasoning tokens inside its output total,
+so no run is ever excluded for unsettled token accounting. The record
+still publishes the two ``reasoning_summand_unsettled*`` fields, reading
+false and zero, because persisted baseline artifacts carry those keys and
+the model forbids unknown ones.
 
 Wall clock is summed over *every* run in the unit regardless of those
 rules: elapsed time is neither priced nor affected by token accounting, so
@@ -47,24 +49,11 @@ from eawf.observability.telemetry.cost_class import CostClass, classify_cost_cla
 from eawf.observability.telemetry.models import RuntimeName
 
 __all__ = [
-    "REASONING_UNSETTLED_RUNTIMES",
     "CompletedUnitRun",
     "PriceSource",
     "TurnCostRecord",
     "build_turn_cost_record",
 ]
-
-
-REASONING_UNSETTLED_RUNTIMES: frozenset[str] = frozenset()
-"""Runtimes that report reasoning tokens as a summand on top of output.
-
-Such a row's token total is not comparable with a runtime that reports
-reasoning as a subset of output, so it is flagged and excluded from the
-cost and token sums; the counts still surface on the record so the
-exclusion is visible rather than silent. The set is empty because every
-supported runtime reports the subset form; the filter is kept so listing
-the next runtime that does not is a one-line change.
-"""
 
 
 class PriceSource(BaseModel):
@@ -149,9 +138,10 @@ class TurnCostRecord(BaseModel):
             tokens over summed runs. Reasoning tokens are never included.
         unattributed_run_count: Runs excluded as unattributed.
         unpriced_run_count: Runs excluded for carrying no price source.
-        reasoning_summand_unsettled: Whether any run was excluded for
-            unsettled reasoning-token accounting.
-        reasoning_summand_unsettled_run_count: How many runs were.
+        reasoning_summand_unsettled: Always false; kept so a persisted
+            baseline artifact still validates against this model.
+        reasoning_summand_unsettled_run_count: Always zero, for the same
+            reason.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -183,7 +173,6 @@ class _CostFold:
     token_total: int = 0
     unattributed_run_count: int = 0
     unpriced_run_count: int = 0
-    unsettled_run_count: int = 0
     unit_wall_clock_ms: list[int] = field(default_factory=list)
     unit_cost_usd: list[Decimal] = field(default_factory=list)
 
@@ -240,8 +229,8 @@ def build_turn_cost_record(
         token_total=fold.token_total,
         unattributed_run_count=fold.unattributed_run_count,
         unpriced_run_count=fold.unpriced_run_count,
-        reasoning_summand_unsettled=fold.unsettled_run_count > 0,
-        reasoning_summand_unsettled_run_count=fold.unsettled_run_count,
+        reasoning_summand_unsettled=False,
+        reasoning_summand_unsettled_run_count=0,
     )
 
 
@@ -302,9 +291,6 @@ def _fold_run(fold: _CostFold, run: CompletedUnitRun) -> Decimal:
     cost_class = classify_cost_class(run.role)
     if cost_class is CostClass.UNATTRIBUTED:
         fold.unattributed_run_count += 1
-        return Decimal("0")
-    if run.runtime in REASONING_UNSETTLED_RUNTIMES:
-        fold.unsettled_run_count += 1
         return Decimal("0")
     if run.price_source is None:
         fold.unpriced_run_count += 1

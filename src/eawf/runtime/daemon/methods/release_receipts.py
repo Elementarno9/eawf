@@ -336,7 +336,7 @@ async def advance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         raise DaemonValidationError(
             f"validation_failed: no release record is stored for {args.release_key!r}"
         )
-    config = resolve_config(current.version)
+    config = resolve_config(current.version, membership_refs=current.membership_refs)
     now = datetime.now(UTC)
     try:
         result = advance_train(train, current=current, config=config, receipts=receipts, now=now)

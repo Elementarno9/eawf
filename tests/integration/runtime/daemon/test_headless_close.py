@@ -139,7 +139,9 @@ def _rewind_close_residue(ctx: Any, state_path: Path, *, snapshot: bytes) -> Non
     cached mutation the other lane already produced; otherwise the receipt-id
     match would be an artefact of reuse instead of proof that the two lanes
     derive the same freshness key. Dropping the idempotency cache alongside the
-    on-disk residue is what a daemon restart between the two closes would do.
+    on-disk residue -- and the per-path last-write stamps that would otherwise
+    refuse the restored snapshot as regressed -- is what a daemon restart
+    between the two closes would do.
     """
     state_path.write_bytes(snapshot)
     local = state_path.parent / "local"
@@ -150,6 +152,7 @@ def _rewind_close_residue(ctx: Any, state_path: Path, *, snapshot: bytes) -> Non
         if candidate.is_file():
             candidate.unlink()
     ctx.idempotency_cache.clear()
+    ctx.state_written_at.clear()
     close_module._CLOSE_TASKS.clear()
 
 

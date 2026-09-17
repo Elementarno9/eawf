@@ -273,6 +273,7 @@ def _patch_producer_spawn(
         repo_root: Path,
         timeout_seconds: float = 600.0,
         events_path: Any = None,
+        extra_args_by_runtime: Any = None,
     ) -> Callable[[str], Any]:
         def _factory(runtime: str) -> _RecordingSpawn:
             return stub

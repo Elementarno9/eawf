@@ -1172,8 +1172,11 @@ class Round(_StrictModel):
             the campaign converged.
         checkpoint: Whether the round coincided with an operator-review
             checkpoint (per the run's checkpoint policy).
-        steer_notes: The operator steer / override notes folded into the round
-            -- the between-rounds feedback that shaped its dispatch set.
+        steer_notes: The operator steer / override notes recorded against the
+            round. Every researcher of a round is spawned before its notes are
+            read, so the notes are recorded and never reach a running round:
+            they are a record of what the operator asked for while the round
+            ran, not an input the round consumed.
     """
 
     campaign_id: str = Field(min_length=1)

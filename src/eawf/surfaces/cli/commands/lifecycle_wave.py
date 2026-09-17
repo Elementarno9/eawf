@@ -44,6 +44,10 @@ from eawf.surfaces.cli.commands.lifecycle import (
     _wave_close_async_via_daemon,
     wave_app,
 )
+
+# Shared with ``roadmap revise --add-wave`` so the two authoring surfaces
+# cannot drift on the criterion floor or on the refusal message.
+from eawf.surfaces.cli.commands.roadmap import _validated_success_criteria
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
@@ -775,8 +779,15 @@ def wave_plan_cmd(
         typer.Option("--deps", help="Comma-separated dep wave IDs (must already exist)."),
     ] = None,
     success_criteria: Annotated[
-        str | None,
-        typer.Option("--success", help="Comma-separated success criteria."),
+        list[str] | None,
+        typer.Option(
+            "--success",
+            help=(
+                "One whole success criterion. Repeatable: pass --success once per "
+                "criterion. The value is never split on commas and must be at "
+                "least 20 characters."
+            ),
+        ),
     ] = None,
     agent_role: Annotated[
         AgentSessionRole | None,
@@ -832,7 +843,11 @@ def wave_plan_cmd(
         return
     file_list = [f.strip() for f in files.split(",") if f.strip()]
     deps_list = [d.strip() for d in (deps or "").split(",") if d.strip()]
-    criteria_list = [c.strip() for c in (success_criteria or "").split(",") if c.strip()]
+    try:
+        criteria_list = _validated_success_criteria(success_criteria)
+    except cli_errors.UserError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
     # An authored wave carries an IntentBrief. This low-level ``wave plan``
     # command takes no ``--intent-*`` flags (the operator authoring surface
     # is ``roadmap revise --add-wave``), so it synthesises a minimal brief

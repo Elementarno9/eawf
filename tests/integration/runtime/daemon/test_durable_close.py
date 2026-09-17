@@ -35,11 +35,11 @@ from eawf.runtime.daemon.gate_receipt_hygiene import (
 from eawf.runtime.daemon.methods.close import (
     _CLOSE_TASKS,
     _close_task_key,
-    _policy_digest,
     _run_attempt,
     cancel,
     gate_freshness_inputs,
     persist_gate_receipt,
+    policy_digest,
     resume,
     resume_durable_close_attempts,
     reusable_pass_gate_ids,
@@ -387,7 +387,7 @@ def test_policy_change_makes_queued_attempt_stale(
 
 
 @pytest.mark.parametrize("layer", ["local", "branch", "env"])
-def test_policy_digest_tracks_effective_runtime_layers(
+def testpolicy_digest_tracks_effective_runtime_layers(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     layer: str,
@@ -395,7 +395,7 @@ def test_policy_digest_tracks_effective_runtime_layers(
     """Local, branch, and env verification overrides bind exact close policy."""
     repo, state_path, _ctx = _repo_with_state(tmp_path)
     state = State.model_validate_json(state_path.read_bytes())
-    before = _policy_digest(state, repo_root=repo, wave_id=_WAVE)
+    before = policy_digest(state, repo_root=repo, wave_id=_WAVE)
 
     if layer == "local":
         config_path = repo / ".ea" / "local" / "config.yaml"
@@ -415,10 +415,10 @@ def test_policy_digest_tracks_effective_runtime_layers(
     else:
         monkeypatch.setenv("EAWF_VERIFY__JUROR_WALL_CLOCK_SECONDS", "703")
 
-    assert _policy_digest(state, repo_root=repo, wave_id=_WAVE) != before
+    assert policy_digest(state, repo_root=repo, wave_id=_WAVE) != before
 
 
-def test_policy_digest_tracks_effective_profile_and_ignores_raw_noise(
+def testpolicy_digest_tracks_effective_profile_and_ignores_raw_noise(
     tmp_path: Path,
 ) -> None:
     """Profile semantics bind close; byte-only config noise does not."""
@@ -436,19 +436,19 @@ def test_policy_digest_tracks_effective_profile_and_ignores_raw_noise(
         encoding="utf-8",
     )
     state = State.model_validate_json(state_path.read_bytes())
-    before = _policy_digest(state, repo_root=repo, wave_id=_WAVE)
+    before = policy_digest(state, repo_root=repo, wave_id=_WAVE)
 
     config_path.write_text(
         "# byte-only comment must not invalidate proof\nprofiles:\n  enabled:\n    - close-test\n",
         encoding="utf-8",
     )
-    assert _policy_digest(state, repo_root=repo, wave_id=_WAVE) == before
+    assert policy_digest(state, repo_root=repo, wave_id=_WAVE) == before
 
     profile_path.write_text(
         "name: close-test\nverify:\n  enforce: true\n  juror_wall_clock_seconds: 705\n",
         encoding="utf-8",
     )
-    assert _policy_digest(state, repo_root=repo, wave_id=_WAVE) != before
+    assert policy_digest(state, repo_root=repo, wave_id=_WAVE) != before
 
 
 @pytest.mark.parametrize(
@@ -866,11 +866,11 @@ def test_blocked_attempt_has_one_bounded_resume(
         state_path.write_text(state.model_dump_json(), encoding="utf-8")
         monkeypatch.setenv("EAWF_VERIFY__JUROR_WALL_CLOCK_SECONDS", "706")
         monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close._runner_environment_digest",
+            "eawf.runtime.daemon.methods.close.runner_environment_digest",
             lambda: "e" * 64,
         )
         monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close._dependency_binding_digest",
+            "eawf.runtime.daemon.methods.close.dependency_binding_digest",
             lambda _state, *, wave_id: "d" * 64,
         )
 

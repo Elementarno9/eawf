@@ -15,9 +15,15 @@ import pytest
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TOOL_PATH = _REPO_ROOT / "tools" / "idle_surface_report.py"
+_SOURCE_ROOT = _REPO_ROOT / "src" / "eawf"
 
-#: Measured idle count for ``src/eawf`` once the reporter counted call sites
-#: instead of files mentioning a name. Pinned to the exact measurement, with no
+#: Trees that hold production callers but ship no surface of their own. A
+#: ``tools/`` script is a real consumer, so the measurement counts its call
+#: sites; without it a wired function reads as idle.
+_CALLER_ROOTS = [_REPO_ROOT / "tools"]
+
+#: Measured idle count for ``src/eawf``, counting call sites in ``src/`` and
+#: in :data:`_CALLER_ROOTS`. Pinned to the exact measurement, with no
 #: headroom, so any newly shipped uncalled function reds this test rather than
 #: being absorbed by slack. Lower it as surfaces are wired or removed.
 #:
@@ -25,25 +31,24 @@ _TOOL_PATH = _REPO_ROOT / "tools" / "idle_surface_report.py"
 #: proxy, which reported 600 rows of which 469 had a caller in their own
 #: defining file.
 #:
-#: Re-pinned down from 206 by dropping four functions nothing reached:
-#: ``mode_key_rows`` (superseded by ``mode_key_rows_active``),
-#: ``validate_envelope_path`` (its one would-be caller reads the file
-#: itself), and the unused ``validate_or_raise`` / ``now_iso`` helpers.
+#: 204 is not comparable either, for two reasons. It predates counting
+#: ``tools/`` call sites, which alone settles five rows (``run_census`` and
+#: friends are driven by repo scripts this reporter's source root cannot see).
+#: And it went stale: the measurement had already drifted to 233 while the
+#: literal stayed at 204, so the ratchet was red rather than holding. The
+#: surface behind that drift is UI and epoch-2 native substrate whose producers
+#: are still being written; each lands with its own row, and this number comes
+#: down with them.
 #:
 #: What still counts is epoch-2 substrate whose producers have not landed:
 #: ``compact_terminal_task`` / ``recover_store_tree``
 #: (``kernel/store/compaction.py``), ``append_correction``
 #: (``kernel/store/ledger.py``), ``apply_transition``
-#: (``workflow/lifecycle/epoch2.py``), ``ambiguity_label`` /
-#: ``render_state_diagram`` (``kernel/state/epoch2/transitions.py``) and
-#: ``validation_rule_payload`` (``kernel/migration/epoch2/validation.py``).
-#: The staged importer, the recovery leg and the epoch-2 mutators are what
-#: call them; lower this again as each producer lands.
-#:
-#: One row is a measurement artifact rather than idle surface:
-#: ``run_census`` is driven by ``tools/ea_commit_census.py``, which this
-#: reporter's ``src/eawf`` source root cannot see.
-IDLE_CEILING = 204
+#: (``workflow/lifecycle/epoch2.py``) and ``ambiguity_label`` /
+#: ``statuses_of`` (``kernel/state/epoch2/transitions.py``). The staged
+#: importer, the recovery leg and the epoch-2 mutators are what call them;
+#: lower this again as each producer lands.
+IDLE_CEILING = 227
 
 
 def _load_tool() -> Any:
@@ -177,14 +182,39 @@ def test_unparsable_module_raises(tool: Any, tmp_path: Path) -> None:
 def test_main_exits_one_when_the_ceiling_is_exceeded(tool: Any, tmp_path: Path) -> None:
     """The ratchet is the exit code, so a rise fails the gate."""
     (tmp_path / "lonely.py").write_text("def never_called() -> int:\n    return 1\n", "utf-8")
-    argv = ["idle_surface_report.py", "--source-root", str(tmp_path), "--ceiling", "0"]
+    argv = [
+        "idle_surface_report.py",
+        "--source-root",
+        str(tmp_path),
+        "--caller-root",
+        str(tmp_path),
+        "--ceiling",
+        "0",
+    ]
     assert tool.main(argv) == 1
 
 
 def test_main_exits_zero_at_the_ceiling(tool: Any, tmp_path: Path) -> None:
     """A count equal to the ceiling passes; only a rise above it fails."""
     (tmp_path / "lonely.py").write_text("def never_called() -> int:\n    return 1\n", "utf-8")
-    argv = ["idle_surface_report.py", "--source-root", str(tmp_path), "--ceiling", "1"]
+    argv = [
+        "idle_surface_report.py",
+        "--source-root",
+        str(tmp_path),
+        "--caller-root",
+        str(tmp_path),
+        "--ceiling",
+        "1",
+    ]
+    assert tool.main(argv) == 0
+
+
+def test_main_counts_the_default_caller_root(tool: Any, tmp_path: Path) -> None:
+    """With no flag the repo's ``tools/`` tree supplies call sites."""
+    source = "def run_census() -> int:\n    return 1\n"
+    (tmp_path / "census.py").write_text(source, "utf-8")
+    argv = ["idle_surface_report.py", "--source-root", str(tmp_path), "--ceiling", "0"]
+
     assert tool.main(argv) == 0
 
 
@@ -212,19 +242,85 @@ def test_does_not_flag_framework_decorated_handlers(tool: Any, tmp_path: Path) -
     assert tool.find_idle_functions(tmp_path) == []
 
 
+def test_a_caller_root_reference_settles_a_source_function(tool: Any, tmp_path: Path) -> None:
+    """A repo script is a production caller, so its call site counts."""
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    (source_root / "census.py").write_text("def census() -> int:\n    return 1\n", "utf-8")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "run.py").write_text("from census import census\n\ncensus()\n", "utf-8")
+
+    assert tool.find_idle_functions(source_root, caller_roots=[scripts]) == []
+    assert [name for name, _ in tool.find_idle_functions(source_root)] == ["census"]
+
+
+def test_a_caller_root_definition_is_not_reported(tool: Any, tmp_path: Path) -> None:
+    """A script's own helper is not shipped surface, so it is never a row."""
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    (source_root / "empty.py").write_text("", "utf-8")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "helper.py").write_text("def script_only() -> int:\n    return 1\n", "utf-8")
+
+    assert tool.find_idle_functions(source_root, caller_roots=[scripts]) == []
+
+
+def test_an_empty_caller_root_changes_nothing(tool: Any, tmp_path: Path) -> None:
+    """A root with no modules is not an error; it supplies no references."""
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    (source_root / "lonely.py").write_text("def orphan() -> int:\n    return 1\n", "utf-8")
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+
+    idle = tool.find_idle_functions(source_root, caller_roots=[scripts])
+
+    assert [name for name, _ in idle] == ["orphan"]
+
+
+def test_a_missing_caller_root_raises(tool: Any, tmp_path: Path) -> None:
+    """A root that scans as empty would report wired functions as idle."""
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+
+    with pytest.raises(NotADirectoryError, match="caller root is not a directory"):
+        tool.find_idle_functions(source_root, caller_roots=[tmp_path / "absent"])
+
+
+def test_an_unparsable_caller_root_module_raises(tool: Any, tmp_path: Path) -> None:
+    """A broken script must fail loudly rather than contribute no references."""
+    source_root = tmp_path / "src"
+    source_root.mkdir()
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "broken.py").write_text("def oops(\n", "utf-8")
+
+    with pytest.raises(SyntaxError):
+        tool.find_idle_functions(source_root, caller_roots=[scripts])
+
+
+def test_repo_run_census_is_not_idle_once_tools_counts(tool: Any) -> None:
+    """``run_census`` is driven by a ``tools/`` script, so it is wired."""
+    idle = {name for name, _ in tool.find_idle_functions(_SOURCE_ROOT, caller_roots=_CALLER_ROOTS)}
+
+    assert "run_census" not in idle
+
+
 def test_flags_the_known_unwired_renderer(tool: Any) -> None:
     """The real defect: ``render_intent_line`` is written but never called.
 
     It renders a project's problem / desired-outcome pair, which is why the
     rendered AGENTS.md carries no project description at all.
     """
-    idle = {name for name, _ in tool.find_idle_functions(_REPO_ROOT / "src" / "eawf")}
+    idle = {name for name, _ in tool.find_idle_functions(_SOURCE_ROOT, caller_roots=_CALLER_ROOTS)}
     assert "render_intent_line" in idle
 
 
 def test_repo_idle_surface_stays_within_ceiling(tool: Any) -> None:
     """Idle surface does not grow. Lower :data:`IDLE_CEILING` when it shrinks."""
-    idle = tool.find_idle_functions(_REPO_ROOT / "src" / "eawf")
+    idle = tool.find_idle_functions(_SOURCE_ROOT, caller_roots=_CALLER_ROOTS)
     assert len(idle) <= IDLE_CEILING, (
         f"{len(idle)} idle public functions exceeds the {IDLE_CEILING} ceiling; "
         "wire the new surface to a caller or drop it"

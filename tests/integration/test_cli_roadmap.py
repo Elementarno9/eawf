@@ -353,7 +353,9 @@ def test_roadmap_revise_add_wave(workspace: Path) -> None:
             "--files",
             "src/",
             "--success",
-            "criterion1,criterion2",
+            "first legacy criterion text",
+            "--success",
+            "second legacy criterion text",
             "--criteria-floor-waiver",
             "test fixture models legacy success strings",
             "--agent-role",
@@ -373,7 +375,10 @@ def test_roadmap_revise_add_wave(workspace: Path) -> None:
     assert "P21-I01-W01" in state["waves"]
     assert state["waves"]["P21-I01-W01"]["title"] == "Foo handling"
     stored_criteria = state["waves"]["P21-I01-W01"]["success_criteria"]
-    assert [c["text"] for c in stored_criteria] == ["criterion1", "criterion2"]
+    assert [c["text"] for c in stored_criteria] == [
+        "first legacy criterion text",
+        "second legacy criterion text",
+    ]
     assert all(c["kind"] == "legacy" for c in stored_criteria)
 
 
@@ -870,7 +875,9 @@ def test_roadmap_apply_approve_passes_when_every_step_covered(workspace: Path) -
             "--effort-bucket",
             "M",
             "--success",
-            "implement parser tokeniser module,wire telemetry dashboard exporter",
+            "implement parser tokeniser module",
+            "--success",
+            "wire telemetry dashboard exporter",
             "--criteria-floor-waiver",
             "test fixture models legacy success strings",
             "--intent-problem",

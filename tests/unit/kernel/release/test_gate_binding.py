@@ -125,7 +125,7 @@ def test_readiness_projection_is_derived_from_the_authored_table() -> None:
 
 
 def test_readiness_projection_covers_every_authored_profile() -> None:
-    bindings = gate_bindings_for(ReleaseGateProfile.DEV2)
+    bindings = gate_bindings_for(ReleaseGateProfile.NATIVE_CANARY)
     projected = {gate: binding.required_signal for gate, binding in bindings.items()}
     assert projected == GATE_SIGNAL_BINDINGS
 
@@ -157,13 +157,13 @@ def test_load_rejects_a_duplicate_gate_binding() -> None:
 
 def test_load_rejects_an_undeclared_profile() -> None:
     with pytest.raises(GateBindingError) as excinfo:
-        load_gate_bindings(DEV1_GATE_BINDINGS_YAML, profile=ReleaseGateProfile.STABLE)
+        load_gate_bindings(DEV1_GATE_BINDINGS_YAML, profile=ReleaseGateProfile.PRODUCT_CANARY)
     assert excinfo.value.code is GateBindingRejection.UNDECLARED_PROFILE
 
 
 def test_profile_gates_rejects_an_undeclared_profile() -> None:
     with pytest.raises(GateBindingError) as excinfo:
-        profile_gates(ReleaseGateProfile.NATIVE_CANARY)
+        profile_gates(ReleaseGateProfile.PRODUCT_CANARY)
     assert excinfo.value.code is GateBindingRejection.UNDECLARED_PROFILE
 
 

@@ -222,9 +222,10 @@ _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 #: campaign-fork channels the FA8 auto-run cockpit shares with the wave cockpit
 #: (one grammar): ``o`` (add-question) appends an :class:`OpenQuestion` row to
 #: the scope, ``t`` (queue-note) queues an operator note for the campaign's
-#: next round, ``b`` (broadcast) fans a notice to every running round of the
-#: campaign, and ``v`` (override) forces an operator verdict onto the blocking
-#: fork. All four RPCs are live (P30-I18-W02 add-question + W04 steer /
+#: next round, ``b`` (broadcast) records a notice on the campaign's channel --
+#: recorded and never reaching a running round, since no fan-out re-prompts a
+#: live researcher -- and ``v`` (override) forces an operator verdict onto the
+#: blocking fork. All four RPCs are live (P30-I18-W02 add-question + W04 steer /
 #: broadcast / override): each key collects its text through a modal and routes
 #: the committed note off the UI thread, surfacing the daemon's honest sent /
 #: rejected result rather than fabricating a row, a queued note, a broadcast,
@@ -3307,16 +3308,19 @@ class ResearchBoardModeScreen(ScopeScreen):
         )
 
     def action_broadcast(self) -> None:
-        """Open the broadcast modal; commit fans a notice to every running round.
+        """Open the broadcast modal; commit records a notice on the channel.
 
-        The ``b`` operator-channel key broadcasts an operator notice across the
-        campaign's running rounds (the balanced-autonomy notice-broadcast channel
-        the campaign cockpit shares with the wave cockpit). Pushes a one-field
-        :class:`OperatorNoteModal` collecting the notice; ``Esc`` cancels (the
-        callback receives ``None`` and issues zero RPCs). A committed notice
-        routes off the UI thread to the live ``research.broadcast`` RPC
-        (P30-I18-W04) against the selected campaign, surfacing the daemon's
-        honest sent / rejected result rather than implying a broadcast landed.
+        The ``b`` operator-channel key records an operator notice on the
+        campaign's channel (the balanced-autonomy notice-broadcast channel the
+        campaign cockpit shares with the wave cockpit). The notice is recorded
+        and never reaches a running round: nothing re-prompts a live
+        researcher, so it surfaces on the next round record's steer notes.
+        Pushes a one-field :class:`OperatorNoteModal` collecting the notice;
+        ``Esc`` cancels (the callback receives ``None`` and issues zero RPCs).
+        A committed notice routes off the UI thread to the live
+        ``research.broadcast`` RPC (P30-I18-W04) against the selected campaign,
+        surfacing the daemon's honest sent / rejected result rather than
+        implying a broadcast landed.
         """
         modal = OperatorNoteModal(
             title="broadcast a notice",
