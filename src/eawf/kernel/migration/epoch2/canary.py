@@ -40,12 +40,16 @@ logger = logging.getLogger(__name__)
 
 
 #: The file a tree carries to declare that an apply may write into it.
+#: It is never committed: a clone that inherited it would be disposable
+#: without its new owner saying so, so each checkout declares for itself.
 CANARY_DECLARATION_FILENAME: Final = "epoch2-disposable-canary.json"
 
 #: The directory inside the target that holds every generation, the
-#: selection pointer, the epoch marker and the cutover journal. One new
-#: directory rather than four new files keeps the surface the commit
-#: policy has to classify down to a single row.
+#: selection pointer, the epoch marker and the cutover journal. One
+#: directory keeps the cutover's footprint in one place, but the commit
+#: policy still classifies it file family by file family: a clone needs
+#: the pointer, the marker and each generation's document and ledgers,
+#: and none of the indexes, staging builds, restore copies or journal.
 GENERATIONS_DIRNAME: Final = "generations"
 
 #: The append-only journal recording how far one apply got.

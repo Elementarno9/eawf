@@ -342,12 +342,21 @@ def test_tag_preflight_probes_pass_on_a_publishable_checkout(tmp_path: Path) -> 
         assert statuses[signal] is ReleaseSignalStatus.PASS, signal
 
 
-def test_tag_preflight_leaves_producerless_signals_unavailable(tmp_path: Path) -> None:
+def test_tag_preflight_leaves_producerless_signals_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A signal with no producer stays unproven rather than reading green.
 
     ``credentials`` is no longer in this set: it has a producer, so an
     absent handle is a FAIL it can name rather than a gap it cannot see.
+
+    The tag probes leave the receipt rows to the default probes, which read
+    ``dist/release-receipts`` under the working directory; running from an
+    empty one keeps the no-receipt precondition true in any checkout.
     """
+    empty_cwd = tmp_path / "cwd"
+    empty_cwd.mkdir()
+    monkeypatch.chdir(empty_cwd)
     statuses = _sweep(_ready_inputs(_init_published_repo(tmp_path)))
     assert statuses[ReleaseSignalName.DEPENDENCIES] is ReleaseSignalStatus.UNAVAILABLE
     assert statuses[ReleaseSignalName.ARTIFACTS] is ReleaseSignalStatus.UNAVAILABLE

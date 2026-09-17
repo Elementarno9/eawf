@@ -83,6 +83,19 @@ CLAUDE.md
 # Per-wave spec renders. The typed criteria and gates in state.json are the
 # durable record, so a committed spec would be a second copy to keep in sync.
 .ea/specs/
+# Epoch-2 generation tree. A clone needs the selection pointer, the epoch
+# marker and each generation's state.json and ledger/*.jsonl, so those stay
+# committed. The rest is one machine's cutover scratch: the indexes
+# regenerate from the ledgers, the staging dirs are half-built generations,
+# restore/ copies the firehose and telemetry out of the epoch-1 tree, and
+# the cutover journal carries free-text detail about one machine's run.
+.ea/generations/gen-*/indexes/
+.ea/generations/.staging-*/
+.ea/generations/restore/
+.ea/generations/journal.jsonl
+# The canary declaration names who declared the tree throwaway. A clone
+# that inherited it would accept an apply its new owner never agreed to.
+.ea/epoch2-disposable-canary.json
 .ea/instrument-probe.json
 # instrument-probe cache embeds absolute host paths; the bare glob covers
 # nested copies a doctor / skill run may write under a resolved state dir

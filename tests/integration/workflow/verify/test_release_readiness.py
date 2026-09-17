@@ -25,6 +25,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -84,7 +85,12 @@ def _all_passing() -> dict[ReleaseSignalName, ReleaseSignalProbe]:
 # ---------------------------------------------------------------------------
 
 
-def test_release_readiness_reports_every_signal_without_probes() -> None:
+def test_release_readiness_reports_every_signal_without_probes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The receipt probes read dist/release-receipts under the working
+    # directory, so an empty one keeps "none written" true in any checkout.
+    monkeypatch.chdir(tmp_path)
     readiness = compute_readiness(_config(), computed_at=_NOW)
     assert len(readiness.signals) == len(ReleaseSignalName)
     assert [row.signal for row in readiness.signals] == list(ReleaseSignalName)

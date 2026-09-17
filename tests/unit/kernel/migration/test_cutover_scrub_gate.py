@@ -32,7 +32,7 @@ from eawf.kernel.migration.epoch2.scrub import (
     scan_staged_tree,
     scan_text,
 )
-from eawf.surfaces.cli.commands.hook import _is_placeholder_path
+from eawf.observability.logging.state_leak import is_placeholder_path
 
 pytestmark = pytest.mark.unit
 
@@ -221,7 +221,7 @@ def test_placeholder_exemption_agrees_with_the_repository_lint() -> None:
     )
 
     for sample in samples:
-        assert is_documented_placeholder(sample) == _is_placeholder_path(sample)
+        assert is_documented_placeholder(sample) == is_placeholder_path(sample)
 
 
 def test_the_anchors_are_the_scrubbers_own_patterns() -> None:

@@ -200,6 +200,55 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         tier=StorageTier.DERIVED,
     ),
     _row(
+        ".ea/generations/selected.json",
+        _YES,
+        "the pointer naming the epoch-2 generation a clone reads from",
+    ),
+    _row(
+        ".ea/generations/EPOCH2_ACTIVE.json",
+        _YES,
+        "the epoch marker; without it a clone would read the tree as epoch 1",
+    ),
+    _row(
+        ".ea/generations/gen-*/state.json",
+        _YES,
+        "one generation's compare-and-swap document of work in flight",
+        tier=StorageTier.DOCUMENT,
+    ),
+    _row(
+        ".ea/generations/gen-*/ledger/*.jsonl",
+        _YES,
+        "one generation's append-only history; a line is never rewritten",
+        tier=StorageTier.LEDGER,
+    ),
+    _row(
+        ".ea/generations/gen-*/indexes/**",
+        _NO,
+        "one generation's offset indexes; they regenerate from its ledgers",
+        tier=StorageTier.DERIVED,
+    ),
+    _row(
+        ".ea/generations/.staging-*/**",
+        _NO,
+        "half-built generations an apply compares and then publishes or discards",
+    ),
+    _row(
+        ".ea/generations/restore/**",
+        _NO,
+        "pre-cutover copies of the authority files, firehose and telemetry included; "
+        "git history already holds the committed originals",
+    ),
+    _row(
+        ".ea/generations/journal.jsonl",
+        _NO,
+        "how far one machine's cutover got; its free-text detail stays local",
+    ),
+    _row(
+        ".ea/epoch2-disposable-canary.json",
+        _NO,
+        "names who declared this tree throwaway; a clone must declare that for itself",
+    ),
+    _row(
         ".ea/rules/views/**",
         _NO,
         "per-runtime rule renders; the authored corpus is the source",
