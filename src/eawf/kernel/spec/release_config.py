@@ -204,6 +204,9 @@ class ReleaseTargetConfig(_StrictModel):
             before the field existed still loads; the manifest freeze
             refuses a target that declares none, because an identity
             invented at freeze time is an identity nobody configured.
+            The value feeds the frozen manifest digest, so editing one
+            re-digests every manifest frozen from it, including any an
+            approved record already pins.
         observe_adapter: Adapter the target is independently read back
             through. Mandatory: a target with no observer can report
             success but can never be observed, so the release could

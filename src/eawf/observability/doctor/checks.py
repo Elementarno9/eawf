@@ -1364,6 +1364,7 @@ def run_all(
     location (:func:`_resolve_probe_cache_path`) so probing never litters an
     ``instrument-probe.json`` into an arbitrary anchor directory.
     """
+    from eawf.observability.doctor.runtime_health import run_runtime_tuple_health_checks
     from eawf.observability.doctor.workflow_health import run_workflow_health_checks
 
     anchor = _resolve_anchor(workspace)
@@ -1386,10 +1387,8 @@ def run_all(
         check_manifest_in_sync(workspace=anchor),
         check_mcp_drift(workspace=anchor),
         check_state_scale_ceiling(workspace=anchor),
-        *run_workflow_health_checks(
-            workspace=anchor,
-            daemon_version_probe=daemon_version_probe,
-        ),
+        *run_workflow_health_checks(workspace=anchor, daemon_version_probe=daemon_version_probe),
+        *run_runtime_tuple_health_checks(workspace=anchor),
         check_incident_fold_parity(workspace=anchor),
         check_backlog_fold_parity(workspace=anchor),
         check_launchd_agent(),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
+from eawf.kernel.runtime.certification import ConformanceStageRecord
 from eawf.kernel.spec.publication import PublicationOperation
 from eawf.kernel.spec.release import Release
 from eawf.kernel.state.enums import StoreKind
@@ -76,6 +77,11 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     # Receipts and advances are the two facts the train walks on. Each
     # keeps its own kind because each is read back on its own: receipts
     # by checkpoint and gate, advances by train.
+    # One conformance stage, filed under the digest of the runtime tuple
+    # it ran for. The envelope carries the tuple; the payload carries only
+    # what the stage concluded, so a stage record is the same shape here
+    # as it is inside the certification that cites it.
+    StoreKind.CONFORMANCE_STAGE: ConformanceStageRecord,
     StoreKind.RELEASE_CHECKPOINT_RECEIPT: CheckpointGateReceipt,
     StoreKind.RELEASE_TRAIN_ADVANCE: TrainAdvanceRecord,
 }

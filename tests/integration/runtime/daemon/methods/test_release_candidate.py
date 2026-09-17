@@ -92,6 +92,38 @@ RECEIPTS: dict[str, dict[str, Any]] = {
 }
 
 
+#: The manifest digest the approved ``dev2`` record pins, bare hex. Three
+#: things feed it -- the configured registry identities, the rule that
+#: picks each kind's filenames, and the digest recipe itself -- and an
+#: edit to any of them would leave that approval pinning a manifest
+#: nothing can recompute, silently. Hence the standing reproduction.
+APPROVED_DEV2_MANIFEST_SHA = (
+    "3ea0e1250281a90d1840583cbd92c2751fc1c99b9d9f1824e69f740ea9c9e148"  # pragma: allowlist secret
+)
+
+#: sha256 of each file the three dev2 publish jobs really uploaded, bare
+#: hex so the allowlist pragma fits the line. The ``sha256:`` prefix the
+#: receipt model wants is added in :func:`write_published_receipts`.
+PUBLISHED_WHEEL_SHA = (
+    "d03753d6be17812e68621d2bb0ca1afef5dd07ef0148848c8ab14f239b998da5"  # pragma: allowlist secret
+)
+PUBLISHED_SDIST_SHA = (
+    "51218682f4581294f7c0ab1a78ba846b31fee3222b73349402aa985a05a12b78"  # pragma: allowlist secret
+)
+PUBLISHED_TARBALL_SHA = (
+    "61918412ca618f73dbae226a4777d44640110314bf9f3c2d07129a345bedbd8c"  # pragma: allowlist secret
+)
+PUBLISHED_NOTES_SHA = (
+    "135a7b960942be9cd3018e6e199a035356d20a1e2220b8fefb348f4dc31ed305"  # pragma: allowlist secret
+)
+PUBLISHED_CHECKSUMS_SHA = (
+    "d942badab2f0ada88cd4c0e8c31a0e0376686cdefdb0208b363aedd622e70afc"  # pragma: allowlist secret
+)
+PUBLISHED_BUNDLE_SHA = (
+    "6d89424461e18b8fea4b23f5877722b7d40bbe0ce4d4af57e94f6e83354b99e9"  # pragma: allowlist secret
+)
+
+
 def dev2_config() -> ReleaseConfig:
     """Return the authored dev2 checkpoint configuration."""
     return load_release_config(checkpoint_config_yaml(DEV2), train=V07_TRAIN)
@@ -129,6 +161,63 @@ def write_receipts(directory: Path, *, omit: str = "", version: str = "") -> Pat
         payload = dict(body)
         if version:
             payload["version"] = version
+        (directory / f"publication-receipt-{target_id}.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+    return directory
+
+
+def write_published_receipts(directory: Path) -> Path:
+    """Write the receipts the real dev2 publish jobs left, and return *directory*.
+
+    Filenames and digests are what those jobs actually uploaded, so a
+    freeze over them reproduces the manifest the approved record pins
+    rather than a shape-alike of it. The two PyPI attestations keep
+    placeholder digests: they are excluded from the artifact set by
+    design, so a real digest there would suggest they matter.
+
+    Args:
+        directory: Where the three receipt files land.
+
+    Returns:
+        *directory*, created if needed.
+    """
+    published: dict[str, dict[str, Any]] = {
+        "pypi": {
+            "target_id": "pypi",
+            "version": DEV2,
+            "job_conclusion": "success",
+            "run_id": "35119940687",
+            "artifact_digests": {
+                f"eawf-{DEV2}-py3-none-any.whl": f"sha256:{PUBLISHED_WHEEL_SHA}",
+                f"eawf-{DEV2}-py3-none-any.whl.publish.attestation": f"sha256:{'2' * 64}",
+                f"eawf-{DEV2}.tar.gz": f"sha256:{PUBLISHED_SDIST_SHA}",
+                f"eawf-{DEV2}.tar.gz.publish.attestation": f"sha256:{'4' * 64}",
+            },
+        },
+        "npm": {
+            "target_id": "npm",
+            "version": "0.7.0-dev.2",
+            "job_conclusion": "success",
+            "run_id": "35119940584",
+            "artifact_digests": {
+                "elementarno-eawf-0.7.0-dev.2.tgz": f"sha256:{PUBLISHED_TARBALL_SHA}",
+            },
+        },
+        "github": {
+            "target_id": "github",
+            "version": DEV2,
+            "job_conclusion": "success",
+            "run_id": "35119940584",
+            "artifact_digests": {
+                "RELEASE_NOTES.md": f"sha256:{PUBLISHED_NOTES_SHA}",
+                "SHA256SUMS": f"sha256:{PUBLISHED_CHECKSUMS_SHA}",
+                f"eawf-plugin-{DEV2}.tar.gz": f"sha256:{PUBLISHED_BUNDLE_SHA}",
+            },
+        },
+    }
+    directory.mkdir(parents=True, exist_ok=True)
+    for target_id, payload in published.items():
         (directory / f"publication-receipt-{target_id}.json").write_text(
             json.dumps(payload), encoding="utf-8"
         )
@@ -354,6 +443,15 @@ def test_candidate_refuses_an_unknown_param(repo: Path) -> None:
 
 
 # --- the library contracts ---------------------------------------------------
+
+
+def test_freeze_manifest_reproduces_the_digest_the_dev2_approval_pinned(tmp_path: Path) -> None:
+    """The approved pin must stay reachable from configuration and receipts."""
+    manifest = freeze_manifest(
+        dev2_config(), receipts_dir=write_published_receipts(tmp_path / "published")
+    )
+
+    assert manifest.digest == f"sha256:{APPROVED_DEV2_MANIFEST_SHA}"
 
 
 def test_freeze_manifest_refuses_a_target_with_no_configured_identity(tmp_path: Path) -> None:

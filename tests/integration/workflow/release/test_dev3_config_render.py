@@ -14,10 +14,21 @@ refs, the configuration loads. Resolved without them, it is refused with
 ``invalid_membership_cardinality`` rather than loading a checkpoint that
 claims a canary Milestone nobody named.
 
-The last test is a regression guard rather than a claim about ``dev3``:
-the ``dev2`` configuration text the approved record was swept against
-must come out of this wave byte-identical, because a rendered document
-that shifted under an approval would invalidate the sweep that read it.
+The last three tests are a regression guard rather than a claim about
+``dev3``. A rendered document that shifted under an approval would
+invalidate the sweep that read it, so the ``dev2`` text stays pinned --
+but no longer byte-identical to the document the approval was swept
+against, and that narrowing is deliberate. The manifest freeze reads
+each target's registry identity off the configuration, and the ``dev2``
+approval pins a manifest carrying all three identities, so the field has
+to be present at this rung: a ``dev2`` configuration without it cannot
+freeze its own approved manifest at all.
+
+What replaces the byte pin is narrower and says more. The identity lines
+are the *only* difference from the approved document, which the middle
+test proves by removing them and recovering the approved digest exactly.
+Everything the sweep read is therefore still frozen; what moved is one
+additive field the sweep never looked at.
 """
 
 from __future__ import annotations
@@ -54,13 +65,29 @@ DEV4_VERSION = "0.7.0.dev4"
 #: The acceptance bundle a ``dev3`` record names.
 MEMBERSHIP_REF = "milestone://epoch2/native-canary"
 
-#: sha256 of the rendered ``dev2`` configuration text as it stood before
-#: this wave. The ``dev2`` record was approved against a sweep that read
-#: this exact document, so the digest is pinned rather than recomputed:
-#: a render that shifted under the approval would silently invalidate it.
+#: sha256 of the rendered ``dev2`` configuration text as it stands now.
+#: Pinned rather than recomputed, so a later edit to the train template
+#: has to come through here and say what it moved.
 DEV2_CONFIG_DIGEST = (
+    "5e3d6dd2f93d7510e57624c6b1280dab43b02cdaca745d45a8ff1e0523651a38"  # pragma: allowlist secret
+)
+
+#: sha256 of that same text with the target ``identity`` lines removed,
+#: which is the document the ``dev2`` record was approved against. The
+#: two digests together localise any drift: a moved identity trips only
+#: the first, anything else trips both.
+DEV2_CONFIG_AS_APPROVED_DIGEST = (
     "d9a94643dd08786c92a99fa6a89d0ba8aab8bd29f8b773aeee2facfa09102f3f"  # pragma: allowlist secret
 )
+
+#: The registry identity each ``dev2`` target is observed against. These
+#: three names are inputs to the frozen manifest the approved record
+#: pins, so they are values rather than presence checks.
+DEV2_TARGET_IDENTITIES = {
+    "pypi": "eawf",
+    "npm": "@elementarno/eawf",
+    "github": "Elementarno9/eawf",
+}
 
 
 def dev3_record(**overrides: Any) -> Release:
@@ -180,6 +207,39 @@ def test_with_membership_refs_rejects_a_document_with_no_release_block() -> None
 # --- the dev2 text the approved record was swept against -------------
 
 
-def test_rendered_dev2_config_keeps_its_pre_wave_digest() -> None:
+def without_identity_lines(config_text: str) -> str:
+    """Return *config_text* with every target ``identity`` line dropped.
+
+    Args:
+        config_text: Rendered checkpoint configuration YAML.
+
+    Returns:
+        The same text minus the identity rows, which is the document as
+        it stood before the field existed. Any other added field stays,
+        so the caller's equality still fails on it.
+    """
+    return "".join(
+        line
+        for line in config_text.splitlines(keepends=True)
+        if not line.lstrip().startswith("identity:")
+    )
+
+
+def test_rendered_dev2_config_keeps_its_pinned_digest() -> None:
     digest = hashlib.sha256(DEV2_RELEASE_CONFIG_YAML.encode("utf-8")).hexdigest()
     assert digest == DEV2_CONFIG_DIGEST
+
+
+def test_rendered_dev2_config_moved_only_by_its_target_identities() -> None:
+    """Drop the identity lines and the approved document comes back."""
+    as_approved = without_identity_lines(DEV2_RELEASE_CONFIG_YAML)
+    digest = hashlib.sha256(as_approved.encode("utf-8")).hexdigest()
+    assert digest == DEV2_CONFIG_AS_APPROVED_DIGEST
+
+
+def test_rendered_dev2_config_declares_the_identity_of_every_target() -> None:
+    """Without these the rung could not freeze the manifest it approved."""
+    config = parse_release_config(DEV2_RELEASE_CONFIG_YAML)
+    assert {target.target_id: target.identity for target in config.targets} == (
+        DEV2_TARGET_IDENTITIES
+    )
