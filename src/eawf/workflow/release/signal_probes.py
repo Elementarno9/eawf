@@ -24,6 +24,21 @@ therefore produced in CI and *read back* from the receipts named in
 write leaves its row ``unavailable`` naming the job, which is the
 honest reading -- an absent producer is not a passing check.
 
+``provider`` and ``membership`` join them for the same reason one level
+further out. Their producers are the daemon-owned conformance runner and
+the disposable canary a Milestone was accepted in, and neither of those
+is reachable from the checkout a sweep runs against: the runner writes
+into a daemon's own store and the canary is a throwaway repository. What
+the checkout carries is the *export* of both, read back through
+:mod:`eawf.workflow.evidence.provider_certification`.
+
+The two rows treat an absent export differently, and the asymmetry is
+deliberate. The advertised runtime set lives in the export, so an absent
+export advertises nothing and the ``provider`` row is ``unavailable``.
+The acceptance bundles live in the checkpoint *configuration*, so an
+absent export leaves a declaration standing with nothing behind it, and
+the ``membership`` row fails.
+
 The receipt probes are not defaults. They read one checkout's receipts,
 and a default has no checkout to name but the process's working
 directory, which is whatever directory the daemon happened to start in.
@@ -47,6 +62,17 @@ from eawf.kernel.release.signals import (
     ReleaseSignalStatus,
 )
 from eawf.kernel.spec.release_config import ReleasePlatformClaim
+from eawf.workflow.evidence.provider_certification import (
+    CANARY_EVIDENCE_DIR,
+    CANARY_EVIDENCE_FILENAME,
+    CanaryEvidence,
+    load_canary_evidence,
+    membership_evidence_refs,
+    membership_findings,
+    provider_evidence_refs,
+    provider_findings,
+    summarise_findings,
+)
 from eawf.workflow.release.dependencies import (
     ComponentOutcome,
     DependencyInventoryInputs,
@@ -256,18 +282,192 @@ def artifacts_probe(
     )
 
 
+def _export_location() -> str:
+    """Return the repo-relative location the canary evidence export is read from."""
+    return "/".join((*CANARY_EVIDENCE_DIR, CANARY_EVIDENCE_FILENAME))
+
+
+def _unreadable_export(exc: ValueError) -> ReleaseSignalOutcome:
+    """Return the outcome for an export that is present and does not parse.
+
+    Args:
+        exc: What the loader refused the document with.
+
+    Returns:
+        A ``fail`` outcome. An unreadable export is not an absent one:
+        something was committed as evidence and cannot be read, which is
+        a defect in the evidence rather than a missing producer.
+    """
+    return ReleaseSignalOutcome(
+        status=ReleaseSignalStatus.FAIL,
+        remediation=(
+            f"the canary evidence export at {_export_location()} does not read back: {exc}; "
+            f"re-export the conformance records rather than editing the document by hand"
+        ),
+    )
+
+
+def _read_export(repo_root: Path) -> tuple[CanaryEvidence | None, ReleaseSignalOutcome | None]:
+    """Return the committed export of *repo_root*, or the outcome that replaces it.
+
+    Args:
+        repo_root: Checkout the export was committed in.
+
+    Returns:
+        ``(evidence, None)`` when an export loads, ``(None, outcome)``
+        when it is present and unreadable, and ``(None, None)`` when no
+        export is committed -- which the two rows read differently.
+    """
+    try:
+        return load_canary_evidence(repo_root), None
+    except ValueError as exc:
+        return None, _unreadable_export(exc)
+
+
+def provider_probe(
+    context: ReleaseSignalContext,
+    *,
+    repo_root: Path,
+) -> ReleaseSignalOutcome:
+    """Return the ``provider`` verdict from the committed certification export.
+
+    The row passes only when every runtime tuple the export advertises
+    carries a runner-written certification that earned itself: a passed
+    ``certify`` stage on the contiguous ``probe`` and ``canary`` before
+    it, a ``verified`` record over an installation that is not
+    quarantined, and a ``verified`` row for every capability the claim
+    requires. An advertised tuple backed by a run log and nothing else
+    fails like one backed by nothing at all, because a run log records
+    that the binary ran rather than that the contract holds.
+
+    Args:
+        context: The signal request, carrying the loaded configuration.
+        repo_root: Checkout the export is read from.
+
+    Returns:
+        ``unavailable`` when no export is committed or it advertises no
+        tuple, ``fail`` naming every gap otherwise, and ``pass`` citing
+        each certification's URN when nothing is outstanding.
+    """
+    evidence, refused = _read_export(repo_root)
+    if refused is not None:
+        return refused
+    if evidence is None:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.UNAVAILABLE,
+            remediation=(
+                f"no conformance certification export is committed at {_export_location()}, "
+                f"so no runtime tuple is advertised; run the conformance probe, canary and "
+                f"certify stages and export their records, or drop the provider gate"
+            ),
+        )
+    if not evidence.advertised:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.UNAVAILABLE,
+            remediation=(
+                f"the export at {_export_location()} advertises no runtime tuple, so the "
+                f"provider claim is empty; advertise the tuples this checkpoint ships or "
+                f"drop the provider gate"
+            ),
+        )
+    findings = provider_findings(evidence)
+    refs = provider_evidence_refs(evidence)
+    if findings:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.FAIL,
+            remediation=(
+                f"{len(findings)} advertised runtime claim(s) are not backed by a "
+                f"runner-written certification: {summarise_findings(findings)}"
+            ),
+            evidence_refs=refs,
+        )
+    logger.info(
+        f"provider_probe release_key={context.config.release_key!r} "
+        f"advertised={len(evidence.advertised)} certified={len(refs)}"
+    )
+    return ReleaseSignalOutcome(status=ReleaseSignalStatus.PASS, evidence_refs=refs)
+
+
+def membership_probe(
+    context: ReleaseSignalContext,
+    *,
+    repo_root: Path,
+) -> ReleaseSignalOutcome:
+    """Return the ``membership`` verdict for the checkpoint's acceptance bundles.
+
+    The row passes only when every ``membership_ref`` the configuration
+    declares resolves to a COMPLETED Milestone recorded in a canary the
+    export declares. A reference that resolves to nothing, to a Milestone
+    that has not finished, or to one recorded outside a declared canary
+    leaves the row red, because each of those is a bundle the checkpoint
+    claimed and cannot show accepted.
+
+    Args:
+        context: The signal request, carrying the loaded configuration.
+        repo_root: Checkout the export is read from.
+
+    Returns:
+        ``unavailable`` when the checkpoint declares no bundle -- which is
+        every rung before ``dev3`` -- ``fail`` naming every unresolved or
+        unfinished bundle, and ``pass`` citing each accepted Milestone
+        otherwise.
+    """
+    declared = context.config.membership_refs
+    if not declared:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.UNAVAILABLE,
+            remediation=(
+                "the checkpoint declares no membership_refs, so there is no acceptance "
+                "bundle to resolve; declare the canary Milestone bundles this checkpoint "
+                "accepts, or drop the membership gate from the profile"
+            ),
+        )
+    evidence, refused = _read_export(repo_root)
+    if refused is not None:
+        return refused
+    if evidence is None:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.FAIL,
+            remediation=(
+                f"the checkpoint declares {len(declared)} acceptance bundle(s) and no canary "
+                f"evidence is committed at {_export_location()}; accept the Milestones in a "
+                f"declared canary and export the records, or withdraw the references"
+            ),
+        )
+    findings = membership_findings(evidence, declared)
+    refs = membership_evidence_refs(evidence, declared)
+    if findings:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.FAIL,
+            remediation=(
+                f"{len(findings)} declared acceptance bundle(s) are not accepted: "
+                f"{summarise_findings(findings)}"
+            ),
+            evidence_refs=refs,
+        )
+    logger.info(
+        f"membership_probe release_key={context.config.release_key!r} "
+        f"declared={len(declared)} accepted={len(refs)}"
+    )
+    return ReleaseSignalOutcome(status=ReleaseSignalStatus.PASS, evidence_refs=refs)
+
+
 def build_receipt_probes(repo_root: Path) -> dict[ReleaseSignalName, ReleaseSignalProbe]:
     """Return the receipt-reading probes bound to *repo_root*.
 
     Args:
-        repo_root: Checkout whose receipts the probes read.
+        repo_root: Checkout whose receipts and committed evidence the
+            probes read.
 
     Returns:
-        A registry over the two signals the CI receipts settle.
+        A registry over the two signals the CI receipts settle plus the
+        two the committed canary evidence settles.
     """
     return {
         ReleaseSignalName.DEPENDENCIES: partial(dependencies_probe, repo_root=repo_root),
         ReleaseSignalName.ARTIFACTS: partial(artifacts_probe, repo_root=repo_root),
+        ReleaseSignalName.PROVIDER: partial(provider_probe, repo_root=repo_root),
+        ReleaseSignalName.MEMBERSHIP: partial(membership_probe, repo_root=repo_root),
     }
 
 
@@ -287,5 +487,7 @@ __all__ = [
     "artifacts_probe",
     "build_receipt_probes",
     "dependencies_probe",
+    "membership_probe",
     "platform_probe",
+    "provider_probe",
 ]

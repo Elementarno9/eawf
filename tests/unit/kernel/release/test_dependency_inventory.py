@@ -413,12 +413,19 @@ def test_default_release_probes_hold_the_platform_probe_only() -> None:
 
 
 def test_build_receipt_probes_binds_both_receipt_rows(tmp_path: Path) -> None:
-    """Each receipt row reads the bound checkout and passes on its receipts."""
+    """Each receipt row reads the bound checkout and passes on its receipts.
+
+    The registry also carries the two rows the committed canary evidence
+    settles, which a checkout holding only CI receipts cannot answer, so
+    the pass is asserted over the receipt rows rather than over the whole
+    registry.
+    """
     stage_passing_receipts(tmp_path, version="0.7.0.dev1", source_sha="c" * 40)
     probes = build_receipt_probes(tmp_path)
-    assert set(probes) == {ReleaseSignalName.DEPENDENCIES, ReleaseSignalName.ARTIFACTS}
-    for signal, probe in probes.items():
-        outcome = probe(ReleaseSignalContext(dev1_config(), signal, None))
+    receipt_rows = (ReleaseSignalName.DEPENDENCIES, ReleaseSignalName.ARTIFACTS)
+    assert set(receipt_rows) <= set(probes)
+    for signal in receipt_rows:
+        outcome = probes[signal](ReleaseSignalContext(dev1_config(), signal, None))
         assert outcome.status is ReleaseSignalStatus.PASS, signal
 
 

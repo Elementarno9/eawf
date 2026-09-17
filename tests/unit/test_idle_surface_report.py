@@ -43,12 +43,13 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: What still counts is epoch-2 substrate whose producers have not landed:
 #: ``compact_terminal_task`` / ``recover_store_tree``
 #: (``kernel/store/compaction.py``), ``append_correction``
-#: (``kernel/store/ledger.py``), ``apply_transition``
-#: (``workflow/lifecycle/epoch2.py``) and ``ambiguity_label`` /
-#: ``statuses_of`` (``kernel/state/epoch2/transitions.py``). The staged
-#: importer, the recovery leg and the epoch-2 mutators are what call them;
-#: lower this again as each producer lands.
-IDLE_CEILING = 227
+#: (``kernel/store/ledger.py``) and ``ambiguity_label`` / ``statuses_of``
+#: (``kernel/state/epoch2/transitions.py``). The staged importer, the
+#: recovery leg and the terminal compaction are what call them; lower this
+#: again as each producer lands. ``apply_transition``
+#: (``workflow/lifecycle/epoch2.py``) has left the list: the native
+#: mutation transaction is its production caller.
+IDLE_CEILING = 222
 
 
 def _load_tool() -> Any:

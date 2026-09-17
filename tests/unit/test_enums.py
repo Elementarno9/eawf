@@ -530,6 +530,9 @@ def test_store_kind_values() -> None:
         # receipts and per-train advances.
         "release_checkpoint_receipt",
         "release_train_advance",
+        # One conformance stage per row, filed under the runtime tuple it
+        # ran for; the journal a certification's history is read back from.
+        "conformance_stage",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

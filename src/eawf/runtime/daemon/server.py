@@ -27,7 +27,8 @@ import logging
 import os
 import socket
 import uuid
-from typing import Any, cast
+from collections.abc import Callable, Mapping
+from typing import Any, Final, cast
 
 import orjson
 
@@ -37,8 +38,10 @@ import eawf.runtime.daemon.methods.close  # registers durable close control meth
 import eawf.runtime.daemon.methods.close_hosted  # registers close.host (P32-I01-W19)
 import eawf.runtime.daemon.methods.close_rereceipt  # registers close.rereceipt
 import eawf.runtime.daemon.methods.config  # registers config read/write methods
+import eawf.runtime.daemon.methods.conformance  # registers the three conformance stages
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.doctor  # registers doctor.apply_repair
+import eawf.runtime.daemon.methods.domain_envelope  # registers domain.transition.apply
 import eawf.runtime.daemon.methods.event
 import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)
 import eawf.runtime.daemon.methods.fleet  # registers fleet.drive (P30-I12-W01)
@@ -46,6 +49,7 @@ import eawf.runtime.daemon.methods.integration  # registers Wave integration/bar
 import eawf.runtime.daemon.methods.jury  # registers jury.label (P30-I23-W17)
 import eawf.runtime.daemon.methods.migration  # registers migration.epoch2.plan
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
+import eawf.runtime.daemon.methods.projection  # registers projection.<route>.read
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.registry_workspace  # registers registry.workspace.*
 import eawf.runtime.daemon.methods.release  # registers the nine release.* record verbs
@@ -58,6 +62,7 @@ import eawf.runtime.daemon.methods.spec_convert  # registers spec.convert_legacy
 import eawf.runtime.daemon.methods.spec_repoint  # registers spec.repoint_{gates,scopes}
 import eawf.runtime.daemon.methods.state  # registers state.read / state.mutate / state.digest
 import eawf.runtime.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
+from eawf.kernel.projection.compute import patches_for_event
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.auth import UnauthorizedError, verify_peer_credential
 from eawf.runtime.daemon.bus import CatchUpTooLargeError, EventBus, Subscriber
@@ -69,7 +74,11 @@ from eawf.runtime.daemon.methods import (
     dispatch,
 )
 from eawf.runtime.daemon.methods.event import subscribe as run_subscribe
-from eawf.runtime.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
+from eawf.runtime.daemon.methods.state_subscribe import (
+    PROJECTION_PUSH_METHOD,
+    PROJECTION_SUBSCRIBE_METHOD,
+    SUBSCRIBE_METHODS,
+)
 from eawf.workflow.lifecycle._errors import LifecycleGuardError
 from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 
@@ -200,6 +209,46 @@ def _push_frame(envelope: Envelope) -> bytes:
         "params": {"event": envelope.model_dump(mode="json")},
     }
     return _frame(notification)
+
+
+def _event_frames(envelope: Envelope) -> tuple[bytes, ...]:
+    """Build the one ``event.push`` frame an envelope produces."""
+    return (_push_frame(envelope),)
+
+
+def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
+    """Build the ``projection.patch`` frames one envelope produces.
+
+    An envelope carrying no committed transition produces none, which is how a
+    projection subscriber sees only patches on a bus that carries every kind.
+    A transition that cannot be turned into a patch is logged and dropped
+    rather than raised: one malformed payload must not end the feed of every
+    projection subscriber on the daemon.
+    """
+    try:
+        patches = patches_for_event(envelope)
+    except ValueError as exc:
+        logger.warning(f"_projection_frames unpatchable event={envelope.id!r} cause={exc!s}")
+        return ()
+    return tuple(
+        _frame(
+            {
+                "jsonrpc": "2.0",
+                "method": PROJECTION_PUSH_METHOD,
+                "params": {"patch": patch.model_dump(mode="json")},
+            }
+        )
+        for patch in patches
+    )
+
+
+#: What the one streamer writes for each subscribe verb. The verbs share the
+#: connection, the bus and the subscriber; only the frame differs, which is what
+#: keeps the projection feed on the socket ``state.subscribe`` already rides.
+_SUBSCRIBE_FRAMES: Final[Mapping[str, Callable[[Envelope], tuple[bytes, ...]]]] = {
+    name: (_projection_frames if name == PROJECTION_SUBSCRIBE_METHOD else _event_frames)
+    for name in SUBSCRIBE_METHODS
+}
 
 
 def _parse_frame(line: bytes) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
@@ -388,6 +437,22 @@ async def _watch_reader_eof(
         bus.unregister(connection_id)
 
 
+async def _write_push_frames(writer: asyncio.StreamWriter, frames: tuple[bytes, ...]) -> bool:
+    """Write every frame of one envelope; return False once the peer is gone.
+
+    An envelope may yield no frame at all (a projection subscriber is pushed
+    nothing for an envelope that patches no read model), which is a delivery
+    like any other and leaves the stream open.
+    """
+    for frame in frames:
+        writer.write(frame)
+        try:
+            await writer.drain()
+        except ConnectionResetError, BrokenPipeError:
+            return False
+    return True
+
+
 async def _stream_subscriber(
     reader: asyncio.StreamReader,
     writer: asyncio.StreamWriter,
@@ -395,6 +460,7 @@ async def _stream_subscriber(
     subscriber: Subscriber,
     backlog: list[Envelope],
     connection_id: str,
+    frames: Callable[[Envelope], tuple[bytes, ...]],
 ) -> None:
     """Flush *backlog* then live-stream pushes until the subscriber closes.
 
@@ -407,20 +473,16 @@ async def _stream_subscriber(
         backlog: Catch-up envelopes the subscriber missed; flushed in
             order before live push begins.
         connection_id: Connection id registered with the bus.
+        frames: What this subscribe verb writes per envelope — the raw
+            ``event.push`` or the keyed ``projection.patch`` frames.
     """
     eof_task = asyncio.create_task(_watch_reader_eof(reader, subscriber, bus, connection_id))
     try:
         for env in backlog:
-            writer.write(_push_frame(env))
-            try:
-                await writer.drain()
-            except ConnectionResetError, BrokenPipeError:
+            if not await _write_push_frames(writer, frames(env)):
                 return
         async for env in bus.iter_subscriber_pushes(subscriber):
-            writer.write(_push_frame(env))
-            try:
-                await writer.drain()
-            except ConnectionResetError, BrokenPipeError:
+            if not await _write_push_frames(writer, frames(env)):
                 return
     finally:
         eof_task.cancel()
@@ -436,6 +498,10 @@ async def _handle_subscribe(
     connection_id: str,
 ) -> Subscriber | None:
     """Register a subscriber and stream pushes for the rest of the connection.
+
+    Every subscribe verb takes this one path: the same registration, the same
+    bus and the same connection. The verb selects only what the streamer writes
+    per envelope, so ``projection.subscribe`` adds a feed and not a transport.
 
     Args:
         reader: Reader half of the connection (used to watch for EOF
@@ -453,6 +519,7 @@ async def _handle_subscribe(
     """
     req_id = payload.get("id")
     params = payload.get("params", {}) or {}
+    frames = _SUBSCRIBE_FRAMES[payload["method"]]
     if not isinstance(ctx.bus, EventBus):
         writer.write(_frame(_error(req_id, INTERNAL_ERROR, "event bus not configured")))
         await writer.drain()
@@ -474,7 +541,7 @@ async def _handle_subscribe(
         return None
     writer.write(_frame(_success(req_id, {"ok": True, "backlog_count": len(backlog)})))
     await writer.drain()
-    await _stream_subscriber(reader, writer, ctx.bus, sub, backlog, connection_id)
+    await _stream_subscriber(reader, writer, ctx.bus, sub, backlog, connection_id, frames)
     return sub
 
 
