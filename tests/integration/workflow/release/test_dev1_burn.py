@@ -46,7 +46,7 @@ from datetime import UTC, datetime, timedelta
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -812,7 +812,6 @@ def train_advance(current: Release, *, receipts: Sequence[CheckpointGateReceipt]
         config=dev1_config(),
         receipts=list(receipts),
         now=NOW,
-        next_uid=uuid4(),
     ).train
 
 

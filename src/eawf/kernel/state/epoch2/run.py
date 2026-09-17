@@ -27,7 +27,7 @@ from collections.abc import Mapping
 from enum import StrEnum
 from typing import Annotated, ClassVar, Final, Literal, Self
 
-from pydantic import Field, StringConstraints, field_validator, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from eawf.kernel.state.epoch2.base import Epoch2Model, RunKey
 from eawf.kernel.state.epoch2.urns import (
@@ -89,7 +89,13 @@ class _RunScopeBase(Epoch2Model):
     shared half is the purpose the episode runs under and the write set
     it is permitted to touch, both of which are checked against
     :attr:`mutating` so the rule lives once instead of in ten copies.
+
+    Scopes are frozen. The validators run only at construction, so an
+    in-place edit of ``purpose`` or ``write_set`` would bypass the
+    mutation rule and leave any digest taken over the scope stale.
     """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     #: Whether a Run at this scope owns a worktree it may write to.
     mutating: ClassVar[bool] = False

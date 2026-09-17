@@ -163,43 +163,38 @@ jobs:
     name: Require green CI on the tagged commit
     # Closes the gap that let v0.5.2 publish while its CI run was red: the
     # publish job below `needs:` this gate, which refuses to proceed unless
-    # the CI workflow concluded `success` for this exact commit. The release
+    # a push-event ci.yaml run from this repository concluded `success` on
+    # this exact commit, or on another commit with the same tree whose run
+    # recorded that tree as green (ci.yaml's green-tree job). The release
     # commit lands on `main` (where ci.yaml runs) before the tag is pushed,
-    # so a CI run for the SHA already exists or is in flight — this gate waits
-    # for it, then asserts success. A `workflow_dispatch` dry-run skips it.
+    # so a CI run for the SHA already exists or is in flight.
+    #
+    # Reading only the newest run for the SHA let a cancelled run hide a
+    # green one and never counted a green run on an identical tree, which
+    # cost a full CI rerun per release. The tree relaxation is sound only
+    # for push runs: a pull request run tests a merge of the head into the
+    # base, not the tree the tag names, so the checker never accepts one.
+    # The checker is tools/ci_green_tree.py, shared by both release
+    # workflows; it waits while a push run on the SHA is in flight or not
+    # yet created, and refuses once they all finished without success. A
+    # `workflow_dispatch` dry-run skips this job.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
-    # Above the 30-min (SECONDS + 1800) in-flight-CI wait loop below, so the
-    # job's own timeout never fires before its internal deadline.
+    # Above the checker's 30-min wait for an in-flight CI run, so the job's
+    # own timeout never fires before its internal deadline.
     timeout-minutes: 35
     permissions:
-      actions: read # read the CI workflow's run conclusion for this SHA
+      actions: read # list the CI workflow's green runs and their tree records
+      contents: read # check out the checker and the tagged tree
     steps:
-      - name: Assert ci.yaml concluded success for ${{ github.sha }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert ci.yaml went green on ${{ github.sha }} or its tree
+        # The runner's system Python: the checker is stdlib-only.
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          deadline=$(( SECONDS + 1800 )) # wait up to 30 min for an in-flight run
-          while :; do
-            read -r status conclusion < <(
-              gh api "repos/${REPO}/actions/workflows/ci.yaml/runs?head_sha=${SHA}&per_page=1" \
-                --jq '.workflow_runs[0] | "\(.status // "missing") \(.conclusion // "none")"'
-            )
-            echo "ci.yaml for ${SHA:0:10}: status=${status} conclusion=${conclusion}"
-            if [ "${status}" = "completed" ]; then
-              [ "${conclusion}" = "success" ] && { echo "CI green — release may proceed"; exit 0; }
-              echo "refusing to publish: CI concluded '${conclusion}', not 'success'" >&2
-              exit 1
-            fi
-            if [ "${SECONDS}" -ge "${deadline}" ]; then
-              echo "refusing to publish: timed out waiting for CI to complete on ${SHA}" >&2
-              exit 1
-            fi
-            sleep 30
-          done
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/ci_green_tree.py gate
 
   release-preflight:
     name: Release preflight (tag chokepoint)

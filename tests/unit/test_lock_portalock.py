@@ -140,6 +140,30 @@ def test_read_heartbeat_at_reads_across_the_empty_rewrite_window(
     assert len(reads) == 2
 
 
+def _poll_heartbeat_change(path: Path, previous: str, *, deadline_s: float) -> str:
+    """Return the first ``heartbeat_at`` that differs from *previous*.
+
+    A single read after a fixed sleep asks whether the ticker ran within that
+    sleep, which a loaded host answers at random. Polling up to a generous
+    deadline asks only whether it ran at all.
+    """
+    deadline = time.monotonic() + deadline_s
+    while time.monotonic() < deadline:
+        current = _read_heartbeat_at(path)
+        if current != previous:
+            return current
+        time.sleep(0.01)
+    raise AssertionError(f"heartbeat_at stayed {previous!r} for {deadline_s}s")
+
+
+def test_poll_heartbeat_change_raises_when_heartbeat_never_changes(tmp_path: Path) -> None:
+    lockfile = tmp_path / "state.json.lock"
+    lockfile.write_text(json.dumps({"heartbeat_at": "2026-09-16T00:00:00+00:00"}))
+
+    with pytest.raises(AssertionError, match="stayed"):
+        _poll_heartbeat_change(lockfile, "2026-09-16T00:00:00+00:00", deadline_s=0.05)
+
+
 def test_ticker_refreshes_heartbeat_during_hold(tmp_path: Path) -> None:
     target = tmp_path / "state.json"
     target.write_text("{}")
@@ -147,9 +171,8 @@ def test_ticker_refreshes_heartbeat_during_hold(tmp_path: Path) -> None:
         target, timeout=1.0, heartbeat_interval=0.02, hold_ceiling=100.0
     ) as lock:
         first = _read_heartbeat_at(lock.path)
-        time.sleep(0.2)
         # No manual heartbeat() call: the background ticker did the refresh.
-        second = _read_heartbeat_at(lock.path)
+        second = _poll_heartbeat_change(lock.path, first, deadline_s=5.0)
     assert second > first
 
 

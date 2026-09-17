@@ -137,6 +137,7 @@ from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.runtime.runtimes.selector import select_adapter
 from eawf.runtime.sandbox.policy import resolve_denied_tools
 from eawf.runtime.session.store import build_event, commit_event, stage_session
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.workflow.dispatch.llm_assist import LLMAssistError, assist_with_schema
 from eawf.workflow.dispatch.renderer import render_dispatch_envelope, resolve_role_blocks
 from eawf.workflow.dispatch.retry import spawn_with_retry
@@ -894,6 +895,7 @@ def _headless_runtime_snapshots(
     """
     priced = price_spawn_result(spawn_result)
     model = spawn_result.resolved_model or spawn_result.model
+    vendor_session_id = hash_vendor_session_id(spawn_result.session_id)
     duration_ms = max(
         0, int((spawn_result.ended_at - spawn_result.started_at).total_seconds() * 1000)
     )
@@ -908,7 +910,7 @@ def _headless_runtime_snapshots(
         cache_read_input_tokens=0,
         harness=serving_runtime,
         model=model,
-        session_id=spawn_result.session_id,
+        session_id=vendor_session_id,
         captured_at=spawn_result.started_at,
     )
     latest = RuntimeLatest(
@@ -926,7 +928,7 @@ def _headless_runtime_snapshots(
         cache_read_input_tokens=spawn_result.cache_read_input_tokens,
         harness=serving_runtime,
         model=model,
-        session_id=spawn_result.session_id,
+        session_id=vendor_session_id,
         captured_at=spawn_result.ended_at,
     )
     return baseline, latest
@@ -940,9 +942,15 @@ def _persist_live_session_attempt(
     serving_runtime: str,
     session_log_handle: str,
     spawn_result: SpawnResult,
-    pid: int,
 ) -> tuple[int, DispatchAnnotation, SessionAttempt] | None:
-    """Persist the live spawn attempt, including the pid used for kill/budget.
+    """Persist the live spawn attempt with its vendor session id hashed.
+
+    The row carries no ``subprocess_pid``. It is written after the spawn has
+    exited, so a recorded pid could only ever name a finished process whose
+    number the OS may since have handed to an unrelated one. The caller keeps
+    the pid in memory for the budget kill ladder and the returned
+    :class:`DispatchPlan`. ``session_log_handle`` must already be built from
+    the hashed id.
 
     Re-reads ``wave.status`` under the state lock BEFORE computing the attempt:
     close-on-behalf (the liveness watcher resolving a wave "closed") can move
@@ -1003,13 +1011,13 @@ def _persist_live_session_attempt(
             runtime=serving_runtime,
             # SessionAttempt is runtime provenance. The EAWF ``SES-*`` claim
             # id belongs on Wave.claim_session_id and report headers; this row
-            # records the vendor/runtime session disclosed by the spawn.
-            session_id=spawn_result.session_id,
+            # records the vendor/runtime session disclosed by the spawn, as a
+            # digest because the raw id names the runtime's local transcript.
+            session_id=hash_vendor_session_id(spawn_result.session_id),
             session_log_handle=session_log_handle,
             started_at=spawn_result.started_at,
             ended_at=spawn_result.ended_at,
             exit_status=spawn_result.exit_status,
-            subprocess_pid=pid,
             cache_creation_input_tokens=spawn_result.cache_creation_input_tokens,
             cache_read_input_tokens=spawn_result.cache_read_input_tokens,
             input_tokens=spawn_result.input_tokens,
@@ -1050,7 +1058,7 @@ def _persist_live_session_attempt(
         atomic_write_json_locked(state_path, state.model_dump(mode="json"))
     logger.info(
         f"_persist_live_session_attempt wave={wave_id} attempt={attempt} "
-        f"runtime={serving_runtime!r} pid={pid}"
+        f"runtime={serving_runtime!r}"
     )
     return attempt, annotation, session_attempt
 
@@ -1953,9 +1961,10 @@ async def _spawn_and_dispatch(
         wave_id=wave_id,
         requested_runtime=runtime,
         serving_runtime=serving_runtime,
-        session_log_handle=adapter.session_log_handle(spawn_result.session_id),
+        session_log_handle=adapter.session_log_handle(
+            hash_vendor_session_id(spawn_result.session_id)
+        ),
         spawn_result=spawn_result,
-        pid=pid,
     )
     if persisted is None:
         # Close-on-behalf closed the wave while this dispatch ran unlocked, so
@@ -2243,12 +2252,12 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     as reaped (the kill primitive reports it rather than raising).
 
     When no live fleet lane resolves (no fleet run armed, or no lane for the
-    pair) the kill FALLS BACK to the wave's single-wave dispatched session:
-    a wave dispatched via ``eawf dispatch wave`` (no fleet run) records its child
-    pid on the matching ``SessionAttempt``, so the kill resolves that pid and
-    signals its group -- a single dispatched session is killable even without a
-    fleet run. Only when NEITHER a live lane NOR a session pid resolves (or the
-    lane / session carries no addressable pid) does the handler return
+    pair) the kill FALLS BACK to a pid recorded on the matching
+    ``SessionAttempt`` and signals its group. The live dispatch path records
+    none, because its attempt row is written after the spawn exits, so the
+    fallback only reaches an attempt row that still carries a pid. Only when
+    NEITHER a live lane NOR a session pid resolves (or the lane / session
+    carries no addressable pid) does the handler return
     ``killed=false`` + a typed ``reason`` and signal nothing, so the response
     never fakes a kill on an unaddressable target.
 

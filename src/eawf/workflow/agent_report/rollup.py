@@ -24,6 +24,7 @@ from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.models import TelemetrySession, TelemetryToolCall
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.surfaces.render.units import format_compact_utc
 
 logger = logging.getLogger(__name__)
@@ -417,9 +418,13 @@ def error_kind_by_attempt_from_store(
     wave: Wave,
     store: AbstractMetricsStore,
 ) -> dict[int, tuple[str, ...]]:
-    """Return telemetry tool-call error kinds keyed by wave attempt."""
+    """Return telemetry tool-call error kinds keyed by wave attempt.
+
+    State stores the vendor session id hashed while telemetry rows carry it
+    raw, so every session key goes through the same hash.
+    """
     attempt_by_session_id = {
-        session.session_id: attempt_no
+        hash_vendor_session_id(session.session_id): attempt_no
         for attempt_no, session in wave.sessions.items()
         if session.session_id
     }
@@ -431,8 +436,8 @@ def error_kind_by_attempt_from_store(
         if session.wave_id != wave.id:
             continue
         attempt_no = _parse_attempt_id(session.attempt_id)
-        if attempt_no is not None:
-            attempt_by_session_id[session.session_id] = attempt_no
+        if attempt_no is not None and session.session_id:
+            attempt_by_session_id[hash_vendor_session_id(session.session_id)] = attempt_no
 
     kinds_by_attempt: dict[int, list[str]] = {}
     if not attempt_by_session_id:
@@ -442,9 +447,9 @@ def error_kind_by_attempt_from_store(
         store.fetch_all("telemetry_tool_calls", TelemetryToolCall),
     )
     for call in telemetry_tool_calls:
-        if not call.is_error:
+        if not call.is_error or not call.session_id:
             continue
-        attempt_no = attempt_by_session_id.get(call.session_id)
+        attempt_no = attempt_by_session_id.get(hash_vendor_session_id(call.session_id))
         if attempt_no is None:
             continue
         kinds_by_attempt.setdefault(attempt_no, []).append(call.error_kind.value)

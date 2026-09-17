@@ -180,6 +180,66 @@ def load_wave_session_rollup(
     return rollup
 
 
+@dataclass(frozen=True)
+class WaveCloseRuntime:
+    """The measured runtime a wave close records and the zero-runtime gate scores.
+
+    Attributes:
+        delta: The baseline-to-latest runtime delta, or ``None`` when nothing
+            was captured.
+        rollup: The telemetry session rollup joined at close, or ``None``.
+        elapsed_eu: The elapsed EU the close records: the delta's figure when
+            it measured anything, else the rollup's session duration, else
+            ``None``.
+    """
+
+    delta: RuntimeDelta | None
+    rollup: WaveSessionRollup | None
+    elapsed_eu: float | None
+
+
+def measure_wave_close_runtime(
+    state: State,
+    mutation: Mutation,
+    *,
+    state_path: Path,
+    repo_root: Path,
+) -> WaveCloseRuntime:
+    """Measure the closing wave's runtime the way the daemon close does.
+
+    The in-process close reads the EU basis and minutes through the same
+    config loader as the daemon, so both paths record the same figure for the
+    same snapshots. A zero delta does not suppress the telemetry rollup: a
+    zero means the snapshots yielded nothing, which is an absence of evidence
+    the rollup may still answer.
+
+    Args:
+        state: Loaded state carrying the closing wave's runtime snapshots.
+        mutation: The wave-close mutation; its ``wave_id`` param names the wave.
+        state_path: Path to ``state.json``; the telemetry DB resolves beside it.
+        repo_root: Anchor for the layered estimation and telemetry config.
+
+    Returns:
+        The :class:`WaveCloseRuntime` for the close.
+
+    Raises:
+        LifecycleError: When the configured ``estimation.eu_basis`` is unknown.
+    """
+    _db_kind, eu_minutes, eu_basis = wave_close_rollup_config(repo_root)
+    delta = wave_runtime_delta(state, mutation, eu_minutes=eu_minutes, eu_basis=eu_basis)
+    rollup = load_wave_session_rollup(
+        state,
+        mutation,
+        state_path=state_path,
+        repo_root=repo_root,
+    )
+    measured_eu = delta.elapsed_eu if delta is not None else None
+    elapsed_eu = (
+        measured_eu if measured_eu else wave_close_elapsed_eu(rollup, eu_minutes=eu_minutes)
+    )
+    return WaveCloseRuntime(delta=delta, rollup=rollup, elapsed_eu=elapsed_eu)
+
+
 def compute_wave_close_readiness(
     state: State,
     mutation: Mutation,
@@ -198,6 +258,12 @@ def compute_wave_close_readiness(
     :func:`_enforce_wave_close_gate` so this helper stays a pure, sync
     readiness compute.
 
+    The branch reads the merged verify block, not the band-narrowed one. The
+    band resolver narrows a mechanical non-band wave to ``enforce=False`` to
+    withdraw the jury and the auditor, never the wave's own falsifiers, so the
+    criteria floor and the backlog-resolution rollup enforce whenever the
+    merged profile does.
+
     Raises:
         LifecycleError: When ``profile.verify.enforce`` is active and the
             rolled-up readiness is not ready (criteria floor /
@@ -208,18 +274,11 @@ def compute_wave_close_readiness(
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.lifecycle._errors import check_disabled_waiver_policy
     from eawf.workflow.verify import compute as compute_readiness
-    from eawf.workflow.verify.readiness import (
-        load_active_verify_block,
-        resolve_wave_verify_block,
-    )
+    from eawf.workflow.verify.readiness import load_active_verify_block
 
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or wave_id not in state.waves:
         return None
-    # Band-conditional enforcement: the merged block records the fleet
-    # intent; the wave-aware resolver narrows ``enforce`` to the UI/UX band
-    # so a non-band wave keeps the advisory close path even when a
-    # band-scoped profile is enabled.
     policy_block = load_active_verify_block(
         wave_id,
         state,
@@ -232,8 +291,7 @@ def compute_wave_close_readiness(
         criteria=list(state.waves[wave_id].success_criteria),
         criteria_floor_waiver=state.waves[wave_id].criteria_floor_waiver,
     )
-    verify_block = resolve_wave_verify_block(policy_block, state.waves[wave_id])
-    if verify_block is None or not verify_block.enforce:
+    if policy_block is None or not policy_block.enforce:
         return None
     deferred: frozenset[str] = frozenset()
     if defer_verdict_kinds:
@@ -265,6 +323,7 @@ def _runtime_zero_close_enforces(
     wave_id: str,
     state_path: Path,
     repo_root: Path,
+    enforce_without_profile: bool,
 ) -> bool:
     """Return whether a zero-runtime close should block instead of warn.
 
@@ -276,6 +335,9 @@ def _runtime_zero_close_enforces(
     the band, which in P30-I25 meant every wave in the iter: the gate that exists to
     refuse a silent zero could not refuse anything, and reported a pass while doing
     it. A gate that cannot fail is not a gate.
+
+    *enforce_without_profile* is the answer when no enabled profile contributes a
+    verify block.
     """
     from eawf.workflow.verify.readiness import load_active_verify_block
 
@@ -287,7 +349,7 @@ def _runtime_zero_close_enforces(
         repo_root=repo_root,
         config_root=config_root_for_state_path(state_path),
     )
-    return True if verify_block is None else verify_block.enforce
+    return enforce_without_profile if verify_block is None else verify_block.enforce
 
 
 def _zero_is_explained_by_a_reset(wave: Wave) -> bool:
@@ -333,6 +395,7 @@ def enforce_nonzero_runtime_close(
     elapsed_eu: float | None,
     state_path: Path,
     repo_root: Path,
+    enforce_without_profile: bool = True,
 ) -> None:
     """Reject SILENT zero-EU wave closes unless the profile is advisory or the zero is explained.
 
@@ -348,6 +411,23 @@ def enforce_nonzero_runtime_close(
     close would strand it -- the baseline lives on disk, so every retry hits the
     same zero -- which is the same unrecoverable trap the gate was written to
     prevent, just wearing the gate's own uniform.
+
+    Args:
+        state: Loaded state carrying the closing wave.
+        mutation: The wave-close mutation; its ``wave_id`` and
+            ``no_runtime_waiver`` params are read.
+        elapsed_eu: The measured elapsed EU for the close, or ``None``.
+        state_path: Path to ``state.json``; anchors the profile config.
+        repo_root: Anchor for profile discovery.
+        enforce_without_profile: Whether a zero refuses when no enabled profile
+            contributes a verify block. The daemon lane, which owns runtime
+            capture, fails closed. The in-process lane passes ``False``: capture
+            reaches state only through the daemon, so without a profile that
+            opts into enforcement a zero there is the expected reading.
+
+    Raises:
+        LifecycleError: The zero is silent -- unwaived and unexplained by a
+            counter reset -- and the gate enforces.
     """
     wave_id = str(mutation.params.get("wave_id", ""))
     if not wave_id or (elapsed_eu is not None and elapsed_eu > 0.0):
@@ -374,6 +454,7 @@ def enforce_nonzero_runtime_close(
         wave_id=wave_id,
         state_path=state_path,
         repo_root=repo_root,
+        enforce_without_profile=enforce_without_profile,
     ):
         raise LifecycleError(message)
     logger.warning(f"wave_close_runtime_zero wave={wave_id!r} mode='warn' message={message!r}")

@@ -182,6 +182,7 @@ def test_close_preflight_calls_compute_before_close_wave(
         wave_id: str,
         outcome: str,
         tokens_consumed: int | None = None,
+        **actuals: Any,
     ) -> Any:
         call_log.append(f"close_wave:{wave_id}")
         return original_close(
@@ -189,6 +190,7 @@ def test_close_preflight_calls_compute_before_close_wave(
             wave_id=wave_id,
             outcome=outcome,
             tokens_consumed=tokens_consumed,
+            **actuals,
         )
 
     def fake_compute(scope_id: str, **_kwargs: Any) -> CloseReadiness:

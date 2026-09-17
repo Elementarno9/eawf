@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -49,9 +50,9 @@ from eawf.surfaces.cli.scope import resolve_state_path
 from eawf.workflow.lifecycle._capacity import resolve_max_parallel_waves
 
 if TYPE_CHECKING:
-    from eawf.kernel.state.models import State
-    from eawf.platform.profiles.models import VerifyBlock
+    from eawf.kernel.state.models import State, Wave
     from eawf.runtime.daemon.gate_execution import GateExecutionContext
+    from eawf.surfaces.cli._mutation import CloseMechanism
     from eawf.workflow.verify.models import CloseReadiness
 
 logger = logging.getLogger(__name__)
@@ -127,50 +128,6 @@ def _reject_disabled_close_waivers(
             )
         except LifecycleGuardError as exc:
             raise cli_errors.ValidationError(str(exc)) from exc
-
-
-def _resolve_close_verify_block(
-    wave_id: str,
-    state: State,
-    *,
-    repo_root: Path,
-    config_root: Path,
-) -> VerifyBlock | None:
-    """Load + band-narrow the active verify block for a closing wave.
-
-    Wraps :func:`~eawf.workflow.verify.readiness.load_active_verify_block`
-    with the band-conditional resolver
-    (:func:`~eawf.workflow.verify.readiness.resolve_wave_verify_block`) so the
-    CLI direct-write fallback matches the daemon close gate: a band-scoped
-    profile gates only the wave's UI/UX band, and a non-band wave stays
-    advisory. A wave id absent from *state* leaves the merged block
-    un-narrowed (the readiness compute then surfaces the missing wave).
-
-    Args:
-        wave_id: The closing wave id.
-        state: Loaded state -- read for the wave's band membership.
-        repo_root: Anchor for SHA derivation + profile discovery.
-        config_root: Anchor that owns ``.ea/config.yaml``.
-
-    Returns:
-        The band-conditional :class:`VerifyBlock`, or ``None`` when no active
-        profile contributes one.
-    """
-    from eawf.workflow.verify.readiness import (
-        load_active_verify_block,
-        resolve_wave_verify_block,
-    )
-
-    verify_block = load_active_verify_block(
-        wave_id,
-        state,
-        repo_root=repo_root,
-        config_root=config_root,
-    )
-    wave = state.waves.get(wave_id)
-    if wave is None:
-        return verify_block
-    return resolve_wave_verify_block(verify_block, wave)
 
 
 def _wrap_no_return(_value: object) -> None:
@@ -620,8 +577,14 @@ def _run_daemonless_close_preflight(
     in-process fallback used to only log as advisories: the deterministic
     pre-flight BLOCKS on a failing required gate (:func:`~eawf.workflow.verify.compute`
     raises under enforce), and a verdict-always wave with no fresh auditor verdict
-    is REFUSED via the synchronous read gate (the daemonless path cannot spawn the
-    auditor). Both honour ``--no-runtime``; sampled / skip waves never block.
+    is REFUSED via the synchronous read gate; sampled / skip waves never block on
+    the verdict.
+
+    ``--no-runtime`` waives a missing runtime capture, not a falsifier, so a
+    failing gate refuses the close whatever *waived* says; ``--waive <gate>`` is
+    the operator override for a failing gate. *waived* still lifts the verdict
+    read gate, because the daemonless path cannot spawn the auditor that would
+    produce the verdict.
 
     The deterministic pre-flight executes its gates through the SAME
     out-of-process runner the daemon binds
@@ -636,21 +599,20 @@ def _run_daemonless_close_preflight(
         state_path: Path to ``state.json``; stores resolve under its ``store/``.
         repo_root: Anchor for SHA derive + the deterministic-gate subprocess cwd.
         config_root: Anchor that owns ``.ea/config.yaml``.
-        waived: Whether the operator passed ``--no-runtime`` this call.
+        waived: Whether the operator passed ``--no-runtime`` this call; lifts
+            only the verdict read gate.
 
     Returns:
         The :class:`CloseReadiness` for the close event advisory tally, or
-        ``None`` when the wave id is absent or a not-ready refusal was waived.
+        ``None`` when the wave id is absent.
 
     Raises:
-        LifecycleError: A required gate fails and the close is not waived.
+        LifecycleError: A required gate fails, with or without ``--no-runtime``.
         cli_errors.ValidationError: A verdict-always wave lacks a fresh verdict
             and the close is not waived.
     """
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.workflow.dispatch.verdict import verdict_requirement, verify_wave_verdict_gate
-    from eawf.workflow.lifecycle._errors import LifecycleGuardError
-    from eawf.workflow.lifecycle.transitions import LifecycleError
     from eawf.workflow.verify import compute as compute_readiness
 
     readiness: CloseReadiness | None = None
@@ -669,13 +631,6 @@ def _run_daemonless_close_preflight(
         )
     except KeyError as exc:
         logger.warning(f"close_advisory wave={wave_id!r} status='skip' err={exc!s}")
-    except LifecycleGuardError:
-        raise
-    except LifecycleError:
-        # A failing required gate refuses the close unless waived (daemon parity).
-        if not waived:
-            raise
-        logger.warning(f"daemonless_close wave={wave_id!r} status='waived-not-ready'")
     else:
         _log_advisory_criteria(wave_id, readiness)
     wave = state.waves.get(wave_id)
@@ -693,6 +648,113 @@ def _run_daemonless_close_preflight(
         f"verdict ({reasons}); the daemonless path cannot spawn the auditor -- "
         "close via the daemon or waive this close with --no-runtime"
     )
+
+
+def _close_and_pin(
+    state: State,
+    *,
+    wave_id: str,
+    outcome: str,
+    tokens_consumed: int | None,
+    no_runtime: bool,
+    commit_sha: str | None,
+    commit_identity_digest: str | None,
+    state_path: Path,
+    repo_root: Path | None,
+    transport_fallback: bool,
+    mechanism_holder: list[CloseMechanism],
+) -> Wave:
+    """Close *wave_id* in-process under the zero-runtime gate the daemon applies.
+
+    The in-process close used to call :func:`close_wave` with no measured
+    actual, so it recorded ``elapsed_eu=0.0`` for every wave and never ran the
+    zero-runtime gate. It now measures the runtime delta exactly as the daemon
+    does and refuses a silent zero before the close lands. A transport-fallback
+    close takes the same gate: it skips only the daemonless bypass door.
+
+    Args:
+        state: State under the lock; mutated in place.
+        wave_id: Id of the wave being closed.
+        outcome: Human-readable outcome summary.
+        tokens_consumed: The operator's ``--tokens-consumed`` tally; a captured
+            runtime delta supersedes it, as on the daemon path.
+        no_runtime: Whether the operator passed ``--no-runtime``.
+        commit_sha: Resolved ``--commit`` SHA to pin, or ``None``.
+        commit_identity_digest: Identity digest of *commit_sha*, or ``None``.
+        state_path: Path to ``state.json``.
+        repo_root: Git root of the workspace, or ``None`` outside a repository;
+            the config root then anchors the runtime config.
+        transport_fallback: Whether the daemon close RPC failed at the
+            transport layer before this in-process close.
+        mechanism_holder: One-element sink for the close mechanism stamp.
+
+    Returns:
+        The closed :class:`Wave`.
+
+    Raises:
+        LifecycleError: *wave_id* is unknown; the close records no runtime,
+            carries no waiver, and the active profile enforces the zero-runtime
+            gate; or :func:`close_wave` rejects the transition.
+        cli_errors.UserError: The daemonless close is gate-bearing and not
+            waived.
+    """
+    from eawf.kernel.state.mutations import Mutation
+    from eawf.runtime.daemon.methods.state_close import (
+        enforce_nonzero_runtime_close,
+        measure_wave_close_runtime,
+    )
+    from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
+
+    if wave_id not in state.waves:
+        # The runtime gate reads an unknown wave as unmeasured; name the real fault.
+        raise LifecycleError(f"unknown wave {wave_id!r}")
+    _stamp_close_mechanism(
+        state,
+        wave_id=wave_id,
+        state_path=state_path,
+        waived=no_runtime,
+        transport_fallback=transport_fallback,
+        holder=mechanism_holder,
+    )
+    params: dict[str, Any] = {"wave_id": wave_id, "outcome": outcome}
+    if no_runtime:
+        params["no_runtime_waiver"] = True
+    mutation = Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id=wave_id,
+        mutation_id=uuid.uuid4().hex,
+        params=params,
+    )
+    anchor = repo_root if repo_root is not None else _config_root_for_state_path(state_path)
+    runtime = measure_wave_close_runtime(
+        state,
+        mutation,
+        state_path=state_path,
+        repo_root=anchor,
+    )
+    enforce_nonzero_runtime_close(
+        state,
+        mutation,
+        elapsed_eu=runtime.elapsed_eu,
+        state_path=state_path,
+        repo_root=anchor,
+        enforce_without_profile=False,
+    )
+    delta = runtime.delta
+    wave = close_wave(
+        state,
+        wave_id=wave_id,
+        outcome=outcome,
+        tokens_consumed=delta.actual_tokens if delta is not None else tokens_consumed,
+        actual_attention_eu=runtime.rollup.attention_eu if runtime.rollup is not None else None,
+        actual_agent_runtime_eu=delta.agent_runtime_eu if delta is not None else None,
+        actual_elapsed_eu=runtime.elapsed_eu,
+        actual_cost_usd=delta.actual_cost_usd if delta is not None else None,
+    )
+    if commit_sha is not None:
+        wave.commit = commit_sha
+        wave.commit_identity_digest = commit_identity_digest
+    return wave
 
 
 @wave_app.command("plan")
@@ -1089,8 +1151,8 @@ def wave_close_cmd(
     from eawf.kernel.store.paths import store_dir as _store_dir
     from eawf.surfaces.cli.scope import resolve_state_path
     from eawf.workflow.lifecycle.criterion_drift import check_wave_criteria_drift
-    from eawf.workflow.lifecycle.transitions import close_wave
     from eawf.workflow.verify import compute as compute_readiness
+    from eawf.workflow.verify.readiness import load_active_verify_block
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -1221,8 +1283,6 @@ def wave_close_cmd(
     drift_warnings: list[str] = []
     close_succeeded = [False]
     readiness_holder: list[CloseReadiness] = []
-    from eawf.surfaces.cli._mutation import CloseMechanism
-
     close_mechanism_holder: list[CloseMechanism] = []
 
     def _close_preflight(state: State) -> None:
@@ -1232,18 +1292,16 @@ def wave_close_cmd(
         config_root = _config_root_for_state_path(state_path)
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
         anchor_for_sha = repo_root if repo_root is not None else config_root
-        # Band-conditional enforcement: the helper loads + band-narrows the
-        # active verify block so the direct-write fallback matches the daemon
-        # close gate (a non-band wave stays advisory under a band-scoped
-        # profile).
-        verify_block = _resolve_close_verify_block(
+        # Branch on the merged block, as the daemon close gate does: the band
+        # resolver narrows a mechanical non-band wave to withdraw the jury and
+        # the auditor, never the wave's own gates.
+        verify_block = load_active_verify_block(
             wave_id,
             state,
             repo_root=anchor_for_sha,
             config_root=config_root,
         )
-        enforce_verify = verify_block is not None and verify_block.enforce
-        if enforce_verify:
+        if verify_block is not None and verify_block.enforce:
             # W20 daemonless teeth: mirror the daemon close gate
             # (deterministic pre-flight + verdict read gate) before acquiring
             # the state lock.
@@ -1273,28 +1331,21 @@ def wave_close_cmd(
             readiness_holder.append(readiness)
             _log_advisory_criteria(wave_id, readiness)
 
-    def _close_and_pin(state: State) -> None:
-        state_path = resolve_state_path(flags.workspace)
+    def _apply_close(state: State) -> None:
         repo_root = _resolve_repo_root_for_drift(flags.workspace)
-        # Daemonless bypass door + close-mechanism stamp (W18 -> W25 wiring): a
-        # gate-bearing daemonless close needs --no-runtime; the mechanism stamps.
-        _stamp_close_mechanism(
-            state,
-            wave_id=wave_id,
-            state_path=state_path,
-            waived=no_runtime,
-            transport_fallback=transport_fallback[0],
-            holder=close_mechanism_holder,
-        )
-        wave = close_wave(
+        wave = _close_and_pin(
             state,
             wave_id=wave_id,
             outcome=outcome,
             tokens_consumed=tokens_consumed,
+            no_runtime=no_runtime,
+            commit_sha=resolved_sha,
+            commit_identity_digest=resolved_identity_digest,
+            state_path=resolve_state_path(flags.workspace),
+            repo_root=repo_root,
+            transport_fallback=transport_fallback[0],
+            mechanism_holder=close_mechanism_holder,
         )
-        if resolved_sha is not None:
-            wave.commit = resolved_sha
-            wave.commit_identity_digest = resolved_identity_digest
         if repo_root is not None:
             drift_warnings.extend(check_wave_criteria_drift(wave, repo_root))
         close_succeeded[0] = True
@@ -1321,7 +1372,7 @@ def wave_close_cmd(
                 len(readiness_holder[0].warnings) if readiness_holder else 0
             ),
         },
-        mutate=_close_and_pin,
+        mutate=_apply_close,
         extras_factory=lambda: {
             "readiness_warnings_count": (
                 len(readiness_holder[0].warnings) if readiness_holder else 0

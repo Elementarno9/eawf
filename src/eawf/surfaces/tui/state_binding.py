@@ -375,6 +375,24 @@ class StateBinding:
             return
         self._probe_task = asyncio.create_task(self._probe_loop())
 
+    async def park_daemon_probe(self) -> None:
+        """Stop the periodic daemon probe for the rest of this binding's life.
+
+        The probe is the only thing that flips the degraded flag while no
+        daemon is up, and it keeps ticking after the flag has been read. A
+        caller that pins the non-degraded frame (the snapshot harness) parks
+        it so a failure count already under way cannot cross the threshold
+        and flip the flag back afterwards. The mtime-poll backstop keeps
+        running, so bound state still refreshes. A binder whose probe never
+        started is left as it is.
+        """
+        if self._probe_task is None:
+            return
+        self._probe_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self._probe_task
+        self._probe_task = None
+
     async def _probe_loop(self) -> None:
         """Repeat socket probe/reconnect attempts on a short backoff."""
         while True:

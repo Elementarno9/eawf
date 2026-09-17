@@ -468,7 +468,7 @@ Tag releases and drive the release train's checkpoint records.
 | Verb | Summary |
 |---|---|
 | `adopt` | Adopt a publication that ran without a release record. |
-| `advance` | Walk the train onto its next rung, or refuse and change nothing. |
+| `advance` | Walk the train past one finished checkpoint, or refuse and change nothing. |
 | `approve` | Approve a candidate against a readiness sweep, and record it. |
 | `burn` | Burn the version: record the spent checkpoint as partially released. |
 | `cancel` | Abandon a checkpoint that never touched a registry, or refuse. |
@@ -479,6 +479,7 @@ Tag releases and drive the release train's checkpoint records.
 | `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
 | `publish` | Open the publication episode and return its reference at once. |
 | `readiness` | Ask the daemon for a checkpoint's readiness sweep. |
+| `receipts` | Prove every required gate of one checkpoint on its pinned source. |
 | `reconcile` | Settle one leg against what its publish job finally reported. |
 | `retry` | Re-queue one leg of the open episode under the idempotency proof. |
 | `show` | Describe the train ladder, one checkpoint rung, and its record. |

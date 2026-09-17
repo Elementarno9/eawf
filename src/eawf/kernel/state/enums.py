@@ -727,6 +727,8 @@ class StoreKind(StrEnum):
     COMMIT_REPIN = "commit_repin"
     RELEASE = "release"
     RELEASE_RECORD = "release_record"
+    RELEASE_CHECKPOINT_RECEIPT = "release_checkpoint_receipt"
+    RELEASE_TRAIN_ADVANCE = "release_train_advance"
 
 
 class ArtifactKind(StrEnum):

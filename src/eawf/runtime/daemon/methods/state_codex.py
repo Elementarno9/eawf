@@ -41,6 +41,7 @@ from eawf.runtime.daemon.methods import (
     register,
 )
 from eawf.runtime.daemon.wal import WalRecord
+from eawf.runtime.session.vendor_id import hash_vendor_session_id, same_vendor_session
 
 if TYPE_CHECKING:
     pass
@@ -120,7 +121,11 @@ def _bind_codex_provider_session(
     provider_session_id: str,
 ) -> tuple[AgentSession | None, str | None]:
     sessions = _active_codex_sessions(state)
-    bound = [session for session in sessions if session.runtime_session_id == provider_session_id]
+    bound = [
+        session
+        for session in sessions
+        if same_vendor_session(session.runtime_session_id, provider_session_id)
+    ]
     if len(bound) == 1:
         return bound[0], None
     if len(bound) > 1:
@@ -144,7 +149,7 @@ def _bound_codex_session(
     bound = [
         session
         for session in _active_codex_sessions(state)
-        if session.runtime_session_id == provider_session_id
+        if same_vendor_session(session.runtime_session_id, provider_session_id)
     ]
     if len(bound) == 1:
         return bound[0], None
@@ -229,7 +234,7 @@ def _apply_codex_lifecycle(
         (
             attempt_no
             for attempt_no, attempt in wave.sessions.items()
-            if attempt.runtime == "codex" and attempt.session_id == args.agent_id
+            if attempt.runtime == "codex" and same_vendor_session(attempt.session_id, args.agent_id)
         ),
         None,
     )
@@ -311,11 +316,22 @@ def _apply_codex_lifecycle(
 
 @register("runtime.codex_lifecycle")
 async def codex_lifecycle(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Correlate provider-native Codex lifecycle events under daemon ownership."""
+    """Correlate provider-native Codex lifecycle events under daemon ownership.
+
+    The provider session id and the subagent id are both vendor-issued, so both
+    are hashed before any binding lookup or write; state only ever carries their
+    digests.
+    """
     try:
         args = CodexLifecycleParams.model_validate(params)
     except ValidationError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    args = args.model_copy(
+        update={
+            "provider_session_id": hash_vendor_session_id(args.provider_session_id),
+            "agent_id": hash_vendor_session_id(args.agent_id) if args.agent_id else None,
+        }
+    )
 
     state_path, event_path, wal_path = resolve_mutator_paths(
         repo_root=args.repo_root,

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import cast
+
+from pydantic import BaseModel
 
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
@@ -21,7 +24,14 @@ from eawf.kernel.store.kinds.agent_report import (
     ExecutorReportBody,
     store_kind_for_role,
 )
-from eawf.workflow.agent_report.rollup import AgentReportRow, per_wave_attempt_rollup
+from eawf.observability.telemetry.models import TelemetryToolCall, ToolCallErrorKind
+from eawf.observability.telemetry.store.base import AbstractMetricsStore
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
+from eawf.workflow.agent_report.rollup import (
+    AgentReportRow,
+    error_kind_by_attempt_from_store,
+    per_wave_attempt_rollup,
+)
 
 NOW = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
@@ -267,3 +277,48 @@ def test_per_wave_attempt_rollup_mixed_tokens_is_partial() -> None:
     assert rollup.token_total == 15
     assert rollup.unmeasured_token_attempt_count == 1
     assert [row.tokens for row in rollup.attempts] == ["15", "-"]
+
+
+class _TelemetryRowsStore:
+    """A metrics store stand-in serving fixed rows per table."""
+
+    def __init__(self, rows: dict[str, list[BaseModel]]) -> None:
+        self._rows = rows
+
+    def fetch_all(self, table: str, model: type[BaseModel]) -> list[BaseModel]:
+        return self._rows.get(table, [])
+
+
+def _tool_error(session_id: str, tool_use_id: str) -> TelemetryToolCall:
+    return TelemetryToolCall(
+        session_id=session_id,
+        turn_idx=0,
+        tool_use_id=tool_use_id,
+        tool_name="Bash",
+        input_hash="h",
+        ts=None,
+        ended_ts=None,
+        is_error=True,
+        error_kind=ToolCallErrorKind.TIMEOUT,
+    )
+
+
+def test_error_kind_by_attempt_from_store_joins_raw_call_to_hashed_attempt() -> None:
+    wave = Wave(
+        id="P28-I03-W27",
+        iter_id="P28-I03",
+        title="show wave attempts",
+        status=WaveStatus.IN_PROGRESS,
+        opened_at=NOW,
+        sessions={1: _session(1, session_id=hash_vendor_session_id("sess-1"), exit_status=0)},
+    )
+    store = _TelemetryRowsStore(
+        {
+            "telemetry_sessions": [],
+            "telemetry_tool_calls": [_tool_error("sess-1", "t1"), _tool_error("", "t2")],
+        }
+    )
+
+    kinds = error_kind_by_attempt_from_store(wave, cast(AbstractMetricsStore, store))
+
+    assert kinds == {1: ("timeout",)}

@@ -20,6 +20,11 @@ contract.
 The negative fixture is per-contract on purpose: promoting one of the
 dev3 pair and asserting the other is named is what proves the check
 reads both rather than short-circuiting.
+
+The dev3 cases that go through the RPC stage the rung below as it will
+really stand: dev2 baked, with its train advance recorded before dev3 is
+created. Without that advance the create is refused on succession
+before admission can say anything, which is pinned here too.
 """
 
 from __future__ import annotations
@@ -54,10 +59,12 @@ from eawf.workflow.release.admission import (
     required_contract_ids,
 )
 from eawf.workflow.release.adoption import adopt_publication
+from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.publication import burn_release
-from eawf.workflow.release.records import record_release
+from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.release.train import V07_TRAIN
-from tests._release_helpers import NOW, dev1_adoption, dev1_config, dev1_draft
+from eawf.workflow.release.train_store import record_train_advance
+from tests._release_helpers import NOW, dev1_adoption, dev1_config, dev1_draft, release_record
 
 pytestmark = pytest.mark.integration
 
@@ -77,6 +84,9 @@ DEV3_CONTRACT_IDS = required_contract_ids(DEV3)
 
 #: Identity minted for the record a successful create returns.
 DEV2_UID = UUID(int=372)
+
+#: The bundle a dev3 open carries, since dev3 requires membership.
+DEV3_MEMBERSHIP = ["milestone://epoch2/native-canary"]
 
 #: The command the refusal must hand the operator.
 PROMOTE_CMD = "eawf artifact promote-contract"
@@ -392,3 +402,73 @@ def test_release_create_rpc_refuses_without_an_on_disk_state() -> None:
 
     with pytest.raises(DaemonValidationError, match="on-disk state root"):
         asyncio.run(create(ctx, {"version": DEV2}))
+
+
+def _dev3_context(tmp_path: Path, state: State, *, advanced: bool) -> MethodContext:
+    """Return a context whose stores hold burned dev1 and baked dev2.
+
+    With *advanced* the dev2 train advance is recorded as well, before
+    any dev3 create is attempted, which is the order the operator walks.
+    """
+    ctx = _context(tmp_path, state)
+    state_path = Path(str(ctx.state_path))
+    baked = release_record(
+        key="REL-0.7.0.dev2",
+        version=DEV2,
+        status=ReleaseStatus.BAKED,
+        approval_ref="receipt://approval/dev2",
+    )
+    record_release(state_path, baked, recorded_at=NOW, summary=f"bake {baked.key}")
+    if advanced:
+        record_train_advance(
+            state_path,
+            TrainAdvanceRecord(
+                train_id=V07_TRAIN.train_id,
+                closed_key=baked.key,
+                closed_revision=baked.revision,
+                opened_key="REL-0.7.0.dev3",
+                receipt_refs=("checkpoint-receipt://REL-0.7.0.dev2/migration/seed",),
+                advanced_at=NOW,
+                train_revision=1,
+            ),
+            recorded_at=NOW,
+            summary="advance past REL-0.7.0.dev2",
+        )
+    return ctx
+
+
+def test_release_create_rpc_opens_dev3_once_the_dev2_advance_is_recorded(
+    tmp_path: Path,
+) -> None:
+    """With dev2 advanced and both contracts promoted, dev3 opens as a DRAFT."""
+    ctx = _dev3_context(tmp_path, state_with(DEV3_CONTRACT_IDS), advanced=True)
+
+    result = asyncio.run(create(ctx, {"version": DEV3, "membership_refs": DEV3_MEMBERSHIP}))
+
+    assert result["release"]["key"] == "REL-0.7.0.dev3"
+    assert result["release"]["status"] == ReleaseStatus.DRAFT.value
+    assert result["measured_contracts"] == list(DEV3_CONTRACT_IDS)
+    assert result["supersedes_release_ref"] == "REL-0.7.0.dev2"
+
+
+def test_release_create_rpc_refuses_dev3_naming_both_missing_contracts(tmp_path: Path) -> None:
+    """After the advance, admission still names every unpromoted dev3 contract."""
+    ctx = _dev3_context(tmp_path, state_with(()), advanced=True)
+
+    with pytest.raises(DaemonValidationError) as excinfo:
+        asyncio.run(create(ctx, {"version": DEV3, "membership_refs": DEV3_MEMBERSHIP}))
+
+    message = str(excinfo.value)
+    assert "measured_contract_missing" in message
+    assert all(contract_id in message for contract_id in DEV3_CONTRACT_IDS)
+    assert read_release_record(Path(str(ctx.state_path)), "REL-0.7.0.dev3") is None
+
+
+def test_release_create_rpc_refuses_dev3_before_the_dev2_advance(tmp_path: Path) -> None:
+    """Promoted contracts do not admit dev3 over a dev2 nobody advanced past."""
+    ctx = _dev3_context(tmp_path, state_with(DEV3_CONTRACT_IDS), advanced=False)
+
+    with pytest.raises(DaemonValidationError, match="predecessor_not_advanced"):
+        asyncio.run(create(ctx, {"version": DEV3, "membership_refs": DEV3_MEMBERSHIP}))
+
+    assert read_release_record(Path(str(ctx.state_path)), "REL-0.7.0.dev3") is None

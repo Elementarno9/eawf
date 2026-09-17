@@ -23,15 +23,26 @@ which is the shape the ``0.7.0.dev1`` incident took: a version published
 to four registries while the machinery held no record of it. An absent
 predecessor is therefore a refusal naming the record to open, not a
 silently permitted open.
+
+A predecessor that *shipped* owes one more thing: the train advance past
+it. ``release advance`` is where a baked or released checkpoint's gate
+receipts are re-validated, and it no longer opens the successor itself.
+If ``release create`` admitted the successor of a shipped rung nobody
+advanced past, it would be a second door around that check. An abandoned
+predecessor owes no advance, because it can never have one: the train
+does not walk past a rung that never shipped, yet the correction still
+has to open.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 from enum import StrEnum
 from typing import Final
 
 from eawf.kernel.spec.release import Release, ReleaseCheckpoint, ReleaseTrain
+from eawf.workflow.release.advance import ADVANCING_STATUSES
 from eawf.workflow.release.lifecycle import TERMINAL_RELEASE_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -53,10 +64,13 @@ class SuccessionDenialCode(StrEnum):
             record, so its lineage cannot be read back.
         PREDECESSOR_LIVE: The rung before this one has not reached a
             terminal status and can still move.
+        PREDECESSOR_NOT_ADVANCED: The rung before this one shipped, but
+            no train advance past it is recorded.
     """
 
     PREDECESSOR_UNRECORDED = "predecessor_unrecorded"
     PREDECESSOR_LIVE = "predecessor_live"
+    PREDECESSOR_NOT_ADVANCED = "predecessor_not_advanced"
 
 
 class CheckpointSuccessionError(Exception):
@@ -117,18 +131,23 @@ def assert_predecessor_terminal(
     *,
     version: str,
     predecessor: Release | None,
+    advanced_keys: Collection[str] = frozenset(),
 ) -> ReleaseCheckpoint | None:
     """Raise unless the rung below *version* is recorded and finished with.
 
     The first rung of a ladder succeeds nothing, so it opens against a
     ``None`` predecessor without a record being required. Every later
-    rung needs one, and it needs to have stopped moving.
+    rung needs one, and it needs to have stopped moving. A predecessor
+    that shipped also needs a recorded train advance past it.
 
     Args:
         train: Train that declares the ladder.
         version: Normalized version of the rung being opened.
         predecessor: The recorded release of the rung below, or ``None``
             when no record was found for it.
+        advanced_keys: Keys of the rungs *train* has a recorded advance
+            past. Empty means no advance is recorded, which refuses the
+            successor of every shipped rung.
 
     Returns:
         The predecessor rung declaration, or ``None`` at the head of the
@@ -137,7 +156,8 @@ def assert_predecessor_terminal(
     Raises:
         CheckpointSuccessionError: ``predecessor_unrecorded`` when the
             rung below has no record, ``predecessor_live`` when it has
-            one that is not terminal.
+            one that is not terminal, ``predecessor_not_advanced`` when
+            it shipped and the train never advanced past it.
         KeyError: When *train* declares no rung for *version*.
         ValueError: When *version* is not a normalized train version, or
             *predecessor* is a record of some other rung.
@@ -168,6 +188,16 @@ def assert_predecessor_terminal(
             f"{rung.release_key}, which stands at {predecessor.status.value!r} and can "
             f"still move; a successor opens only over "
             f"{sorted(SUCCEEDABLE_STATUSES)}",
+            release_key=key,
+            predecessor_key=rung.release_key,
+        )
+    if predecessor.status in ADVANCING_STATUSES and rung.release_key not in advanced_keys:
+        raise CheckpointSuccessionError(
+            SuccessionDenialCode.PREDECESSOR_NOT_ADVANCED,
+            f"{SuccessionDenialCode.PREDECESSOR_NOT_ADVANCED.value}: {key} succeeds "
+            f"{rung.release_key}, which stands at {predecessor.status.value!r} with no "
+            f"recorded train advance; run `eawf release advance {rung.release_key}` "
+            f"before opening its successor",
             release_key=key,
             predecessor_key=rung.release_key,
         )

@@ -20,6 +20,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.state import codex_lifecycle, runtime_capture
 from eawf.runtime.daemon.session import resolve_session_log
+from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     NO_METERED_SESSIONS,
     cost_tab_rows,
@@ -434,7 +435,7 @@ def test_codex_lifecycle_correlates_timed_subagent_attempt(tmp_path: Path) -> No
 
         state = State.model_validate(orjson.loads(state_path.read_bytes()))
         agent_session = state.agent_sessions["SES-CODEX-01"]
-        assert agent_session.runtime_session_id == "provider-session-01"
+        assert agent_session.runtime_session_id == hash_vendor_session_id("provider-session-01")
         attempt = state.waves["P30-I05-W04"].sessions[1]
         assert attempt.started_at == started_at
         assert attempt.ended_at == stopped_at
@@ -622,7 +623,7 @@ def test_interactive_capture_idempotent_updates_not_appends(tmp_path: Path) -> N
         state = State.model_validate(orjson.loads(state_path.read_bytes()))
         wave = state.waves[interactive_id]
         assert len(wave.sessions) == 1
-        assert wave.sessions[1].session_id == "sess-x"
+        assert wave.sessions[1].session_id == hash_vendor_session_id("sess-x")
         assert wave.sessions[1].cost_usd == pytest.approx(0.30)
 
     _run(body)

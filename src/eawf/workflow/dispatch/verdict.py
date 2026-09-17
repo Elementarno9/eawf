@@ -50,6 +50,7 @@ diff cold.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import Callable, Iterable, Sequence
@@ -70,7 +71,12 @@ from eawf.kernel.state.enums import (
     EffortBucket,
 )
 from eawf.kernel.state.models import AgentSession, State, Wave
-from eawf.kernel.store.kinds.agent_report import AgentReportBody, AuditorReportBody
+from eawf.kernel.store.kinds.agent_report import (
+    AgentReportBody,
+    AgentReportEvidenceRef,
+    AuditorReportBody,
+    CriterionVerdict,
+)
 from eawf.runtime.session.store import SessionConflict, start_session, terminalize_session
 from eawf.workflow.agent_report.rollup import iter_agent_reports
 from eawf.workflow.agent_report.store import (
@@ -446,8 +452,18 @@ def _rubric_block(rubric: Sequence[WaveBehavior]) -> str:
     return "\n".join(rows)
 
 
+def _json_string(text: str) -> str:
+    """Return *text* as the JSON string literal an auditor copies into its body."""
+    return json.dumps(text, ensure_ascii=False)
+
+
 def _durable_audit_context_block(context: DurableAuditContext) -> str:
-    """Render exact close inputs and criterion-to-receipt proof bindings."""
+    """Render exact close inputs and criterion-to-receipt proof bindings.
+
+    Each criterion text is shown as a JSON string with nothing else on its
+    line, and the deterministic flag gets its own sub-bullet: an auditor that
+    sees an annotation next to the text tends to copy it into its echo.
+    """
     lines = [
         f"- wave: `{context.wave_id}`",
         f"- close attempt: `{context.close_attempt_id}`",
@@ -464,12 +480,10 @@ def _durable_audit_context_block(context: DurableAuditContext) -> str:
         "Required criterion evidence bindings:",
     ]
     for criterion in context.criteria:
-        lines.append(
-            f"- `{criterion.criterion_id}`: {criterion.text} "
-            f"(deterministic={str(criterion.deterministic).lower()})"
-        )
+        lines.append(f"- `{criterion.criterion_id}` criterion: {_json_string(criterion.text)}")
+        lines.append(f"  - deterministic: {str(criterion.deterministic).lower()}")
         if criterion.gate_receipt_urns:
-            lines.extend(f"  - `{urn}`" for urn in criterion.gate_receipt_urns)
+            lines.extend(f"  - mapped GateReceipt: `{urn}`" for urn in criterion.gate_receipt_urns)
         else:
             lines.append("  - no deterministic GateReceipt applies")
     return "\n".join(lines)
@@ -512,6 +526,30 @@ SENSITIVE_VALUE_RULE: str = (
     "The same applies to any absolute local filesystem path, local URL or\n"
     "local hostname. Cite files by their repo-relative path. A report that\n"
     "quotes such a value is rejected and must be re-emitted."
+)
+
+
+def _field_names(names: Sequence[str]) -> str:
+    """Return two or more *names* as a backticked prose list."""
+    quoted = [f"`{name}`" for name in names]
+    return f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+
+
+#: The report models forbid extra fields, and a live auditor still added a
+#: ``findings`` list on every re-ask, so the durable prompt spells out the closed
+#: field set. It is read from the models so the prompt cannot drift from the
+#: schema. ``report_source`` is left out: only the daemon sets it, when it
+#: synthesizes a body.
+_DURABLE_BODY_FIELDS: tuple[str, ...] = tuple(
+    name for name in AuditorReportBody.model_fields if name != "report_source"
+)
+_DURABLE_FIELDS_RULE: str = (
+    "The body accepts only these fields:\n"
+    f"{_field_names(_DURABLE_BODY_FIELDS)}.\n"
+    f"A `criteria` row accepts only {_field_names(list(CriterionVerdict.model_fields))};\n"
+    f"an evidence entry accepts only {_field_names(list(AgentReportEvidenceRef.model_fields))}.\n"
+    "Any other field, such as `findings`, is rejected: put additional\n"
+    "observations in `summary` instead."
 )
 
 
@@ -617,7 +655,9 @@ def build_auditor_prompt(
             "## Durable evidence contract\n"
             "\n"
             "Emit exactly one `criteria` row for every required criterion above,\n"
-            "in the same order, using its full criterion text. Every row MUST\n"
+            "in the same order. Set each row's `criterion` to the JSON string shown\n"
+            "for that criterion, copied character for character: no paraphrase,\n"
+            "no shortening, no criterion id and no deterministic flag. Every row MUST\n"
             "carry at least one `evidence_refs` entry. Evidence `kind` MUST be\n"
             "exactly one of `audit`, `artifact`, `decision`, `store_record`, or\n"
             "`external_url`. A GateReceipt is a store record, never a separate\n"
@@ -627,7 +667,9 @@ def build_auditor_prompt(
             "criterion's mapped GateReceipt URNs exactly. The aggregate\n"
             "verdict MUST agree with those rows: pass / pass-with-followups\n"
             "requires every row to pass; fail / blocked requires at least one\n"
-            "row to fail. A close-ready verdict cannot carry refutations."
+            "row to fail. A close-ready verdict cannot carry refutations.\n"
+            "\n"
+            f"{_DURABLE_FIELDS_RULE}"
         )
     return "\n\n".join(sections)
 
@@ -648,12 +690,40 @@ def _validate_durable_auditor_aggregate(body: AuditorReportBody) -> None:
         )
 
 
+#: An auditor that has seen a criterion next to its deterministic flag tends to
+#: echo both. The flag is not part of the criterion, so exactly one trailing
+#: annotation is dropped before the verbatim comparison; a second annotation,
+#: a different spelling or any other edit still fails it.
+_DETERMINISTIC_ANNOTATION: re.Pattern[str] = re.compile(r" ?\(deterministic=(?:true|false)\)\Z")
+
+
+def _strip_deterministic_annotation(echo: str) -> str:
+    """Return *echo* without one trailing ``(deterministic=...)`` annotation."""
+    return _DETERMINISTIC_ANNOTATION.sub("", echo, count=1)
+
+
 def _validate_durable_auditor_body(
     body: AuditorReportBody,
     *,
     context: DurableAuditContext,
 ) -> AuditorReportBody:
-    """Enforce exact required-criterion coverage and receipt-grounded proof."""
+    """Enforce exact required-criterion coverage and receipt-grounded proof.
+
+    Each row must echo its criterion text verbatim, apart from one trailing
+    ``(deterministic=true)`` or ``(deterministic=false)`` annotation.
+
+    Args:
+        body: The auditor body that already passed the forced schema.
+        context: The frozen close context naming the required criteria.
+
+    Returns:
+        *body* with every criterion echo set to the exact criterion text, so
+        a stripped annotation never reaches the report store.
+
+    Raises:
+        ValueError: When the target, the row count, a criterion echo, the
+            per-row evidence or the aggregate verdict breaks the contract.
+    """
     if body.target_id != context.wave_id:
         raise ValueError(
             f"durable audit target_id must equal wave id: expected "
@@ -664,12 +734,20 @@ def _validate_durable_auditor_body(
         raise ValueError(
             f"durable audit requires {len(expected)} criterion rows, got {len(body.criteria)}"
         )
+    rows: list[CriterionVerdict] = []
     for row, criterion in zip(body.criteria, expected, strict=True):
-        if row.criterion != criterion.text:
+        if criterion.text not in (row.criterion, _strip_deterministic_annotation(row.criterion)):
             raise ValueError(
                 f"durable audit criterion mismatch for {criterion.criterion_id!r}: "
-                f"expected {criterion.text!r}, got {row.criterion!r}"
+                f"set `criterion` to exactly {_json_string(criterion.text)}, copied "
+                f"character for character with no paraphrase or annotation; "
+                f"got {_json_string(row.criterion)}"
             )
+        rows.append(
+            row
+            if row.criterion == criterion.text
+            else row.model_copy(update={"criterion": criterion.text})
+        )
         if not row.evidence_refs:
             raise ValueError(
                 f"durable audit criterion requires evidence_refs: {criterion.criterion_id!r}"
@@ -689,7 +767,12 @@ def _validate_durable_auditor_body(
                     f"{criterion.criterion_id!r}"
                 )
     _validate_durable_auditor_aggregate(body)
-    return body
+    if rows == body.criteria:
+        return body
+    logger.info(
+        f"_validate_durable_auditor_body wave={context.wave_id!r} stripped=deterministic_annotation"
+    )
+    return body.model_copy(update={"criteria": rows})
 
 
 def parse_auditor_report_body(

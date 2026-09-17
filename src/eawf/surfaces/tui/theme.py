@@ -11,15 +11,36 @@ the structural CSS references when the active theme changes — the swap
 becomes a pure var rebind, exactly as the structural CSS was written to
 expect.
 
-Every theme the App can switch to MUST carry the full semantic var set,
-otherwise the structural CSS in ``theme.tcss`` references an undefined
-var on that theme. The four operator-facing logical names map onto
-registered Textual theme names through :data:`LOGICAL_THEMES`:
+Every theme the App can switch to MUST carry the full chrome and semantic
+var set, otherwise the structural CSS in ``theme.tcss`` references an
+undefined var on that theme.
 
-* ``dark`` → :data:`EA_DARK` — the Wong 2011 deuteranopia-safe palette.
-  Its lifecycle ``status-*`` tints carry the exact hex values that shipped
-  at global scope in ``theme.tcss``; only ``accent`` / ``primary`` rotate
-  teal -> green for the cosmic-terminal reskin.
+The dark and light values are bound from the design packet's stylesheet,
+tracked as the colour oracle ``tests/fixtures/console/colour-oracle.json``.
+The oracle suite holds both themes to it with exactly one deliberate
+difference: the dark status green (``ok`` / ``status-closed``) stays
+``#009e73``, because the packet gives it the accent green and a closed cell
+would then read as the brand. ``primary`` has no packet counterpart and is
+product-authored.
+
+The four operator-facing logical names map onto registered Textual theme
+names through :data:`LOGICAL_THEMES`:
+
+* ``dark`` -> :data:`EA_DARK`: the packet's dark console palette, built on
+  the Wong 2011 deuteranopia-safe hues.
+* ``cb`` -> :data:`EA_CB`: the IBM colour-blind-safe palette, visually
+  distinct from Wong so a second swap is observable. The packet has no
+  colour-blind variant, so it reuses the dark chrome and swaps only the
+  semantic hues.
+* ``light`` -> :data:`EA_LIGHT`: the packet's light console palette,
+  carrying the same var *names* tuned for a light surface.
+* ``auto`` -> terminal-background detect, resolving to ``dark`` or
+  ``light``. The live OSC 11 probe (:func:`detect_auto_theme`) queries the
+  terminal background and classifies it by luminance; it runs once at App
+  construction (before Textual captures stdin) and the result is cached.
+  The pure :func:`resolve_theme_name` validator keeps returning the dark
+  baseline for ``auto`` so a persisted-value validation never triggers a
+  terminal query.
 
 Two palette invariants hold on EVERY registered theme, because the
 structural CSS reads them as a pair rather than in isolation:
@@ -35,18 +56,6 @@ structural CSS reads them as a pair rather than in isolation:
   and ``$surface``. ``muted`` is the header / footer hint colour and those
   chassis rows are painted on ``$panel``, so a ``muted`` tuned only against
   the darker ``$surface`` reads as unlabelled grey mush on the band.
-* ``cb`` → :data:`EA_CB` — the IBM colour-blind-safe palette, visually
-  distinct from Wong so a second swap is observable.
-* ``light`` → :data:`EA_LIGHT` — a light-background variant that carries
-  the same semantic var *names* tuned for a light surface, built on
-  Textual's ``textual-light`` base colours.
-* ``auto`` → terminal-background detect, resolving to ``dark`` or
-  ``light``. The live OSC 11 probe (:func:`detect_auto_theme`) queries the
-  terminal background and classifies it by luminance; it runs once at App
-  construction (before Textual captures stdin) and the result is cached.
-  The pure :func:`resolve_theme_name` validator keeps returning the dark
-  baseline for ``auto`` so a persisted-value validation never triggers a
-  terminal query.
 """
 
 from __future__ import annotations
@@ -78,17 +87,13 @@ _OSC11_TIMEOUT_S: Final[float] = 0.2
 #: midpoint of the 0..255 range.
 _LIGHT_LUMINANCE_THRESHOLD: Final[float] = 127.5
 
-#: Wong 2011 deuteranopia-safe semantic vars. The lifecycle ``status-*``
-#: tints and the ``ok`` / ``warn`` / ``err`` band hexes keep the exact
-#: values that shipped at global scope in ``theme.tcss`` before the
-#: per-theme migration. ``accent`` rotated teal -> green for the
-#: cosmic-terminal reskin; ``primary`` is its lit sibling so the focused
-#: pane border reads as a lift rather than as the same green, and ``muted``
-#: is a blue-grey chosen to clear 4.5:1 on both the panel and the surface
-#: (the flat ``#6c6c6c`` it replaces scored 2.5:1 on the panel).
-#: ``status-claimed`` deliberately keeps
-#: the cool teal so it reads distinct from the green accent and the green
-#: ``status-closed``. Public because the shared
+#: Dark semantic vars, bound from the packet's dark palette on Wong 2011
+#: deuteranopia-safe hues. ``ok`` / ``status-closed`` keep the Wong green
+#: ``#009e73`` rather than the packet's accent green, so a closed or ok cell
+#: never renders identical to the brand accent. ``primary`` is the lit
+#: sibling of ``accent`` so the focused pane border reads as a lift, and
+#: ``status-claimed`` keeps the cool teal so it reads apart from both
+#: greens. Public because the shared
 #: :mod:`eawf.surfaces.tui.widgets.status_tint` helper derives the Rich-context
 #: fallback tints (tree-label / DataTable-cell hexes) from this single
 #: palette rather than re-typing the hexes.
@@ -99,14 +104,14 @@ WONG_VARIABLES: Final[dict[str, str]] = {
     "warn": "#e69f00",
     "err": "#d55e00",
     "muted": "#828a94",
-    "status-pending": "#6c6c6c",
+    "status-pending": "#828a94",
     "status-claimed": "#56b6c2",
     "status-in-progress": "#e69f00",
     "status-closed": "#009e73",
     "status-failed": "#d55e00",
 }
 
-#: IBM colour-blind-safe semantic vars — a palette visually distinct from
+#: IBM colour-blind-safe semantic vars: a palette visually distinct from
 #: Wong (bluer accent, magenta error, gold in-progress) so a swap away
 #: from ``dark`` is observable while staying colour-blind-safe.
 _IBM_VARIABLES: Final[dict[str, str]] = {
@@ -123,81 +128,113 @@ _IBM_VARIABLES: Final[dict[str, str]] = {
     "status-failed": "#dc267f",
 }
 
-#: Light-surface semantic vars — the same var *names* the structural CSS
-#: references, retuned so the tints stay legible on a light background.
-#: ``primary`` is DARKER than ``accent`` here, inverting the dark themes'
-#: lift: a focus ring only reads as focused when it moves away from the
-#: background, and this background is the bright one.
+#: Light semantic vars, bound from the packet's light palette. ``primary``
+#: is DARKER than ``accent`` here, inverting the dark themes' lift: a focus
+#: ring only reads as focused when it moves away from the background, and
+#: this background is the bright one.
 _LIGHT_VARIABLES: Final[dict[str, str]] = {
-    "accent": "#007a52",
+    "accent": "#0a7a52",
     "primary": "#00503a",
-    "ok": "#007a52",
-    "warn": "#a35b00",
+    "ok": "#0a7a52",
+    "warn": "#9a5600",
     "err": "#a8331a",
-    "muted": "#595959",
-    "status-pending": "#595959",
-    "status-claimed": "#007a87",
-    "status-in-progress": "#a35b00",
-    "status-closed": "#007a52",
+    "muted": "#5b636d",
+    "status-pending": "#5b636d",
+    "status-claimed": "#0a7a87",
+    "status-in-progress": "#9a5600",
+    "status-closed": "#0a7a52",
     "status-failed": "#a8331a",
 }
 
+#: Dark chrome: the packet's planes, rules and text tones under the
+#: packet's own names, except its ``text``, which binds to Textual's
+#: ``foreground``. ``$text`` stays Textual's contrast-aware colour because
+#: widget stylesheets paint it on saturated fills (banners, cursors) where
+#: a fixed grey would lose contrast. ``border`` overrides the ``$border``
+#: Textual would otherwise copy from ``primary``, so frames recede instead
+#: of glowing in the focus-ring green.
+_DARK_CHROME: Final[dict[str, str]] = {
+    "void": "#14181d",
+    "surface": "#0c0e11",
+    "panel": "#12161b",
+    "panel-2": "#171c22",
+    "border": "#242a32",
+    "border-soft": "#1d2229",
+    "border-lit": "#2b313a",
+    "foreground": "#c2c9d1",
+    "faint": "#5b636d",
+    "ghost": "#343b44",
+}
 
-#: Every theme pins ``panel`` explicitly instead of letting Textual derive
-#: it. Textual's default is ``surface.blend(primary, 0.1)`` plus a white
-#: boost on dark themes, which chains the chassis-band background to the
-#: focus-ring colour: brightening ``primary`` to make the ring visible also
-#: lifts every header / footer band and silently eats the ``muted``
-#: contrast budget measured against it. Pinning breaks that chain, so the
-#: ring and the band are tuned independently.
-#:
-#: The two dark panels sit just above ``$surface`` in luminance and carry
-#: their palette's hue, so the band still reads as a distinct plane while
-#: leaving ``muted`` its 4.5:1 headroom. The light panel keeps the exact
-#: value Textual derived before the pin, so the light chassis is unchanged.
+#: The packet has no colour-blind palette. The cb theme is a dark theme
+#: whose chrome carries no hue, so it reuses the dark chrome and a swap
+#: moves only the semantic hues.
+_CB_CHROME: Final[dict[str, str]] = dict(_DARK_CHROME)
 
-#: The Wong deuteranopia-safe dark theme — the default + the ``dark``
-#: logical name. Its ``variables`` carry the pre-migration lifecycle hex
-#: with the green-rotated accent + lit primary mirrored onto the Textual
-#: ctor.
-EA_DARK: Final[Theme] = Theme(
-    name="ea-dark",
-    primary="#5ce8bb",
-    accent="#16b384",
-    success="#009e73",
-    warning="#e69f00",
-    error="#d55e00",
-    panel="#1a2422",
-    dark=True,
-    variables=dict(WONG_VARIABLES),
+#: Light chrome, bound from the packet's light palette the same way.
+_LIGHT_CHROME: Final[dict[str, str]] = {
+    "void": "#e7eaee",
+    "surface": "#f3f5f7",
+    "panel": "#ffffff",
+    "panel-2": "#f6f8fa",
+    "border": "#d3d7dc",
+    "border-soft": "#e0e4e8",
+    "border-lit": "#b9c0c8",
+    "foreground": "#1a1d21",
+    "faint": "#6f7883",
+    "ghost": "#c9ced4",
+}
+
+
+def _build_theme(
+    *, name: str, semantic: dict[str, str], chrome: dict[str, str], dark: bool
+) -> Theme:
+    """Build a registered theme whose ctor mirrors its variables map.
+
+    Textual resolves ``$var`` from the ``variables`` map but derives its
+    built-ins (block cursor, ``$text-primary``, scrollbars) from the ctor
+    arguments, so both must carry the same palette. ``panel`` is always
+    pinned: Textual would otherwise derive it from ``primary``, chaining the
+    header / footer band to the focus-ring colour and eating the ``muted``
+    contrast budget measured against it.
+
+    Args:
+        name: The registered Textual theme name.
+        semantic: The semantic vars (accent, primary, status tints, ...).
+        chrome: The chrome vars (surface, panel, border, foreground, ...).
+        dark: Whether the theme is a dark theme.
+
+    Returns:
+        The theme, carrying ``chrome`` and ``semantic`` in one variables map.
+    """
+    return Theme(
+        name=name,
+        primary=semantic["primary"],
+        accent=semantic["accent"],
+        success=semantic["ok"],
+        warning=semantic["warn"],
+        error=semantic["err"],
+        surface=chrome["surface"],
+        panel=chrome["panel"],
+        foreground=chrome["foreground"],
+        dark=dark,
+        variables={**chrome, **semantic},
+    )
+
+
+#: The dark theme: the default and the ``dark`` logical name.
+EA_DARK: Final[Theme] = _build_theme(
+    name="ea-dark", semantic=WONG_VARIABLES, chrome=_DARK_CHROME, dark=True
 )
 
-#: The IBM colour-blind-safe dark theme — the ``cb`` logical name.
-EA_CB: Final[Theme] = Theme(
-    name="ea-cb",
-    primary="#3fd6c0",
-    accent="#1a9988",
-    success="#1a9988",
-    warning="#ffb000",
-    error="#dc267f",
-    panel="#16252a",
-    dark=True,
-    variables=dict(_IBM_VARIABLES),
+#: The IBM colour-blind-safe dark theme: the ``cb`` logical name.
+EA_CB: Final[Theme] = _build_theme(
+    name="ea-cb", semantic=_IBM_VARIABLES, chrome=_CB_CHROME, dark=True
 )
 
-#: The light-surface theme — the ``light`` logical name. Carries the
-#: semantic var set retuned for a light background so the structural CSS
-#: keeps resolving every ``$var`` it references.
-EA_LIGHT: Final[Theme] = Theme(
-    name="ea-light",
-    primary="#00503a",
-    accent="#007a52",
-    success="#007a52",
-    warning="#a35b00",
-    error="#a8331a",
-    panel="#dce8e4",
-    dark=False,
-    variables=dict(_LIGHT_VARIABLES),
+#: The light-surface theme: the ``light`` logical name.
+EA_LIGHT: Final[Theme] = _build_theme(
+    name="ea-light", semantic=_LIGHT_VARIABLES, chrome=_LIGHT_CHROME, dark=False
 )
 
 

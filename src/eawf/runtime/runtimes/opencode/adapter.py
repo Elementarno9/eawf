@@ -293,12 +293,21 @@ def _assert_no_error_event(events: list[dict[str, object]]) -> None:
     Raises:
         RuntimeSpawnError: An ``error`` event is present (the message is
             lifted from ``error.data.message``, falling back to
-            ``error.name``).
+            ``error.name``, and rides on ``stderr`` so the failure
+            classifies by its own message).
     """
     for event in events:
         if event.get("type") != "error":
             continue
-        raise RuntimeSpawnError(f"opencode reported an error event: {_error_event_detail(event)!r}")
+        detail = _error_event_detail(event)
+        # opencode can report an auth or rate-limit failure as a stream event
+        # while still exiting zero, and parse_error keys on stderr -- carry the
+        # lifted detail there so the failure classifies by its own message
+        # instead of falling through to the generic API default.
+        raise RuntimeSpawnError(
+            f"opencode reported an error event: {detail!r}",
+            stderr=str(detail).encode() if detail is not None else b"",
+        )
 
 
 def _opencode_stream_error_detail(stdout: bytes) -> str:

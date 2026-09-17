@@ -27,10 +27,20 @@ all the work here:
   that binds different source proves a gate passed on a *different
   build*, which is the failure this check exists to catch.
 
-The advance never mutates the closing record. :class:`Release` is frozen
-and :func:`advance_train` returns the prior record untouched alongside a
-brand-new DRAFT record for the next rung, so a checkpoint's history can
-never be rewritten by the checkpoint that followed it.
+The advance never mutates the closing record, and it opens no record
+either. :class:`Release` is frozen, and :func:`advance_train` returns the
+prior record untouched beside a :class:`TrainAdvanceRecord` naming the
+rung now open. The DRAFT of that rung is opened by ``release create``
+behind measured admission, so there is one way into a checkpoint record
+rather than a second one that skips the admission check.
+
+Where the train stands is derived rather than stored. The ladder is
+source data, so its index cannot be a field anyone writes;
+:func:`open_rung_index` reads it off the release records and the
+recorded advances instead.
+
+This module stays free of store I/O: the store-kind registry imports its
+two payload models, and a store import here would close that loop.
 """
 
 from __future__ import annotations
@@ -40,10 +50,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Final
+from typing import Annotated, Any, Final
 from uuid import UUID
 
-from pydantic import ConfigDict, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import (
@@ -53,8 +63,8 @@ from eawf.kernel.spec.release import (
     ReleaseKeyStr,
     ReleaseStatus,
     ReleaseTrain,
+    ReleaseTrainIdStr,
     Sha256DigestStr,
-    validate_release_against_train,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName
 from eawf.kernel.state.models import ShaStr
@@ -177,6 +187,46 @@ class CheckpointGateReceipt(_StrictModel):
         return self
 
 
+class TrainAdvanceRecord(_StrictModel):
+    """The durable row one train advance leaves behind.
+
+    Attributes:
+        train_id: Train that walked.
+        closed_key: Checkpoint the train walked past.
+        closed_revision: Revision of that checkpoint's record when it
+            closed, which is the revision its receipts were judged
+            against.
+        opened_key: The rung the train has open after the advance. It
+            names a rung, not a record: nothing is opened until
+            ``release create`` admits it.
+        receipt_refs: The closed checkpoint's validated receipt
+            references, in its configuration's gate order.
+        advanced_at: When the advance was judged (timezone-aware UTC).
+        train_revision: The train's revision after the advance.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    train_id: ReleaseTrainIdStr
+    closed_key: ReleaseKeyStr
+    closed_revision: Annotated[int, Field(ge=0)]
+    opened_key: ReleaseKeyStr
+    receipt_refs: tuple[ReferenceStr, ...]
+    advanced_at: UtcDatetime
+    train_revision: Annotated[int, Field(ge=1)]
+
+    @model_validator(mode="after")
+    def _walks_forward(self) -> TrainAdvanceRecord:
+        """Reject an advance that closes and opens the same rung.
+
+        Raises:
+            ValueError: When :attr:`opened_key` equals :attr:`closed_key`.
+        """
+        if self.opened_key == self.closed_key:
+            raise ValueError(f"train advance closes and opens the same rung {self.closed_key!r}")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class TrainAdvance:
     """The result of walking a train onto its next rung.
@@ -185,15 +235,17 @@ class TrainAdvance:
         train: The train at the new index, one revision on.
         closed: The record that was standing at the old index, returned
             unchanged so a caller can assert it was never rewritten.
-        opened: The brand-new DRAFT record of the next rung.
-        receipt_refs: The prior checkpoint's validated receipt
-            references, in the profile's gate order.
+        record: The row a caller persists so the move outlives the call.
     """
 
     train: ReleaseTrain
     closed: Release
-    opened: Release
-    receipt_refs: tuple[str, ...]
+    record: TrainAdvanceRecord
+
+    @property
+    def receipt_refs(self) -> tuple[str, ...]:
+        """Return the closed checkpoint's validated receipt references."""
+        return self.record.receipt_refs
 
 
 def draft_release_for(
@@ -208,6 +260,8 @@ def draft_release_for(
     record cannot be opened at an epoch or a channel its train never
     declared. The record starts at revision ``0``: it is a new object
     with its own identity, never a copy of the checkpoint before it.
+    Measured admission is the caller's job, which is why the train
+    advance does not call this.
 
     Args:
         rung: The ladder rung to open.
@@ -454,8 +508,6 @@ def advance_train(
     config: ReleaseConfig,
     receipts: Sequence[CheckpointGateReceipt],
     now: datetime,
-    next_uid: UUID,
-    membership_refs: Sequence[str] = (),
 ) -> TrainAdvance:
     """Walk *train* onto its next rung, or refuse and leave it untouched.
 
@@ -463,34 +515,30 @@ def advance_train(
     record the train has open, has it finished, is there anywhere to go,
     and does its evidence still bind. Nothing is built until all four
     hold, so a refused advance leaves both the train and the closing
-    record exactly as they were.
+    record exactly as they were. No record is built for the next rung
+    either way; ``release create`` opens it once admission holds.
 
     Args:
-        train: The train to advance.
+        train: The train to advance, standing at its derived open index.
         current: The record standing at the open index.
         config: The open checkpoint's loaded configuration.
-        receipts: Gate receipts earned by the open checkpoint.
+        receipts: Gate receipts earned by the open checkpoint, at most
+            one per gate.
         now: Timezone-aware UTC instant freshness is judged at.
-        next_uid: Identity for the DRAFT record of the next rung.
-        membership_refs: Milestone acceptance bundles for the next rung,
-            for the rungs that require them.
 
     Returns:
         A :class:`TrainAdvance` carrying the advanced train, the
-        unchanged closing record and the newly opened DRAFT record.
+        unchanged closing record and the row that records the move.
 
     Raises:
         TrainAdvanceError: On any of the five named denials.
         ValueError: When *now* is naive, when *config* describes a
-            different checkpoint, when a gate is offered twice, or when
-            the opened record disagrees with the rung the train declares.
+            different checkpoint, or when a gate is offered twice.
     """
     _assert_open_checkpoint(train, current)
     assert_checkpoint_terminal(train, current)
     rung = _next_rung(train, current)
     refs = assert_prerequisite_receipts(current, config, receipts, now=now, train_id=train.train_id)
-    opened = draft_release_for(rung, uid=next_uid, membership_refs=membership_refs)
-    validate_release_against_train(opened, train)
     advanced = ReleaseTrain.model_validate(
         train.model_copy(
             update={
@@ -500,12 +548,105 @@ def advance_train(
             }
         ).model_dump(mode="json")
     )
+    record = TrainAdvanceRecord(
+        train_id=train.train_id,
+        closed_key=current.key,
+        closed_revision=current.revision,
+        opened_key=rung.release_key,
+        receipt_refs=refs,
+        advanced_at=now,
+        train_revision=advanced.revision,
+    )
     logger.info(
         f"advance_train train_id={train.train_id!r} closed={current.key!r} "
-        f"opened={opened.key!r} index={advanced.current_checkpoint_index} "
+        f"opened={rung.release_key!r} index={advanced.current_checkpoint_index} "
         f"revision={advanced.revision}"
     )
-    return TrainAdvance(train=advanced, closed=current, opened=opened, receipt_refs=refs)
+    return TrainAdvance(train=advanced, closed=current, record=record)
+
+
+def open_rung_index(
+    train: ReleaseTrain,
+    *,
+    recorded_keys: Iterable[str],
+    advances: Iterable[TrainAdvanceRecord],
+) -> int:
+    """Return the index of the rung *train* has open, read off the stores.
+
+    The open rung is the later of two facts. A rung that carries a
+    record has been opened, so the train stands at least that far up.
+    A rung the train recorded an advance past is closed, so the train
+    stands at least one rung above it. Neither fact alone is enough: a
+    checkpoint burned to ``partially_released`` never advances, yet its
+    successor's record moves the train past it, and a baked checkpoint
+    that advanced has no successor record until ``release create``
+    opens one.
+
+    Args:
+        train: The train whose ladder is read.
+        recorded_keys: The key of every record in the release-record
+            collection. A key the ladder does not declare belongs to
+            another train and is skipped.
+        advances: Every recorded train advance. Rows of another train
+            are skipped.
+
+    Returns:
+        The zero-based open index; ``0`` when nothing is recorded.
+
+    Raises:
+        ValueError: When an advance of this train opened a rung its
+            ladder does not declare.
+    """
+    positions = {rung.release_key: index for index, rung in enumerate(train.checkpoints)}
+    highest_recorded = max((positions[key] for key in recorded_keys if key in positions), default=0)
+    after_advance = 0
+    for row in advances:
+        if row.train_id != train.train_id:
+            continue
+        if row.opened_key not in positions:
+            raise ValueError(
+                f"train {train.train_id} advance opened {row.opened_key!r}, which its "
+                f"ladder does not declare"
+            )
+        after_advance = max(after_advance, positions[row.opened_key])
+    return max(highest_recorded, after_advance)
+
+
+def derive_train(
+    train: ReleaseTrain,
+    *,
+    recorded_keys: Iterable[str],
+    advances: Sequence[TrainAdvanceRecord],
+) -> ReleaseTrain:
+    """Return *train* standing where its records and advances put it.
+
+    Args:
+        train: The source-declared train, standing at its first rung.
+        recorded_keys: The key of every record in the release-record
+            collection.
+        advances: Every recorded train advance.
+
+    Returns:
+        The train at :func:`open_rung_index`, one revision on per
+        advance of its own, carrying each advance's receipt references
+        against the rung it closed.
+
+    Raises:
+        ValueError: When an advance of this train names a rung its
+            ladder does not declare.
+    """
+    own = [row for row in advances if row.train_id == train.train_id]
+    index = open_rung_index(train, recorded_keys=recorded_keys, advances=own)
+    refs = {**train.gate_receipt_refs, **{row.closed_key: row.receipt_refs for row in own}}
+    return ReleaseTrain.model_validate(
+        train.model_copy(
+            update={
+                "current_checkpoint_index": index,
+                "gate_receipt_refs": refs,
+                "revision": train.revision + len(own),
+            }
+        ).model_dump(mode="json")
+    )
 
 
 def ladder_status(train: ReleaseTrain, index: int) -> CheckpointLadderStatus:
@@ -606,11 +747,14 @@ __all__ = [
     "TrainAdvance",
     "TrainAdvanceDenialCode",
     "TrainAdvanceError",
+    "TrainAdvanceRecord",
     "advance_train",
     "assert_checkpoint_terminal",
     "assert_prerequisite_receipts",
+    "derive_train",
     "draft_release_for",
     "ladder_status",
+    "open_rung_index",
     "render_train_ladder",
     "render_train_ladder_text",
 ]

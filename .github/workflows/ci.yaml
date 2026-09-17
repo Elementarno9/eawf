@@ -24,6 +24,8 @@ jobs:
     # an hour per push. This job compares the checkout with the last green
     # ci.yaml run on the same ref and exposes code=false only when every
     # changed path is state bookkeeping; the heavy jobs gate on that output.
+    # The green output names the green commit it compared against, which
+    # the green-tree job records as the tree a skipped run inherits.
     # It must stay unconditional and must not swallow a failure: a skipped or
     # crashed classifier would leave the output empty and skip the matrix.
     # Every lookup failure fails open to code=true inside the tool, and a
@@ -36,6 +38,7 @@ jobs:
       contents: read
     outputs:
       code: ${{ steps.classify.outputs.code }}
+      green: ${{ steps.classify.outputs.green }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -433,3 +436,61 @@ jobs:
           tests/integration/test_windows_atomic_floor.py
           tests/integration/surfaces/cli/test_windows_w04_policy.py
           tests/integration/test_packaging.py
+
+  green-tree:
+    name: Record the green tree
+    # The release gates accept a green push run on the tagged tree, not
+    # only on the tagged commit, and this job is what makes a tree count as
+    # green. It needs every other job, so it runs last and sees each
+    # result. The not-cancelled guard keeps the skip of a pull-request-only
+    # job from skipping it, and the result checks keep a failed or
+    # cancelled job from recording anything. Push runs only: a pull
+    # request run tests a merge of the head into the base, a tree nobody
+    # tags. The tool writes the record when the heavy jobs passed, or when
+    # the changes job skipped them against a green tree that is itself
+    # recorded, and the record names that inherited tree. A run that may
+    # not record stays green; the gates then accept only its own commit.
+    needs:
+      [
+        changes,
+        test,
+        tool-install-smoke,
+        snapshot-pairing,
+        linux-jail,
+        twice-green,
+        prose-gate,
+        windows,
+      ]
+    if: >-
+      !cancelled() && github.event_name == 'push'
+      && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read # find the green run that recorded an inherited tree
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: an inherited tree is read off the green baseline
+          # commit, which a shallow clone does not carry.
+          fetch-depth: 0
+
+      - name: Decide on the tree record
+        id: record
+        # The runner's system Python, as in the changes job: the tool is
+        # stdlib-only. NEEDS carries every needed job's result and the
+        # changes job's outputs.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_green_tree.py record "${RUNNER_TEMP}/ci-green-tree.json"
+
+      - name: Upload the tree record
+        if: steps.record.outputs.recorded == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-green-tree-${{ steps.record.outputs.tree }}
+          path: ${{ runner.temp }}/ci-green-tree.json
+          if-no-files-found: error

@@ -14,7 +14,10 @@ Covers the standalone gate in ``tools/coverage_gate.py``:
   ``[tool.eawf.coverage.gates]`` and the TUI carries a behavioural floor instead
   of a line/branch ratchet;
 - the real ``pyproject.toml`` floors are GREEN against the real ``coverage.xml``
-  (when that report is present) -- the ratchet-is-not-aspirational contract.
+  (when that report is present and no older than the HEAD commit) -- the
+  ratchet-is-not-aspirational contract;
+- ``coverage_xml_is_stale`` and ``head_commit_time`` decide that freshness
+  skip, including outside a git work tree.
 
 ``tools/`` is excluded from the package, so the gate is loaded via
 :mod:`importlib`. The aggregation + evaluation helpers take injected config +
@@ -24,6 +27,7 @@ fixture trees so the negative controls never touch the real coverage report.
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import tomllib
 import xml.etree.ElementTree as ET
@@ -298,10 +302,104 @@ def test_tui_line_cov_stays_waived_but_carries_behavioural_floor() -> None:
     assert int(behavioural["min_flows"]) > 0
 
 
-@pytest.mark.skipif(not _COVERAGE_XML.exists(), reason="no coverage.xml on this tree")
+def _real_coverage_skip_reason(coverage_xml: Path, head_committed_at: int | None) -> str | None:
+    """Return why a real-tree check must skip, or ``None`` when it may run.
+
+    A ``coverage.xml`` left behind by an earlier local run measured an older
+    tree, so checking today's floors against it passes or fails by accident.
+    """
+    if not coverage_xml.exists():
+        return "no coverage.xml on this tree"
+    if head_committed_at is None:
+        return "HEAD commit time is unavailable outside a git work tree"
+    if _GATE.coverage_xml_is_stale(coverage_xml, head_committed_at=head_committed_at):
+        return "coverage.xml is older than the HEAD commit"
+    return None
+
+
+def _skip_unless_real_coverage_is_fresh() -> None:
+    reason = _real_coverage_skip_reason(_COVERAGE_XML, _GATE.head_commit_time(_REPO_ROOT))
+    if reason is not None:
+        pytest.skip(reason)
+
+
+def _write_report_at(path: Path, mtime: float) -> Path:
+    path.write_text("<coverage/>", encoding="utf-8")
+    os.utime(path, (mtime, mtime))
+    return path
+
+
+def test_coverage_xml_is_stale_when_written_before_head(tmp_path: Path) -> None:
+    report = _write_report_at(tmp_path / "coverage.xml", 1_000.0)
+    assert _GATE.coverage_xml_is_stale(report, head_committed_at=1_001) is True
+
+
+def test_coverage_xml_is_stale_false_when_written_after_head(tmp_path: Path) -> None:
+    report = _write_report_at(tmp_path / "coverage.xml", 1_002.0)
+    assert _GATE.coverage_xml_is_stale(report, head_committed_at=1_001) is False
+
+
+def test_coverage_xml_is_stale_false_in_the_commit_second(tmp_path: Path) -> None:
+    # Boundary: commit times have whole-second resolution, so a report written
+    # at the commit's own second is taken as fresh.
+    report = _write_report_at(tmp_path / "coverage.xml", 1_001.0)
+    assert _GATE.coverage_xml_is_stale(report, head_committed_at=1_001) is False
+
+
+def test_coverage_xml_is_stale_raises_for_a_missing_report(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        _GATE.coverage_xml_is_stale(tmp_path / "coverage.xml", head_committed_at=1_001)
+
+
+def test_head_commit_time_reads_this_checkout() -> None:
+    if not (_REPO_ROOT / ".git").exists():
+        pytest.skip("this tree is not a git checkout")
+    stamp = _GATE.head_commit_time(_REPO_ROOT)
+    assert isinstance(stamp, int)
+    assert stamp > 0
+
+
+def test_head_commit_time_is_none_outside_a_work_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Stop git's upward search at tmp_path so an enclosing checkout cannot answer.
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+    assert _GATE.head_commit_time(tmp_path) is None
+
+
+def test_head_commit_time_is_none_without_a_git_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PATH", str(tmp_path))
+    assert _GATE.head_commit_time(_REPO_ROOT) is None
+
+
+def test_real_coverage_skip_reason_skips_a_report_older_than_head(tmp_path: Path) -> None:
+    report = _write_report_at(tmp_path / "coverage.xml", 1_000.0)
+    reason = _real_coverage_skip_reason(report, 1_001)
+    assert reason == "coverage.xml is older than the HEAD commit"
+
+
+def test_real_coverage_skip_reason_runs_on_a_fresh_report(tmp_path: Path) -> None:
+    report = _write_report_at(tmp_path / "coverage.xml", 1_002.0)
+    assert _real_coverage_skip_reason(report, 1_001) is None
+
+
+def test_real_coverage_skip_reason_skips_without_a_report_or_head(tmp_path: Path) -> None:
+    missing = tmp_path / "coverage.xml"
+    assert _real_coverage_skip_reason(missing, 1_001) == "no coverage.xml on this tree"
+    report = _write_report_at(missing, 1_002.0)
+    assert _real_coverage_skip_reason(report, None) == (
+        "HEAD commit time is unavailable outside a git work tree"
+    )
+
+
 def test_real_floors_are_green_against_real_coverage() -> None:
     # The ratchet-is-not-aspirational contract: the floors committed in
     # pyproject pass against the measured coverage report present on the tree.
+    _skip_unless_real_coverage_is_fresh()
     gates = _real_gates()
     classes = ET.parse(_COVERAGE_XML).getroot().findall(".//class")
     # Restrict to the W06 packages this wave authored (other gates may predate
@@ -320,7 +418,6 @@ def test_real_tui_behavioural_floor_is_green() -> None:
 
 
 def test_main_passes_with_real_tree() -> None:
-    if not _COVERAGE_XML.exists():
-        pytest.skip("no coverage.xml on this tree")
+    _skip_unless_real_coverage_is_fresh()
     rc = _GATE.main(["--coverage-xml", str(_COVERAGE_XML), "--repo-root", str(_REPO_ROOT)])
     assert rc == 0

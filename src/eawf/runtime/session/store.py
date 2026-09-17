@@ -31,6 +31,7 @@ from eawf.kernel.store.append import append_envelope as _append_canonical
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.runtime.lock import portalock
+from eawf.runtime.session.vendor_id import hash_vendor_session_id, same_vendor_session
 
 logger = logging.getLogger(__name__)
 
@@ -572,6 +573,8 @@ def _exit_target(
     one session is live. Ambiguity returns ``None`` rather than guessing --
     stamping the wrong row's ``ended_at`` corrupts every duration derived from
     it, and the daemon-boot reconcile still catches whatever this declines.
+    The vendor id is compared through its hash, so a row whose binding is still
+    a raw id resolves too.
     """
     live = [
         (sid, session)
@@ -579,7 +582,11 @@ def _exit_target(
         if session.status is AgentSessionStatus.ACTIVE
     ]
     if runtime_session_id:
-        bound = [sid for sid, session in live if session.runtime_session_id == runtime_session_id]
+        bound = [
+            sid
+            for sid, session in live
+            if same_vendor_session(session.runtime_session_id, runtime_session_id)
+        ]
         return bound[0] if len(bound) == 1 else None
     if scope_id:
         scoped = [sid for sid, session in live if session.scope_id == scope_id]
@@ -617,7 +624,8 @@ def stamp_session_end_at_exit(
         state_path: Path to ``state.json``.
         events_path: Path to the ``event.jsonl`` close-event sink.
         runtime_session_id: Vendor session id carried on the exit payload,
-            when the runtime supplies one.
+            when the runtime supplies one. It is hashed on entry, so neither
+            the lookup nor the skip log sees the raw id.
         scope_id: Scope the exiting process ran under, used when no vendor
             session id resolves a row.
         status: Terminal status to stamp (default ``CLOSED`` -- a clean exit).
@@ -642,6 +650,8 @@ def stamp_session_end_at_exit(
         raise ValueError(f"stamp_session_end_at_exit requires terminal status; got {status!r}")
     if not state_path.exists():
         return None
+    if runtime_session_id:
+        runtime_session_id = hash_vendor_session_id(runtime_session_id)
     moment = now if now is not None else datetime.now(UTC)
     with portalock.acquire(state_path, timeout=5.0):
         try:

@@ -71,6 +71,8 @@ EXPECTED_SITES = frozenset(
         "settlement:route_after_observation",
         "target_machine:advance_target_attempt",
         "target_machine:open_target_attempt",
+        "train_store:record_checkpoint_receipt",
+        "train_store:record_train_advance",
     }
 )
 

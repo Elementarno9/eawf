@@ -214,31 +214,24 @@ def acquire(
     )
     deadline = time.monotonic() + effective_timeout
 
-    fh: IO[str] | None = None
-
     while True:
+        # An open() failure propagates as-is: there is no handle to close yet.
+        fh = open(lock_path, "a+", encoding="utf-8")  # noqa: SIM115
         try:
-            fh = open(lock_path, "a+", encoding="utf-8")  # noqa: SIM115
             fh.seek(0)
             portalocker.lock(fh, portalocker.LOCK_EX | portalocker.LOCK_NB)
-            # Acquired — break out of retry loop.
-            break
         except portalocker.LockException:
-            if fh is not None:
-                fh.close()
-                fh = None
+            fh.close()
             if time.monotonic() >= deadline:
                 raise LockTimeout(
                     f"Could not acquire lock {lock_path} within {effective_timeout}s"
                 ) from None
             time.sleep(0.05)
         except Exception:
-            if fh is not None:
-                fh.close()
-                fh = None
+            fh.close()
             raise
-
-    assert fh is not None  # guaranteed by loop logic above
+        else:
+            break
 
     # The advisory lock is bound to this inode. Never unlink the path while a
     # contender may already have opened it: unlink/recreate lets two processes

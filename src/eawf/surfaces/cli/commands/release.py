@@ -10,6 +10,10 @@ daemon owns.
 registered ``release.*`` method names the subcommand that reaches it, so
 a verb added to the daemon without an operator surface reds the parity
 test rather than shipping as substrate nobody can call.
+
+The two train-walking verbs, ``receipts`` and ``advance``, live in
+:mod:`eawf.surfaces.cli.commands.release_train`, which attaches them to
+:data:`release_app` when this module is imported.
 """
 
 from __future__ import annotations
@@ -53,6 +57,7 @@ RELEASE_RPC_METHODS: Final[Mapping[str, str]] = {
     "adopt": "release.adopt",
     "cancel": "release.cancel",
     "advance": "release.advance_train",
+    "receipts": "release.produce_receipts",
 }
 
 release_app = typer.Typer(
@@ -634,12 +639,20 @@ def _current_record(
     return record.model_dump(mode="json")
 
 
-def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
+def _dispatch(
+    method: str,
+    params: dict[str, Any],
+    *,
+    call_timeout_seconds: float | None = None,
+) -> dict[str, Any]:
     """Call one ``release.*`` JSON-RPC method and return its result.
 
     Args:
         method: Fully-qualified method name, e.g. ``release.publish``.
         params: Already-assembled JSON-RPC params.
+        call_timeout_seconds: How long to wait for the reply; ``None``
+            keeps the client's default, which suits every verb that does
+            not run proof commands.
 
     Returns:
         The handler's result object.
@@ -653,7 +666,12 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     try:
-        with DaemonClient() as client:
+        client = (
+            DaemonClient()
+            if call_timeout_seconds is None
+            else DaemonClient(call_timeout_seconds=call_timeout_seconds)
+        )
+        with client:
             return client.call(method, params)
     except DaemonRpcError as exc:
         raise cli_errors.UserError(
@@ -1343,55 +1361,10 @@ def release_cancel(
     emit_json_or_text(result, text, flags=flags)
 
 
-@release_app.command("advance")
-def release_advance(
-    ctx: typer.Context,
-    release_key: Annotated[str, typer.Argument(help="Release key standing at the open rung.")],
-    release_file: Annotated[
-        Path,
-        typer.Option("--release", help="Path to the serialized record at the open checkpoint."),
-    ],
-    receipt_file: Annotated[
-        list[Path] | None,
-        typer.Option("--receipt", help="A checkpoint gate receipt, as JSON; repeatable."),
-    ] = None,
-    membership_ref: Annotated[
-        list[str] | None,
-        typer.Option("--membership-ref", help="Milestone bundle for the rung being opened."),
-    ] = None,
-) -> None:
-    """Walk the train onto its next rung, or refuse and change nothing.
-
-    The index moves only from a baked or released checkpoint whose every
-    required gate receipt still binds its exact source and manifest. The
-    closing record comes back unchanged beside the opened DRAFT, so the
-    caller can assert the prior rung was not rewritten.
-    """
-    flags: GlobalFlags = ctx.obj
-    try:
-        result = _dispatch(
-            RELEASE_RPC_METHODS["advance"],
-            {
-                "release": _release_document(release_file, release_key),
-                "receipts": [
-                    _read_json_document(path, label="gate receipt") for path in (receipt_file or ())
-                ],
-                "membership_refs": list(membership_ref or ()),
-            },
-        )
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    closed = result.get("closed") or {}
-    opened = result.get("opened") or {}
-    train = result.get("train") or {}
-    text = (
-        f"closed {closed.get('key')} ({closed.get('status')}) -> "
-        f"opened {opened.get('key')} ({opened.get('status')})\n"
-        f"  index: {train.get('current_checkpoint_index')}\n"
-        f"  receipts: {', '.join(result.get('receipt_refs') or ()) or '(none)'}"
-    )
-    emit_json_or_text(result, text, flags=flags)
-
+# ---- command registration ---------------------------------------------------
+# Importing the sibling runs its ``@release_app.command(...)`` decorators so
+# the app carries every verb the parity map names. The import sits after
+# every shared symbol is defined, so the sibling can import them from here.
+from eawf.surfaces.cli.commands import release_train as _release_train  # noqa: E402, F401
 
 __all__ = ["RELEASE_RPC_METHODS", "release_app"]

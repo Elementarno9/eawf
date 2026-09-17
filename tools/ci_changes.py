@@ -8,7 +8,9 @@ This tool compares the checked-out tree with the last green ``ci.yaml``
 run on the same ref and writes ``code=false`` to ``$GITHUB_OUTPUT`` only
 when every changed path is bookkeeping (an identical tree changes no path
 at all). Any other path writes ``code=true``, and the workflow gates the
-heavy jobs on that output.
+heavy jobs on that output. The ``green`` output names the green commit
+the tree was compared with, so a skipped run can record which green tree
+it inherits; it is empty when no baseline was established.
 
 The baseline is the last *successful* run, never ``github.event.before``:
 a push whose predecessor was cancelled or red must not inherit a green it
@@ -109,15 +111,23 @@ class Verdict:
         code: True when the tested tree may differ from the green one in
             anything other than bookkeeping.
         reason: One line for the job log.
+        green: The head SHA of the green run the tree was compared with;
+            empty when no baseline was established.
     """
 
     code: bool
     reason: str
+    green: str = ""
 
     @property
-    def output_line(self) -> str:
-        """Return the ``$GITHUB_OUTPUT`` line that carries this verdict."""
-        return f"code={'true' if self.code else 'false'}\n"
+    def code_line(self) -> str:
+        """Return ``code=true`` or ``code=false``."""
+        return f"code={'true' if self.code else 'false'}"
+
+    @property
+    def output_lines(self) -> str:
+        """Return the ``$GITHUB_OUTPUT`` lines that carry this verdict."""
+        return f"{self.code_line}\ngreen={self.green}\n"
 
 
 def is_bookkeeping(path: str) -> bool:
@@ -220,7 +230,7 @@ def _classify_push(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) 
     """Compare the pushed commit with the last green push on its branch."""
     green = _green_sha(env, fetch=fetch, branch=_require(env, "GITHUB_REF_NAME"), event="push")
     where = f"the push since green {green[:12]}"
-    return _verdict(_code_paths(diff_paths(git, green, "HEAD")), where=where)
+    return _verdict(_code_paths(diff_paths(git, green, "HEAD")), where=where, green=green)
 
 
 def _classify_pull_request(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Verdict:
@@ -240,9 +250,10 @@ def _classify_pull_request(env: Mapping[str, str], *, git: GitRunner, fetch: Fet
     head = _rev_parse(git, "HEAD^2")
     head_code = _code_paths(diff_paths(git, green, head))
     if head_code:
-        return _verdict(head_code, where=f"the head since green {green[:12]}")
+        return _verdict(head_code, where=f"the head since green {green[:12]}", green=green)
     base_code = _code_paths(base_paths_since(git, green, base))
-    return _verdict(base_code, where=f"the head and base branch since green {green[:12]}")
+    where = f"the head and base branch since green {green[:12]}"
+    return _verdict(base_code, where=where, green=green)
 
 
 def diff_paths(git: GitRunner, old: str, new: str) -> list[str]:
@@ -356,8 +367,8 @@ def main(
     fetcher = fetch if fetch is not None else github_fetcher(environ.get("GITHUB_TOKEN", ""))
     verdict = classify(environ, git=git, fetch=fetcher)
     with Path(output).open("a", encoding="utf-8") as handle:
-        handle.write(verdict.output_line)
-    print(f"{verdict.output_line.strip()}: {verdict.reason}")
+        handle.write(verdict.output_lines)
+    print(f"{verdict.code_line}: {verdict.reason}")
     return 0
 
 
@@ -417,14 +428,14 @@ def _code_paths(paths: Iterable[str]) -> list[str]:
     return sorted({path for path in paths if not is_bookkeeping(path)})
 
 
-def _verdict(code_paths: Sequence[str], *, where: str) -> Verdict:
-    """Build the verdict for the non-bookkeeping paths found in *where*."""
+def _verdict(code_paths: Sequence[str], *, where: str, green: str) -> Verdict:
+    """Build the verdict for the non-bookkeeping paths found since *green*."""
     if not code_paths:
-        return Verdict(code=False, reason=f"{where}: only state bookkeeping changed")
+        return Verdict(code=False, reason=f"{where}: only state bookkeeping changed", green=green)
     shown = ", ".join(code_paths[:_SHOWN_PATHS])
     extra = len(code_paths) - _SHOWN_PATHS
     suffix = f" and {extra} more" if extra > 0 else ""
-    return Verdict(code=True, reason=f"{where}: code changed in {shown}{suffix}")
+    return Verdict(code=True, reason=f"{where}: code changed in {shown}{suffix}", green=green)
 
 
 if __name__ == "__main__":

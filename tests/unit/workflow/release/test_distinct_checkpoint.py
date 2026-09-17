@@ -3,10 +3,12 @@
 A train that mutated ``dev1`` into ``dev2`` would let a published
 version be retroactively re-pointed at different source, which is the
 one thing the immutable-record design exists to prevent. These tests pin
-that the advance mints a distinct DRAFT record with its own identity and
-its own revision, that the closing record's status, manifest digest and
-receipts read identically before and after, and that the ladder renderer
-behind ``eawf release train show --json`` reports the index and every
+that the advance names the next rung without minting a record for it
+(``release create`` does that, behind measured admission), that the
+DRAFT builder gives a new rung its own identity and revision, that the
+closing record's status, manifest digest and receipts read identically
+before and after, and that the ladder renderer behind
+``eawf release train show --json`` reports the index and every
 checkpoint's status.
 """
 
@@ -17,6 +19,7 @@ import pytest
 from eawf.kernel.spec.release import ReleaseStatus
 from eawf.workflow.release.advance import (
     CheckpointLadderStatus,
+    draft_release_for,
     ladder_status,
     render_train_ladder,
     render_train_ladder_text,
@@ -42,31 +45,33 @@ LADDER_KEYS = frozenset(
 )
 
 
-# --- the record the advance opens --------------------------------------------
+# --- the rung the advance opens ----------------------------------------------
 
 
-def test_the_opened_checkpoint_is_the_next_rung_in_draft() -> None:
-    """dev2 opens as a DRAFT record keyed for its own version."""
-    opened = advance(finished()).opened
-
-    assert opened.key == "REL-0.7.0.dev2"
-    assert opened.version == "0.7.0.dev2"
-    assert opened.status is ReleaseStatus.DRAFT
-
-
-def test_the_opened_checkpoint_starts_at_its_own_revision() -> None:
-    """A new rung is revision 0, not a continuation of the prior count."""
+def test_the_advance_names_the_next_rung_without_a_record() -> None:
+    """The advance opens dev2 on the ladder and mints no record for it."""
     result = advance(finished())
 
-    assert result.closed.revision == 0
-    assert result.opened.revision == 0
-    assert result.opened.uid == NEXT_UID
-    assert result.opened.uid != result.closed.uid
+    assert result.record.opened_key == "REL-0.7.0.dev2"
+    assert result.train.current_checkpoint.release_key == "REL-0.7.0.dev2"
+    assert not hasattr(result, "opened")
 
 
-def test_the_opened_checkpoint_inherits_no_pin() -> None:
+def test_the_next_checkpoint_draft_starts_at_its_own_revision() -> None:
+    """A new rung is revision 0 with its own identity, not a continuation."""
+    closed = advance(finished()).closed
+    opened = draft_release_for(V07_TRAIN.checkpoint_for_version("0.7.0.dev2"), uid=NEXT_UID)
+
+    assert closed.revision == 0
+    assert opened.revision == 0
+    assert opened.status is ReleaseStatus.DRAFT
+    assert opened.uid == NEXT_UID
+    assert opened.uid != closed.uid
+
+
+def test_the_next_checkpoint_draft_inherits_no_pin() -> None:
     """dev2 carries none of dev1's source or manifest binding."""
-    opened = advance(finished()).opened
+    opened = draft_release_for(V07_TRAIN.checkpoint_for_version("0.7.0.dev2"), uid=NEXT_UID)
 
     assert opened.source_sha is None
     assert opened.source_tree_sha is None

@@ -42,11 +42,15 @@ repos:
         # and re-rolls whenever the managed body changes (same loop noise as
         # state.json). It is deterministic render output with no user secrets,
         # so it is excluded rather than baselined per regeneration.
-        # The epoch-1 migration fixtures are slices of state.json taken at a
-        # pinned revision, so they carry the same 40-char wave-commit SHAs and
-        # URN-shaped audit ids the state.json exclusion above already covers.
-        # Baselining them would re-roll every line offset whenever a slice is
-        # widened, which is the loop noise the exclusions exist to avoid.
+        # The named epoch-1 migration fixtures are slices of state.json taken
+        # at a pinned revision, so they carry the same 40-char wave-commit SHAs
+        # and URN-shaped audit ids the state.json exclusion above already
+        # covers. Baselining them would re-roll every line offset whenever a
+        # slice is widened, which is the loop noise the exclusions exist to
+        # avoid. They are listed one by one rather than as a
+        # tests/fixtures/migration/ prefix: a prefix silently un-scans every
+        # fixture added later, and a fixture is exactly where a hand-pasted
+        # credential would land.
         #
         # The migration rehearsal goldens are the same class one step further
         # on: they record the sha256 manifest, source and approval digests of
@@ -54,13 +58,15 @@ repos:
         # Whether a given digest trips the Hex-High-Entropy plugin depends on
         # the digest's own bytes, so a regenerated golden can start tripping
         # for a fixture that did not before -- the baseline could never settle.
+        # That is a property of the whole generated class, so this one stays a
+        # pattern, narrowed to the rehearsal directory and its .json renders.
         #
         # The live release-observation captures (``*-dev2.json``) are the
         # same class: public registry bodies recorded to pin the published
         # artifacts' real sha256 digests. They are trimmed to the fields the
         # readers read, which test_observe_adapters enforces, so nothing but
         # names, URLs and digests can land in them.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/|^tests/golden/kernel/migration/|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$'
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0
