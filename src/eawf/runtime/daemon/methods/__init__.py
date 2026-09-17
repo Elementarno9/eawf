@@ -17,7 +17,12 @@ import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +149,34 @@ class MethodContext:
     #: The LockHandle of the mutation currently holding the state lock,
     #: or ``None``. The watchdog belt-and-braces heartbeat ticks it.
     active_lock_handle: Any = field(default=None)
+    #: Native epoch-2 root contexts, keyed by root id. Kept apart from the
+    #: epoch-1 anchors above, so attaching a native root never changes how
+    #: an epoch-1 request resolves its state file, event log or WAL.
+    native_roots: dict[str, Epoch2RootContext] = field(default_factory=dict)
+
+    def native_root_context(self, tree_root: Path) -> Epoch2RootContext:
+        """Return the native context of the epoch-2 tree at ``tree_root``.
+
+        Args:
+            tree_root: The tree's root directory, as the native fence
+                resolved it for the request.
+
+        Returns:
+            The tree's one context, whose WAL namespace is a subdirectory
+            of :attr:`wal_dir`.
+
+        Raises:
+            NativeAuthorityRequiredError: The tree resolves to epoch 1.
+            MigrationDualAuthorityError: The tree's select is not whole.
+            RuntimeError: :attr:`wal_dir` is unset.
+        """
+        # Imported here: every daemon method module imports this package,
+        # and only a native request needs the epoch-2 migration stack.
+        from eawf.runtime.daemon.epoch2_root import attach_root_context
+
+        return attach_root_context(
+            self.native_roots, tree_root=tree_root, daemon_wal_dir=self.wal_dir
+        )
 
     def mutation_started(self, mutation_id: str, kind: str) -> None:
         """Register an in-flight mutation for telemetry + the watchdog."""

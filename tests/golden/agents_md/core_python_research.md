@@ -221,10 +221,10 @@ Rendered and authored markdown — PR bodies, issue/review comments, audit / res
 The ~72-column wrap convention is reserved for **commit messages** (subject + body), where tooling and ``git log`` assume it. Fenced code blocks keep their own formatting. Skill output contracts inherit this rule: a skill that emits markdown emits unwrapped paragraphs.
 
 <!-- END EAWF:managed id=markdown-no-manual-wrap -->
-<!-- BEGIN EAWF:managed id=release-process version=1.1 hash=e9197d40232446a3 -->
+<!-- BEGIN EAWF:managed id=release-process version=1.2 hash=e9197d40232446a3 -->
 `release-process` — Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.1 hash=79ff416238f54342 -->
+<!-- BEGIN EAWF:managed id=ship-process version=1.2 hash=79ff416238f54342 -->
 `ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and merge with rebase. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
 <!-- END EAWF:managed id=ship-process -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=600b85c26e27f28b -->

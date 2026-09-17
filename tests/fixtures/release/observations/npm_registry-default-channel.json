@@ -2,18 +2,23 @@
   "payload": {
     "dist-tags": {
       "latest": "0.7.0-dev.1",
-      "next": "0.7.0-dev.1"
+      "next": "0.7.0-dev.2"
     },
     "name": "@elementarno/eawf",
     "versions": {
+      "0.6.8": {
+        "dist": {
+          "tarball": "https://registry.npmjs.org/@elementarno/eawf/-/eawf-0.6.8.tgz"
+        }
+      },
       "0.7.0-dev.1": {
         "dist": {
-          "files": [
-            {
-              "name": "eawf-0.7.0-dev.1.tgz",
-              "sha256": "3333333333333333333333333333333333333333333333333333333333333333"
-            }
-          ]
+          "tarball": "https://registry.npmjs.org/@elementarno/eawf/-/eawf-0.7.0-dev.1.tgz"
+        }
+      },
+      "0.7.0-dev.2": {
+        "dist": {
+          "tarball": "https://registry.npmjs.org/@elementarno/eawf/-/eawf-0.7.0-dev.2.tgz"
         }
       }
     }

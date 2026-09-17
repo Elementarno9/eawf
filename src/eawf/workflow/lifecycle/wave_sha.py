@@ -1,10 +1,11 @@
-"""Derive a wave's commit SHA from git history via the ``[P##-W##]`` prefix.
+"""Derive a wave's commit SHA from git history via its message wave markers.
 
 The derive step is the fallback path behind ``eawf wave show --commit``:
 when ``Wave.commit`` has not been pinned (via ``wave close --commit
-<ref>``), the commit subject's ``[P##-W##]`` prefix is the durable
-signal. Git history rewrites preserve subjects, so the SHA stays
-discoverable even after cherry-pick or rebase.
+<ref>``), the commit message is the durable signal: an ``Eawf-Wave:`` line
+anywhere in the body, or the legacy ``[P##-W##]`` subject prefix. Git
+history rewrites preserve messages, so the SHA stays discoverable even
+after cherry-pick or rebase.
 
 The helpers in this module are intentionally thin subprocess wrappers
 that return ``None`` rather than raise when git is unavailable or the
@@ -60,10 +61,12 @@ _WAVE_TRAILER_NAME = "Eawf-Wave"
 # and can neither provoke nor receive such a reply, without ever disturbing the
 # App's own fd 0 (which a process-global redirect would corrupt mid-render).
 
-# Field/record separators for the one-pass ``git log`` in
-# :func:`build_wave_sha_index`. A commit message can carry newlines but never a
-# NUL byte, so NUL is a safe record boundary even when the trailer placeholder
-# emits its own newline; the unit separator delimits fields within a record.
+# Field/record separators for the one-pass ``git log`` walks. A commit message
+# can carry newlines but never a NUL byte, so NUL is a safe record boundary even
+# though the full-body placeholder spans lines; the unit separator delimits
+# fields within a record. The body is always the last field and is split off
+# with a bounded ``maxsplit``, so a stray separator byte inside a message stays
+# in the body instead of shifting it out of reach.
 # These are the literal output bytes the parser splits on; the ``--format``
 # string itself uses git's ``%x00`` / ``%x1f`` placeholders (ASCII in argv)
 # because subprocess rejects a literal NUL byte inside a command argument.
@@ -71,9 +74,23 @@ _REC_SEP = "\x00"
 _FIELD_SEP = "\x1f"
 _REC_SEP_PLACEHOLDER = "%x00"
 _FIELD_SEP_PLACEHOLDER = "%x1f"
+_BODY_PLACEHOLDER = "%B"
 
 # A bracketed commit-subject prefix, e.g. ``[P30-I07-W08]`` or ``[P28-W02]``.
 _BRACKET_PREFIX_RE = re.compile(r"^\[(P\d{2,}(?:-I\d{2,})?-W\d{2,})\]")
+
+# The ``Eawf-Wave`` line exactly as ``tools/commit_prefix_lint.py`` accepts it:
+# line-anchored anywhere in the message, not only in git's final trailer
+# paragraph. Git's ``%(trailers)`` parse misses a commit that puts a blank line
+# between ``Eawf-Wave:`` and ``Co-Authored-By:``, which the lint accepts, so the
+# index would lose that wave. The lint runs under the system interpreter and
+# cannot be imported from here, so the pattern is copied and a parity test pins
+# the two together.
+_WAVE_TRAILER_RE = re.compile(
+    rf"^{_WAVE_TRAILER_NAME}:\s+"
+    r"(?P<wave>P\d{2,}(?:-I(?!00)\d{2,})?-W(?!00)\d{2,})\s*$",
+    re.MULTILINE,
+)
 
 # Transient per-wave refs whose commit must lose to an integration ref under a
 # twin. ``worktree-agent-*`` is the Claude harness's detached worktree branch
@@ -295,6 +312,39 @@ def _candidate_grep_terms(wave_id: str) -> list[str]:
     return terms
 
 
+def _body_wave_ids(message: str) -> list[str]:
+    """Return every wave id named on an ``Eawf-Wave`` line of *message*.
+
+    A short ``P##-W##`` value names the ``I01`` iter, as it does for the
+    commit lint. A squash commit can name several waves, so every line counts;
+    the first id is the one the lint scopes the commit to.
+
+    Args:
+        message: The full commit message, subject included.
+
+    Returns:
+        The distinct full wave ids in message order; empty when no line
+        matches.
+    """
+    wave_ids: list[str] = []
+    for match in _WAVE_TRAILER_RE.finditer(message):
+        parts = match.group("wave").split("-")
+        wave_id = "-".join(parts) if len(parts) == 3 else f"{parts[0]}-I01-{parts[1]}"
+        if wave_id not in wave_ids:
+            wave_ids.append(wave_id)
+    return wave_ids
+
+
+def _commit_wave_keys(subject: str, body: str) -> list[str]:
+    """Return a commit's index keys: its bracket prefix, then its body wave ids."""
+    keys: list[str] = []
+    prefix_match = _BRACKET_PREFIX_RE.match(subject)
+    if prefix_match:
+        keys.append(f"[{prefix_match.group(1)}]")
+    keys.extend(_body_wave_ids(body))
+    return keys
+
+
 def _candidate_index_keys(wave_id: str) -> list[str]:
     """Return the index-lookup keys for *wave_id*, in priority order.
 
@@ -341,10 +391,9 @@ def commit_matches_wave(commit: str, wave_id: str, *, repo_root: Path | None = N
         return False
     message = out.stdout or ""
     subject = message.splitlines()[0] if message.splitlines() else ""
-    trailer = commit_wave_trailer(wave_id)
-    return any(subject.startswith(prefix) for prefix in _candidate_prefixes(wave_id)) or (
-        trailer is not None and trailer in message
-    )
+    if wave_id in _body_wave_ids(message):
+        return True
+    return any(subject.startswith(prefix) for prefix in _candidate_prefixes(wave_id))
 
 
 def commit_identity_digest(commit: str, *, repo_root: Path | None = None) -> str | None:
@@ -367,32 +416,23 @@ def commit_identity_digest(commit: str, *, repo_root: Path | None = None) -> str
 
 def _reachable_wave_keys(repo_root: Path | None) -> dict[str, set[str]]:
     """Return every reachable commit and its explicit wave identity keys."""
-    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(
-        ("%H", "%s", f"%(trailers:key={_WAVE_TRAILER_NAME},valueonly)")
-    )
+    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(("%H", "%s", _BODY_PLACEHOLDER))
     out = _run_git(["log", "--all", f"--format={fmt}"], repo_root=repo_root, timeout=20.0)
     if out is None or out.returncode != 0:
         return {}
     result: dict[str, set[str]] = {}
     for raw_record in out.stdout.split(_REC_SEP):
-        fields = raw_record.strip("\n").split(_FIELD_SEP)
+        fields = raw_record.strip("\n").split(_FIELD_SEP, 2)
         if len(fields) != 3:
             continue
-        sha, subject, trailers = fields
-        keys: set[str] = set()
-        prefix_match = _BRACKET_PREFIX_RE.match(subject)
-        if prefix_match:
-            keys.add(f"[{prefix_match.group(1)}]")
-        keys.update(line.strip() for line in trailers.splitlines() if line.strip())
-        result[sha] = keys
+        sha, subject, body = fields
+        result[sha] = set(_commit_wave_keys(subject, body))
     return result
 
 
 def _first_parent_wave_candidates(repo_root: Path | None) -> dict[str, list[str]]:
     """Index all wave identities on the current integration first-parent."""
-    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(
-        ("%H", "%s", f"%(trailers:key={_WAVE_TRAILER_NAME},valueonly)")
-    )
+    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(("%H", "%s", _BODY_PLACEHOLDER))
     out = _run_git(["log", "--first-parent", "HEAD", f"--format={fmt}"], repo_root=repo_root)
     if out is None or out.returncode != 0:
         return {}
@@ -400,16 +440,11 @@ def _first_parent_wave_candidates(repo_root: Path | None) -> dict[str, list[str]
     for raw_record in out.stdout.split(_REC_SEP):
         if not raw_record:
             continue
-        fields = raw_record.strip("\n").split(_FIELD_SEP)
+        fields = raw_record.strip("\n").split(_FIELD_SEP, 2)
         if len(fields) != 3:
             continue
-        sha, subject, trailers = fields
-        keys: list[str] = []
-        prefix_match = _BRACKET_PREFIX_RE.match(subject)
-        if prefix_match:
-            keys.append(f"[{prefix_match.group(1)}]")
-        keys.extend(line.strip() for line in trailers.splitlines() if line.strip())
-        for key in keys:
+        sha, subject, body = fields
+        for key in _commit_wave_keys(subject, body):
             indexed.setdefault(key, []).append(sha)
     return indexed
 
@@ -477,13 +512,15 @@ def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
 
     Replaces the O(closed-waves) per-wave ``git log --grep`` shell-outs in
     the bulk reconcilers with a single ``git log --all --source`` walk that
-    indexes every commit's bracketed subject prefix AND its ``Eawf-Wave``
-    trailer value. Consumers (:func:`derive_wave_sha`,
+    indexes every commit's bracketed subject prefix AND every ``Eawf-Wave``
+    line in its full message, read the way the commit lint reads it (see
+    :func:`_body_wave_ids`). Consumers (:func:`derive_wave_sha`,
     :func:`detect_git_state_drift`, :func:`scan_commit_pins`) look a wave's
     candidate keys up in the returned map instead of shelling out per wave.
 
     Keys are the bracketed prefix (e.g. ``[P30-I07-W08]``, ``[P28-W02]``)
-    and the bare wave id (the trailer value, e.g. ``P28-I03-W02``). Values
+    and the full wave id (the ``Eawf-Wave`` value, e.g. ``P28-I03-W02``;
+    a short ``P28-W02`` value is keyed as ``P28-I01-W02``). Values
     are the full 40-hex SHA.
 
     Deterministic twin resolution: ``--source`` annotates each commit with
@@ -505,9 +542,7 @@ def build_wave_sha_index(repo_root: Path | None = None) -> Mapping[str, str]:
     if shutil.which("git") is None:
         logger.debug("build_wave_sha_index git=not-on-path")
         return {}
-    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(
-        ("%H", "%S", "%s", f"%(trailers:key={_WAVE_TRAILER_NAME},valueonly)")
-    )
+    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(("%H", "%S", "%s", _BODY_PLACEHOLDER))
     cmd = ["git", "log", "--all", "--source", f"--format={fmt}"]
     try:
         # Annotate ``out`` explicitly: splatting the ``dict[str, Any]`` detach
@@ -550,24 +585,15 @@ def _parse_index(raw: str) -> dict[str, str]:
     for record in raw.split(_REC_SEP):
         if not record:
             continue
-        fields = record.split(_FIELD_SEP)
+        fields = record.split(_FIELD_SEP, 3)
         if len(fields) < 4:
             continue
-        sha, source_ref, subject, trailer = fields[0], fields[1], fields[2], fields[3]
+        sha, source_ref, subject, body = fields
         sha = sha.strip()
         if not sha:
             continue
         tier = _TIER_TRANSIENT if _TRANSIENT_REF_RE.search(source_ref) else _TIER_INTEGRATION
-        keys: list[str] = []
-        match = _BRACKET_PREFIX_RE.match(subject)
-        if match is not None:
-            keys.append(f"[{match.group(1)}]")
-        trailer_wave = trailer.strip().splitlines()
-        if trailer_wave:
-            keys.append(trailer_wave[0].strip())
-        for key in keys:
-            if not key:
-                continue
+        for key in _commit_wave_keys(subject, body):
             prior = tier_seen.get(key)
             if prior is None or tier < prior:
                 index[key] = sha

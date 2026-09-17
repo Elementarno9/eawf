@@ -22,8 +22,10 @@ why it is a sibling of
 :func:`eawf.runtime.daemon.gate_execution.run_gate_out_of_process` rather
 than a caller of it: readiness is a read-only projection, so it must claim
 no freshness key, write no receipt, and leave no scratch file anywhere in
-the live state directory. It also runs a whole batch of checks per child,
-because a floor pack is compiled and scored as one list.
+the live state directory. Holding no claim, the child is offered no
+progress channel either, and a progress manifest from it would be refused
+(:mod:`eawf.runtime.verification.progress`). It also runs a whole batch of
+checks per child, because a floor pack is compiled and scored as one list.
 """
 
 from __future__ import annotations

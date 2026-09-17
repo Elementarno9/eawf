@@ -11,10 +11,12 @@ per-target ledger:
   binding the exact manifest digest **and** the chokepoint preflight
   recomputing green. Either half going stale denies ``approval_stale``.
 * ``PUBLISHING -> VERIFYING`` -- ``target_results_complete`` is every
-  configured leg carrying a success receipt. An adapter-reported
-  failure on any leg is a recovery question, not a verification one, so
-  it denies ``target_results_incomplete`` rather than quietly verifying
-  a partial publication.
+  *required* leg carrying a success receipt. An adapter-reported
+  failure on a required leg is a recovery question, not a verification
+  one, so it denies ``target_results_incomplete`` rather than quietly
+  verifying a partial publication. An optional leg is counted by
+  neither this guard nor the bake guard, so one that was never
+  published cannot hold the checkpoint at PUBLISHING.
 * ``RECOVERING -> PUBLISHING`` (and the same move out of
   ``PUBLISH_TIMEOUT``) -- ``idempotent_retry`` is the retry replaying
   the *same* idempotency key and proof digest with retry budget left on
@@ -161,19 +163,27 @@ def projected_target_statuses(
 
 
 def target_results_complete(config: ReleaseConfig, operation: PublicationOperation) -> bool:
-    """Return whether every configured leg carries a success receipt.
+    """Return whether every required leg carries a success receipt.
+
+    The count is the one
+    :func:`~eawf.workflow.release.settlement.required_targets_observed`
+    takes at the bake: if this guard counted an optional leg the bake
+    ignores, an optional target that was never published would hold the
+    record at PUBLISHING even though it could never hold the bake.
 
     Args:
         config: Loaded checkpoint configuration naming every target.
         operation: The operation whose ledger is read.
 
     Returns:
-        ``True`` when every configured target's latest attempt reported
+        ``True`` when every required target's latest attempt reported
         success or was already independently observed as a success.
+        Vacuously ``True`` for a configuration that requires no target.
     """
     complete = {ReleaseTargetStatus.REPORTED_SUCCESS, ReleaseTargetStatus.OBSERVED_SUCCESS}
     return all(
-        current_target_status(operation, target.target_id) in complete for target in config.targets
+        current_target_status(operation, target_id) in complete
+        for target_id in config.required_target_ids
     )
 
 
@@ -303,7 +313,7 @@ def begin_verification(
     config: ReleaseConfig,
     operation: PublicationOperation,
 ) -> Release:
-    """Move *release* to VERIFYING once every leg reported success.
+    """Move *release* to VERIFYING once every required leg reported success.
 
     Args:
         release: The publishing record.
@@ -316,7 +326,7 @@ def begin_verification(
     Raises:
         ReleaseTransitionError: With
             :attr:`~eawf.workflow.release.lifecycle.ReleaseDenialCode.TARGET_RESULTS_INCOMPLETE`
-            when a configured leg carries no success receipt.
+            when a required leg carries no success receipt.
     """
     return advance_release(
         release,
@@ -510,6 +520,7 @@ def reconcile_target(
     status: ReleaseTargetStatus,
     effect_receipt_ref: str | None = None,
     now: datetime,
+    dispatch_proven: bool = False,
 ) -> tuple[Release, PublicationOperation]:
     """Settle one leg against what the adapter finally reported.
 
@@ -522,6 +533,13 @@ def reconcile_target(
     own publication. Only
     :func:`~eawf.workflow.release.settlement.observe_target` writes them,
     and only from an observation receipt.
+
+    The publisher is a pipeline job this process never calls, so nothing
+    here records the moment a leg leaves ``queued``. A publish job's own
+    receipt names the run that made the call, which proves the dispatch
+    happened; with *dispatch_proven* a queued leg is moved into flight in
+    the same snapshot before the report settles it. An asserted status
+    proves no dispatch, so without the flag a queued leg stays refused.
 
     The release status does not move here: what a late report settles is
     one leg. The record still advances a revision, because its projected
@@ -537,6 +555,8 @@ def reconcile_target(
         effect_receipt_ref: The adapter's receipt, required by the two
             reported statuses.
         now: Timezone-aware UTC instant of the reconciliation.
+        dispatch_proven: Whether the report itself proves the leg was
+            dispatched, which admits a queued leg.
 
     Returns:
         The record with re-projected target statuses, and the operation
@@ -555,8 +575,14 @@ def reconcile_target(
     if status not in RECONCILABLE_TARGET_STATUSES:
         raise ObserverOnlyStatusError(status)
     target = configured_target(config, target_id)
+    dispatched = operation
+    queued = current_target_status(operation, target_id) is ReleaseTargetStatus.QUEUED
+    if dispatch_proven and queued:
+        dispatched = advance_target_attempt(
+            operation, target=target, to=ReleaseTargetStatus.IN_FLIGHT, now=now
+        )
     settled = advance_target_attempt(
-        operation,
+        dispatched,
         target=target,
         to=status,
         now=now,

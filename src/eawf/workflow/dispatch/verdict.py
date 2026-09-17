@@ -58,7 +58,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, TypeAdapter
+from pydantic import AfterValidator, TypeAdapter, ValidationError
+from pydantic_core import InitErrorDetails, PydanticCustomError
 
 from eawf.kernel.spec.wave import WaveBehavior
 from eawf.kernel.state.enums import (
@@ -75,6 +76,7 @@ from eawf.workflow.agent_report.rollup import iter_agent_reports
 from eawf.workflow.agent_report.store import (
     AgentReportAppendResult,
     append_agent_report,
+    scrub_finding_kinds,
 )
 from eawf.workflow.dispatch.llm_assist import (
     DEFAULT_MAX_ATTEMPTS,
@@ -494,6 +496,24 @@ WORKING_TREE_RULE: str = (
     "check."
 )
 
+#: The report store refuses a body that quotes a local path, a private address
+#: or an email, and the diffs an auditor reads (leak-scrub changes above all)
+#: carry exactly those shapes in their test fixtures. Asking for a generic
+#: description up front keeps a faithful verdict from spending its bounded
+#: re-ask budget on the scrub.
+SENSITIVE_VALUE_RULE: str = (
+    "## Sensitive-value rule\n"
+    "\n"
+    "Your report is persisted and scanned for leaked local data. Describe\n"
+    "home-directory paths, IP addresses, email addresses and tokens\n"
+    "generically instead of quoting them: write `a home-directory path`,\n"
+    "`a private IP address`, `an email address` or `a token` in place of\n"
+    "the literal value, even when the diff or a test fixture contains it.\n"
+    "The same applies to any absolute local filesystem path, local URL or\n"
+    "local hostname. Cite files by their repo-relative path. A report that\n"
+    "quotes such a value is rejected and must be re-emitted."
+)
+
 
 def build_auditor_prompt(
     wave: Wave,
@@ -579,6 +599,7 @@ def build_auditor_prompt(
         )
     sections.append(f"## Success criteria\n\n{criteria}")
     sections.append(WORKING_TREE_RULE)
+    sections.append(SENSITIVE_VALUE_RULE)
     sections.append(
         "## Output contract\n"
         "\n"
@@ -842,6 +863,48 @@ def _coerce_confidence(raw: object) -> object:
     return {**raw, "confidence": bucket.value}
 
 
+def _reject_scrub_findings(body: AuditorReportBody) -> AuditorReportBody:
+    """Refuse a body the report store's leak scrub would refuse at append.
+
+    :func:`append_agent_report` runs the same check, but only after the
+    bounded re-ask loop has accepted the body, so a leaking auditor report
+    ended the close with no second chance. Raising here, as a
+    :class:`pydantic.ValidationError` (the only failure besides bad JSON the
+    loop re-asks on), turns the leak into a correctable response. The error
+    hides its input and names only the finding kinds, so neither the re-ask
+    notice nor the exhausted-loop error repeats the leaked value.
+
+    Args:
+        body: The auditor body that already passed the forced schema.
+
+    Returns:
+        *body* unchanged when its text carries no scrub finding.
+
+    Raises:
+        pydantic.ValidationError: When the body text carries a scrub finding.
+    """
+    kinds = scrub_finding_kinds(body)
+    if not kinds:
+        return body
+    named = ", ".join(kinds)
+    logger.info(f"_reject_scrub_findings kinds={named}")
+    raise ValidationError.from_exception_data(
+        "AuditorReportBody",
+        [
+            InitErrorDetails(
+                type=PydanticCustomError(
+                    "agent_report_scrub",
+                    f"agent report body failed scrub: {named}; describe each such "
+                    "value generically instead of quoting it",
+                ),
+                loc=(),
+                input=kinds,
+            )
+        ],
+        hide_input=True,
+    )
+
+
 #: Suffix appended to the wave id to scope the fresh auditor session. The
 #: session store enforces one ACTIVE session per ``(scope_id, runtime)``;
 #: the wave-close producer may run while the executor session is still
@@ -1010,7 +1073,11 @@ async def produce_wave_verdict(
     3. Drive the bounded re-ask loop
        (:func:`eawf.workflow.dispatch.llm_assist.assist_with_schema`) with the
        injected *spawn* and the narrowing :func:`parse_auditor_report_body`
-       validator, so the loop only accepts an auditor body.
+       validator, so the loop only accepts an auditor body. The same
+       validator runs the report store's leak scrub
+       (:func:`_reject_scrub_findings`), so a body quoting a home path or a
+       private IP is re-asked with the finding kinds named instead of being
+       refused after the loop.
     4. Append the validated body through the canonical writer
        (:func:`eawf.workflow.agent_report.store.append_agent_report`) at
        ``base_id=wave.id``. The writer computes the monotonic attempt, so a
@@ -1066,7 +1133,8 @@ async def produce_wave_verdict(
         ExecutorSelfReportError: When the registered author session
             resolves to an EXECUTOR session (a self-report).
         eawf.workflow.dispatch.llm_assist.LLMAssistError: When the bounded
-            re-ask loop exhausts without a schema-valid auditor body.
+            re-ask loop exhausts without a schema-valid, scrub-clean auditor
+            body.
         eawf.workflow.agent_report.store.AgentReportRoleMismatchError: When
             the persisted body role disagrees with the author session role.
     """
@@ -1095,11 +1163,11 @@ async def produce_wave_verdict(
             diff_base=diff_base,
             durable_context=durable_context,
         )
-        validator = (
-            parse_auditor_report_body
-            if durable_context is None
-            else lambda raw: parse_auditor_report_body(raw, durable_context=durable_context)
-        )
+
+        def validator(raw: object) -> AuditorReportBody:
+            body = parse_auditor_report_body(raw, durable_context=durable_context)
+            return _reject_scrub_findings(body)
+
         assist_result = await assist_with_schema(
             prompt,
             spawn=spawn,

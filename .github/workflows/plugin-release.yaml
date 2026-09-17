@@ -1,7 +1,7 @@
 name: Plugin Release
 
 # Plugin Release pipeline. Fires on a ``v*`` version-tag push (mirrors the
-# trigger style of release.yaml / phase-release.yaml) and publishes the
+# trigger style of release.yaml) and publishes the
 # rendered runtime plugin trees to their self-hosted marketplace sources:
 #
 #   * Claude — the rendered ``.claude-plugin/`` tree is published to npm as
@@ -31,6 +31,14 @@ name: Plugin Release
 # shape. A blocking validate gate runs over both rendered trees before any
 # publish. ``workflow_dispatch`` renders + validates as a dry-run but never
 # publishes (the publish jobs gate on a real ``v*`` tag push).
+#
+# The bytes the npm and source-host legs publish -- the npm tarball, the
+# plugin bundle, the release notes and ``SHA256SUMS`` -- are rendered once
+# by ``render-release-assets``, which runs on the dry run too, and the
+# publish jobs upload that job's files instead of re-rendering them. Every
+# input to those bytes is pinned to the commit, so a dry run renders the
+# digests the tag will publish and the manifest can be frozen before the
+# tag exists.
 #
 # Secrets consumed (none inlined): ``GITHUB_TOKEN`` (built-in) for the
 # plugins-dist branch push + release notes. The npm publish holds no
@@ -259,86 +267,94 @@ jobs:
           # trees -> codex cp fails, npm publishes an incomplete package).
           include-hidden-files: true
 
-  require-green-ci:
-    name: Require green CI on the tagged commit
-    # Closes the gap that let v0.5.2 publish while its CI run was red: the
-    # publish jobs below `needs:` this gate, which refuses to proceed unless
-    # the CI workflow concluded `success` for this exact commit. The release
-    # commit lands on `main` (where ci.yaml runs) before the tag is pushed,
-    # so a CI run for the SHA already exists or is in flight — this gate waits
-    # for it, then asserts success. A `workflow_dispatch` dry-run skips it.
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+  render-release-assets:
+    name: Render npm tarball, plugin bundle and SHA256SUMS
+    # Runs on the tag push and on the workflow_dispatch dry run alike: the
+    # dry run is where the manifest is frozen, so it must render the very
+    # files the tag publishes. Nothing here can publish -- the token is
+    # read-only, no OIDC token is minted, and no step pushes, publishes or
+    # writes a release.
+    needs: [package-validate]
     runs-on: ubuntu-24.04
-    # Above the 30-min (SECONDS + 1800) in-flight-CI wait loop below, so the
-    # job's own timeout never fires before its internal deadline.
-    timeout-minutes: 35
+    # Above the 45-min wait for release.yaml's dist below, which is only
+    # uploaded once that run's receipt job and build job have finished.
+    timeout-minutes: 60
     permissions:
-      actions: read # read the CI workflow's run conclusion for this SHA
+      contents: read
+      actions: read # read the Release workflow's dist artifact for this SHA
+    outputs:
+      npm_tarball: ${{ steps.pack.outputs.npm_tarball }}
     steps:
-      - name: Assert ci.yaml concluded success for ${{ github.sha }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Pin SOURCE_DATE_EPOCH to the tagged commit
+        # The bundle builder stamps every member with this value, so it
+        # must be a property of the commit -- its committer time, read the
+        # way release.yaml reads it -- and never the runner's clock.
         env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          deadline=$(( SECONDS + 1800 )) # wait up to 30 min for an in-flight run
-          while :; do
-            read -r status conclusion < <(
-              gh api "repos/${REPO}/actions/workflows/ci.yaml/runs?head_sha=${SHA}&per_page=1" \
-                --jq '.workflow_runs[0] | "\(.status // "missing") \(.conclusion // "none")"'
-            )
-            echo "ci.yaml for ${SHA:0:10}: status=${status} conclusion=${conclusion}"
-            if [ "${status}" = "completed" ]; then
-              [ "${conclusion}" = "success" ] && { echo "CI green — release may proceed"; exit 0; }
-              echo "refusing to publish: CI concluded '${conclusion}', not 'success'" >&2
-              exit 1
-            fi
-            if [ "${SECONDS}" -ge "${deadline}" ]; then
-              echo "refusing to publish: timed out waiting for CI to complete on ${SHA}" >&2
-              exit 1
-            fi
-            sleep 30
-          done
+          epoch="$(git show -s --format=%ct "${SHA}")"
+          echo "SOURCE_DATE_EPOCH=${epoch}" >> "$GITHUB_ENV"
+          echo "SOURCE_DATE_EPOCH=${epoch} (${SHA:0:10})"
 
-  publish-claude-npm:
-    name: Publish Claude plugin to npm
-    needs: [package-validate, require-green-ci]
-    # Live publish, gated on a real ``v*`` tag push. ``workflow_dispatch``
-    # renders + validates in package-validate but never reaches publish.
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      # npm trusted publishing exchanges this OIDC token for a
-      # short-lived credential at publish time. Without it npm falls back
-      # to looking for a token, and the registry answers a scoped package
-      # it cannot authenticate for with 404 rather than 401 -- an error
-      # that names the wrong problem entirely.
-      id-token: write
-    steps:
       - name: Download rendered trees
         uses: actions/download-artifact@v4
         with:
           name: plugin-trees
           path: build/
 
-      - name: Set up Node + npm registry
-        # Trusted publishing requires npm >= 11.5.1 on Node >= 22.14.0.
-        # The npm bundled with a Node release lags, so the floor is
-        # asserted explicitly rather than inferred from node-version.
+      - name: Download the dist artifact from the Release run
+        # The checksums file covers every artifact the tag publishes, and
+        # the wheel + sdist are built by release.yaml, in a different
+        # workflow run. Same head SHA, so the run is found the way
+        # ``require-green-ci`` finds the CI run. A dry run therefore needs
+        # a release.yaml dry run of the same commit. The wait covers that
+        # run's receipt job and build job, which finish before its dist is
+        # uploaded.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 2700 ))
+          while :; do
+            run_id="$(
+              gh api "repos/${REPO}/actions/workflows/release.yaml/runs?head_sha=${SHA}&per_page=1" \
+                --jq '.workflow_runs[0].id // empty'
+            )"
+            if [ -n "${run_id}" ] && gh run download "${run_id}" --repo "${REPO}" \
+                 --name dist --dir dist 2>/dev/null; then
+              echo "downloaded dist from release.yaml run ${run_id}"
+              break
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "refusing to render: no dist artifact for ${SHA} after 45 min" >&2
+              exit 1
+            fi
+            echo "waiting for release.yaml to upload dist for ${SHA:0:10}"
+            sleep 30
+          done
+          ls -l dist/
+
+      - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Assert the npm floor trusted publishing needs
-        run: |
-          set -euo pipefail
-          npm install -g npm@latest
-          npm --version
-          node --version
 
       - name: Synthesize npm package manifest
         # The rendered Claude tree carries ``.claude-plugin/plugin.json``
@@ -389,16 +405,162 @@ jobs:
           print(f"wrote package.json name=@elementarno/eawf version={version}")
           PY
 
+      - name: Pack the npm tarball
+        # ``npm pack`` stamps every entry with a fixed date, so the tarball
+        # depends only on the tree and the npm version, both printed here.
+        # The JSON listing is kept beside the tarball as the rendered pack
+        # output a dry-run reviewer reads.
+        id: pack
+        run: |
+          set -euo pipefail
+          out="$(pwd)/release-assets"
+          mkdir -p "${out}"
+          echo "node $(node --version), npm $(npm --version)"
+          cd build/eawf-plugin
+          npm pack --json --pack-destination "${out}" > "${out}/npm-pack.json"
+          cat "${out}/npm-pack.json"
+          tarball="$(basename "$(jq -r '.[0].filename' "${out}/npm-pack.json")")"
+          test -f "${out}/${tarball}"
+          sha256sum "${out}/${tarball}"
+          echo "npm_tarball=${tarball}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the plugin bundle, release notes and SHA256SUMS
+        # The three asset filenames come from
+        # ``eawf.workflow.release.source_host_assets``, which is also
+        # what the observation adapter compares against -- one home for
+        # the strings, so a rename cannot land on only one side.
+        #
+        # The bundle comes from the stdlib builder rather than
+        # ``tar -czf``: tar records checkout mtimes, runner owners and
+        # directory listing order, so two renders of one commit never
+        # agree. It stays a tarball rather than a zip because the plugin
+        # tree carries executable hooks and dotdirs, and tar keeps both.
+        #
+        # The notes name the tag the version implies rather than
+        # ``github.ref_name``, which is a branch name on a dry run.
+        env:
+          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
+          NPM_VERSION: ${{ needs.package-validate.outputs.npm_version }}
+        run: |
+          set -euo pipefail
+          bundle="eawf-plugin-${PLUGIN_VERSION}.tar.gz"
+          tag="v${PLUGIN_VERSION}"
+          uv run python -m eawf.workflow.release.plugin_bundle \
+            build/eawf-plugin "release-assets/${bundle}"
+          {
+            echo "## Plugin distribution"
+            echo
+            echo "- Claude: \`npm install @elementarno/eawf@${NPM_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
+            echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
+            echo "- Codex (pin / rollback): the same tree is retained at \`versions/${PLUGIN_VERSION}/plugins/eawf\` on \`plugins-dist\`."
+            echo
+            echo "## Verifying the artifacts"
+            echo
+            echo "\`SHA256SUMS\` covers every wheel, sdist and plugin bundle attached to ${tag}."
+            echo "Download it beside the artifacts and run \`sha256sum -c SHA256SUMS\`."
+          } > release-assets/RELEASE_NOTES.md
+          sha256sum dist/* "release-assets/${bundle}" | sed 's| .*/| |' > release-assets/SHA256SUMS
+          sha256sum release-assets/RELEASE_NOTES.md
+          cat release-assets/SHA256SUMS
+
+      - name: Upload the rendered release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets/
+          if-no-files-found: error
+
+  require-green-ci:
+    name: Require green CI on the tagged commit
+    # Closes the gap that let v0.5.2 publish while its CI run was red: the
+    # publish jobs below `needs:` this gate, which refuses to proceed unless
+    # the CI workflow concluded `success` for this exact commit. The release
+    # commit lands on `main` (where ci.yaml runs) before the tag is pushed,
+    # so a CI run for the SHA already exists or is in flight — this gate waits
+    # for it, then asserts success. A `workflow_dispatch` dry-run skips it.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    # Above the 30-min (SECONDS + 1800) in-flight-CI wait loop below, so the
+    # job's own timeout never fires before its internal deadline.
+    timeout-minutes: 35
+    permissions:
+      actions: read # read the CI workflow's run conclusion for this SHA
+    steps:
+      - name: Assert ci.yaml concluded success for ${{ github.sha }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 1800 )) # wait up to 30 min for an in-flight run
+          while :; do
+            read -r status conclusion < <(
+              gh api "repos/${REPO}/actions/workflows/ci.yaml/runs?head_sha=${SHA}&per_page=1" \
+                --jq '.workflow_runs[0] | "\(.status // "missing") \(.conclusion // "none")"'
+            )
+            echo "ci.yaml for ${SHA:0:10}: status=${status} conclusion=${conclusion}"
+            if [ "${status}" = "completed" ]; then
+              [ "${conclusion}" = "success" ] && { echo "CI green — release may proceed"; exit 0; }
+              echo "refusing to publish: CI concluded '${conclusion}', not 'success'" >&2
+              exit 1
+            fi
+            if [ "${SECONDS}" -ge "${deadline}" ]; then
+              echo "refusing to publish: timed out waiting for CI to complete on ${SHA}" >&2
+              exit 1
+            fi
+            sleep 30
+          done
+
+  publish-claude-npm:
+    name: Publish Claude plugin to npm
+    needs: [package-validate, render-release-assets, require-green-ci]
+    # Live publish, gated on a real ``v*`` tag push. ``workflow_dispatch``
+    # renders + validates in package-validate but never reaches publish.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # npm trusted publishing exchanges this OIDC token for a
+      # short-lived credential at publish time. Without it npm falls back
+      # to looking for a token, and the registry answers a scoped package
+      # it cannot authenticate for with 404 rather than 401 -- an error
+      # that names the wrong problem entirely.
+      id-token: write
+    steps:
+      - name: Download the rendered release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: .
+
+      - name: Set up Node + npm registry
+        # Trusted publishing requires npm >= 11.5.1 on Node >= 22.14.0.
+        # The npm bundled with a Node release lags, so the floor is
+        # asserted explicitly rather than inferred from node-version.
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Assert the npm floor trusted publishing needs
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+          node --version
+
       - name: Publish to npm
         # ``npm publish`` with no ``--tag`` writes ``latest``, which would
         # make a prerelease the default install for every new user. Pass
         # the dist-tag derived from the version in package-validate so a
         # prerelease is reachable only via an explicit ``@next``.
         #
-        # The tarball is packed first and published by path rather than
-        # from the working directory, so the bytes the receipt below
-        # digests are the exact bytes the registry received. Digesting a
-        # tree and publishing a repack of it proves nothing.
+        # The tarball is the one render-release-assets packed, published
+        # by path, so the bytes the receipt below digests are the exact
+        # bytes the registry received and the ones the dry run rendered.
+        # Repacking here would publish bytes nobody froze.
         id: npm
         # No NODE_AUTH_TOKEN: authentication is the OIDC exchange above.
         # A token present here takes precedence over trusted publishing,
@@ -406,16 +568,19 @@ jobs:
         # configured.
         env:
           DIST_TAG: ${{ needs.package-validate.outputs.dist_tag }}
+          TARBALL: ${{ needs.render-release-assets.outputs.npm_tarball }}
         run: |
           set -euo pipefail
           if [ -z "${DIST_TAG}" ]; then
             echo "refusing to publish: dist-tag not resolved by package-validate" >&2
             exit 1
           fi
-          cd build/eawf-plugin
-          tarball="$(npm pack --silent)"
-          echo "tarball=build/eawf-plugin/${tarball}" >> "$GITHUB_OUTPUT"
-          npm publish "${tarball}" --access public --tag "${DIST_TAG}"
+          if [ -z "${TARBALL}" ] || [ ! -f "${TARBALL}" ]; then
+            echo "refusing to publish: rendered npm tarball '${TARBALL}' is missing" >&2
+            exit 1
+          fi
+          echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
+          npm publish "${TARBALL}" --access public --tag "${DIST_TAG}"
 
       - name: Write the npm publication receipt
         # Written whether the publish succeeded or not, and whatever the
@@ -550,7 +715,7 @@ jobs:
 
   publish-source-host:
     name: Publish source-host release assets
-    needs: [package-validate, publish-claude-npm, publish-codex-branch]
+    needs: [package-validate, render-release-assets, publish-claude-npm, publish-codex-branch]
     # The third publication leg. The ``github`` target of the checkpoint
     # configuration declares three artifact kinds -- ``release_notes``,
     # ``checksums`` and ``plugin_bundle`` -- and the source-host
@@ -558,94 +723,32 @@ jobs:
     # asset-by-asset against the frozen manifest. So this job is not
     # "notes, plus some files": it is the leg whose absence leaves the
     # release record unable to reach VERIFYING.
+    #
+    # The three files are the ones render-release-assets wrote, so the
+    # digests this leg publishes are the ones the dry run rendered.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write # gh release create / edit / upload
-      actions: read # read the Release workflow's dist artifact for this SHA
     steps:
       - name: Checkout tag
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Download rendered trees
+      - name: Download the rendered release assets
         uses: actions/download-artifact@v4
         with:
-          name: plugin-trees
-          path: build/
-
-      - name: Download the dist artifact from the Release run
-        # The checksums file covers every artifact the tag publishes, and
-        # the wheel + sdist are built by release.yaml, in a different
-        # workflow run. Same head SHA, so the run is found the way
-        # ``require-green-ci`` finds the CI run; the wait loop exists
-        # because the two workflows start together and release.yaml's
-        # build job may still be uploading.
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          deadline=$(( SECONDS + 900 ))
-          while :; do
-            run_id="$(
-              gh api "repos/${REPO}/actions/workflows/release.yaml/runs?head_sha=${SHA}&per_page=1" \
-                --jq '.workflow_runs[0].id // empty'
-            )"
-            if [ -n "${run_id}" ] && gh run download "${run_id}" --repo "${REPO}" \
-                 --name dist --dir dist 2>/dev/null; then
-              echo "downloaded dist from release.yaml run ${run_id}"
-              break
-            fi
-            if [ "${SECONDS}" -ge "${deadline}" ]; then
-              echo "refusing to publish: no dist artifact for ${SHA} after 15 min" >&2
-              exit 1
-            fi
-            echo "waiting for release.yaml to upload dist for ${SHA:0:10}"
-            sleep 30
-          done
-          ls -l dist/
-
-      - name: Assemble release notes, checksums and the plugin bundle
-        # The three asset filenames come from
-        # ``eawf.workflow.release.source_host_assets``, which is also
-        # what the observation adapter compares against -- one home for
-        # the strings, so a rename cannot land on only one side.
-        #
-        # The bundle is a tarball rather than a zip because the rendered
-        # plugin tree carries executable hooks and dotdirs, and tar keeps
-        # both modes and names intact.
-        env:
-          PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
-          NPM_VERSION: ${{ needs.package-validate.outputs.npm_version }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          bundle="eawf-plugin-${PLUGIN_VERSION}.tar.gz"
-          tar -czf "${bundle}" -C build/eawf-plugin .
-          {
-            echo "## Plugin distribution"
-            echo
-            echo "- Claude: \`npm install @elementarno/eawf@${NPM_VERSION}\` (or \`/plugin install eawf@eawf\` after \`marketplace add\`)."
-            echo "- Codex: rendered tree on the \`plugins-dist\` branch (\`git-subdir\` pointer at \`./plugins/eawf\`)."
-            echo "- Codex (pin / rollback): the same tree is retained at \`versions/${PLUGIN_VERSION}/plugins/eawf\` on \`plugins-dist\`."
-            echo
-            echo "## Verifying the artifacts"
-            echo
-            echo "\`SHA256SUMS\` covers every wheel, sdist and plugin bundle attached to ${TAG}."
-            echo "Download it beside the artifacts and run \`sha256sum -c SHA256SUMS\`."
-          } > RELEASE_NOTES.md
-          sha256sum dist/* "${bundle}" | sed 's| .*/| |' > SHA256SUMS
-          cat SHA256SUMS
+          name: release-assets
+          path: .
 
       - name: Create or edit the tag release with every declared asset
         # ``gh release create`` fails when the release already exists and
-        # ``edit`` fails when it does not, and either can be true here:
-        # phase-release.yaml creates the release for a phase-close merge,
-        # while a hand-pushed tag has none. Hence create-or-edit.
+        # ``edit`` fails when it does not, and either can be true here: a
+        # tag pushed by ``eawf release tag --push`` arrives with no release,
+        # while a re-run of this job finds the one its first attempt made.
+        # Hence create-or-edit, and this job is the only release writer.
         #
         # ``--prerelease`` is the source-host half of REL-016: a host
         # advertises the newest non-prerelease release as *the* release,

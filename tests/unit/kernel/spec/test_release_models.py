@@ -159,7 +159,7 @@ def test_release_models_accepts_a_well_formed_dev1_record() -> None:
     assert record.membership_refs == ()
     assert record.status is ReleaseStatus.DRAFT
     assert record.revision == 0
-    assert record.schema_version == "release/v1"
+    assert record.schema_version == "release/v2"
 
 
 def test_release_rejects_a_key_that_does_not_spell_the_version() -> None:

@@ -621,10 +621,34 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ),
     ConfigKey(
         tab="vcs",
+        key="vcs.integration_commit_unit",
+        label="Delivery commit unit",
+        type="choice",
+        default="batch",
+        description=(
+            "batch = squash a Batch's sealed candidates into one delivery commit "
+            "at integration; task = one delivery commit per Task."
+        ),
+        choices=("batch", "task"),
+    ),
+    ConfigKey(
+        tab="vcs",
         key="vcs.require_ci_green",
         label="Require CI green before merge",
         type="bool",
         default=True,
+    ),
+    ConfigKey(
+        tab="vcs",
+        key="vcs.task_reference",
+        label="Task reference in delivery commits",
+        type="choice",
+        default="trailer",
+        description=(
+            "trailer = a 'Task:' trailer; subject = an in-subject identifier; "
+            "none = the provenance manifest is the only link."
+        ),
+        choices=("trailer", "subject", "none"),
     ),
     ConfigKey(
         tab="verify",

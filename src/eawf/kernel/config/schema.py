@@ -10,6 +10,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
 CommitSubjectStyle = Literal["bracket", "trailer"]
+#: The unit of one verified delivery commit: under ``batch`` the daemon
+#: squashes a Batch's sealed candidates at integration; ``task`` keeps one
+#: delivery commit per Task.
+IntegrationCommitUnit = Literal["batch", "task"]
+#: How a delivery commit names its Task: a ``Task:`` trailer, an in-subject
+#: identifier, or nothing beyond the provenance manifest.
+TaskReference = Literal["trailer", "subject", "none"]
 ReleaseCadence = Literal["manual", "per-phase"]
 AgentDrivenReleasePolicy = Literal["manual", "per-phase"]
 VerifyWaiverMode = Literal["A", "B", "C", "disabled"]
@@ -411,12 +418,14 @@ __all__ = [
     "EstimationConfig",
     "EstimationDisplayConfig",
     "EuBasis",
+    "IntegrationCommitUnit",
     "PreferencesConfig",
     "ProseConfig",
     "ProseLevel",
     "ReleaseCadence",
     "RuntimeModelsConfig",
     "SolutionBias",
+    "TaskReference",
     "VcsConventionsConfig",
     "VcsReleaseConventionsConfig",
     "VerifyConfig",

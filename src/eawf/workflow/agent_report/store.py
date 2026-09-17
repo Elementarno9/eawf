@@ -68,6 +68,23 @@ def _scrub_findings(body: AgentReportBody) -> list[ScrubFinding]:
     return findings
 
 
+def scrub_finding_kinds(body: AgentReportBody) -> tuple[str, ...]:
+    """Return the distinct scrub finding kinds in *body*'s text, sorted.
+
+    This is the check :func:`append_agent_report` refuses a body on, exposed
+    so a producer can run it before the append and re-ask for a clean body.
+    Only the kinds are returned, never the matched text, so a caller can name
+    the failure without echoing the sensitive value back.
+
+    Args:
+        body: The validated report body to scan.
+
+    Returns:
+        The sorted distinct finding kinds; empty when the body is clean.
+    """
+    return tuple(sorted({finding.kind for finding in _scrub_findings(body)}))
+
+
 def _session_for(state: State, session_id: str) -> AgentSession:
     session = state.agent_sessions.get(session_id)
     if session is None:
@@ -113,10 +130,9 @@ def append_agent_report(
         raise AgentReportRoleMismatchError(
             f"body role {body.role!r} does not match session role {session.role.value!r}"
         )
-    findings = _scrub_findings(body)
-    if findings:
-        kinds = ", ".join(sorted({finding.kind for finding in findings}))
-        raise AgentReportScrubError(f"agent report body failed scrub: {kinds}")
+    kinds = scrub_finding_kinds(body)
+    if kinds:
+        raise AgentReportScrubError(f"agent report body failed scrub: {', '.join(kinds)}")
 
     moment = generated_at if generated_at is not None else datetime.now(UTC)
     store_kind = store_kind_for_role(session.role)

@@ -45,6 +45,17 @@ from eawf.kernel.state.types import UtcDatetime
 
 logger = logging.getLogger(__name__)
 
+#: Record tag every newly written :class:`Release` carries. It moved from
+#: ``release/v1`` when :attr:`Release.adoption` was added: ``Release``
+#: forbids unknown fields, so a reader built before that field rejects a
+#: row carrying it, and the tag is what tells the two shapes apart.
+RELEASE_SCHEMA_VERSION: Final[Literal["release/v2"]] = "release/v2"
+
+#: Every record tag a reader accepts. ``release/v1`` stays readable
+#: because rows already committed under it, some carrying an
+#: ``adoption``, must keep loading.
+ReleaseSchemaVersion = Literal["release/v1", "release/v2"]
+
 
 class ReleaseChannel(StrEnum):
     """Distribution channel a release version maps onto.
@@ -586,7 +597,9 @@ class Release(_StrictModel):
     """One immutable checkpoint record of a :class:`ReleaseTrain`.
 
     Attributes:
-        schema_version: Record schema tag.
+        schema_version: Record schema tag. A record read from the store
+            keeps the tag its row was written under; a new record takes
+            :data:`RELEASE_SCHEMA_VERSION`.
         uid: Stable identity across revisions of the same checkpoint.
         key: ``REL-<version>``; agrees with :attr:`version`.
         version: Normalized version; immutable for the record's life.
@@ -618,7 +631,7 @@ class Release(_StrictModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal["release/v1"] = "release/v1"
+    schema_version: ReleaseSchemaVersion = RELEASE_SCHEMA_VERSION
     uid: UUID
     key: ReleaseKeyStr
     version: NormalizedVersionStr
@@ -857,6 +870,7 @@ def validate_release_against_train(release: Release, train: ReleaseTrain) -> Rel
 
 __all__ = [
     "OBSERVED_TARGET_STATUSES",
+    "RELEASE_SCHEMA_VERSION",
     "AdoptedTargetObservation",
     "NormalizedVersionStr",
     "ReferenceStr",
@@ -868,6 +882,7 @@ __all__ = [
     "ReleaseInvalidation",
     "ReleaseInvalidationCause",
     "ReleaseKeyStr",
+    "ReleaseSchemaVersion",
     "ReleaseStatus",
     "ReleaseTargetStatus",
     "ReleaseTrain",

@@ -14,6 +14,13 @@ The Linux real-host jail gate joins the same family from the other end: it
 guards a job that must EXIST at all, because the sandbox's Linux backend is
 otherwise exercised only by argv shape on hosts without bubblewrap -- a
 prefix bwrap refuses to mount then reads as green.
+
+The changes gate guards the cost cut that skips the heavy jobs on a
+state-only push: the skip must hinge on the classifier's verdict alone,
+and the jobs outside it must keep running on every push.
+
+The twice-green gate pins when the rerun happens as well as how: on main
+and release pushes plus nightly and manual runs, never on a pull request.
 """
 
 from __future__ import annotations
@@ -438,6 +445,38 @@ def test_linux_real_host_gate_reds_on_a_missing_job() -> None:
 
 # --- twice-green full-suite gate --------------------------------------------
 
+#: The one job-level condition the test matrix carries: skip only when the
+#: changes job proved the code tree is the one the last green run tested.
+_CHANGES_CONDITION = "needs.changes.outputs.code == 'true'"
+
+#: The one job-level condition twice-green carries: a push runs it under the
+#: changes gate, a scheduled or dispatched run always, a pull request never.
+_TWICE_GREEN_CONDITION = (
+    f"(github.event_name == 'push' && {_CHANGES_CONDITION})"
+    " || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+)
+
+#: The push branches the twice-green cadence names: main and the release train.
+_PUSH_BRANCHES = ["main", "release", "release/**"]
+
+#: The sentence the job comment and the lint docstring both carry, so the
+#: cadence a reader sees is the cadence the lint enforces.
+_REL026_CADENCE = "the REL-026 proof runs on main and release pushes plus nightly and manual runs"
+
+_TWICE_GREEN_CONDITION_PROBLEM = (
+    "the twice-green job is not gated to main and release pushes plus nightly and manual "
+    "runs, so it can run on a pull request or skip a run it owes"
+)
+_NIGHTLY_PROBLEM = "ci.yaml has no nightly schedule, so twice-green never re-proves main"
+_DISPATCH_PROBLEM = "ci.yaml has no workflow_dispatch trigger, so twice-green cannot run by hand"
+_PUSH_PROBLEM = (
+    f"ci.yaml's push trigger does not name exactly the branches {_PUSH_BRANCHES}, "
+    "so twice-green runs on the wrong pushes"
+)
+_CONCURRENCY_PROBLEM = (
+    "the concurrency group ignores the event name, so a main push cancels the nightly run"
+)
+
 
 def _just_test_all_steps(job: dict[str, Any]) -> list[dict[str, Any]]:
     """Return the steps of *job* that invoke ``just test-all``."""
@@ -445,7 +484,28 @@ def _just_test_all_steps(job: dict[str, Any]) -> list[dict[str, Any]]:
     return [step for step in steps if "just test-all" in str(step.get("run", ""))]
 
 
-def twice_green_violations(workflow: dict[str, Any]) -> list[str]:
+def _triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
+    """Return the trigger table of *workflow*.
+
+    YAML 1.1 reads the bare key ``on`` as the boolean ``True``, so both
+    spellings are looked up.
+    """
+    raw = workflow.get(True, workflow.get("on"))
+    return raw if isinstance(raw, dict) else {}
+
+
+def _is_nightly(cron: str) -> bool:
+    """Return whether *cron* fires once a day at a fixed hour and minute."""
+    fields = cron.split()
+    return (
+        len(fields) == 5
+        and fields[0].isdigit()
+        and fields[1].isdigit()
+        and fields[2:] == ["*", "*", "*"]
+    )
+
+
+def twice_green_violations(workflow: dict[Any, Any]) -> list[str]:
     """Report every way *workflow* could stop proving the suite is twice-green.
 
     A suite that passes once but not twice in a row is not green, it is
@@ -453,14 +513,24 @@ def twice_green_violations(workflow: dict[str, Any]) -> list[str]:
     is where the shared-runtime-dir and stale-lock flakes lived. The
     ``test`` matrix runs the suite once and cannot see that class at all.
 
+    Cadence: the REL-026 proof runs on main and release pushes plus nightly
+    and manual runs. A pull request never runs it: there the rerun bounded
+    every push's wall-clock without catching a defect the first run missed.
+    A push skips it only when the changes job proved the code tree already
+    went green, while a scheduled or dispatched run has no diff and always
+    runs it. The cadence therefore needs the push branch filter, a nightly
+    schedule, a dispatch trigger, and a concurrency group split by event,
+    without which a merge to main cancels the nightly run on the same ref.
+
     Args:
         workflow: The parsed CI workflow.
 
     Returns:
-        One human-readable problem per violation; empty when a fresh,
-        unconditional ubuntu-24.04 job checks the tree out and runs
-        ``just test-all`` exactly twice, with neither run's exit code
-        swallowed.
+        One human-readable problem per violation; empty when a fresh
+        ubuntu-24.04 job carrying exactly the cadence condition checks the
+        tree out and runs ``just test-all`` exactly twice with neither exit
+        code swallowed, and the workflow's triggers and concurrency group
+        deliver that cadence.
     """
     problems: list[str] = []
     job = workflow.get("jobs", {}).get("twice-green")
@@ -469,8 +539,8 @@ def twice_green_violations(workflow: dict[str, Any]) -> list[str]:
 
     if job.get("runs-on") != "ubuntu-24.04":
         problems.append("the twice-green job does not run on ubuntu-24.04")
-    if job.get("if") is not None:
-        problems.append("the twice-green job is conditional, so the rerun can go unproven")
+    if job.get("if") != _TWICE_GREEN_CONDITION:
+        problems.append(_TWICE_GREEN_CONDITION_PROBLEM)
 
     steps: list[dict[str, Any]] = job.get("steps", [])
     if not any(str(step.get("uses", "")).startswith("actions/checkout") for step in steps):
@@ -481,7 +551,55 @@ def twice_green_violations(workflow: dict[str, Any]) -> list[str]:
         problems.append(f"the twice-green job runs 'just test-all' {len(runs)} time(s), not twice")
     if any(step.get("continue-on-error") for step in runs):
         problems.append("a 'just test-all' step is continue-on-error, so a red run reads as green")
+    return problems + _cadence_violations(workflow)
+
+
+def _cadence_violations(workflow: dict[Any, Any]) -> list[str]:
+    """Report the ways the workflow's triggers could break the twice-green cadence."""
+    problems: list[str] = []
+    triggers = _triggers(workflow)
+    push = triggers.get("push")
+    if not isinstance(push, dict) or push.get("branches") != _PUSH_BRANCHES:
+        problems.append(_PUSH_PROBLEM)
+
+    schedule = triggers.get("schedule")
+    entries = schedule if isinstance(schedule, list) else []
+    if not any(
+        isinstance(entry, dict) and _is_nightly(str(entry.get("cron"))) for entry in entries
+    ):
+        problems.append(_NIGHTLY_PROBLEM)
+    if "workflow_dispatch" not in triggers:
+        problems.append(_DISPATCH_PROBLEM)
+
+    concurrency = workflow.get("concurrency")
+    group = concurrency.get("group") if isinstance(concurrency, dict) else concurrency
+    if concurrency is not None and "github.event_name" not in str(group):
+        problems.append(_CONCURRENCY_PROBLEM)
     return problems
+
+
+def _job_comment(source: str, job_name: str) -> str | None:
+    """Return the job-level comment of *job_name* as one whitespace-normalised line.
+
+    Args:
+        source: The raw workflow text; parsing it as YAML drops comments.
+        job_name: The job whose own comment lines are joined; step comments
+            and other jobs' comments are left out.
+
+    Returns:
+        The joined comment, or None when the workflow declares no such job.
+    """
+    lines = source.splitlines()
+    header = f"  {job_name}:"
+    if header not in lines:
+        return None
+    comment: list[str] = []
+    for line in lines[lines.index(header) + 1 :]:
+        if line.strip() and not line.startswith("    "):
+            break
+        if line.startswith("    #"):
+            comment.append(line.strip().removeprefix("#"))
+    return " ".join(" ".join(comment).split())
 
 
 def test_ci_runs_the_full_suite_twice_green() -> None:
@@ -492,8 +610,9 @@ def test_ci_runs_the_full_suite_twice_green() -> None:
 def test_twice_green_gate_reds_on_a_single_run() -> None:
     """The gate fires on the real defect: one run, so a rerun-only flake hides.
 
-    The synthetic job also swallows the exit code and pins the wrong
-    runner, which are the other two ways a job can look like this gate's
+    The synthetic job also swallows the exit code, pins the wrong runner
+    and runs on pull requests, and the workflow keeps none of the cadence
+    triggers, which are the other ways a job can look like this gate's
     subject while proving nothing.
     """
     defective = yaml.safe_load(
@@ -510,27 +629,57 @@ def test_twice_green_gate_reds_on_a_single_run() -> None:
                 run: just test-all
         """
     )
-    problems = twice_green_violations(defective)
-    assert any("1 time(s), not twice" in problem for problem in problems), problems
-    assert any("continue-on-error" in problem for problem in problems), problems
-    assert any("ubuntu-24.04" in problem for problem in problems), problems
-    assert any("conditional" in problem for problem in problems), problems
+    assert twice_green_violations(defective) == [
+        "the twice-green job does not run on ubuntu-24.04",
+        _TWICE_GREEN_CONDITION_PROBLEM,
+        "the twice-green job runs 'just test-all' 1 time(s), not twice",
+        "a 'just test-all' step is continue-on-error, so a red run reads as green",
+        _PUSH_PROBLEM,
+        _NIGHTLY_PROBLEM,
+        _DISPATCH_PROBLEM,
+    ]
 
 
-def test_twice_green_gate_reds_on_a_checkoutless_job() -> None:
-    """Two runs over a tree nobody checked out are not two FRESH runs."""
-    defective = yaml.safe_load(
+def _twice_green_workflow(condition: str | None = _TWICE_GREEN_CONDITION) -> dict[Any, Any]:
+    """Return a well-formed twice-green workflow whose job carries *condition*.
+
+    Args:
+        condition: The job-level ``if``; None leaves the job unconditional.
+    """
+    workflow: dict[Any, Any] = yaml.safe_load(
         """
+        on:
+          push:
+            branches: [main, release, "release/**"]
+          pull_request:
+          schedule:
+            - cron: "17 3 * * *"
+          workflow_dispatch:
+        concurrency:
+          group: ci-${{ github.event_name }}-${{ github.ref }}
+          cancel-in-progress: true
         jobs:
           twice-green:
+            needs: changes
             runs-on: ubuntu-24.04
             steps:
+              - name: Checkout
+                uses: actions/checkout@v4
               - name: Pytest (run 1)
                 run: just test-all
               - name: Pytest (run 2)
                 run: just test-all
         """
     )
+    if condition is not None:
+        workflow["jobs"]["twice-green"]["if"] = condition
+    return workflow
+
+
+def test_twice_green_gate_reds_on_a_checkoutless_job() -> None:
+    """Two runs over a tree nobody checked out are not two FRESH runs."""
+    defective = _twice_green_workflow()
+    defective["jobs"]["twice-green"]["steps"].pop(0)
     assert twice_green_violations(defective) == ["the twice-green job checks out no fresh tree"]
 
 
@@ -538,6 +687,319 @@ def test_twice_green_gate_reds_on_a_missing_job() -> None:
     """A workflow with no twice-green job at all is itself the violation."""
     assert twice_green_violations(yaml.safe_load("jobs: {}\n")) == [
         "ci.yaml declares no 'twice-green' job"
+    ]
+
+
+def test_twice_green_gate_accepts_the_cadence_condition() -> None:
+    """Main and release pushes under the changes gate plus nightly and manual runs."""
+    assert twice_green_violations(_twice_green_workflow()) == []
+
+
+def test_twice_green_gate_accepts_a_workflow_without_concurrency() -> None:
+    """Without a concurrency block no run cancels another, so the nightly survives."""
+    workflow = _twice_green_workflow()
+    del workflow["concurrency"]
+    assert twice_green_violations(workflow) == []
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        None,
+        _CHANGES_CONDITION,
+        "github.event_name == 'pull_request'",
+        "github.event_name != 'schedule' && needs.changes.outputs.code == 'true'",
+        f"{_TWICE_GREEN_CONDITION} || github.event_name == 'pull_request'",
+        "always()",
+    ],
+)
+def test_twice_green_gate_reds_on_a_pull_request_run(condition: str | None) -> None:
+    """The gate fires on the cadence it replaces: a rerun on every PR push."""
+    assert twice_green_violations(_twice_green_workflow(condition)) == [
+        _TWICE_GREEN_CONDITION_PROBLEM
+    ]
+
+
+@pytest.mark.parametrize(
+    "condition",
+    [
+        f"${{{{ {_TWICE_GREEN_CONDITION} }}}}",
+        "github.event_name != 'pull_request'",
+        "github.event_name != 'pull_request' && needs.changes.outputs.code == 'true'",
+        f"(github.event_name == 'push' && {_CHANGES_CONDITION}) || github.event_name == 'schedule'",
+    ],
+)
+def test_twice_green_gate_reds_on_any_other_condition(condition: str) -> None:
+    """Near misses of the cadence condition still read as the wrong gate."""
+    assert twice_green_violations(_twice_green_workflow(condition)) == [
+        _TWICE_GREEN_CONDITION_PROBLEM
+    ]
+
+
+@pytest.mark.parametrize(
+    "schedule",
+    [None, [], [{"cron": "17 3 * * 1"}], [{"cron": "0 * * * *"}], [{"cron": "17 3 * *"}], ["x"]],
+)
+def test_twice_green_gate_reds_without_a_nightly_schedule(schedule: object) -> None:
+    """With no daily schedule the rerun waits for the next push to main."""
+    workflow = _twice_green_workflow()
+    if schedule is None:
+        del workflow[True]["schedule"]
+    else:
+        workflow[True]["schedule"] = schedule
+    assert twice_green_violations(workflow) == [_NIGHTLY_PROBLEM]
+
+
+def test_twice_green_gate_accepts_a_nightly_schedule_among_others() -> None:
+    """A weekly entry beside the nightly one does not hide the nightly run."""
+    workflow = _twice_green_workflow()
+    workflow[True]["schedule"] = [{"cron": "0 6 * * 1"}, {"cron": "5 2 * * *"}]
+    assert twice_green_violations(workflow) == []
+
+
+def test_twice_green_gate_reds_without_a_dispatch_trigger() -> None:
+    """With no dispatch trigger nobody can rerun the proof after a fix."""
+    workflow = _twice_green_workflow()
+    del workflow[True]["workflow_dispatch"]
+    assert twice_green_violations(workflow) == [_DISPATCH_PROBLEM]
+
+
+@pytest.mark.parametrize(
+    "push",
+    [
+        None,
+        {"branches": ["**"]},
+        {"branches": ["main"]},
+        {"branches": ["main", "release", "release/**", "feature/**"]},
+        {"branches-ignore": ["gh-pages"]},
+    ],
+)
+def test_twice_green_gate_reds_on_a_branch_push_trigger(push: object) -> None:
+    """A push filter wider or narrower than main and release moves the rerun."""
+    workflow = _twice_green_workflow()
+    workflow[True]["push"] = push
+    assert twice_green_violations(workflow) == [_PUSH_PROBLEM]
+
+
+def test_twice_green_gate_reds_without_a_push_trigger() -> None:
+    """With no push trigger a merge to main never reruns the suite."""
+    workflow = _twice_green_workflow()
+    del workflow[True]["push"]
+    assert twice_green_violations(workflow) == [_PUSH_PROBLEM]
+
+
+@pytest.mark.parametrize(
+    "concurrency",
+    [
+        {"group": "ci-${{ github.ref }}", "cancel-in-progress": True},
+        {"cancel-in-progress": True},
+        "ci-${{ github.ref }}",
+    ],
+)
+def test_twice_green_gate_reds_on_a_shared_concurrency_group(concurrency: object) -> None:
+    """A per-ref group lets a merge to main cancel the nightly run on main."""
+    workflow = _twice_green_workflow()
+    workflow["concurrency"] = concurrency
+    assert twice_green_violations(workflow) == [_CONCURRENCY_PROBLEM]
+
+
+def test_twice_green_gate_reads_the_on_key_under_either_spelling() -> None:
+    """A loader that keeps ``on`` as a string still yields the same triggers."""
+    workflow = _twice_green_workflow()
+    workflow["on"] = workflow.pop(True)
+    assert twice_green_violations(workflow) == []
+
+
+def test_twice_green_comment_states_the_rel026_cadence() -> None:
+    """The job comment and the lint docstring both state the enforced cadence."""
+    assert _REL026_CADENCE in (_job_comment(_CI.read_text(encoding="utf-8"), "twice-green") or "")
+    assert _REL026_CADENCE in " ".join((twice_green_violations.__doc__ or "").split())
+
+
+def test_twice_green_comment_gate_reds_on_a_cadence_in_another_job() -> None:
+    """Only the twice-green job's own comment counts, not a neighbour's or a step's."""
+    source = (
+        "jobs:\n"
+        "  twice-green:\n"
+        "    # The rerun runs on every pull request push.\n"
+        "    steps:\n"
+        "      - name: Pytest\n"
+        f"        # Cadence: {_REL026_CADENCE}.\n"
+        "        run: just test-all\n"
+        "  prose-gate:\n"
+        f"    # Cadence: {_REL026_CADENCE}.\n"
+        "    runs-on: ubuntu-24.04\n"
+    )
+    assert _job_comment(source, "twice-green") == "The rerun runs on every pull request push."
+    assert _job_comment(source, "prose-gate") == f"Cadence: {_REL026_CADENCE}."
+    assert _job_comment(source, "windows") is None
+
+
+# --- changes gate on the heavy jobs ------------------------------------------
+
+#: Jobs expensive enough to skip on a bookkeeping-only diff, each with the
+#: one condition it may carry. Twice-green applies the changes gate to push
+#: runs only, since a scheduled or dispatched run has no diff to classify.
+_HEAVY_JOBS: dict[str, str] = {
+    "test": _CHANGES_CONDITION,
+    "twice-green": _TWICE_GREEN_CONDITION,
+}
+
+#: Jobs that run whatever the classifier says: linux-jail is a release-train
+#: receipt, windows and the wheel smoke cover what the matrix cannot, and the
+#: two PR gates are cheap enough that skipping them saves nothing.
+_CHEAP_JOBS = ("linux-jail", "windows", "tool-install-smoke", "snapshot-pairing", "prose-gate")
+
+
+def _needs(job: dict[str, Any]) -> list[str]:
+    """Return the job names *job* needs, whichever YAML form it uses."""
+    needs = job.get("needs", [])
+    return [needs] if isinstance(needs, str) else list(needs)
+
+
+def changes_gate_violations(workflow: dict[str, Any]) -> list[str]:
+    """Report every way *workflow* could skip a job it must run.
+
+    The heavy jobs skip when the changes job says the tree is already
+    green, so the gate is only as sound as that job: a conditional or
+    error-swallowing classifier leaves the output empty, and an empty
+    output skips the matrix on a run that still concludes success. The
+    cheap jobs must never see the classifier at all.
+
+    Args:
+        workflow: The parsed CI workflow.
+
+    Returns:
+        One human-readable problem per violation; empty when an
+        unconditional changes job runs the classifier over full history
+        and exports its verdict, each heavy job needs it and carries
+        exactly its sanctioned condition, and no cheap job depends on it.
+    """
+    jobs = workflow.get("jobs", {})
+    changes = jobs.get("changes")
+    if changes is None:
+        return ["ci.yaml declares no 'changes' job"]
+    problems = _changes_job_shape(changes)
+    for name, condition in _HEAVY_JOBS.items():
+        job = jobs.get(name)
+        if job is None:
+            problems.append(f"ci.yaml declares no {name!r} job")
+            continue
+        if "changes" not in _needs(job):
+            problems.append(f"the {name} job does not need the changes job")
+        if job.get("if") != condition:
+            problems.append(f"the {name} job is not gated on exactly {condition!r}")
+    for name in _CHEAP_JOBS:
+        job = jobs.get(name)
+        if job is None:
+            problems.append(f"ci.yaml declares no {name!r} job")
+        elif "changes" in _needs(job) or "needs.changes" in str(job.get("if", "")):
+            problems.append(f"the {name} job depends on the changes job, so it can be skipped")
+    return problems
+
+
+def _changes_job_shape(job: dict[str, Any]) -> list[str]:
+    """Report the ways the changes job could exist yet leave the gate open."""
+    problems: list[str] = []
+    steps: list[dict[str, Any]] = job.get("steps", [])
+    if job.get("if") is not None:
+        problems.append("the changes job is conditional, so skipping it skips the matrix")
+    if job.get("continue-on-error") or any(step.get("continue-on-error") for step in steps):
+        problems.append("the changes job is continue-on-error, so a crash skips the matrix")
+
+    checkout = next(
+        (step for step in steps if str(step.get("uses", "")).startswith("actions/checkout")), None
+    )
+    if checkout is None or (checkout.get("with") or {}).get("fetch-depth") != 0:
+        problems.append("the changes job checks out no full history to diff against")
+
+    classify = next(
+        (step for step in steps if "tools/ci_changes.py" in str(step.get("run", ""))), None
+    )
+    if classify is None:
+        problems.append("no changes step runs tools/ci_changes.py")
+        return problems
+    wired = f"${{{{ steps.{classify.get('id')}.outputs.code }}}}"
+    if str((job.get("outputs") or {}).get("code", "")) != wired:
+        problems.append("the changes job's code output is not wired from the classifier step")
+    return problems
+
+
+def test_ci_gates_the_heavy_jobs_on_the_changes_output() -> None:
+    """The live CI workflow skips only the heavy jobs, and only on the verdict."""
+    assert changes_gate_violations(_load_ci()) == []
+
+
+def test_changes_gate_reds_on_an_open_gate() -> None:
+    """The gate fires on the real defect: a matrix that can skip unproven.
+
+    The synthetic classifier is conditional, swallows its own crash, diffs
+    a shallow clone and exports another step's output; the matrix is not
+    gated at all, twice-green carries a near-miss condition, and two cheap
+    jobs were pulled behind the classifier.
+    """
+    defective = yaml.safe_load(
+        """
+        jobs:
+          changes:
+            if: github.event_name == 'push'
+            outputs:
+              code: ${{ steps.other.outputs.code }}
+            steps:
+              - name: Checkout
+                uses: actions/checkout@v4
+              - name: Classify
+                id: classify
+                continue-on-error: true
+                run: python3 tools/ci_changes.py
+          test:
+            runs-on: ubuntu-24.04
+          twice-green:
+            needs: changes
+            if: needs.changes.outputs.code != 'false'
+          linux-jail: {}
+          windows:
+            needs: [changes]
+          tool-install-smoke: {}
+          snapshot-pairing:
+            if: github.event_name == 'pull_request' && needs.changes.outputs.code == 'true'
+          prose-gate:
+            if: github.event_name == 'pull_request'
+        """
+    )
+    assert changes_gate_violations(defective) == [
+        "the changes job is conditional, so skipping it skips the matrix",
+        "the changes job is continue-on-error, so a crash skips the matrix",
+        "the changes job checks out no full history to diff against",
+        "the changes job's code output is not wired from the classifier step",
+        "the test job does not need the changes job",
+        "the test job is not gated on exactly \"needs.changes.outputs.code == 'true'\"",
+        f"the twice-green job is not gated on exactly {_TWICE_GREEN_CONDITION!r}",
+        "the windows job depends on the changes job, so it can be skipped",
+        "the snapshot-pairing job depends on the changes job, so it can be skipped",
+    ]
+
+
+def test_changes_gate_reds_on_a_classifierless_job() -> None:
+    """A changes job that never runs the classifier exports nothing to gate on."""
+    workflow = _load_ci()
+    workflow["jobs"]["changes"]["steps"] = [
+        {"name": "Checkout", "uses": "actions/checkout@v4", "with": {"fetch-depth": 0}}
+    ]
+    assert changes_gate_violations(workflow) == ["no changes step runs tools/ci_changes.py"]
+
+
+def test_changes_gate_reds_on_a_missing_cheap_job() -> None:
+    """A renamed cheap job would otherwise make its unconditional check vacuous."""
+    workflow = _load_ci()
+    del workflow["jobs"]["windows"]
+    assert changes_gate_violations(workflow) == ["ci.yaml declares no 'windows' job"]
+
+
+def test_changes_gate_reds_on_a_missing_job() -> None:
+    """A workflow with no changes job at all is itself the violation."""
+    assert changes_gate_violations(yaml.safe_load("jobs: {}\n")) == [
+        "ci.yaml declares no 'changes' job"
     ]
 
 

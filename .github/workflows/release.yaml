@@ -29,6 +29,11 @@ permissions:
 jobs:
   build-wheel:
     name: Build wheel + sdist (dry-run)
+    # Needs the receipt job because the digests this job uploads must be
+    # the ones the reproducible-build receipt attests: a dry-run receipt
+    # only lets a manifest be frozen before the tag if the tag build
+    # reproduces it byte for byte.
+    needs: [inventory-and-reproducibility]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -45,6 +50,19 @@ jobs:
 
       - name: Sync (frozen)
         run: uv sync --frozen
+
+      - name: Pin SOURCE_DATE_EPOCH to the tagged commit
+        # The archive members' mtimes are the wall clock unless this is
+        # set, so an unpinned build never matches the receipt. The value
+        # is read the way the receipt producer reads it -- the commit's
+        # own committer time -- and exported for every later step.
+        env:
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          epoch="$(git show -s --format=%ct "${SHA}")"
+          echo "SOURCE_DATE_EPOCH=${epoch}" >> "$GITHUB_ENV"
+          echo "SOURCE_DATE_EPOCH=${epoch} (${SHA:0:10})"
 
       - name: Build wheel + sdist
         run: uv build --out-dir dist
@@ -79,6 +97,61 @@ jobs:
           uv run --no-project --with "${wheel}" --python 3.14 -- eawf --help >/dev/null
           uv run --no-project --with "${wheel}" --python 3.14 -- python -c \
             "import eawf.surfaces.cli, eawf.workflow.audit_dsl.registry; print('runtime import closure OK')"
+
+      - name: Download the reproducible-build receipt
+        # Into the runner's temp dir, never the workspace: the sdist
+        # archives every unignored file in the tree, and ``dist/`` is
+        # what twine checks and the publish job uploads.
+        uses: actions/download-artifact@v4
+        with:
+          name: reproducible-build-receipt
+          path: ${{ runner.temp }}/build-receipt
+
+      - name: Assert the build reproduces the receipt digests
+        # Last step before the upload, so the digests compared are the
+        # bytes that leave this job. A wheel or sdist that differs from
+        # the receipt reds the build here, before publish-pypi can ship
+        # an artifact no frozen manifest describes.
+        env:
+          RECEIPT: ${{ runner.temp }}/build-receipt/reproducible-build-receipt.json
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          uv run python - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          from eawf.workflow.release.reproducibility import (
+              ReproducibleBuildReceipt,
+              digest_build_output,
+          )
+
+          receipt = ReproducibleBuildReceipt.model_validate_json(
+              Path(os.environ["RECEIPT"]).read_text(encoding="utf-8")
+          )
+          epoch = int(os.environ["SOURCE_DATE_EPOCH"])
+          built = digest_build_output(Path("dist"), attempt=1, source_date_epoch=epoch)
+          problems = []
+          if receipt.source_sha != os.environ["SHA"]:
+              problems.append(f"receipt is for {receipt.source_sha}, not {os.environ['SHA']}")
+          if receipt.source_date_epoch != epoch:
+              problems.append(f"receipt pins epoch {receipt.source_date_epoch}, build used {epoch}")
+          if not receipt.reproduced:
+              problems.append(f"receipt did not reproduce: {list(receipt.divergent_artifacts)}")
+          expected = {a.filename: a.sha256 for a in receipt.attempts[-1].artifacts}
+          actual = {a.filename: a.sha256 for a in built.artifacts}
+          for name in sorted(set(expected) | set(actual)):
+              if expected.get(name) != actual.get(name):
+                  problems.append(f"{name}: receipt {expected.get(name)} != built {actual.get(name)}")
+          if problems:
+              print("build does not reproduce the receipt:", file=sys.stderr)
+              for problem in problems:
+                  print(f"  - {problem}", file=sys.stderr)
+              sys.exit(1)
+          for name, digest in sorted(actual.items()):
+              print(f"{digest}  {name}")
+          PY
 
       - name: Upload dist artifact
         uses: actions/upload-artifact@v4
@@ -353,10 +426,13 @@ jobs:
           from pathlib import Path
 
           target_id = os.environ["TARGET_ID"]
+          # Only what PyPI serves: the publish action writes a
+          # ``.publish.attestation`` beside each dist, and a receipt that
+          # digests those names files no frozen manifest carries.
           digests = {
               path.name: f"sha256:{hashlib.sha256(path.read_bytes()).hexdigest()}"
               for path in sorted(Path("dist").glob("*"))
-              if path.is_file()
+              if path.is_file() and path.name.endswith((".whl", ".tar.gz"))
           }
           receipt = {
               "target_id": target_id,

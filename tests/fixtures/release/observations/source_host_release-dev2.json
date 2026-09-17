@@ -1,0 +1,21 @@
+{
+  "payload": {
+    "assets": [
+      {
+        "digest": "sha256:6d89424461e18b8fea4b23f5877722b7d40bbe0ce4d4af57e94f6e83354b99e9",
+        "name": "eawf-plugin-0.7.0.dev2.tar.gz"
+      },
+      {
+        "digest": "sha256:135a7b960942be9cd3018e6e199a035356d20a1e2220b8fefb348f4dc31ed305",
+        "name": "RELEASE_NOTES.md"
+      },
+      {
+        "digest": "sha256:d942badab2f0ada88cd4c0e8c31a0e0376686cdefdb0208b363aedd622e70afc",
+        "name": "SHA256SUMS"
+      }
+    ],
+    "prerelease": true,
+    "tag_name": "v0.7.0.dev2"
+  },
+  "status": 200
+}

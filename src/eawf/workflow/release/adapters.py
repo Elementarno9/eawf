@@ -12,12 +12,11 @@ makes the adapters testable at all. Judging is a pure function of a
 :class:`~eawf.workflow.release.observation.RecordedResponse`, so the
 match, missing, mismatch and unknown paths of every adapter are driven
 by recorded fixtures. Reading is a separate seam
-(:data:`DEFAULT_REGISTRY_READERS`): no HTTP client ships in this
-distribution, so every default reader answers
-``registry_unreachable`` and the operator supplies the recorded
-response. That is the honest current state -- an adapter that fabricated
-a match rather than reporting an unread registry would be exactly the
-failure this whole record exists to prevent.
+(:data:`DEFAULT_REGISTRY_READERS`): the live readers in
+:mod:`eawf.workflow.release.registry_readers` query each registry and
+add the two facts the registries do not publish -- the npm tarball's
+sha256 and the source-host release's repository -- so a recorded
+response is always the reader's answer, never a raw registry body.
 
 Two rules shape all three adapters:
 
@@ -52,6 +51,14 @@ from eawf.workflow.release.observation import (
     PublicationObservation,
     RecordedResponse,
     build_observation,
+)
+from eawf.workflow.release.registry_readers import (
+    NPM_TARBALL_DIGESTS_FIELD,
+    SOURCE_HOST_REPOSITORY_FIELD,
+    NpmRegistryReader,
+    PackageIndexReader,
+    SourceHostReleaseReader,
+    UrllibOpener,
 )
 
 logger = logging.getLogger(__name__)
@@ -296,9 +303,12 @@ def observe_npm_registry(
 
     Reads the packument projection: ``name`` is the package the registry
     answered about, ``dist-tags`` maps each distribution tag onto a
-    version, and ``versions.<semver>.dist.files`` carries the published
-    filenames with their ``sha256`` digests. The version key is the
-    SemVer spelling of the checkpoint, because npm carries
+    version, and ``versions.<semver>.dist`` carries the tarball digest
+    the npm reader recorded under
+    :data:`~eawf.workflow.release.registry_readers.NPM_TARBALL_DIGESTS_FIELD`.
+    The registry itself publishes no sha256, so a packument that did not
+    pass through the reader exposes no artifact to compare. The version
+    key is the SemVer spelling of the checkpoint, because npm carries
     ``0.7.0-dev.1`` where the index carries ``0.7.0.dev1``.
 
     REL-016 lands here: the ``latest`` tag is what a bare ``npm install``
@@ -376,7 +386,7 @@ def observe_npm_registry(
 
 
 def _npm_digests(entry: Mapping[str, Any]) -> dict[str, str]:
-    """Return the published file digests of one packument version.
+    """Return the tarball digests the reader recorded for one version.
 
     Args:
         entry: The ``versions.<semver>`` object.
@@ -385,19 +395,13 @@ def _npm_digests(entry: Mapping[str, Any]) -> dict[str, str]:
         Filename to ``sha256:``-prefixed digest, skipping unreadable
         rows.
     """
-    files = (_mapping(entry.get("dist")) or {}).get("files")
-    observed: dict[str, str] = {}
-    if not isinstance(files, list):
-        return observed
-    for row in files:
-        record = _mapping(row)
-        if record is None:
-            continue
-        name = record.get("name")
-        sha256 = record.get("sha256")
-        if isinstance(name, str) and isinstance(sha256, str):
-            observed[name] = f"sha256:{sha256}" if not sha256.startswith("sha256:") else sha256
-    return observed
+    dist = _mapping(entry.get("dist")) or {}
+    recorded = _mapping(dist.get(NPM_TARBALL_DIGESTS_FIELD)) or {}
+    return {
+        name: digest if digest.startswith("sha256:") else f"sha256:{digest}"
+        for name, digest in recorded.items()
+        if isinstance(name, str) and isinstance(digest, str)
+    }
 
 
 def observe_source_host_release(
@@ -409,10 +413,11 @@ def observe_source_host_release(
     """Judge a source-host release read-back of one checkpoint.
 
     Reads the release-object projection: ``repository`` is the
-    ``owner/repo`` the host answered about, ``tag_name`` is the tag the
-    release object hangs off, ``prerelease`` is the flag that keeps it
-    off the "latest release" surface, and each row of ``assets`` carries
-    a ``name`` plus a ``digest``.
+    ``owner/repo`` the source-host reader recorded (the host's release
+    object does not name it), ``tag_name`` is the tag the release object
+    hangs off, ``prerelease`` is the flag that keeps it off the "latest
+    release" surface, and each row of ``assets`` carries a ``name`` plus
+    a ``sha256:``-prefixed ``digest``.
 
     REL-016 lands here too, in the flag: a source host advertises the
     newest non-prerelease release as *the* release, so a checkpoint tag
@@ -438,16 +443,14 @@ def observe_source_host_release(
             observed_at=observed_at,
         )
     payload = _mapping(response.payload) or {}
-    if str(payload.get("repository", "")) != request.identity:
+    repository = payload.get(SOURCE_HOST_REPOSITORY_FIELD)
+    if str(repository or "") != request.identity:
         return build_observation(
             request,
             response,
             code=ObservationCode.IDENTITY_MISMATCH,
             observed_digests={},
-            detail=(
-                f"the host answered about repository {payload.get('repository')!r}, "
-                f"not {request.identity!r}"
-            ),
+            detail=f"the host answered about repository {repository!r}, not {request.identity!r}",
             observed_at=observed_at,
         )
     expected_tag = f"v{request.version}"
@@ -556,34 +559,20 @@ def resolve_observe_adapter(target: ReleaseTargetConfig) -> ObservationAdapterFn
         raise UndeclaredObservationAdapterError(target.observe_adapter, target.target_id) from exc
 
 
-def _unreachable_reader(request: ObservationRequest) -> RecordedResponse:
-    """Return the answer of a registry this build cannot query.
+#: The live reader behind each adapter, each querying its public
+#: registry through urllib. Total over the adapter enum for the same
+#: reason :data:`OBSERVATION_ADAPTERS` is.
+DEFAULT_REGISTRY_READERS: Final[Mapping[ObservationAdapter, RegistryReader]] = {
+    ObservationAdapter.PACKAGE_INDEX: PackageIndexReader(opener=UrllibOpener()),
+    ObservationAdapter.NPM_REGISTRY: NpmRegistryReader(opener=UrllibOpener()),
+    ObservationAdapter.SOURCE_HOST_RELEASE: SourceHostReleaseReader(opener=UrllibOpener()),
+}
 
-    No HTTP client ships in this distribution, so there is nothing to
-    query with. Reporting status ``0`` makes every default read-back
-    ``registry_unreachable``, which refuses to settle the leg -- the
-    alternative, inferring a verdict from an unmade query, is how a
-    release bakes on evidence nobody collected.
-
-    Args:
-        request: The read-back request that cannot be dispatched.
-
-    Returns:
-        A response carrying no status and no body.
-    """
-    logger.warning(
-        f"registry_reader_unavailable target={request.target.target_id!r} "
-        f"adapter={request.target.observe_adapter.value!r} identity={request.identity!r}; "
-        f"supply the recorded response instead"
-    )
-    return RecordedResponse(status=0)
-
-
-#: The reader behind each adapter. Every entry is the unreachable reader
-#: until a live client lands; see :func:`_unreachable_reader`.
-DEFAULT_REGISTRY_READERS: Final[Mapping[ObservationAdapter, RegistryReader]] = dict.fromkeys(
-    ObservationAdapter, _unreachable_reader
+_UNREAD = sorted(
+    adapter.value for adapter in ObservationAdapter if adapter not in DEFAULT_REGISTRY_READERS
 )
+if _UNREAD:  # pragma: no cover - a build with this defect cannot import
+    raise RuntimeError(f"registry readers are incomplete: {_UNREAD} have no reader")
 
 
 def collect_observation(
@@ -603,10 +592,11 @@ def collect_observation(
     Args:
         request: The read-back request for this leg.
         observed_at: Timezone-aware UTC instant of the judgement.
-        response: A registry answer already in hand. When ``None`` the
+        response: A reader's answer already in hand. When ``None`` the
             leg's reader is asked for one.
         readers: Reader registry to ask. Defaults to
-            :data:`DEFAULT_REGISTRY_READERS`.
+            :data:`DEFAULT_REGISTRY_READERS`, which queries the live
+            registries.
 
     Returns:
         The observation the answer supports.
@@ -614,7 +604,8 @@ def collect_observation(
     Raises:
         UndeclaredObservationAdapterError: When the leg's declared
             adapter has no implementation.
-        ValueError: When *observed_at* is naive.
+        ValueError: When *observed_at* is naive, or the reader refuses
+            the request's identity or frozen artifact set.
     """
     if observed_at.tzinfo is None:
         raise ValueError("observed_at must be timezone-aware")

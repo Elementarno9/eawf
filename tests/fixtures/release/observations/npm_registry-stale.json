@@ -1,0 +1,16 @@
+{
+  "payload": {
+    "dist-tags": {
+      "latest": "0.6.8"
+    },
+    "name": "@elementarno/eawf",
+    "versions": {
+      "0.6.8": {
+        "dist": {
+          "tarball": "https://registry.npmjs.org/@elementarno/eawf/-/eawf-0.6.8.tgz"
+        }
+      }
+    }
+  },
+  "status": 200
+}
