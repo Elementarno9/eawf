@@ -1,0 +1,8 @@
+{
+  "case": "state",
+  "description": "The primary Track committed a change after the plan was approved over its revision 1, so the compare-and-swap token the approval pinned no longer names the Track in front of the apply.",
+  "path": ["track", "TRK-RUNTIME", "revision"],
+  "value": 2,
+  "expected_code": "revision_conflict",
+  "expected_guard": "base_state_revision_pinned"
+}

@@ -1,0 +1,96 @@
+{
+  "description": "One Run's event stream walked end to end: two ordered events, an idempotent replay of the second, a jump that records a typed gap, and a late event that arrives after the Run was cancelled and is quarantined without reopening it.",
+  "steps": [
+    {
+      "step": "the first event takes sequence one",
+      "event_ref": "EVT-0000000a",
+      "run_sequence": 1,
+      "event_kind": "reasoning_started",
+      "payload": {"payload_kind": "reasoning_summary", "phase": "started"},
+      "expect_disposition": "appended",
+      "expect_last_contiguous": 1,
+      "expect_next": 2,
+      "expect_derivation_stopped": false,
+      "expect_run_status": "RUNNING"
+    },
+    {
+      "step": "a background command starts at sequence two",
+      "event_ref": "EVT-0000000b",
+      "run_sequence": 2,
+      "event_kind": "command_started",
+      "payload": {
+        "payload_kind": "command",
+        "command_family_ref": "shell",
+        "command_ref": "CMD-0000000c",
+        "phase": "started",
+        "execution": "background"
+      },
+      "expect_disposition": "appended",
+      "expect_last_contiguous": 2,
+      "expect_next": 3,
+      "expect_derivation_stopped": false,
+      "expect_run_status": "RUNNING"
+    },
+    {
+      "step": "the same event submitted again appends nothing",
+      "event_ref": "EVT-0000000b",
+      "run_sequence": 2,
+      "event_kind": "command_started",
+      "payload": {
+        "payload_kind": "command",
+        "command_family_ref": "shell",
+        "command_ref": "CMD-0000000c",
+        "phase": "started",
+        "execution": "background"
+      },
+      "expect_disposition": "duplicate",
+      "expect_last_contiguous": 2,
+      "expect_next": 3,
+      "expect_derivation_stopped": false,
+      "expect_run_status": "RUNNING"
+    },
+    {
+      "step": "sequences three and four never arrive, so the hole is recorded",
+      "event_ref": "EVT-0000000d",
+      "run_sequence": 5,
+      "event_kind": "command_result",
+      "payload": {
+        "payload_kind": "command",
+        "command_family_ref": "shell",
+        "command_ref": "CMD-0000000c",
+        "phase": "result",
+        "execution": "background",
+        "exit_code": 0,
+        "outcome": "succeeded"
+      },
+      "replay_capability": "verified",
+      "expect_disposition": "gap_recorded",
+      "expect_gap": {
+        "expected_sequence": 3,
+        "observed_sequence": 5,
+        "replay_requested": true
+      },
+      "expect_last_contiguous": 2,
+      "expect_next": 6,
+      "expect_derivation_stopped": true,
+      "expect_run_status": "RUNNING"
+    },
+    {
+      "step": "an event arriving after the cancellation is quarantined",
+      "cancel_run_first": true,
+      "event_ref": "EVT-0000000e",
+      "run_sequence": 6,
+      "event_kind": "reasoning_summarized",
+      "payload": {
+        "payload_kind": "reasoning_summary",
+        "phase": "summarized",
+        "summary": "weighed two options and took the cheaper one"
+      },
+      "expect_disposition": "quarantined",
+      "expect_last_contiguous": 2,
+      "expect_next": 6,
+      "expect_derivation_stopped": true,
+      "expect_run_status": "CANCELLED"
+    }
+  ]
+}

@@ -33,6 +33,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, Validation
 
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictPositiveInt
+from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
 from eawf.runtime.daemon.epoch2_transaction import (
     MutationReceipt,
     TransactionRefusalCode,
@@ -185,12 +186,16 @@ class DomainEnvelope(BaseModel):
     links: dict[str, str] = Field(default_factory=dict)
 
 
-def accepted_envelope(receipt: MutationReceipt, *, operation: str) -> DomainEnvelope:
+def accepted_envelope(
+    receipt: MutationReceipt, *, operation: str, warnings: tuple[str, ...] = ()
+) -> DomainEnvelope:
     """Return the machine response of one committed mutation.
 
     Args:
         receipt: What the transaction committed.
         operation: The operation the client asked for.
+        warnings: Non-fatal notes about an answer that still stands, such
+            as a post-commit publish that did not reach the projection.
 
     Returns:
         An ``ok`` envelope carrying the receipt as its result.
@@ -202,6 +207,7 @@ def accepted_envelope(receipt: MutationReceipt, *, operation: str) -> DomainEnve
         revision_before=receipt.revision_before,
         revision_after=receipt.revision_after,
         result=receipt.model_dump(mode="json"),
+        warnings=warnings,
     )
 
 
@@ -274,7 +280,12 @@ async def _apply_domain_transition(
         authority: The epoch-2 answer the fence resolved for the tree.
 
     Returns:
-        The machine envelope, as a JSON-mode mapping.
+        The machine envelope, as a JSON-mode mapping. A commit whose
+        post-commit publish did not reach the projection still answers
+        ``ok`` with its receipt, carrying the ``projection_degraded``
+        warning: the mutation is durable and only the fan-out was lost.
+        A retry the transaction answered from its receipt store publishes
+        nothing, because the original commit already did.
     """
     try:
         request = TransitionRequest.model_validate(
@@ -293,11 +304,12 @@ async def _apply_domain_transition(
     except TransactionRefusedError as refusal:
         logger.info(f"_apply_domain_transition refused code={refusal.code.value}")
         return refused_envelope(refusal, operation=DOMAIN_TRANSITION_METHOD).model_dump(mode="json")
-    if ctx.bus is not None:
-        ctx.bus.publish(committed.envelope)
-    return accepted_envelope(committed.receipt, operation=DOMAIN_TRANSITION_METHOD).model_dump(
-        mode="json"
-    )
+    warnings: tuple[str, ...] = ()
+    if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope):
+        warnings = (PROJECTION_DEGRADED,)
+    return accepted_envelope(
+        committed.receipt, operation=DOMAIN_TRANSITION_METHOD, warnings=warnings
+    ).model_dump(mode="json")
 
 
 __all__ = [

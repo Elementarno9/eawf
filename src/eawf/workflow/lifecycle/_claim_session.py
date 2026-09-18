@@ -1,12 +1,31 @@
-"""Claim-session identity guards shared by wave lifecycle transitions."""
+"""Claim-session identity guards and the claim-time runtime baseline.
+
+The baseline lives beside the guards because it is the same question asked
+twice: which session is claiming, and what had that session already spent
+when it did. Both read the :class:`~eawf.kernel.state.models.AgentSession`
+row, and neither means anything without it.
+"""
 
 from __future__ import annotations
 
-from typing import Final
+import logging
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Final
 
-from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
-from eawf.kernel.state.models import AgentSession, State, Wave
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, WaveStatus
+from eawf.kernel.state.models import AgentSession, RuntimeBaseline, State, Wave
 from eawf.workflow.lifecycle._errors import ClaimSessionGuardCode, LifecycleGuardError
+
+if TYPE_CHECKING:
+    from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
+
+logger = logging.getLogger(__name__)
+
+#: The wave statuses whose work is still burning the session it claimed in.
+_SHARING_WAVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
+    {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
+)
 
 #: Stable claim-session guard codes. Callers and negative probes key off these,
 #: so the strings are API surface; message wording behind each code may change.
@@ -145,10 +164,132 @@ def validate_claim_session(state: State, wave: Wave, session_id: str) -> AgentSe
     return session
 
 
+def _claim_session_counters(runtime_session_id: str) -> RuntimeCounters | None:
+    """Return a vendor runtime session's cumulative counters, when readable.
+
+    The transcript is the primary source. The statusline runtime-counter
+    sidecar stays a fallback for an operator whose statusline is
+    ``eawf statusline`` but whose transcript does not resolve. Callers must
+    supply a vendor runtime session id explicitly; an EAWF
+    :class:`~eawf.kernel.state.models.AgentSession` id never enters this
+    lookup.
+
+    Args:
+        runtime_session_id: Vendor session id used to resolve both the runtime
+            transcript and its session-keyed statusline cache.
+
+    Returns:
+        The session's cumulative counters, or ``None`` when neither the
+        transcript nor the sidecar yields any.
+    """
+    from eawf.runtime.runtime_counter_sidecar import (
+        RuntimeCounterSidecar,
+        sidecar_path_for_statusline_cache,
+    )
+    from eawf.runtime.runtimes.claude.statusline import cache_path_for
+    from eawf.runtime.runtimes.claude.transcript_counters import (
+        aggregate_transcript_counters,
+        transcript_path_for_session,
+    )
+
+    transcript = transcript_path_for_session(runtime_session_id, cwd=Path.cwd())
+    counters = aggregate_transcript_counters(transcript)
+    if counters is not None:
+        return counters
+    sidecar = RuntimeCounterSidecar(
+        sidecar_path_for_statusline_cache(cache_path_for(runtime_session_id))
+    )
+    return sidecar.read()
+
+
+def count_runtime_session_sharers(state: State, *, runtime_session_id: str) -> int:
+    """Return how many waves are burning *runtime_session_id* right now.
+
+    Runtime counters are cumulative per vendor session, so every wave
+    claimed into one session differences the same numbers. Counting the
+    sharers at claim time is what lets the close-time delta hand each wave
+    a share instead of handing every one of them the whole session.
+
+    Args:
+        state: The state the wave and session rows are read from.
+        runtime_session_id: The vendor session the claim is anchored to.
+
+    Returns:
+        How many CLAIMED or IN_PROGRESS waves resolve to a session
+        disclosing this runtime session id. The wave whose claim is being
+        stamped is counted among them, so a sole claimant answers one.
+    """
+    sharing = {
+        session.id
+        for session in state.agent_sessions.values()
+        if session.runtime_session_id == runtime_session_id
+    }
+    return sum(
+        1
+        for wave in state.waves.values()
+        if wave.status in _SHARING_WAVE_STATUSES and wave.claim_session_id in sharing
+    )
+
+
+def capture_claim_baseline(state: State, session: AgentSession) -> RuntimeBaseline | None:
+    """Return the claim-time snapshot of *session*, or ``None`` when it has none.
+
+    An :class:`~eawf.kernel.state.models.AgentSession` id is an EAWF id, not
+    a vendor one, so the lookup is anchored on the session's disclosed
+    ``runtime_session_id`` and nothing else: resolving a transcript by the
+    EAWF id read a foreign namespace and stamped whatever happened to
+    collide as this wave's origin.
+
+    Args:
+        state: The state the concurrent-wave count is read from.
+        session: The validated claiming session, already bound to the wave
+            so the wave being claimed is counted among the sharers.
+
+    Returns:
+        The baseline, stamped with the sharer count the claim saw, or
+        ``None`` when the session discloses no runtime session or that
+        session exposes no counters at all -- so the close-time delta
+        degrades to "no captured runtime" rather than subtracting against a
+        phantom zero baseline.
+    """
+    runtime_session_id = session.runtime_session_id
+    if runtime_session_id is None:
+        return None
+    counters = _claim_session_counters(runtime_session_id)
+    if counters is None:
+        return None
+    # The count is of BOUND waves, and a capture taken before the binding
+    # lands sees none of them. A divisor of zero is not a thing the delta can
+    # apply, and the session being captured for is itself in flight, so one is
+    # the floor rather than a rounding-up of nothing.
+    shared = max(1, count_runtime_session_sharers(state, runtime_session_id=runtime_session_id))
+    logger.info(
+        f"capture_claim_baseline session={session.id!r} shared_wave_count={shared} "
+        f"measure_version={counters.measure_version}"
+    )
+    return RuntimeBaseline(
+        api_duration_ms=counters.api_duration_ms,
+        total_duration_ms=counters.total_duration_ms,
+        cost_usd=float(counters.cost_usd) if counters.cost_usd is not None else None,
+        input_tokens=counters.input_tokens,
+        output_tokens=counters.output_tokens,
+        cache_creation_input_tokens=counters.cache_creation_input_tokens,
+        cache_read_input_tokens=counters.cache_read_input_tokens,
+        harness=counters.harness,
+        model=counters.model,
+        session_id=runtime_session_id,
+        measure_version=counters.measure_version,
+        shared_wave_count=shared,
+        captured_at=datetime.now(UTC),
+    )
+
+
 __all__ = [
     "CLAIM_SESSION_NOT_ACTIVE",
     "CLAIM_SESSION_NOT_FOUND",
     "CLAIM_SESSION_ROLE_MISMATCH",
     "CLAIM_SESSION_SCOPE_MISMATCH",
+    "capture_claim_baseline",
+    "count_runtime_session_sharers",
     "validate_claim_session",
 ]

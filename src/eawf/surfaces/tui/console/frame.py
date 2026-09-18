@@ -18,6 +18,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.attention import open_count
 from eawf.surfaces.tui.console.fixture import EntryState, Fixture
 from eawf.surfaces.tui.console.header import ProcessValue, header_row
@@ -42,6 +43,9 @@ class View:
         h: The frame height in rows.
         verbose: Whether the ``--verbose`` trace row is painted.
         held: Whether the console clock is held, which freezes every live feed.
+        projection: The daemon-served read model of the session's route, when the console
+            is bound to one. ``None`` is the epoch-1 mode the prototype registers drive,
+            which is what the tracked golden contract replays.
     """
 
     session: Session
@@ -50,6 +54,7 @@ class View:
     h: int
     verbose: bool = False
     held: bool = False
+    projection: SpineView | None = None
 
 
 class Fixed(str):

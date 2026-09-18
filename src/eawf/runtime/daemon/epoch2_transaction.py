@@ -16,17 +16,41 @@ order, whichever entity it moves:
 5. Allocate the workspace-global ``canonical_sequence`` inside the
    committing transaction, so a sequence only becomes durable together
    with the mutation that carries it.
-6. Write one WAL intent, mutate the document once, append one firehose
-   row carrying one ``domain.<entity>.<verb>`` event, and mark the WAL
-   record durable.
+6. Write one WAL intent, mutate the document once, file the receipt that
+   answers a retry of this request, append one firehose row carrying one
+   ``domain.<entity>.<verb>`` event, move a record the edge made terminal
+   out of the document and into its ledger, and mark the WAL record
+   durable.
 7. Publish after the commit, outside the locks, because a projection
-   publish inside them would stall every other writer on the root.
+   publish inside them would stall every other writer on the root. A
+   publish that fails there degrades the answer and never the commit.
 
 A denied edge writes nothing at all: the denial is decided at step 4,
 before the WAL record of step 6 exists. A mutation whose new free text
 carries a leak shape is refused in the same place, by the scrub every
 canonical state writer already runs, so the refusal also predates the
 first byte.
+
+An edge that lands a record in a state it has no way out of is the last
+mutation that record takes, so the record is compacted inside the same
+locked session: its line is appended to the collection's append-only
+ledger, its document row is dropped and the derived index is rebuilt.
+Only the collections declared at the ledger tier move -- a Track is read
+on every render and retires where it sits. The move is taken after the
+mutation is durable rather than before it, because a ledger line cannot
+be taken back and a document the replay may still have to judge has to
+read as exactly one of the two digests the WAL record carries. A
+compaction that cannot finish is logged and left alone: the mutation
+stands, the record is still canonical in the document, and the daemon's
+start-up recovery is what finishes the move.
+
+A retry is decided before any of it. The first thing the locked session
+does is ask the root's receipt store whether this idempotency key has
+already committed something: if it has, and the request digests to the
+parameters that produced it, the original receipt is the answer and the
+seven steps do not run. A key that committed different parameters is
+refused, since one key naming two effects is a client bug and picking a
+winner would hide it.
 
 The high-water mark of the sequence lives in the document itself. It is
 the only figure that survives a restart, and keeping it beside the rows
@@ -58,19 +82,31 @@ from eawf.kernel.state.epoch2.transitions import (
     LifecycleEntity,
     LifecycleStatus,
     ObservedFact,
+    is_terminal,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.append import append_json_line
-from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.compaction import (
+    RecordInTwoPlacesError,
+    compact_terminal_record,
+    document_rows,
+)
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
-from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection
+from eawf.kernel.store.ledger import LedgerError, LedgerRecord
+from eawf.kernel.store.paths import ledger_path, store_path
+from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
 from eawf.observability.logging.state_leak import state_leak_refusal
+from eawf.runtime.daemon.epoch2_recovery import (
+    canonical_params_digest,
+    read_idempotency_receipt,
+    record_idempotency_receipt,
+)
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
+from eawf.surfaces.cli.errors import StateConflict
 from eawf.workflow.lifecycle.epoch2 import (
     ENTITY_OF_RECORD,
     GuardContext,
@@ -96,6 +132,19 @@ TRANSITION_EVENT_SCHEMA_VERSION: Final = "1"
 #: a ledger and never compacts.
 _TREE_ANCHOR_FILENAME: Final = "state.json"
 
+#: What a compaction is allowed to fail with without unmaking the mutation
+#: it follows. By then the transition is durable and its event is
+#: published, so a half-finished move is housekeeping the daemon's
+#: start-up recovery repairs, not a mutation to report as failed.
+_DEFERRABLE_COMPACTION_ERRORS: Final = (
+    OSError,
+    ValueError,
+    KeyError,
+    LedgerError,
+    RecordInTwoPlacesError,
+    StateConflict,
+)
+
 
 class TransactionRefusalCode(StrEnum):
     """The stable codes this transaction refuses a mutation with.
@@ -110,6 +159,7 @@ class TransactionRefusalCode(StrEnum):
     IDENTITY_KIND_MISMATCH = "identity_kind_mismatch"
     LEGACY_IDENTITY_READ_ONLY = "legacy_identity_read_only"
     REVISION_CONFLICT = "revision_conflict"
+    IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     ILLEGAL_TRANSITION = "illegal_transition"
     TRANSITION_GUARD_FAILED = "transition_guard_failed"
 
@@ -256,11 +306,16 @@ class CommittedTransaction:
     Attributes:
         receipt: What the caller answers with.
         envelope: The firehose row, held so the publish can happen after
-            the locks are released.
+            the locks are released. ``None`` on a replayed answer, which
+            is exactly what stops a retry from publishing the original
+            mutation's event a second time.
+        replayed: Whether the receipt was read from the root's receipt
+            store rather than produced by a commit taken just now.
     """
 
     receipt: MutationReceipt
-    envelope: Envelope
+    envelope: Envelope | None
+    replayed: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -276,6 +331,10 @@ class _CommitPlan:
             something to diff the proposed write against.
         new_document: The whole document the commit leaves behind.
         envelope: The one firehose row the commit appends.
+        compaction: The ledger line the successor is moved into once the
+            mutation is durable, or ``None`` when the record stays in the
+            document -- which is every edge that is not terminal and
+            every collection that is not declared at the ledger tier.
     """
 
     record: LifecycleRecord
@@ -285,6 +344,7 @@ class _CommitPlan:
     document: dict[str, Any]
     new_document: dict[str, Any]
     envelope: Envelope
+    compaction: LedgerRecord | None
 
 
 def run_transaction(
@@ -307,13 +367,16 @@ def run_transaction(
 
     Returns:
         The receipt of the committed mutation beside the firehose
-        envelope the caller publishes.
+        envelope the caller publishes. A retry of a request this root
+        already committed returns that commit's receipt and no envelope,
+        having written nothing.
 
     Raises:
-        TransactionRefusedError: The request names an unknown entity kind or
-            status, addresses a record the document does not hold, builds
-            on a stale revision, is denied by the transition registry, or
-            adds free text carrying a leak shape. Nothing was written.
+        TransactionRefusedError: The request reuses an idempotency key for
+            different parameters, names an unknown entity kind or status,
+            addresses a record the document does not hold, builds on a
+            stale revision, is denied by the transition registry, or adds
+            free text carrying a leak shape. Nothing was written.
         NativeAuthorityRequiredError: The tree left epoch 2.
         MigrationDualAuthorityError: The tree's select is not whole.
         LockTimeout: A lock stayed held past the lock timeout.
@@ -322,6 +385,13 @@ def run_transaction(
     target = _target_status(entity, request)
     collection = ENTITY_COLLECTIONS[request.urn.kind]
     with context.session([request.urn]) as session:
+        replayed = _replayed_receipt(context, request=request)
+        if replayed is not None:
+            logger.info(
+                f"epoch2 transaction replayed root={context.identity.root_id} "
+                f"key={request.idempotency_key!r} sequence={replayed.canonical_sequence}"
+            )
+            return CommittedTransaction(receipt=replayed, envelope=None, replayed=True)
         document = session.read_document()
         record = _reread_record(
             document=document,
@@ -346,6 +416,7 @@ def run_transaction(
             plan = _plan_commit(
                 document=document,
                 collection=collection,
+                entity=entity,
                 record=record,
                 successor=outcome.record,
                 event_name=outcome.event.name,
@@ -377,7 +448,18 @@ def _persist(
     now: datetime,
     write_document: Callable[[dict[str, Any]], None],
 ) -> MutationReceipt:
-    """Write the intent, the document, the firehose row and the durability mark.
+    """Write the intent, the document, the receipt, the row and the mark.
+
+    The receipt is filed once the document write is durable and the WAL
+    record says so, because a receipt is a promise the change happened: a
+    receipt written earlier could answer a retry with a commit that never
+    landed, while one written later costs a crashed request's retry only
+    a revision conflict.
+
+    A terminal record is compacted last of all, after the event the move
+    emits is on disk. Everything before it is reversible by a replay that
+    reads the document's digest; the compaction is not, so it is taken
+    only once nothing is left to judge.
 
     Raises:
         TransactionRefusedError: The write would add free text carrying a leak
@@ -393,12 +475,7 @@ def _persist(
         after_state_version=state_version(plan.new_document),
         state_path=str(document_path),
     )
-    write_pending(context.wal_dir, wal_record)
-    write_document(plan.new_document)
-    mark_applied(context.wal_dir, wal_record.record_id)
-    append_json_line(_firehose_path(context), plan.envelope.model_dump_json())
-    mark_fsynced(context.wal_dir, wal_record.record_id)
-    return MutationReceipt(
+    receipt = MutationReceipt(
         event_name=plan.event_name,
         entity_ref=request.urn,
         revision_before=plan.record.revision,
@@ -409,6 +486,145 @@ def _persist(
         occurred_at=now,
         wal_record_id=wal_record.record_id,
     )
+    write_pending(context.wal_dir, wal_record)
+    write_document(plan.new_document)
+    mark_applied(context.wal_dir, wal_record.record_id)
+    record_idempotency_receipt(
+        context,
+        namespaced_key=context.idempotency_key(request.idempotency_key),
+        params_digest=canonical_params_digest(request.model_dump(mode="json")),
+        receipt=receipt.model_dump(mode="json"),
+        recorded_at=now,
+    )
+    append_json_line(_firehose_path(context), plan.envelope.model_dump_json())
+    if plan.compaction is not None:
+        _compact(context, document_path=document_path, record=plan.compaction)
+    mark_fsynced(context.wal_dir, wal_record.record_id)
+    return receipt
+
+
+def _terminal_ledger_record(
+    *,
+    entity: LifecycleEntity,
+    collection: Epoch2Collection,
+    successor: LifecycleRecord,
+    now: datetime,
+) -> LedgerRecord | None:
+    """Return the ledger line *successor* compacts into, if it compacts.
+
+    Args:
+        entity: The lifecycle machine the record is governed by.
+        collection: The collection the record is stored under.
+        successor: The record the transition produced.
+        now: When the transition happened, which is when the record
+            became history.
+
+    Returns:
+        The line to append, or ``None`` when the record stays in the
+        document. A record whose status still has an outgoing edge is
+        work in flight, and a collection declared anywhere but the ledger
+        tier has no append-only file to move into.
+    """
+    if not is_terminal(entity, successor.status):
+        return None
+    if tier_for(collection) is not StorageTier.LEDGER:
+        return None
+    return LedgerRecord(
+        collection=collection,
+        record_key=successor.key,
+        status=str(successor.status),
+        recorded_at=now,
+        payload=successor.model_dump(mode="json"),
+    )
+
+
+def _compact(context: Epoch2RootContext, *, document_path: Path, record: LedgerRecord) -> None:
+    """Move one terminal record out of the document and into its ledger.
+
+    The commit policy is asked about the ledger before a byte is written,
+    because the compaction writes it directly rather than through the
+    session, and a family nobody declared must not appear in a tree.
+
+    Args:
+        context: The native context of the tree the record belongs to.
+        document_path: The selected generation's document, which the
+            ledger and the derived index are both resolved against.
+        record: The ledger line the terminal record becomes.
+
+    Raises:
+        UndeclaredPathError: The commit policy declares no row for the
+            collection's ledger, so nothing says whether a clone carries
+            it. Raised before the move starts.
+    """
+    ledger = context.declared_path(ledger_path(document_path, record.collection))
+    try:
+        result = compact_terminal_record(document_path, record=record)
+    except _DEFERRABLE_COMPACTION_ERRORS:
+        logger.warning(
+            f"epoch2 compaction deferred root={context.identity.root_id} "
+            f"collection={record.collection.value} record_key={record.record_key!r} "
+            f"ledger={ledger.name!r}",
+            exc_info=True,
+        )
+        return
+    logger.info(
+        f"epoch2 compaction committed root={context.identity.root_id} "
+        f"collection={record.collection.value} record_key={record.record_key!r} "
+        f"offset={result.ledger_offset} remaining={result.document_rows_remaining}"
+    )
+
+
+def _replayed_receipt(
+    context: Epoch2RootContext, *, request: TransitionRequest
+) -> MutationReceipt | None:
+    """Return the receipt this request already earned, if it earned one.
+
+    Args:
+        context: The native context of the addressed root.
+        request: The already-validated request parameters.
+
+    Returns:
+        The original receipt when this key committed these parameters, or
+        ``None`` when the key has committed nothing on this root.
+
+    Raises:
+        TransactionRefusedError: The key committed different parameters, or
+            the stored receipt cannot be read. Both refuse before the
+            transition is evaluated, so nothing is written either way.
+    """
+    namespaced = context.idempotency_key(request.idempotency_key)
+    try:
+        stored = read_idempotency_receipt(context, namespaced_key=namespaced)
+    except ValueError as error:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=f"the receipt stored for idempotency key {request.idempotency_key!r} "
+            "cannot be read, so whether this request already ran is unknown",
+            entity_ref=str(request.urn),
+            remediation="Remove the unreadable receipt from the root local store and retry.",
+        ) from error
+    if stored is None:
+        return None
+    try:
+        receipt = MutationReceipt.model_validate(stored.receipt)
+    except ValueError as error:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=f"the receipt stored for idempotency key {request.idempotency_key!r} "
+            "does not validate through the receipt model",
+            entity_ref=str(request.urn),
+            remediation="Remove the invalid receipt from the root local store and retry.",
+        ) from error
+    if stored.params_digest != canonical_params_digest(request.model_dump(mode="json")):
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.IDEMPOTENCY_CONFLICT,
+            detail=f"idempotency key {request.idempotency_key!r} already committed a request "
+            "with different parameters, so this one is not a retry of it",
+            entity_ref=str(request.urn),
+            remediation="Retry with the original parameters, or choose a new idempotency key.",
+            revision=receipt.revision_after,
+        )
+    return receipt
 
 
 def _entity_for(urn: QualifiedUrn) -> LifecycleEntity:
@@ -530,6 +746,7 @@ def _plan_commit(
     *,
     document: dict[str, Any],
     collection: Epoch2Collection,
+    entity: LifecycleEntity,
     record: LifecycleRecord,
     successor: LifecycleRecord,
     event_name: str,
@@ -542,6 +759,11 @@ def _plan_commit(
     The document is deep-copied rather than edited, because the leak scrub
     diffs the two payloads and an in-place edit would leave it comparing
     one payload with itself.
+
+    The successor is written into the document even when it is terminal
+    and about to be compacted out of it. That is what puts its new free
+    text in front of the leak scrub, and what leaves the record canonical
+    in one place for as long as the move is unfinished.
     """
     new_document = copy.deepcopy(document)
     rows = new_document.setdefault(collection.value, {})
@@ -560,6 +782,12 @@ def _plan_commit(
             successor=successor,
             event_name=event_name,
             sequence=sequence,
+            now=now,
+        ),
+        compaction=_terminal_ledger_record(
+            entity=entity,
+            collection=collection,
+            successor=successor,
             now=now,
         ),
     )

@@ -19,6 +19,10 @@ Each row also names the read model it renders. The kernel's read-model declarati
 the routes each model serves, and a registry whose binding disagrees with them in either
 direction refuses to build; a row with no read model is a specification hole the registry
 lists in :attr:`RouteRegistry.read_model_holes`.
+
+A row may also name the regions the focus moves between. The chassis bounds a route at
+:data:`FOCUS_REGION_LIMIT` of them, because a fourth region is a frame an operator has to
+remember rather than read, and a registry holding a row over the bound refuses to build.
 """
 
 from __future__ import annotations
@@ -61,6 +65,10 @@ class DoorKind(StrEnum):
 
 # Doors that live on another route; the rest are reachable from anywhere.
 _LOCAL_DOORS = frozenset({DoorKind.LIGHT_VERB, DoorKind.ROUTE_KEY})
+
+#: The most focus regions one route may declare. Three is the chassis bound: a frame with
+#: a fourth place for the arrows to be is one an operator has to remember rather than read.
+FOCUS_REGION_LIMIT: int = 3
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -119,6 +127,8 @@ class RouteSpec:
             while staying a route.
         doors: The light-verb and route-key doors other routes bind to this one.
         read_model: The read model the route renders; ``None`` marks a specification hole.
+        focus_regions: The places the focus moves between on this route, in cycle order;
+            empty for a route whose frame has one place for the arrows to be.
 
     Raises:
         ValueError: ``doors`` declares a ``g``, palette or drill door, which the row's
@@ -140,6 +150,7 @@ class RouteSpec:
     overlay_backed: bool = False
     doors: tuple[Door, ...] = ()
     read_model: ReadModelKind | None = None
+    focus_regions: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         """Default the key to the id and keep derived doors in the columns that own them."""
@@ -265,8 +276,9 @@ def _validate(routes: tuple[RouteSpec, ...]) -> None:
 
     Raises:
         ValueError: two rows share an id, key or ``g`` letter; a parent, door origin or
-            drill target names an unregistered route; a row has no door; or the rows'
-            read-model binding disagrees with the kernel declarations.
+            drill target names an unregistered route; a row has no door; a row declares
+            more than :data:`FOCUS_REGION_LIMIT` focus regions or names one twice; or the
+            rows' read-model binding disagrees with the kernel declarations.
     """
     columns = (
         ("id", [spec.id for spec in routes]),
@@ -286,6 +298,22 @@ def _validate(routes: tuple[RouteSpec, ...]) -> None:
     orphans = unreachable_routes(routes)
     if orphans:
         raise ValueError(f"routes with no door: {', '.join(orphans)}")
+    crowded = [
+        f"{spec.id} declares {len(spec.focus_regions)}"
+        for spec in routes
+        if len(spec.focus_regions) > FOCUS_REGION_LIMIT
+    ]
+    if crowded:
+        raise ValueError(
+            f"routes over the {FOCUS_REGION_LIMIT}-region focus limit: {', '.join(crowded)}"
+        )
+    repeated_regions = [
+        f"{spec.id}: {', '.join(_duplicates(spec.focus_regions))}"
+        for spec in routes
+        if _duplicates(spec.focus_regions)
+    ]
+    if repeated_regions:
+        raise ValueError(f"routes naming a focus region twice: {'; '.join(repeated_regions)}")
     binding = {spec.key: spec.read_model for spec in routes if spec.read_model is not None}
     mismatches = route_binding_mismatches(binding, READ_MODEL_BY_KIND)
     if mismatches:
@@ -309,11 +337,13 @@ class RouteRegistry:
         overlay_routes: The routes drawn over their own backdrop.
         read_models: Read model per route that declares one.
         read_model_holes: The routes with no read model, in registry order.
+        focus_regions: Focus regions per route that declares any, in cycle order.
 
     Raises:
         ValueError: the rows fail the registry checks (duplicate id, key or ``g``
-            letter; a reference to an unregistered route; a route with no door; a
-            read-model binding the kernel declarations do not mirror).
+            letter; a reference to an unregistered route; a route with no door; a route
+            over the focus-region limit or naming one region twice; a read-model binding
+            the kernel declarations do not mirror).
     """
 
     def __init__(self, routes: Sequence[RouteSpec]) -> None:
@@ -348,6 +378,9 @@ class RouteRegistry:
         )
         self.read_model_holes: tuple[str, ...] = tuple(
             s.id for s in self.routes if s.read_model is None
+        )
+        self.focus_regions: Mapping[str, tuple[str, ...]] = MappingProxyType(
+            {s.id: s.focus_regions for s in self.routes if s.focus_regions}
         )
 
     def route_word(self, route: str) -> str:
@@ -410,6 +443,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         tab_owner="path",
         word="attach workspace",
         read_model=_RM.PROCESS_FRAME,
+        focus_regions=("path",),
     ),
     RouteSpec(
         id="scope.home",
@@ -419,6 +453,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         step_leaf="",
         word="home",
         read_model=_RM.SCOPE_HOME_VIEW,
+        focus_regions=("outcomes", "attention"),
     ),
     RouteSpec(
         id="track",
@@ -426,12 +461,14 @@ ROUTES: tuple[RouteSpec, ...] = (
         subject_required=True,
         step_leaf="Runtime",
         read_model=_RM.ENTITY_DETAIL_VIEW,
+        focus_regions=("milestones", "campaigns", "queue"),
     ),
     RouteSpec(
         id="batch.detail",
         family=RouteFamily.SPINE,
         subject_required=True,
         read_model=_RM.ENTITY_DETAIL_VIEW,
+        focus_regions=("tasks",),
     ),
     RouteSpec(
         id="task.detail",
@@ -439,6 +476,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         subject_required=True,
         word="task",
         read_model=_RM.ENTITY_DETAIL_VIEW,
+        focus_regions=("criteria", "runs"),
     ),
     RouteSpec(
         id="git.pr",
@@ -464,6 +502,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         subject_required=True,
         word="run",
         read_model=_RM.RUN_DETAIL_VIEW,
+        focus_regions=("timeline",),
     ),
     RouteSpec(
         id="attention",

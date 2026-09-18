@@ -13,6 +13,11 @@ command bodies live in four sibling modules:
 - :mod:`eawf.surfaces.cli.commands.lifecycle_wave_read` — wave read / dispatch /
   budget verbs (graph / next-ready / blocks-rebuild / dispatch /
   dispatch-batch / budget set·consume·show).
+- :mod:`eawf.surfaces.cli.commands.domain` — the native epoch-2 verbs of
+  the ``milestone`` / ``batch`` / ``task`` apps plus ``track retire``.
+  Those forward to the daemon's per-entity lifecycle RPCs rather than
+  running the shared transaction below, so they share this module's apps
+  and none of its helpers.
 
 Each sibling imports the apps and shared helpers from this module and
 attaches its handlers via ``@<app>.command(...)``. Importing this module
@@ -135,6 +140,25 @@ wave_budget_app = typer.Typer(
     no_args_is_help=True,
 )
 wave_app.add_typer(wave_budget_app, name="budget")
+
+# The epoch-2 lifecycle nouns. They carry no epoch-1 verbs at all: each
+# one is a native per-entity move, and the handlers live in the sibling
+# ``domain`` module beside the Track verb that joins this app's own.
+milestone_app = typer.Typer(
+    name="milestone",
+    help="Milestone lifecycle (activate, open-review, accept, cancel).",
+    no_args_is_help=True,
+)
+batch_app = typer.Typer(
+    name="batch",
+    help="Delivery-batch lifecycle (activate, ready).",
+    no_args_is_help=True,
+)
+task_app = typer.Typer(
+    name="task",
+    help="Task lifecycle (promote, start).",
+    no_args_is_help=True,
+)
 
 
 # ---- Internal helpers -------------------------------------------------------
@@ -819,6 +843,7 @@ def _run_mutation(
 # so the apps above carry their full verb set. The imports sit at the bottom,
 # after every shared symbol is defined, so the siblings can import the apps and
 # helpers from this module without a circular-import failure.
+from eawf.surfaces.cli.commands import domain as _domain  # noqa: E402, F401
 from eawf.surfaces.cli.commands import lifecycle_iter as _lifecycle_iter  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_phase as _lifecycle_phase  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_wave as _lifecycle_wave  # noqa: E402, F401
@@ -838,9 +863,12 @@ _phase_prepare_close_checklist = _lifecycle_phase._phase_prepare_close_checklist
 # ---- Re-exports -------------------------------------------------------------
 
 __all__ = [
+    "batch_app",
     "iter_app",
+    "milestone_app",
     "phase_app",
     "project_app",
+    "task_app",
     "track_app",
     "wave_app",
     "wave_budget_app",

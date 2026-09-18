@@ -18,15 +18,56 @@ from pathlib import Path
 
 import pytest
 
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, ScopeKind
+from eawf.kernel.state.models import AgentSession, RuntimeBaseline, State
 from eawf.runtime.runtime_counter_sidecar import (
     RuntimeCounterSidecar,
     sidecar_path_for_statusline_cache,
 )
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 from eawf.runtime.runtimes.claude.statusline import cache_path_for
-from eawf.workflow.lifecycle.wave import _capture_runtime_baseline
+from eawf.workflow.lifecycle._claim_session import capture_claim_baseline
 
 _SESSION = "sess-placeholder-eu26"
+
+
+def _capture_runtime_baseline(runtime_session_id: str) -> RuntimeBaseline | None:
+    """Capture a baseline for *runtime_session_id* through the claim path.
+
+    The production entry point takes the claiming session row, because an
+    EAWF session id and a vendor one live in different namespaces; this
+    wraps it so the counter-resolution assertions below stay about counters.
+    """
+    from datetime import UTC, datetime
+
+    session = AgentSession(
+        id="SES-01",
+        role=AgentSessionRole.EXECUTOR,
+        runtime="claude",
+        scope_id="QR",
+        status=AgentSessionStatus.ACTIVE,
+        started_at=datetime.now(UTC),
+        runtime_session_id=runtime_session_id,
+    )
+    state = State.model_validate(
+        {
+            "schema_version": "1.0",
+            "scope_kind": ScopeKind.REPO.value,
+            "urn": "urn:eawf:v1:state:QR",
+            "updated_at": datetime.now(UTC).isoformat(),
+            "project": None,
+            "current": {},
+            "workspace": None,
+            "phases": {},
+            "iters": {},
+            "waves": {},
+            "artifacts": {},
+            "agent_sessions": {session.id: session.model_dump(mode="json")},
+            "plugins": {},
+            "indexes": {},
+        }
+    )
+    return capture_claim_baseline(state, session)
 
 
 @pytest.fixture(autouse=True)

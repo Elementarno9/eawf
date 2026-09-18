@@ -41,6 +41,7 @@ import eawf.runtime.daemon.methods.config  # registers config read/write methods
 import eawf.runtime.daemon.methods.conformance  # registers the three conformance stages
 import eawf.runtime.daemon.methods.daemon
 import eawf.runtime.daemon.methods.doctor  # registers doctor.apply_repair
+import eawf.runtime.daemon.methods.domain  # registers the per-entity domain.<entity>.<verb>s
 import eawf.runtime.daemon.methods.domain_envelope  # registers domain.transition.apply
 import eawf.runtime.daemon.methods.event
 import eawf.runtime.daemon.methods.evidence  # registers evidence.append (P28-I01-W04)
@@ -49,6 +50,7 @@ import eawf.runtime.daemon.methods.integration  # registers Wave integration/bar
 import eawf.runtime.daemon.methods.jury  # registers jury.label (P30-I23-W17)
 import eawf.runtime.daemon.methods.migration  # registers migration.epoch2.plan
 import eawf.runtime.daemon.methods.needs_user  # registers needs_user.{raise,resolve,park}
+import eawf.runtime.daemon.methods.planning  # registers the planning.plan_revision.* verbs
 import eawf.runtime.daemon.methods.projection  # registers projection.<route>.read
 import eawf.runtime.daemon.methods.registry  # registers registry.read / registry.update (W10)
 import eawf.runtime.daemon.methods.registry_workspace  # registers registry.workspace.*
@@ -57,11 +59,16 @@ import eawf.runtime.daemon.methods.release_candidate  # registers release.candid
 import eawf.runtime.daemon.methods.release_disposition  # registers release.adopt / release.cancel
 import eawf.runtime.daemon.methods.release_receipts  # registers the two train-walking verbs
 import eawf.runtime.daemon.methods.research  # registers research.create_campaign (P29-I09-W07)
+import eawf.runtime.daemon.methods.run  # registers runtime.run.bind / control / contract.read
+import eawf.runtime.daemon.methods.run_budget  # registers runtime.run.budget.meter
+import eawf.runtime.daemon.methods.semantic  # registers semantic.call / semantic.result.read
 import eawf.runtime.daemon.methods.spec  # registers spec.{init,validate,promote,archive} (P25-W03)
 import eawf.runtime.daemon.methods.spec_convert  # registers spec.convert_legacy (P30-I23-W24)
 import eawf.runtime.daemon.methods.spec_repoint  # registers spec.repoint_{gates,scopes}
 import eawf.runtime.daemon.methods.state  # registers state.read / state.mutate / state.digest
-import eawf.runtime.daemon.methods.state_subscribe  # noqa: F401  — registers (state|event).subscribe
+import eawf.runtime.daemon.methods.state_subscribe  # registers (state|event).subscribe
+import eawf.runtime.daemon.methods.wal_admin  # registers the wal.* admin verbs
+import eawf.runtime.daemon.methods.workspace_lease  # noqa: F401  — registers workspace.lease.*
 from eawf.kernel.projection.compute import patches_for_event
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.auth import UnauthorizedError, verify_peer_credential

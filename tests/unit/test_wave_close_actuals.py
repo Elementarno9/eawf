@@ -42,9 +42,10 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.observability.telemetry.join import DEFAULT_TOKENS_PER_EU
+from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
 from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
-from eawf.workflow.lifecycle import wave as wave_lifecycle
+from eawf.workflow.lifecycle import _claim_session as claim_session
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.transitions import (
     close_wave,
@@ -220,17 +221,22 @@ def test_claim_wave_runtime_baseline_none_when_sidecar_missing(
 def test_claim_wave_never_calls_vendor_counter_capture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """EAWF session binding cannot drive the vendor-counter lookup seam."""
+    """EAWF session binding cannot drive the vendor-counter lookup seam.
+
+    The claim capture is anchored on the session's DISCLOSED vendor runtime
+    session id, and the sessions these fixtures seed disclose none, so the
+    counter lookup must never run at all.
+    """
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
     calls = 0
 
-    def capture(runtime_session_id: str) -> RuntimeBaseline:
+    def capture(runtime_session_id: str) -> RuntimeCounters | None:
         nonlocal calls
         calls += 1
         raise AssertionError(f"unexpected vendor counter lookup: {runtime_session_id}")
 
-    monkeypatch.setattr(wave_lifecycle, "_capture_runtime_baseline", capture)
+    monkeypatch.setattr(claim_session, "_claim_session_counters", capture)
 
     first = claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     original_claimed_at = first.claimed_at

@@ -35,6 +35,7 @@ from eawf.kernel.store.paths import store_path
 from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.epoch2_recovery import recover_native_store_trees, replay_native_wal
 from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
 from eawf.runtime.daemon.limits import (
     MUTATION_HARD_LIMIT_SECONDS,
@@ -954,6 +955,37 @@ def run(*, foreground: bool = True) -> int:
                     f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
                     f"operator should run 'eawf daemon replay-wal --inspect'"
                 )
+
+            # Native replay: epoch-2 roots keep their WAL records in a
+            # namespace per root under the same directory, which the pass
+            # above never lists. Each native record carries the document it
+            # wrote and the digests either side of that write, so this pass
+            # asks each tree which side of the write its crash fell on and
+            # either finishes the mutation or abandons the intent.
+            native_report = replay_native_wal(daemon_wal_dir)
+            logger.info(
+                f"run native-wal-replay roots={native_report.root_count} "
+                f"completed={native_report.completed_count} "
+                f"abandoned={native_report.abandoned_count} "
+                f"replayed={native_report.replayed_event_count} "
+                f"poisoned={native_report.poisoned_count}"
+            )
+
+            # Compaction recovery: a terminal record moves out of the
+            # document and into its ledger in two durable writes, so a
+            # kill between them leaves it in both places. This pass drops
+            # every document row a standing ledger line has already
+            # committed and rebuilds the derived indexes. It runs after
+            # the replay above, which judges a pending intent by the
+            # document digest the mutation wrote; reconciling the document
+            # first would leave that intent matching neither digest.
+            store_report = recover_native_store_trees(daemon_wal_dir)
+            logger.info(
+                f"run native-store-recovery trees={store_report.tree_count} "
+                f"repaired={store_report.repaired_ledgers} "
+                f"dropped={store_report.document_rows_dropped} "
+                f"indexed={store_report.regenerated_indexes}"
+            )
 
             # Reconcile orphaned agent sessions: a prior daemon's spawned
             # children died with it, but their AgentSession rows stay ACTIVE in

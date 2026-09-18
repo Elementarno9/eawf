@@ -71,6 +71,7 @@ class Epoch2Collection(StrEnum):
     PERMISSION = "permission"
     PENDING_ACTION = "pending_action"
     OPEN_QUESTION = "open_question"
+    PLAN_REVISION = "plan_revision"
     MILESTONE = "milestone"
     BATCH = "batch"
     TASK = "task"
@@ -91,6 +92,7 @@ class Epoch2Collection(StrEnum):
     LEGACY = "legacy"
     TELEMETRY = "telemetry"
     DRAFT = "draft"
+    LEASE = "lease"
     EVENT = "event"
     INDEXES = "indexes"
     DISPATCH_PAUSED = "dispatch_paused"
@@ -143,6 +145,7 @@ TIER_ASSIGNMENTS: Final[tuple[TierAssignment, ...]] = (
     _at(Epoch2Collection.PERMISSION, _DOC, "grant consulted before every mutation"),
     _at(Epoch2Collection.PENDING_ACTION, _DOC, "queued by definition; leaves on resolution"),
     _at(Epoch2Collection.OPEN_QUESTION, _DOC, "open by definition; answered questions compact"),
+    _at(Epoch2Collection.PLAN_REVISION, _DOC, "read on every apply until the plan it holds lands"),
     _at(Epoch2Collection.MILESTONE, _LED, "accepted or abandoned Milestones leave the document"),
     _at(Epoch2Collection.BATCH, _LED, "merged or abandoned Batches leave the document"),
     _at(Epoch2Collection.TASK, _LED, "the collection that made the epoch-1 document 5.9 MB"),
@@ -163,6 +166,7 @@ TIER_ASSIGNMENTS: Final[tuple[TierAssignment, ...]] = (
     _at(Epoch2Collection.LEGACY, _LED, "epoch-1 rows with no native successor, kept verbatim"),
     _at(Epoch2Collection.TELEMETRY, _LOC, "machine-local measurement history; restored explicitly"),
     _at(Epoch2Collection.DRAFT, _LOC, "machine-local working drafts, never committed"),
+    _at(Epoch2Collection.LEASE, _LOC, "a worktree on this machine; a clone holds none of ours"),
     _at(Epoch2Collection.EVENT, _FIRE, "raw agent output; neither evidence nor state"),
     _at(Epoch2Collection.INDEXES, _DER, "offset indexes rebuilt from the ledgers"),
     _at(Epoch2Collection.DISPATCH_PAUSED, _DER, "recipe, version and digest"),
