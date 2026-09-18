@@ -80,6 +80,7 @@ from eawf.platform.artifacts.references import (
     citation_numbers_in_text,
     validate_dense_citation_refs,
 )
+from eawf.platform.artifacts.validation import REFERENCE_ROW_RE
 from eawf.platform.lint._conditional import changed_files
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
 from eawf.runtime.sandbox.env_scrub import (
@@ -149,7 +150,6 @@ _GATE_FILES_ENV: str = "EAWF_GATE_FILES"
 _GATE_FILES_SEPARATOR: str = "\n"
 
 _SECTION_HEADING_RE = re.compile(r"^## (?P<title>[^\n#]+)\s*$", re.MULTILINE)
-_REFERENCE_ROW_RE = re.compile(r"^\[(?P<n>[1-9][0-9]*)\]\s+(?P<ref>\S+)")
 
 
 def _require_str(args: dict[str, Any], key: str, *, name: str, kind: str) -> str:
@@ -280,10 +280,12 @@ def _citation_rows_from_markdown(text: str) -> list[Citation]:
             continue
         if not in_references:
             continue
-        match = _REFERENCE_ROW_RE.match(line.strip())
+        match = REFERENCE_ROW_RE.match(line.strip())
         if match is None:
             continue
-        rows.append(Citation.from_legacy_source(int(match.group("n")), match.group("ref")))
+        number = match.group("n_new") or match.group("n_legacy")
+        ref = match.group("ref_new") or match.group("ref_legacy")
+        rows.append(Citation.from_legacy_source(int(number), ref))
     return rows
 
 

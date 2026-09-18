@@ -135,14 +135,12 @@
     {
       "route": "settings",
       "read_model": "effective_settings_view",
-      "binding": "hole",
-      "bound_by": "P33-I01-W72"
+      "binding": "served_off_document"
     },
     {
       "route": "settings.stack",
       "read_model": "settings_layer_stack",
-      "binding": "hole",
-      "bound_by": "P33-I01-W72"
+      "binding": "served_off_document"
     },
     {
       "route": "task.detail",

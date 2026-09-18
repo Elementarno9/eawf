@@ -1,0 +1,629 @@
+{
+  "canary": {
+    "epoch": 2,
+    "generation_id": "gen-a4b0bee5aab918a6",
+    "project_code": "W84CANARY",
+    "repository": "eawf://WSP-W84CANARY/PRJ-W84CANARY/REP-W84CANARY/repository/REP-W84CANARY",
+    "runtime_dir": "fresh, allocated by the provisioning and named nowhere in this record"
+  },
+  "census": [
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "workspace",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "project",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "repository",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.scope.home.read",
+        "projection.search.read",
+        "projection.track.read"
+      ],
+      "record": "track",
+      "written_by": [
+        "domain.track.retire",
+        "domain.transition.apply"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.campaign.read",
+        "projection.campaign.step.read",
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.search.read"
+      ],
+      "record": "campaign",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "current",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "migration_cutover",
+      "read_by": [],
+      "record": "track_outcome",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.sandbox.log.read"
+      ],
+      "record": "sandbox_policy",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "capability",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "tool_authority",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "permission",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.attention.read"
+      ],
+      "record": "pending_action",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "open_question",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "native_verb",
+      "read_by": [],
+      "record": "plan_revision",
+      "written_by": [
+        "planning.plan_revision.submit",
+        "planning.plan_revision.approve",
+        "planning.plan_revision.apply"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.milestone.read",
+        "projection.release.read",
+        "projection.roadmap.read",
+        "projection.scope.home.read",
+        "projection.search.read"
+      ],
+      "record": "milestone",
+      "written_by": [
+        "planning.plan_revision.apply",
+        "domain.milestone.activate",
+        "domain.milestone.open_review",
+        "domain.milestone.accept",
+        "domain.milestone.cancel",
+        "domain.transition.apply",
+        "runtime.delivery.request_acceptance_repair"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.batch.detail.read",
+        "projection.git.pr.read",
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.merge.conflict.read",
+        "projection.milestone.read",
+        "projection.roadmap.read",
+        "projection.search.read"
+      ],
+      "record": "batch",
+      "written_by": [
+        "planning.plan_revision.apply",
+        "domain.batch.activate",
+        "domain.batch.ready",
+        "domain.transition.apply",
+        "runtime.delivery.integrate",
+        "runtime.delivery.verify_batch",
+        "runtime.delivery.reconcile_merge"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.backlog.read",
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.search.read",
+        "projection.task.detail.read"
+      ],
+      "record": "task",
+      "written_by": [
+        "planning.plan_revision.apply",
+        "domain.task.promote",
+        "domain.task.start",
+        "domain.transition.apply"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.activity.read",
+        "projection.cost.ceiling.read",
+        "projection.crash.recovery.read",
+        "projection.export.read",
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.notifications.read",
+        "projection.run.detail.read",
+        "projection.search.read",
+        "projection.transcript.read",
+        "projection.unattended.read"
+      ],
+      "record": "run",
+      "written_by": [
+        "runtime.run.dispatch",
+        "runtime.run.retry",
+        "runtime.run.bind",
+        "runtime.run.control.request",
+        "runtime.run.control.acknowledge",
+        "runtime.run.control.effect",
+        "runtime.run.worker.hello",
+        "runtime.run.event.append",
+        "runtime.run.budget.meter",
+        "runtime.candidate.submit",
+        "runtime.candidate.report.bind"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.release.read"
+      ],
+      "record": "release",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.evidence.digest.read",
+        "projection.evidence.read"
+      ],
+      "record": "evidence",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.receipt.read"
+      ],
+      "record": "receipt",
+      "written_by": [
+        "semantic.call"
+      ]
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.evidence.read",
+        "projection.trust.read"
+      ],
+      "record": "claim",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "campaign_finding",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "hypothesis",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "migration_cutover",
+      "read_by": [],
+      "record": "audit",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "decision",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "incident",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "migration_cutover",
+      "read_by": [],
+      "record": "estimate",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "migration_cutover",
+      "read_by": [],
+      "record": "actual",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "native_verb",
+      "read_by": [
+        "projection.campaign.artifact.read",
+        "projection.history.diff.read",
+        "projection.history.read",
+        "projection.search.read"
+      ],
+      "record": "artifact",
+      "written_by": [
+        "semantic.call"
+      ]
+    },
+    {
+      "consumer": "none",
+      "producer": "migration_cutover",
+      "read_by": [],
+      "record": "memory",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "migration_cutover",
+      "read_by": [],
+      "record": "legacy",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "telemetry",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "draft",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "lease",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "event",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "indexes",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "dispatch_paused",
+      "written_by": []
+    },
+    {
+      "consumer": "none",
+      "producer": "none",
+      "read_by": [],
+      "record": "fleet_run",
+      "written_by": []
+    },
+    {
+      "consumer": "console_route",
+      "producer": "none",
+      "read_by": [
+        "projection.health.read"
+      ],
+      "record": "health_view",
+      "written_by": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-01",
+      "known_gap": false,
+      "observed": "/verify --mode all was refused with schema_validation_failed on actor, while the same verb called with an operator principal reached its domain check",
+      "severity": "P1",
+      "statement": "/verify and /dispatch present their own skill name in the actor parameter of the verification and retry verbs, and that parameter is typed to a principal key, so neither call can be accepted whatever the tree holds"
+    },
+    {
+      "id": "F-02",
+      "known_gap": false,
+      "observed": "the census derives campaign, claim, evidence, health_view, release and sandbox_policy as producerless, and the declaration names pending_action alone",
+      "severity": "P2",
+      "statement": "six collections a console route reads have no epoch-2 producer and are not named by the unwritten-register declaration, so those routes draw an empty register as one that was read and found quiet"
+    },
+    {
+      "id": "F-03",
+      "known_gap": false,
+      "observed": "/integrate show over the freshly applied Batch reported one record and one conflict frame and returned outcome conflicted on a blocked envelope",
+      "severity": "P2",
+      "statement": "the merge-conflict route is bound to the batch collection, so a Batch that has received no delivery renders as one conflict frame and /integrate show reports the Batch as conflicted"
+    },
+    {
+      "id": "F-04",
+      "known_gap": true,
+      "observed": "the census records pending_action with no producer, and the code's own unwritten-register declaration names it",
+      "severity": "P1",
+      "statement": "accepting a Milestone requires a sealed pending action and nothing in epoch 2 writes one, so the acceptance edge is unreachable even from acceptance review"
+    },
+    {
+      "id": "F-05",
+      "known_gap": true,
+      "observed": "planning.plan_revision.submit refused with identity_not_found on the guard primary_track_resolved until the rows were seeded",
+      "severity": "P2",
+      "statement": "no shipped verb admits a Track or a repository row into an epoch-2 tree, so a plan cannot be submitted against a canary without a direct document write"
+    }
+  ],
+  "first_unexecutable_step": "dispatch",
+  "milestone": {
+    "created_by": "planning.plan_revision.apply",
+    "key": "MLS-0001",
+    "status_reached": "ACTIVE",
+    "status_target": "COMPLETED",
+    "title": "Rehearse the native delivery path",
+    "urn": "eawf://WSP-W84CANARY/PRJ-W84CANARY/REP-W84CANARY/milestone/MLS-0001"
+  },
+  "precondition": {
+    "code": "epoch2_record_admission_absent",
+    "note": "the plan binds a Track and a repository row and no shipped verb admits either, so both were written into the canary's generation document directly before the walk began",
+    "surface": "the selected generation document"
+  },
+  "provider_processes_started": 0,
+  "record_without_producer": "pending_action",
+  "records_without_producer": [
+    "campaign",
+    "campaign_finding",
+    "capability",
+    "claim",
+    "current",
+    "decision",
+    "dispatch_paused",
+    "draft",
+    "event",
+    "evidence",
+    "fleet_run",
+    "health_view",
+    "hypothesis",
+    "incident",
+    "indexes",
+    "lease",
+    "open_question",
+    "pending_action",
+    "permission",
+    "project",
+    "release",
+    "repository",
+    "sandbox_policy",
+    "telemetry",
+    "tool_authority",
+    "workspace"
+  ],
+  "rehearsed_on": "2026-09-18",
+  "schema_version": "canary-rehearsal/v1",
+  "steps": [
+    {
+      "attempts": [
+        {
+          "code": null,
+          "executed": true,
+          "note": "committed planning.plan_revision.validated at canonical sequence 1",
+          "surface": "planning.plan_revision.submit"
+        },
+        {
+          "code": null,
+          "executed": true,
+          "note": "committed planning.plan_revision.approved at canonical sequence 2",
+          "surface": "planning.plan_revision.approve"
+        },
+        {
+          "code": null,
+          "executed": true,
+          "note": "committed planning.plan_revision.applied at canonical sequence 3",
+          "surface": "planning.plan_revision.apply"
+        },
+        {
+          "code": null,
+          "executed": true,
+          "note": "the Milestone renders at projection revision 4",
+          "surface": "projection.milestone.read"
+        },
+        {
+          "code": null,
+          "executed": true,
+          "note": "the Batch renders at projection revision 4",
+          "surface": "projection.batch.detail.read"
+        }
+      ],
+      "code": null,
+      "detail": "submit, approve and apply each committed; the apply materialised the Milestone, one Batch and one PLANNED Task at canonical sequence 3",
+      "disposition": "executed",
+      "step": "plan_apply",
+      "surface": "planning.plan_revision.apply"
+    },
+    {
+      "attempts": [
+        {
+          "code": "run_request_uncompilable",
+          "executed": false,
+          "note": "outcome needs_operator, stopped on dependency_proof_unreadable and run_request_uncompilable over a frontier of one Task",
+          "surface": "/dispatch"
+        },
+        {
+          "code": "identity_not_found",
+          "executed": false,
+          "note": "called directly with an operator principal, the verb accepted the request shape and refused on the absent Run, so the verb itself is reachable",
+          "surface": "runtime.run.retry"
+        }
+      ],
+      "code": "run_request_uncompilable",
+      "detail": "the pass read the Batch and its one PLANNED Task and stopped for an operator: no read model carries a dependency edge and no surface compiles a run request, so no Run was opened and no provider process was started",
+      "disposition": "refused",
+      "step": "dispatch",
+      "surface": "/dispatch"
+    },
+    {
+      "attempts": [
+        {
+          "code": null,
+          "executed": true,
+          "note": "read the Batch and the conflict route and reported outcome conflicted over one frame, though the Batch had received no delivery and held no conflict",
+          "surface": "/integrate show"
+        },
+        {
+          "code": "candidate_set_unreadable",
+          "executed": false,
+          "note": "unresolved: candidates",
+          "surface": "/integrate select"
+        },
+        {
+          "code": "integration_request_unnamed",
+          "executed": false,
+          "note": "unresolved: base, branch, subject, subjects, exit_refs, diagnostic_ref",
+          "surface": "/integrate apply"
+        }
+      ],
+      "code": "integration_request_unnamed",
+      "detail": "the apply branch named the six request fields no surface resolves and sent nothing; the select branch found no read model for a sealed candidate set",
+      "disposition": "refused",
+      "step": "integrate",
+      "surface": "/integrate apply"
+    },
+    {
+      "attempts": [
+        {
+          "code": "schema_validation_failed",
+          "executed": false,
+          "note": "runtime.delivery.verify_batch refused the pass on the actor parameter",
+          "surface": "/verify --mode all"
+        },
+        {
+          "code": "proof_receipts_unpresented",
+          "executed": false,
+          "note": "unresolved: base, report_verdict, gates, proof_facts",
+          "surface": "/verify --mode gates"
+        },
+        {
+          "code": "completion_generation_unselected",
+          "executed": false,
+          "note": "called directly with an operator principal, the verb accepted the request shape and refused on the Batch having selected no integration generation",
+          "surface": "runtime.delivery.verify_batch"
+        }
+      ],
+      "code": "schema_validation_failed",
+      "detail": "the pass reached the verification verb and the verb refused its parameters: the skill presents its own name in the actor slot, which is typed to a principal key",
+      "disposition": "refused",
+      "step": "verify",
+      "surface": "/verify --mode all"
+    },
+    {
+      "attempts": [
+        {
+          "code": "illegal_transition",
+          "executed": false,
+          "note": "the verb moves a record out of ACCEPTANCE_REVIEW; the record was PLANNED",
+          "surface": "domain.milestone.accept"
+        },
+        {
+          "code": null,
+          "executed": true,
+          "note": "committed domain.milestone.activated at canonical sequence 4",
+          "surface": "domain.milestone.activate"
+        },
+        {
+          "code": "transition_guard_failed",
+          "executed": false,
+          "note": "guard required_batches_completed",
+          "surface": "domain.milestone.open_review"
+        }
+      ],
+      "code": "transition_guard_failed",
+      "detail": "the Milestone activated and then could not reach acceptance review: its required Batch never completed, because the integrate step never executed",
+      "disposition": "refused",
+      "step": "accept",
+      "surface": "domain.milestone.open_review"
+    }
+  ]
+}

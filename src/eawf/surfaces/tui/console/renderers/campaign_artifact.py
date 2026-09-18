@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import Scrollbar, View, boxed
 from eawf.surfaces.tui.console.navigation import Ctx
@@ -53,10 +54,6 @@ def art_window(session: Session, art: dict[str, Any], h: int) -> Win:
     return fit(offset)
 
 
-def _lines(n: int) -> str:
-    return f"{n} line{'' if n == 1 else 's'}"
-
-
 def render(view: View) -> list[str]:
     """Return the artifact card, native when a read model is held."""
     spine = held(view)
@@ -67,10 +64,10 @@ def render(view: View) -> list[str]:
     win = art_window(s, art, h)
     lines: list[str] = []
     if win.above:
-        lines.append(f"… {_lines(win.above)} above")
+        lines.append(f"… {plural(win.above, 'line')} above")
     lines.extend(art["body"][win.start : win.start + win.take])
     if win.below:
-        lines.append(f"… {_lines(win.below)} below")
+        lines.append(f"… {plural(win.below, 'line')} below")
     keys: list[tuple[str, str]] = [("↑↓", "scroll")] if (win.above or win.below) else []
     keys.extend([("y", "copy"), ("Esc", "close")])
     arts = list(fx.registers.cam_art)

@@ -69,7 +69,7 @@ def _canonical_digest(payload: Mapping[str, Any]) -> str:
     Returns:
         The ``sha256:``-prefixed hex digest.
     """
-    body = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    body = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return f"sha256:{hashlib.sha256(body.encode('utf-8')).hexdigest()}"
 
 

@@ -22,45 +22,17 @@ from __future__ import annotations
 
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
-from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Fixed, Table, View, bar, build, route_keys_bar, thin
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.renderers.read_model import counts, crumb
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, truth_cell
+from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import pad
-
-#: What a count with no register in this read model renders as. A register that was read
-#: and held nothing renders ``0``; this token says no register was read at all.
-UNAVAILABLE = "∅ unavailable"
-
-#: The label a count carries while the projection cannot claim it holds every row.
-KNOWN = "known"
 
 _ROWS = Table([34, 12, 0], 2)
 _EMPTY = "   this scope holds no record the read model renders"
-
-
-def _crumb(view: View, spine: SpineView) -> str:
-    """Return the frame's breadcrumb, ending at the route's own leaf."""
-    session = view.session
-    leaf = REGISTRY.step_leaf(session.route, session.subj_id)
-    steps = [BRAND, spine.scope_id, *([leaf] if leaf else [])]
-    return " " + CRUMB_SEP.join(steps)
-
-
-def _counts(spine: SpineView) -> str:
-    """Return the derived count of every register the route binds, in binding order."""
-    parts = [
-        f"{group(count)} {name}" + ("" if count == 1 else "s")
-        for name, count in spine.counts.items()
-    ]
-    if not parts:
-        parts = [UNAVAILABLE]
-    elif not spine.complete:
-        parts.append(KNOWN)
-    return " · ".join([*parts, f"cursor {group(int(spine.source_cursor))}"])
 
 
 def _unstated(spine: SpineView) -> str:
@@ -112,8 +84,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     cursor = restore(session, spine)
     regions = REGISTRY.focus_regions.get(session.route, ())
     rows: list[str] = [
-        header_row(session, crumb=_crumb(view, spine), scope=spine.scope_id, needs=0, w=w),
-        " " + _counts(spine),
+        header_row(session, crumb=crumb(view, spine), scope=spine.scope_id, needs=0, w=w),
+        " " + counts(spine),
         bar(w),
     ]
     if regions:

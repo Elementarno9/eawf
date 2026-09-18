@@ -158,22 +158,19 @@ def test_all_glyphs_covers_every_table_and_chrome_glyph() -> None:
 
 
 @pytest.mark.parametrize(
-    ("field", "quality", "ascii", "expected"),
+    ("field", "expected"),
     [
-        (None, "measured", False, ""),
-        ("unavailable", "measured", False, "∅"),
-        ("unavailable", "measured", True, "-"),
-        ("denied", "estimated", True, "x"),
-        (0, "measured", False, "0"),
-        (12, "derived", False, "~12"),
-        (12, "estimated", False, "≈12"),
-        (12, "estimated", True, "=12"),
+        (None, ""),
+        ("unknown", "?"),
+        ("unavailable", "∅"),
+        ("denied", "⊘"),
+        ("failed", "✗"),
+        ("attention", "!"),
+        ("zero", "0"),
     ],
 )
-def test_truth_cell_renders_token_prefix_or_nothing(
-    field: str | int | None, quality: str, ascii: bool, expected: str
-) -> None:
-    assert truth_cell(field, quality=quality, ascii=ascii) == expected
+def test_truth_cell_renders_its_token_or_nothing(field: str | None, expected: str) -> None:
+    assert truth_cell(field) == expected
 
 
 def test_truth_cell_unknown_token_raises_key_error() -> None:
@@ -181,9 +178,10 @@ def test_truth_cell_unknown_token_raises_key_error() -> None:
         truth_cell("stale")
 
 
-def test_truth_cell_unknown_quality_raises_key_error() -> None:
+def test_truth_cell_empty_token_raises_key_error() -> None:
+    """The empty boundary: a blank name is a missing name, not the never-acted case."""
     with pytest.raises(KeyError):
-        truth_cell(3, quality="guessed")
+        truth_cell("")
 
 
 @pytest.mark.parametrize(

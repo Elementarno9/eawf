@@ -89,27 +89,21 @@ RAIL = "│"
 _CHROME: tuple[str, ...] = (CRUMB_SEP, CARET, BRAND, RULE_HEAVY, RULE_THIN, RULE_PALETTE, RAIL)
 
 
-def truth_cell(field: str | int | None, *, quality: str = "measured", ascii: bool = False) -> str:
-    """Render one truth cell: a quality prefix and numeral, one truth token, or nothing.
+def truth_cell(field: str | None) -> str:
+    """Render one truth cell: the token naming an absence, or nothing.
 
     Args:
-        field: ``None`` for the never-acted case, a truth token name, or a numeral.
-        quality: The quality prefix a numeral carries; ignored for a token or ``None``.
-        ascii: Render the ASCII allocation instead of the Unicode one.
+        field: ``None`` for the never-acted case, or a truth token name.
 
     Returns:
         The cell text; empty for ``None``.
 
     Raises:
-        KeyError: ``field`` names no truth token, or ``quality`` names no quality prefix.
+        KeyError: ``field`` names no truth token.
     """
     if field is None:
         return ""
-    if isinstance(field, str):
-        glyph = TRUTH[field]
-        return glyph.ascii if ascii else glyph.unicode
-    prefix = QUALITY[quality]
-    return (prefix.ascii if ascii else prefix.unicode) + str(field)
+    return TRUTH[field].unicode
 
 
 def all_glyphs() -> frozenset[str]:

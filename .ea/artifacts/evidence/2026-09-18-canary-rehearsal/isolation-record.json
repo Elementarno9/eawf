@@ -1,0 +1,32 @@
+{
+  "canary": {
+    "project_code": "W84CANARY",
+    "registry": "a scratch registry file, so the operator's own registry was never addressed",
+    "rows_after_provision": [
+      "W84CANARY"
+    ]
+  },
+  "operator_registry": {
+    "addressed": false,
+    "holds_canary_code": false,
+    "unchanged": true
+  },
+  "production_root": {
+    "after_digest": "sha256:e656cbc2546c29f7c1bbf0b35fd306311b5c1d7db0637c53b1dbaadc2fb7df9f",
+    "before_digest": "sha256:e656cbc2546c29f7c1bbf0b35fd306311b5c1d7db0637c53b1dbaadc2fb7df9f",
+    "digest_method": "sha256 over each tracked path under .ea and the sha256 of its bytes, in path order",
+    "label": "the wave worktree's tracked .ea tree",
+    "tracked_file_count": 141
+  },
+  "rehearsed_on": "2026-09-18",
+  "schema_version": "canary-isolation/v1",
+  "teardown": {
+    "registry_rows_after": [],
+    "removed_registry_codes": [
+      "W84CANARY"
+    ],
+    "root_exists": false,
+    "runtime_dir_exists": false,
+    "runtime_dir_removed": true
+  }
+}

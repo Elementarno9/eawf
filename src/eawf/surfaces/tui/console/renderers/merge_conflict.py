@@ -56,7 +56,7 @@ def _side_lines(name: str, side: ConflictSideView) -> list[str]:
     rows.extend(f"       {line}" for line in shown)
     hidden = len(side.lines) - len(shown)
     if hidden:
-        rows.append(f"       … {group(hidden)} more line" + ("" if hidden == 1 else "s"))
+        rows.append(f"       … {dv.plural(hidden, 'more line')}")
     return rows
 
 
@@ -103,7 +103,7 @@ def native_frame(view: View, model: MergeConflictReadModel) -> list[str]:
     cursor = dv.sel_in(view.session, len(model.hunks))
     hunk = model.hunk_at(cursor)
     total = len(model.hunks)
-    title = f"MERGE CONFLICT · {group(total)} hunk" + ("" if total == 1 else "s")
+    title = f"MERGE CONFLICT · {dv.plural(total, 'hunk')}"
     lines = _hunk_lines(model, hunk) if hunk is not None else [NO_CONFLICT]
     return boxed(
         view,

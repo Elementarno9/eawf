@@ -25,6 +25,7 @@ from eawf.kernel.projection.transcript import (
 )
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.runtime.events import RunEventKind
+from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import (
     Fixed,
@@ -340,8 +341,8 @@ def _state_row(model: TranscriptReadModel) -> str:
     stated = field.value if field.state is TruthState.KNOWN and field.value else None
     parts = [
         f"{stated or truth_cell('unknown')} · {DERIVED_LABEL}",
-        f"{group(len(model.blocks))} block" + ("" if len(model.blocks) == 1 else "s"),
-        f"{group(len(model.purged))} purged range" + ("" if len(model.purged) == 1 else "s"),
+        plural(len(model.blocks), "block"),
+        plural(len(model.purged), "purged range"),
         f"contiguous through {group(model.last_contiguous_sequence)}",
     ]
     if model.quarantined:

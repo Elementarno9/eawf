@@ -42,6 +42,7 @@ from eawf.kernel.spec.release_config import ObservationAdapter
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.release import observe, reconcile
 from eawf.surfaces.cli.app import app
+from eawf.workflow.release.adapters import OBSERVATION_ADAPTERS
 from eawf.workflow.release.registry_readers import HttpReply, PackageIndexReader
 from tests.integration.runtime.daemon.methods.conftest import (
     ADAPTER_STEMS,
@@ -107,9 +108,23 @@ def test_observe_uses_the_adapter_the_target_declares(
     _run(body)
 
 
-def test_the_declared_adapters_are_the_three_implemented_ones() -> None:
+def test_the_dev1_declared_adapters_are_all_implemented() -> None:
+    """dev1 names three adapters, and each one has an implementation behind it.
+
+    The enum carries more members than dev1 declares: ``git_ref`` joins from the
+    native canary rung onward, so a checkpoint that predates it legitimately
+    names a strict subset. The invariant worth holding here is that nothing dev1
+    declares is unimplemented, not that dev1 exhausts the enum -- the adapter
+    table's totality against the enum is asserted where that table is defined.
+    """
     declared = {target.observe_adapter for target in dev1_config().targets}
-    assert declared == set(ObservationAdapter)
+
+    assert declared == {
+        ObservationAdapter.PACKAGE_INDEX,
+        ObservationAdapter.NPM_REGISTRY,
+        ObservationAdapter.SOURCE_HOST_RELEASE,
+    }
+    assert declared <= set(OBSERVATION_ADAPTERS)
 
 
 def test_observing_every_required_target_bakes_the_release(

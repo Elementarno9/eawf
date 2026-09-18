@@ -53,7 +53,7 @@ from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.spine import UNAVAILABLE
+from eawf.surfaces.tui.console.renderers.read_model import UNAVAILABLE
 from eawf.surfaces.tui.console.session import Session
 
 #: When the probe projections are stamped. The digest does not cover the stamp; a fixed

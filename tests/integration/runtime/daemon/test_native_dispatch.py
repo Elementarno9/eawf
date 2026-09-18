@@ -14,9 +14,12 @@ spawn, and the dispatch that follows it runs on a daemon context built
 from scratch, so nothing in process memory carries over and the ledger is
 all there is to resume from.
 
-Nothing here sleeps and nothing polls. Every stamp comes from the ``now``
-the driver is handed, and the lost daemon is a raised exception at an
-exact point rather than a race.
+Nothing here sleeps and nothing polls. Every stamp in this module comes from the
+``now`` the driver is handed, and the lost daemon is a raised exception at an exact
+point rather than a race. That holds only while a case stays inside the driver: a
+wire handler stamps from the real clock, so a caller that crosses into one passes
+the real clock to :func:`dispatch` too, or the lease it issued expires against a
+frozen instant that wall time has since passed.
 """
 
 from __future__ import annotations
@@ -332,8 +335,13 @@ def dispatch(
     launcher: Any,
     *,
     params: dict[str, Any] | None = None,
+    now: datetime = AT,
 ) -> dict[str, Any]:
-    """Drive one dispatch through the driver with *launcher* installed."""
+    """Drive one dispatch through the driver with *launcher* installed.
+
+    A caller that goes on to reach a verb stamping from the real clock passes that
+    clock here, so the lease this dispatch issues is measured against the same one.
+    """
     supplied = params if params is not None else dispatch_params(canary)
     args = DispatchParams.model_validate(
         {key: value for key, value in supplied.items() if key != "repo_root"}
@@ -341,7 +349,7 @@ def dispatch(
     context = ctx.native_root_context(canary.root / ".ea")
     answer = asyncio.run(
         native_dispatch.dispatch_run(
-            context, args, now=AT, launchers=dict(compile_launchers((launcher,)))
+            context, args, now=now, launchers=dict(compile_launchers((launcher,)))
         )
     )
     return answer.model_dump(mode="json")

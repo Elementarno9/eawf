@@ -653,6 +653,7 @@ jobs:
         # makes every published version addressable, and a non-force push
         # also refuses to clobber a concurrent publish. Uses the built-in
         # ``GITHUB_TOKEN``.
+        id: publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLUGIN_VERSION: ${{ needs.package-validate.outputs.version }}
@@ -706,6 +707,62 @@ jobs:
           git add -A -f
           git commit -q -m "Publish Codex plugin tree for ${TAG} (version ${PLUGIN_VERSION})"
           git push -q origin plugins-dist
+
+          # What the read-back recomputes off the pushed branch: the
+          # same plumbing listing over the same path, hashed as git
+          # emits it. A branch carries no digest of its own, so without
+          # this the ledger has nothing to compare the published tree
+          # against and the leg can only ever be reported, never
+          # observed.
+          tree_path="${version_path}/plugins/eawf"
+          tree_digest="$(git ls-tree -r --full-tree HEAD -- "${tree_path}" | sha256sum | cut -d' ' -f1)"
+          echo "tree_path=${tree_path}" >> "$GITHUB_OUTPUT"
+          echo "tree_digest=sha256:${tree_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Write the plugins-dist publication receipt
+        # Written whether the push succeeded or not, and whatever the
+        # runner concluded, for the same reason the npm leg's receipt is:
+        # a receiptless failure teaches the ledger nothing about the one
+        # case it needs help with. A failed push leaves the step outputs
+        # empty, so the receipt carries no artifact digest and says so
+        # through ``job_conclusion`` rather than by being absent.
+        if: always()
+        env:
+          TARGET_ID: plugins-dist
+          RECEIPT_VERSION: ${{ needs.package-validate.outputs.version }}
+          JOB_CONCLUSION: ${{ job.status }}
+          RUN_ID: ${{ github.run_id }}
+          TREE_PATH: ${{ steps.publish.outputs.tree_path }}
+          TREE_DIGEST: ${{ steps.publish.outputs.tree_digest }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          target_id = os.environ["TARGET_ID"]
+          tree_path = os.environ["TREE_PATH"]
+          tree_digest = os.environ["TREE_DIGEST"]
+          digests = {tree_path: tree_digest} if tree_path and tree_digest else {}
+          receipt = {
+              "target_id": target_id,
+              "version": os.environ["RECEIPT_VERSION"],
+              "artifact_digests": digests,
+              "job_conclusion": os.environ["JOB_CONCLUSION"],
+              "run_id": os.environ["RUN_ID"],
+          }
+          out = Path(f"publication-receipt-{target_id}.json")
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(out.read_text(encoding="utf-8"))
+          PY
+
+      - name: Upload the plugins-dist publication receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-receipt-plugins-dist
+          path: publication-receipt-plugins-dist.json
 
   publish-source-host:
     name: Publish source-host release assets

@@ -571,11 +571,10 @@ def test_this_waves_routes_are_listed_bound_and_served(route: str) -> None:
     assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
 
 
-def test_the_remaining_holes_are_the_ones_later_waves_still_owe() -> None:
-    """The grid stays total: binding these routes leaves exactly the other holes."""
+def test_no_route_is_left_owed_to_a_later_wave() -> None:
+    """The grid stays total: binding these routes leaves nothing waiting on a wave."""
     holes = sorted(row.route for row in load_manifest().routes if row.binding == "hole")
-    assert holes == ["settings", "settings.stack"]
-    assert not set(holes) & set(BOUND_BY_THIS_WAVE)
+    assert holes == []
 
 
 def test_the_grid_and_the_console_still_agree_in_both_directions() -> None:

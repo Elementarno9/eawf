@@ -85,7 +85,7 @@ _IDLE_HEARTBEAT_SECONDS = 5.0
 # request/response into streaming mode. Mirrors
 # ``state_subscribe.SUBSCRIBE_METHODS`` but is duplicated here as a literal so
 # this win32-only module never imports the POSIX dispatch graph at module top.
-_SUBSCRIBE_METHODS = frozenset({"event.subscribe", "state.subscribe"})
+_SUBSCRIBE_METHODS = frozenset({"event.subscribe", "state.subscribe", "projection.subscribe"})
 
 if sys.platform == "win32":  # pragma: no cover - win32-only branch
     # ``CancelIoEx`` is the only reliable way to unblock a pending blocking

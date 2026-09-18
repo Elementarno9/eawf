@@ -4,6 +4,8 @@ The crumb, the counts row and the unstated section are the parts every native fr
 shares whatever it draws below them, so :func:`crumb`, :func:`counts` and
 :func:`unstated_rows` are public: the integration and transcript routes draw their own
 bodies and still print the same three things about the projection they were served.
+The first two read nothing but the projection header, which is what :class:`Projected`
+names, so the spine and register frames draw them off their own read models too.
 
 The seven routes share this frame because they share what it draws: rows the daemon
 projected at one committed cursor, and nothing else. Only what the read model states is
@@ -30,9 +32,13 @@ opens against the prototype registers, and the tracked golden contract is that m
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Protocol
+
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.truth import TruthField, TruthState
 from eawf.kernel.projection.verification import HealthReadModel, RuntimeTupleRow
+from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Fixed, Table, View, bar, build, route_keys_bar, thin
 from eawf.surfaces.tui.console.header import header_row
@@ -69,7 +75,33 @@ _TOKEN_OF_STATE: dict[TruthState, str] = {
 }
 
 
-def crumb(view: View, model: RouteReadModel) -> str:
+class Projected(Protocol):
+    """The projection header the crumb and the counts row are drawn off.
+
+    The spine, the register and the route read models are three row shapes over one
+    header, and these two rows read the header alone. Naming it here is what lets the
+    three families share one crumb builder and one counts builder instead of each
+    keeping its own copy.
+    """
+
+    @property
+    def scope_id(self) -> str:
+        """The scope the projection was built for."""
+
+    @property
+    def source_cursor(self) -> str:
+        """The committed sequence the rows were read through."""
+
+    @property
+    def complete(self) -> bool:
+        """Whether the projection claimed every row of its scope."""
+
+    @property
+    def counts(self) -> Mapping[str, int]:
+        """The rows per collection the route binds, keyed by collection name."""
+
+
+def crumb(view: View, model: Projected) -> str:
     """Return the frame's breadcrumb, ending at the route's own leaf.
 
     Args:
@@ -85,7 +117,7 @@ def crumb(view: View, model: RouteReadModel) -> str:
     return " " + CRUMB_SEP.join(steps)
 
 
-def counts(model: RouteReadModel) -> str:
+def counts(model: Projected) -> str:
     """Return the derived count of every register the route binds, in binding order.
 
     Args:
@@ -94,10 +126,7 @@ def counts(model: RouteReadModel) -> str:
     Returns:
         The counts and the cursor, as the row under the header prints them.
     """
-    parts = [
-        f"{group(count)} {name}" + ("" if count == 1 else "s")
-        for name, count in model.counts.items()
-    ]
+    parts = [plural(count, name) for name, count in model.counts.items()]
     if not parts:
         parts = [UNAVAILABLE]
     elif not model.complete:
@@ -185,7 +214,7 @@ def record_rows(view: View, model: RouteReadModel, cursor: int) -> list[str]:
 def _tuple_rows(tuples: tuple[RuntimeTupleRow, ...], w: int) -> list[str]:
     """Return the runtime-tuple section: one line per verdict, or the honest absence."""
     quarantined = sum(1 for row in tuples if row.quarantined)
-    head = f" TUPLES    {len(tuples)} runtime tuple" + ("" if len(tuples) == 1 else "s")
+    head = f" TUPLES    {plural(len(tuples), 'runtime tuple')}"
     rows = [f"{head} · {quarantined} quarantined" if tuples else f" TUPLES    {NO_VERDICT}"]
     if not tuples:
         return rows

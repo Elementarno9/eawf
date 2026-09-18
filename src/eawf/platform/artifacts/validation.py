@@ -34,7 +34,7 @@ _SECTION_HEADING_RE = re.compile(r"^## (?P<title>[^\n#]+)\s*$", re.MULTILINE)
 #: bare-``[N] <ref>`` form. The citation number comes from the anchor id
 #: (new shape) or the leading marker (legacy); the ref is the first token
 #: after the marker.
-_REFERENCE_ROW_RE = re.compile(
+REFERENCE_ROW_RE = re.compile(
     r"^(?:"
     r'\d+\.\s+<a id="ref-(?P<n_new>[1-9][0-9]*)"></a>'
     r"\s*\[\\\[\d+\\\]\]\(#ref-\d+\)\s+(?P<ref_new>\S+)"
@@ -92,7 +92,7 @@ def _has_meaningful_content(section: str) -> bool:
 def _reference_rows(section: str) -> list[Citation]:
     rows: list[Citation] = []
     for line in section.splitlines():
-        match = _REFERENCE_ROW_RE.match(line.strip())
+        match = REFERENCE_ROW_RE.match(line.strip())
         if match is None:
             continue
         number = match.group("n_new") or match.group("n_legacy")

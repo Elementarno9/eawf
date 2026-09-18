@@ -43,8 +43,12 @@ _FACT_SEP = " · "
 
 
 def plural(n: int, word: str, suffix: str = "s") -> str:
-    """Return ``n word`` with ``suffix`` appended unless ``n`` is one."""
-    return f"{n} {word}{'' if n == 1 else suffix}"
+    """Return ``n word``, thousands grouped, with ``suffix`` appended unless ``n`` is one.
+
+    Raises:
+        TypeError: ``n`` is not an integer, or is a bool.
+    """
+    return f"{group(n)} {word}{'' if n == 1 else suffix}"
 
 
 # ---------- entity records ----------
@@ -631,8 +635,3 @@ def entity_id_in(text: str) -> str | None:
 def route_of_id(entity_id: str | None) -> str | None:
     """Return the route the id-prefix table files ``entity_id`` under."""
     return route_of(entity_id) if entity_id else None
-
-
-def num(n: int) -> str:
-    """Return ``n`` with its thousands grouped by a comma."""
-    return group(n)

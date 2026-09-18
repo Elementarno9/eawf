@@ -1,4 +1,4 @@
-"""REL-018/REL-016: the three publication observation adapters.
+"""REL-018/REL-016: the publication observation adapters.
 
 Each adapter answers one question about one registry: *is the exact
 frozen artifact set of this checkpoint visible there right now, on the
@@ -14,9 +14,10 @@ match, missing, mismatch and unknown paths of every adapter are driven
 by recorded fixtures. Reading is a separate seam
 (:data:`DEFAULT_REGISTRY_READERS`): the live readers in
 :mod:`eawf.workflow.release.registry_readers` query each registry and
-add the two facts the registries do not publish -- the npm tarball's
-sha256 and the source-host release's repository -- so a recorded
-response is always the reader's answer, never a raw registry body.
+add the facts the registries do not publish -- the npm tarball's sha256,
+the source-host release's repository, the published branch's tree digest
+-- so a recorded response is always the reader's answer, never a raw
+registry body.
 
 Two rules shape all three adapters:
 
@@ -53,12 +54,18 @@ from eawf.workflow.release.observation import (
     build_observation,
 )
 from eawf.workflow.release.registry_readers import (
+    GIT_REF_FIELD,
+    GIT_TREE_DIGESTS_FIELD,
     NPM_TARBALL_DIGESTS_FIELD,
+    PLUGINS_DIST_REF,
     SOURCE_HOST_REPOSITORY_FIELD,
+    GitRefReader,
     NpmRegistryReader,
     PackageIndexReader,
     SourceHostReleaseReader,
+    SubprocessGitRunner,
     UrllibOpener,
+    plugins_dist_path,
 )
 
 logger = logging.getLogger(__name__)
@@ -515,6 +522,111 @@ def _asset_digests(payload: Mapping[str, Any]) -> dict[str, str]:
     return observed
 
 
+def observe_git_ref(
+    request: ObservationRequest,
+    response: RecordedResponse,
+    *,
+    observed_at: datetime,
+) -> PublicationObservation:
+    """Judge a published-branch read-back of one checkpoint.
+
+    Reads the projection the git reader records: the ``owner/repo`` it
+    queried, the ref it listed the tree off, and the published tree's
+    digest keyed by the path it was read at. Two facts have to hold
+    together and neither implies the other. The ref has to be the
+    branch the Codex ``git-subdir`` source resolves, because a tree
+    sitting on some other ref is a tree nobody installs; and the tree
+    read at the version's retained path has to carry the frozen digest,
+    because a branch that moved on is not evidence about this version.
+
+    A branch that carries no tree at the version's path is
+    ``version_absent`` rather than a mismatch, for the same reason an
+    empty registry answer is: the publication did not land, which is a
+    different fact from something else having landed in its place.
+
+    Args:
+        request: The read-back request for this leg.
+        response: The recorded branch answer.
+        observed_at: Timezone-aware UTC instant of the judgement.
+
+    Returns:
+        The observation the answer supports.
+    """
+    settled = _transport_verdict(request, response)
+    if settled is not None:
+        return build_observation(
+            request,
+            response,
+            code=settled[0],
+            observed_digests={},
+            detail=settled[1],
+            observed_at=observed_at,
+        )
+    payload = _mapping(response.payload) or {}
+    repository = payload.get(SOURCE_HOST_REPOSITORY_FIELD)
+    if str(repository or "") != request.identity:
+        return build_observation(
+            request,
+            response,
+            code=ObservationCode.IDENTITY_MISMATCH,
+            observed_digests={},
+            detail=f"the branch was read on repository {repository!r}, not {request.identity!r}",
+            observed_at=observed_at,
+        )
+    ref = str(payload.get(GIT_REF_FIELD, ""))
+    if ref != PLUGINS_DIST_REF:
+        return build_observation(
+            request,
+            response,
+            code=ObservationCode.IDENTITY_MISMATCH,
+            observed_digests={},
+            detail=(
+                f"the tree was listed off ref {ref!r}, not the published "
+                f"{PLUGINS_DIST_REF!r} the plugin source resolves"
+            ),
+            observed_at=observed_at,
+        )
+    observed = _tree_digests(payload)
+    if not observed:
+        return build_observation(
+            request,
+            response,
+            code=ObservationCode.VERSION_ABSENT,
+            observed_digests={},
+            detail=(
+                f"{PLUGINS_DIST_REF} carries no tree at {plugins_dist_path(request.version)!r}"
+            ),
+            observed_at=observed_at,
+        )
+    code, detail = _digest_verdict(request, observed)
+    return build_observation(
+        request,
+        response,
+        code=code,
+        observed_digests=observed,
+        detail=detail or f"{request.identity}@{PLUGINS_DIST_REF} exposes the frozen tree",
+        observed_at=observed_at,
+    )
+
+
+def _tree_digests(payload: Mapping[str, Any]) -> dict[str, str]:
+    """Return the published tree digests the reader recorded, by path.
+
+    Args:
+        payload: The decoded branch answer.
+
+    Returns:
+        Repository path to ``sha256:``-prefixed digest, skipping
+        unreadable rows.
+    """
+    recorded = _mapping(payload.get(GIT_TREE_DIGESTS_FIELD)) or {}
+    return {
+        path: digest if digest.startswith("sha256:") else f"sha256:{digest}"
+        for path, digest in recorded.items()
+        if isinstance(path, str) and isinstance(digest, str)
+    }
+
+
 #: The implementation behind each declared adapter. Total over
 #: :class:`~eawf.kernel.spec.release_config.ObservationAdapter` -- the
 #: completeness assertion below runs at import, so adding an adapter
@@ -524,6 +636,7 @@ OBSERVATION_ADAPTERS: Final[Mapping[ObservationAdapter, ObservationAdapterFn]] =
     ObservationAdapter.PACKAGE_INDEX: observe_package_index,
     ObservationAdapter.NPM_REGISTRY: observe_npm_registry,
     ObservationAdapter.SOURCE_HOST_RELEASE: observe_source_host_release,
+    ObservationAdapter.GIT_REF: observe_git_ref,
 }
 
 _UNIMPLEMENTED = sorted(
@@ -559,13 +672,15 @@ def resolve_observe_adapter(target: ReleaseTargetConfig) -> ObservationAdapterFn
         raise UndeclaredObservationAdapterError(target.observe_adapter, target.target_id) from exc
 
 
-#: The live reader behind each adapter, each querying its public
-#: registry through urllib. Total over the adapter enum for the same
-#: reason :data:`OBSERVATION_ADAPTERS` is.
+#: The live reader behind each adapter: the three HTTP registries
+#: through urllib, and the published branch through git plumbing. Total
+#: over the adapter enum for the same reason :data:`OBSERVATION_ADAPTERS`
+#: is.
 DEFAULT_REGISTRY_READERS: Final[Mapping[ObservationAdapter, RegistryReader]] = {
     ObservationAdapter.PACKAGE_INDEX: PackageIndexReader(opener=UrllibOpener()),
     ObservationAdapter.NPM_REGISTRY: NpmRegistryReader(opener=UrllibOpener()),
     ObservationAdapter.SOURCE_HOST_RELEASE: SourceHostReleaseReader(opener=UrllibOpener()),
+    ObservationAdapter.GIT_REF: GitRefReader(runner=SubprocessGitRunner()),
 }
 
 _UNREAD = sorted(
@@ -625,6 +740,7 @@ __all__ = [
     "RegistryReader",
     "UndeclaredObservationAdapterError",
     "collect_observation",
+    "observe_git_ref",
     "observe_npm_registry",
     "observe_package_index",
     "observe_source_host_release",

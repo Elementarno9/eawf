@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.attention import OPEN, question_row
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.overlays.states import with_state_rows
@@ -60,7 +60,7 @@ def render(view: View) -> list[str]:
         bar(w),
         " QUESTION  Which shim may be retired — the wave shim, or the alias table?",
         thin(w),
-        f" ASKED     10:02:03 · revision {dv.num(fx.proto.revision)}",
+        f" ASKED     10:02:03 · revision {group(fx.proto.revision)}",
         f" DEADLINE  {deadline}",
         thin(w),
         f" ANSWERS   1  {ANSWERS[0]}",
