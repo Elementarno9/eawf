@@ -1,0 +1,201 @@
+{
+  "boundary": "Measured against a canary-scoped daemon process of its own, on its own socket under its own runtime directory, while two real native Runs were in flight in the same canary. Only daemon.ping was driven: the ladder never reaches the operator's daemon and never issues a state read or a write, so the frozen contract's state-read and portalocker ceilings are untouched by this re-probe. The frozen numbers came from an idle daemon with no dispatch in flight, so a rung that leaves the frozen ceiling is measuring a different population rather than a regression. One workstation, under whatever else it was running.",
+  "breaches": [],
+  "comparisons": [
+    {
+      "direction": "ceiling",
+      "frozen_value": 64.0,
+      "label": "highest ladder rung driven",
+      "limit_name": "ping_concurrency",
+      "observed_value": 64.0,
+      "unit": "count",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c1",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 0.346,
+      "unit": "ms",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c2",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 0.286,
+      "unit": "ms",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c4",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 0.197,
+      "unit": "ms",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c8",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 0.319,
+      "unit": "ms",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c16",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 0.979,
+      "unit": "ms",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c32",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 2.271,
+      "unit": "ms",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 5.32,
+      "label": "daemon.ping p95 at c64",
+      "limit_name": "ping_p95_ms",
+      "observed_value": 4.606,
+      "unit": "ms",
+      "within_limit": true
+    }
+  ],
+  "contract_id": "MCT-26081303",
+  "dispatches": [
+    {
+      "handshake_disposition": "accepted",
+      "input_tokens": 18,
+      "launch_adjustment": null,
+      "model_requested": "haiku",
+      "output_tokens": 310,
+      "provider_kind": "claude",
+      "provider_session_digest": "sha256:0ed9dfee17463577a4e9572e441364e065d66b6c8eebbad10b903e224b16c68e",
+      "run_key": "RUN-00000010",
+      "runtime_id": "claude-code",
+      "stage": "announced",
+      "stream_lines": 18,
+      "subprocess_observed": true,
+      "wall_seconds": 7.216
+    },
+    {
+      "handshake_disposition": "accepted",
+      "input_tokens": 4918,
+      "launch_adjustment": "the shipped launcher passes no sandbox flag, and codex refuses to start under the eawf seatbelt jail with its own sandbox on, so this probe supplied -s danger-full-access to reach a running child",
+      "model_requested": "gpt-5.6-luna",
+      "output_tokens": 295,
+      "provider_kind": "codex",
+      "provider_session_digest": "sha256:7765f5b60309192f41a766fb80e587e30eace487972f782951fc374b001e8d37",
+      "run_key": "RUN-00000011",
+      "runtime_id": "codex",
+      "stage": "announced",
+      "stream_lines": 7,
+      "subprocess_observed": true,
+      "wall_seconds": 11.949
+    }
+  ],
+  "environment": {
+    "host_platform": "darwin",
+    "population": "2540 daemon.ping calls across concurrency 1 to 64, every rung driven while two native provider children were alive",
+    "population_size": 2540,
+    "scale_band": "dev",
+    "toolchain": "python 3.14.3"
+  },
+  "ladder_rungs": [
+    {
+      "calls": 20,
+      "concurrency": 1,
+      "errors": 0,
+      "max_ms": 0.368,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 0.116,
+      "p95_ms": 0.346
+    },
+    {
+      "calls": 40,
+      "concurrency": 2,
+      "errors": 0,
+      "max_ms": 0.354,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 0.141,
+      "p95_ms": 0.286
+    },
+    {
+      "calls": 80,
+      "concurrency": 4,
+      "errors": 0,
+      "max_ms": 0.426,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 0.15,
+      "p95_ms": 0.197
+    },
+    {
+      "calls": 160,
+      "concurrency": 8,
+      "errors": 0,
+      "max_ms": 0.507,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 0.219,
+      "p95_ms": 0.319
+    },
+    {
+      "calls": 320,
+      "concurrency": 16,
+      "errors": 0,
+      "max_ms": 1.617,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 0.496,
+      "p95_ms": 0.979
+    },
+    {
+      "calls": 640,
+      "concurrency": 32,
+      "errors": 0,
+      "max_ms": 6.511,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 0.869,
+      "p95_ms": 2.271
+    },
+    {
+      "calls": 1280,
+      "concurrency": 64,
+      "errors": 0,
+      "max_ms": 11.18,
+      "method": "daemon.ping",
+      "native_runs_in_flight_at_end": 2,
+      "native_runs_in_flight_at_start": 2,
+      "p50_ms": 1.787,
+      "p95_ms": 4.606
+    }
+  ],
+  "observed_at": "2026-09-18T14:44:06.243818Z",
+  "probe_command": "uv run python .ea/local/spikes/2026-09-18-w85-reprobe/probe.py --live",
+  "rpc_errors": 0,
+  "schema_version": "contract-reprobe/v1"
+}

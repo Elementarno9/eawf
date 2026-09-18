@@ -64,7 +64,7 @@ def _generation_cells(row: GenerationRow) -> list[str]:
         row.key + (" ◂ head" if row.selected else ""),
         f"generation {group(row.ordinal)}",
         row.head_sha[:6],
-        f"{group(paths)} path" + ("" if paths == 1 else "s"),
+        dv.plural(paths, "path"),
     ]
 
 
@@ -73,7 +73,7 @@ def _generation_rows(view: View, model: GitPrReadModel) -> list[str]:
     session, w = view.session, view.w
     cursor = dv.sel_in(session, len(model.generations))
     taken = len(model.generations)
-    head = f" HISTORY   {group(taken)} generation" + ("" if taken == 1 else "s")
+    head = f" HISTORY   {dv.plural(taken, 'generation')}"
     selected = model.selected_generation()
     rows = [f"{head} · head {selected.key}" if selected else f" HISTORY   {NO_GENERATION}"]
     if not model.generations:

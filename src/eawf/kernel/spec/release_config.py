@@ -117,11 +117,17 @@ class ObservationAdapter(StrEnum):
         PACKAGE_INDEX: A Python package index (PyPI).
         NPM_REGISTRY: The npm registry.
         SOURCE_HOST_RELEASE: The source host's release object.
+        GIT_REF: A published git branch, read back through
+            ``ls-remote`` plus the tree at the version's retained path.
+            A branch is a registry like any other here: it exposes a
+            named thing at a content digest, and a publication nobody
+            can read back cannot bake.
     """
 
     PACKAGE_INDEX = "package_index"
     NPM_REGISTRY = "npm_registry"
     SOURCE_HOST_RELEASE = "source_host_release"
+    GIT_REF = "git_ref"
 
 
 class ReleaseArtifactKind(StrEnum):

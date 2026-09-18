@@ -1,0 +1,303 @@
+{
+  "boundary": "Re-measured by dispatching one real native Run per installed runtime through runtime.run.dispatch inside a disposable canary, so the rows marked dispatched_run rest on what a child process emitted rather than on what a CLI advertises. Rows marked driver_seam rest on the eawf driver call being exercised, and rows marked runtime_surface rest on a separate zero-token subprocess of the installed CLI, which is weaker than a driven turn: two codex rows sit there because the one-shot codex stream announces no tool, skill or agent inventory the way the claude stream does. opencode was absent from PATH, so its eight rows are UNKNOWN rather than passing. The codex child cannot start under the eawf seatbelt jail with its own sandbox on, so this probe supplied a sandbox flag the shipped launcher does not pass. The claude child inherited the operator's own hooks, plugins and MCP servers, so its announced inventory describes this workstation rather than a clean install. One workstation, one account tier, one turn per runtime.",
+  "breaches": [],
+  "capability_rows": [
+    {
+      "basis": "dispatched_run",
+      "capability_id": "skills",
+      "declared": "supported",
+      "evidence": "the child announced a Skill tool and 42 skills alongside 75 slash commands",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "plan_mode",
+      "declared": "supported",
+      "evidence": "the child announced a permission mode of 'bypassPermissions', which is the surface plan mode selects on",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "tool_use",
+      "declared": "supported",
+      "evidence": "the turn emitted 1 tool_use blocks out of 77 announced tools",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "sub_agents",
+      "declared": "supported",
+      "evidence": "the child announced a Task tool and 13 agent definitions",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "streaming",
+      "declared": "supported",
+      "evidence": "the driver drained 18 stream-json lines as they arrived",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "driver_seam",
+      "capability_id": "session_resume",
+      "declared": "unsupported",
+      "evidence": "the driver's resume seam raised NotImplementedError rather than resuming",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "cache_control",
+      "declared": "supported",
+      "evidence": "the result envelope disclosed 60732 prompt-cache tokens for the turn",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "driver_seam",
+      "capability_id": "error_class_surface",
+      "declared": "supported",
+      "evidence": "a deliberately failed spawn classified as RUNTIME_API_ERROR",
+      "measured": true,
+      "runtime_id": "claude-code",
+      "status": "OK"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "skills",
+      "declared": "supported",
+      "evidence": "codex plugin list exited 0 and enumerated 13 enabled plugins across 4 marketplaces",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "driver_seam",
+      "capability_id": "plan_mode",
+      "declared": "partial",
+      "evidence": "the driver's deny-list inversion granted 13 of 14 tools and pinned 1 off, which is the tool-allowlist restriction the partial cell names rather than a first-class plan mode",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "tool_use",
+      "declared": "supported",
+      "evidence": "the turn emitted 2 command_execution items over 7 lines",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "sub_agents",
+      "declared": "supported",
+      "evidence": "codex agents exited 0, so the installed build carries the agent-session surface; the dispatched turn announced no agent inventory",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "streaming",
+      "declared": "supported",
+      "evidence": "the driver drained 7 --json lines as they arrived",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "driver_seam",
+      "capability_id": "session_resume",
+      "declared": "unsupported",
+      "evidence": "the driver's resume seam raised NotImplementedError rather than resuming",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "dispatched_run",
+      "capability_id": "cache_control",
+      "declared": "unsupported",
+      "evidence": "the turn disclosed 24064 automatically cached input tokens and the driver argv carries no caller-side cache marker",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "driver_seam",
+      "capability_id": "error_class_surface",
+      "declared": "supported",
+      "evidence": "a deliberately failed spawn classified as RUNTIME_API_ERROR",
+      "measured": true,
+      "runtime_id": "codex",
+      "status": "OK"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "skills",
+      "declared": "supported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "plan_mode",
+      "declared": "partial",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "tool_use",
+      "declared": "supported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "sub_agents",
+      "declared": "supported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "streaming",
+      "declared": "supported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "session_resume",
+      "declared": "unsupported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "cache_control",
+      "declared": "unsupported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    },
+    {
+      "basis": "runtime_surface",
+      "capability_id": "error_class_surface",
+      "declared": "supported",
+      "evidence": "the binary is absent from PATH, so no Run reached this row",
+      "measured": false,
+      "runtime_id": "opencode",
+      "status": "UNKNOWN"
+    }
+  ],
+  "comparisons": [
+    {
+      "direction": "floor",
+      "frozen_value": 2.0,
+      "label": "installed runtimes that ran a Run",
+      "limit_name": "runtimes_installed",
+      "observed_value": 2.0,
+      "unit": "count",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 2.0,
+      "label": "DRIFT rows",
+      "limit_name": "declared_vs_observed_drift",
+      "observed_value": 0.0,
+      "unit": "count",
+      "within_limit": true
+    },
+    {
+      "direction": "floor",
+      "frozen_value": 6.0,
+      "label": "rows resolved by a driven observation",
+      "limit_name": "evidence_backed_capability_rows",
+      "observed_value": 16.0,
+      "unit": "count",
+      "within_limit": true
+    },
+    {
+      "direction": "ceiling",
+      "frozen_value": 18.0,
+      "label": "rows no probe reached",
+      "limit_name": "unmeasured_capability_rows",
+      "observed_value": 8.0,
+      "unit": "count",
+      "within_limit": true
+    }
+  ],
+  "contract_id": "MCT-26081302",
+  "dispatches": [
+    {
+      "handshake_disposition": "accepted",
+      "input_tokens": 18,
+      "launch_adjustment": null,
+      "model_requested": "haiku",
+      "output_tokens": 310,
+      "provider_kind": "claude",
+      "provider_session_digest": "sha256:0ed9dfee17463577a4e9572e441364e065d66b6c8eebbad10b903e224b16c68e",
+      "run_key": "RUN-00000010",
+      "runtime_id": "claude-code",
+      "stage": "announced",
+      "stream_lines": 18,
+      "subprocess_observed": true,
+      "wall_seconds": 7.216
+    },
+    {
+      "handshake_disposition": "accepted",
+      "input_tokens": 4918,
+      "launch_adjustment": "the shipped launcher passes no sandbox flag, and codex refuses to start under the eawf seatbelt jail with its own sandbox on, so this probe supplied -s danger-full-access to reach a running child",
+      "model_requested": "gpt-5.6-luna",
+      "output_tokens": 295,
+      "provider_kind": "codex",
+      "provider_session_digest": "sha256:7765f5b60309192f41a766fb80e587e30eace487972f782951fc374b001e8d37",
+      "run_key": "RUN-00000011",
+      "runtime_id": "codex",
+      "stage": "announced",
+      "stream_lines": 7,
+      "subprocess_observed": true,
+      "wall_seconds": 11.949
+    }
+  ],
+  "environment": {
+    "host_platform": "darwin",
+    "population": "3 declared runtimes x 8 capability rows = 24 rows, of which 16 were resolved around two real native Runs in one canary and 8 belong to a runtime whose binary is absent",
+    "population_size": 24,
+    "scale_band": "dev",
+    "toolchain": "python 3.14.3"
+  },
+  "observed_at": "2026-09-18T14:44:06.243818Z",
+  "probe_command": "uv run python .ea/local/spikes/2026-09-18-w85-reprobe/probe.py --live",
+  "schema_version": "contract-reprobe/v1"
+}

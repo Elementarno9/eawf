@@ -14,6 +14,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.action_menu import menu_rows
 from eawf.surfaces.tui.console.attention import menu_verbs, verb_available
 from eawf.surfaces.tui.console.fixture import Fixture
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, entry_state
 from eawf.surfaces.tui.console.renderers import copy_target
 from eawf.surfaces.tui.console.session import Session
@@ -59,7 +60,7 @@ def inspect_rows(view: View) -> list[str]:
     return [
         f" INSPECT   value       {_inspected(s, fx)}",
         "           quality     " + ("~ derived · provider rate card" if derived else "measured"),
-        f"           answered by daemon@1 · revision {dv.num(fx.proto.revision)} · exact",
+        f"           answered by daemon@1 · revision {group(fx.proto.revision)} · exact",
         "           freshness   as of 14:02 · within this view’s 2s target",  # noqa: RUF001
     ]
 

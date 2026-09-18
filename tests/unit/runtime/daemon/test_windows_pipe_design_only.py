@@ -329,3 +329,19 @@ def test_listener_delegates_accepted_pipe_to_worker(
     finally:
         loop.close()
     assert spawned == [pipe]
+
+
+def test_the_win32_subscribe_literal_equals_the_dispatch_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The duplicated literal names exactly the methods the streamer routes.
+
+    The win32 module declares the set as a literal rather than importing it, so nothing
+    but this test stops the two drifting; a method missing here falls to the
+    request/response path and its stream never reaches a Windows client.
+    """
+    from eawf.runtime.daemon.methods.state_subscribe import SUBSCRIBE_METHODS
+
+    module = _load_windows_pipe_with_fakes(monkeypatch)
+
+    assert module._SUBSCRIBE_METHODS == SUBSCRIBE_METHODS

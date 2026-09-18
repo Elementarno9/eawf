@@ -38,6 +38,7 @@ from eawf.runtime.daemon.methods import (
 if TYPE_CHECKING:
     pass
 from eawf.runtime.daemon.methods.state_context import args_hash, bus_for_root
+from eawf.workflow.estimation.thresholds import classify_band, wave_budget_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,6 @@ logger = logging.getLogger(__name__)
 _WAVE_ELAPSED_ACTIVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
     {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
 )
-_WAVE_ELAPSED_WARN_FRACTION: Final[float] = 0.8
-_WAVE_ELAPSED_ERROR_FRACTION: Final[float] = 1.0
 _WAVE_ELAPSED_LAST_MINUTE: dict[int, dict[str, int]] = {}
 #: The cache is read-then-written by every digest poll, and digest polls now
 #: hand their parse to a worker thread, so two polls over the same wave can
@@ -127,31 +126,16 @@ def claim_elapsed_minute(*, ctx: MethodContext, cache_key: str, elapsed_minute: 
         return True
 
 
-def _wave_elapsed_budget_minutes(state: State, wave_id: str) -> float | None:
-    """Return the time-burn budget for *wave_id*, preferring estimates."""
-    estimates = state.estimates or {}
-    estimate = estimates.get(wave_id)
-    if estimate is not None and estimate.pessimistic_minutes > 0:
-        return estimate.pessimistic_minutes
-    wave = state.waves.get(wave_id)
-    if wave is None or wave.effort_bucket is None:
-        return None
-    from eawf.workflow.estimation.buckets import EU_MINUTES, wave_estimate_eu
-
-    minutes = wave_estimate_eu(wave) * EU_MINUTES
-    return minutes if minutes > 0 else None
-
-
 def _wave_elapsed_band(elapsed_minutes: float, budget_minutes: float | None) -> str:
-    """Classify elapsed time against the 80% warning / 100% error bands."""
+    """Classify elapsed time against the shared budget bands.
+
+    Banding is delegated so this publisher and the stale-wave advisory agree at the
+    boundaries: a wave sitting exactly on a band edge must not read one way here and
+    another way there.
+    """
     if budget_minutes is None or budget_minutes <= 0:
         return "ok"
-    fraction = elapsed_minutes / budget_minutes
-    if fraction >= _WAVE_ELAPSED_ERROR_FRACTION:
-        return "err"
-    if fraction >= _WAVE_ELAPSED_WARN_FRACTION:
-        return "warn"
-    return "ok"
+    return classify_band(elapsed_minutes / budget_minutes)
 
 
 def _build_wave_elapsed_envelope(
@@ -241,7 +225,7 @@ def publish_wave_elapsed_updates(
             wave_id=wave.id,
             elapsed_minute=elapsed_minute,
             elapsed_minutes=elapsed_minutes,
-            budget_minutes=_wave_elapsed_budget_minutes(state, wave.id),
+            budget_minutes=wave_budget_minutes(state, wave.id),
             before_version=version,
             after_version=version,
         )

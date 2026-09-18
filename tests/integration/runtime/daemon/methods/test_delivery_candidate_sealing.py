@@ -21,6 +21,7 @@ from the ``now`` each call is handed.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
 
@@ -52,7 +53,6 @@ from eawf.runtime.daemon.native_retry import (
 )
 from tests.integration.runtime.daemon.test_native_dispatch import (
     ACTOR,
-    AT,
     RUN_URN,
     SUCCESSOR_KEY,
     TASK_URN,
@@ -97,7 +97,12 @@ def dispatched(tmp_path: Path) -> tuple[CanaryProvision, Path, MethodContext]:
     """Return a canary whose Run has been dispatched all the way through."""
     canary = make_canary(tmp_path / "repo", rows=seeded_rows())
     runtime = tmp_path / "runtime"
-    answer = dispatch(method_ctx(runtime), canary, LedgerReadingLauncher(canary, runtime))
+    answer = dispatch(
+        method_ctx(runtime),
+        canary,
+        LedgerReadingLauncher(canary, runtime),
+        now=datetime.now(UTC),
+    )
     assert answer["stage"] == DispatchStage.ANNOUNCED.value
     return canary, runtime, method_ctx(runtime)
 
@@ -230,7 +235,7 @@ def test_submit_records_one_immutable_claim_with_its_binding_pending(tmp_path: P
 def test_the_daemon_fills_the_workspace_facts_the_worker_never_names(tmp_path: Path) -> None:
     """The lease, its generation and its base commit come off the lease."""
     canary, runtime, _ctx, _answer = submitted(tmp_path, claim=SUCCESS["submission"])
-    lease = active_lease_of(root_ctx(canary, runtime), run_ref=str(RUN_URN), now=AT)
+    lease = active_lease_of(root_ctx(canary, runtime), run_ref=str(RUN_URN), now=datetime.now(UTC))
     standing = submissions_on(canary, runtime)[0]
 
     assert lease is not None
@@ -422,7 +427,7 @@ def retry(canary: CanaryProvision, runtime: Path, **fields: Any) -> Any:
     params = RetryParams.model_validate(
         {"urn": str(RUN_URN), "actor": ACTOR, "idempotency_key": "retry-01", **fields}
     )
-    return retry_run(root_ctx(canary, runtime), params, now=AT)
+    return retry_run(root_ctx(canary, runtime), params, now=datetime.now(UTC))
 
 
 def test_a_submission_made_before_provider_loss_survives_the_retry(tmp_path: Path) -> None:
@@ -483,7 +488,7 @@ def test_the_recovery_run_replays_even_though_it_holds_no_lease(tmp_path: Path) 
     """A replay writes nothing, so it needs no workspace of its own."""
     canary, runtime, ctx, _first = submitted(tmp_path, claim=LOSS["submission"])
     successor_lease = active_lease_of(
-        root_ctx(canary, runtime), run_ref=str(run_urn(SUCCESSOR_KEY)), now=AT
+        root_ctx(canary, runtime), run_ref=str(run_urn(SUCCESSOR_KEY)), now=datetime.now(UTC)
     )
 
     replayed = call_verb(

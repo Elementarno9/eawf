@@ -1,11 +1,16 @@
-"""Every console route is listed once, as bound or as a hole naming the wave that binds it.
+"""Every console route is listed once, under the thing that actually serves it.
 
 The coverage grid is the thing that makes "the console is bound" falsifiable. Without it,
 a route that nobody ever wired is indistinguishable from a route somebody decided not to
 wire: both are simply absent. The manifest lists all thirty-four registry routes, each
-with the read model it renders and one of three bindings -- ``bound`` when a projection
-serves it today, ``hole`` when a named later wave will, and ``unprojectable`` for the one
-route no projection can carry, because no projection exists before a session does.
+with the read model it renders and one of four bindings.
+
+The four are what the console can do for a route. ``bound`` is a document collection
+projected into rows. ``served_off_document`` is a read verb and a composing call site with
+no collection behind them: the settings routes read layered config, which carries no
+ordinal and so no row projection, and calling that a hole would owe a wave work that is
+already done. ``hole`` is a route a named later wave will serve. ``unprojectable`` is the
+one route no projection can carry, because no projection exists before a session does.
 
 Two failures are the point. A route the registry holds and the manifest does not is
 unlisted, and the grid can no longer claim to be total. A hole that names no wave is an
@@ -23,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
@@ -33,8 +39,10 @@ from eawf.kernel.projection.compute import ROUTE_COLLECTIONS
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.projection.operations import OPERATIONS_ROUTES
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
+from eawf.kernel.projection.settings import SETTINGS_ROUTES
 from eawf.kernel.projection.verification import VERIFICATION_ROUTES
-from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS
+from eawf.runtime.daemon.methods import registered_methods
+from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, SETTINGS_READ_METHOD
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
@@ -60,12 +68,48 @@ WAVE_ID = re.compile(r"^P\d{2,}-I\d{2,}-W\d{2,}$")
 #: The one route that is not a hole and never will be bound.
 UNPROJECTABLE_ROUTE = "entry"
 
-#: A route the grid still lists as a hole, which the teeth cases are exercised on. A
-#: bound route would pass the very check those cases exist to red.
-HOLE_ROUTE = "settings.stack"
+#: The routes a read verb and a composing call site serve without a document collection.
+#: :meth:`~eawf.surfaces.tui.console.app.ConsoleApp.settings_view` gates on this very
+#: tuple, so the grid names what the composer accepts rather than a list of its own.
+OFF_DOCUMENT_ROUTES: frozenset[str] = frozenset(SETTINGS_ROUTES)
+
+#: A route id no registry holds, for the cases that exercise row validation alone and
+#: whose route is beside the point.
+SYNTHETIC_ROUTE = "spike.hole"
+
+#: The wave id the fabricated rows name. No roadmap holds it; it is the symbol's shape,
+#: which is all the rows under test need it to be.
+SYNTHETIC_WAVE = "P99-I99-W99"
 
 #: The route whose epoch-1 footer this suite presses every key of.
 TRUST_ROUTE = "trust"
+
+
+def _unserved_route() -> str:
+    """Return a listed route nothing serves, which the teeth cases relabel to ``bound``.
+
+    Derived rather than named. A hardcoded route is one a later wave can bind out from
+    under these cases, which turns a teeth case green without anybody touching it.
+
+    Returns:
+        The first such route in registry order.
+
+    Raises:
+        ValueError: Every route is served, so no case can prove the check reds.
+    """
+    unserved = sorted(
+        spec.id
+        for spec in REGISTRY.routes
+        if spec.key not in ROUTE_COLLECTIONS and spec.id not in OFF_DOCUMENT_ROUTES
+    )
+    if not unserved:
+        raise ValueError("no route is unserved, so the teeth cases have nothing to relabel")
+    return unserved[0]
+
+
+#: The route the teeth cases relabel. Today the unprojectable one, which is the durable
+#: answer: a route declared permanently unservable is one no wave can take away.
+UNSERVED_ROUTE = _unserved_route()
 
 
 class CoverageRow(BaseModel):
@@ -74,8 +118,8 @@ class CoverageRow(BaseModel):
     Attributes:
         route: The registry route id.
         read_model: The read model the route renders.
-        binding: Whether a projection serves the route today, a later wave will, or none
-            ever can.
+        binding: What serves the route -- a document collection, a read verb with no
+            collection behind it, a named later wave, or nothing that ever can.
         bound_by: The wave that binds a hole; absent on every other binding.
         reason: Why an unprojectable route carries no projection; absent otherwise.
     """
@@ -84,7 +128,7 @@ class CoverageRow(BaseModel):
 
     route: Annotated[str, Field(min_length=1)]
     read_model: ReadModelKind
-    binding: Literal["bound", "hole", "unprojectable"]
+    binding: Literal["bound", "served_off_document", "hole", "unprojectable"]
     bound_by: str | None = None
     reason: Annotated[str, Field(min_length=1)] | None = None
 
@@ -137,7 +181,7 @@ def coverage_defects(manifest: CoverageManifest) -> tuple[str, ...]:
     Returns:
         One message per disagreeing route: a registry route the grid does not list, a
         grid row for no registry route, a row naming the wrong read model, and a row
-        whose binding is not what the projection table says. Empty when they agree.
+        whose binding is not what the projection tables say. Empty when they agree.
     """
     listed = {row.route: row for row in manifest.routes}
     defects: list[str] = []
@@ -162,10 +206,15 @@ def coverage_defects(manifest: CoverageManifest) -> tuple[str, ...]:
         if row.read_model is not declared:
             defects.append(f"route {route!r} lists {row.read_model} but renders {declared}")
         served = spec.key in ROUTE_COLLECTIONS
+        off_document = spec.id in OFF_DOCUMENT_ROUTES
         if served and row.binding != "bound":
             defects.append(f"route {route!r} is served by a projection but listed {row.binding}")
-        if not served and row.binding == "bound":
+        elif off_document and row.binding != "served_off_document":
+            defects.append(f"route {route!r} is served off document but listed {row.binding}")
+        elif not served and row.binding == "bound":
             defects.append(f"route {route!r} is listed bound but no projection serves it")
+        elif not off_document and row.binding == "served_off_document":
+            defects.append(f"route {route!r} is listed served off document but no verb serves it")
     return tuple(defects)
 
 
@@ -221,6 +270,25 @@ def _manifest_without(route: str) -> dict[str, Any]:
     return document
 
 
+def _synthetic_hole(*, bound_by: str | None = SYNTHETIC_WAVE) -> dict[str, Any]:
+    """Return a hole row for a route no registry holds, naming ``bound_by``.
+
+    The grid records no hole, so the rules a hole obeys are proved on a fabricated one
+    rather than on whichever real route happens to be unserved this week.
+    """
+    return {
+        "route": SYNTHETIC_ROUTE,
+        "read_model": "search_page",
+        "binding": "hole",
+        "bound_by": bound_by,
+    }
+
+
+def _grid_of(*rows: dict[str, Any]) -> dict[str, Any]:
+    """Return a whole grid document holding only ``rows``."""
+    return {"schema_version": "coverage-grid/1.0", "routes": list(rows)}
+
+
 # ---------- the grid is total, and agrees with the console ----------
 
 
@@ -267,13 +335,26 @@ def test_this_waves_routes_are_listed_bound_and_served(route: str) -> None:
     assert READ_METHOD_TEMPLATE.format(route=route) in ROUTE_READ_METHODS
 
 
-def test_every_hole_names_the_wave_that_binds_it() -> None:
-    """A hole naming no wave is a permanent gap wearing a temporary label."""
-    holes = [row for row in load_manifest().routes if row.binding == "hole"]
-    assert holes
-    for row in holes:
-        assert row.bound_by is not None
-        assert WAVE_ID.match(row.bound_by), row.bound_by
+def test_the_off_document_rows_are_the_routes_a_read_verb_serves_without_a_collection() -> None:
+    """The fourth binding's rule, checked against the verb table and the collection table."""
+    rows = [row for row in load_manifest().routes if row.binding == "served_off_document"]
+    assert {row.route for row in rows} == OFF_DOCUMENT_ROUTES
+    assert SETTINGS_READ_METHOD in registered_methods()
+    assert SETTINGS_READ_METHOD not in ROUTE_READ_METHODS
+    for row in rows:
+        assert REGISTRY.by_id[row.route].key not in ROUTE_COLLECTIONS
+
+
+def test_the_grid_records_no_hole() -> None:
+    """Every projectable route is accounted for by what serves it, so nothing is owed.
+
+    The rule a hole must obey -- that it names the wave binding it -- is not asserted over
+    these rows, which would be vacuous while there are none. It is enforced on the row
+    itself, and proved on a fabricated hole by the validation cases below.
+    """
+    rows = load_manifest().routes
+    assert [row.route for row in rows if row.binding == "hole"] == []
+    assert all(row.bound_by is None for row in rows)
 
 
 def test_the_unprojectable_row_is_the_entry_layer_alone() -> None:
@@ -286,11 +367,16 @@ def test_the_unprojectable_row_is_the_entry_layer_alone() -> None:
     assert UNPROJECTABLE_ROUTE not in ROUTE_COLLECTIONS
 
 
-def test_the_grid_accounts_for_every_route_exactly_once_across_the_three_bindings() -> None:
-    """Bound plus holes plus the one unprojectable route is the whole registry."""
+def test_the_grid_accounts_for_every_route_exactly_once_across_the_four_bindings() -> None:
+    """Bound plus off-document plus holes plus the unprojectable route is the registry."""
     rows = load_manifest().routes
-    counted = sum(1 for row in rows if row.binding in ("bound", "hole", "unprojectable"))
-    assert counted == len(REGISTRY.ids)
+    tally = Counter(row.binding for row in rows)
+    assert tally == {
+        "bound": len(ROUTE_COLLECTIONS),
+        "served_off_document": len(OFF_DOCUMENT_ROUTES),
+        "unprojectable": 1,
+    }
+    assert sum(tally.values()) == len(REGISTRY.ids)
 
 
 # ---------- the check has teeth ----------
@@ -305,16 +391,9 @@ def test_an_unlisted_route_is_reported() -> None:
 def test_a_row_for_no_registry_route_is_reported() -> None:
     """A grid row the registry does not hold is a route that was renamed or removed."""
     document = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    document["routes"].append(
-        {
-            "route": "spike.hole",
-            "read_model": "search_page",
-            "binding": "hole",
-            "bound_by": "P33-I01-W99",
-        }
-    )
+    document["routes"].append(_synthetic_hole())
     defects = coverage_defects(load_manifest(document))
-    assert defects == ("route 'spike.hole' is listed but the registry does not hold it",)
+    assert defects == (f"route {SYNTHETIC_ROUTE!r} is listed but the registry does not hold it",)
 
 
 def test_a_row_naming_the_wrong_read_model_is_reported() -> None:
@@ -328,17 +407,44 @@ def test_a_row_naming_the_wrong_read_model_is_reported() -> None:
 def test_a_served_route_listed_as_a_hole_is_reported() -> None:
     """A route a projection already serves cannot still be waiting on a wave."""
     document = _manifest_without("trust")
-    document["routes"].append(_row("trust", binding="hole", bound_by="P33-I01-W99"))
+    document["routes"].append(_row("trust", binding="hole", bound_by=SYNTHETIC_WAVE))
     defects = coverage_defects(load_manifest(document))
     assert defects == ("route 'trust' is served by a projection but listed hole",)
 
 
-def test_a_hole_listed_as_bound_is_reported() -> None:
-    """Calling an unbound route bound is the claim the grid exists to refuse."""
-    document = _manifest_without(HOLE_ROUTE)
-    document["routes"].append(_row(HOLE_ROUTE, binding="bound", bound_by=None))
+def test_a_document_backed_route_listed_as_served_off_document_is_reported() -> None:
+    """A collection serves this route, so calling it config-served misfiles the row."""
+    document = _manifest_without("trust")
+    document["routes"].append(_row("trust", binding="served_off_document"))
     defects = coverage_defects(load_manifest(document))
-    assert defects == (f"route {HOLE_ROUTE!r} is listed bound but no projection serves it",)
+    assert defects == ("route 'trust' is served by a projection but listed served_off_document",)
+
+
+def test_an_off_document_route_listed_as_a_hole_is_reported() -> None:
+    """The defect this binding exists to name: a served route owed to a wave anyway."""
+    off_document = sorted(OFF_DOCUMENT_ROUTES)[0]
+    document = _manifest_without(off_document)
+    document["routes"].append(_row(off_document, binding="hole", bound_by=SYNTHETIC_WAVE))
+    defects = coverage_defects(load_manifest(document))
+    assert defects == (f"route {off_document!r} is served off document but listed hole",)
+
+
+def test_an_unserved_route_listed_as_bound_is_reported() -> None:
+    """Calling an unserved route bound is the claim the grid exists to refuse."""
+    document = _manifest_without(UNSERVED_ROUTE)
+    document["routes"].append(_row(UNSERVED_ROUTE, binding="bound", reason=None))
+    defects = coverage_defects(load_manifest(document))
+    assert defects == (f"route {UNSERVED_ROUTE!r} is listed bound but no projection serves it",)
+
+
+def test_an_unserved_route_listed_as_served_off_document_is_reported() -> None:
+    """No read verb answers for this route, so the fourth binding is not its either."""
+    document = _manifest_without(UNSERVED_ROUTE)
+    document["routes"].append(_row(UNSERVED_ROUTE, binding="served_off_document", reason=None))
+    defects = coverage_defects(load_manifest(document))
+    assert defects == (
+        f"route {UNSERVED_ROUTE!r} is listed served off document but no verb serves it",
+    )
 
 
 def test_a_route_listed_twice_is_reported() -> None:
@@ -350,25 +456,29 @@ def test_a_route_listed_twice_is_reported() -> None:
 
 def test_an_undeclared_hole_is_refused_at_validation() -> None:
     """A hole with no wave never reaches the comparison; the row itself is invalid."""
-    document = _manifest_without(HOLE_ROUTE)
-    row = _row(HOLE_ROUTE, bound_by=None)
-    document["routes"].append({**row, "binding": "hole"})
     with pytest.raises(ValidationError, match="undeclared hole"):
-        load_manifest(document)
+        load_manifest(_grid_of(_synthetic_hole(bound_by=None)))
 
 
 def test_a_hole_naming_something_that_is_not_a_wave_is_refused() -> None:
     """The wave id is the symbol, not a free-text promise."""
-    document = _manifest_without(HOLE_ROUTE)
-    document["routes"].append(_row(HOLE_ROUTE, bound_by="later"))
     with pytest.raises(ValidationError, match="undeclared hole"):
-        load_manifest(document)
+        load_manifest(_grid_of(_synthetic_hole(bound_by="later")))
 
 
 def test_a_bound_row_naming_a_wave_is_refused() -> None:
     """A bound route has no wave left to wait for."""
     document = _manifest_without("trust")
-    document["routes"].append(_row("trust", bound_by="P33-I01-W99"))
+    document["routes"].append(_row("trust", bound_by=SYNTHETIC_WAVE))
+    with pytest.raises(ValidationError, match="names a binding wave"):
+        load_manifest(document)
+
+
+def test_an_off_document_row_naming_a_wave_is_refused() -> None:
+    """A route a read verb already serves has no wave left to wait for either."""
+    off_document = sorted(OFF_DOCUMENT_ROUTES)[0]
+    document = _manifest_without(off_document)
+    document["routes"].append(_row(off_document, bound_by=SYNTHETIC_WAVE))
     with pytest.raises(ValidationError, match="names a binding wave"):
         load_manifest(document)
 

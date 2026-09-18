@@ -47,17 +47,10 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.renderers.read_model import UNAVAILABLE, counts, crumb
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, truth_cell
+from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import pad
-
-#: What a count with no register at all renders as. Distinct from the unknown token, which
-#: says a register is bound and unwritten rather than absent from the read model.
-UNAVAILABLE = "∅ unavailable"
-
-#: The label a count carries while the projection cannot claim it holds every row.
-KNOWN = "known"
 
 #: The row the frame shows where a register nothing writes would have been counted.
 UNWRITTEN_ROW = " UNWRITTEN "
@@ -69,27 +62,6 @@ _EMPTY = "   this scope holds no record the read model renders"
 def _unknown_token() -> str:
     """Return the truth token a value with no producer renders as."""
     return truth_cell("unknown")
-
-
-def _crumb(view: View, register: RegisterView) -> str:
-    """Return the frame's breadcrumb, ending at the route's own leaf."""
-    session = view.session
-    leaf = REGISTRY.step_leaf(session.route, session.subj_id)
-    steps = [BRAND, register.scope_id, *([leaf] if leaf else [])]
-    return " " + CRUMB_SEP.join(steps)
-
-
-def _counts(register: RegisterView) -> str:
-    """Return the derived count of every register the route binds that something writes."""
-    parts = [
-        f"{group(count)} {name}" + ("" if count == 1 else "s")
-        for name, count in register.counts.items()
-    ]
-    if not parts:
-        parts = [UNAVAILABLE]
-    elif not register.complete:
-        parts.append(KNOWN)
-    return " · ".join([*parts, f"cursor {group(int(register.source_cursor))}"])
 
 
 def _withheld(register: RegisterView) -> list[str]:
@@ -183,12 +155,12 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     rows: list[str] = [
         header_row(
             session,
-            crumb=_crumb(view, register),
+            crumb=crumb(view, register),
             scope=register.scope_id,
             needs=needs_count(view),
             w=w,
         ),
-        " " + _counts(register),
+        " " + counts(register),
         bar(w),
     ]
     rows.extend(_BLOCKS[register.route](view, register))

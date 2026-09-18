@@ -88,7 +88,7 @@ def render(view: View) -> list[str]:
         pre=[],
         title="EXPORT · report this Run",
         lines=lines,
-        foot=f"{_PARTS[s.sel][3]}  Enter writes the report and names the path.",
+        foot=f"{_PARTS[s.sel][3]}  Enter renders the report; nothing is written.",
         keys=_KEYS,
     )
 

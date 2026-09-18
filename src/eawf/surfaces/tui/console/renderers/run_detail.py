@@ -7,6 +7,7 @@ absence.
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
@@ -66,7 +67,7 @@ def render(view: View) -> list[str]:
     parent = "EAWF-0001 ▸ " if rid == OWN else ""
     rows = [
         header(view, f" Eä ▸ … ▸ {parent}{rid}"),
-        f" Run {rid} · {_facts(view, rid)} · seq {dv.num(proto.revision)}",
+        f" Run {rid} · {_facts(view, rid)} · seq {group(proto.revision)}",
         bar(w),
         tl_header(w),
     ]

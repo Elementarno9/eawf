@@ -37,12 +37,59 @@ from pydantic import ConfigDict, Field
 
 from eawf.kernel.release.gate_binding import profile_gates
 from eawf.kernel.spec.common import _StrictModel
-from eawf.kernel.spec.release import ReleaseCheckpoint
+from eawf.kernel.spec.release import ReleaseCheckpoint, ReleaseGateProfile
 
 logger = logging.getLogger(__name__)
 
 #: Top-level key every checkpoint configuration document is wrapped in.
 CONFIG_ROOT_KEY: Final[str] = "release"
+
+
+#: Every gate profile in ladder order, which is the order the enum
+#: declares them in and the order a train's rungs climb. The rank of a
+#: profile is its position here, and nothing else orders profiles, so a
+#: rung reached later can never rank before an earlier one.
+_PROFILE_RANK: Final[Mapping[ReleaseGateProfile, int]] = {
+    profile: rank for rank, profile in enumerate(ReleaseGateProfile)
+}
+
+
+class DeferredTargets(_StrictModel):
+    """Target rows that join the configuration from one rung onward.
+
+    A publication target declared on the train-wide template would land
+    on every rung, including rungs already published. Those rungs bake
+    on a frozen manifest their approval pinned, and the manifest is
+    frozen from the targets their configuration declared -- so adding a
+    target to an earlier rung retroactively changes a document a
+    reviewer already approved and a record already bound. Deferring the
+    row to the rung where the target first exists is what keeps the
+    published half of the ladder fixed while the unpublished half grows.
+
+    Attributes:
+        from_profile: Earliest gate profile whose rungs carry these
+            rows. Every rung at or after it in ladder order gets them;
+            every rung before it renders exactly as it did.
+        targets: Non-empty publication target rows, verbatim, appended
+            after the always-present ones in publication order.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    from_profile: ReleaseGateProfile
+    targets: Annotated[tuple[dict[str, object], ...], Field(min_length=1)]
+
+    def applies_to(self, profile: ReleaseGateProfile) -> bool:
+        """Return whether a rung running *profile* carries these rows.
+
+        Args:
+            profile: Gate profile of the rung being rendered.
+
+        Returns:
+            ``True`` when *profile* is at or after
+            :attr:`from_profile` in ladder order.
+        """
+        return _PROFILE_RANK[profile] >= _PROFILE_RANK[self.from_profile]
 
 
 class CheckpointConfigTemplate(_StrictModel):
@@ -64,6 +111,8 @@ class CheckpointConfigTemplate(_StrictModel):
             because the configuration loader is the one boundary that
             validates them, and typing them twice would give a rendered
             document two chances to disagree with an authored one.
+        deferred_targets: Target rows that join from one rung onward,
+            or ``None`` when every rung publishes the same set.
         platform_claims: Advertised platform rows, verbatim.
     """
 
@@ -74,7 +123,24 @@ class CheckpointConfigTemplate(_StrictModel):
     require_clean_tree: bool
     require_ancestor_of_remote: bool
     targets: Annotated[tuple[dict[str, object], ...], Field(min_length=1)]
+    deferred_targets: DeferredTargets | None = None
     platform_claims: tuple[dict[str, object], ...] = ()
+
+    def targets_for(self, profile: ReleaseGateProfile) -> list[dict[str, object]]:
+        """Return the target rows a rung running *profile* publishes to.
+
+        Args:
+            profile: Gate profile of the rung being rendered.
+
+        Returns:
+            The always-present rows, followed by the deferred ones when
+            the rung is at or after the profile they join at.
+        """
+        rows = [dict(target) for target in self.targets]
+        deferred = self.deferred_targets
+        if deferred is not None and deferred.applies_to(profile):
+            rows.extend(dict(target) for target in deferred.targets)
+        return rows
 
 
 def render_checkpoint_config(
@@ -100,6 +166,7 @@ def render_checkpoint_config(
             profile, which means the rung cannot be configured yet.
     """
     gates = profile_gates(rung.gate_profile)
+    targets = template.targets_for(rung.gate_profile)
     body: dict[str, object] = {
         "version": rung.version,
         "channel": rung.channel.value,
@@ -108,7 +175,7 @@ def render_checkpoint_config(
         "require_signed_tag": template.require_signed_tag,
         "require_clean_tree": template.require_clean_tree,
         "require_ancestor_of_remote": template.require_ancestor_of_remote,
-        "targets": [dict(target) for target in template.targets],
+        "targets": targets,
         "platform_claims": [dict(claim) for claim in template.platform_claims],
         "gates": {
             "profile": rung.gate_profile.value,
@@ -120,7 +187,7 @@ def render_checkpoint_config(
     logger.info(
         f"render_checkpoint_config release_key={rung.release_key!r} "
         f"profile={rung.gate_profile.value!r} gates={len(gates)} "
-        f"targets={len(template.targets)}"
+        f"targets={len(targets)}"
     )
     rendered: str = yaml.safe_dump(
         {CONFIG_ROOT_KEY: body}, sort_keys=False, default_flow_style=False
@@ -178,6 +245,7 @@ def with_membership_refs(
 __all__ = [
     "CONFIG_ROOT_KEY",
     "CheckpointConfigTemplate",
+    "DeferredTargets",
     "render_checkpoint_config",
     "with_membership_refs",
 ]

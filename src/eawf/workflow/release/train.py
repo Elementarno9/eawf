@@ -25,6 +25,7 @@ from typing import Final
 
 from eawf.kernel.release.checkpoint_template import (
     CheckpointConfigTemplate,
+    DeferredTargets,
     render_checkpoint_config,
 )
 from eawf.kernel.release.gate_binding import (
@@ -165,11 +166,23 @@ release:
 """
 
 #: The train-wide half of every checkpoint configuration: the three
-#: publication targets, the single real-host platform claim and the four
+#: publication targets every rung carries, the fourth that joins at
+#: ``native_canary``, the single real-host platform claim and the four
 #: publishability flags. Authored once here and rendered per rung by
 #: :func:`~eawf.kernel.release.checkpoint_template.render_checkpoint_config`,
 #: which fills the version, channel, epoch and gate set from the rung
 #: itself.
+#:
+#: ``plugins-dist`` is deferred rather than declared beside the other
+#: three. The Codex tree has been pushed to that branch since ``dev1``,
+#: but it was pushed with nobody watching: no receipt, no target row, no
+#: read-back, so a Codex publication could break and the checkpoint
+#: would still bake on the three targets that were declared. Declaring
+#: it from ``native_canary`` onward closes that for every rung still
+#: ahead. It cannot be declared on the rungs behind: ``dev1`` and
+#: ``dev2`` are published against approved manifests frozen from the
+#: targets they declared, and a fourth row there would re-digest a
+#: manifest an approval already bound.
 V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
     source_branch="main",
     require_signed_tag=True,
@@ -206,6 +219,20 @@ V07_CONFIG_TEMPLATE: Final[CheckpointConfigTemplate] = CheckpointConfigTemplate(
             "retry_limit": 2,
         },
     ),
+    deferred_targets=DeferredTargets(
+        from_profile=ReleaseGateProfile.NATIVE_CANARY,
+        targets=(
+            {
+                "target_id": "plugins-dist",
+                "required": True,
+                "artifact_kinds": ["codex_plugin"],
+                "identity": "Elementarno9/eawf",
+                "observe_adapter": "git_ref",
+                "timeout_seconds": 1800,
+                "retry_limit": 2,
+            },
+        ),
+    ),
     platform_claims=(
         {
             "platform_id": "linux-x86_64",
@@ -225,7 +252,9 @@ DEV2_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
 )
 
 #: The ``0.7.0.dev3`` checkpoint configuration, rendered the same way
-#: ``dev2`` is. It carries no ``membership_refs``: which acceptance
+#: ``dev2`` is, and the first rung to carry four publication targets:
+#: ``native_canary`` is where ``plugins-dist`` joins the declared set.
+#: It carries no ``membership_refs``: which acceptance
 #: bundles the canary Milestone completed is a fact about the record
 #: being cut rather than about the train, so the rung requires the list
 #: and the resolver overlays it from the record.

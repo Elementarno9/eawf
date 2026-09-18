@@ -1,4 +1,4 @@
-"""Live readers for the three publication observation adapters.
+"""Live readers for the publication observation adapters.
 
 An adapter *judges* one registry answer; a reader *fetches* it. The
 readers here query the public registries with the standard library's
@@ -25,6 +25,13 @@ frozen manifest pins:
 A request that got no answer at all (DNS, TLS, a refused or dropped
 connection, a timeout) reads as status ``0``, which the adapters report
 as ``registry_unreachable``: nothing was learned, so nothing is settled.
+
+One leg is not HTTP at all. The Codex plugin tree is published to a git
+branch, so :class:`GitRefReader` reads it with git plumbing through
+:class:`SubprocessGitRunner` rather than :mod:`urllib`, and maps the same
+statuses onto the same three meanings. Its answer carries the ref, the
+tip it resolved to and the published tree's digest, because none of the
+three is legible from a ref listing alone.
 """
 
 from __future__ import annotations
@@ -34,10 +41,11 @@ import http.client
 import json
 import logging
 import re
+import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Final, Protocol
@@ -68,6 +76,25 @@ NPM_TARBALL_DIGESTS_FIELD: Final[str] = "tarball_digests"
 #: ``owner/repo`` the release was requested for.
 SOURCE_HOST_REPOSITORY_FIELD: Final[str] = "repository"
 
+#: Branch the Codex plugin tree is published to. The Codex ``git-subdir``
+#: source pins this ref by name, so it is a property of the distribution
+#: rather than a per-checkpoint choice, and a tree read off any other ref
+#: says nothing about what a Codex install resolves.
+PLUGINS_DIST_REF: Final[str] = "refs/heads/plugins-dist"
+
+#: Field the git reader records: the ref it listed the tree off.
+GIT_REF_FIELD: Final[str] = "ref"
+
+#: Field the git reader records: the commit the ref resolved to.
+GIT_TIP_FIELD: Final[str] = "tip"
+
+#: Field the git reader records: the published tree's digest, keyed by
+#: the repository path it was read at.
+GIT_TREE_DIGESTS_FIELD: Final[str] = "tree_digests"
+
+#: Seconds one git invocation may take before it counts as unanswered.
+GIT_TIMEOUT_SECONDS: Final[float] = 120.0
+
 #: Identifies the observer to the registries; the source host refuses
 #: requests without one.
 USER_AGENT: Final[str] = f"eawf/{__version__} (release observe)"
@@ -84,6 +111,9 @@ _SOURCE_HOST_HEADERS: Final[Mapping[str, str]] = {
 _REPOSITORY_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"[A-Za-z0-9][A-Za-z0-9-]*/(?!\.{1,2}$)[A-Za-z0-9._-]+"
 )
+
+#: A git object name as ``ls-remote`` prints it in its first column.
+_OBJECT_NAME_PATTERN: Final[re.Pattern[str]] = re.compile(r"[0-9a-f]{40}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,22 +400,234 @@ class SourceHostReleaseReader:
         )
 
 
+def plugins_dist_path(version: str) -> str:
+    """Return the retained tree path one version is published at.
+
+    Args:
+        version: Normalized checkpoint version.
+
+    Returns:
+        The repository-relative path of that version's Codex plugin
+        tree on the publication branch.
+    """
+    return f"versions/{version}/plugins/eawf"
+
+
+def source_host_clone_url(identity: str) -> str:
+    """Return the ``https`` clone URL of the ``owner/repo`` *identity*.
+
+    Args:
+        identity: The ``owner/repo`` pair the branch is published on.
+
+    Returns:
+        The clone URL ``git ls-remote`` is pointed at.
+
+    Raises:
+        ValueError: When *identity* is not an ``owner/repo`` pair. The
+            value reaches a subprocess argument, so an identity that
+            does not match the pattern is refused rather than passed on.
+    """
+    if _REPOSITORY_PATTERN.fullmatch(identity) is None:
+        raise ValueError(f"git-ref identity {identity!r} is not an 'owner/repo' pair")
+    return f"https://github.com/{identity}.git"
+
+
+def tree_listing_digest(listing: bytes) -> str:
+    """Return the ``sha256:`` digest of one ``git ls-tree`` listing.
+
+    The listing is hashed as git emitted it, with no normalization. Both
+    sides of the comparison run the same plumbing command over the same
+    tree, so the raw bytes already agree; re-sorting or re-spacing them
+    here would only give the publisher and the observer two ways to
+    disagree about what they hashed.
+
+    Args:
+        listing: Raw stdout of ``git ls-tree -r --full-tree``.
+
+    Returns:
+        The ``sha256:``-prefixed digest of those bytes.
+    """
+    return f"sha256:{hashlib.sha256(listing).hexdigest()}"
+
+
+@dataclass(frozen=True, slots=True)
+class GitReply:
+    """One git invocation's answer as a reader sees it.
+
+    Attributes:
+        exit_code: Process exit status; non-zero means the command did
+            not answer.
+        stdout: Raw standard output, kept as bytes because a tree
+            listing is hashed rather than read.
+    """
+
+    exit_code: int
+    stdout: bytes = b""
+
+
+class GitRunner(Protocol):
+    """Runs one read-only git command and returns its answer."""
+
+    def __call__(self, argv: Sequence[str]) -> GitReply:
+        """Return the answer to running ``git`` with *argv*."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class SubprocessGitRunner:
+    """The production :class:`GitRunner`, built on :mod:`subprocess`.
+
+    Every failure to get an answer maps to a non-zero exit code rather
+    than raising, so an unreachable remote reads as
+    ``registry_unreachable`` instead of aborting the verb -- the same
+    contract :class:`UrllibOpener` keeps for the HTTP legs.
+
+    Attributes:
+        run: The subprocess entry point; a field so the error mapping is
+            testable without spawning git.
+        timeout_seconds: Per-invocation timeout.
+    """
+
+    run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run
+    timeout_seconds: float = GIT_TIMEOUT_SECONDS
+
+    def __call__(self, argv: Sequence[str]) -> GitReply:
+        """Return the answer to running ``git`` with *argv*.
+
+        Args:
+            argv: Arguments after the ``git`` executable itself.
+
+        Returns:
+            The exit code and raw stdout, or a non-zero code when git
+            could not be run at all.
+        """
+        command = ["git", *argv]
+        try:
+            completed = self.run(
+                command,
+                capture_output=True,
+                check=False,
+                timeout=self.timeout_seconds,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            logger.warning(f"git_read_failed argv={list(argv)!r} error={exc!r}")
+            return GitReply(exit_code=1)
+        logger.info(
+            f"git_read argv={list(argv)!r} exit_code={completed.returncode} "
+            f"bytes={len(completed.stdout)}"
+        )
+        return GitReply(exit_code=int(completed.returncode), stdout=completed.stdout)
+
+
+@dataclass(frozen=True, slots=True)
+class GitRefReader:
+    """Reads the publication branch and the version's published tree.
+
+    Three plumbing calls, in the order that lets each answer the next
+    one's precondition: ``ls-remote`` settles whether the branch exists
+    at all, a shallow ``fetch`` brings its tip into the local object
+    database, and ``ls-tree`` lists the version's retained path out of
+    that tip. The fetch is what makes the tree readable without a full
+    clone; nothing else about the local repository is touched, and the
+    ref is never checked out.
+
+    A branch the remote does not carry is status ``404`` -- the
+    publication never landed. A version path the branch does not carry
+    answers ``200`` with no tree digest, which the adapter reads the
+    same way for the same reason: the branch is there and this version
+    is not on it. Every other failure is status ``0``, meaning the
+    read-back learned nothing.
+
+    Attributes:
+        runner: Runs each git command.
+    """
+
+    runner: GitRunner
+
+    def __call__(self, request: ObservationRequest) -> RecordedResponse:
+        """Return the branch's answer for *request*.
+
+        Args:
+            request: The read-back request for the git-ref leg.
+
+        Returns:
+            The recorded answer, carrying the ref, its tip and the
+            published tree's digest keyed by the path it was read at.
+
+        Raises:
+            ValueError: When the identity is not an ``owner/repo`` pair.
+        """
+        url = source_host_clone_url(request.identity)
+        listing = self.runner(["ls-remote", url, PLUGINS_DIST_REF])
+        if listing.exit_code != 0:
+            return RecordedResponse(status=0)
+        tip = _first_ref_sha(listing.stdout)
+        if tip is None:
+            return RecordedResponse(status=int(HTTPStatus.NOT_FOUND))
+        fetched = self.runner(["fetch", "--quiet", "--no-tags", "--depth", "1", url, tip])
+        if fetched.exit_code != 0:
+            return RecordedResponse(status=0)
+        path = plugins_dist_path(request.version)
+        tree = self.runner(["ls-tree", "-r", "--full-tree", tip, "--", path])
+        if tree.exit_code != 0:
+            return RecordedResponse(status=0)
+        digests = {path: tree_listing_digest(tree.stdout)} if tree.stdout.strip() else {}
+        return RecordedResponse(
+            status=int(HTTPStatus.OK),
+            payload={
+                SOURCE_HOST_REPOSITORY_FIELD: request.identity,
+                GIT_REF_FIELD: PLUGINS_DIST_REF,
+                GIT_TIP_FIELD: tip,
+                GIT_TREE_DIGESTS_FIELD: digests,
+            },
+        )
+
+
+def _first_ref_sha(listing: bytes) -> str | None:
+    """Return the object name of the first ``ls-remote`` row, if any.
+
+    Args:
+        listing: Raw ``git ls-remote`` stdout.
+
+    Returns:
+        The 40-character object name, or ``None`` when the remote
+        listed no matching ref or answered in another shape.
+    """
+    for line in listing.decode("utf-8", errors="replace").splitlines():
+        candidate = line.split("\t", 1)[0].strip()
+        if _OBJECT_NAME_PATTERN.fullmatch(candidate):
+            return candidate
+    return None
+
+
 __all__ = [
+    "GIT_REF_FIELD",
+    "GIT_TIMEOUT_SECONDS",
+    "GIT_TIP_FIELD",
+    "GIT_TREE_DIGESTS_FIELD",
     "NPM_REGISTRY_URL",
     "NPM_TARBALL_DIGESTS_FIELD",
     "PACKAGE_INDEX_URL",
+    "PLUGINS_DIST_REF",
     "READ_TIMEOUT_SECONDS",
     "SOURCE_HOST_API_URL",
     "SOURCE_HOST_REPOSITORY_FIELD",
     "USER_AGENT",
+    "GitRefReader",
+    "GitReply",
+    "GitRunner",
     "HttpOpener",
     "HttpReply",
     "NpmRegistryReader",
     "PackageIndexReader",
     "SourceHostReleaseReader",
+    "SubprocessGitRunner",
     "UrlOpen",
     "UrllibOpener",
     "npm_packument_url",
     "package_index_url",
+    "plugins_dist_path",
+    "source_host_clone_url",
     "source_host_release_url",
+    "tree_listing_digest",
 ]
