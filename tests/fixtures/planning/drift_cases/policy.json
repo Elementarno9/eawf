@@ -1,0 +1,8 @@
+{
+  "case": "policy",
+  "description": "The Track policy was edited after approval, so the rules the plan was judged under are not the rules that would govern the work it creates.",
+  "path": ["track", "TRK-RUNTIME", "policy", "revision"],
+  "value": 2,
+  "expected_code": "transition_guard_failed",
+  "expected_guard": "policy_revision_pinned"
+}

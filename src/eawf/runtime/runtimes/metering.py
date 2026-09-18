@@ -82,10 +82,11 @@ adapter layer — a static import here would invert that edge).
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from decimal import Decimal
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import MeasurementStatus
 from eawf.observability.telemetry.pricing import PRICING_VERSION, ModelPricing, lookup_pricing
@@ -97,11 +98,155 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "DispatchCostEmitter",
+    "InFlightMeter",
+    "MeterReading",
     "MeteredCost",
+    "UsageSample",
     "meter_and_emit",
+    "meter_stream",
     "price_spawn_result",
     "price_token_counts",
 ]
+
+
+class UsageSample(BaseModel):
+    """One cumulative usage reading a provider disclosed mid-turn.
+
+    Providers report running totals, not per-chunk deltas: the codex
+    ``token_count`` event carries ``total_token_usage`` for the session so
+    far, and the last one carries the session totals. A sample is therefore
+    adopted, never added, and the meter ratchets over the sequence.
+
+    ``reasoning_output_tokens`` is a SUBSET of ``output_tokens``, never a
+    sibling of it, so it is carried for attribution and never summed into
+    the billable total. The vendor's own ``total_tokens`` equals input plus
+    output on every observed rollout, which is what
+    :meth:`_reasoning_lies_inside_output` refuses to let a sample
+    contradict: a reading claiming more reasoning than output is a
+    double-counted summand, and admitting it would terminate a Run early
+    on tokens nobody spent.
+
+    Attributes:
+        input_tokens: Non-cached input tokens reported so far.
+        output_tokens: Output tokens reported so far, reasoning included.
+        reasoning_output_tokens: The reasoning slice of ``output_tokens``.
+        cache_read_input_tokens: Prompt-cache read tokens reported so far.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    reasoning_output_tokens: int = Field(default=0, ge=0)
+    cache_read_input_tokens: int = Field(default=0, ge=0)
+
+    @model_validator(mode="after")
+    def _reasoning_lies_inside_output(self) -> Self:
+        """Refuse a reading whose reasoning slice exceeds its own output.
+
+        Raises:
+            ValueError: ``reasoning_output_tokens`` exceeds
+                ``output_tokens``, which can only mean the source added
+                the reasoning slice to the output total instead of
+                reporting it inside.
+        """
+        if self.reasoning_output_tokens > self.output_tokens:
+            raise ValueError(
+                f"reasoning_output_tokens {self.reasoning_output_tokens} exceeds "
+                f"output_tokens {self.output_tokens}; reasoning is a subset of output"
+            )
+        return self
+
+    @property
+    def billable_tokens(self) -> int:
+        """Return the billed classes of this reading, reasoning counted once."""
+        return self.input_tokens + self.output_tokens + self.cache_read_input_tokens
+
+
+class MeterReading(BaseModel):
+    """What a turn's usage samples have metered so far.
+
+    Attributes:
+        observed_tokens: The billed total the cap is tested against.
+        output_tokens: The output slice of it, reasoning included.
+        reasoning_output_tokens: The reasoning slice of ``output_tokens``.
+        sample_count: How many readings the meter has adopted.
+        ratcheted: Whether any reading came back below the running total
+            and was held rather than applied.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    observed_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    reasoning_output_tokens: int = Field(default=0, ge=0)
+    sample_count: int = Field(default=0, ge=0)
+    ratcheted: bool = False
+
+
+class InFlightMeter:
+    """Fold a turn's cumulative usage readings into one metered total.
+
+    The fold is a ratchet: a reading below the running total is held, not
+    applied. A cumulative counter that moves backwards mid-turn means the
+    source re-based (a resumed session, a re-read transcript), and applying
+    it would walk a Run back under a cap it has already crossed -- which is
+    the one direction a safety meter must never move.
+    """
+
+    def __init__(self) -> None:
+        self._reading = MeterReading()
+
+    @property
+    def reading(self) -> MeterReading:
+        """Return the fold so far, with no reading adopted."""
+        return self._reading
+
+    def observe(self, sample: UsageSample) -> MeterReading:
+        """Adopt *sample* and return the fold it leaves behind.
+
+        Args:
+            sample: The provider's cumulative reading at this point in the
+                turn.
+
+        Returns:
+            The updated fold. Every tally is the larger of the running one
+            and the sample's, so the total is monotonic in arrival order.
+        """
+        billable = sample.billable_tokens
+        ratcheted = self._reading.ratcheted or billable < self._reading.observed_tokens
+        if billable < self._reading.observed_tokens:
+            logger.warning(
+                f"observe meter-ratchet observed={billable} "
+                f"running={self._reading.observed_tokens} ratcheted=true"
+            )
+        self._reading = MeterReading(
+            observed_tokens=max(self._reading.observed_tokens, billable),
+            output_tokens=max(self._reading.output_tokens, sample.output_tokens),
+            reasoning_output_tokens=max(
+                self._reading.reasoning_output_tokens, sample.reasoning_output_tokens
+            ),
+            sample_count=self._reading.sample_count + 1,
+            ratcheted=ratcheted,
+        )
+        return self._reading
+
+
+def meter_stream(samples: Iterable[UsageSample]) -> MeterReading:
+    """Fold *samples* in arrival order into the reading a cap is tested against.
+
+    Args:
+        samples: The turn's cumulative usage readings, oldest first. An
+            empty stream is a turn that disclosed nothing.
+
+    Returns:
+        The fold. An empty stream meters zero, which no positive cap
+        crosses.
+    """
+    meter = InFlightMeter()
+    for sample in samples:
+        meter.observe(sample)
+    return meter.reading
 
 
 class MeteredCost(BaseModel):

@@ -1,0 +1,29 @@
+{
+  "schema_version": "runtime-contract/v1",
+  "fixture_id": "scope-escape",
+  "summary": "A candidate naming a path outside the run's write set is refused before the write set is joined to any directory, so nothing on disk moves.",
+  "write_set": ["src"],
+  "calls": [
+    {
+      "idempotency_key": "scope-escape-01",
+      "tool_id": "submit_candidate",
+      "payload": {
+        "tool_id": "submit_candidate",
+        "task_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042",
+        "lease_id": "lease-0123456789abcdef",
+        "submission_ref": "artifact://candidate/scope-escape",
+        "changed_paths": ["src/module.py", "tests/unit/escape.py"],
+        "resulting_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "verdict": "refused",
+      "check": "scope",
+      "code": "SCOPE_DENIED",
+      "retry_class": "never",
+      "field_path": "/changed_paths"
+    }
+  ]
+}

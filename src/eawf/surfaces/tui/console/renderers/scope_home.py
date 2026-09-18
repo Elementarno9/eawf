@@ -25,6 +25,7 @@ from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.reads import attn_cell, reads
 from eawf.surfaces.tui.console.registry import route_of
+from eawf.surfaces.tui.console.renderers.spine import native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 ATTENTION_REGION = "attention"
@@ -81,7 +82,9 @@ def _attention(view: View, open_: list[Action], attn: bool) -> list[str]:
 
 
 def render(view: View) -> list[str]:
-    """Return the scope-home frame."""
+    """Return the scope-home frame, native when a read model is held."""
+    if view.projection is not None:
+        return native_frame(view, view.projection)
     s, fx, w = view.session, view.fixture, view.w
     proto = fx.proto
     open_ = open_actions(fx)

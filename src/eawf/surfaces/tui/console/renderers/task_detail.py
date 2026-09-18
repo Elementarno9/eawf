@@ -17,6 +17,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.renderers.spine import native_frame
 
 OWN = "EAWF-0001"
 OWN_RUN = "RUN-9e3779b1"
@@ -40,7 +41,9 @@ def _subject(view: View, tid: str) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the Task frame."""
+    """Return the Task frame, native when a read model is held."""
+    if view.projection is not None:
+        return native_frame(view, view.projection)
     s, fx, w = view.session, view.fixture, view.w
     tid = dv.subj_of(s, OWN)
     own = dv.own_body(s, OWN)

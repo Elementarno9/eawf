@@ -1,0 +1,8 @@
+{
+  "case": "head",
+  "description": "The repository the plan's one Batch integrates into moved to another head, so the exact-head proof the approval carries was taken against a tree that is no longer there.",
+  "path": ["repository", "REP-EAWF", "head_sha"],
+  "value": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "expected_code": "proof_stale",
+  "expected_guard": "base_head_bindings_pinned"
+}

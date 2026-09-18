@@ -1,0 +1,8 @@
+{
+  "case": "keys",
+  "description": "A Milestone already sits under the key the plan would mint, so applying would overwrite a record the plan never described.",
+  "path": ["milestone", "MLS-0030"],
+  "value": {"key": "MLS-0030"},
+  "expected_code": "revision_conflict",
+  "expected_guard": "plan_keys_unclaimed"
+}

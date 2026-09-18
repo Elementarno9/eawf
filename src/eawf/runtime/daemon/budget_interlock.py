@@ -38,7 +38,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from typing import Protocol
 
+from eawf.kernel.runtime.budget_notice import BudgetNotice
+from eawf.kernel.runtime.control import ControlRequestId
+from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.runtime.budget.policy import (
     BudgetAction,
     BudgetDecision,
@@ -47,6 +52,7 @@ from eawf.runtime.budget.policy import (
 )
 from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.runtimes.cancel import cancel_with_grace
+from eawf.runtime.runtimes.metering import MeterReading
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +160,163 @@ def enforce_token_cap(
     return InterlockOutcome(decision=decision, terminated=True, termination=termination)
 
 
+class BudgetTerminationLedger(Protocol):
+    """The two durable steps a budget termination is written in.
+
+    They are two calls rather than one because they record two different
+    things. :meth:`open` records what was read and what was asked, and it
+    runs while the process group is still alive. :meth:`confirm` records
+    what was observed, and it can only run once the kill ladder has
+    observed it. Collapsing them would append a confirmed effect for a
+    reap that had not happened, and a daemon lost between the two would
+    leave that lie standing.
+    """
+
+    def open(self, notice: BudgetNotice) -> bool:
+        """Append the notice and the control it opens; return whether it leads.
+
+        Returns:
+            ``True`` when the opened control took the Run's one control
+            lease, so this guard owns the reap. ``False`` when another
+            principal's control already holds it.
+        """
+        ...
+
+    def confirm(self, notice: BudgetNotice, termination: TerminationResult) -> None:
+        """Append the confirmed effect of the reap the ladder observed."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class InFlightBudgetOutcome:
+    """Outcome of one in-flight cap reading on a live Run.
+
+    Attributes:
+        decision: The verdict the reading classified to. Always present,
+            because the classification runs on every reading.
+        notice: The recorded budget notice, or ``None`` when the reading
+            stayed under the cap and nothing was written.
+        led: Whether the opened control took the Run's control lease. A
+            budget termination that lost it records its notice and signals
+            nothing: the holder's own control ends the Run.
+        terminated: ``True`` only when the kill ladder was driven.
+        termination: The ladder's result when :attr:`terminated`, else
+            ``None``.
+    """
+
+    decision: BudgetDecision
+    notice: BudgetNotice | None
+    led: bool
+    terminated: bool
+    termination: TerminationResult | None
+
+
+def guard_in_flight_budget(
+    *,
+    reading: MeterReading,
+    base_budget: int | None,
+    enforce: EnforceMode,
+    multiplier: float,
+    run_ref: RunUrn,
+    control_request_ref: ControlRequestId,
+    noticed_at: datetime,
+    pgid: int | None,
+    ledger: BudgetTerminationLedger,
+    cancel: Callable[[int], TerminationResult] = cancel_with_grace,
+) -> InFlightBudgetOutcome:
+    """Terminate a Run at its cap while its child is still running.
+
+    The shipped :func:`enforce_token_cap` classifies the burn a dispatch
+    reports once the dispatch has returned, so the group it signals has
+    already exited. This runs on a reading taken mid-turn and writes before
+    it signals: the notice and the opened control reach the run ledger
+    while the process group is alive, and the confirmed effect is appended
+    only after the ladder observed the group die.
+
+    The Run's one control lease still decides who acts. A budget
+    termination racing an operator cancel is two answers to the same
+    question, and the second one is superseded -- so the loser records its
+    notice, which blocks nothing, and sends no signal. The Run reaches the
+    same terminal status either way; only the attribution differs.
+
+    Args:
+        reading: The metered consumption so far this turn.
+        base_budget: The Run's configured token budget, or ``None`` for no
+            cap, which never terminates anything.
+        enforce: ``soft`` (warn and keep running) or ``hard`` (halt at the
+            cap). Only ``hard`` reaches a termination.
+        multiplier: Cap multiplier scaling *base_budget* into the enforced
+            cap; must be strictly positive.
+        run_ref: The Run the reading is of.
+        control_request_ref: The control request a termination opens.
+        noticed_at: When the crossing was read.
+        pgid: Process-group id of the live child, or ``None`` when none is
+            addressable -- the notice is still recorded and no signal sent.
+        ledger: The durable writer of the notice and the control facts.
+        cancel: Kill-ladder callable driven with the pgid on a reap.
+
+    Returns:
+        The outcome, carrying the decision, the recorded notice and
+        whether the ladder ran.
+
+    Raises:
+        ValueError: Propagated from
+            :func:`~eawf.runtime.budget.policy.classify_enforcement` when
+            the consumption is negative or *multiplier* is not strictly
+            positive.
+    """
+    decision = classify_enforcement(
+        reading.observed_tokens,
+        base_budget,
+        enforce=enforce,
+        multiplier=multiplier,
+    )
+    if decision.action is not BudgetAction.HALT or decision.cap is None:
+        return InFlightBudgetOutcome(
+            decision=decision, notice=None, led=False, terminated=False, termination=None
+        )
+    notice = BudgetNotice(
+        run_ref=run_ref,
+        control_request_ref=control_request_ref,
+        cap_tokens=decision.cap,
+        observed_tokens=reading.observed_tokens,
+        noticed_at=noticed_at,
+    )
+    led = ledger.open(notice)
+    if not led:
+        logger.warning(
+            f"guard_in_flight_budget run={run_ref.entity_key!r} cap={decision.cap} "
+            f"observed={reading.observed_tokens} led=false terminated=false "
+            "reason=another-control-holds-the-lease"
+        )
+        return InFlightBudgetOutcome(
+            decision=decision, notice=notice, led=False, terminated=False, termination=None
+        )
+    if pgid is None or pgid <= 0:
+        logger.warning(
+            f"guard_in_flight_budget run={run_ref.entity_key!r} cap={decision.cap} "
+            f"observed={reading.observed_tokens} pgid=none terminated=false "
+            "reason=no-addressable-process"
+        )
+        return InFlightBudgetOutcome(
+            decision=decision, notice=notice, led=True, terminated=False, termination=None
+        )
+    termination = cancel(pgid)
+    ledger.confirm(notice, termination)
+    logger.warning(
+        f"guard_in_flight_budget run={run_ref.entity_key!r} cap={decision.cap} "
+        f"observed={reading.observed_tokens} pgid={pgid} terminated=true "
+        f"sigkill={termination.sigkill_sent}"
+    )
+    return InFlightBudgetOutcome(
+        decision=decision, notice=notice, led=True, terminated=True, termination=termination
+    )
+
+
 __all__ = [
+    "BudgetTerminationLedger",
+    "InFlightBudgetOutcome",
     "InterlockOutcome",
     "enforce_token_cap",
+    "guard_in_flight_budget",
 ]

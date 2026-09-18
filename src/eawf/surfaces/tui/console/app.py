@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from rich.segment import Segment
 from rich.style import Style
@@ -20,6 +21,7 @@ from textual.events import Key, Resize
 from textual.strip import Strip
 from textual.widget import Widget
 
+from eawf.kernel.projection.spine import SPINE_ROUTES, SpineView, build_spine_view
 from eawf.surfaces.tui.console.clock import (
     Clock,
     FakeClock,
@@ -39,6 +41,11 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
+
+if TYPE_CHECKING:
+    # imported for the type alone: the seam pulls the daemon method registry in, and a
+    # console that is drawing the prototype registers has no business registering verbs
+    from eawf.surfaces.tui.console.seam import ProjectionSeam
 
 TICK_SECONDS = 0.25
 GO_DRAWER = "go"
@@ -206,6 +213,9 @@ class ConsoleApp(App[None]):
         fixture: The registers the console renders.
         clock: The console clock; a :class:`FakeClock` holds every timed behaviour.
         verbose: Whether the trace row names the handler of every key.
+        seam: The console's one link to the daemon projection. A console given one draws
+            the spine routes from the read model it holds; a console given none draws the
+            prototype registers, which is the mode the tracked golden contract replays.
     """
 
     CSS = """
@@ -213,12 +223,18 @@ class ConsoleApp(App[None]):
     """
 
     def __init__(
-        self, fixture: Fixture, clock: Clock | None = None, *, verbose: bool = False
+        self,
+        fixture: Fixture,
+        clock: Clock | None = None,
+        *,
+        verbose: bool = False,
+        seam: ProjectionSeam | None = None,
     ) -> None:
         super().__init__()
         self.fixture = fixture
         self.console_clock: Clock = clock or Clock()
         self.verbose = verbose
+        self.seam = seam
         self.session = Session()
         self.reset(None)
         self.frame_rows: list[str] = []
@@ -262,6 +278,20 @@ class ConsoleApp(App[None]):
             return SIZES[self.session.size]
         return (w, h)
 
+    def spine_view(self) -> SpineView | None:
+        """Return the read model the session's route draws from, if the seam holds one.
+
+        The seam carries one route, so a projection for another route is not this route's
+        answer and the frame falls back rather than drawing another route's rows.
+        """
+        seam = self.seam
+        if seam is None or seam.route != self.session.route:
+            return None
+        projection = seam.projection
+        if projection is None or projection.route not in SPINE_ROUTES:
+            return None
+        return build_spine_view(projection)
+
     def view(self) -> View:
         """Return the render view at the current frame size."""
         w, h = self.frame_size
@@ -272,6 +302,7 @@ class ConsoleApp(App[None]):
             h=h,
             verbose=self.verbose,
             held=self.held,
+            projection=self.spine_view(),
         )
 
     def reset(self, setup: SessionSetup | None) -> None:

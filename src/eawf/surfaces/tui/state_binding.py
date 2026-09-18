@@ -45,9 +45,11 @@ from typing import TYPE_CHECKING, Any
 import orjson
 from pydantic import ValidationError
 
+from eawf.kernel.projection.compute import KeyedPatch
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
+from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_PUSH_METHOD
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.cli._daemon_client import DaemonClient
 
@@ -67,6 +69,11 @@ DEFAULT_DAEMON_FAILURE_THRESHOLD: int = 3
 
 #: Default cadence in seconds for repeated daemon-socket reconnect probes.
 DEFAULT_DAEMON_PROBE_INTERVAL_S: float = 0.5
+
+#: The subscribe verb the epoch-1 feed rides. A binder constructed without an
+#: explicit verb sends this one, so the console's projection feed can take the
+#: same transport without moving the feed that was already on it.
+DEFAULT_SUBSCRIBE_METHOD: str = "state.subscribe"
 
 #: Minimum seconds between subscription (re)connect attempts. A stream the
 #: daemon repeatedly drops must NOT be re-subscribed at the probe cadence
@@ -90,11 +97,15 @@ class StateBindingCallbacks:
         on_event: Awaited with live daemon envelopes before the matching
             state refresh is delivered. Optional because older tests only
             care about state/degraded callbacks.
+        on_patch: Awaited with each keyed projection patch the daemon pushes.
+            Optional and ``None`` for the epoch-1 feed, which subscribes with a
+            verb that produces no patch frame at all.
     """
 
     on_state: Callable[[State], Awaitable[None]]
     on_degraded: Callable[[bool], Awaitable[None]]
     on_event: Callable[[Envelope], Awaitable[None]] | None = None
+    on_patch: Callable[[KeyedPatch], Awaitable[None]] | None = None
 
 
 def load_state(state_path: Path | None) -> State | None:
@@ -245,6 +256,7 @@ class StateBinding:
         daemon_probe_interval_s: float | None = None,
         daemon_failure_threshold: int = DEFAULT_DAEMON_FAILURE_THRESHOLD,
         daemon_client_factory: Callable[[], DaemonClient] | None = None,
+        subscribe_method: str = DEFAULT_SUBSCRIBE_METHOD,
     ) -> None:
         """Construct the binder.
 
@@ -256,9 +268,14 @@ class StateBinding:
                 ``EAWF_POLL_INTERVAL_S`` then :data:`DEFAULT_POLL_INTERVAL_S`.
             daemon_client_factory: Test seam for the JSON-RPC client. The
                 production default uses :class:`DaemonClient`.
+            subscribe_method: The verb the push stream subscribes with. The
+                default keeps the epoch-1 feed exactly where it was; the
+                console's projection seam passes the projection verb so its
+                feed rides this same socket rather than opening a second.
         """
         self._state_path = state_path
         self._callbacks = callbacks
+        self._subscribe_method = subscribe_method
         self._poll_task: asyncio.Task[None] | None = None
         self._subscribe_task: asyncio.Task[None] | None = None
         self._probe_task: asyncio.Task[None] | None = None
@@ -295,6 +312,10 @@ class StateBinding:
         # monotonic timestamp of the last connect attempt so a repeatedly-
         # dropping stream reconnects on a bounded cadence, not per probe tick.
         self._last_event_id: str | None = None
+        # The projection feed's own resume cursor. Event ids order nothing
+        # across two records, so a console resumes from the workspace-global
+        # ordinal the daemon allocated instead; 0 means nothing acknowledged.
+        self._last_canonical_sequence = 0
         self._last_subscribe_monotonic = 0.0
         reconnect_env = os.environ.get("EAWF_RECONNECT_MIN_INTERVAL_S")
         if reconnect_env is not None:
@@ -501,7 +522,7 @@ class StateBinding:
             self._run_subscription_windows(loop)
             return
         with self._client_factory() as client:
-            client.call("state.subscribe", self._subscribe_params())
+            client.call(self._subscribe_method, self._subscribe_params())
             self._consecutive_failures = 0
             asyncio.run_coroutine_threadsafe(self._on_subscription_connected(), loop)
             while not self._stopping:
@@ -541,7 +562,7 @@ class StateBinding:
             {
                 "jsonrpc": "2.0",
                 "id": "tui-subscribe",
-                "method": "state.subscribe",
+                "method": self._subscribe_method,
                 "params": self._subscribe_params(),
             }
         )
@@ -575,13 +596,23 @@ class StateBinding:
         await self._set_degraded(False)
 
     def _handle_push_line(self, loop: asyncio.AbstractEventLoop, line: bytes) -> None:
-        """Decode one ``event.push`` frame and schedule delivery."""
+        """Decode one push frame and schedule delivery for the feed it belongs to.
+
+        The two feeds share this socket and differ only in the frame the daemon
+        writes, so the method name is what selects the leg. A frame belonging to
+        neither is dropped, which is what keeps an epoch-1 binder unaffected by a
+        projection frame it did not subscribe for.
+        """
         try:
             frame = orjson.loads(line)
-            if frame.get("method") != "event.push":
-                return
+            method = frame.get("method")
             params = frame.get("params")
             if not isinstance(params, dict):
+                return
+            if method == PROJECTION_PUSH_METHOD:
+                self._handle_patch_frame(loop, params)
+                return
+            if method != "event.push":
                 return
             envelope = Envelope.model_validate(params.get("event"))
         except (orjson.JSONDecodeError, ValidationError, ValueError) as exc:
@@ -590,6 +621,55 @@ class StateBinding:
         # Advance the resume cursor so a later reconnect resumes past this event.
         self._last_event_id = envelope.id
         asyncio.run_coroutine_threadsafe(self._handle_push(envelope), loop)
+
+    def _handle_patch_frame(self, loop: asyncio.AbstractEventLoop, params: dict[str, Any]) -> None:
+        """Validate one keyed patch, advance the resume cursor and deliver it.
+
+        A malformed patch is dropped rather than raised: the stream carries every
+        subscriber's patches, so one bad frame must not end the feed. The cursor
+        does not advance over it, so a later reconnect asks from the last ordinal
+        actually applied.
+        """
+        if self._callbacks.on_patch is None:
+            return
+        try:
+            patch = KeyedPatch.model_validate(params.get("patch"))
+        except (ValidationError, ValueError) as exc:
+            logger.debug(f"_handle_patch_frame skip cause={exc!r}")
+            return
+        self._last_canonical_sequence = max(self._last_canonical_sequence, patch.canonical_sequence)
+        asyncio.run_coroutine_threadsafe(self._deliver_patch(patch), loop)
+
+    async def _deliver_patch(self, patch: KeyedPatch) -> None:
+        """Hand one keyed patch to the projection callback, if one is registered."""
+        if self._callbacks.on_patch is not None:
+            await self._callbacks.on_patch(patch)
+
+    @property
+    def resume_cursor(self) -> int:
+        """Return the ordinal the projection feed last acknowledged; ``0`` when none."""
+        return self._last_canonical_sequence
+
+    async def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Run one request/response RPC over this binder's daemon transport.
+
+        The seam calls the daemon through the binder rather than holding a client
+        of its own, so the console keeps one transport to open, authorise, probe
+        and reconnect. The call is blocking, so it runs off the event loop.
+
+        Args:
+            method: The dotted JSON-RPC method name.
+            params: The request parameters.
+
+        Returns:
+            The result mapping the daemon answered with.
+        """
+
+        def _blocking_call() -> dict[str, Any]:
+            with self._client_factory() as client:
+                return client.call(method, params)
+
+        return await asyncio.to_thread(_blocking_call)
 
     async def _handle_push(self, envelope: Envelope) -> None:
         """Forward live event envelope and refresh bound state from disk."""
@@ -676,6 +756,7 @@ class StateBinding:
 
 __all__ = [
     "DEFAULT_POLL_INTERVAL_S",
+    "DEFAULT_SUBSCRIBE_METHOD",
     "StateBinding",
     "StateBindingCallbacks",
     "is_state_schema_stale",

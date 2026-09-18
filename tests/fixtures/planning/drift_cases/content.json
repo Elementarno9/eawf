@@ -1,0 +1,8 @@
+{
+  "case": "content",
+  "description": "The stored plan body was edited after approval, so the digest the operator approved is no longer the digest the body has and the receipt authorises content nobody filed.",
+  "path": ["plan_revision", "PRV-0001", "body", "milestone", "title"],
+  "value": "Publish an installable wheel and a tarball",
+  "expected_code": "protected_approval_required",
+  "expected_guard": "content_digest_bound"
+}

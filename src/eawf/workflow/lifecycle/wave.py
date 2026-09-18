@@ -13,8 +13,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 from eawf.kernel.config.schema import EuBasis, VerifyWaiverMode
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
@@ -44,6 +42,7 @@ from eawf.workflow.lifecycle._claim_guards import (
     validate_claim_criteria,
     validate_claim_parent,
 )
+from eawf.workflow.lifecycle._claim_session import capture_claim_baseline
 from eawf.workflow.lifecycle._claim_session import validate_claim_session as validate_claim_session
 from eawf.workflow.lifecycle._errors import (
     LifecycleError,
@@ -66,9 +65,6 @@ from eawf.workflow.lifecycle.spec import (
     validate_transition,
 )
 
-if TYPE_CHECKING:
-    from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
-
 logger = logging.getLogger(__name__)
 
 #: Every per-class token counter a runtime snapshot carries.
@@ -88,76 +84,6 @@ _WORK_TOKEN_FIELDS: tuple[str, ...] = (
     "output_tokens",
     "cache_creation_input_tokens",
 )
-
-
-def _claim_session_counters(runtime_session_id: str) -> RuntimeCounters | None:
-    """Return a vendor runtime session's cumulative counters, when readable.
-
-    The transcript is the primary source. The statusline runtime-counter
-    sidecar stays a fallback for an operator whose statusline is
-    ``eawf statusline`` but whose transcript does not resolve. Callers must
-    supply a vendor runtime session id explicitly; an EAWF
-    :class:`AgentSession` id never enters this lookup.
-
-    Args:
-        runtime_session_id: Vendor session id used to resolve both the runtime
-            transcript and its session-keyed statusline cache.
-
-    Returns:
-        The session's cumulative :class:`RuntimeCounters`, or ``None`` when
-        neither the transcript nor the sidecar yields any.
-    """
-    from eawf.runtime.runtime_counter_sidecar import (
-        RuntimeCounterSidecar,
-        sidecar_path_for_statusline_cache,
-    )
-    from eawf.runtime.runtimes.claude.statusline import cache_path_for
-    from eawf.runtime.runtimes.claude.transcript_counters import (
-        aggregate_transcript_counters,
-        transcript_path_for_session,
-    )
-
-    transcript = transcript_path_for_session(runtime_session_id, cwd=Path.cwd())
-    counters = aggregate_transcript_counters(transcript)
-    if counters is not None:
-        return counters
-    sidecar = RuntimeCounterSidecar(
-        sidecar_path_for_statusline_cache(cache_path_for(runtime_session_id))
-    )
-    return sidecar.read()
-
-
-def _capture_runtime_baseline(runtime_session_id: str) -> RuntimeBaseline | None:
-    """Return a claim-time snapshot for an explicit vendor runtime session.
-
-    Converts the session's cumulative counters (see
-    :func:`_claim_session_counters`) into a baseline stamped at claim time.
-    Returns ``None`` when the session exposes no counters at all -- neither a
-    readable transcript nor a statusline sidecar -- so the close-time delta
-    degrades to "no captured runtime" rather than subtracting against a phantom
-    zero baseline.
-
-    Args:
-        runtime_session_id: Vendor runtime session id whose counters the
-            baseline snapshots. This is never an EAWF ``AgentSession.id``.
-    """
-    counters = _claim_session_counters(runtime_session_id)
-    if counters is None:
-        return None
-    return RuntimeBaseline(
-        api_duration_ms=counters.api_duration_ms,
-        total_duration_ms=counters.total_duration_ms,
-        cost_usd=float(counters.cost_usd) if counters.cost_usd is not None else None,
-        input_tokens=counters.input_tokens,
-        output_tokens=counters.output_tokens,
-        cache_creation_input_tokens=counters.cache_creation_input_tokens,
-        cache_read_input_tokens=counters.cache_read_input_tokens,
-        harness=counters.harness,
-        model=counters.model,
-        session_id=runtime_session_id,
-        measure_version=counters.measure_version,
-        captured_at=datetime.now(UTC),
-    )
 
 
 @dataclass(frozen=True)
@@ -1044,14 +970,15 @@ def claim_wave(
     # a re-entry never re-bases the clock to a later wall-clock.
     if wave.claimed_at is None:
         wave.claimed_at = datetime.now(UTC)
-    # No claim-time vendor-counter capture. ``session_id`` names an EAWF
-    # AgentSession, NOT a Claude / Codex / OpenCode session, so resolving a
-    # transcript or statusline sidecar by it read a foreign namespace and
-    # stamped whatever happened to collide as this wave's origin. Until the
-    # v0.7 schema adds ``runtime_session_id`` there is no honest mapping, and
-    # absence is honest: the live-spawn path stamps a matched
-    # baseline/latest pair of its own, and the interactive capture path
-    # re-origins a missing baseline on its first capture.
+    # Claim-time vendor-counter capture, anchored on the session's DISCLOSED
+    # runtime session id rather than its EAWF id -- the two live in different
+    # namespaces and resolving a transcript by the EAWF id stamped whatever
+    # happened to collide as this wave's origin. A session disclosing none
+    # captures nothing, which is honest: the live-spawn path stamps a matched
+    # baseline/latest pair of its own and the interactive capture path
+    # re-origins a missing baseline on its first capture. The binding above
+    # runs first so this wave counts among the sharers of its own session.
+    wave.runtime_baseline = capture_claim_baseline(state, session)
     # Rebuild the advisory pointer from authoritative statuses on every
     # successful claim. This both records the new claimant and repairs stale
     # pointer rows without letting a stale pointer weaken the repo-wide cap.

@@ -1,0 +1,47 @@
+{
+  "schema_version": "runtime-contract/v1",
+  "fixture_id": "duplicate-call",
+  "summary": "One idempotency key answers one request: an identical replay returns the original receipt with no second effect, and the same key carrying another payload is refused.",
+  "write_set": ["src"],
+  "calls": [
+    {
+      "idempotency_key": "duplicate-call-01",
+      "tool_id": "budget_status",
+      "payload": {
+        "tool_id": "budget_status",
+        "include_children": false
+      }
+    },
+    {
+      "idempotency_key": "duplicate-call-01",
+      "tool_id": "budget_status",
+      "payload": {
+        "tool_id": "budget_status",
+        "include_children": false
+      }
+    },
+    {
+      "idempotency_key": "duplicate-call-01",
+      "tool_id": "budget_status",
+      "payload": {
+        "tool_id": "budget_status",
+        "include_children": true
+      }
+    }
+  ],
+  "expected": [
+    {
+      "verdict": "served"
+    },
+    {
+      "verdict": "replayed"
+    },
+    {
+      "verdict": "refused",
+      "check": "idempotency",
+      "code": "IDEMPOTENCY_PAYLOAD_MISMATCH",
+      "retry_class": "after_input_change",
+      "field_path": "/payload_digest"
+    }
+  ]
+}

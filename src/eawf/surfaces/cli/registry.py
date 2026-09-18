@@ -96,6 +96,12 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("phase", "eawf.surfaces.cli.commands.lifecycle", "phase_app"),
     GroupRow("iter", "eawf.surfaces.cli.commands.lifecycle", "iter_app"),
     GroupRow("wave", "eawf.surfaces.cli.commands.lifecycle", "wave_app"),
+    # Native epoch-2 lifecycle nouns (milestone / batch / task). Their
+    # verbs are attached by the ``domain`` sibling that
+    # ``commands.lifecycle`` imports, so mounting the apps is enough.
+    GroupRow("milestone", "eawf.surfaces.cli.commands.lifecycle", "milestone_app"),
+    GroupRow("batch", "eawf.surfaces.cli.commands.lifecycle", "batch_app"),
+    GroupRow("task", "eawf.surfaces.cli.commands.lifecycle", "task_app"),
     GroupRow("close", "eawf.surfaces.cli.commands.close", "close_app"),
     # Evidence nouns.
     GroupRow("goal", "eawf.surfaces.cli.commands.evidence", "goal_app"),

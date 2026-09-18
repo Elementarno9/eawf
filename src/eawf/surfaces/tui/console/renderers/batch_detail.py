@@ -8,6 +8,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.renderers.spine import native_frame
 
 OWN = "BAT-0001"
 
@@ -25,7 +26,9 @@ def _task_rows(view: View, bid: str) -> list[tuple[str, str, str]]:
 
 
 def render(view: View) -> list[str]:
-    """Return the Batch frame."""
+    """Return the Batch frame, native when a read model is held."""
+    if view.projection is not None:
+        return native_frame(view, view.projection)
     s, fx, w = view.session, view.fixture, view.w
     bid = dv.subj_of(s, OWN)
     tasks = _task_rows(view, bid)

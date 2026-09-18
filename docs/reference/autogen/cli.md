@@ -99,6 +99,15 @@ Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when pres
 | `prune` | Keep the N most-recent snapshots; delete older ones. |
 | `restore` | Restore ``state.json`` + ``config.yaml`` + optional legacy ``profile.yaml`` from *ts*. |
 
+### `eawf batch`
+
+Delivery-batch lifecycle (activate, ready).
+
+| Verb | Summary |
+|---|---|
+| `activate` | Move a PLANNED delivery Batch to ACTIVE. |
+| `ready` | Declare an ACTIVE Batch ready to merge. |
+
 ### `eawf bench`
 
 Perf bench harness — seed corpora, time harnesses, flag regressions.
@@ -386,6 +395,17 @@ Migrate state.json across schema versions (v1.0 -> v1.1 chain).
 |---|---|
 | `status` | Show the current ``schema_version`` and available migration edges. |
 
+### `eawf milestone`
+
+Milestone lifecycle (activate, open-review, accept, cancel).
+
+| Verb | Summary |
+|---|---|
+| `accept` | Accept a Milestone in review against a sealed approval receipt. |
+| `activate` | Move a PLANNED Milestone to ACTIVE under an active Track. |
+| `cancel` | Cancel a Milestone that has not completed. |
+| `open-review` | Open acceptance review on an ACTIVE Milestone. |
+
 ### `eawf operator`
 
 Operator report rollups.
@@ -596,6 +616,15 @@ JSONL store maintenance (compact, ...).
 |---|---|
 | `compact` | Compact the JSONL store for *kind* and emit the dedup report. |
 
+### `eawf task`
+
+Task lifecycle (promote, start).
+
+| Verb | Summary |
+|---|---|
+| `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
+| `start` | Start a CLAIMED Task under the Run the payload binds it to. |
+
 ### `eawf telemetry`
 
 Telemetry / observability subsystem — pricing currency, projection.
@@ -611,6 +640,7 @@ Track lifecycle (add, switch).
 | Verb | Summary |
 |---|---|
 | `add` | Add a track under the active project. |
+| `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
 | `switch` | Set the active track pointer. |
 | `sync` | Recompute a Track's measured outcome statuses from their samples. |
 

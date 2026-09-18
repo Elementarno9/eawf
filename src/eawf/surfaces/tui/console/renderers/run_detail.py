@@ -9,6 +9,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.renderers.spine import native_frame
 from eawf.surfaces.tui.console.width import cell_len
 
 OWN = "RUN-9e3779b1"
@@ -50,11 +51,13 @@ def _facts(view: View, rid: str) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the Run frame.
+    """Return the Run frame, native when a read model is held.
 
     Raises:
         ValueError: an event's detail is wider than its column.
     """
+    if view.projection is not None:
+        return native_frame(view, view.projection)
     s, fx, w = view.session, view.fixture, view.w
     proto = fx.proto
     dv.sel_in(s, len(proto.timeline))
