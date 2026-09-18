@@ -35,9 +35,12 @@ from eawf.runtime.daemon.methods.domain import DOMAIN_LIFECYCLE_METHODS
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
 from eawf.runtime.daemon.wal import list_records
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    APPROVAL_URN,
     BATCH_URN,
     MILESTONE_URN,
     TASK_URN,
+    acceptance_bundle_row,
+    approval_rows,
     document_path,
     firehose_path,
     method_context,
@@ -51,7 +54,6 @@ ACTOR = "OP-0001"
 KEY = "req-lifecycle-0001"
 TRACK_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME"
 RUN_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010"
-APPROVAL_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/pending-action/ACT-0001"
 BRANCH = "feature/eawf-v0.7"
 
 _BINDING = seed_row("milestone", "COMPLETED")["accepted_binding"]
@@ -130,11 +132,15 @@ COMMITTED_CASES: tuple[Case, ...] = (
     ),
     Case(
         method="domain.milestone.accept",
-        rows={"milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")}},
+        rows={
+            "milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")},
+            **approval_rows(),
+        },
         urn=MILESTONE_URN,
         params={
             "updates": {"accepted_binding": _BINDING},
             "approval_receipt_ref": APPROVAL_URN,
+            "acceptance_bundle": acceptance_bundle_row(),
         },
         event_name="domain.milestone.completed",
     ),

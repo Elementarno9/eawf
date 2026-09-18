@@ -38,6 +38,7 @@ from pydantic import (
 )
 
 from eawf.kernel.runtime.compiled import BoundedText, JsonPointer, canonical_digest
+from eawf.kernel.runtime.lease import LeaseId, WorkspaceHandle
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
     CommandFamilyId,
@@ -88,9 +89,6 @@ ReceiptId = Annotated[str, _grammar(r"^receipt-[0-9a-f]{16}$", max_length=24)]
 #: The key the gateway replays a call by. Same key and same payload digest
 #: return the original receipt; same key and another digest is refused.
 IdempotencyKey = Annotated[str, _grammar(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", max_length=128)]
-#: An opaque workspace or repository handle. A raw path is refused here
-#: because the worker is never told where its workspace lives on the host.
-ResourceHandle = Annotated[str, _grammar(r"^handle-[0-9a-f]{16,64}$", max_length=71)]
 OptionId = Annotated[str, _grammar(r"^[a-z][a-z0-9_-]{0,31}$", max_length=32)]
 CriterionId = Annotated[str, _grammar(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", max_length=64)]
 FindingCode = Annotated[str, _grammar(r"^[a-z][a-z0-9_]{0,63}$", max_length=64)]
@@ -98,7 +96,6 @@ ProjectionSelector = Annotated[
     str, _grammar(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*){0,3}$", max_length=128)
 ]
 FieldName = Annotated[str, _grammar(r"^[a-z][a-z0-9_]{0,63}$", max_length=64)]
-LeaseId = Annotated[str, _grammar(r"^lease-[0-9a-f]{16}$", max_length=22)]
 RepoRelativePath = Annotated[
     str,
     StringConstraints(strict=True, min_length=1, max_length=500, pattern=r"^[^/\\][^\\]*$"),
@@ -316,7 +313,7 @@ class RepoReadInput(SemanticToolInputBase):
     """Read a bounded byte range of one repository-relative file."""
 
     tool_id: Literal["repo_read"]
-    resource_handle: ResourceHandle
+    resource_handle: WorkspaceHandle
     path: RepoRelativePath
     start_byte: Annotated[StrictInt, Field(ge=0)] = 0
     byte_cap: Annotated[StrictInt, Field(ge=1, le=1_048_576)] = 65_536
@@ -326,7 +323,7 @@ class RepoSearchInput(SemanticToolInputBase):
     """Search the read set for a bounded number of matches."""
 
     tool_id: Literal["repo_search"]
-    resource_handle: ResourceHandle
+    resource_handle: WorkspaceHandle
     query: BoundedText
     path_prefix: RepoRelativePath | None = None
     result_cap: Annotated[StrictInt, Field(ge=1, le=1000)] = 100
@@ -336,7 +333,7 @@ class DiffReadInput(SemanticToolInputBase):
     """Read the diff of the Run's read set against its base tree."""
 
     tool_id: Literal["diff_read"]
-    resource_handle: ResourceHandle
+    resource_handle: WorkspaceHandle
     path: RepoRelativePath | None = None
     byte_cap: Annotated[StrictInt, Field(ge=1, le=1_048_576)] = 262_144
 
@@ -360,7 +357,7 @@ class RunScopedCommandInput(SemanticToolInputBase):
 
     tool_id: Literal["run_scoped_command"]
     command_family_id: CommandFamilyId
-    cwd_handle: ResourceHandle
+    cwd_handle: WorkspaceHandle
     argv: Annotated[tuple[CommandArgument, ...], Field(min_length=1, max_length=64)]
     timeout_seconds: Annotated[StrictInt, Field(ge=1, le=3600)]
     expected_evidence_kind: EvidenceSourceKind

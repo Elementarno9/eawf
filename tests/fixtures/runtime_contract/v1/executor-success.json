@@ -1,0 +1,79 @@
+{
+  "schema_version": "runtime-delivery/v1",
+  "fixture_id": "executor-success",
+  "summary": "An executor that finished its work files one immutable submission whose report binding reads pending, and the daemon seals a bundle for it only once the terminal report is accepted and all six seal checks hold. Each unsealing case names one durable fact the checks read, so a check wired to the wrong record changes the answer here rather than passing quietly.",
+  "write_set": ["src"],
+  "submission": {
+    "submission_ref": "artifact://candidate/executor-success",
+    "changed_paths": ["src/module.py"],
+    "resulting_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "report": {
+    "report_schema_ref": "schema://executor-report/v1",
+    "report_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "verdict": "pass",
+    "resulting_tree_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "seal_checks": [
+    "report_bound",
+    "tree_digest_agrees",
+    "verdict_admits_delivery",
+    "paths_within_write_set",
+    "workspace_generation_current",
+    "base_commit_agrees"
+  ],
+  "expected": {
+    "report_binding": "pending",
+    "sealed": true,
+    "failed_checks": []
+  },
+  "unsealing": [
+    {
+      "case_id": "no-report-accepted",
+      "summary": "Nothing has been accepted about the work, so the three checks that read the binding all fail and the submission stands unsealed.",
+      "mutation": "omit_report",
+      "reachable_through_verbs": true,
+      "failed_checks": ["report_bound", "tree_digest_agrees", "verdict_admits_delivery"]
+    },
+    {
+      "case_id": "report-about-another-tree",
+      "summary": "The accepted report describes a tree the submission does not propose, so the acceptance is evidence about something else.",
+      "mutation": "report_resulting_tree_digest",
+      "value": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "reachable_through_verbs": true,
+      "failed_checks": ["tree_digest_agrees"]
+    },
+    {
+      "case_id": "verdict-refuses-delivery",
+      "summary": "The Run reported that its work is not ready, and sealing it would make the report's own conclusion unreadable downstream.",
+      "mutation": "verdict",
+      "value": "blocked",
+      "reachable_through_verbs": true,
+      "failed_checks": ["verdict_admits_delivery"]
+    },
+    {
+      "case_id": "path-outside-the-write-set",
+      "summary": "The claim names a path the lease never made writable, so the work reaches outside the scope the Run was dispatched under.",
+      "mutation": "changed_paths",
+      "value": ["src/module.py", "docs/note.md"],
+      "reachable_through_verbs": true,
+      "failed_checks": ["paths_within_write_set"]
+    },
+    {
+      "case_id": "workspace-rematerialized",
+      "summary": "The workspace was rematerialized after the claim, so the tree being proposed came from a generation the lease no longer points at.",
+      "mutation": "lease_workspace_generation",
+      "value": 2,
+      "reachable_through_verbs": false,
+      "failed_checks": ["workspace_generation_current"]
+    },
+    {
+      "case_id": "another-base-commit",
+      "summary": "The lease names a different base commit than the claim started from, so what the work would be applied to is not what it was written against.",
+      "mutation": "lease_base_commit",
+      "value": "1111111111111111111111111111111111111111",
+      "reachable_through_verbs": false,
+      "failed_checks": ["base_commit_agrees"]
+    }
+  ]
+}

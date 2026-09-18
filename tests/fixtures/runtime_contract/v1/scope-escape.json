@@ -10,7 +10,7 @@
       "payload": {
         "tool_id": "submit_candidate",
         "task_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042",
-        "lease_id": "lease-0123456789abcdef",
+        "lease_id": "LSE-0123456789abcdef0123456789abcdef",
         "submission_ref": "artifact://candidate/scope-escape",
         "changed_paths": ["src/module.py", "tests/unit/escape.py"],
         "resulting_tree_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"

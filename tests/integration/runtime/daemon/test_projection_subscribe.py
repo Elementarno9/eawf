@@ -63,9 +63,19 @@ FRAME_TIMEOUT_SECONDS = 10.0
 #: Milestone keys the canary is seeded with, one per commit the run makes.
 KEYS = ("MLS-0030", "MLS-0031", "MLS-0032")
 
-#: The read models a Milestone move patches: the roadmap renders milestones, and
-#: so does the scope home, so one commit fans out to both.
-MILESTONE_READ_MODELS = (ReadModelKind.ROADMAP_VIEW, ReadModelKind.SCOPE_HOME_VIEW)
+#: The read models a Milestone move patches. The roadmap renders milestones, so do the
+#: scope home, the Milestone's own acceptance bundle and the readiness of a candidate
+#: that carries it; the history page, the history diff and the search page read across
+#: the whole corpus, so one commit fans out to all seven.
+MILESTONE_READ_MODELS = (
+    ReadModelKind.ACCEPTANCE_BUNDLE_VIEW,
+    ReadModelKind.HISTORY_DIFF_VIEW,
+    ReadModelKind.HISTORY_PAGE,
+    ReadModelKind.RELEASE_READINESS_VIEW,
+    ReadModelKind.ROADMAP_VIEW,
+    ReadModelKind.SCOPE_HOME_VIEW,
+    ReadModelKind.SEARCH_PAGE,
+)
 
 #: The system temp dir, captured before the canary fixture redirects
 #: ``tempfile.tempdir`` at a deep per-test path. An AF_UNIX node has about 104
@@ -199,7 +209,7 @@ def test_subscribe_streams_patches_in_contiguous_canonical_sequence_order(
 def test_one_commit_patches_every_read_model_that_renders_its_collection(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:
-    """A Milestone move reaches the roadmap and the scope home at one ordinal."""
+    """A Milestone move reaches every read model that renders it, at one ordinal."""
     ctx = method_context(tmp_path / "runtime")
     ctx.bus = EventBus()
 
@@ -311,8 +321,16 @@ def test_patches_for_event_builds_one_entry_at_the_events_ordinal() -> None:
     assert len(patches) == len(MILESTONE_READ_MODELS)
     assert all(isinstance(patch, KeyedPatch) for patch in patches)
     assert {patch.canonical_sequence for patch in patches} == {7}
-    assert [len(patch.entries) for patch in patches] == [1, 1]
-    assert {route for patch in patches for route in patch.routes} == {"roadmap", "scope.home"}
+    assert [len(patch.entries) for patch in patches] == [1] * len(MILESTONE_READ_MODELS)
+    assert {route for patch in patches for route in patch.routes} == {
+        "history",
+        "history.diff",
+        "milestone",
+        "release",
+        "roadmap",
+        "scope.home",
+        "search",
+    }
 
 
 @pytest.mark.parametrize(

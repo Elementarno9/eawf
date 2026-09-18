@@ -151,12 +151,12 @@ def test_error_envelope_accepts_real_fields() -> None:
     assert env.data["kind"] == "LockConflict"
 
 
-# --- assertion 5: 17-skill registry after bootstrap ------------------
+# --- assertion 5: full skill registry after bootstrap ----------------
 
 
-def test_skill_registry_holds_seventeen_after_bootstrap() -> None:
+def test_skill_registry_holds_every_canonical_skill_after_bootstrap() -> None:
     registered = registry.list_registered()
-    assert len(registered) == 17
+    assert len(registered) == len(CANONICAL_SKILL_NAMES)
 
 
 # --- assertion 5b: user-facing catalog == runtime registry -----------
@@ -168,14 +168,14 @@ def test_user_facing_catalog_matches_runtime_registry() -> None:
     The six C04b skills were registered in the runtime registry but
     absent from the user-facing catalog (``eawf skill list`` read
     ``CANONICAL_SKILL_NAMES``, frozen at 11). W26 extended the catalog to
-    17 so both surfaces agree. The names — not just the counts — must
-    match so a skill registered without a catalog row (or vice versa) is
-    caught here.
+    17 so both surfaces agree, and the three lifecycle skills took it to
+    20. The names — not just the counts — must match so a skill
+    registered without a catalog row (or vice versa) is caught here.
     """
     catalog = set(CANONICAL_SKILL_NAMES)
     registered = set(registry.list_registered())
-    assert len(catalog) == 17
-    assert len(registered) == 17
+    assert len(catalog) == len(CANONICAL_SKILL_NAMES)
+    assert len(registered) == len(CANONICAL_SKILL_NAMES)
     assert catalog == registered, (
         "catalog/registry drift: "
         f"catalog-only={sorted(catalog - registered)} "

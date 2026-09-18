@@ -25,6 +25,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
 
@@ -197,7 +198,10 @@ def _section_rows(view: View, section: Section, rows: Sequence[Any], summary: st
 
 
 def render(view: View) -> list[str]:
-    """Return the Campaign frame."""
+    """Return the Campaign frame, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, fx, w = view.session, view.fixture, view.w
     x, wide = w >= 160, w >= 120
     dv.sel_in(s, len(section_list(s, fx)))

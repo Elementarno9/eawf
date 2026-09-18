@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "hit"),
@@ -23,7 +24,10 @@ _HITS: tuple[list[str], ...] = (
 
 
 def render(view: View) -> list[str]:
-    """Return the Search frame."""
+    """Return the Search frame, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, w = view.session, view.w
     grid = Grid([18, 18, 0])
     dv.sel_in(s, len(_HITS))

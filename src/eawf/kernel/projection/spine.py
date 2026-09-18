@@ -1,11 +1,14 @@
-"""The spine read models: the rows and the derived counts each spine route renders.
+"""The native read models: the rows and the derived counts each native route renders.
 
 :mod:`~eawf.kernel.projection.compute` answers a route at a cursor; it does not say what
-any one route draws with the answer. This module does, for the five projection-backed
-spine routes, and it is deliberately the only place a spine field is declared.
+any one route draws with the answer. This module does, for every projection-backed route
+the console draws natively, and it is deliberately the only place such a field is
+declared. The routes come in three groups -- the spine, the planning routes and the
+diagnostics routes -- and they share one row shape, one view and one frame, because they
+draw the same thing: rows the daemon projected at one committed cursor.
 
 Two rules shape it. A field is rendered from the read model or it is not rendered at all:
-a spine field whose producer has not shipped is declared with ``produced=False`` and comes
+a declared field whose producer has not shipped is declared with ``produced=False`` and comes
 back as a :class:`~eawf.kernel.projection.truth.TruthField` in the ``unknown`` state naming
 why, never as a blank a console would draw as an empty cell. And a count is derived here
 from the rows the projection carries, per collection the route binds, so a count is either
@@ -51,9 +54,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 logger = logging.getLogger(__name__)
 
 
-#: The console routes this module states a read model for. Every one is bound by
-#: :data:`~eawf.kernel.projection.compute.ROUTE_COLLECTIONS`, so every one is served by
-#: ``projection.<route>.read`` and by ``projection.<route>.reconnect``.
+#: The spine routes: the workspace's own records, opened on and drilled through.
 SPINE_ROUTES: Final[tuple[str, ...]] = (
     "scope.home",
     "track",
@@ -62,11 +63,36 @@ SPINE_ROUTES: Final[tuple[str, ...]] = (
     "run.detail",
 )
 
-#: The route the spine opens on before a session exists. It carries no projection, so it
+#: The planning routes: what is proposed, queued or being researched. Their columns are
+#: Campaign, Decision and plan-lens fields, whose producers are dev4 items, so the rows
+#: state the stored status and every planned column comes back unknown.
+PLANNING_ROUTES: Final[tuple[str, ...]] = (
+    "roadmap",
+    "backlog",
+    "campaign",
+    "campaign.step",
+    "campaign.artifact",
+)
+
+#: The diagnostics routes: what changed and where a record is. They read across the
+#: corpus :data:`~eawf.kernel.projection.compute.DIAGNOSTICS_CORPUS` names rather than a
+#: register of their own, because a history entry is about a record another route renders.
+DIAGNOSTICS_ROUTES: Final[tuple[str, ...]] = ("history", "history.diff", "search")
+
+#: Every console route this module states a read model for. Each one is bound by
+#: :data:`~eawf.kernel.projection.compute.ROUTE_COLLECTIONS`, so each one is served by
+#: ``projection.<route>.read`` and by ``projection.<route>.reconnect``.
+NATIVE_ROUTES: Final[tuple[str, ...]] = (
+    *SPINE_ROUTES,
+    *PLANNING_ROUTES,
+    *DIAGNOSTICS_ROUTES,
+)
+
+#: The route the console opens on before a session exists. It carries no projection, so it
 #: is named here to be excluded rather than left to look like an oversight.
 ENTRY_ROUTE: Final = "entry"
 
-#: The field every spine row states from the document, and the only one that does.
+#: The field every native row states from the document, and the only one that does.
 STATUS_FIELD: Final = "status"
 
 #: Why a declared field comes back unknown. The console prints the truth token beside it;
@@ -76,7 +102,7 @@ UNPRODUCED_REASON: Final = "no epoch-2 producer states this field yet"
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SpineFieldSpec:
-    """One field a spine route renders per row.
+    """One field a native route renders per row.
 
     Attributes:
         name: The field's console name, which is also its key in a row's fields.
@@ -97,35 +123,49 @@ def _fields(*names: str) -> tuple[SpineFieldSpec, ...]:
     )
 
 
-#: What each spine route renders per row, in column order. The first field of every route
-#: is the status the document states; the rest are the design's columns whose producers
-#: are dev4 items, declared so the console draws the unknown token in their place.
-SPINE_FIELDS: Final[Mapping[str, tuple[SpineFieldSpec, ...]]] = MappingProxyType(
+#: What each native route renders per row, in column order. The first field of every
+#: route is the status the document states; the rest are the design's columns whose
+#: producers are dev4 items, declared so the console draws the unknown token in their
+#: place. A column the row itself carries -- its key, its collection, its revision -- is
+#: not declared here, because it is stated rather than missing.
+ROUTE_FIELDS: Final[Mapping[str, tuple[SpineFieldSpec, ...]]] = MappingProxyType(
     {
         "scope.home": _fields("runs", "attention", "progress"),
         "track": _fields("batches", "due"),
         "batch.detail": _fields("checks", "runs"),
         "task.detail": _fields("criteria", "candidates"),
         "run.detail": _fields("provider", "elapsed", "cost"),
+        "roadmap": _fields("lane", "date", "forecast"),
+        "backlog": _fields("group", "due", "reason"),
+        "campaign": _fields("plan", "evidence", "artifacts"),
+        "campaign.step": _fields("round", "activity", "products"),
+        "campaign.artifact": _fields("kind", "size", "digest"),
+        "history": _fields("change", "source", "when"),
+        "history.diff": _fields("before", "after", "source"),
+        "search": _fields("query", "matched", "where"),
     }
 )
 
 
 def _check_declarations() -> None:
-    """Refuse a spine table the console could not render.
+    """Refuse a route table the console could not render.
 
     Raises:
-        ValueError: A spine route binds no collection, so no projection serves it; a
-            spine route declares no fields; a field table does not lead with the stored
-            status; or a table names one field twice. Raised at import, because a spine
-            route that cannot be rendered is a startup failure rather than a frame that
-            draws the wrong thing.
+        ValueError: A native route binds no collection, so no projection serves it; a
+            native route declares no fields; a field table does not lead with the stored
+            status; a table names one field twice; or one route is declared twice across
+            the three groups. Raised at import, because a route that cannot be rendered
+            is a startup failure rather than a frame that draws the wrong thing.
     """
-    defects: list[str] = []
-    for route in SPINE_ROUTES:
+    defects: list[str] = [
+        f"route {route!r} is declared in two route groups"
+        for route in sorted(set(NATIVE_ROUTES))
+        if NATIVE_ROUTES.count(route) > 1
+    ]
+    for route in NATIVE_ROUTES:
         if route not in ROUTE_COLLECTIONS:
             defects.append(f"route {route!r} binds no collection, so no projection serves it")
-        specs = SPINE_FIELDS.get(route, ())
+        specs = ROUTE_FIELDS.get(route, ())
         if not specs:
             defects.append(f"route {route!r} declares no field to render")
             continue
@@ -137,12 +177,12 @@ def _check_declarations() -> None:
             for name in sorted(set(names))
             if names.count(name) > 1
         ]
-    extra = sorted(set(SPINE_FIELDS) - set(SPINE_ROUTES))
-    defects += [f"route {route!r} declares fields but is not a spine route" for route in extra]
-    if ENTRY_ROUTE in SPINE_FIELDS:
+    extra = sorted(set(ROUTE_FIELDS) - set(NATIVE_ROUTES))
+    defects += [f"route {route!r} declares fields but is not a native route" for route in extra]
+    if ENTRY_ROUTE in ROUTE_FIELDS:
         defects.append(f"route {ENTRY_ROUTE!r} carries no projection, so it states no fields")
     if defects:
-        raise ValueError(f"spine declarations are invalid: {'; '.join(defects)}")
+        raise ValueError(f"native route declarations are invalid: {'; '.join(defects)}")
 
 
 _check_declarations()
@@ -150,7 +190,7 @@ _check_declarations()
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SpineRow:
-    """One record a spine route renders, with every declared field stated.
+    """One record a native route renders, with every declared field stated.
 
     Attributes:
         key: The record's public key, which is also the stable id a selection restores by.
@@ -177,7 +217,7 @@ class SpineRow:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SpineView:
-    """One spine route's read model, as the console draws it.
+    """One native route's read model, as the console draws it.
 
     Attributes:
         route: The console route key the rows were gathered for.
@@ -223,11 +263,11 @@ class SpineView:
 
     def field_names(self) -> tuple[str, ...]:
         """Return the fields this route renders, in column order."""
-        return tuple(spec.name for spec in SPINE_FIELDS[self.route])
+        return tuple(spec.name for spec in ROUTE_FIELDS[self.route])
 
     def unproduced(self) -> tuple[str, ...]:
         """Return the declared fields no epoch-2 producer states yet, in column order."""
-        return tuple(spec.name for spec in SPINE_FIELDS[self.route] if not spec.produced)
+        return tuple(spec.name for spec in ROUTE_FIELDS[self.route] if not spec.produced)
 
 
 def _unknown_field(*, urn: str, revision: int) -> TruthField[str]:
@@ -247,7 +287,7 @@ def _unknown_field(*, urn: str, revision: int) -> TruthField[str]:
 
 
 def build_spine_view(projection: RouteProjection) -> SpineView:
-    """Return the read model a spine route draws from one served projection.
+    """Return the read model a native route draws from one served projection.
 
     Args:
         projection: The route projection the daemon answered, already validated.
@@ -259,17 +299,17 @@ def build_spine_view(projection: RouteProjection) -> SpineView:
 
     Raises:
         ValueError: The projection is for a route this module states no read model for.
-            A spine frame drawn from another route's rows would be showing one route's
+            A native frame drawn from another route's rows would be showing one route's
             records under another's columns.
     """
     route = projection.route
-    if route not in SPINE_FIELDS:
-        stated = ", ".join(SPINE_ROUTES)
+    if route not in ROUTE_FIELDS:
+        stated = ", ".join(NATIVE_ROUTES)
         raise ValueError(
-            f"route {route!r} has no spine read model, so its projection states no "
-            f"spine rows; spine routes: {stated}"
+            f"route {route!r} has no native read model, so its projection states no "
+            f"rows a native frame draws; native routes: {stated}"
         )
-    specs = SPINE_FIELDS[route]
+    specs = ROUTE_FIELDS[route]
     rows = tuple(
         SpineRow(
             key=row.key,
@@ -309,8 +349,11 @@ def build_spine_view(projection: RouteProjection) -> SpineView:
 
 
 __all__ = [
+    "DIAGNOSTICS_ROUTES",
     "ENTRY_ROUTE",
-    "SPINE_FIELDS",
+    "NATIVE_ROUTES",
+    "PLANNING_ROUTES",
+    "ROUTE_FIELDS",
     "SPINE_ROUTES",
     "STATUS_FIELD",
     "UNPRODUCED_REASON",

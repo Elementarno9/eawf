@@ -35,6 +35,12 @@ Advisory body (no engine implementation; registry-only skill):
 - :class:`~eawf.workflow.skills.bodies.wave_spec.WaveSpecBody`
 - :class:`~eawf.workflow.skills.bodies.security_review.SecurityReviewBody`
 
+The three lifecycle bodies that drive the native delivery path:
+
+- :class:`~eawf.workflow.skills.bodies.dispatch.DispatchBody`
+- :class:`~eawf.workflow.skills.bodies.integrate.IntegrateBody`
+- :class:`~eawf.workflow.skills.bodies.verify.VerifyBody`
+
 The :class:`UserQuestion` payload is shared across every body — strict
 validation requires it on ``header.status == "needs_user"``.
 """
@@ -49,8 +55,10 @@ from eawf.workflow.skills.bodies.blitz import BlitzBody
 from eawf.workflow.skills.bodies.coauthor import CoauthorBody
 from eawf.workflow.skills.bodies.compress import CompressBody
 from eawf.workflow.skills.bodies.differentiate import DifferentiateBody
+from eawf.workflow.skills.bodies.dispatch import DispatchBody
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.bodies.init import InitBody
+from eawf.workflow.skills.bodies.integrate import IntegrateBody
 from eawf.workflow.skills.bodies.memory import MemoryBody
 from eawf.workflow.skills.bodies.mockup import (
     MockupBody,
@@ -65,6 +73,7 @@ from eawf.workflow.skills.bodies.roadmap import RoadmapBody
 from eawf.workflow.skills.bodies.security_review import SecurityReviewBody
 from eawf.workflow.skills.bodies.ship import ShipBody
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.bodies.verify import VerifyBody
 from eawf.workflow.skills.bodies.wave_spec import WaveSpecBody
 
 # Canonical skill-name -> body-model map. This is the single source of
@@ -91,6 +100,9 @@ SKILL_BODY_MODELS: dict[str, type[BaseModel]] = {
     "/compress": CompressBody,
     "/wave-spec": WaveSpecBody,
     "/security-review": SecurityReviewBody,
+    "/dispatch": DispatchBody,
+    "/integrate": IntegrateBody,
+    "/verify": VerifyBody,
 }
 
 
@@ -122,8 +134,10 @@ __all__ = [
     "CoauthorBody",
     "CompressBody",
     "DifferentiateBody",
+    "DispatchBody",
     "FlowBody",
     "InitBody",
+    "IntegrateBody",
     "MemoryBody",
     "MockupBody",
     "MockupVariant",
@@ -136,6 +150,7 @@ __all__ = [
     "ShipBody",
     "UserQuestion",
     "UserQuestionOption",
+    "VerifyBody",
     "WaveSpecBody",
     "body_model_for",
     "resolve_mockup_pick",

@@ -57,8 +57,6 @@ from eawf.kernel.runtime.lease import LeaseStatus, WorkLease, lease_has_expired
 from eawf.kernel.runtime.provider import MUTATING_ROLES, Digest, RuntimeRecord
 from eawf.kernel.runtime.semantic import (
     TOOL_SCHEMA_VERSION,
-    BudgetStatusOutput,
-    BudgetUsage,
     CallId,
     CoordinationAction,
     IdempotencyKey,
@@ -69,6 +67,7 @@ from eawf.kernel.runtime.semantic import (
     SemanticToolError,
     SemanticToolErrorCode,
     SemanticToolId,
+    SemanticToolOutput,
     SubmitCoordinationProposalInput,
     error_for,
     tool_contract,
@@ -87,6 +86,11 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
+from eawf.runtime.daemon.semantic_handlers import (
+    BROKERED_TOOLS,
+    SEMANTIC_HANDLERS,
+    HandlerInputs,
+)
 from eawf.runtime.workspace.lease import root_leases
 
 logger = logging.getLogger(__name__)
@@ -237,11 +241,9 @@ AGENT_LAUNCH_COMMANDS: Final[frozenset[str]] = frozenset(
     {"claude", "codex", "opencode", "eawf", "eawfd", "npx", "uvx", "pipx"}
 )
 
-#: The tools this daemon answers itself. Every other admitted call needs
-#: the live broker, which is installed separately; until it is, an
-#: admitted call for one of them is refused at the RPC layer with no
-#: receipt rather than answered with a fabricated outcome.
-BROKERED_TOOLS: Final[frozenset[SemanticToolId]] = frozenset({SemanticToolId.BUDGET_STATUS})
+#: The tools this daemon answers itself, re-exported from the module that
+#: implements them. The set is derived from the handler table there, so a
+#: tool becomes brokered by acquiring a handler and by nothing else.
 
 
 @dataclass(frozen=True, slots=True)
@@ -888,7 +890,7 @@ def serve_semantic_call(
         receipt = (
             _denied_receipt(call, check=outcome.check, error=outcome.error, now=now)
             if outcome.verdict == "refused"
-            else _served_receipt(call, inputs=inputs, now=now)
+            else _served_receipt(call, session=session, inputs=inputs, now=now)
         )
         _append_receipt(session, receipt, now=now)
     logger.info(
@@ -936,48 +938,37 @@ def _denied_receipt(
 
 
 def _served_receipt(
-    call: SemanticCall, *, inputs: GuardInputs, now: datetime
+    call: SemanticCall, *, session: RootSession, inputs: GuardInputs, now: datetime
 ) -> SemanticCallReceipt:
     """Answer an admitted call, or refuse to fabricate an answer for it.
 
+    The handler reads through the session the guard already opened. A
+    handler that opened one of its own would block on the document lock
+    this caller is holding, so the seam passes the pass rather than the
+    context.
+
     Raises:
-        SemanticGatewayError: The tool needs the live broker, which this
-            daemon does not have. No receipt is filed, because a receipt
-            is a record of an answer and there is none.
+        SemanticGatewayError: The tool needs a handler this daemon does
+            not install. No receipt is filed, because a receipt is a
+            record of an answer and there is none.
     """
-    if call.tool_id not in BROKERED_TOOLS:
+    handler = SEMANTIC_HANDLERS.get(call.tool_id)
+    if handler is None:
         raise SemanticGatewayError(
             code=HANDLER_NOT_BROKERED,
             detail=f"{call.tool_id.value} passed every check and reaches no handler here",
         )
-    assert call.tool_id is SemanticToolId.BUDGET_STATUS, "the brokered set holds one tool today"
-    return _receipt(
-        call,
-        status="succeeded",
-        error=None,
-        output=_budget_output(inputs),
-        check=None,
-        now=now,
+    output = handler(
+        HandlerInputs(
+            session=session,
+            call=call,
+            capsule=inputs.capsule,
+            run=inputs.run,
+            calls_so_far=inputs.calls_so_far,
+            now=now,
+        )
     )
-
-
-def _budget_output(inputs: GuardInputs) -> BudgetStatusOutput:
-    """Return what this Run has measurably spent and what remains of it.
-
-    Only measured numbers are carried. A ceiling whose spend nothing
-    metered is reported absent rather than as zero, because a budget that
-    reads as untouched is how one is overrun while it looks observed.
-    """
-    ceiling = inputs.capsule.budget.wall_seconds
-    started = inputs.run.started_at
-    elapsed = 0 if started is None else int((inputs.now - started).total_seconds())
-    return BudgetStatusOutput(
-        tool_id="budget_status",
-        used=BudgetUsage(wall_seconds=elapsed, tool_calls=inputs.calls_so_far),
-        remaining=BudgetUsage(wall_seconds=max(0, ceiling - elapsed)),
-        quality="measured",
-        includes_children=False,
-    )
+    return _receipt(call, status="succeeded", error=None, output=output, check=None, now=now)
 
 
 def _receipt(
@@ -985,7 +976,7 @@ def _receipt(
     *,
     status: Literal["succeeded", "denied"],
     error: SemanticToolError | None,
-    output: BudgetStatusOutput | None,
+    output: SemanticToolOutput | None,
     check: PreHandlerCheck | None,
     now: datetime,
 ) -> SemanticCallReceipt:

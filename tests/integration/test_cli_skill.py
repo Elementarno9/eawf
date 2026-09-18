@@ -163,7 +163,7 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
             registry.register(previous)
 
 
-def test_skill_list_shows_all_seventeen_names(cli_runner: CliRunner) -> None:
+def test_skill_list_shows_every_canonical_name(cli_runner: CliRunner) -> None:
     """Every canonical skill name appears in the table.
 
     Post-W03 every canonical skill (six core + four meta) is registered
@@ -224,13 +224,13 @@ def test_skill_list_json_payload_carries_status_and_schema(
     payload = json.loads(result.stdout)
     assert "skills" in payload
     skills = cast(list[dict[str, object]], payload["skills"])
-    # 17 execution-backed canonical skills plus the six model-only
+    # 20 execution-backed canonical skills plus the six model-only
     # code-quality playbooks and the four advisory design-surface skills
     # (``/mockup``, ``/design``, ``/spike``, ``/math-explainer``). The
     # latter ten ship as builtin SKILL.md files (so ``skill list``
     # discovers them) but carry no execution body, so they surface with
     # ``status="user"`` and ``body_schema=None``.
-    assert len(skills) == 27
+    assert len(skills) == 30
     by_name = {cast(str, s["name"]): s for s in skills}
     research = by_name["/research"]
     assert research["status"] == "installed"

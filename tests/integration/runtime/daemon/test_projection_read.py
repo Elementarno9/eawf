@@ -45,7 +45,7 @@ from eawf.runtime.daemon.methods import (
     MethodNotFoundError,
     dispatch,
 )
-from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS
+from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, SETTINGS_READ_METHOD
 from eawf.runtime.daemon.native_guard import NativeAuthorityRefusedError
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     AT,
@@ -256,10 +256,23 @@ def test_read_refuses_a_tree_that_holds_no_native_authority(
 
 def test_an_unbound_route_has_no_read_verb(ctx: MethodContext, canary: CanaryProvision) -> None:
     """A route with no document binding is not found, never answered empty."""
-    assert "settings" not in ROUTE_COLLECTIONS
+    assert "settings.stack" not in ROUTE_COLLECTIONS
 
     with pytest.raises(MethodNotFoundError):
-        _read(ctx, canary, "projection.settings.read")
+        _read(ctx, canary, "projection.settings.stack.read")
+
+
+def test_settings_is_served_off_the_document_rather_than_by_a_route_read(
+    ctx: MethodContext, canary: CanaryProvision
+) -> None:
+    """Settings render layered config, so the route binds no collection but is served."""
+    assert "settings" not in ROUTE_COLLECTIONS
+    assert SETTINGS_READ_METHOD not in ROUTE_READ_METHODS
+
+    leaves = _read(ctx, canary, SETTINGS_READ_METHOD)["leaves"]
+
+    assert leaves
+    assert all(leaf["winning_layer"] for leaf in leaves)
 
 
 def test_build_route_projection_refuses_an_unbound_route() -> None:

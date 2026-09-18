@@ -61,6 +61,34 @@ def test_golden_frame_settles_in_one_cycle(frame_id: str, replay: dict[str, Resu
     assert result.settle_cycles == 1, f"{frame_id}: settle needed {result.settle_cycles} cycles"
 
 
+#: The routes whose frames a native binding must leave exactly where it found them. The
+#: tracked contract replays the epoch-1 mode, so binding a route to a read model the
+#: replay never holds may not move one row of it.
+ACCEPTANCE_FRAME_ROUTES: tuple[str, ...] = ("milestone", "release", "receipt", "export")
+
+#: Every tracked frame of those routes, at all three widths.
+ACCEPTANCE_FRAME_IDS: tuple[str, ...] = tuple(
+    frame_id
+    for frame_id in FRAME_IDS
+    if any(route in frame_id for route in ACCEPTANCE_FRAME_ROUTES)
+)
+
+
+def test_the_acceptance_routes_carry_their_whole_tracked_census() -> None:
+    """Five frames at three widths; a dropped one would make the next check vacuous."""
+    assert len(ACCEPTANCE_FRAME_IDS) == 15
+
+
+@pytest.mark.parametrize("frame_id", ACCEPTANCE_FRAME_IDS)
+def test_an_acceptance_route_frame_replays_with_no_residual(
+    frame_id: str, replay: dict[str, Result]
+) -> None:
+    """Binding these routes moved no row of the mode the tracked contract replays."""
+    result = replay[frame_id]
+    assert result.ok, f"{frame_id}: {result.detail}"
+    assert result.settle_cycles == 1
+
+
 @pytest.mark.parametrize("journey_id", JOURNEY_IDS)
 def test_journey_step_settles_in_one_cycle(journey_id: str, replay: dict[str, Result]) -> None:
     result = replay[journey_id]

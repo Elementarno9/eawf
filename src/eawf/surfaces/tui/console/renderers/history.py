@@ -18,6 +18,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import pad
 
 Fact = tuple[str, str, str, str]
@@ -57,7 +58,10 @@ def filtered_facts(query: str) -> list[Fact]:
 
 
 def render(view: View) -> list[str]:
-    """Return the History frame."""
+    """Return the History frame, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, fx, w, h = view.session, view.fixture, view.w, view.h
     query = dv.filter_of(s)
     facts = filtered_facts(query)

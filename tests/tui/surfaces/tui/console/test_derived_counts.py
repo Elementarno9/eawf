@@ -38,7 +38,8 @@ from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_ME
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
 from eawf.kernel.projection.spine import (
     ENTRY_ROUTE,
-    SPINE_FIELDS,
+    NATIVE_ROUTES,
+    ROUTE_FIELDS,
     SPINE_ROUTES,
     STATUS_FIELD,
     UNPRODUCED_REASON,
@@ -131,10 +132,11 @@ def _frame(spine: SpineView, *, width: int = 120) -> tuple[list[str], Session]:
 
 
 def test_spine_routes_are_the_five_a_projection_carries() -> None:
-    """The spine table names exactly the routes a read model is stated for."""
+    """The spine group names five routes, and the field table names every native one."""
     assert SPINE_ROUTES == ("scope.home", "track", "batch.detail", "task.detail", "run.detail")
-    assert set(SPINE_FIELDS) == set(SPINE_ROUTES)
-    assert ENTRY_ROUTE not in SPINE_ROUTES
+    assert set(ROUTE_FIELDS) == set(NATIVE_ROUTES)
+    assert set(SPINE_ROUTES) <= set(NATIVE_ROUTES)
+    assert ENTRY_ROUTE not in NATIVE_ROUTES
 
 
 @pytest.mark.parametrize("route", SPINE_ROUTES)
@@ -360,14 +362,15 @@ def test_field_names_lead_with_the_stored_status() -> None:
 # ---------- refusals ----------
 
 
-@pytest.mark.parametrize("route", ["activity", "backlog", "roadmap"])
-def test_a_bound_route_with_no_spine_read_model_is_refused(route: str) -> None:
+@pytest.mark.parametrize("route", ["activity"])
+def test_a_bound_route_with_no_native_read_model_is_refused(route: str) -> None:
     """A projection of another route is not this frame's rows, so it is not adopted."""
-    with pytest.raises(ValueError, match="has no spine read model"):
+    with pytest.raises(ValueError, match="has no native read model"):
         build_spine_view(_projection(route))
 
 
 def test_an_unbound_route_has_no_projection_to_build_from() -> None:
     """A route with no document binding is refused at the projection, not papered over."""
+    assert "settings" not in ROUTE_COLLECTIONS
     with pytest.raises(ValueError, match="renders no epoch-2 collection"):
-        _projection("attention")
+        _projection("settings")

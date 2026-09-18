@@ -225,8 +225,7 @@ _NEW_CAMPAIGN_METHOD: str = "research.stage_campaign"
 #: next round, ``b`` (broadcast) records a notice on the campaign's channel --
 #: recorded and never reaching a running round, since no fan-out re-prompts a
 #: live researcher -- and ``v`` (override) forces an operator verdict onto the
-#: blocking fork. All four RPCs are live (P30-I18-W02 add-question + W04 steer /
-#: broadcast / override): each key collects its text through a modal and routes
+#: blocking fork. All four RPCs are live: each key collects its text through a modal and routes
 #: the committed note off the UI thread, surfacing the daemon's honest sent /
 #: rejected result rather than fabricating a row, a queued note, a broadcast,
 #: or an override. The queue-note / broadcast / override channels thread the
@@ -3318,7 +3317,7 @@ class ResearchBoardModeScreen(ScopeScreen):
         Pushes a one-field :class:`OperatorNoteModal` collecting the notice;
         ``Esc`` cancels (the callback receives ``None`` and issues zero RPCs).
         A committed notice routes off the UI thread to the live
-        ``research.broadcast`` RPC (P30-I18-W04) against the selected campaign,
+        ``research.broadcast`` RPC against the selected campaign,
         surfacing the daemon's honest sent / rejected result rather than
         implying a broadcast landed.
         """

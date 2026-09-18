@@ -124,7 +124,10 @@ def test_the_gate_admits_a_staged_tree_carrying_only_placeholders(tmp_path: Path
     """The same tree with the documented forms passes untouched."""
     state_path = _seed_tree(tmp_path, intent=" and ".join(PLACEHOLDER_FORMS))
 
-    require_no_home_path_leaks(scan_staged_tree(state_path))
+    findings = scan_staged_tree(state_path)
+
+    assert list(findings) == []
+    require_no_home_path_leaks(findings)
 
 
 def test_the_gate_rewrites_no_source_string(tmp_path: Path) -> None:

@@ -29,6 +29,7 @@ import orjson
 import pytest
 
 import eawf.runtime.daemon.server as server_mod
+from eawf.kernel.projection.compute import patches_for_event
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
@@ -163,8 +164,11 @@ def test_an_unpatchable_envelope_yields_no_frame_and_keeps_the_stream() -> None:
         payload={"canonical_sequence": 4},
     )
 
+    moved = _transition_envelope()
+
     assert server_mod._projection_frames(broken) == ()
-    assert len(server_mod._projection_frames(_transition_envelope())) == 2
+    assert len(server_mod._projection_frames(moved)) == len(patches_for_event(moved))
+    assert server_mod._projection_frames(moved)
     assert len(server_mod._event_frames(broken)) == 1
 
 

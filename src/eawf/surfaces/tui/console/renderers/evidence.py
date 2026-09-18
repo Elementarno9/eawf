@@ -9,6 +9,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, lab, prose, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
 
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "rung"),
@@ -71,7 +72,10 @@ def _ladder(wide: bool, room: int) -> list[str]:
 
 
 def render(view: View) -> list[str]:
-    """Return the Evidence frame."""
+    """Return the Evidence frame, native when a read model is held."""
+    model = native(view)
+    if model is not None:
+        return native_frame(view, model)
     s, w = view.session, view.w
     rungs = view.fixture.registers.ev_rungs
     wide = w >= 120

@@ -55,12 +55,12 @@ def release_candidate(
 ) -> None:
     """Freeze the manifest from the receipts and record the CANDIDATE.
 
-    The artifact set an approval binds used to be assembled by hand. Here
-    it is derived: one receipt per declared target, every declared
-    artifact kind resolved to a file that receipt reported, and the
-    registry identities read off the checkpoint configuration rather than
-    spelled again. A directory missing a target, or holding receipts for
-    another version, refuses and records nothing.
+    The artifact set an approval binds is derived rather than assembled by
+    hand: one receipt per declared target, every declared artifact kind
+    resolved to a file that receipt reported, and the registry identities
+    read off the checkpoint configuration rather than spelled again. A
+    directory missing a target, or holding receipts for another version,
+    refuses and records nothing.
 
     The pinned tree is read from this checkout at ``--source``, so the
     commit and the tree cannot disagree, and the whole pin lands in one

@@ -78,12 +78,10 @@ from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunStatus
 from eawf.kernel.state.epoch2.urns import RunUrn
-from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerRecord,
     append_ledger_record,
-    effective_records,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -102,7 +100,16 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.native_dispatch import (
+    RUN_DISPATCH_METHOD,
+    RUN_RETRY_METHOD,
+    DispatchParams,
+    dispatch_run,
+    run_binding_of,
+    stored_run,
+)
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator, require_native_call
+from eawf.runtime.daemon.native_retry import RetryParams, retry_run
 from eawf.runtime.daemon.run_events import (
     AppendDisposition,
     RunEventAppend,
@@ -420,37 +427,12 @@ def _control_facts(records: tuple[LedgerRecord, ...], urn: QualifiedUrn) -> tupl
     return tuple(sorted(selected, key=lambda fact: fact.sequence))
 
 
-def _binding_of(records: tuple[LedgerRecord, ...], urn: QualifiedUrn) -> RunBinding | None:
-    """Return one Run's contract binding, or ``None`` when it has none."""
-    for item in records:
-        if item.payload.get("payload_kind") != "run_binding":
-            continue
-        binding = RunBinding.model_validate(item.payload)
-        if binding.run_ref == urn:
-            return binding
-    return None
-
-
-def _stored_run(session: RootSession, records: tuple[LedgerRecord, ...], urn: QualifiedUrn) -> Run:
-    """Return the Run record, from the document or from its ledger.
-
-    A terminal Run is compacted out of the document into the run ledger,
-    so a contract read that looked only in the document would stop
-    answering for exactly the Runs whose outcome matters most.
-
-    Raises:
-        DaemonValidationError: Neither tier holds the record.
-    """
-    row = document_rows(session.read_document(), Epoch2Collection.RUN).get(urn.entity_key)
-    if row is not None:
-        return Run.model_validate(row)
-    for item in effective_records(records):
-        if item.record_key == urn.entity_key and "payload_kind" not in item.payload:
-            return Run.model_validate(item.payload)
-    raise DaemonValidationError(
-        f"validation_failed: identity_not_found: no run record keyed {urn.entity_key!r} "
-        "is held by the document or the run ledger"
-    )
+#: The two durable readers the dispatch path and these verbs share. They
+#: live with the dispatcher because it is the writer of both records, and
+#: a second copy here would let the reader of a binding disagree with
+#: whoever wrote it.
+_binding_of = run_binding_of
+_stored_run = stored_run
 
 
 def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> None:
@@ -1071,6 +1053,33 @@ async def _read_run_events(ctx: MethodContext, params: dict[str, Any]) -> dict[s
     args = _params(RunEventsRead, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(_read_events, context, args, now=datetime.now(UTC))
+    return answer.model_dump(mode="json")
+
+
+@native_mutator(RUN_DISPATCH_METHOD)
+async def _dispatch_run(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """Compile, lease, spawn and accept the announcement, in that order.
+
+    The driver is awaited rather than threaded: it has to await the
+    launcher, and each of its locked passes over the tree is opened and
+    closed around that await rather than held across it.
+    """
+    args = _params(DispatchParams, params)
+    context = ctx.native_root_context(authority.root)
+    answer = await dispatch_run(context, args, now=datetime.now(UTC))
+    return answer.model_dump(mode="json")
+
+
+@native_mutator(RUN_RETRY_METHOD)
+async def _retry_run(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """Decide whether a retry keeps this Run or links a new one to it."""
+    args = _params(RetryParams, params)
+    context = ctx.native_root_context(authority.root)
+    answer = await asyncio.to_thread(retry_run, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 
 

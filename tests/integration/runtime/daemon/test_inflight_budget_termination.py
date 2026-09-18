@@ -37,7 +37,7 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.store.compaction import read_document
-from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
@@ -308,8 +308,25 @@ def notices(canary: CanaryProvision) -> list[dict[str, Any]]:
 
 
 def stored_status(canary: CanaryProvision) -> str:
-    """Return the status the canonical Run record carries right now."""
-    return str(read_document(document_path(canary))["run"][RUN_KEY]["status"])
+    """Return the status the canonical Run record carries right now.
+
+    A terminated Run is exactly the case this suite drives, and a Run that
+    reaches a terminal state is compacted out of the document and into the
+    run ledger, beside the notice and control lines the same ledger
+    carries. The Run's own line is the one with no payload discriminator,
+    which is how the daemon's own reader tells it apart.
+
+    Raises:
+        AssertionError: Neither tier holds the record, so the Run was lost
+            by the move rather than relocated by it.
+    """
+    rows = read_document(document_path(canary)).get("run", {})
+    if RUN_KEY in rows:
+        return str(rows[RUN_KEY]["status"])
+    for item in effective_records(read_ledger_records(run_ledger(canary))):
+        if item.record_key == RUN_KEY and "payload_kind" not in item.payload:
+            return str(item.payload["status"])
+    raise AssertionError(f"neither tier holds a run record keyed {RUN_KEY!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -575,7 +592,12 @@ def test_a_cap_with_no_addressable_group_records_the_breach_and_signals_nothing(
 def test_replaying_the_meter_verb_writes_no_second_notice(
     ctx: MethodContext, canary: CanaryProvision, child: LiveChild
 ) -> None:
-    """A retry is answered from the ledger it already wrote, not appended to."""
+    """A retry is answered from the ledger it already wrote, not appended to.
+
+    The retry also runs entirely against a Run the first call compacted out
+    of the document, so the status it answers with is the verb resolving
+    the record from the tier that now holds it.
+    """
     child.read_chunks(CHUNKS)
     first = meter(ctx, canary, output_totals=(900,), pgid=child.pgid)
     child.observed_ledger()
@@ -584,6 +606,7 @@ def test_replaying_the_meter_verb_writes_no_second_notice(
 
     assert first["terminated"] is True
     assert second["notice"] == first["notice"]
+    assert second["run_status"] == "CANCELLED"
     assert len(notices(canary)) == 1
     assert ledger_kinds(canary).count("control:effected") == 1
     assert stored_status(canary) == "CANCELLED"

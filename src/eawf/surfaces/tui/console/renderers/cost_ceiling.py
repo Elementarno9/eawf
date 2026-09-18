@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
+from eawf.surfaces.tui.console.renderers.registers import native_frame
+from eawf.surfaces.tui.console.session import Session
 
 _KEYS: tuple[tuple[str, str], ...] = (("↑↓", "row"), ("Enter", "run"), ("Esc", "back"))
 _STOPPED: tuple[list[str], ...] = (
@@ -12,8 +14,21 @@ _STOPPED: tuple[list[str], ...] = (
 )
 
 
+def stopped_run(session: Session) -> str | None:
+    """Return the Run the cursor sits on in the stopped list, or nothing when it is empty.
+
+    The footer advertises ``Enter run``, so the key has to name a Run; this is the one
+    place the list's shape is read, rather than the dispatcher reaching into it.
+    """
+    if not _STOPPED:
+        return None
+    return _STOPPED[min(max(session.sel, 0), len(_STOPPED) - 1)][0]
+
+
 def render(view: View) -> list[str]:
     """Return the Cost ceiling frame."""
+    if view.register is not None:
+        return native_frame(view, view.register)
     s, w = view.session, view.w
     grid = Grid([17, 8, 0])
     dv.sel_in(s, len(_STOPPED))

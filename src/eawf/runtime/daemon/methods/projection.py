@@ -1,8 +1,8 @@
 """``projection.<route>.read`` and ``.reconnect``: a route's rows, and the way back.
 
-A console used to project the whole document itself, which meant every surface
-re-derived the same rows and none of them could say which cursor its answer stood
-at. The daemon allocates the only workspace-global order, so it is the one place
+A surface that projects the whole document itself re-derives rows every other
+surface already built, and cannot say which cursor its answer stands at. The
+daemon allocates the only workspace-global order, so it is the one place
 that can answer both at once: these verbs read the selected generation's document,
 build the route's read model through the committed ``canonical_sequence``, and hand
 back a header stating that cursor.
@@ -12,6 +12,12 @@ binds, so a route with no document binding is not found rather than answered wit
 empty projection. The read sits behind the epoch-2 fence: a tree that has not been
 shown to hold native authority has no document to read.
 
+``projection.settings.read`` is the one verb that answers from outside the document.
+Settings are layered config rather than records, so the route binds no collection and
+gets no reconnect verb -- there is no ordinal to replay from. It is served here anyway,
+because a console that had to reach for a second surface to draw one of its routes would
+have two answers to "what is in force" and no way to say which read is older.
+
 ``projection.<route>.reconnect`` is the same idea for a client that went away and
 came back holding a cursor. It answers from retention alone: it walks the tree's
 firehose once, so it knows both which ordinals it still holds and which keyed
@@ -19,6 +25,13 @@ patches those ordinals produce, and it hands back either the gap's patches or a
 refusal naming the exact range it could not supply. A console that got a replay ends
 at the daemon's cursor holding the same rows a fresh read would give it, which is
 the equality the two paths are worth having.
+
+``projection.export.report`` renders one acceptance route's read model as plain text
+at the digest that view was read through. It is a read like the others: it opens the
+document, renders what it found and hands the bytes back, so exporting allocates no
+ordinal, writes no record and leaves the tree exactly as it was. Two reports taken at
+one cursor are byte-identical and name one digest, which is what lets a terminal and a
+plain-text reader compare what each was shown.
 
 The work runs off the event loop. It is a file read plus a pass over the rows it
 holds, which is the shape of occupancy that pushes an unrelated ``daemon.ping`` past
@@ -34,10 +47,10 @@ import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, Self
 
 import orjson
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.compute import (
@@ -54,6 +67,7 @@ from eawf.kernel.projection.connection import (
     ReconnectDisposition,
     negotiate_reconnect,
 )
+from eawf.kernel.projection.settings import SETTINGS_ROUTE, SettingsView, build_settings_view
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictNonNegativeInt
@@ -64,6 +78,13 @@ from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
 from eawf.runtime.daemon.native_guard import require_native_call
+from eawf.workflow.projection.acceptance import (
+    ACCEPTANCE_ROUTES,
+    MILESTONE_ROUTE,
+    ExportReport,
+    build_acceptance_view,
+    export_report,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +93,11 @@ logger = logging.getLogger(__name__)
 #: cannot be projected at all -- its high-water mark or one of its rows is not what
 #: a projection is built from -- never that the route holds nothing.
 PROJECTION_UNREADABLE: Final = "projection_unreadable"
+
+#: The stable code an export is refused with. An export that cannot name an acceptance
+#: route is refused rather than answered with another route's report, because the
+#: digest it would carry addresses rows the caller did not ask for.
+EXPORT_UNREPORTABLE: Final = "projection_export_unreportable"
 
 #: The stable code a reconnect is refused with. Distinct from a ``snapshot_required``
 #: answer, which is a successful negotiation: this code means the request itself
@@ -99,6 +125,35 @@ class ReconnectParams(BaseModel):
 
     repo_root: str | None = None
     cursor: StrictNonNegativeInt = 0
+
+
+class ExportParams(BaseModel):
+    """The parameters one export request carries.
+
+    Attributes:
+        repo_root: The repository whose tree to answer for; the daemon's bound tree
+            when absent.
+        route: The acceptance route to report. The Milestone's bundle view is the
+            default because it is the view an acceptance is given against.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_root: str | None = None
+    route: str = MILESTONE_ROUTE
+
+    @model_validator(mode="after")
+    def _route_is_one_this_verb_reports(self) -> Self:
+        """Refuse a route outside the acceptance family.
+
+        Raises:
+            ValueError: The named route is not one this verb renders a report of, so
+                the digest the report carried would address rows nobody asked for.
+        """
+        if self.route not in ACCEPTANCE_ROUTES:
+            stated = ", ".join(ACCEPTANCE_ROUTES)
+            raise ValueError(f"route {self.route!r} is not reportable; reportable: {stated}")
+        return self
 
 
 def _document_path(authority: RootAuthority) -> Path:
@@ -152,6 +207,40 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
         raise DaemonValidationError(
             f"validation_failed: {PROJECTION_UNREADABLE}: {error}"
         ) from error
+
+
+def _read_settings(*, authority: RootAuthority) -> SettingsView:
+    """Build the effective-settings read model for a fence-cleared tree.
+
+    The tree's root is both the workspace and the repo anchor, which is the call shape
+    every other layered-config consumer uses. Nothing is written: the layers are read,
+    merged in memory and handed back.
+
+    Raises:
+        DaemonValidationError: The document states its high-water mark as something
+            other than an ordinal, so the view could not state the cursor it was read
+            beside.
+        FileNotFoundError: The selected generation carries no document.
+    """
+    root = authority.root
+    cursor = _document_cursor(read_document(_document_path(authority)))
+    return build_settings_view(
+        workspace=root,
+        repo=root,
+        scope_id=RootIdentity.of(root).root_id,
+        cursor=cursor,
+        generated_at=datetime.now(UTC),
+    )
+
+
+def _report(*, route: str, authority: RootAuthority) -> ExportReport:
+    """Render one acceptance route's read model, reading the document and nothing else.
+
+    Raises:
+        DaemonValidationError: The tree cannot be projected through a cursor.
+        FileNotFoundError: The selected generation carries no document.
+    """
+    return export_report(build_acceptance_view(_project(route=route, authority=authority)))
 
 
 def _retained(path: Path, *, route: str) -> tuple[set[int], dict[int, tuple[KeyedPatch, ...]]]:
@@ -318,6 +407,77 @@ def _register_route_verbs(template: str, build: Callable[[str], Handler]) -> tup
     return tuple(names)
 
 
+#: The verb the effective-settings view is read through. It is not in
+#: :data:`ROUTE_READ_METHODS`, because the route it serves binds no collection and its
+#: answer is not a row projection.
+SETTINGS_READ_METHOD: Final = READ_METHOD_TEMPLATE.format(route=SETTINGS_ROUTE)
+
+
+@register(SETTINGS_READ_METHOD)
+async def read_settings(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Return every configuration leaf with the layer that set it and the ones it overrode.
+
+    Args:
+        ctx: Server context, whose bound state path is the tree fallback.
+        params: The request parameters; ``repo_root`` names the tree when the caller
+            does not want the one the daemon is bound to.
+
+    Returns:
+        The settings view as a JSON-mode mapping.
+
+    Raises:
+        NativeAuthorityRefusedError: The request addresses no epoch-2 tree.
+        DaemonValidationError: The tree's cursor could not be read.
+    """
+    authority = require_native_call(ctx, params)
+    view = await asyncio.to_thread(_read_settings, authority=authority)
+    logger.debug(f"read_settings leaves={len(view.leaves)} cursor={view.header.source_cursor}")
+    return view.model_dump(mode="json")
+
+
+#: The verb an acceptance route's report is taken through. It is not in
+#: :data:`ROUTE_READ_METHODS`, because its answer is a rendered report rather than a
+#: row projection; the rows it renders are read through the route's own read verb.
+EXPORT_REPORT_METHOD: Final = "projection.export.report"
+
+
+@register(EXPORT_REPORT_METHOD)
+async def read_export_report(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Return one acceptance route's read model as plain text, at that view's digest.
+
+    Nothing is written. The document is read, the view is rendered and the bytes are
+    handed back, so an export leaves the tree at the cursor it found it at.
+
+    Args:
+        ctx: Server context, whose bound state path is the tree fallback.
+        params: The request parameters, validated as :class:`ExportParams`.
+
+    Returns:
+        The report's digest, the cursor its rows were read at, and its lines.
+
+    Raises:
+        NativeAuthorityRefusedError: The request addresses no epoch-2 tree.
+        DaemonValidationError: The parameters are not an export request, or the tree
+            cannot be projected.
+    """
+    try:
+        args = ExportParams.model_validate(params)
+    except ValidationError as error:
+        raise DaemonValidationError(
+            f"validation_failed: {EXPORT_UNREPORTABLE}: {error.error_count()} bad "
+            f"parameter(s) for {EXPORT_REPORT_METHOD}"
+        ) from error
+    authority = require_native_call(ctx, params)
+    report = await asyncio.to_thread(_report, route=args.route, authority=authority)
+    logger.debug(f"read_export_report route={args.route} lines={len(report.lines)}")
+    return {
+        "route": args.route,
+        "digest": report.digest,
+        "source_cursor": report.source_cursor,
+        "lines": list(report.lines),
+    }
+
+
 #: The read verbs this module registered, one per bound route.
 ROUTE_READ_METHODS: Final[tuple[str, ...]] = _register_route_verbs(
     READ_METHOD_TEMPLATE, _route_reader
@@ -332,11 +492,17 @@ ROUTE_RECONNECT_METHODS: Final[tuple[str, ...]] = _register_route_verbs(
 
 
 __all__ = [
+    "EXPORT_REPORT_METHOD",
+    "EXPORT_UNREPORTABLE",
     "PROJECTION_UNREADABLE",
     "READ_METHOD_TEMPLATE",
     "RECONNECT_METHOD_TEMPLATE",
     "RECONNECT_UNNEGOTIABLE",
     "ROUTE_READ_METHODS",
     "ROUTE_RECONNECT_METHODS",
+    "SETTINGS_READ_METHOD",
+    "ExportParams",
     "ReconnectParams",
+    "read_export_report",
+    "read_settings",
 ]

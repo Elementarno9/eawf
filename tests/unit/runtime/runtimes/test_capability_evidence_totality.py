@@ -14,6 +14,7 @@ cell is itself ``unknown``.
 
 from __future__ import annotations
 
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 
 import pytest
@@ -188,5 +189,5 @@ def test_drift_row_probe_rule_defaults_to_empty_and_is_frozen() -> None:
     """A hand-built row carries no rule and cannot be re-statused."""
     row = DriftRow(capability="skills", declared="supported", status="UNKNOWN", detail="d")
     assert row.probe_rule == ()
-    with pytest.raises(Exception, match=r"(?i)cannot|frozen"):
+    with pytest.raises(FrozenInstanceError, match="cannot assign to field 'status'"):
         row.status = "OK"  # type: ignore[misc]

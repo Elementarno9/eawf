@@ -32,6 +32,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry
 from eawf.surfaces.tui.console.reads import attn_cell, can_mutate, reads
+from eawf.surfaces.tui.console.renderers.registers import native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 RAIL_W = 29
@@ -140,6 +141,8 @@ def _keys(view: View, shown: Sequence[Action]) -> list[KeyEntry]:
 
 def render(view: View) -> list[str]:
     """Return the Attention frame."""
+    if view.register is not None:
+        return native_frame(view, view.register)
     s, fx, w, h = view.session, view.fixture, view.w, view.h
     n = open_count(fx)
     rd = reads(s)

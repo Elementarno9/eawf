@@ -95,6 +95,9 @@ _SKILL_DESCRIPTIONS: dict[SkillName, str] = {
     "/compress": "Compress the session conversation when context approaches the limit.",
     "/wave-spec": "Scaffold or validate a WaveSpec deliverable for a claimed wave.",
     "/security-review": "Run the security-audit DSL against a closed scope and emit findings.",
+    "/dispatch": "Coordinate one Delivery Batch: bring its ready Tasks to a candidate.",
+    "/integrate": "Prepare or execute one daemon-owned integration action on a Delivery Batch.",
+    "/verify": "Verify one Delivery Batch at one exact revision, as auditor or as reviewer.",
 }
 
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the

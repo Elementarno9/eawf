@@ -12,11 +12,13 @@ Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row is an
 | `/compress` | yes | `[--tokens-before=<n>] [--tokens-after=<n>] [--runtime=<id>]` | Compress the session conversation when context approaches the limit. |
 | `/design` | yes | `<surface-slug> [--final] [--from-brief <path>]` | Read-only design pass for an interactive surface: produces a statechart + action x context matrix + journey scenarios backed by an 11-rule lint contract. No state mutations. |
 | `/differentiate` | yes | `<candidate-id>` | Recommend the cheapest experiment that discriminates between two or more candidate paths. |
+| `/dispatch` | yes | `<batch-ref> [--task=<ref>] [--max-parallel=<n>] [--resume=<run-ref>] [--dry-run]` | Coordinate one Delivery Batch: bring its ready Tasks to a candidate. |
 | `/extract-function` | no | `—` | Model-only refactoring playbook for pulling a coherent block out of a long function into a named helper. |
 | `/extract-module` | no | `—` | Model-only refactoring playbook for splitting a multi-concern file into layered modules. |
 | `/flow` | yes | `<task-slug> [--advance-after=<stage>[,<stage>...]] [--stop-after=<stage>] [--resume] [--args-per-step=<json>] [--caps=eu=..,usd=..] [--max-repair-cycles=<n>]` | Run /research → /prep → /audit → /polish → /ship sequentially; review folds into /ship as the PR-review pass. Short-circuit on any non-ok status. |
 | `/graduate-research-code` | no | `—` | Model-only playbook for promoting spike/research code into a typed, tested, maintained module. |
 | `/init` | yes | `[--profile=<id>]` | Initialise a new Eä Workflow workspace. Renders managed regions of AGENTS.md and the .claude/ plugin tree. |
+| `/integrate` | yes | `<seal\|select\|apply\|retry\|show> <batch-or-candidate-ref> [--candidate=<ref>] [--expected-head=<sha>] [--verify-after]` | Prepare or execute one daemon-owned integration action on a Delivery Batch. |
 | `/math-explainer` | yes | `<explainer-slug> [--final] [--from-brief <path>]` | Author a verification-grounded math-explainer over typed MathClaim/MathExplainer rows: each claim pins intuition + a runnable CI-checked example gate + assumptions/regime + a canonical citation, run through an in-skill clarity loop (vale-prose + EAWF019 + draft validate). No state mutations. |
 | `/memory` | yes | `save\|list\|forget [<name>] [--tier=working\|archival\|retrieval]` | Save, list, or forget curated durable memory entries. |
 | `/mockup` | yes | `<surface-slug>` | Author 2-4 UI mockups as ASCII layouts and surface them as side-by-side AskUserQuestion option previews to compare. |
@@ -29,5 +31,6 @@ Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row is an
 | `/security-review` | yes | `--spec=<path> [--cwd=<dir>]` | Run the security-audit DSL against a closed scope and emit findings. |
 | `/ship` | yes | `<phase-id> [--dry-run] [--gauntlet=full\|scoped] [--release=v<X.Y.Z>] [--skip-pr-pass]` | Close out a phase by running the full local CI surface, opening the phase PR, and (after merge) advancing state. |
 | `/spike` | yes | `<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree]` | Read-only multi-axis direction investigation that unblocks /roadmap propose or /design: N rounds x M axis picks, optional postmortem + scope deltas. No state mutations. |
+| `/verify` | yes | `<batch-or-revision-ref> [--mode=gates\|audit\|review\|security\|all] [--gate=<id>] [--severity-floor=<P0\|P1\|P2\|P3>] [--no-cache]` | Verify one Delivery Batch at one exact revision, as auditor or as reviewer. |
 | `/wave-spec` | yes | `init\|validate <wave-id> [--mockup-waiver-reason=<text>]` | Scaffold or validate a WaveSpec deliverable for a claimed wave. |
 | `/write-adr` | no | `—` | Model-only playbook for drafting an architecture decision record companion to a typed decision row. |

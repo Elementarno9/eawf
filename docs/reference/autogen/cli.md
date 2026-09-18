@@ -367,6 +367,8 @@ Manage MCP server entries (add/install/update/remove/list/grant/revoke).
 | `list` | List MCP entries from state and/or runtime config. |
 | `remove` | Delete an Eä-owned MCP entry from state (and optionally runtime configs). |
 | `revoke` | Remove an MCP grant from ``state.mcp_grants``. |
+| `run-config` | Render how one lane is told about a Run's semantic tool server. |
+| `serve` | Serve one Run's granted semantic tools over MCP stdio. |
 | `update` | Patch an existing Eä-owned MCP entry in ``state.mcp_servers``. |
 
 ### `eawf memory`

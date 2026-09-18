@@ -30,7 +30,10 @@ from eawf.runtime.daemon.methods.domain import DOMAIN_LIFECYCLE_METHODS
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
 from eawf.runtime.daemon.wal import list_records
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    APPROVAL_URN,
     MILESTONE_URN,
+    acceptance_bundle_row,
+    approval_rows,
     document_path,
     firehose_path,
     method_context,
@@ -43,7 +46,6 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 ACCEPT_METHOD = "domain.milestone.accept"
 ACTOR = "OP-0001"
 KEY = "req-accept-0001"
-APPROVAL_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/pending-action/ACT-0001"
 EVIDENCE_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/evidence/EVD-0001"
 
 ACCEPTED_BINDING: dict[str, Any] = seed_row("milestone", "COMPLETED")["accepted_binding"]
@@ -59,9 +61,15 @@ def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.fixture
 def canary(tmp_path: Path) -> CanaryProvision:
-    """A provisioned canary holding one Milestone in acceptance review."""
+    """A canary holding one Milestone in review and the approval that seals it."""
     provisioned = provision(tmp_path / "accept", code="ACCEPT")
-    seed(provisioned, {"milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")}})
+    seed(
+        provisioned,
+        {
+            "milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")},
+            **approval_rows(),
+        },
+    )
     return provisioned
 
 
@@ -75,6 +83,7 @@ def _accept(canary: CanaryProvision, tmp_path: Path, **overrides: Any) -> dict[s
         "idempotency_key": KEY,
         "actor": ACTOR,
         "updates": {"accepted_binding": ACCEPTED_BINDING},
+        "acceptance_bundle": acceptance_bundle_row(),
     }
     params.update(overrides)
     return asyncio.run(methods.dispatch(ACCEPT_METHOD, ctx, params))
@@ -208,7 +217,10 @@ def test_a_denied_acceptance_leaves_the_key_free_to_be_retried(
 def test_accept_of_a_milestone_outside_review_is_denied_before_the_approval(tmp_path: Path) -> None:
     """A Milestone that never opened review is not acceptable with any approval."""
     canary = provision(tmp_path / "planned", code="PLANNED")
-    seed(canary, {"milestone": {"MLS-0030": seed_row("milestone", "PLANNED")}})
+    seed(
+        canary,
+        {"milestone": {"MLS-0030": seed_row("milestone", "PLANNED")}, **approval_rows()},
+    )
     before = document_path(canary).read_bytes()
 
     answer = _accept(canary, tmp_path, approval_receipt_ref=APPROVAL_URN)

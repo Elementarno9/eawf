@@ -1718,6 +1718,220 @@ production conventions.
 """
 
 
+# ---------------------------------------------------------------------------
+# The three lifecycle bodies. Unlike the bodies above they are authored one
+# line per paragraph rather than hard-wrapped: the Claude renderer unwraps
+# its input, but the opencode command renderer emits the body verbatim, so a
+# wrapped literal would ship a manually wrapped artifact on that surface.
+# Implicit concatenation keeps the source inside the line-length budget while
+# the emitted line stays whole.
+# ---------------------------------------------------------------------------
+
+_DISPATCH_BODY = (
+    "# /dispatch\n"
+    "\n"
+    "## Canonical algorithm\n"
+    "\n"
+    "1. Bind the Batch and its Task graph at one exact read cursor. Every Task named later"
+    " carries the key it was read under, so a head that moves during the pass is detectable"
+    " rather than silent.\n"
+    "2. Compute the candidate frontier: the Tasks standing at PLANNED. The read models carry"
+    " each record's lifecycle status and no dependency edge and no ownership claim, so"
+    " promoting that candidate set to a ready frontier needs facts this surface cannot see."
+    " Do not invent a parallelism plan: the graph is the plan, and two Tasks you expected to"
+    " run together that conflict on ownership are a plan defect to report rather than to"
+    " silently serialize around.\n"
+    "3. Render the concurrency plan before dispatching anything: which Tasks fan out, which"
+    " are forced sequential, and which constraint forces each. The operator sees this before"
+    " any Run starts.\n"
+    "4. Dispatch each ready Task as its own Run under its own Task scope: one Task, one Run,"
+    " one lease, one workspace. Opening a Run needs a compiled run specification, and no"
+    " surface this grammar reaches produces one, so the pass stops with"
+    " `run_request_uncompilable` rather than sending a request whose halves it invented.\n"
+    "5. Resume a Run with `--resume`. That request names the Run and nothing else, so it"
+    " completes, and the daemon's answer is reported as it came back.\n"
+    "6. Stop and raise for the operator when a dependency proof cannot be satisfied, a Task"
+    " exhausts its retry budget, an ownership conflict has no ordering, or the Batch's exact"
+    " head moves under the pass.\n"
+    "\n"
+    "## Invocation\n"
+    "\n"
+    "```text\n"
+    "/dispatch <batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|"
+    "attention>] [--max-parallel <N>] [--provider <id>] [--resume <run-ref>] [--budget <spec>]"
+    " [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]\n"
+    "```\n"
+    "\n"
+    "An option the grammar does not declare fails before anything is dispatched.\n"
+    "\n"
+    "## Effects boundary\n"
+    "\n"
+    "Coordinator read models plus the Run dispatch and retry verbs, and nothing else: a call"
+    " outside that allowlist is refused before the transport is touched. The coordinator holds"
+    " no write scope and no lease, edits no repository, and records no Task completion. A Run"
+    " that succeeded has produced a candidate; it has not completed its Task, and integration"
+    " is the daemon's job rather than the coordinator's.\n"
+    "\n"
+    "## Pre-flight checklist\n"
+    "\n"
+    "- [ ] The Batch reference names a Batch in a native tree; a tree without that authority"
+    " refuses at the first read.\n"
+    "- [ ] `--max-parallel` matches the resolved ceiling. The ceiling is policy, not"
+    " preference: do not raise it, and do not lower it to be safe.\n"
+    "- [ ] A Task marked exclusive runs alone, so nothing is dispatched beside it.\n"
+    "\n"
+    "## Decision surfaces\n"
+    "\n"
+    "A frontier the read models cannot settle stops the pass at `needs_operator` with a"
+    " two-option question: name the ready Tasks with `--task`, or stop and resolve the plan"
+    " defect. Stopping is a valid outcome rather than a failure.\n"
+    "\n"
+    "## Output contract\n"
+    "\n"
+    'Skill envelope with `header.skill = "/dispatch"`. The body is the `coordination_report`:'
+    " the concurrency plan computed before anything moved, every Run addressed with the method"
+    " called for it, the frontier remaining, and every condition the pass stopped on."
+    " Terminal outcomes are `candidate_ready`, `frontier_empty`, `needs_operator`,"
+    " `budget_exhausted`, `blocked` and `cancelled`.\n"
+)
+
+
+_INTEGRATE_BODY = (
+    "# /integrate\n"
+    "\n"
+    "## Canonical algorithm\n"
+    "\n"
+    "1. Resolve the Delivery Batch, its exact base, its candidate set, its conflict frames and"
+    " its current integration generation. Never author a product change, and never choose a"
+    " candidate by intuition.\n"
+    "2. For `show`, render Batch and conflict truth at the read cursor and mutate nothing."
+    " This is the branch that completes today.\n"
+    "3. For `select`, apply the declared deterministic policy and explain every inclusion and"
+    " every rejection. No read model renders a Batch's sealed candidate set, so the policy has"
+    " nothing to order and the branch stops with `candidate_set_unreadable` instead of"
+    " inventing one.\n"
+    "4. For `seal`, recompute the candidate digest and reject dirty, incomplete, unattributed"
+    " or contract-stale content. The seal request binds a Run's accepted report by schema,"
+    " digest and verdict, which this grammar carries no option for, so the branch stops with"
+    " `candidate_report_unbound` and names those fields.\n"
+    "5. For `apply` and `retry`, prove the expected head and the Batch base still match, then"
+    " create a fresh hidden generation and leave canonical history untouched until"
+    " verification succeeds. The delivery request names the exact base binding, the branch,"
+    " one commit subject per sealed candidate, a typed exit per conflict kind and a diagnostic"
+    " reference; no surface this invocation reaches resolves them, so the branch stops with"
+    " `integration_request_unnamed` rather than fabricating a revision binding.\n"
+    "6. Never resolve a conflict by editing a candidate inside this skill.\n"
+    "\n"
+    "## Invocation\n"
+    "\n"
+    "```text\n"
+    "/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...]"
+    " [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason"
+    " <text>] [--dry-run] [--expected-revision <N>] [--idempotency-key <key>] [--output"
+    " <human|json|markdown>]\n"
+    "```\n"
+    "\n"
+    "Options irrelevant to the selected branch reject rather than being ignored.\n"
+    "\n"
+    "## Effects boundary\n"
+    "\n"
+    "The Batch and conflict read models plus the candidate-report and delivery-integration"
+    " verbs, and nothing else: a call outside that allowlist is refused before the transport"
+    " is touched. The skill authors no product change, edits no candidate and resolves no"
+    " conflict itself. An apply that lands without fresh verification is"
+    " integrated-but-unproven, never complete.\n"
+    "\n"
+    "## Pre-flight checklist\n"
+    "\n"
+    "- [ ] `--expected-head` names the head the caller actually read, so a moved head reads as"
+    " stale rather than as a result.\n"
+    "- [ ] The selection policy is declared, not improvised.\n"
+    "- [ ] `--verify-after` is set whenever the delivery is meant to be complete rather than"
+    " merely applied.\n"
+    "\n"
+    "## Decision surfaces\n"
+    "\n"
+    "An ambiguous selection is a typed operator choice, never an invented order. A stale base,"
+    " an invalid seal, a conflict, a moved head, a missing receipt or an authority failure all"
+    " stop the action with the code that says which rule refused it.\n"
+    "\n"
+    "## Output contract\n"
+    "\n"
+    'Skill envelope with `header.skill = "/integrate"`. The body is the'
+    " `integration_skill_report`: the candidates considered with the reason for each"
+    " disposition, the generations selected, the conflict frames recorded, the verification"
+    " receipts bound, and the request fields the branch could not resolve. Terminal outcomes"
+    " are `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale` and `blocked`.\n"
+)
+
+
+_VERIFY_BODY = (
+    "# /verify\n"
+    "\n"
+    "## Canonical algorithm\n"
+    "\n"
+    "You verify one Delivery Batch at one exact revision and you do not repair it. You may be"
+    " invoked as an auditor or as a reviewer, and they are different jobs: an audit is"
+    " closed-world and tries to falsify each required criterion, a review is open-world and"
+    " looks for defects nobody wrote a criterion for. Do the one you were assigned.\n"
+    "\n"
+    "1. Bind the exact head the Batch delivers. Every finding is recorded against that"
+    " revision, and a head that moved makes the result stale rather than negative.\n"
+    "2. As auditor, attempt to falsify each required criterion and check that the receipts"
+    " entail what they claim rather than merely that they exist. One required criterion that"
+    " fails or cannot be verified fails the whole audit, whatever the aggregate looks like.\n"
+    "3. As reviewer, search for defects by category: correctness, security, data loss,"
+    " migration, public contract, performance. Record each as a stable finding with a"
+    " repo-relative locus and its evidence.\n"
+    "4. The `audit`, `review` and `all` modes walk the Batch verification cycle, which needs"
+    " the Batch reference and the judgment criteria the caller names and nothing else, so they"
+    " complete and report the daemon's answer.\n"
+    "5. The `gates` mode judges one Task's completion, which needs the exact base binding, the"
+    " report verdict, the gate specifications its criteria reference and the runtime facts its"
+    " proofs ran under. No surface this invocation reaches resolves them, so the mode reports"
+    " `unverified` with `proof_receipts_unpresented` and names those fields instead of"
+    " presenting invented ones.\n"
+    "6. Do not resolve your own findings and do not edit the candidate.\n"
+    "\n"
+    "## Invocation\n"
+    "\n"
+    "```text\n"
+    "/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate"
+    " <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>]"
+    " [--no-cache] [--idempotency-key <key>] [--output <human|json|markdown>]\n"
+    "```\n"
+    "\n"
+    "## Effects boundary\n"
+    "\n"
+    "The Batch and evidence read models plus the Batch verification and Task completion verbs,"
+    " which file verification receipts, and nothing else: a call outside that allowlist is"
+    " refused before the transport is touched. The pass receives no producer transcript and no"
+    " context from the Run that made the work, and that independence is the point of the job.\n"
+    "\n"
+    "## Pre-flight checklist\n"
+    "\n"
+    "- [ ] The subject names one exact revision, not a moving branch.\n"
+    "- [ ] Every judgment criterion the audit must cover is named with `--gate`.\n"
+    "- [ ] The reviewer did not produce the work being judged, and could not have changed it.\n"
+    "\n"
+    "## Decision surfaces\n"
+    "\n"
+    "Absence of evidence is not a pass. A criterion the pass cannot settle reads as"
+    " `unverified`, which blocks, and that is the correct outcome. A finding is accepted as"
+    " risk only when it is advisory and outside security, migration, data loss, authority,"
+    " public contract, required criteria and release proof; everything else is resolved or"
+    " superseded.\n"
+    "\n"
+    "## Output contract\n"
+    "\n"
+    'Skill envelope with `header.skill = "/verify"`. The body is the `verification_report`:'
+    " the head the pass was taken on, the stage the cycle now stands at, the blocking and"
+    " settled criteria, and the per-criterion rows the aggregate verdict is derived from."
+    " Aggregate verdicts are derived from rows, never asserted. Terminal outcomes are"
+    " `passed`, `failed`, `unverified`, `stale` and `blocked`.\n"
+)
+
+
 SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
         skill_name="research",
@@ -1949,6 +2163,38 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
         user_invocable=True,
         disable_model_invocation=False,
         body=_SECURITY_REVIEW_BODY,
+    ),
+    SkillSpec(
+        skill_name="dispatch",
+        description=("Coordinate one Delivery Batch: bring its ready Tasks to a candidate."),
+        argument_hint=(
+            "<batch-ref> [--task=<ref>] [--max-parallel=<n>] [--resume=<run-ref>] [--dry-run]"
+        ),
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=_DISPATCH_BODY,
+    ),
+    SkillSpec(
+        skill_name="integrate",
+        description=("Prepare or execute one daemon-owned integration action on a Delivery Batch."),
+        argument_hint=(
+            "<seal|select|apply|retry|show> <batch-or-candidate-ref>"
+            " [--candidate=<ref>] [--expected-head=<sha>] [--verify-after]"
+        ),
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=_INTEGRATE_BODY,
+    ),
+    SkillSpec(
+        skill_name="verify",
+        description=("Verify one Delivery Batch at one exact revision, as auditor or as reviewer."),
+        argument_hint=(
+            "<batch-or-revision-ref> [--mode=gates|audit|review|security|all]"
+            " [--gate=<id>] [--severity-floor=<P0|P1|P2|P3>] [--no-cache]"
+        ),
+        user_invocable=True,
+        disable_model_invocation=True,
+        body=_VERIFY_BODY,
     ),
     SkillSpec(
         skill_name="refactor-god-class",

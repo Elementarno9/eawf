@@ -68,8 +68,9 @@ def test_update_plugin_after_external_install_force_succeeds(tmp_path: Path) -> 
     skill_path.write_text(skill_path.read_text() + "\n# drift\n")
     # Operator escalates to force install (the documented recipe).
     install_plugin(tmp_path, force=True)
-    # Update now succeeds.
+    assert "# drift" not in skill_path.read_text()
     update_plugin(tmp_path)
+    assert "# drift" not in skill_path.read_text()
 
 
 def test_update_plugin_keeps_user_settings_keys(tmp_path: Path) -> None:

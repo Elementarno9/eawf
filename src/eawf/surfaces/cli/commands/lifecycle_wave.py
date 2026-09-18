@@ -670,11 +670,11 @@ def _close_and_pin(
 ) -> Wave:
     """Close *wave_id* in-process under the zero-runtime gate the daemon applies.
 
-    The in-process close used to call :func:`close_wave` with no measured
-    actual, so it recorded ``elapsed_eu=0.0`` for every wave and never ran the
-    zero-runtime gate. It now measures the runtime delta exactly as the daemon
-    does and refuses a silent zero before the close lands. A transport-fallback
-    close takes the same gate: it skips only the daemonless bypass door.
+    The runtime delta is measured exactly as the daemon measures it, and a
+    silent ``elapsed_eu=0.0`` is refused before the close lands: an unmeasured
+    actual would pass the zero-runtime gate without ever running it. A
+    transport-fallback close takes the same gate, skipping only the daemonless
+    bypass door.
 
     Args:
         state: State under the lock; mutated in place.

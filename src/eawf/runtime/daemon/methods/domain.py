@@ -44,10 +44,15 @@ a Milestone is the moment the work is declared done, so the request must
 carry the reference of a sealed PendingAction receipt; without one the
 answer is ``protected_approval_required`` and nothing moves. The reference
 travels into the committed event's binding refs, so the approval an
-acceptance was taken against is readable from the event alone. The
-PendingAction record itself is not read here -- the guard takes the
-reference as the proof -- and the seal is verified where that record
-lands.
+acceptance was taken against is readable from the event alone.
+
+The referenced record is then read from the tree, never presented, and
+held against the acceptance bundle the request carries. A caller may
+present any bundle it likes: the sealed approval records the digest of
+the bundle it was actually given to, so a bundle that is not that one
+digests differently and the acceptance is refused. Who sealed it needs no
+check at all -- the resolver slot of a PendingAction is typed to a human
+principal, so an agent-approved acceptance is a record that cannot exist.
 """
 
 from __future__ import annotations
@@ -62,11 +67,13 @@ from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
+from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.identity import EntityKind, IdentityError, QualifiedUrn, parse_qualified_urn
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
+from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.track import Track, TrackStatus
 from eawf.kernel.state.epoch2.transitions import (
@@ -110,6 +117,7 @@ from eawf.runtime.daemon.methods.domain_envelope import (
     refused_envelope,
 )
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
 from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 logger = logging.getLogger(__name__)
@@ -182,9 +190,15 @@ class MilestoneAcceptParams(LifecycleParams):
         approval_receipt_ref: The sealed PendingAction receipt the
             acceptance was approved by. Absent, or addressing anything
             other than a PendingAction, refuses the request.
+        acceptance_bundle: The revision the operator read before
+            approving. Presented rather than read because nothing seals
+            one yet; presenting it buys a caller nothing, because the
+            approval read from the tree records the digest it was given
+            to and a different bundle does not produce it.
     """
 
     approval_receipt_ref: AnyEntityUrn | None = None
+    acceptance_bundle: MilestoneAcceptanceBundle | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -568,10 +582,17 @@ def _sealed_approval(params: LifecycleParams) -> QualifiedUrn | None:
     return ref
 
 
+#: What an acceptance request is told when it names no approval at all.
+_APPROVAL_ABSENT: Final = (
+    f"needs the reference of a sealed {EntityKind.PENDING_ACTION.value} receipt and the "
+    "request carries none"
+)
+
+
 def _approval_refusal(
-    verb: LifecycleVerb, *, params: LifecycleParams, record: LifecycleRecord
+    verb: LifecycleVerb, *, params: LifecycleParams, record: LifecycleRecord, detail: str
 ) -> DomainEnvelope:
-    """Return the refusal of an acceptance nobody sealed an approval for.
+    """Return the refusal of an acceptance no sealed approval covers.
 
     The code is outside the transaction's own refusal vocabulary, so the
     envelope is built here rather than through the transaction's refusal
@@ -581,6 +602,7 @@ def _approval_refusal(
         verb: The verb the client asked for.
         params: The already-validated request parameters.
         record: The subject as the document holds it.
+        detail: Which acceptance rule was not met.
 
     Returns:
         An ``error`` envelope carrying ``protected_approval_required``.
@@ -594,19 +616,62 @@ def _approval_refusal(
         errors=(
             DomainError(
                 code=DomainErrorCode.PROTECTED_APPROVAL_REQUIRED,
-                message=(
-                    f"{verb.method} needs the reference of a sealed "
-                    f"{EntityKind.PENDING_ACTION.value} receipt and the request carries none"
-                ),
+                message=f"{verb.method} {detail}",
                 entity_ref=str(params.urn),
                 guard=TransitionGuard.ACCEPTANCE_JOURNEY_PASSED.value,
                 remediation=(
-                    "Seal the acceptance approval as a PendingAction and retry with its "
-                    "receipt reference."
+                    "Seal the acceptance approval as a PendingAction against the exact bundle "
+                    "revision, and retry with its receipt reference."
                 ),
             ),
         ),
     )
+
+
+def _unsealed_acceptance(
+    document: dict[str, Any], *, params: LifecycleParams, record: LifecycleRecord
+) -> str | None:
+    """Return why this acceptance is not covered, or ``None`` when it is.
+
+    The PendingAction is read from the document rather than accepted from
+    the request, so a caller cannot supply the approval it needs. The
+    bundle is presented, and is pinned by the digest the sealed approval
+    itself recorded, so presenting a different one refuses rather than
+    passes.
+
+    Args:
+        document: The locked document the mutation would land in.
+        params: The already-validated request parameters.
+        record: The subject as the document holds it.
+
+    Returns:
+        The sentence naming the unmet rule, or ``None``.
+    """
+    ref = _sealed_approval(params)
+    if ref is None:
+        return _APPROVAL_ABSENT
+    if not isinstance(params, MilestoneAcceptParams) or not isinstance(record, Milestone):
+        return "reads an acceptance bundle only for a Milestone"
+    bundle = params.acceptance_bundle
+    if bundle is None:
+        return (
+            f"holds {ref.entity_key} against the acceptance bundle it approved, and the "
+            "request presents none"
+        )
+    row = document_rows(document, Epoch2Collection.PENDING_ACTION).get(ref.entity_key)
+    if row is None:
+        return f"finds no {ref.entity_key} in the tree, so nothing sealed the approval"
+    try:
+        action = PendingAction.model_validate(row)
+    except ValidationError:
+        return f"cannot read {ref.entity_key} as a pending action"
+    try:
+        require_sealed_acceptance(
+            action, bundle=bundle, milestone_ref=record.urn, status=record.status
+        )
+    except AcceptanceRefusedError as error:
+        return str(error)
+    return None
 
 
 def _kind_mismatch(verb: LifecycleVerb, *, params: LifecycleParams) -> DomainEnvelope:
@@ -829,8 +894,10 @@ def _preflight(
         return None
     if record.status not in verb.from_statuses:
         return _illegal_edge(verb, params=params, record=record)
-    if verb.approval_required and _sealed_approval(params) is None:
-        return _approval_refusal(verb, params=params, record=record)
+    if verb.approval_required:
+        unsealed = _unsealed_acceptance(document, params=params, record=record)
+        if unsealed is not None:
+            return _approval_refusal(verb, params=params, record=record, detail=unsealed)
     guard = _unmet_guard(
         verb, document=document, document_path=document_path, record=record, params=params
     )

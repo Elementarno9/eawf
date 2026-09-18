@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import uuid
 from collections.abc import Callable, Coroutine
@@ -97,22 +98,33 @@ def _run(body: Callable[[], Coroutine[Any, Any, None]]) -> None:
 # ---- the note primitive ------------------------------------------------------
 
 
-def test_note_allows_mismatched_root(tmp_path: Path) -> None:
+def test_note_allows_mismatched_root(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A serve against another root is admitted, and says which root it wrote for."""
     bound = tmp_path / "bound-repo" / ".ea" / "state.json"
     bound.parent.mkdir(parents=True)
     other_repo = tmp_path / "other-repo"
     other_repo.mkdir()
     ctx = _ctx(bound, tmp_path)
-    note_cross_root_serve(ctx, repo_root=str(other_repo), command="probe")
+    with caplog.at_level(logging.INFO, logger="eawf.runtime.daemon.methods"):
+        note_cross_root_serve(ctx, repo_root=str(other_repo), command="probe")
+    notes = [r for r in caplog.records if "cross_root_serve" in r.getMessage()]
+    assert len(notes) == 1
+    assert "probe" in notes[0].getMessage()
+    assert str((other_repo / ".ea" / "state.json").resolve()) in notes[0].getMessage()
 
 
-def test_note_passes_matching_and_omitted_root(tmp_path: Path) -> None:
+def test_note_passes_matching_and_omitted_root(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Neither the matching root nor the omitted one is a cross-root serve, so neither notes."""
     bound_repo = tmp_path / "bound-repo"
     bound = bound_repo / ".ea" / "state.json"
     bound.parent.mkdir(parents=True)
     ctx = _ctx(bound, tmp_path)
-    note_cross_root_serve(ctx, repo_root=str(bound_repo), command="probe")
-    note_cross_root_serve(ctx, repo_root=None, command="probe")
+    with caplog.at_level(logging.INFO, logger="eawf.runtime.daemon.methods"):
+        note_cross_root_serve(ctx, repo_root=str(bound_repo), command="probe")
+        note_cross_root_serve(ctx, repo_root=None, command="probe")
+    assert [r for r in caplog.records if "cross_root_serve" in r.getMessage()] == []
 
 
 # ---- CR-01 flipped: a cross-root mutation is served against ITS root ---------

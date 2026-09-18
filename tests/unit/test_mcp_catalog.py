@@ -58,7 +58,7 @@ def test_mcp_catalog_entry_defaults_match_spec() -> None:
     assert entry.description == ""
 
 
-def test_mcp_catalog_module_import_is_side_effect_free() -> None:
+def test_mcp_catalog_module_import_is_side_effect_free(capsys: pytest.CaptureFixture[str]) -> None:
     """Re-importing the module must not emit warnings or print."""
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -66,3 +66,6 @@ def test_mcp_catalog_module_import_is_side_effect_free() -> None:
         import eawf.runtime.mcp.catalog as catalog_mod
 
         importlib.reload(catalog_mod)
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == ""

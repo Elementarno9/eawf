@@ -1,0 +1,63 @@
+{
+  "schema_version": "runtime-dispatch/v1",
+  "fixture_id": "capability-unknown",
+  "summary": "A required capability that is unknown, expired, degraded or unsupported by the driver denies unattended dispatch. The denial is taken while the spec is being compiled, so no workspace is leased and no provider process is started; only a capability the certification verifies admits the Run.",
+  "required_capability": "event_replay",
+  "cases": [
+    {
+      "case_id": "unknown",
+      "summary": "The driver declares the capability and the certification observed nothing about it, so its level is unknown rather than absent.",
+      "manifest_declares": true,
+      "observation": "absent",
+      "expected": {
+        "verdict": "denied",
+        "capability_status": "unknown",
+        "code": "required_capability_unavailable"
+      }
+    },
+    {
+      "case_id": "expired",
+      "summary": "The certification verified the capability and its evidence has since lapsed, so the observation no longer attests anything at compile time.",
+      "manifest_declares": true,
+      "observation": "expired",
+      "expected": {
+        "verdict": "denied",
+        "capability_status": "expired",
+        "code": "required_capability_unavailable"
+      }
+    },
+    {
+      "case_id": "degraded",
+      "summary": "The capability is available only through a reduced workflow, which is not the verified level an unattended Run requires.",
+      "manifest_declares": true,
+      "observation": "degraded",
+      "expected": {
+        "verdict": "denied",
+        "capability_status": "degraded",
+        "code": "required_capability_unavailable"
+      }
+    },
+    {
+      "case_id": "mismatched",
+      "summary": "The bound driver manifest declares no such capability, so the requirement and the tuple do not match.",
+      "manifest_declares": false,
+      "observation": "absent",
+      "expected": {
+        "verdict": "denied",
+        "capability_status": "unsupported",
+        "code": "required_capability_unavailable"
+      }
+    },
+    {
+      "case_id": "verified",
+      "summary": "The certification verifies the capability and its evidence is current, which is the one state an unattended dispatch is admitted on.",
+      "manifest_declares": true,
+      "observation": "verified",
+      "expected": {
+        "verdict": "admitted",
+        "capability_status": "verified",
+        "code": null
+      }
+    }
+  ]
+}

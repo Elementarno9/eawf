@@ -6,7 +6,9 @@ skill module is imported for its registration decorator (``@register``);
 the imports are otherwise unused. The catalog spans the six core + four
 meta workflow skills, ``/blitz``, and the six skill-surface bodies
 (``/coauthor``, ``/memory``, ``/agent-dispatch``, ``/compress``,
-``/wave-spec``, ``/security-review``).
+``/wave-spec``, ``/security-review``), plus the three lifecycle skills
+that drive the native delivery path (``/dispatch``, ``/integrate``,
+``/verify``).
 
 The CLI surface (`eawf.surfaces.cli.commands.skill`) imports this module so
 ``eawf skill list`` reports every skill as ``installed``.
@@ -39,8 +41,10 @@ from eawf.workflow.skills import blitz as _blitz  # noqa: F401
 from eawf.workflow.skills import coauthor as _coauthor  # noqa: F401
 from eawf.workflow.skills import compress as _compress  # noqa: F401
 from eawf.workflow.skills import differentiate as _differentiate  # noqa: F401
+from eawf.workflow.skills import dispatch as _dispatch  # noqa: F401
 from eawf.workflow.skills import flow as _flow  # noqa: F401
 from eawf.workflow.skills import init as _init  # noqa: F401
+from eawf.workflow.skills import integrate as _integrate  # noqa: F401
 from eawf.workflow.skills import memory as _memory  # noqa: F401
 from eawf.workflow.skills import polish as _polish  # noqa: F401
 from eawf.workflow.skills import prep as _prep  # noqa: F401
@@ -49,6 +53,7 @@ from eawf.workflow.skills import review as _review  # noqa: F401
 from eawf.workflow.skills import roadmap as _roadmap  # noqa: F401
 from eawf.workflow.skills import security_review as _security_review  # noqa: F401
 from eawf.workflow.skills import ship as _ship  # noqa: F401
+from eawf.workflow.skills import verify as _verify  # noqa: F401
 from eawf.workflow.skills import wave_spec as _wave_spec  # noqa: F401
 
 __all__: list[str] = []

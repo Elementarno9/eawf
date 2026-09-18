@@ -75,10 +75,12 @@ _READ_ONLY_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
 
 # Mutating / lifecycle skills the model is BARRED from auto-invoking. The
 # six lifecycle drivers (prep, ship, polish, init, roadmap, flow) advance
-# the workflow; the remaining three scaffold or dispatch a concrete
-# lifecycle artifact (memory writes durable recall, wave-spec scaffolds a
-# spec, agent-dispatch hands a wave to a runtime) — auto-invoking any of
-# them would drive workflow progress without operator intent.
+# the workflow; three more scaffold or dispatch a concrete lifecycle
+# artifact (memory writes durable recall, wave-spec scaffolds a spec,
+# agent-dispatch hands a wave to a runtime); and the three native
+# delivery drivers (dispatch, integrate, verify) open Runs, apply
+# integrations and file verification receipts — auto-invoking any of them
+# would drive workflow progress without operator intent.
 _MUTATING_SKILL_NAMES: frozenset[str] = frozenset(
     {
         "prep",
@@ -90,6 +92,9 @@ _MUTATING_SKILL_NAMES: frozenset[str] = frozenset(
         "memory",
         "agent-dispatch",
         "wave-spec",
+        "dispatch",
+        "integrate",
+        "verify",
     }
 )
 
