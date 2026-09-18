@@ -1,0 +1,44 @@
+---
+name: integrate
+description: "Prepare or execute one daemon-owned integration action on a Delivery Batch."
+argument-hint: "<seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate=<ref>] [--expected-head=<sha>] [--verify-after]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /integrate
+
+## Canonical algorithm
+
+1. Resolve the Delivery Batch, its exact base, its candidate set, its conflict frames and its current integration generation. Never author a product change, and never choose a candidate by intuition.
+2. For `show`, render Batch and conflict truth at the read cursor and mutate nothing. This is the branch that completes today.
+3. For `select`, apply the declared deterministic policy and explain every inclusion and every rejection. No read model renders a Batch's sealed candidate set, so the policy has nothing to order and the branch stops with `candidate_set_unreadable` instead of inventing one.
+4. For `seal`, recompute the candidate digest and reject dirty, incomplete, unattributed or contract-stale content. The seal request binds a Run's accepted report by schema, digest and verdict, which this grammar carries no option for, so the branch stops with `candidate_report_unbound` and names those fields.
+5. For `apply` and `retry`, prove the expected head and the Batch base still match, then create a fresh hidden generation and leave canonical history untouched until verification succeeds. The delivery request names the exact base binding, the branch, one commit subject per sealed candidate, a typed exit per conflict kind and a diagnostic reference; no surface this invocation reaches resolves them, so the branch stops with `integration_request_unnamed` rather than fabricating a revision binding.
+6. Never resolve a conflict by editing a candidate inside this skill.
+
+## Invocation
+
+```text
+/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--dry-run] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]
+```
+
+Options irrelevant to the selected branch reject rather than being ignored.
+
+## Effects boundary
+
+The Batch and conflict read models plus the candidate-report and delivery-integration verbs, and nothing else: a call outside that allowlist is refused before the transport is touched. The skill authors no product change, edits no candidate and resolves no conflict itself. An apply that lands without fresh verification is integrated-but-unproven, never complete.
+
+## Pre-flight checklist
+
+- [ ] `--expected-head` names the head the caller actually read, so a moved head reads as stale rather than as a result.
+- [ ] The selection policy is declared, not improvised.
+- [ ] `--verify-after` is set whenever the delivery is meant to be complete rather than merely applied.
+
+## Decision surfaces
+
+An ambiguous selection is a typed operator choice, never an invented order. A stale base, an invalid seal, a conflict, a moved head, a missing receipt or an authority failure all stop the action with the code that says which rule refused it.
+
+## Output contract
+
+Skill envelope with `header.skill = "/integrate"`. The body is the `integration_skill_report`: the candidates considered with the reason for each disposition, the generations selected, the conflict frames recorded, the verification receipts bound, and the request fields the branch could not resolve. Terminal outcomes are `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale` and `blocked`.

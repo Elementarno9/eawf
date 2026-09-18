@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, thin
+from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
 
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "check"),
@@ -46,7 +47,10 @@ def _checks() -> list[Check]:
 
 
 def render(view: View) -> list[str]:
-    """Return the Health frame."""
+    """Return the Health frame, native when a read model is held."""
+    model = native(view)
+    if model is not None:
+        return native_frame(view, model)
     s, w, h = view.session, view.w, view.h
     # two columns of air between the longest check name and its result cell
     grid = Grid([30, 11, 0])

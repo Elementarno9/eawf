@@ -21,7 +21,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.renderers.spine import native_frame
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import pad
 
 OWN = "Runtime"
@@ -86,8 +86,9 @@ def _line(group: Group, row: tuple[str, ...], cur: bool) -> str:
 
 def render(view: View) -> list[str]:
     """Return the Track frame, native when a read model is held."""
-    if view.projection is not None:
-        return native_frame(view, view.projection)
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, fx, w = view.session, view.fixture, view.w
     focused = group_of(s.track_group)
     s.track_group = focused.id

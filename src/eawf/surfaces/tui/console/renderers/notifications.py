@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
+from eawf.surfaces.tui.console.renderers.registers import native_frame
 
 _CLASSES: tuple[tuple[str, str, str], ...] = (
     ("needs permission", "yes", "policy"),
@@ -20,6 +21,8 @@ _KEYS: tuple[tuple[str, str], ...] = (("↑↓", "class"), ("Esc", "close"))
 
 def render(view: View) -> list[str]:
     """Return the Notifications card."""
+    if view.register is not None:
+        return native_frame(view, view.register)
     s = view.session
     dv.sel_in(s, len(_CLASSES))
     lines = [f"{LABEL_MARK}CLASS               MAY INTERRUPT   DECIDED BY{CHIP_END}", ""]

@@ -104,6 +104,11 @@ _TREE_ANCHOR_FILENAME: Final = "state.json"
 #: The document field a repository row records its current head under.
 _HEAD_FIELD: Final = "head_sha"
 
+#: The compare-and-swap token a freshly drafted revision carries. A
+#: submission is the first write of its key, so there is nothing earlier
+#: for it to have moved from.
+_DRAFT_REVISION: Final = 1
+
 #: The origin every natively planned record carries.
 _NATIVE_ORIGIN: Final = EntityOrigin(kind="native", mapping_basis="native", confidence="exact")
 
@@ -202,6 +207,74 @@ def plan_lock_urns(body: PlanBody) -> tuple[str, ...]:
         *(str(batch.urn) for batch in body.batches),
         *(str(task.urn) for task in body.tasks),
     )
+
+
+def validate_plan_proposal(
+    document: dict[str, Any], *, proposal: PlanRevisionProposal, at: UtcDatetime
+) -> PlanRevisionAdvanced | PlanRefusal:
+    """Return the VALIDATED successor *proposal* earns, or why it earns none.
+
+    Everything here reads the document and writes nothing, which is what
+    lets a worker's proposal be judged by the same rules that admit an
+    operator's submission. The two differ in what they may do with the
+    verdict, not in how the verdict is reached: this function decides,
+    and only :func:`submit_plan_revision` may record what it decided.
+
+    Args:
+        document: The locked generation document the bindings are
+            observed from.
+        proposal: The strict create document the planner emitted.
+        at: When the submission happened, stamped on the successor.
+
+    Returns:
+        The validated revision beside the event it emits, or the typed
+        refusal. A refusal names the exact guard that produced it.
+    """
+    body = proposal.body
+    if _stored_revision(document, key=proposal.key) is not None:
+        return PlanRefusal(
+            code=PlanRefusalCode.REVISION_CONFLICT,
+            guard="plan_revision_key_free",
+            detail=f"the document already holds a plan revision keyed {proposal.key!r}",
+            remediation="Submit the repair as a child revision under a new key.",
+        )
+    world = observe_plan_world(document, body=body)
+    if world.track_revision is None or world.policy_revision is None:
+        return PlanRefusal(
+            code=PlanRefusalCode.IDENTITY_NOT_FOUND,
+            guard="primary_track_resolved",
+            detail=(
+                "the plan names Track "
+                f"{body.milestone.primary_track_ref.entity_key!r}, which the document "
+                "does not hold as a readable row"
+            ),
+            remediation="Create the Track before planning a Milestone under it.",
+        )
+    missing = sorted(ref for ref, head in world.heads.items() if head is None)
+    if missing:
+        return PlanRefusal(
+            code=PlanRefusalCode.IDENTITY_NOT_FOUND,
+            guard="repository_head_readable",
+            detail=f"these repositories record no head to bind: {', '.join(missing)}",
+            remediation="Record each repository's head before planning against it.",
+        )
+    draft = PlanRevision.model_validate(
+        {
+            "key": proposal.key,
+            "revision": _DRAFT_REVISION,
+            "status": PlanRevisionStatus.DRAFT.value,
+            "author": proposal.author.model_dump(mode="json"),
+            "created_at": at.isoformat(),
+            "updated_at": at.isoformat(),
+            "content_digest": plan_content_digest(body),
+            "base_state_revision": world.track_revision,
+            "policy_revision": world.policy_revision,
+            "head_bindings": list(_head_bindings(world)),
+            "body": body.model_dump(mode="json"),
+            "parent_key": proposal.parent_key,
+        }
+    )
+    return advance_plan_revision(draft, to=PlanRevisionStatus.VALIDATED, at=at)
 
 
 def observe_plan_world(document: dict[str, Any], *, body: PlanBody) -> ObservedPlanWorld:
@@ -463,56 +536,13 @@ def submit_plan_revision(
         if replayed is not None:
             return replayed
         document = session.read_document()
-        if _stored_revision(document, key=proposal.key) is not None:
-            return PlanRefusal(
-                code=PlanRefusalCode.REVISION_CONFLICT,
-                guard="plan_revision_key_free",
-                detail=f"the document already holds a plan revision keyed {proposal.key!r}",
-                remediation="Submit the repair as a child revision under a new key.",
-            )
-        world = observe_plan_world(document, body=body)
-        if world.track_revision is None or world.policy_revision is None:
-            return PlanRefusal(
-                code=PlanRefusalCode.IDENTITY_NOT_FOUND,
-                guard="primary_track_resolved",
-                detail=(
-                    "the plan names Track "
-                    f"{body.milestone.primary_track_ref.entity_key!r}, which the document "
-                    "does not hold as a readable row"
-                ),
-                remediation="Create the Track before planning a Milestone under it.",
-            )
-        missing = sorted(ref for ref, head in world.heads.items() if head is None)
-        if missing:
-            return PlanRefusal(
-                code=PlanRefusalCode.IDENTITY_NOT_FOUND,
-                guard="repository_head_readable",
-                detail=f"these repositories record no head to bind: {', '.join(missing)}",
-                remediation="Record each repository's head before planning against it.",
-            )
-        draft = PlanRevision.model_validate(
-            {
-                "key": proposal.key,
-                "revision": 1,
-                "status": PlanRevisionStatus.DRAFT.value,
-                "author": proposal.author.model_dump(mode="json"),
-                "created_at": at.isoformat(),
-                "updated_at": at.isoformat(),
-                "content_digest": plan_content_digest(body),
-                "base_state_revision": world.track_revision,
-                "policy_revision": world.policy_revision,
-                "head_bindings": list(_head_bindings(world)),
-                "body": body.model_dump(mode="json"),
-                "parent_key": proposal.parent_key,
-            }
-        )
-        outcome = advance_plan_revision(draft, to=PlanRevisionStatus.VALIDATED, at=at)
+        outcome = validate_plan_proposal(document, proposal=proposal, at=at)
         if isinstance(outcome, PlanRefusal):
             return outcome
         return _commit(
             context,
             session=session,
-            write=_revision_only_write(document, outcome=outcome, revision_before=draft.revision),
+            write=_revision_only_write(document, outcome=outcome, revision_before=_DRAFT_REVISION),
             actor=actor,
             idempotency_key=idempotency_key,
             request_digest=digest,
@@ -930,4 +960,5 @@ __all__ = [
     "plan_lock_urns",
     "resolve_plan_body",
     "submit_plan_revision",
+    "validate_plan_proposal",
 ]

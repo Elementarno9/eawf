@@ -1,9 +1,11 @@
 """What a key handler works with, and the one way a route opens another.
 
 A :class:`Ctx` is built per keystroke by the app: the session, the registers, the host
-that owns the clock and the quit, the frame size, and the ``--verbose`` flag. Route key
-hooks and the dispatcher both receive it, so a route's own keys live beside its renderer
-without the dispatcher knowing them.
+that owns the clock and the quit, the frame size, the ``--verbose`` flag and the read
+model the frame was drawn from. Route key hooks and the dispatcher both receive it, so a
+route's own keys live beside its renderer without the dispatcher knowing them, and a key
+that acts on what the frame shows reads the same model the frame drew rather than a
+second answer of its own.
 """
 
 from __future__ import annotations
@@ -11,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.clock import Clock, notify
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.registry import REGISTRY
@@ -45,6 +49,9 @@ class Ctx:
         w: The frame width in cells.
         h: The frame height in rows.
         verbose: Whether an unclaimed key is named in the key log.
+        projection: The read model the frame was drawn from, when one is held. A key
+            that acts on what the frame shows reads this rather than deriving a second
+            answer the operator never saw.
     """
 
     session: Session
@@ -53,6 +60,7 @@ class Ctx:
     w: int
     h: int
     verbose: bool = False
+    projection: SpineView | RouteReadModel | None = None
 
     @property
     def s(self) -> Session:

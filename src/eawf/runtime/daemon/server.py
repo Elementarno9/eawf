@@ -34,12 +34,15 @@ import orjson
 
 # Import to ensure handlers register before dispatch runs.
 import eawf.runtime.daemon.methods.agent
+import eawf.runtime.daemon.methods.candidate  # registers runtime.candidate.submit / report.bind
 import eawf.runtime.daemon.methods.close  # registers durable close control methods
 import eawf.runtime.daemon.methods.close_hosted  # registers close.host (P32-I01-W19)
 import eawf.runtime.daemon.methods.close_rereceipt  # registers close.rereceipt
 import eawf.runtime.daemon.methods.config  # registers config read/write methods
 import eawf.runtime.daemon.methods.conformance  # registers the three conformance stages
 import eawf.runtime.daemon.methods.daemon
+import eawf.runtime.daemon.methods.delivery  # registers runtime.delivery.integrate
+import eawf.runtime.daemon.methods.delivery_acceptance  # registers reconcile/acceptance repair
 import eawf.runtime.daemon.methods.doctor  # registers doctor.apply_repair
 import eawf.runtime.daemon.methods.domain  # registers the per-entity domain.<entity>.<verb>s
 import eawf.runtime.daemon.methods.domain_envelope  # registers domain.transition.apply

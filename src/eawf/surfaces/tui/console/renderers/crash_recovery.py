@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
+from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
 
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "door"),
@@ -19,7 +20,10 @@ _DOORS: tuple[list[str], ...] = (
 
 
 def render(view: View) -> list[str]:
-    """Return the Recovery frame."""
+    """Return the Recovery frame, native when a read model is held."""
+    model = native(view)
+    if model is not None:
+        return native_frame(view, model)
     s, w = view.session, view.w
     grid = Grid([13, 21, 0])
     dv.sel_in(s, len(_DOORS))

@@ -445,13 +445,16 @@ def request_daemon_shutdown(
 def wait_for_daemon_ready(
     runtime_dir: Path,
     *,
-    timeout_seconds: float = SPAWN_POLL_TIMEOUT_SECONDS,
+    timeout_seconds: float | None = None,
 ) -> int:
     """Poll ``daemon.ping`` until the daemon is RPC-ready.
 
     Args:
         runtime_dir: Daemon runtime directory.
-        timeout_seconds: Wait window in seconds.
+        timeout_seconds: Wait window in seconds; ``None`` reads
+            :data:`SPAWN_POLL_TIMEOUT_SECONDS` at call time. Binding the module
+            constant as the default would freeze it at import, so a caller that
+            rebinds it would silently keep waiting the original window.
 
     Returns:
         PID reported by ``daemon.ping``.
@@ -459,6 +462,8 @@ def wait_for_daemon_ready(
     Raises:
         DaemonSpawnTimeout: When readiness does not arrive in time.
     """
+    if timeout_seconds is None:
+        timeout_seconds = SPAWN_POLL_TIMEOUT_SECONDS
     if timeout_seconds <= 0:
         raise DaemonSpawnTimeout(f"timeout must be positive, got {timeout_seconds!r}")
     deadline = time.monotonic() + timeout_seconds

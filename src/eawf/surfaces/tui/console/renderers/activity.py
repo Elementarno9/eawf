@@ -19,6 +19,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.reads import reads
+from eawf.surfaces.tui.console.renderers.registers import native_frame
 from eawf.surfaces.tui.console.width import pad
 
 RAIL_W = 29
@@ -88,6 +89,8 @@ def _with_rail(view: View, body: list[str], col: int) -> list[str]:
 
 def render(view: View) -> list[str]:
     """Return the Activity frame."""
+    if view.register is not None:
+        return native_frame(view, view.register)
     s, w, h = view.session, view.w, view.h
     rows_all = _rows(view)
     if s.sel >= len(rows_all):

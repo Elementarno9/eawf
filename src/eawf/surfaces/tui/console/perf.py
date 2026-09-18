@@ -1,9 +1,8 @@
 """The console performance harness: latency distributions, and the cold-paint clock.
 
-Every console budget before this module was unfalsifiable: the probes measured
-correctness only, so a render that got ten times slower still passed. This harness
-records distributions off the shipped render path, so a budget is read off the console
-an operator drives rather than off a private one.
+A correctness probe cannot falsify a budget: a render that got ten times slower still
+passes it. This harness records distributions off the shipped render path, so a budget
+is read off the console an operator drives rather than off a private one.
 
 Three things are recorded.
 
@@ -98,8 +97,8 @@ DEFAULT_KEY_SAMPLES = 100
 #: fleet is too small to be the reason. Measured at about 0.5ms on a host running several
 #: other jobs, with the median steady inside a five per cent band across repeats, so this
 #: ceiling carries roughly twenty times headroom and still discriminates: a per-keystroke
-#: regression of the kind the P20 postmortem recorded -- re-reading the whole workspace
-#: state on every key -- lands on the median, not on one sample, and trips this.
+#: regression that re-reads the whole workspace state on every key lands on the median,
+#: not on one sample, and trips this.
 KEY_FLOOR_CEILING_MS = 10.0
 
 #: The per-row budget in microseconds: what one extra run may add to a keypress. Measured

@@ -5,6 +5,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, Grid, View, boxed
 from eawf.surfaces.tui.console.renderers import settings as st
+from eawf.surfaces.tui.console.renderers.provenance import stack_frame
 
 _KEYS: tuple[tuple[str, str], ...] = (("↑↓", "layer"), ("Esc", "close"))
 _NOT_SET = "–"  # noqa: RUF001
@@ -17,7 +18,13 @@ def _label(name: str) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the stack card, or the settings frame when no key is focused."""
+    """Return the stack card, native when the effective-settings view is held.
+
+    Outside the native mode it draws the prototype catalog's stack, and the settings
+    frame when no key is focused.
+    """
+    if view.settings is not None:
+        return stack_frame(view, view.settings)
     s, cfg, w, h = view.session, view.fixture.settings, view.w, view.h
     name = st.sec(s, cfg)
     k = st.cur_key(s, cfg)

@@ -26,7 +26,7 @@ from eawf.surfaces.tui.console.overlays.palette import palette_hits
 from eawf.surfaces.tui.console.overlays.question import ANSWERS
 from eawf.surfaces.tui.console.overlays.states import OV_MODEL, step_state
 from eawf.surfaces.tui.console.registry import OVERLAY_ARROWS, REGISTRY, SECTIONS, route_for_id
-from eawf.surfaces.tui.console.renderers import copy_target, seam_for, track
+from eawf.surfaces.tui.console.renderers import copy_target, cost_ceiling, seam_for, track
 from eawf.surfaces.tui.console.renderers import timeline as tl
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import Severity
@@ -679,6 +679,11 @@ def _enter_activity(ctx: Ctx) -> None:
     _drill(ctx, "run.detail", row.run if row else None)
 
 
+def _enter_cost_ceiling(ctx: Ctx) -> None:
+    """Open the Run the cursor sits on in the stopped list, which the footer promises."""
+    _drill(ctx, "run.detail", cost_ceiling.stopped_run(ctx.s))
+
+
 _ENTER: Mapping[str, Callable[[Ctx], None]] = MappingProxyType(
     {
         HOME: _enter_note("nothing to drill"),
@@ -699,6 +704,7 @@ _ENTER: Mapping[str, Callable[[Ctx], None]] = MappingProxyType(
         "activity": _enter_activity,
         "batch.detail": _enter_nav("task.detail"),
         "attention": _enter_attention,
+        "cost.ceiling": _enter_cost_ceiling,
     }
 )
 

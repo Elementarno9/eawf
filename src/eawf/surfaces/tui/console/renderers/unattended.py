@@ -9,6 +9,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
 
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "row"),
@@ -27,7 +28,10 @@ def run_under_cursor(sel: int) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the Unattended frame."""
+    """Return the Unattended frame, native when a read model is held."""
+    model = native(view)
+    if model is not None:
+        return native_frame(view, model)
     s, w = view.session, view.w
     not_started = "∅ not started"
     queue = [

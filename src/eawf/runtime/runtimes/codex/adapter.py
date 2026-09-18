@@ -40,10 +40,14 @@ from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
+    NativeLaunchOutcome,
+    NativeLaunchRequest,
+    NativeRunLauncher,
     RuntimeAdapter,
     RuntimeSpawnError,
     SpawnResult,
     acquire_spawn_slot,
+    compose_worker_hello,
     release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
@@ -251,7 +255,7 @@ _REASONING_EFFORT_CONFIG_KEY = "model_reasoning_effort"
 _TOOLS_CONFIG_NAMESPACE = "tools"
 
 
-def _codex_tool_config_key(tool: str) -> str:
+def codex_tool_config_key(tool: str) -> str:
     """Return the dotted codex config key for a tool's grant boolean.
 
     Maps an eawf tool name (e.g. ``"WebSearch"``) to the codex ``tools.<name>``
@@ -292,9 +296,9 @@ def _codex_tool_grant_overrides(denied_tools: Sequence[str]) -> list[str]:
     """
     overrides: list[str] = []
     for allowed in invert_deny_to_allow(list(denied_tools)):
-        overrides.extend(("-c", f"{_codex_tool_config_key(allowed)}=true"))
+        overrides.extend(("-c", f"{codex_tool_config_key(allowed)}=true"))
     for denied in sorted(set(denied_tools)):
-        overrides.extend(("-c", f"{_codex_tool_config_key(denied)}=false"))
+        overrides.extend(("-c", f"{codex_tool_config_key(denied)}=false"))
     return overrides
 
 
@@ -1109,6 +1113,76 @@ class CodexAdapter:
         return self.accepts_continue
 
 
-_ADAPTER_CHECK: RuntimeAdapter = CodexAdapter()
+class CodexNativeLauncher:
+    """Start one native Run on Codex from its compiled spec.
 
-__all__ = ["CodexAdapter", "ConcurrentSpawnCapError"]
+    The launcher reads policy from the spec and from nothing else, and it
+    answers with the worker's announcement rather than with free text, so
+    the daemon judges the launch against the Run's recorded binding
+    instead of against whatever the child printed.
+
+    Attributes:
+        provider_kind: The compiled ``provider_options`` discriminator
+            this launcher answers to.
+        driver_version: The version this driver implementation reports as
+            its loaded runtime. It describes the eawf driver rather than
+            the installed CLI, which publishes no version the spawn path
+            can read without a second process.
+        worker_protocol_version: The worker protocol this driver speaks.
+        event_codec_version: The event codec this driver emits.
+    """
+
+    provider_kind: str = "codex"
+    driver_version: str = "1.0.0"
+    worker_protocol_version: str = "1.0.0"
+    event_codec_version: str = "1.0.0"
+
+    def __init__(self, adapter: CodexAdapter | None = None) -> None:
+        """Bind the launcher to the adapter that owns the spawn.
+
+        Args:
+            adapter: The spawning adapter; a fresh one by default.
+        """
+        self._adapter = adapter if adapter is not None else CodexAdapter()
+
+    async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
+        """Start the child inside the leased workspace and take its hello.
+
+        Args:
+            request: The compiled spec, the sealed capsule, the resolved
+                workspace and the announcement sequence expected back.
+
+        Returns:
+            The provider session, the child's pid and the announcement.
+
+        Raises:
+            RuntimeSpawnError: The spawn timed out, exited non-zero, or
+                returned an envelope that does not parse.
+        """
+        spec = request.spec
+        result = await self._adapter.spawn_session(
+            request.prompt,
+            model=spec.model_id,
+            cwd=str(request.workspace),
+            denied_tools=sorted(spec.tool_policy.deny),
+            timeout=float(spec.limits.wall_seconds),
+        )
+        return NativeLaunchOutcome(
+            provider_session_ref=result.session_id,
+            subprocess_pid=result.subprocess_pid,
+            hello=compose_worker_hello(
+                spec=spec,
+                capsule=request.capsule,
+                provider_session_ref=result.session_id,
+                sdk_version=self.driver_version,
+                worker_protocol_version=self.worker_protocol_version,
+                event_codec_version=self.event_codec_version,
+                hello_sequence=request.hello_sequence,
+            ),
+        )
+
+
+_ADAPTER_CHECK: RuntimeAdapter = CodexAdapter()
+_LAUNCHER_CHECK: NativeRunLauncher = CodexNativeLauncher()
+
+__all__ = ["CodexAdapter", "CodexNativeLauncher", "ConcurrentSpawnCapError"]

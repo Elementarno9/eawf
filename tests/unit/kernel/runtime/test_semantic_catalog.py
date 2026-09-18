@@ -80,7 +80,7 @@ RETRY_CLASSES = (
 )
 #: The two tools that write, and so bind to a mutating task-scoped Run.
 WRITING_TOOLS = ("workspace_apply_patch", "submit_candidate")
-HANDLE = f"handle-{'f' * 16}"
+HANDLE = f"wsh-{'f' * 32}"
 DIGEST = f"sha256:{'a' * 64}"
 ARTIFACT = "artifact://log/run-10"
 SUBJECT = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042"
@@ -285,7 +285,7 @@ def test_repo_read_path_stays_inside_the_repository(path: str, admitted: bool) -
 
 @pytest.mark.parametrize(
     "resource_handle",
-    ["", "/srv/checkout/eawf", "handle-zzzz", f"handle-{'f' * 15}", f"handle-{'f' * 65}"],
+    ["", "/srv/checkout/eawf", "wsh-zzzz", f"wsh-{'f' * 31}", f"wsh-{'f' * 33}"],
 )
 def test_repo_read_refuses_a_handle_that_is_not_opaque(resource_handle: str) -> None:
     with pytest.raises(ValidationError):

@@ -44,6 +44,9 @@ _EXPECTED_SKILL_NAMES: set[str] = {
     "compress",
     "wave-spec",
     "security-review",
+    "dispatch",
+    "integrate",
+    "verify",
     # Model-only code-quality playbooks (user_invocable=False).
     "refactor-god-class",
     "write-adr",

@@ -1,0 +1,43 @@
+---
+description: "Coordinate one Delivery Batch: bring its ready Tasks to a candidate."
+---
+
+# /dispatch
+
+## Canonical algorithm
+
+1. Bind the Batch and its Task graph at one exact read cursor. Every Task named later carries the key it was read under, so a head that moves during the pass is detectable rather than silent.
+2. Compute the candidate frontier: the Tasks standing at PLANNED. The read models carry each record's lifecycle status and no dependency edge and no ownership claim, so promoting that candidate set to a ready frontier needs facts this surface cannot see. Do not invent a parallelism plan: the graph is the plan, and two Tasks you expected to run together that conflict on ownership are a plan defect to report rather than to silently serialize around.
+3. Render the concurrency plan before dispatching anything: which Tasks fan out, which are forced sequential, and which constraint forces each. The operator sees this before any Run starts.
+4. Dispatch each ready Task as its own Run under its own Task scope: one Task, one Run, one lease, one workspace. Opening a Run needs a compiled run specification, and no surface this grammar reaches produces one, so the pass stops with `run_request_uncompilable` rather than sending a request whose halves it invented.
+5. Resume a Run with `--resume`. That request names the Run and nothing else, so it completes, and the daemon's answer is reported as it came back.
+6. Stop and raise for the operator when a dependency proof cannot be satisfied, a Task exhausts its retry budget, an ownership conflict has no ordering, or the Batch's exact head moves under the pass.
+
+## Invocation
+
+```text
+/dispatch <batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] [--provider <id>] [--resume <run-ref>] [--budget <spec>] [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]
+```
+
+An option the grammar does not declare fails before anything is dispatched.
+
+## Effects boundary
+
+Coordinator read models plus the Run dispatch and retry verbs, and nothing else: a call outside that allowlist is refused before the transport is touched. The coordinator holds no write scope and no lease, edits no repository, and records no Task completion. A Run that succeeded has produced a candidate; it has not completed its Task, and integration is the daemon's job rather than the coordinator's.
+
+## Pre-flight checklist
+
+- [ ] The Batch reference names a Batch in a native tree; a tree without that authority refuses at the first read.
+- [ ] `--max-parallel` matches the resolved ceiling. The ceiling is policy, not preference: do not raise it, and do not lower it to be safe.
+- [ ] A Task marked exclusive runs alone, so nothing is dispatched beside it.
+
+## Decision surfaces
+
+A frontier the read models cannot settle stops the pass at `needs_operator` with a two-option question: name the ready Tasks with `--task`, or stop and resolve the plan defect. Stopping is a valid outcome rather than a failure.
+
+## Output contract
+
+Skill envelope with `header.skill = "/dispatch"`. The body is the `coordination_report`: the concurrency plan computed before anything moved, every Run addressed with the method called for it, the frontier remaining, and every condition the pass stopped on. Terminal outcomes are `candidate_ready`, `frontier_empty`, `needs_operator`, `budget_exhausted`, `blocked` and `cancelled`.
+
+<!-- argument hint: <batch-ref> [--task=<ref>] [--max-parallel=<n>] [--resume=<run-ref>] [--dry-run] -->
+ARGUMENTS: $ARGUMENTS

@@ -152,7 +152,7 @@ def test_a_denied_receipt_offers_no_shell_command_as_a_remedy(
             "workspace_apply_patch",
             {
                 "tool_id": "workspace_apply_patch",
-                "lease_id": "lease-0123456789abcdef",
+                "lease_id": "LSE-0123456789abcdef0123456789abcdef",
                 "expected_workspace_generation": 1,
                 "patch_ref": "artifact://patch/one",
                 "patch_digest": f"sha256:{'2' * 64}",
@@ -203,7 +203,7 @@ def test_every_refusal_code_the_gateway_uses_carries_its_declared_retry_class(
             tool_id="workspace_apply_patch",
             payload={
                 "tool_id": "workspace_apply_patch",
-                "lease_id": "lease-0123456789abcdef",
+                "lease_id": "LSE-0123456789abcdef0123456789abcdef",
                 "expected_workspace_generation": 1,
                 "patch_ref": "artifact://patch/one",
                 "patch_digest": f"sha256:{'2' * 64}",

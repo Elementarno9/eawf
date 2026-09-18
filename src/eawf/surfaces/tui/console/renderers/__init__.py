@@ -103,7 +103,7 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "settings": RouteModule(render=settings.render, seam=settings.seam),
         "search": RouteModule(render=search.render),
         "history.diff": RouteModule(render=history_diff.render, seam=history_diff.seam),
-        "trust": RouteModule(render=trust.render),
+        "trust": RouteModule(render=trust.render, seam=trust.seam),
         "evidence": RouteModule(render=evidence.render, seam=evidence.seam),
         "health": RouteModule(render=health.render),
         "sandbox.log": RouteModule(render=sandbox_log.render, seam=sandbox_log.seam),
@@ -112,7 +112,7 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "settings.stack": RouteModule(render=settings_stack.render),
         "notifications": RouteModule(render=notifications.render),
         "merge.conflict": RouteModule(render=merge_conflict.render),
-        "export": RouteModule(render=export.render),
+        "export": RouteModule(render=export.render, seam=export.seam),
         "receipt": RouteModule(render=receipt.render),
         "campaign.step": RouteModule(
             render=campaign_step.render, seam=campaign_step.seam, copy=campaign_step.copy

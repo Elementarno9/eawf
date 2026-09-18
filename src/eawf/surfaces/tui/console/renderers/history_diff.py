@@ -8,6 +8,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 
 PAIRS: tuple[str, ...] = ("41,150 → 41,208", "41,088 → 41,150", "40,990 → 41,088")
 ENTITY = "RUN-538453eb"
@@ -21,7 +22,10 @@ _KEYS: tuple[tuple[str, str], ...] = (
 
 
 def render(view: View) -> list[str]:
-    """Return the History diff frame."""
+    """Return the History diff frame, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, w = view.session, view.w
     unchanged = "– unchanged"  # noqa: RUF001
     fields = [

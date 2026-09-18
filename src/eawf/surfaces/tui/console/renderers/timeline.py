@@ -22,6 +22,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 Lane = tuple[str, str, str]
@@ -166,7 +167,10 @@ def _regions(view: View) -> list[str]:
 
 
 def render(view: View) -> list[str]:
-    """Return the Timeline frame."""
+    """Return the Timeline frame, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, fx, w, h = view.session, view.fixture, view.w, view.h
     dv.sel_in(s, len(TL_LANES))
     rows = [

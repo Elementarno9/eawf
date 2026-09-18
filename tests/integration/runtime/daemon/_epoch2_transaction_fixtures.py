@@ -20,11 +20,13 @@ from typing import Any, Final
 
 import yaml
 
+from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import require_native_authority
 from eawf.kernel.store.compaction import read_document, write_document
 from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import MethodContext
@@ -48,6 +50,12 @@ AT: Final = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 MILESTONE_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030"
 BATCH_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007"
 TASK_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042"
+
+#: The container slot every seeded URN is spelled under.
+_CONTAINER: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
+
+#: The sealed approval an acceptance is taken on.
+APPROVAL_URN: Final = f"{_CONTAINER}/pending-action/ACT-0001"
 
 
 def seed_row(entity: str, status: str) -> dict[str, Any]:
@@ -143,12 +151,74 @@ def root_context(provisioned: CanaryProvision, runtime_root: Path) -> Epoch2Root
     return method_context(runtime_root).native_root_context(tree_root(provisioned))
 
 
+def acceptance_bundle_row() -> dict[str, Any]:
+    """Return revision one of the seeded Milestone's acceptance bundle.
+
+    The journey mirrors the seed record's single step, and the binding is
+    the one a completed Milestone carries, so the bundle describes the
+    same acceptance the transaction would commit.
+    """
+    return MilestoneAcceptanceBundle.model_validate(
+        {
+            "milestone_ref": MILESTONE_URN,
+            "revision": 1,
+            "accepted_binding": seed_row("milestone", "COMPLETED")["accepted_binding"],
+            "steps": [
+                {
+                    "step_id": "AS-01",
+                    "passed": True,
+                    "observation": "the install completed and reported the version",
+                    "evidence_kinds": ["artifact"],
+                    "evidence_refs": [f"{_CONTAINER}/evidence/EVD-0002"],
+                }
+            ],
+            "sealed_at": AT.isoformat(),
+        }
+    ).model_dump(mode="json")
+
+
+def sealed_approval_row() -> dict[str, Any]:
+    """Return the sealed protected approval an acceptance is taken on.
+
+    The resolver is a person because the record admits nothing else, and
+    the recorded digest is the bundle's own, so a request presenting any
+    other bundle is refused rather than accepted.
+    """
+    return {
+        "id": "ACT-0001",
+        "kind": "protected_approval",
+        "subject_ref": MILESTONE_URN,
+        "question": "Accept MLS-0030 on the bundle you just read?",
+        "bundle_digest": MilestoneAcceptanceBundle.model_validate(acceptance_bundle_row()).digest(),
+        "options": [
+            {"option_id": "approve", "label": "Accept the Milestone", "effect": "approve"},
+            {"option_id": "decline", "label": "Do not accept it", "effect": "decline"},
+        ],
+        "idempotency_key": "req-accept-0001",
+        "status": "SEALED",
+        "requested_by": {"principal_kind": "human", "principal_id": "OP-0001"},
+        "resolution_actor": {"principal_kind": "human", "principal_id": "OP-0001"},
+        "selected_option_id": "approve",
+        "receipt_ref": f"{_CONTAINER}/evidence/EVD-0001",
+        "created_at": AT.isoformat(),
+        "updated_at": AT.isoformat(),
+    }
+
+
+def approval_rows() -> dict[str, dict[str, Any]]:
+    """Return the document rows an acceptance needs beside its Milestone."""
+    return {Epoch2Collection.PENDING_ACTION.value: {"ACT-0001": sealed_approval_row()}}
+
+
 __all__ = [
+    "APPROVAL_URN",
     "AT",
     "BATCH_URN",
     "MILESTONE_URN",
     "SEED_RECORDS",
     "TASK_URN",
+    "acceptance_bundle_row",
+    "approval_rows",
     "document_path",
     "firehose_path",
     "legacy_task_row",
@@ -156,6 +226,7 @@ __all__ = [
     "provision",
     "rekeyed",
     "root_context",
+    "sealed_approval_row",
     "seed",
     "seed_row",
     "tree_root",

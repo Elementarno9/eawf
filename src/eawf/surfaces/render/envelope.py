@@ -56,7 +56,8 @@ EnvelopeStatus = Literal["ok", "needs_user", "blocked", "failed", "partial"]
 # envelopes, so ``SkillName`` is intentionally open while this tuple preserves
 # deterministic builtin ordering for CLI tables and plugin rendering.
 # The eleven core/meta + /blitz skills are followed by the six
-# skill-surface bodies.
+# skill-surface bodies and then the three lifecycle skills that drive the
+# native Task, Run, candidate and Batch path.
 CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/research",
     "/prep",
@@ -75,6 +76,9 @@ CANONICAL_SKILL_NAMES: tuple[str, ...] = (
     "/compress",
     "/wave-spec",
     "/security-review",
+    "/dispatch",
+    "/integrate",
+    "/verify",
 )
 SkillName = str
 

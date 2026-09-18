@@ -52,6 +52,7 @@ from eawf.kernel.projection.connection import (
     staleness_target_seconds,
     vouches_for_counts,
 )
+from eawf.kernel.projection.settings import SETTINGS_ROUTE, SettingsView
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
 from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
 
@@ -153,6 +154,7 @@ class ProjectionSeam:
         self._app_state = on_state
         self._app_degraded = on_degraded
         self._projection: RouteProjection | None = None
+        self._settings: SettingsView | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
         self._connection = ConnectionValue.DISCONNECTED
@@ -187,6 +189,11 @@ class ProjectionSeam:
     def projection(self) -> RouteProjection | None:
         """Return the projection the console draws; ``None`` before the first load."""
         return self._projection
+
+    @property
+    def settings(self) -> SettingsView | None:
+        """Return the effective-settings view; ``None`` before the first settings read."""
+        return self._settings
 
     @property
     def cursor(self) -> int:
@@ -268,6 +275,24 @@ class ProjectionSeam:
         projection = self._adopt(RouteProjection.model_validate(answer))
         logger.debug(f"load route={self._route} cursor={projection.header.source_cursor}")
         return projection
+
+    async def load_settings(self) -> SettingsView:
+        """Read every configuration leaf and the layer behind it, and hold the answer.
+
+        The settings view is not a row projection: config carries no ordinal, so there
+        is nothing to patch it with and it is re-read instead. It comes through this
+        seam anyway, so the console has one link and one answer to how old a read is.
+
+        Returns:
+            The view, with every leaf's effective value, winning layer and stack.
+        """
+        answer = await self._binding.call(
+            READ_METHOD_TEMPLATE.format(route=SETTINGS_ROUTE), self._params()
+        )
+        view = SettingsView.model_validate(answer)
+        self._settings = view
+        logger.debug(f"load_settings leaves={len(view.leaves)}")
+        return view
 
     async def reconnect(self) -> ReconnectOutcome:
         """Run the reconnect protocol from the cursor the console persisted.

@@ -11,6 +11,7 @@ from typing import Any
 
 from eawf.surfaces.tui.console.frame import Fixed, Grid, View, g_frame, g_row, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 _FIRST_INK = re.compile(r"\S")
@@ -50,7 +51,10 @@ def _group(view: View, name: str, heads: Sequence[str], rows: Sequence[Any]) -> 
 
 
 def render(view: View) -> list[str]:
-    """Return the Backlog frame."""
+    """Return the Backlog frame, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s = view.session
     reg = view.fixture.registers
     lists = {_DRAFTS: reg.bl_drafts, _DEFERRED: reg.bl_deferred}

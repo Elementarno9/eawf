@@ -18,7 +18,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from eawf.kernel.projection.registers import RegisterView, attention_mine
+from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.settings import SettingsView
 from eawf.kernel.projection.spine import SpineView
+from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console.attention import open_count
 from eawf.surfaces.tui.console.fixture import EntryState, Fixture
 from eawf.surfaces.tui.console.header import ProcessValue, header_row
@@ -44,8 +48,17 @@ class View:
         verbose: Whether the ``--verbose`` trace row is painted.
         held: Whether the console clock is held, which freezes every live feed.
         projection: The daemon-served read model of the session's route, when the console
-            is bound to one. ``None`` is the epoch-1 mode the prototype registers drive,
-            which is what the tracked golden contract replays.
+            is bound to one. The spine routes hold a :class:`SpineView`; every other
+            bound family holds a :class:`RouteReadModel`. ``None`` is the epoch-1 mode
+            the prototype registers drive, which the tracked golden contract replays.
+        register: The daemon-served register read model of the session's route, under
+            the same rule as ``projection``: a route is either a spine route or a
+            register route, so at most one of the two is ever held.
+        attention: The Attention register, held whatever route is drawn, because the
+            header prints its count on every frame. It is the same object as
+            ``register`` while the session sits on the Attention route.
+        settings: The daemon-served effective-settings view, held on the settings
+            routes under the same rule: ``None`` draws the prototype catalog.
     """
 
     session: Session
@@ -54,7 +67,10 @@ class View:
     h: int
     verbose: bool = False
     held: bool = False
-    projection: SpineView | None = None
+    projection: SpineView | RouteReadModel | None = None
+    register: RegisterView | None = None
+    attention: RegisterView | None = None
+    settings: SettingsView | None = None
 
 
 class Fixed(str):
@@ -82,6 +98,21 @@ def snap_caret(row: str) -> str:
     return found.group(1) + " " * (len(gap) - 1) + f"{CARET} " + row[len(found.group(0)) - 1 :]
 
 
+def needs_count(view: View) -> int:
+    """Return the header's attention count: the Attention register's, when one is held.
+
+    The count has one producer whatever route is drawn, so the header's ``!N`` and the
+    Attention frame's ``mine`` row cannot disagree. A register nobody writes states no
+    count, and the header shows no badge for it -- the badge is absent, which is what it
+    already is at zero, rather than a zero standing in for a number nobody has.
+    """
+    held = view.attention
+    if held is None:
+        return open_count(view.fixture) if view.fixture.proto.attention else 0
+    mine = attention_mine(held)
+    return int(mine.value) if mine.state is TruthState.KNOWN and mine.value else 0
+
+
 def header(view: View, crumb: str) -> str:
     """Return the frame's header row for ``crumb``.
 
@@ -95,8 +126,7 @@ def header(view: View, crumb: str) -> str:
         return header_row(
             session, crumb=crumb, scope=proto.scope, needs=0, w=view.w, process=process
         )
-    needs = open_count(view.fixture) if proto.attention else 0
-    return header_row(session, crumb=crumb, scope=proto.scope, needs=needs, w=view.w)
+    return header_row(session, crumb=crumb, scope=proto.scope, needs=needs_count(view), w=view.w)
 
 
 def entry_state(view: View) -> EntryState:

@@ -281,7 +281,7 @@ def candidate_payload(
     return {
         "tool_id": "submit_candidate",
         "task_ref": task_ref,
-        "lease_id": "lease-0123456789abcdef",
+        "lease_id": "LSE-0123456789abcdef0123456789abcdef",
         "submission_ref": "artifact://candidate/one",
         "changed_paths": list(changed_paths),
         "resulting_tree_digest": digest("1"),
@@ -292,7 +292,7 @@ def patch_payload(*, generation: int) -> dict[str, Any]:
     """Return the payload of a workspace patch at an expected generation."""
     return {
         "tool_id": "workspace_apply_patch",
-        "lease_id": "lease-0123456789abcdef",
+        "lease_id": "LSE-0123456789abcdef0123456789abcdef",
         "expected_workspace_generation": generation,
         "patch_ref": "artifact://patch/one",
         "patch_digest": digest("2"),
@@ -304,7 +304,7 @@ def command_payload(*, argv: tuple[str, ...]) -> dict[str, Any]:
     return {
         "tool_id": "run_scoped_command",
         "command_family_id": "test-runner",
-        "cwd_handle": "handle-0123456789abcdef",
+        "cwd_handle": "wsh-0123456789abcdef0123456789abcdef",
         "argv": list(argv),
         "timeout_seconds": 60,
         "expected_evidence_kind": "deterministic",

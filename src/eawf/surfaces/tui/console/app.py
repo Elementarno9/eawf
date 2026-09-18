@@ -10,7 +10,7 @@ through the app's one interval.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
@@ -21,7 +21,28 @@ from textual.events import Key, Resize
 from textual.strip import Strip
 from textual.widget import Widget
 
-from eawf.kernel.projection.spine import SPINE_ROUTES, SpineView, build_spine_view
+from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
+from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
+from eawf.kernel.delivery.receipts import ProofReceipt
+from eawf.kernel.projection.compute import RouteProjection
+from eawf.kernel.projection.integration import INTEGRATION_ROUTES, build_integration_view
+from eawf.kernel.projection.operations import OPERATIONS_ROUTES, build_operations_view
+from eawf.kernel.projection.registers import (
+    ATTENTION_ROUTE,
+    REGISTER_ROUTES,
+    RegisterView,
+    build_register_view,
+)
+from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.settings import SETTINGS_ROUTES, SettingsView
+from eawf.kernel.projection.spine import NATIVE_ROUTES, SpineView, build_spine_view
+from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, build_transcript_view
+from eawf.kernel.projection.verification import (
+    VERIFICATION_ROUTES,
+    RuntimeTupleVerdict,
+    build_verification_view,
+)
+from eawf.kernel.runtime.events import RunEventRecord
 from eawf.surfaces.tui.console.clock import (
     Clock,
     FakeClock,
@@ -37,10 +58,13 @@ from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
+from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
+from eawf.workflow.delivery.acceptance import AcceptanceApproval
+from eawf.workflow.projection.acceptance import ACCEPTANCE_ROUTES, build_acceptance_view
 
 if TYPE_CHECKING:
     # imported for the type alone: the seam pulls the daemon method registry in, and a
@@ -214,8 +238,28 @@ class ConsoleApp(App[None]):
         clock: The console clock; a :class:`FakeClock` holds every timed behaviour.
         verbose: Whether the trace row names the handler of every key.
         seam: The console's one link to the daemon projection. A console given one draws
-            the spine routes from the read model it holds; a console given none draws the
-            prototype registers, which is the mode the tracked golden contract replays.
+            the bound spine, register, verification, operations, integration and
+            transcript routes from the read model it holds; a console given none draws
+            the prototype registers, which is the mode the tracked golden contract
+            replays.
+        health_verdicts: The conformance verdicts the health route draws. A console
+            given none draws the unknown token for every tuple cell, which is the
+            honest answer while nothing has read the conformance store for it.
+        integration_generations: The Batch generations the Git surface draws, oldest
+            first. Generations are ledger lines rather than document rows, so they
+            arrive beside the projection under the same rule as the health verdicts.
+        integration_conflicts: The conflict frames the conflict card draws. A console
+            given none draws no hunk and says the Batch is not blocked.
+        run_events: The Run event lines the transcript draws, in any order. A console
+            given none draws no block rather than a block that says nothing.
+        acceptance_bundle: The sealed bundle the Milestone frame draws. A bundle is a
+            process record rather than a document row, so it arrives beside the
+            projection under the same rule as the health verdicts.
+        acceptance_approval: The approval given to a bundle digest. It is drawn only
+            against the bundle whose digest it names, so a later revision never inherits
+            an earlier consent.
+        proof_receipts: The receipts a receipt card may open, in record order. A console
+            given none opens no card and says the receipt is not held.
     """
 
     CSS = """
@@ -229,12 +273,26 @@ class ConsoleApp(App[None]):
         *,
         verbose: bool = False,
         seam: ProjectionSeam | None = None,
+        health_verdicts: Sequence[RuntimeTupleVerdict] = (),
+        integration_generations: Sequence[IntegrationGeneration] = (),
+        integration_conflicts: Sequence[IntegrationConflict] = (),
+        run_events: Sequence[RunEventRecord] = (),
+        acceptance_bundle: MilestoneAcceptanceBundle | None = None,
+        acceptance_approval: AcceptanceApproval | None = None,
+        proof_receipts: Sequence[ProofReceipt] = (),
     ) -> None:
         super().__init__()
         self.fixture = fixture
         self.console_clock: Clock = clock or Clock()
         self.verbose = verbose
         self.seam = seam
+        self.health_verdicts = tuple(health_verdicts)
+        self.integration_generations = tuple(integration_generations)
+        self.integration_conflicts = tuple(integration_conflicts)
+        self.run_events = tuple(run_events)
+        self.acceptance_bundle = acceptance_bundle
+        self.acceptance_approval = acceptance_approval
+        self.proof_receipts = tuple(proof_receipts)
         self.session = Session()
         self.reset(None)
         self.frame_rows: list[str] = []
@@ -278,23 +336,80 @@ class ConsoleApp(App[None]):
             return SIZES[self.session.size]
         return (w, h)
 
-    def spine_view(self) -> SpineView | None:
-        """Return the read model the session's route draws from, if the seam holds one.
+    @property
+    def route_key(self) -> str:
+        """Return the port key of the session's route.
+
+        The registry addresses a row by the pack's id and the seam by the port's key,
+        and the normalisation map renames one route between them; comparing the wrong
+        one would leave that route drawing its prototype registers forever.
+        """
+        spec = REGISTRY.by_id.get(self.session.route)
+        return spec.key if spec is not None else self.session.route
+
+    def _held_projection(self) -> RouteProjection | None:
+        """Return the projection the seam holds for the session's own route.
 
         The seam carries one route, so a projection for another route is not this route's
-        answer and the frame falls back rather than drawing another route's rows.
+        answer and the frame falls back rather than drawing another route's rows. Each
+        family states its own read model, and a route no family names falls back too.
         """
         seam = self.seam
-        if seam is None or seam.route != self.session.route:
+        if seam is None or seam.route != self.route_key:
             return None
-        projection = seam.projection
-        if projection is None or projection.route not in SPINE_ROUTES:
+        return seam.projection
+
+    def route_view(self) -> SpineView | RouteReadModel | None:
+        """Return the read model the session's route draws from, if one is held."""
+        projection = self._held_projection()
+        if projection is None:
             return None
-        return build_spine_view(projection)
+        route = projection.route
+        if route in NATIVE_ROUTES:
+            return build_spine_view(projection)
+        if route in VERIFICATION_ROUTES:
+            return build_verification_view(projection, verdicts=self.health_verdicts)
+        if route in OPERATIONS_ROUTES:
+            return build_operations_view(projection)
+        if route in INTEGRATION_ROUTES:
+            return build_integration_view(
+                projection,
+                generations=self.integration_generations,
+                conflicts=self.integration_conflicts,
+            )
+        if route == TRANSCRIPT_ROUTE:
+            return build_transcript_view(projection, events=self.run_events)
+        if route in ACCEPTANCE_ROUTES:
+            return build_acceptance_view(
+                projection,
+                bundle=self.acceptance_bundle,
+                approval=self.acceptance_approval,
+                receipts=self.proof_receipts,
+            )
+        return None
+
+    def register_view(self) -> RegisterView | None:
+        """Return the register read model the session's route draws from, if one is held."""
+        projection = self._held_projection()
+        if projection is None or projection.route not in REGISTER_ROUTES:
+            return None
+        return build_register_view(projection)
+
+    def settings_view(self) -> SettingsView | None:
+        """Return the effective-settings view the settings routes draw from.
+
+        Config is not read per route, so this one answer serves the settings list and the
+        stack card it opens; every other route draws nothing from it.
+        """
+        seam = self.seam
+        if seam is None or self.route_key not in SETTINGS_ROUTES:
+            return None
+        return seam.settings
 
     def view(self) -> View:
         """Return the render view at the current frame size."""
         w, h = self.frame_size
+        register = self.register_view()
         return View(
             session=self.session,
             fixture=self.fixture,
@@ -302,7 +417,14 @@ class ConsoleApp(App[None]):
             h=h,
             verbose=self.verbose,
             held=self.held,
-            projection=self.spine_view(),
+            projection=self.route_view(),
+            register=register,
+            # the header prints the attention count on every route, so it is held only
+            # while the one seam is bound to the route that states it
+            attention=register
+            if register is not None and register.route == ATTENTION_ROUTE
+            else None,
+            settings=self.settings_view(),
         )
 
     def reset(self, setup: SessionSetup | None) -> None:
@@ -344,6 +466,7 @@ class ConsoleApp(App[None]):
             w=view.w,
             h=view.h,
             verbose=self.verbose,
+            projection=view.projection,
         )
         dispatch(ctx, key, shift)
         self.render_frame()

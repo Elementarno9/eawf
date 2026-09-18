@@ -1,0 +1,29 @@
+{
+  "schema_version": "runtime-delivery/v1",
+  "fixture_id": "submission-before-loss",
+  "summary": "A submission filed before the provider was lost survives the loss untouched: the retry that follows cannot prove continuity, so it runs as a new Run linked to its predecessor, and the recovery Run presenting the same work replays the standing candidate instead of filing a second one. Nothing is sealed along the way, because no report was ever accepted.",
+  "write_set": ["src"],
+  "submission": {
+    "submission_ref": "artifact://candidate/submission-before-loss",
+    "changed_paths": ["src/module.py"],
+    "resulting_tree_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "loss": {
+    "summary": "The provider session is gone, so the retry offers neither the session it started nor a recompiled contract digest.",
+    "continuity_offered": false,
+    "disposition": "linked_run",
+    "unmet_guards": ["provider_session_continuity", "contract_unchanged"]
+  },
+  "recovery": {
+    "summary": "The recovery Run presents the predecessor's work under the same Task and the same resulting tree, which is the same candidate.",
+    "replayed": true,
+    "submission_lines": 1,
+    "run_ref_stays_with": "predecessor"
+  },
+  "expected": {
+    "submission_survives": true,
+    "report_binding": "pending",
+    "sealed": false,
+    "failed_checks": ["report_bound", "tree_digest_agrees", "verdict_admits_delivery"]
+  }
+}

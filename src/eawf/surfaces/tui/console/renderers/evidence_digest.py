@@ -11,6 +11,7 @@ from typing import Any
 
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, boxed
+from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
 from eawf.surfaces.tui.console.session import Session
 
 _UNKNOWN_PREFIX = re.compile(r"^\? ")
@@ -32,7 +33,10 @@ def _means(outcome: str) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the rung card."""
+    """Return the rung card, native when a read model is held."""
+    model = native(view)
+    if model is not None:
+        return native_frame(view, model)
     fx = view.fixture
     r = rung_of(view.session, fx)
     found = list(r["found"])

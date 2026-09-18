@@ -86,19 +86,71 @@ class _ProjectionViewModel(Epoch2Model):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
+#: The corpus the diagnostics routes read across: every register another console route
+#: renders. A history entry is about one of these records and a search hits one of them,
+#: so stating the set once keeps the diagnostics routes over the corpus the rest of the
+#: console draws instead of each inventing a set of its own.
+DIAGNOSTICS_CORPUS: Final[tuple[Epoch2Collection, ...]] = (
+    Epoch2Collection.TRACK,
+    Epoch2Collection.CAMPAIGN,
+    Epoch2Collection.MILESTONE,
+    Epoch2Collection.BATCH,
+    Epoch2Collection.TASK,
+    Epoch2Collection.RUN,
+    Epoch2Collection.ARTIFACT,
+)
+
+
 #: Which epoch-2 collections each console route renders, in render order. A route
 #: absent from this table has no document binding yet, so its read is refused; an
 #: empty projection would be indistinguishable from a scope that holds nothing.
+#:
+#: A register whose producer has not shipped is still bound, because a register that
+#: was read and held nothing counts zero honestly; what a route may not do is claim a
+#: collection it does not render.
 ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingProxyType(
     {
         "activity": (Epoch2Collection.RUN,),
+        "attention": (Epoch2Collection.PENDING_ACTION,),
         "backlog": (Epoch2Collection.TASK,),
         "batch.detail": (Epoch2Collection.BATCH,),
+        "campaign": (Epoch2Collection.CAMPAIGN,),
+        # a step and an artifact card are sub-surfaces of the campaign: the record each
+        # addresses is the campaign row and the artifact row the campaign produced
+        "campaign.artifact": (Epoch2Collection.ARTIFACT,),
+        "campaign.step": (Epoch2Collection.CAMPAIGN,),
+        "cost.ceiling": (Epoch2Collection.RUN,),
+        "crash.recovery": (Epoch2Collection.RUN,),
+        "evidence": (Epoch2Collection.CLAIM, Epoch2Collection.EVIDENCE),
+        "evidence.digest": (Epoch2Collection.EVIDENCE,),
+        # a report of a Run is taken over that Run's own record, so the export card
+        # renders the register the Run surface it was opened from renders
+        "export": (Epoch2Collection.RUN,),
+        # the delivery a Batch received is a Batch fact: a generation and the
+        # conflict that blocked one are both filed against the Batch they moved
+        "git.pr": (Epoch2Collection.BATCH,),
+        "health": (Epoch2Collection.HEALTH_VIEW,),
+        "history": DIAGNOSTICS_CORPUS,
+        "history.diff": DIAGNOSTICS_CORPUS,
+        "merge.conflict": (Epoch2Collection.BATCH,),
+        # the Milestone frame draws the Milestone and the Batches cut under it, which
+        # is the membership an acceptance bundle is sealed over
+        "milestone": (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
+        "notifications": (Epoch2Collection.RUN,),
+        "receipt": (Epoch2Collection.RECEIPT,),
+        # a candidate's membership is the Milestones it carries, so the Release frame
+        # renders the release register beside them
+        "release": (Epoch2Collection.RELEASE, Epoch2Collection.MILESTONE),
         "roadmap": (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
         "run.detail": (Epoch2Collection.RUN,),
+        "sandbox.log": (Epoch2Collection.SANDBOX_POLICY,),
         "scope.home": (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE),
+        "search": DIAGNOSTICS_CORPUS,
         "task.detail": (Epoch2Collection.TASK,),
         "track": (Epoch2Collection.TRACK,),
+        "transcript": (Epoch2Collection.RUN,),
+        "trust": (Epoch2Collection.CLAIM,),
+        "unattended": (Epoch2Collection.RUN,),
     }
 )
 
@@ -449,6 +501,7 @@ def _digest(*, route: str, cursor: int, rows: tuple[ProjectionRow, ...]) -> str:
 
 __all__ = [
     "CANONICAL_SEQUENCE_FIELD",
+    "DIAGNOSTICS_CORPUS",
     "MISSING_STATUS_REASON",
     "PROJECTION_POLICY_REVISION",
     "PROJECTION_PRODUCER",

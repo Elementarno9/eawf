@@ -9,6 +9,11 @@ fresh deterministic receipt can be reused. Every leg that is not reused is
 returned with its reason, so an audit names each rerun instead of silently
 re-running or silently trusting.
 
+Which revision a leg is required at is the caller's decision, not this
+module's: :func:`build_verification_leg` takes the binding it is handed.
+That is what lets one caller require a proof at the head everyone is
+delivering while requiring another at the older revision it was proved on.
+
 Nothing here runs a gate or touches storage: callers pass the receipts
 they hold and act on the returned plan.
 """
@@ -35,7 +40,7 @@ from eawf.kernel.delivery.receipts import (
     RevisionBinding,
 )
 from eawf.kernel.state.enums import GateReceiptResult
-from eawf.kernel.state.epoch2.base import Epoch2Model
+from eawf.kernel.state.epoch2.base import Epoch2Model, Sha256DigestStr
 from eawf.workflow.delivery.criteria import ExecutionContract
 
 logger = logging.getLogger(__name__)
@@ -191,6 +196,68 @@ class VerificationLeg(Epoch2Model):
         return self
 
 
+class ProofRuntimeFacts(Epoch2Model):
+    """The half of a freshness key that no stored record supplies.
+
+    A deterministic proof is reusable only while the runner, the
+    execution environment, the selector result and the effective policy
+    are still what they were, and none of those four is derivable from
+    the plan or from the tree: they are observations of the machine that
+    ran the proof. They travel together so a leg cannot be assembled from
+    three of them plus a guess at the fourth.
+
+    Attributes:
+        selector_digest: Digest of the selector result the runner receives.
+        policy_digest: Digest of the effective verification policy.
+        runner_digest: Digest of the runner and its toolchain.
+        environment_digest: Digest of the execution environment.
+        external_inputs: Every declared external input the proof reads.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    selector_digest: Sha256DigestStr
+    policy_digest: Sha256DigestStr
+    runner_digest: Sha256DigestStr
+    environment_digest: Sha256DigestStr
+    external_inputs: tuple[ExternalInputDigest, ...] = ()
+
+
+def build_verification_leg(
+    contract: ExecutionContract,
+    *,
+    revision_binding: RevisionBinding,
+    facts: ProofRuntimeFacts,
+) -> VerificationLeg:
+    """Return the leg *contract* must be proved at on *revision_binding*.
+
+    Args:
+        contract: The compiled contract the leg executes.
+        revision_binding: The exact code the proof is required against.
+        facts: The runtime half of the key.
+
+    Returns:
+        The required leg, carrying the key a receipt must match.
+
+    Raises:
+        pydantic.ValidationError: A digest is malformed, an external input
+            repeats, or the binding and the runner disagree about the
+            execution environment.
+    """
+    return VerificationLeg(
+        contract=contract,
+        expected=compute_proof_freshness_key(
+            contract,
+            revision_binding=revision_binding,
+            selector_digest=facts.selector_digest,
+            policy_digest=facts.policy_digest,
+            runner_digest=facts.runner_digest,
+            environment_digest=facts.environment_digest,
+            external_inputs=facts.external_inputs,
+        ),
+    )
+
+
 def _is_expired(receipt: ProofReceipt, *, now: datetime | None, max_age: timedelta | None) -> bool:
     """Return whether *receipt* is older than the reuse age limit, when one is set."""
     if now is None or max_age is None:
@@ -329,8 +396,10 @@ def decide_receipt_reuse(
 
 
 __all__ = [
+    "ProofRuntimeFacts",
     "StaleReceiptError",
     "VerificationLeg",
+    "build_verification_leg",
     "compare_freshness",
     "compute_proof_freshness_key",
     "decide_leg_reuse",

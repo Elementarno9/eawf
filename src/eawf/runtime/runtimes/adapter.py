@@ -41,13 +41,19 @@ in :class:`~eawf.kernel.state.models.SessionAttempt.runtime`,
 
 from __future__ import annotations
 
+import sys
 import threading
 from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.runtime.capsule import AuthorityCapsule
+from eawf.kernel.runtime.compiled import CompiledRunSpec, canonical_digest
+from eawf.kernel.runtime.handshake import WorkerHello
+from eawf.kernel.runtime.lease import WorkspaceHandle
 from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
@@ -90,6 +96,12 @@ ALL_ERROR_CLASSES: Final[tuple[ErrorClass, ...]] = (
 )
 """Closed-set tuple for runtime iteration / validation (matches
 :data:`ErrorClass` ordering exactly)."""
+
+OsClass = Literal["linux", "macos", "windows"]
+"""The operating-system vocabulary a worker announces itself under.
+
+Spelled here rather than inlined so the launcher seam and
+:class:`~eawf.kernel.runtime.handshake.WorkerHello` cannot drift apart."""
 
 
 # ---------------------------------------------------------------------------
@@ -616,6 +628,166 @@ class RuntimeAdapter(Protocol):
 
 
 # ---------------------------------------------------------------------------
+# Native launch seam (compiled spec in, worker announcement out)
+# ---------------------------------------------------------------------------
+
+
+#: Which ``os_class`` a worker announces, by ``sys.platform`` prefix. A
+#: platform outside the map announces nothing at all rather than a guess,
+#: because the field is part of the contract a handshake is judged on.
+_OS_CLASSES: Final[tuple[tuple[str, OsClass], ...]] = (
+    ("linux", "linux"),
+    ("darwin", "macos"),
+    ("win32", "windows"),
+    ("cygwin", "windows"),
+)
+
+
+def host_os_class() -> OsClass:
+    """Return the ``os_class`` a worker on this host announces.
+
+    Returns:
+        The closed vocabulary member for the running platform.
+
+    Raises:
+        ValueError: The platform is outside the announced vocabulary, so
+            no honest value exists for it.
+    """
+    for prefix, os_class in _OS_CLASSES:
+        if sys.platform.startswith(prefix):
+            return os_class
+    raise ValueError(f"platform {sys.platform!r} announces no worker os_class")
+
+
+class NativeLaunchRequest(BaseModel):
+    """Exactly what a launcher is handed to start one native Run.
+
+    The compiled spec and the sealed capsule are the whole of the policy
+    input: a launcher receives no layered YAML, no configuration document
+    and no raw mapping, so it cannot resolve authority a compiler did not
+    already resolve for it.
+
+    Attributes:
+        spec: The immutable, self-verifying compiled spec of the Run.
+        capsule: The sealed authority capsule the worker must echo.
+        workspace_handle: The opaque name the worker knows its workspace
+            by. It reaches the child process; the directory does not.
+        workspace: The directory the child is started in. The daemon
+            resolved it from the handle, which is the only resolution
+            that exists.
+        prompt: The rendered prompt the child is started with.
+        hello_sequence: Which announcement the returned hello must be.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
+
+    spec: CompiledRunSpec
+    capsule: AuthorityCapsule
+    workspace_handle: WorkspaceHandle
+    workspace: Path
+    prompt: Annotated[str, Field(min_length=1, max_length=200_000)]
+    hello_sequence: Annotated[int, Field(strict=True, ge=1)]
+
+
+class NativeLaunchOutcome(BaseModel):
+    """What one launcher reports back about the process it started.
+
+    Attributes:
+        provider_session_ref: The provider's own handle for the session,
+            which is what a later continuity proof is compared against.
+        subprocess_pid: The child's process id.
+        hello: What the worker announces about the contract it holds.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider_session_ref: Annotated[str, Field(min_length=1, max_length=500)]
+    subprocess_pid: Annotated[int, Field(ge=1)]
+    hello: WorkerHello
+
+
+@runtime_checkable
+class NativeRunLauncher(Protocol):
+    """The seam a native Run is started through, one per provider.
+
+    It is deliberately not :class:`RuntimeAdapter`: that Protocol is the
+    epoch-1 Wave dispatcher and takes a prompt plus a model string, while
+    a native launch takes the compiled spec and answers with the worker's
+    announcement.
+
+    Attributes:
+        provider_kind: Which provider this launcher starts, matching
+            ``CompiledRunSpec.provider_options.provider_kind``.
+    """
+
+    provider_kind: str
+
+    async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
+        """Start the provider process for *request* and take its hello.
+
+        Raises:
+            RuntimeSpawnError: The process could not be started, or it
+                exited before announcing itself.
+        """
+
+
+def compose_worker_hello(
+    *,
+    spec: CompiledRunSpec,
+    capsule: AuthorityCapsule,
+    provider_session_ref: str | None,
+    sdk_version: str,
+    worker_protocol_version: str,
+    event_codec_version: str,
+    hello_sequence: int,
+) -> WorkerHello:
+    """Build the announcement a launched worker makes about its contract.
+
+    Every contract field is taken from the spec and the capsule the child
+    was actually handed, so a launcher cannot compose an announcement
+    that agrees with a binding the process is not running under.
+
+    Args:
+        spec: The compiled spec the child received.
+        capsule: The sealed capsule the child received.
+        provider_session_ref: The provider's session handle, when it
+            reported one.
+        sdk_version: The provider CLI or SDK version actually loaded.
+        worker_protocol_version: The worker protocol the driver speaks.
+        event_codec_version: The event codec the driver emits.
+        hello_sequence: Which announcement this is, counting from one.
+
+    Returns:
+        The announcement, whose digests are the spec's and the capsule's.
+
+    Raises:
+        pydantic.ValidationError: A supplied version or reference breaks
+            the announcement's own grammar.
+        ValueError: The host platform announces no ``os_class``.
+    """
+    return WorkerHello.model_validate(
+        {
+            "run_ref": spec.run_ref,
+            "provider_session_ref": provider_session_ref,
+            "driver_manifest_digest": spec.driver_manifest_digest,
+            "provider_id": spec.provider_options.provider_kind,
+            "sdk_version": sdk_version,
+            "auth_kind": spec.auth_kind,
+            "model_id": spec.model_id,
+            "os_class": host_os_class(),
+            "worker_protocol_version": worker_protocol_version,
+            "event_codec_version": event_codec_version,
+            "compiled_spec_digest": spec.contract_digest,
+            "authority_capsule_digest": capsule.contract_digest,
+            "capabilities_digest": canonical_digest(
+                [row.model_dump(mode="json") for row in spec.capabilities]
+            ),
+            "hello_sequence": hello_sequence,
+        }
+    )
+
+
+# ---------------------------------------------------------------------------
 # Event emission helpers (canonical Event model)
 # ---------------------------------------------------------------------------
 
@@ -720,13 +892,19 @@ __all__ = [
     "ConcurrentSpawnCapError",
     "DispatchEventKind",
     "ErrorClass",
+    "NativeLaunchOutcome",
+    "NativeLaunchRequest",
+    "NativeRunLauncher",
+    "OsClass",
     "RuntimeAdapter",
     "RuntimeSpawnError",
     "SessionResumeFailedError",
     "SpawnResult",
     "acquire_spawn_slot",
     "classify_stream_error",
+    "compose_worker_hello",
     "emit_runtime_event",
+    "host_os_class",
     "release_spawn_slot",
     "spawn_inflight",
 ]

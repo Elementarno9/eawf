@@ -69,6 +69,16 @@ def _unstated(spine: SpineView) -> str:
     return " UNSTATED  " + " · ".join(f"{name} {token}" for name in spine.unproduced())
 
 
+def held(view: View) -> SpineView | None:
+    """Return the spine read model the route draws from, when the console holds one.
+
+    The view carries whichever family's read model the seam answered with, so a spine
+    renderer asks for its own and falls back to the epoch-1 frame for anything else.
+    """
+    model = view.projection
+    return model if isinstance(model, SpineView) else None
+
+
 def restore(session: Session, spine: SpineView) -> int:
     """Return the row the cursor sits on, restored by stable id, and publish that id.
 

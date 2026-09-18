@@ -1,0 +1,86 @@
+{
+  "schema_version": "reviewer-independence/v1",
+  "fixture_id": "reviewer-independence",
+  "summary": "A reviewing Run may read the tree it judges and may not change it, and it is given the criterion to check rather than the producing Run's account of having met it. Each case names the layer it exercises: the capsule the Run is dispatched under, the attestation built from that capsule and its brief, or the attestation record built directly.",
+  "batch_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0007",
+  "producer_run_refs": ["eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010"],
+  "reviewer_run_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000020",
+  "cases": [
+    {
+      "case_id": "read-only-reviewer-capsule",
+      "summary": "The grants a reviewer legitimately needs seal into a Batch-scoped capsule.",
+      "layer": "capsule",
+      "tool_grants": ["repo_read", "repo_search", "diff_read", "eawf_state_query", "submit_report"],
+      "expected": {"verdict": "attested", "code": null}
+    },
+    {
+      "case_id": "read-only-reviewer-attestation",
+      "summary": "That capsule and a criterion-only brief produce an attestation.",
+      "layer": "attestation",
+      "tool_grants": ["repo_read", "repo_search", "diff_read", "eawf_state_query", "submit_report"],
+      "statement": "the published wheel installs from the index into a clean environment",
+      "expected": {"verdict": "attested", "code": null}
+    },
+    {
+      "case_id": "read-only-reviewer-record",
+      "summary": "The same grants are admitted on the attestation record itself.",
+      "layer": "record",
+      "tool_grants": ["repo_read", "repo_search", "diff_read", "eawf_state_query", "submit_report"],
+      "expected": {"verdict": "attested", "code": null}
+    },
+    {
+      "case_id": "candidate-seal-grant-capsule",
+      "summary": "A capsule granting a reviewer the candidate seal does not seal at all.",
+      "layer": "capsule",
+      "tool_grants": ["repo_read", "submit_candidate"],
+      "expected": {"verdict": "refused", "code": null}
+    },
+    {
+      "case_id": "candidate-seal-grant-record",
+      "summary": "An attestation carrying the candidate seal does not validate either.",
+      "layer": "record",
+      "tool_grants": ["repo_read", "submit_candidate"],
+      "expected": {"verdict": "refused", "code": null}
+    },
+    {
+      "case_id": "workspace-patch-grant-capsule",
+      "summary": "A capsule granting a reviewer a workspace patch does not seal.",
+      "layer": "capsule",
+      "tool_grants": ["repo_read", "workspace_apply_patch"],
+      "expected": {"verdict": "refused", "code": null}
+    },
+    {
+      "case_id": "workspace-patch-grant-record",
+      "summary": "An attestation carrying a workspace patch does not validate.",
+      "layer": "record",
+      "tool_grants": ["repo_read", "workspace_apply_patch"],
+      "expected": {"verdict": "refused", "code": null}
+    },
+    {
+      "case_id": "producer-transcript-quoted",
+      "summary": "A brief whose statement quotes a producing Run carries that Run's account, not the criterion.",
+      "layer": "attestation",
+      "tool_grants": ["repo_read", "diff_read"],
+      "statement": "RUN-00000010 reported that the wheel installs cleanly, so confirm it",
+      "expected": {"verdict": "refused", "code": "verification_reviewer_producer_transcript"}
+    },
+    {
+      "case_id": "reviewer-is-producer",
+      "summary": "A Run that sealed a candidate of the Batch cannot review it.",
+      "layer": "attestation",
+      "run_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010",
+      "tool_grants": ["repo_read", "diff_read"],
+      "statement": "the published wheel installs from the index into a clean environment",
+      "expected": {"verdict": "refused", "code": "verification_reviewer_is_producer"}
+    },
+    {
+      "case_id": "brief-for-another-batch",
+      "summary": "A reviewer sealed for one Batch may not be briefed on another.",
+      "layer": "attestation",
+      "brief_batch_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0008",
+      "tool_grants": ["repo_read", "diff_read"],
+      "statement": "the published wheel installs from the index into a clean environment",
+      "expected": {"verdict": "refused", "code": "verification_reviewer_brief_misbound"}
+    }
+  ]
+}

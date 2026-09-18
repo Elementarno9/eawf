@@ -42,10 +42,10 @@ Evidence totality
 
 Capability evidence is total over the declared set: every declared
 capability resolves to a row, and a row reaches ``OK`` only through a
-probe rule. A capability with no rule used to resolve ``OK`` on the
-authority of its own declaration, which made a green conformance run
-largely the matrix agreeing with itself and produced a tautological pass
-citable as conformance evidence. :attr:`DriftRow.probe_rule` carries the
+probe rule. A capability reaching ``OK`` on the authority of its own
+declaration would make a green conformance run largely the matrix
+agreeing with itself, a tautological pass citable as conformance
+evidence. :attr:`DriftRow.probe_rule` carries the
 tokens the rule consulted, so a consumer can tell an evidenced verdict
 from an unevidenced one without parsing :attr:`DriftRow.detail`.
 """

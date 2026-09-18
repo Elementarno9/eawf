@@ -28,10 +28,14 @@ from eawf.platform.subprocess_detach import no_window_kwargs
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
+    NativeLaunchOutcome,
+    NativeLaunchRequest,
+    NativeRunLauncher,
     RuntimeAdapter,
     RuntimeSpawnError,
     SpawnResult,
     acquire_spawn_slot,
+    compose_worker_hello,
     release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
@@ -842,10 +846,87 @@ class ClaudeAdapter:
         return self.accepts_continue
 
 
+class ClaudeNativeLauncher:
+    """Start one native Run on Claude Code from its compiled spec.
+
+    The launcher reads policy from the spec and from nothing else: the
+    model, the wall ceiling, the deny list and the working directory are
+    all compiled values, so a layered document cannot reach the child
+    through this seam.
+
+    There is no vendor SDK behind the CLI, so a launch is one headless
+    turn: the child is started, the turn is awaited, and the worker's
+    announcement is composed from the session the child reported. A
+    long-lived worker announcing itself over the daemon socket mid-turn
+    is the shape the streaming path takes; this is the one-shot form of
+    the same handshake.
+
+    Attributes:
+        provider_kind: The compiled ``provider_options`` discriminator
+            this launcher answers to.
+        driver_version: The version this driver implementation reports as
+            its loaded runtime. It describes the eawf driver rather than
+            the installed CLI, because the CLI publishes no version the
+            spawn path can read without a second process.
+        worker_protocol_version: The worker protocol this driver speaks.
+        event_codec_version: The event codec this driver emits.
+    """
+
+    provider_kind: str = "claude"
+    driver_version: str = "1.0.0"
+    worker_protocol_version: str = "1.0.0"
+    event_codec_version: str = "1.0.0"
+
+    def __init__(self, adapter: ClaudeAdapter | None = None) -> None:
+        """Bind the launcher to the adapter that owns the spawn.
+
+        Args:
+            adapter: The spawning adapter; a fresh one by default.
+        """
+        self._adapter = adapter if adapter is not None else ClaudeAdapter()
+
+    async def launch(self, request: NativeLaunchRequest) -> NativeLaunchOutcome:
+        """Start the child inside the leased workspace and take its hello.
+
+        Args:
+            request: The compiled spec, the sealed capsule, the resolved
+                workspace and the announcement sequence expected back.
+
+        Returns:
+            The provider session, the child's pid and the announcement.
+
+        Raises:
+            RuntimeSpawnError: The spawn timed out, exited non-zero, or
+                returned an envelope that does not parse.
+        """
+        spec = request.spec
+        result = await self._adapter.spawn_session(
+            request.prompt,
+            model=spec.model_id,
+            cwd=str(request.workspace),
+            denied_tools=sorted(spec.tool_policy.deny),
+            timeout=float(spec.limits.wall_seconds),
+        )
+        return NativeLaunchOutcome(
+            provider_session_ref=result.session_id,
+            subprocess_pid=result.subprocess_pid,
+            hello=compose_worker_hello(
+                spec=spec,
+                capsule=request.capsule,
+                provider_session_ref=result.session_id,
+                sdk_version=self.driver_version,
+                worker_protocol_version=self.worker_protocol_version,
+                event_codec_version=self.event_codec_version,
+                hello_sequence=request.hello_sequence,
+            ),
+        )
+
+
 # Module-level Protocol-conformance sanity check. The daemon's
 # ``isinstance(adapter, RuntimeAdapter)`` load-time gate catches a
 # Protocol-mismatch; checking at import keeps the failure mode at the
 # right layer.
 _ADAPTER_CHECK: RuntimeAdapter = ClaudeAdapter()
+_LAUNCHER_CHECK: NativeRunLauncher = ClaudeNativeLauncher()
 
-__all__ = ["ClaudeAdapter", "ConcurrentSpawnCapError"]
+__all__ = ["ClaudeAdapter", "ClaudeNativeLauncher", "ConcurrentSpawnCapError"]

@@ -1,0 +1,178 @@
+{
+  "schema_version": "coverage-grid/1.0",
+  "routes": [
+    {
+      "route": "activity",
+      "read_model": "fleet_query_page",
+      "binding": "bound"
+    },
+    {
+      "route": "attention",
+      "read_model": "attention_page",
+      "binding": "bound"
+    },
+    {
+      "route": "backlog",
+      "read_model": "backlog_view",
+      "binding": "bound"
+    },
+    {
+      "route": "batch.detail",
+      "read_model": "entity_detail_view",
+      "binding": "bound"
+    },
+    {
+      "route": "campaign",
+      "read_model": "campaign_view",
+      "binding": "bound"
+    },
+    {
+      "route": "campaign.artifact",
+      "read_model": "artifact_card_view",
+      "binding": "bound"
+    },
+    {
+      "route": "campaign.step",
+      "read_model": "campaign_plan_step",
+      "binding": "bound"
+    },
+    {
+      "route": "cost.ceiling",
+      "read_model": "cost_ceiling_view",
+      "binding": "bound"
+    },
+    {
+      "route": "crash.recovery",
+      "read_model": "crash_recovery_view",
+      "binding": "bound"
+    },
+    {
+      "route": "entry",
+      "read_model": "process_frame",
+      "binding": "unprojectable",
+      "reason": "no projection carries a process frame, because none exists before a session does"
+    },
+    {
+      "route": "evidence",
+      "read_model": "evidence_view",
+      "binding": "bound"
+    },
+    {
+      "route": "evidence.digest",
+      "read_model": "evidence_rung_record",
+      "binding": "bound"
+    },
+    {
+      "route": "export",
+      "read_model": "run_report_plan",
+      "binding": "bound"
+    },
+    {
+      "route": "git.pr",
+      "read_model": "git_pr_view",
+      "binding": "bound"
+    },
+    {
+      "route": "health",
+      "read_model": "health_view",
+      "binding": "bound"
+    },
+    {
+      "route": "history",
+      "read_model": "history_page",
+      "binding": "bound"
+    },
+    {
+      "route": "history.diff",
+      "read_model": "history_diff_view",
+      "binding": "bound"
+    },
+    {
+      "route": "merge.conflict",
+      "read_model": "merge_conflict_view",
+      "binding": "bound"
+    },
+    {
+      "route": "milestone",
+      "read_model": "acceptance_bundle_view",
+      "binding": "bound"
+    },
+    {
+      "route": "notifications",
+      "read_model": "notification_matrix_view",
+      "binding": "bound"
+    },
+    {
+      "route": "receipt",
+      "read_model": "criterion_receipt_view",
+      "binding": "bound"
+    },
+    {
+      "route": "release",
+      "read_model": "release_readiness_view",
+      "binding": "bound"
+    },
+    {
+      "route": "run.detail",
+      "read_model": "run_detail_view",
+      "binding": "bound"
+    },
+    {
+      "route": "sandbox.log",
+      "read_model": "sandbox_log_page",
+      "binding": "bound"
+    },
+    {
+      "route": "scope.home",
+      "read_model": "scope_home_view",
+      "binding": "bound"
+    },
+    {
+      "route": "search",
+      "read_model": "search_page",
+      "binding": "bound"
+    },
+    {
+      "route": "settings",
+      "read_model": "effective_settings_view",
+      "binding": "hole",
+      "bound_by": "P33-I01-W72"
+    },
+    {
+      "route": "settings.stack",
+      "read_model": "settings_layer_stack",
+      "binding": "hole",
+      "bound_by": "P33-I01-W72"
+    },
+    {
+      "route": "task.detail",
+      "read_model": "entity_detail_view",
+      "binding": "bound"
+    },
+    {
+      "route": "timeline",
+      "read_model": "roadmap_view",
+      "binding": "bound"
+    },
+    {
+      "route": "track",
+      "read_model": "entity_detail_view",
+      "binding": "bound"
+    },
+    {
+      "route": "transcript",
+      "read_model": "transcript_view",
+      "binding": "bound"
+    },
+    {
+      "route": "trust",
+      "read_model": "trust_view",
+      "binding": "bound"
+    },
+    {
+      "route": "unattended",
+      "read_model": "unattended_view",
+      "binding": "bound"
+    }
+  ]
+}

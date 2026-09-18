@@ -12,6 +12,7 @@ from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import Scrollbar, View, boxed
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers.campaign import Win
+from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.session import Session
 
 # Rows the card's chrome takes: header, context, rule, two provenance lines, both borders,
@@ -57,7 +58,10 @@ def _lines(n: int) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the artifact card."""
+    """Return the artifact card, native when a read model is held."""
+    spine = held(view)
+    if spine is not None:
+        return native_frame(view, spine)
     s, fx, h = view.session, view.fixture, view.h
     art = artifact_of(s, fx)
     win = art_window(s, art, h)
