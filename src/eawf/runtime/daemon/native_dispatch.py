@@ -589,13 +589,48 @@ def scope_reference(scope: RunScope) -> str:
     return str(getattr(scope, SCOPE_REFERENCE_FIELDS[scope.scope_kind]))
 
 
+def _reject_capsule_widening(*, spec: CompiledRunSpec, request: CapsuleRequest) -> None:
+    """Refuse capsule tool fields more permissive than the merged policy.
+
+    The grants and denials are the two enforcement fields that arrive on the
+    request rather than off the spec, and they are the fields authority is
+    actually enforced on: the semantic gateway admits a call by reading the
+    sealed capsule, not the spec. A caller that assembled them from anything
+    other than the merged tool policy would seal back the authority the
+    least-authority merge had just withdrawn, and the binding would record
+    that digest as though the merge had produced it.
+
+    Equality is not required -- a capsule stricter than the policy is fine.
+    Only a widening is refused.
+
+    Args:
+        spec: The compiled spec whose merged tool policy binds.
+        request: The caller-supplied capsule fields.
+
+    Raises:
+        ValueError: A merged denial is absent from the capsule's denials, or
+            a requested grant is one the merged policy denies.
+    """
+    denied = set(spec.tool_policy.deny)
+    dropped = sorted(denied - set(request.tool_denials))
+    granted = sorted(denied.intersection(request.tool_grants))
+    if dropped or granted:
+        raise ValueError(
+            f"capsule_policy_drift: capsule is more permissive than the merged "
+            f"tool policy; denials_dropped={dropped} denied_but_granted={granted}; "
+            f"run_ref={spec.run_ref}"
+        )
+
+
 def seal_capsule(
     *, spec: CompiledRunSpec, request: CapsuleRequest, parent_run_ref: str | None = None
 ) -> AuthorityCapsule:
     """Seal the authority capsule one compiled spec is dispatched under.
 
-    Every enforcement field is taken from the spec, so the capsule and the
-    spec cannot disagree about what the Run may do.
+    Every enforcement field is taken from the spec except the tool grants and
+    denials, which arrive on the request and are checked against the spec's
+    merged tool policy before sealing, so the capsule can be stricter than
+    the spec but never looser.
 
     Args:
         spec: The compiled spec the capsule accompanies.
@@ -606,9 +641,11 @@ def seal_capsule(
         The sealed capsule.
 
     Raises:
+        ValueError: The request's tool fields widen the merged tool policy.
         pydantic.ValidationError: A grant names no catalog tool, or the
             scope does not admit a tool that writes.
     """
+    _reject_capsule_widening(spec=spec, request=request)
     return AuthorityCapsule.seal(
         {
             "run_ref": spec.run_ref,

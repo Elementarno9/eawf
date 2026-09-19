@@ -12,6 +12,7 @@ W01 wires only the ``daemon.*`` namespace. Subsequent waves attach
 from __future__ import annotations
 
 import asyncio
+import importlib
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -354,8 +355,91 @@ def register(name: str) -> Callable[[Handler], Handler]:
     return decorator
 
 
+#: Every method module whose import registers handlers.
+#:
+#: Handlers register by import side effect, so importing every module up
+#: front made daemon startup pay for the whole method surface before it
+#: could answer a ping. Almost all of that cost is Pydantic building
+#: validators for models a liveness probe never touches. ``server`` imports
+#: only the liveness and subscribe modules, because it reaches for names in
+#: them; every other verb registers when this function runs.
+#:
+#: Only top-level entry modules are listed. Several of them import helper
+#: modules that register verbs of their own, which is why the companion test
+#: asserts that every registered name in the package resolves rather than
+#: that every file appears here -- a filename list would both miss those
+#: helpers and break whenever one is split out.
+#:
+#: The list is explicit rather than discovered by scanning the package, so
+#: adding an entry module is a visible edit and a stray file cannot quietly
+#: become part of the surface.
+_METHOD_MODULES: Final[tuple[str, ...]] = (
+    "agent",
+    "daemon",
+    "candidate",
+    "close",
+    "close_hosted",
+    "close_rereceipt",
+    "config",
+    "conformance",
+    "delivery",
+    "delivery_acceptance",
+    "doctor",
+    "domain",
+    "domain_envelope",
+    "event",
+    "evidence",
+    "fleet",
+    "integration",
+    "jury",
+    "migration",
+    "needs_user",
+    "planning",
+    "projection",
+    "registry",
+    "registry_workspace",
+    "release",
+    "release_candidate",
+    "release_disposition",
+    "release_receipts",
+    "research",
+    "run",
+    "run_budget",
+    "semantic",
+    "spec",
+    "spec_convert",
+    "spec_repoint",
+    "state",
+    "state_subscribe",
+    "wal_admin",
+    "workspace_lease",
+)
+
+_lazy_modules_loaded = False
+
+
+def ensure_all_methods_registered() -> None:
+    """Import every deferred method module, at most once per process.
+
+    Idempotent: the flag is set only after every module has imported, so a
+    failed import is retried on the next call rather than leaving a
+    half-registered surface behind a flag that says otherwise.
+    """
+    global _lazy_modules_loaded
+    if _lazy_modules_loaded:
+        return
+    for suffix in _METHOD_MODULES:
+        importlib.import_module(f"{__name__}.{suffix}")
+    _lazy_modules_loaded = True
+    logger.debug(f"ensure_all_methods_registered modules={len(_METHOD_MODULES)}")
+
+
 async def dispatch(name: str, ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Dispatch a JSON-RPC method call.
+
+    A registry miss is not yet an unknown method: most handlers register on
+    first need, so the deferred modules load and the lookup is retried once
+    before the call is refused.
 
     Args:
         name: The method name from the request envelope.
@@ -366,24 +450,33 @@ async def dispatch(name: str, ctx: MethodContext, params: dict[str, Any]) -> dic
         The handler's result dict.
 
     Raises:
-        MethodNotFoundError: When *name* is not in the registry.
+        MethodNotFoundError: When *name* is in no module's registry.
     """
-    try:
-        handler = _REGISTRY[name]
-    except KeyError as exc:
-        raise MethodNotFoundError(name) from exc
+    handler = _REGISTRY.get(name)
+    if handler is None:
+        ensure_all_methods_registered()
+        try:
+            handler = _REGISTRY[name]
+        except KeyError as exc:
+            raise MethodNotFoundError(name) from exc
     return await handler(ctx, params)
 
 
 def registered_methods() -> tuple[str, ...]:
     """Return the registered method names in registration order.
 
+    Loads the deferred modules first, so the answer is the whole surface
+    rather than whichever part of it has been called so far.
+
     Returns:
-        Tuple of method names. Useful for ``daemon.status`` and tests.
+        Tuple of method names.
     """
+    ensure_all_methods_registered()
     return tuple(_REGISTRY)
 
 
 def reset_registry() -> None:
     """Clear the registry. Test-only helper — do not call from production code."""
+    global _lazy_modules_loaded
     _REGISTRY.clear()
+    _lazy_modules_loaded = False

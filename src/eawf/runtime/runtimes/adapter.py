@@ -59,6 +59,7 @@ from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
 from eawf.runtime.runtimes.stream_json import vendor_error_signal
+from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
 
 if TYPE_CHECKING:
     from eawf.workflow.agents.specs.models import RoleContract
@@ -731,6 +732,43 @@ class NativeRunLauncher(Protocol):
         """
 
 
+def ambient_denied_tools(spec: CompiledRunSpec) -> list[str]:
+    """Render a compiled spec's tool denials as ambient names, or refuse.
+
+    Two tool vocabularies meet here and they do not overlap.
+    ``CompiledRunSpec.tool_policy`` carries semantic tool ids and declares
+    ``ambient_provider_tools`` false; the spawn path's ``denied_tools``
+    carries ambient names drawn from :data:`TOOL_UNIVERSE`. Nothing maps one
+    onto the other.
+
+    Forwarding a semantic id would therefore widen authority rather than
+    withhold it: a lane that expresses a deny as its inverted allowlist
+    subtracts nothing for a name it does not know, so the child is granted
+    the whole universe -- strictly more than the empty deny-list, which
+    emits no override at all. Refusing is the only outcome that cannot end
+    with a denied tool reaching the child.
+
+    Args:
+        spec: The compiled spec whose denials are being forwarded.
+
+    Returns:
+        The sorted ambient deny-list; empty when the spec denies nothing.
+
+    Raises:
+        RuntimeSpawnError: A denial names no tool in the ambient universe,
+            so no deny-list can express it.
+    """
+    denied = sorted(spec.tool_policy.deny)
+    stray = [name for name in denied if name not in TOOL_UNIVERSE]
+    if stray:
+        raise RuntimeSpawnError(
+            f"tool_vocabulary_mismatch: denials {stray} name no ambient tool, "
+            f"so forwarding them would grant the child every tool instead of "
+            f"withholding these; run_ref={spec.run_ref}"
+        )
+    return denied
+
+
 def compose_worker_hello(
     *,
     spec: CompiledRunSpec,
@@ -901,6 +939,7 @@ __all__ = [
     "SessionResumeFailedError",
     "SpawnResult",
     "acquire_spawn_slot",
+    "ambient_denied_tools",
     "classify_stream_error",
     "compose_worker_hello",
     "emit_runtime_event",

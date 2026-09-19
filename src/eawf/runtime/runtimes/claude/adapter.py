@@ -35,6 +35,7 @@ from eawf.runtime.runtimes.adapter import (
     RuntimeSpawnError,
     SpawnResult,
     acquire_spawn_slot,
+    ambient_denied_tools,
     compose_worker_hello,
     release_spawn_slot,
 )
@@ -904,7 +905,7 @@ class ClaudeNativeLauncher:
             request.prompt,
             model=spec.model_id,
             cwd=str(request.workspace),
-            denied_tools=sorted(spec.tool_policy.deny),
+            denied_tools=ambient_denied_tools(spec),
             timeout=float(spec.limits.wall_seconds),
         )
         return NativeLaunchOutcome(
