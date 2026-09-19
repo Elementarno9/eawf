@@ -21180,15 +21180,15 @@
       "claimed_wave_ids": [
         "P33-I01-W100"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-19T19:15:25.249053Z",
       "id": "SES-20260918T184355.334017Z-operator-generic-e84f8102-017e-4653-a1cd-f1b495b852e3",
       "role": "operator",
       "runtime": "generic",
       "runtime_session_id": null,
       "scope_id": "P33-I01-W100",
       "started_at": "2026-09-18T18:43:55.334017Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -25508,6 +25508,45 @@
       "scope_id": "EAWF",
       "status": "closed",
       "title": "Freeze the footer heartbeat before a golden capture"
+    },
+    "B153": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-19T19:22:55.661189Z",
+      "description": "ConsoleApp has no production construction site: every caller in src/ is test tooling passing load_fixture() and a FakeClock, so the 261-frame console is unreachable. SURF-173 specifies the eawf tui launch flag. The transport is already proven - the projection seam serves reads and keyed patches over the daemon, and the epoch-1 TUI connects through the identical binding. The open design question is what production passes where the fixture goes. Targeted at P34.",
+      "id": "B153",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Launch the epoch-2 console from eawf tui on the live projection seam"
+    },
+    "B154": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-19T19:23:05.255100Z",
+      "description": "The v0.7 UI packet judged 82 shipped surfaces under src/eawf/surfaces/tui/: 47 carry into console routes, 27 fold into the chassis, 8 delete. None of that disposition is scheduled, so two TUIs coexist and eawf tui still opens the epoch-1 app. Removal is gated on the 47 carry-overs landing first, or function is lost. Targeted at P35, the flag day, alongside the coverage grid reconciling to the route registry.",
+      "id": "B154",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Retire the epoch-1 TUI against the packet carry-over verdict"
+    },
+    "B155": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-19T19:23:19.537244Z",
+      "description": "P37 promises to close every idle contract with a producer and a consumer, but tools/idle_contract_gate.py tracks only hand-registered contracts and carries no console reference, so the console being unreachable would never red it. This is why the launcher omission survived a whole phase unnoticed. Register the launcher as a tracked contract, and prefer a rule that reds on any renderer with no production construction site over one more hand-added row.",
+      "id": "B155",
+      "intent": null,
+      "priority": "P2",
+      "resolution": null,
+      "scope_id": "EAWF",
+      "status": "open",
+      "title": "Track the console launcher as an idle contract so the gate can red"
     },
     "B70": {
       "closed_at": null,
@@ -34043,9 +34082,7 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260918T184355.334017Z-operator-generic-e84f8102-017e-4653-a1cd-f1b495b852e3"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [],
     "iter_id": "P33-I01",
     "phase_id": "P33",
@@ -52816,7 +52853,7 @@
       "depends_on": [
         "P33"
       ],
-      "description": "Fourth v0.7.0 phase: cuts 0.7.0.dev4 with the planning surfaces (PlanRevision, uncertainty triage, MeasuredContract grounding, Campaign, questions, pauses, actions), multi-repository identity, the steering surface (rule graph, generated policy projection, role carriers, staleness hook, workspace layer), the 20-skill catalog and prompt chassis, the measurement producers and budget notices. Closes with the first perfect-realization rehearsal on this repository as canary (REL-031, REL-032).",
+      "description": "Fourth v0.7.0 phase: cuts 0.7.0.dev4 with the planning surfaces (PlanRevision, uncertainty triage, Campaign, questions, actions), multi-repository identity, the steering surface (rule graph, policy projection, role carriers), the 20-skill catalog, and the measurement producers. Ships the console launcher (SURF-173): eawf tui opens the epoch-2 console on the live projection seam, behind a flag. Closes with the first perfect-realization rehearsal on this repository as canary (REL-031).",
       "id": "P34",
       "intent": null,
       "iter_ids": [
@@ -52828,7 +52865,7 @@
       "scope_id": "EAWF",
       "source_brief_ids": [],
       "status": "planned",
-      "title": "Ship the 0.7.0.dev4 planning and steering surfaces",
+      "title": "Ship the 0.7.0.dev4 planning, steering and console surfaces",
       "track_id": null
     },
     "P35": {
@@ -52837,7 +52874,7 @@
       "depends_on": [
         "P34"
       ],
-      "description": "Fifth v0.7.0 phase: the flag day. Epoch-1 state is refused with typed migration guidance, every epoch-1 mutator is removed or refuses, the full migration rehearsal runs over each required fixture with backup restore proven, the daemonless bypass is removed on a proven hosted gate runner, the commit grammar switches to the task trailer, the coverage grid reconciles against the route registry, and turn cost is re-measured against the dev1 baseline. Closes through the six-item flag-day gate.",
+      "description": "Fifth v0.7.0 phase: the flag day. Epoch-1 state is refused with migration guidance, every epoch-1 mutator is removed or refuses, the migration rehearsal runs with backup restore proven, the daemonless bypass is removed, the commit grammar switches to the task trailer, and turn cost is re-measured. The epoch-2 console becomes the default eawf tui and the epoch-1 TUI retires on the packet carry-over verdict (47 carry, 27 chassis, 8 delete), reconciling the coverage grid to the route registry.",
       "id": "P35",
       "intent": null,
       "iter_ids": [
@@ -52849,7 +52886,7 @@
       "scope_id": "EAWF",
       "source_brief_ids": [],
       "status": "planned",
-      "title": "Cut the 0.7.0rc1 flag day on epoch-2 authority",
+      "title": "Cut the 0.7.0rc1 flag day and retire the epoch-1 surfaces",
       "track_id": null
     },
     "P36": {
@@ -52929,7 +52966,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-18T18:45:30.430988Z",
+  "updated_at": "2026-09-19T19:23:19.537244Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
