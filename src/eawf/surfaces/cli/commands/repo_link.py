@@ -24,8 +24,8 @@ import typer
 
 from eawf.kernel.state.enums import ProjectStatus
 from eawf.kernel.state.ids import is_project_code
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.urn import build as build_urn
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.repo import repo_app
@@ -190,9 +190,9 @@ def _persist_link_payloads(
     """
     try:
         with portalock.acquire(workspace_path, timeout=5.0):
-            atomic_write_json_locked(workspace_path, ws_payload)
+            write_state_unlocked(workspace_path, ws_payload)
         with portalock.acquire(repo_state_path, timeout=5.0):
-            atomic_write_json_locked(repo_state_path, repo_payload)
+            write_state_unlocked(repo_state_path, repo_payload)
     except portalock.LockTimeout as exc:
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
 

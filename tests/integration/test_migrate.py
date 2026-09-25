@@ -520,12 +520,11 @@ def test_run_chain_writes_backup_adjacent_to_state(tmp_path: Path) -> None:
 def test_run_chain_routes_write_through_canonical_writer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The write MUST go through portalock + atomic_write_json_locked.
+    """The write MUST go through portalock + write_state_unlocked.
 
-    Asserts the daemon canonical-writer primitive
-    (``atomic_write_json_locked``, acquired under ``portalock``) is
-    exercised and the lock-acquiring ``atomic_write_json`` bypass is
-    never called (AGENTS rule 4 / D-SUP-01).
+    Asserts the canonical state writer (``write_state_unlocked``, which
+    runs the leak refusal, called under ``portalock``) is exercised and
+    the lock-acquiring ``atomic_write_json`` bypass is never called.
     """
     from eawf.kernel.migrations import _base
     from eawf.kernel.state import writer
@@ -538,10 +537,10 @@ def test_run_chain_routes_write_through_canonical_writer(
     acquire_calls: list[Path] = []
     bypass_calls: list[Path] = []
 
-    real_locked = writer.atomic_write_json_locked
+    real_locked = _base.write_state_unlocked
     real_acquire = portalock.acquire
 
-    def spy_locked(target: Path, data: Any) -> None:
+    def spy_locked(target: Path, data: dict[str, Any]) -> None:
         locked_calls.append(Path(target))
         real_locked(target, data)
 
@@ -553,14 +552,14 @@ def test_run_chain_routes_write_through_canonical_writer(
         bypass_calls.append(Path(target))
 
     # Patch the names the migration module resolved at import time.
-    monkeypatch.setattr(_base, "atomic_write_json_locked", spy_locked)
+    monkeypatch.setattr(_base, "write_state_unlocked", spy_locked)
     monkeypatch.setattr(_base.portalock, "acquire", spy_acquire)
     monkeypatch.setattr(writer, "atomic_write_json", spy_bypass)
 
     chain = build_migration_chain(DEFAULT_REGISTRY, from_version="1.0", to_version="1.1")
     run_chain(state_path, chain=chain, from_version="1.0", to_version="1.1")
 
-    assert locked_calls == [state_path], "canonical atomic_write_json_locked not exercised"
+    assert locked_calls == [state_path], "canonical write_state_unlocked not exercised"
     assert state_path in acquire_calls, "portalock.acquire not held during the write"
     assert bypass_calls == [], "migration must not call the atomic_write_json bypass"
 

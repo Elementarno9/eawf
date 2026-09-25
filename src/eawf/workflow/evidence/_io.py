@@ -77,16 +77,20 @@ def load_state(state_path: Path) -> State:
 
 
 def atomic_write_state(state_path: Path, state: State) -> None:
-    """Persist *state* via the LOCKED atomic writer.
+    """Persist *state* via the LOCKED, leak-refusing atomic writer.
 
     Caller MUST already hold ``portalock(state_path)``. Use this only inside
     a :func:`eawf.surfaces.cli._mutation.state_transaction` (or an equivalent
     explicit ``with portalock.acquire(state_path):`` block).
+
+    Raises:
+        StateValidationError: When a string *state* adds or changes relative
+            to the on-disk payload at *state_path* carries a leak shape.
     """
-    from eawf.kernel.state.writer import atomic_write_json_locked
+    from eawf.kernel.state.io import write_state_unlocked
 
     payload = json.loads(state.model_dump_json())
-    atomic_write_json_locked(state_path, payload)
+    write_state_unlocked(state_path, payload)
 
 
 def args_hash(args: dict[str, Any]) -> str:

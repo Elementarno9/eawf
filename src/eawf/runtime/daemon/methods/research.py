@@ -73,8 +73,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
     Urgency,
 )
-from eawf.kernel.state.io import state_version
-from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.state.io import state_version, write_state_unlocked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
@@ -1678,7 +1677,7 @@ def _close_researcher_session(ctx: MethodContext, *, session_id: str, summary: s
         except SessionNotFound:
             return
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     logger.info(f"_close_researcher_session session={session_id!r} status=closed")
 
 
@@ -1710,7 +1709,7 @@ def _register_researcher_session(
         state.updated_at = datetime.now(UTC)
         new_payload = state.model_dump(mode="json")
         after_version = state_version(new_payload)
-        atomic_write_json_locked(state_path, new_payload)
+        write_state_unlocked(state_path, new_payload)
     logger.info(
         f"_register_researcher_session scope_id={scope_id!r} runtime={runtime!r} "
         f"session={session_id!r} before={before_version} after={after_version}"

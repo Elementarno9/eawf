@@ -23,11 +23,11 @@ from eawf.kernel.state.enums import (
     AgentSessionRole,
     StoreKind,
 )
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
@@ -93,7 +93,7 @@ def persist_auditor_session_snapshot(
             raise DaemonValidationError(
                 "validation_failed: auditor session snapshot invalid: " + "; ".join(details)
             )
-        atomic_write_json_locked(state_path, payload)
+        write_state_unlocked(state_path, payload)
     logger.info(f"persist_auditor_session_snapshot wave={wave_id!r} sessions={len(changed)}")
 
 

@@ -41,6 +41,7 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.spec_context import (
@@ -80,6 +81,7 @@ def _commit_repair(
     ctx: MethodContext,
     *,
     state: State,
+    old_payload: dict[str, Any],
     paths: tuple[Path, Path, Path],
     idempotency_key: str | None,
     before_version: str,
@@ -94,6 +96,10 @@ def _commit_repair(
     Args:
         ctx: Server context (publish bus).
         state: The mutated state, written as-is.
+        old_payload: The payload on disk before this repair, from the same
+            ``read_state`` call the caller took ``before_version`` from --
+            threaded in rather than re-read here so the leak diff below
+            compares against the exact pre-mutation bytes.
         paths: ``(state_path, event_path, wal_path)``.
         idempotency_key: Caller's retry key, recorded on the WAL row.
         before_version: State digest before the mutation.
@@ -104,12 +110,18 @@ def _commit_repair(
 
     Raises:
         DaemonValidationError: The post-mutation state fails schema or
-            invariant validation; nothing is written.
+            invariant validation, or a string the repair adds or changes
+            carries a leak shape; nothing is written.
     """
     state_path, event_path, wal_path = paths
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")
     after_version = validate_post_sync(new_payload)
+    # Refuse BEFORE the WAL-pending record lands, mirroring the daemon's
+    # single-lock mutator ordering, so a refused repair leaves no orphaned
+    # PENDING record for the next replay to skip over.
+    if (leak_refusal := state_leak_refusal(old_payload, new_payload)) is not None:
+        raise DaemonValidationError(f"validation_failed: {leak_refusal}")
 
     mutation_id = uuid.uuid4().hex
     envelope = build_envelope(after_version)
@@ -300,7 +312,7 @@ def _apply_repoint_locked(
         DaemonValidationError: When the repoint is refused or the
             post-mutation state fails schema / invariant validation.
     """
-    state, _payload = read_state(state_path)
+    state, payload = read_state(state_path)
     before_version = state_version(state.model_dump(mode="json"))
     report = _apply_repoint(state, args)
     if not report.changed:
@@ -311,6 +323,7 @@ def _apply_repoint_locked(
     after_version, envelope = _commit_repair(
         ctx,
         state=state,
+        old_payload=payload,
         paths=(state_path, event_path, wal_path),
         idempotency_key=args.idempotency_key,
         before_version=before_version,
@@ -627,7 +640,7 @@ def _apply_scope_repoint_locked(
         DaemonValidationError: When the repoint is refused or the
             post-mutation state fails schema / invariant validation.
     """
-    state, _payload = read_state(state_path)
+    state, payload = read_state(state_path)
     before_version = state_version(state.model_dump(mode="json"))
     report = _apply_scope_repoint(state, args, repo_root=repo_root)
     if not report.changed_criteria and not report.scopes_changed:
@@ -638,6 +651,7 @@ def _apply_scope_repoint_locked(
     after_version, envelope = _commit_repair(
         ctx,
         state=state,
+        old_payload=payload,
         paths=(state_path, event_path, wal_path),
         idempotency_key=args.idempotency_key,
         before_version=before_version,
@@ -884,7 +898,7 @@ async def rewrite_gate_kind(ctx: MethodContext, params: dict[str, Any]) -> dict[
     ctx.in_flight_mutations += 1
     try:
         with portalock.acquire(state_path, timeout=5.0):
-            state, _payload = read_state(state_path)
+            state, payload = read_state(state_path)
             before_version = state_version(state.model_dump(mode="json"))
             report = _apply_kind_rewrite(state, args)
             if not report.changed:
@@ -895,6 +909,7 @@ async def rewrite_gate_kind(ctx: MethodContext, params: dict[str, Any]) -> dict[
                 after_version, envelope = _commit_repair(
                     ctx,
                     state=state,
+                    old_payload=payload,
                     paths=(state_path, event_path, wal_path),
                     idempotency_key=args.idempotency_key,
                     before_version=before_version,

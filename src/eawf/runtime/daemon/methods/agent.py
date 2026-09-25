@@ -79,7 +79,7 @@ from eawf.kernel.state.enums import (
     StoreKind,
     WaveStatus,
 )
-from eawf.kernel.state.io import state_version
+from eawf.kernel.state.io import state_version, write_state_unlocked
 from eawf.kernel.state.models import (
     AgentSession,
     DispatchAnnotation,
@@ -89,7 +89,6 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
@@ -1057,7 +1056,7 @@ def _persist_live_session_attempt(
         wave.runtime_baseline = baseline
         wave.runtime_latest = latest
         state.updated_at = now
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     logger.info(
         f"_persist_live_session_attempt wave={wave_id} attempt={attempt} "
         f"runtime={serving_runtime!r}"
@@ -1207,7 +1206,7 @@ def _reassert_dispatch_state(
             changed = True
         if changed:
             state.updated_at = datetime.now(UTC)
-            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+            write_state_unlocked(state_path, state.model_dump(mode="json"))
             logger.warning(
                 f"_reassert_dispatch_state wave={wave_id} session={session_id!r} "
                 f"restored=reverted-dispatch-rows"
@@ -1367,7 +1366,7 @@ def _claim_live_session(
             before_state_version=before_version,
             after_state_version=after_version,
         )
-        atomic_write_json_locked(state_path, new_payload)
+        write_state_unlocked(state_path, new_payload)
 
     if staged_event is not None:
         commit_event(event_path, staged_event)
@@ -2428,7 +2427,7 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool, repo_root: str | N
         state.updated_at = datetime.now(UTC)
         new_payload = state.model_dump(mode="json")
         after_version = state_version(new_payload)
-        atomic_write_json_locked(state_path, new_payload)
+        write_state_unlocked(state_path, new_payload)
         ctx.note_state_written(state_path, updated_at=state.updated_at)
         now = datetime.now(UTC)
         args_hash = hashlib.sha256(

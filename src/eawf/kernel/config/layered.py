@@ -279,20 +279,51 @@ def _deep_merge_with_sources(
 #: These names are claimed by infrastructure (daemon escape hatch, verbose-
 #: logging gate, etc.) and MUST be excluded from the layered-config env merge
 #: so they cannot accidentally inject phantom top-level keys.
+#:
+#: ``tests/lint/test_env_control_var_census.py`` AST-scans ``src/`` and
+#: ``tools/`` for every ``EAWF_``-shaped string literal actually read via
+#: ``os.environ`` / ``os.getenv`` and fails if one is missing here (or from
+#: :data:`_RESERVED_ENV_PREFIXES`) — add the literal there when the census
+#: reds on a new knob rather than widening a prefix.
 _RESERVED_ENV_VARS: frozenset[str] = frozenset(
     {
         "EAWF_DAEMONLESS",
         "EAWF_VERBOSE",
+        "EAWF_DEBUG",
         "EAWF_REGISTRY_PATH",
         "EAWF_STATE",
+        "EAWF_HOME",
         "EAWF_RUNTIME_DIR",
+        "EAWF_WORKSPACE_KEY",
+        "EAWF_CLAUDE_PROJECTS_DIR",
+        "EAWF_SPEC_CACHE_DIR",
         "EAWF_DAEMON_IDLE_TIMEOUT",
         "EAWF_DAEMON_SESSION_TTL",
+        "EAWF_DAEMON_STALE_WAVE_SECONDS",
+        "EAWF_DAEMON_PROBE_INTERVAL_S",
+        "EAWF_MUTATION_HARD_LIMIT_SECONDS",
+        "EAWF_POLL_INTERVAL_S",
+        "EAWF_RECONNECT_MIN_INTERVAL_S",
         "EAWF_LOCK_TIMEOUT",
         "EAWF_SKIP_GLOBAL_HOOKS",
         "EAWF_SKIP_PERF",
         "EAWF_BLITZ_DEPTH",
         "EAWF_BLITZ_DEPTH_COUNTER",
+        "EAWF_NO_PAGER",
+        "EAWF_NO_OSC",
+        "EAWF_CONSOLE_COLD_PAINT_T0",
+        "EAWF_STATUSLINE_THEME",
+        "EAWF_STATUSLINE_CACHE",
+        "EAWF_POC_DEFECTS",
+        "EAWF_EGRESS_SOCKET",
+        "EAWF_SNAPSHOT_OUT",
+        "EAWF_SNAPSHOT_REGEN",
+        "EAWF_REFRESH_GOLDEN",
+        "EAWF_EVIDENCE_DIRECT_WRITE",
+        "EAWF_EVIDENCE_DIRECT_WRITE_MODE",
+        "EAWF_COAUTHOR_MODE",
+        "EAWF_COAUTHOR_HARNESS",
+        "EAWF_COAUTHOR_RUNTIME",
         # Spelled out rather than imported: its owner,
         # ``eawf.runtime.daemon.churn.SUITE_SESSION_ENV``, sits above the kernel.
         "EAWF_SUITE_SESSION",
@@ -306,6 +337,21 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
     }
 )
 
+#: Prefix families reserved wholesale rather than one literal at a time.
+#: Each prefix keeps a single trailing underscore, which structurally
+#: cannot collide with the ``EAWF_<SECTION>__<KEY>`` double-underscore
+#: config-override form (that form always doubles the underscore at the
+#: section boundary, so a single-underscore prefix can never match it) —
+#: verified against the real ``daemon`` section in
+#: :mod:`eawf.kernel.config.defaults` before adding either entry. Do not
+#: add a prefix for a family whose section name alone would collide (e.g.
+#: no bare ``EAWF_STATUSLINE_`` — ``statusline`` is itself a real
+#: top-level config section, so its members stay exact literals above).
+_RESERVED_ENV_PREFIXES: tuple[str, ...] = (
+    "EAWF_DAEMON_LOG_",
+    "EAWF_DAEMON_WAL_",
+)
+
 
 def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
     """Translate ``EAWF_FOO__BAR=baz`` env vars into ``{foo: {bar: "baz"}}``.
@@ -317,14 +363,15 @@ def _collect_env_overrides(env: Mapping[str, str]) -> dict[str, Any]:
     else stays a string. JSON-mode callers can pre-coerce by passing CLI
     overrides directly via :func:`merge_config`.
 
-    Reserved control vars (:data:`_RESERVED_ENV_VARS`) are skipped — they
-    name runtime knobs, not config keys.
+    Reserved control vars (:data:`_RESERVED_ENV_VARS`, plus any
+    :data:`_RESERVED_ENV_PREFIXES` family) are skipped — they name runtime
+    knobs, not config keys.
     """
     out: dict[str, Any] = {}
     for raw_key, raw_val in env.items():
         if not raw_key.startswith(_ENV_PREFIX):
             continue
-        if raw_key in _RESERVED_ENV_VARS:
+        if raw_key in _RESERVED_ENV_VARS or raw_key.startswith(_RESERVED_ENV_PREFIXES):
             continue
         stripped = raw_key[len(_ENV_PREFIX) :]
         if not stripped:

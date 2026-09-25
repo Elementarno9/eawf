@@ -65,9 +65,9 @@ from eawf.kernel.config.schema import BucketEstimateOverride
 from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.enums import GoalStatus, ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import RE_PROJECT_CODE
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import Goal, Project
 from eawf.kernel.state.urn import build as build_urn
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.platform.install.gitignore_writer import write_gitignore
 from eawf.platform.install.steps import (
     STEP_LIFECYCLE_DEPTH,
@@ -595,8 +595,9 @@ def run_wizard_no_input(
     2. Resolve the state path. If ``answers.state_path`` is relative it is
        anchored at ``target_dir``.
     3. Acquire the sibling lock on the state path and write the minimal
-       state document via :func:`atomic_write_json_locked`. The lock
-       prevents a concurrent ``eawf project init`` from racing the write.
+       state document via :func:`eawf.kernel.state.io.write_state_unlocked`
+       (refuses a leak-shaped answer before it lands). The lock prevents a
+       concurrent ``eawf project init`` from racing the write.
     4. Write ``.ea/config.yaml`` via :func:`_atomic_write_yaml` (held under
        its own lock).
     5. Materialise ``state_extensions.fields_required`` for every selected
@@ -665,7 +666,7 @@ def run_wizard_no_input(
         project_title=answers.project_title,
     )
     with portalock.acquire(state_path, timeout=5.0):
-        atomic_write_json_locked(state_path, state_payload)
+        write_state_unlocked(state_path, state_payload)
 
     # Config yaml — second write, separate lock. Its layout is what the
     # layered-config loader will see on the next ``eawf config get``.

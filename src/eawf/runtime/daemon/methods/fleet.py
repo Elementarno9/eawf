@@ -7,9 +7,9 @@ convergence criterion (K consecutive clean rounds) is met. The whole loop is
 daemon-owned: every run-state transition is persisted as the typed
 :class:`~eawf.kernel.state.models.FleetRun` on the optional ``State.fleet_run``
 field through the **daemon canonical state writer** (the
-``portalock(state.json)`` + :func:`~eawf.kernel.state.writer.atomic_write_json_locked`
-path every other mutator takes, per the daemon-as-sole-mutator rule). The loop
-never opens ``state.json`` directly.
+``portalock(state.json)`` + :func:`~eawf.kernel.state.io.write_state_unlocked`
+path every other mutator takes, per the daemon-as-sole-mutator rule). The
+loop never opens ``state.json`` directly.
 
 The loop honours the durable
 :attr:`~eawf.kernel.state.models.State.dispatch_paused` flag: a drive armed
@@ -62,6 +62,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.spec.auq_bridge import WaveFrontierItem, compute_ready_frontier
 from eawf.kernel.state.enums import AgentSessionRole, RiskTier, StoreKind, WaveStatus
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import (
     FleetCounters,
     FleetFork,
@@ -74,7 +75,6 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
@@ -505,10 +505,10 @@ def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
     """Write *fleet_run* onto ``State.fleet_run`` through the canonical writer.
 
     Routes the mutation through the daemon canonical state writer
-    (``portalock(state.json)`` + locked atomic write, mirroring
+    (``portalock(state.json)`` + leak-refusing locked atomic write, mirroring
     :func:`eawf.runtime.daemon.dispatch_runner._mark_wave_in_progress`): acquire
     the sibling lock, load the typed state, set ``fleet_run``, stamp
-    ``updated_at``, then ``atomic_write_json_locked`` under the held lock. The
+    ``updated_at``, then ``write_state_unlocked`` under the held lock. The
     loop never opens ``state.json`` directly.
 
     After the disk write the run transition is published to the subscription
@@ -533,7 +533,7 @@ def _persist_fleet_run(ctx: MethodContext, fleet_run: FleetRun | None) -> None:
         state = load_state(state_path)
         state.fleet_run = fleet_run
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     run_state = fleet_run.run_state.value if fleet_run is not None else None
     _publish_run_transition(ctx, fleet_run)
     logger.info(f"_persist_fleet_run run_state={run_state!r}")
@@ -1478,7 +1478,7 @@ def _enqueue_fork(ctx: MethodContext, fork: FleetFork) -> None:
         run.counters.blocked += 1
         state.fleet_run = run
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     logger.info(
         f"_enqueue_fork wave={fork.wave_id} attempt={fork.attempt} "
         f"reason={fork.reason.value} forks_open={len(run.forks)}"
@@ -2475,7 +2475,7 @@ class _Loop:
                 return
             fail_wave(state, wave_id=wave_id, reason=reason)
             state.updated_at = datetime.now(UTC)
-            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+            write_state_unlocked(state_path, state.model_dump(mode="json"))
         logger.info(f"_terminal_fail_on_disk wave={wave_id} status=failed reason={reason!r}")
 
     def _reap_orphan_claims(self) -> None:
@@ -2587,7 +2587,7 @@ class _Loop:
             now = datetime.now(UTC)
             closed_sessions = self._finalize_wave_sessions(state, wave_id=wave_id, now=now)
             state.updated_at = now
-            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+            write_state_unlocked(state_path, state.model_dump(mode="json"))
         logger.info(
             f"_close_wave_on_disk wave={wave_id} status=closed sessions_closed={closed_sessions}"
         )
@@ -3738,7 +3738,7 @@ def _deregister_lane(ctx: MethodContext, *, wave_id: str, attempt: int) -> None:
         run.counters.forked += 1
         state.fleet_run = run
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     logger.info(f"_deregister_lane wave={wave_id} attempt={attempt}")
 
 
@@ -3891,7 +3891,7 @@ def resolve_fork(
             raise LifecycleError(f"unknown fork resolution: {resolution!r}")
         state.fleet_run = run
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     logger.info(
         f"resolve_fork wave={wave_id} attempt={attempt} resolution={resolution.value} "
         f"run_state={run.run_state.value} forks_open={len(run.forks)}"

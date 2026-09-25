@@ -66,9 +66,8 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import RE_WAVE
-from eawf.kernel.state.io import state_version
+from eawf.kernel.state.io import state_version, write_state_unlocked
 from eawf.kernel.state.models import AgentSession, State
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
@@ -1205,7 +1204,7 @@ def accrue_tokens_consumed(
         state.updated_at = datetime.now(UTC)
         new_payload = state.model_dump(mode="json")
         after_version = state_version(new_payload)
-        atomic_write_json_locked(state_path, new_payload)
+        write_state_unlocked(state_path, new_payload)
         tokens_consumed = wave.tokens_consumed
         token_budget = wave.token_budget
     _publish_state_revision(
@@ -1640,7 +1639,7 @@ def _mark_wave_in_progress(ctx: MethodContext, *, wave_id: str) -> bool:
             return False
         start_wave(state, wave_id=wave_id)
         state.updated_at = datetime.now(UTC)
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     logger.info(f"_mark_wave_in_progress wave={wave_id}")
     return True
 

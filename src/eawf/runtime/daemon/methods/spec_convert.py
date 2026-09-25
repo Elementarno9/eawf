@@ -44,6 +44,7 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.runtime.daemon.methods.spec_context import (
@@ -502,7 +503,7 @@ def _apply_convert_legacy_locked(
         DaemonValidationError: When the post-mutation state fails schema /
             invariant validation (mapped to -32002).
     """
-    state, _payload = read_state(state_path)
+    state, payload = read_state(state_path)
     before_version = state_version(state.model_dump(mode="json"))
     config_root = state_path.parent.parent if state_path.parent.name == ".ea" else state_path.parent
     repo_root = Path(args.repo_root) if args.repo_root is not None else config_root
@@ -552,6 +553,11 @@ def _apply_convert_legacy_locked(
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")
     after_version = validate_post_sync(new_payload)
+    # Refuse BEFORE the WAL-pending record lands, mirroring the daemon's
+    # single-lock mutator ordering, so a refused convert leaves no orphaned
+    # PENDING record for the next replay to skip over.
+    if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+        raise DaemonValidationError(f"validation_failed: {leak_refusal}")
 
     mutation_id = uuid.uuid4().hex
     envelope = _build_convert_legacy_envelope(

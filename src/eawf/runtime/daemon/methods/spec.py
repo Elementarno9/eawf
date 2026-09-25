@@ -63,6 +63,7 @@ from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
@@ -1047,7 +1048,7 @@ def _apply_sync_locked(
             validation (mapped to ``-32002``).
         ValueError: When the wave id is unknown (mapped to ``-32602``).
     """
-    state, _payload = read_state(state_path)
+    state, payload = read_state(state_path)
     before_version = state_version(state.model_dump(mode="json"))
     wave = state.waves.get(args.wave_id)
     if wave is None:
@@ -1120,6 +1121,11 @@ def _apply_sync_locked(
     state.updated_at = datetime.now(UTC)
     new_payload = state.model_dump(mode="json")
     after_version = validate_post_sync(new_payload)
+    # Refuse BEFORE the WAL-pending record lands, mirroring the daemon's
+    # single-lock mutator ordering, so a refused sync leaves no orphaned
+    # PENDING record for the next replay to skip over.
+    if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+        raise DaemonValidationError(f"validation_failed: {leak_refusal}")
 
     mutation_id = uuid.uuid4().hex
     envelope = _build_sync_envelope(

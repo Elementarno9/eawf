@@ -125,7 +125,7 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
         )
         return []
 
-    from eawf.kernel.state.writer import atomic_write_json_locked
+    from eawf.kernel.state.io import write_state_unlocked
 
     try:
         with portalock.acquire(state_path, timeout=5.0):
@@ -154,7 +154,7 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
             if not added:
                 return []
 
-            atomic_write_json_locked(state_path, body)
+            write_state_unlocked(state_path, body)
             return added
     except portalock.LockTimeout as exc:
         raise UserError(

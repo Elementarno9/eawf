@@ -20,10 +20,11 @@ the offending step rather than after the whole chain.
 does NOT call :func:`eawf.kernel.state.writer.atomic_write_json` directly. It
 routes through :func:`write_canonical`, which acquires
 :func:`eawf.runtime.lock.portalock.acquire` and then calls
-:func:`eawf.kernel.state.writer.atomic_write_json_locked` — the exact lock +
-write primitive the daemon ``state.mutate`` handler and the
-``state_transaction`` chokepoint use. Routing through the shared lock +
-``atomic_write_json_locked`` primitive keeps the migration on the
+:func:`eawf.kernel.state.io.write_state_unlocked` — the same lock +
+leak-refusing write chokepoint the daemon-down fallback
+(:func:`eawf.kernel.state.io.commit_mutation`) and the ``state_transaction``
+chokepoint route through. Routing through the shared lock +
+``write_state_unlocked`` primitive keeps the migration on the
 canonical writer path without routing every per-step *intermediate*
 output through ``state_transaction``'s full ``State.model_validate`` — a
 later migration edge will introduce a breaking field change whose
@@ -59,7 +60,7 @@ import logging
 from pathlib import Path
 from typing import Any, Protocol, get_args, runtime_checkable
 
-from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
@@ -293,12 +294,14 @@ def write_canonical(state_path: Path, payload: dict[str, Any], *, timeout: float
     """Persist *payload* to *state_path* through the canonical writer path.
 
     Acquires :func:`eawf.runtime.lock.portalock.acquire` then calls
-    :func:`eawf.kernel.state.writer.atomic_write_json_locked` — the exact lock +
-    write primitive the daemon ``state.mutate`` handler and the
-    ``state_transaction`` chokepoint use (AGENTS rule 4 / D-SUP-01). The
+    :func:`eawf.kernel.state.io.write_state_unlocked` — the same lock +
+    leak-refusing write chokepoint the daemon ``state.mutate`` handler and
+    the ``state_transaction`` chokepoint use (AGENTS rule 4 / D-SUP-01). The
     lock-acquiring ``atomic_write_json`` bypass is deliberately NOT used:
     every state write must serialise under the sibling lock the canonical
-    chokepoint holds.
+    chokepoint holds. A migrated string that carries forward an *unchanged*
+    leak-shaped value from the pre-migration payload is not re-flagged --
+    only a string a migration step actually adds or changes is scanned.
 
     Args:
         state_path: Absolute path to ``state.json``.
@@ -308,9 +311,11 @@ def write_canonical(state_path: Path, payload: dict[str, Any], *, timeout: float
     Raises:
         portalock.LockTimeout: When the sibling lock cannot be acquired
             within *timeout*.
+        StateValidationError: When a migration step adds or changes a
+            string that carries a leak shape.
     """
     with portalock.acquire(state_path, timeout=timeout):
-        atomic_write_json_locked(state_path, payload)
+        write_state_unlocked(state_path, payload)
     logger.info(f"write_canonical path={state_path!r} keys={len(payload)}")
 
 

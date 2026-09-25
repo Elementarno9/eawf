@@ -960,8 +960,8 @@ def _create_workspace_state(workspace_state_path: Path, *, code: str) -> None:
     from typing import Any
 
     from eawf.kernel.state.enums import ScopeKind
+    from eawf.kernel.state.io import write_state_unlocked
     from eawf.kernel.state.urn import build as build_urn
-    from eawf.kernel.state.writer import atomic_write_json_locked
     from eawf.runtime.lock import portalock
 
     payload: dict[str, Any] = {
@@ -989,7 +989,7 @@ def _create_workspace_state(workspace_state_path: Path, *, code: str) -> None:
     }
     workspace_state_path.parent.mkdir(parents=True, exist_ok=True)
     with portalock.acquire(workspace_state_path, timeout=5.0):
-        atomic_write_json_locked(workspace_state_path, payload)
+        write_state_unlocked(workspace_state_path, payload)
 
 
 __all__ = [

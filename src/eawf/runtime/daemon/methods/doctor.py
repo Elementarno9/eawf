@@ -11,8 +11,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.config.migration import migrate_config_file
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.doctor.repair import (
     DoctorRepairAction,
@@ -118,7 +118,7 @@ def _apply_pins(workspace: Path, state_path: Path) -> tuple[str, int]:
             repaired,
             status="planned",
         )
-        atomic_write_json_locked(state_path, payload)
+        write_state_unlocked(state_path, payload)
     append_commit_repin_provenance(
         state_path,
         repaired,

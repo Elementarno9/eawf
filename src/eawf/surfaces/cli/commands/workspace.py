@@ -59,6 +59,7 @@ import typer
 
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import is_project_code
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.urn import build as build_urn
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.runtime.lock import portalock
@@ -218,7 +219,7 @@ def workspace_init_cmd(
                     )
             except PydValidationError as exc:
                 raise cli_errors.ValidationError(str(exc)) from exc
-            atomic_write_json_locked(state_path, payload)
+            write_state_unlocked(state_path, payload)
     except portalock.LockTimeout as exc:
         cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
         return

@@ -72,9 +72,18 @@ class StateValidationError(ValueError):
 
 
 def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
-    """Write *data* to *path* atomically WITHOUT acquiring the sibling lock.
+    """Refuse a leaking payload, else write *data* to *path* atomically.
 
-    The caller must already hold the lock via
+    This is the one place every ``state.json`` write -- the daemon-down
+    fallback (:func:`commit_mutation`) and the direct read-modify-write
+    helpers scattered across the CLI, migrations and daemon methods --
+    funnels through, so it is the chokepoint that runs
+    :func:`eawf.observability.logging.state_leak.state_leak_refusal`
+    between validation and persistence. The "before" side of the diff is
+    read fresh from *path* under the caller's held lock, so callers never
+    need to thread their own pre-mutation payload through.
+
+    Does NOT acquire the sibling lock. The caller must already hold it via
     :func:`eawf.runtime.lock.portalock.acquire`. The locked variant lives in
     :mod:`eawf.kernel.state.writer`; this unlocked variant is needed because the
     transaction-level lock is held for the entire handler.
@@ -82,7 +91,17 @@ def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
     Args:
         path: Destination ``state.json`` path (parent dirs are created).
         data: JSON-serialisable payload to persist.
+
+    Raises:
+        StateValidationError: When a string *data* adds or changes relative
+            to the on-disk payload at *path* carries a leak shape (home
+            path, email, or credential token). Nothing is written.
     """
+    from eawf.observability.logging.state_leak import state_leak_refusal
+
+    old = orjson.loads(path.read_bytes()) if path.exists() else {}
+    if (leak_refusal := state_leak_refusal(old, data)) is not None:
+        raise StateValidationError(leak_refusal)
     path.parent.mkdir(parents=True, exist_ok=True)
     suffix = secrets.token_hex(4)
     tmp = path.with_name(f"{path.name}.tmp.{suffix}")
@@ -385,10 +404,12 @@ def commit_mutation(
 
     Raises:
         StateValidationError: When the post-apply payload fails strict
-            invariant validation.
+            invariant validation, or a string it adds or changes carries a
+            leak shape (home path, email, or credential token).
     """
     from eawf.kernel.store.append import append_envelope
     from eawf.kernel.store.paths import store_path
+    from eawf.observability.logging.state_leak import state_leak_refusal
     from eawf.runtime.daemon import wal
     from eawf.runtime.daemon.recovery import replay_wal
     from eawf.runtime.daemon.wal import WalRecord
@@ -404,6 +425,16 @@ def commit_mutation(
     # log never carries an event whose state change is missing, and so a
     # half-applied prior write completes before this one starts.
     replay_wal(wal_dir, state_path=state_path, event_path=events_path)
+
+    # Refuse BEFORE the WAL-pending record lands -- mirrors the daemon's own
+    # ``state.mutate`` ordering (leak check, then WAL) so a refused mutation
+    # leaves no orphaned PENDING record for the next replay to skip over.
+    # ``write_state_unlocked`` repeats this check as the chokepoint every
+    # other fallback writer relies on; here it is a cheap defense-in-depth
+    # second pass over an already-clean payload.
+    old_payload = orjson.loads(state_path.read_bytes()) if state_path.exists() else {}
+    if (leak_refusal := state_leak_refusal(old_payload, payload)) is not None:
+        raise StateValidationError(leak_refusal)
 
     envelope = build_event_envelope(
         command=command,

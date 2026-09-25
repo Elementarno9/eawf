@@ -33,7 +33,7 @@ import orjson
 import typer
 
 from eawf.kernel.state.enums import ActualStatus, Confidence, StoreKind
-from eawf.kernel.state.writer import atomic_write_json_locked
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.runtime.lock import portalock
 from eawf.runtime.lock.stale import is_stale
 from eawf.surfaces.cli import errors
@@ -145,7 +145,7 @@ def _commit_state(
     if report.violations:
         codes = sorted({v.code for v in report.violations})
         raise errors.ValidationError(f"post-mutation invariant violations: {', '.join(codes)}")
-    atomic_write_json_locked(state_path, payload)
+    write_state_unlocked(state_path, payload)
 
 
 def _emit_event(

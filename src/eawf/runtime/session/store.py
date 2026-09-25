@@ -25,8 +25,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import AgentSession, State
-from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.append import append_envelope as _append_canonical
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
@@ -553,7 +553,7 @@ def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
                 summary="orphaned by daemon restart",
             )
         if orphan_ids:
-            atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+            write_state_unlocked(state_path, state.model_dump(mode="json"))
     count = len(orphan_ids)
     logger.info(f"reconcile_orphaned_sessions flipped={count}")
     return count
@@ -673,7 +673,7 @@ def stamp_session_end_at_exit(
             summary=summary or "stamped at process exit",
             now=moment,
         )
-        atomic_write_json_locked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(state_path, state.model_dump(mode="json"))
     try:
         commit_event(events_path, staged.event)
     except Exception as exc:
