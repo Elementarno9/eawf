@@ -89,6 +89,10 @@ ReceiptId = Annotated[str, _grammar(r"^receipt-[0-9a-f]{16}$", max_length=24)]
 #: The key the gateway replays a call by. Same key and same payload digest
 #: return the original receipt; same key and another digest is refused.
 IdempotencyKey = Annotated[str, _grammar(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", max_length=128)]
+#: A candidate's own identifier, mirrored from the grammar
+#: ``eawf.kernel.runtime.candidate.candidate_identity`` produces --
+#: duplicated rather than imported because that module imports this one.
+CandidateRef = Annotated[str, _grammar(r"^CND-[0-9a-f]{32}$", max_length=36)]
 OptionId = Annotated[str, _grammar(r"^[a-z][a-z0-9_-]{0,31}$", max_length=32)]
 CriterionId = Annotated[str, _grammar(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$", max_length=64)]
 FindingCode = Annotated[str, _grammar(r"^[a-z][a-z0-9_]{0,63}$", max_length=64)]
@@ -674,17 +678,21 @@ class SubmitCoordinationProposalOutput(SemanticToolOutputBase):
 
 
 class SubmitCandidateOutput(SemanticToolOutputBase):
-    """The candidate the daemon sealed.
+    """The claim the daemon recorded, and the bundle it seals to if one already stands.
 
     There is no integration result here: a worker proposes content and
     the daemon alone integrates, so a field naming an integration outcome
-    would report an authority the worker does not hold.
+    would report an authority the worker does not hold. Sealing is a
+    second, separate act that needs an accepted terminal report this call
+    does not carry, so ``sealed_at`` names the standing bundle when one
+    already exists and is absent otherwise -- a submission is never sealed
+    by the act of being made.
     """
 
     tool_id: Literal["submit_candidate"]
-    candidate_ref: AnyEntityUrn
+    candidate_ref: CandidateRef
     resulting_tree_digest: Digest
-    sealed_at: UtcDatetime
+    sealed_at: UtcDatetime | None = None
 
 
 class SubmitReportOutput(SemanticToolOutputBase):

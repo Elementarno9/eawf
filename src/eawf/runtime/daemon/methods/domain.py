@@ -106,15 +106,14 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.domain_envelope import (
-    ENTITY_REF_WIDTH,
     ENVELOPE_SCHEMA_VERSION,
-    UNNAMED_SUBJECT,
     DomainEnvelope,
     DomainError,
     DomainErrorCode,
     DomainStatus,
     accepted_envelope,
     refused_envelope,
+    schema_refusal,
 )
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
@@ -528,41 +527,6 @@ DOMAIN_LIFECYCLE_PARAMS: Final[Mapping[str, type[LifecycleParams]]] = {
 }
 
 
-def _schema_refusal(
-    error: ValidationError, *, params: dict[str, Any], operation: str
-) -> DomainEnvelope:
-    """Return the envelope of a request that does not parse.
-
-    The pydantic detail is reduced to the offending field paths, because
-    the full error text repeats the submitted values and a refusal that
-    travels to terminals and daemon logs must not carry them.
-
-    Args:
-        error: What the parameter model refused.
-        params: The raw request parameters, read only for the subject.
-        operation: The verb the client asked for.
-
-    Returns:
-        An ``error`` envelope naming the fields to correct.
-    """
-    fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-    named = params.get("urn")
-    subject = named[:ENTITY_REF_WIDTH] if isinstance(named, str) and named else UNNAMED_SUBJECT
-    return DomainEnvelope(
-        schema_version=ENVELOPE_SCHEMA_VERSION,
-        status=DomainStatus.ERROR,
-        operation=operation,
-        errors=(
-            DomainError(
-                code=DomainErrorCode.SCHEMA_VALIDATION_FAILED,
-                message=f"the request is not a valid {operation}; check {', '.join(fields)}",
-                entity_ref=subject,
-                remediation="Correct the named parameters and retry.",
-            ),
-        ),
-    )
-
-
 def _sealed_approval(params: LifecycleParams) -> QualifiedUrn | None:
     """Return the sealed approval reference the request supplies.
 
@@ -969,7 +933,7 @@ async def _run_verb(
             {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
         )
     except ValidationError as error:
-        return _schema_refusal(error, params=params, operation=verb.method).model_dump(mode="json")
+        return schema_refusal(error, params=params, operation=verb.method).model_dump(mode="json")
     context = ctx.native_root_context(authority.root)
     refused = await asyncio.to_thread(_preflight, context, verb=verb, params=request_params)
     if refused is not None:

@@ -21,10 +21,13 @@ from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from pydantic import ValidationError
 
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.runtime.mcp.native_launch import native_run_server_config
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -40,6 +43,7 @@ from eawf.runtime.runtimes.adapter import (
     release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
+from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.runtimes.stream_json import terminal_result_envelope
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
@@ -427,6 +431,129 @@ def _parse_claude_result(
         started_at=started_at,
         ended_at=ended_at,
     )
+
+
+def _assistant_usage_from_stream_line(line: str) -> tuple[str | None, UsageSample] | None:
+    """Return the per-call usage reading one claude stream-json line discloses.
+
+    Only a ``type: "assistant"`` event carries ``message.usage`` -- the same
+    block the finished-transcript aggregator
+    (:func:`~eawf.runtime.runtimes.claude.transcript_counters.aggregate_transcript_counters`)
+    reads off the persisted session log, because the live stream and the
+    persisted transcript are the same wire shape. That shape is PER API
+    CALL, not a running session total: unlike a provider whose stream
+    discloses a cumulative reading each time, Claude reports what one call
+    billed and nothing more. A line that is not JSON, not an object, not an
+    assistant event, or carries no well-formed usage block is skipped
+    rather than raised: a malformed mid-turn line must not abort an
+    otherwise-live spawn.
+
+    Args:
+        line: One decoded stdout line, trailing newline included or not.
+
+    Returns:
+        A ``(dedupe_key, sample)`` pair, or ``None`` when the line carries
+        no usage. ``sample`` is the token classes THIS call billed --
+        :class:`_ClaudeUsageAccumulator` folds it into the running total the
+        in-flight meter expects. ``dedupe_key`` identifies the billed call
+        (see :func:`_usage_dedupe_key`) so the accumulator can drop the
+        duplicate content-block copies Claude Code writes for one message;
+        it is ``None`` when the event names no such id, and the reading is
+        then folded unconditionally.
+    """
+    try:
+        data = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or data.get("type") != "assistant":
+        return None
+    message = data.get("message")
+    if not isinstance(message, dict):
+        return None
+    usage = message.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    try:
+        sample = UsageSample(
+            input_tokens=usage.get("input_tokens") or 0,
+            output_tokens=usage.get("output_tokens") or 0,
+            cache_read_input_tokens=usage.get("cache_read_input_tokens") or 0,
+        )
+    except ValidationError, TypeError:
+        return None
+    return _usage_dedupe_key(data, message), sample
+
+
+def _usage_dedupe_key(data: dict[str, Any], message: dict[str, Any]) -> str | None:
+    """Return the id naming the billed call *data* / *message* belong to.
+
+    Mirrors :func:`~eawf.runtime.runtimes.claude.transcript_counters._usage_key`:
+    Claude Code appends an assistant message once per content block, each
+    copy repeating the same ``message.usage``, so the message id -- falling
+    back to the event's own request or row id -- names the call rather than
+    the line.
+    """
+    for candidate in (message.get("id"), data.get("requestId"), data.get("uuid")):
+        if isinstance(candidate, str) and candidate:
+            return candidate
+    return None
+
+
+class _ClaudeUsageAccumulator:
+    """Fold a claude stream's per-call usage readings into running totals.
+
+    Claude's ``message.usage`` on a stream-json ``assistant`` event is what
+    ONE API call billed, not a session-cumulative figure. The in-flight
+    meter (:class:`~eawf.runtime.runtimes.metering.InFlightMeter`) ratchets
+    each reading against the largest one seen so far, which is a safe fold
+    only when every reading IS the running total -- fed a bare per-call
+    figure instead, it discards every earlier call and meters a Run at its
+    single largest message, so a Run whose calls together cross the token
+    cap runs past it. This accumulator restores the running-total contract
+    at the source: it dedupes Claude Code's duplicate content-block copies
+    of one message (see :func:`_usage_dedupe_key`) and emits the running
+    sum, so every reading handed to the meter already is cumulative -- the
+    same contract codex's own stream already satisfies natively.
+    """
+
+    def __init__(self) -> None:
+        """Start the fold at zero, with no call yet seen."""
+        self._seen: set[str] = set()
+        self._input_tokens = 0
+        self._output_tokens = 0
+        self._cache_read_input_tokens = 0
+
+    def observe(self, line: str) -> UsageSample | None:
+        """Fold *line*'s reading in and return the new running total.
+
+        Args:
+            line: One decoded stdout line, trailing newline included or
+                not.
+
+        Returns:
+            The running-total :class:`UsageSample` after folding *line* in,
+            or ``None`` when *line* discloses no NEW usage -- it is not an
+            assistant-usage event, or it repeats a call already folded.
+        """
+        usage = _assistant_usage_from_stream_line(line)
+        if usage is None:
+            return None
+        dedupe_key, sample = usage
+        if dedupe_key is not None:
+            if dedupe_key in self._seen:
+                return None
+            self._seen.add(dedupe_key)
+        self._input_tokens += sample.input_tokens
+        self._output_tokens += sample.output_tokens
+        self._cache_read_input_tokens += sample.cache_read_input_tokens
+        try:
+            return UsageSample(
+                input_tokens=self._input_tokens,
+                output_tokens=self._output_tokens,
+                cache_read_input_tokens=self._cache_read_input_tokens,
+            )
+        except ValidationError:
+            return None
 
 
 class ClaudeAdapter:
@@ -897,16 +1024,50 @@ class ClaudeNativeLauncher:
             The provider session, the child's pid and the announcement.
 
         Raises:
-            RuntimeSpawnError: The spawn timed out, exited non-zero, or
-                returned an envelope that does not parse.
+            RuntimeSpawnError: The spawn timed out, exited non-zero,
+                returned an envelope that does not parse, or the per-Run
+                MCP configuration could not be built or does not register
+                the Run's server.
         """
         spec = request.spec
+        server_config = native_run_server_config(request, runtime_id=self._adapter.id)
+        pgid_box: list[int | None] = [None]
+        relayed_terminated = False
+        usage_accumulator = _ClaudeUsageAccumulator()
+
+        def _capture_pgid(pgid: int) -> None:
+            pgid_box[0] = pgid
+
+        async def _relay_usage(line: str) -> None:
+            """Parse *line* for a usage reading and hand it to the sink.
+
+            *line* discloses what one API call billed, not a running
+            total, so ``usage_accumulator`` folds it into the running sum
+            the sink expects before relaying (see
+            :class:`_ClaudeUsageAccumulator`).
+
+            Stops relaying once the sink reports the Run terminated at its
+            cap -- the kill ladder reaps the child from there, and a
+            terminated meter answers every further reading identically, so
+            relaying past that point buys nothing.
+            """
+            nonlocal relayed_terminated
+            if request.usage_sink is None or relayed_terminated:
+                return
+            sample = usage_accumulator.observe(line)
+            if sample is None:
+                return
+            relayed_terminated = await request.usage_sink(sample, pgid_box[0])
+
         result = await self._adapter.spawn_session(
             request.prompt,
             model=spec.model_id,
             cwd=str(request.workspace),
+            extra_args=server_config.argv_flags,
             denied_tools=ambient_denied_tools(spec),
             timeout=float(spec.limits.wall_seconds),
+            on_pgid=_capture_pgid if request.usage_sink is not None else None,
+            on_chunk=_relay_usage if request.usage_sink is not None else None,
         )
         return NativeLaunchOutcome(
             provider_session_ref=result.session_id,

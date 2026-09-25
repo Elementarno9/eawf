@@ -21,7 +21,7 @@ from typing import Final, Self
 
 from pydantic import model_validator
 
-from eawf.kernel.state.epoch2.base import BatchKey, BranchName
+from eawf.kernel.state.epoch2.base import BatchKey, BranchName, Epoch2Model
 from eawf.kernel.state.epoch2.milestone import reject_duplicate_refs
 from eawf.kernel.state.epoch2.urns import BatchUrn, MilestoneUrn, RepositoryUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import (
@@ -63,6 +63,31 @@ _HEAD_BOUND: Final = frozenset(
 
 #: The one state in which a target branch has not been chosen yet.
 _UNTARGETED: Final = frozenset({BatchStatus.PLANNED})
+
+
+class BatchCreateSpec(Epoch2Model):
+    """The strict create document for a DeliveryBatch.
+
+    Status, identity, the target branch and every proof are absent by
+    construction: a Batch is created ``PLANNED``, and the branch and the
+    head binding are facts its own edges pin later. Accepting either here
+    would let a caller create a Batch that already claims to be mergeable.
+    """
+
+    key: BatchKey
+    milestone_ref: MilestoneUrn
+    repository_ref: RepositoryUrn
+    task_refs: tuple[TaskUrn, ...] = ()
+
+    @model_validator(mode="after")
+    def _task_refs_are_unique(self) -> Self:
+        """Require each Task to appear at most once in the Batch.
+
+        Raises:
+            ValueError: A Task is listed twice.
+        """
+        reject_duplicate_refs(self.task_refs, field="task_refs")
+        return self
 
 
 class DeliveryBatch(Epoch2Record):
@@ -111,6 +136,7 @@ class DeliveryBatch(Epoch2Record):
 
 
 __all__ = [
+    "BatchCreateSpec",
     "BatchStatus",
     "DeliveryBatch",
 ]

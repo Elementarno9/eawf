@@ -16,8 +16,12 @@ plan is the one failure the graph exists to prevent.
 The same honesty governs the dispatch arm. Opening a Run needs a compiled
 run specification -- provider documents, a certified binding set, an
 authority capsule and a rendered prompt -- and no surface this grammar
-reaches produces one. The pass therefore stops for an operator rather
-than sending a request it would have had to fabricate. The retry arm is
+reaches produces one. Without it the pass stops for an operator rather
+than sending a request it would have had to fabricate. An operator who
+has compiled one presents it with ``--run-request`` beside the one Task
+(``--task``) and the Run it runs under (``--run``); the pass then reads
+the Run back and asks the daemon to dispatch exactly that request, and
+the dispatched Task leaves the frontier it reports. The retry arm is
 complete: resuming a Run needs the Run reference and nothing else, so
 ``--resume`` reaches the daemon.
 """
@@ -87,8 +91,8 @@ RPC_SCOPE: Final = RpcScope(
 INVOCATION_GRAMMAR: Final = (
     "/dispatch <batch-ref> [--task <ref>...] "
     "[--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] "
-    "[--provider <id>] [--resume <run-ref>] [--budget <spec>] [--dry-run] "
-    "[--idempotency-key <key>] [--output <human|json|markdown>]"
+    "[--provider <id>] [--resume <run-ref>] [--run <run-ref>] [--run-request <compiled>] "
+    "[--budget <spec>] [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]"
 )
 
 #: What this skill may cause, stated as the boundary it never crosses.
@@ -119,6 +123,12 @@ _FRONTIER_STOP: Final = "dependency_proof_unreadable"
 #: Why the pass cannot open a Run from this grammar.
 _DISPATCH_STOP: Final = "run_request_uncompilable"
 
+#: Who a dispatch or retry the pass sends is attributed to. The skill's own
+#: slash-prefixed name is not a valid principal key (the daemon's
+#: ``PrincipalKey`` pattern is uppercase-anchored and admits no ``/``),
+#: so the coordinator carries its own qualified key instead.
+_ACTOR_PRINCIPAL: Final = "SKILL-DISPATCH"
+
 MANIFEST = SkillManifest(
     name="/dispatch",
     description="Coordinate one Delivery Batch: bring its ready Tasks to a candidate.",
@@ -142,6 +152,10 @@ class DispatchArgs(BaseModel):
             ceiling is policy, so the pass neither raises nor lowers it.
         provider: The provider id a dispatched Run would bind.
         resume: A Run reference to resume instead of opening new work.
+        run: The Run the one named Task is dispatched under.
+        run_request: The compiled dispatch request an operator presents
+            for that Run: the compile request, provider documents and
+            registry, bindings, capsule, base, lease and prompt.
         budget: The budget spec the pass charges against.
         dry_run: Render the plan and record no effect.
         idempotency_key: This request's name; minted when omitted.
@@ -157,6 +171,8 @@ class DispatchArgs(BaseModel):
     max_parallel: int = Field(default=1, ge=1, le=64)
     provider: str | None = None
     resume: str | None = None
+    run: str | None = None
+    run_request: dict[str, Any] | None = None
     budget: str | None = None
     dry_run: bool = False
     idempotency_key: str | None = None
@@ -200,7 +216,10 @@ class DispatchSkill(Skill):
         try:
             batch = RPC_SCOPE.call(caller, BATCH_READ_METHOD, {**params, "key": args.batch_ref})
             tasks = RPC_SCOPE.call(caller, TASK_READ_METHOD, params)
-            dispatched = self._resume(caller, args, params)
+            dispatched = [
+                *self._resume(caller, args, params),
+                *self._dispatch(caller, args, params),
+            ]
         except RpcRefusedError as refused:
             return self._refused(args, refused)
         return self._report(args, batch=batch, tasks=tasks, dispatched=dispatched)
@@ -230,7 +249,7 @@ class DispatchSkill(Skill):
             {
                 **params,
                 "urn": args.resume,
-                "actor": self.name,
+                "actor": _ACTOR_PRINCIPAL,
                 "idempotency_key": args.idempotency_key or uuid.uuid4().hex,
             },
         )
@@ -243,6 +262,49 @@ class DispatchSkill(Skill):
             )
         ]
 
+    def _dispatch(
+        self, caller: RpcCaller, args: DispatchArgs, params: dict[str, Any]
+    ) -> list[DispatchedRun]:
+        """Dispatch the one named Task under the named Run, when both were named.
+
+        A presented request opens exactly one Run, so it is honoured only
+        beside exactly one Task; with any other count nothing is sent and
+        the pass reports the frontier as it stands.
+
+        Args:
+            caller: The transport seam.
+            args: The validated invocation.
+            params: The tree-addressing params every call carries.
+
+        Returns:
+            One row for the dispatched Run; empty when nothing was sent.
+
+        Raises:
+            RpcRefusedError: The daemon refused the read or the dispatch.
+        """
+        if args.run is None or args.run_request is None or len(args.task) != 1 or args.dry_run:
+            return []
+        RPC_SCOPE.call(caller, RUN_READ_METHOD, {**params, "key": args.run})
+        RPC_SCOPE.call(
+            caller,
+            RUN_DISPATCH_METHOD,
+            {
+                **params,
+                **args.run_request,
+                "urn": args.run,
+                "actor": _ACTOR_PRINCIPAL,
+                "idempotency_key": args.idempotency_key or uuid.uuid4().hex,
+            },
+        )
+        return [
+            DispatchedRun(
+                task_ref=args.task[0],
+                run_ref=args.run,
+                method=RUN_DISPATCH_METHOD,
+                outcome="dispatched",
+            )
+        ]
+
     def _report(
         self,
         args: DispatchArgs,
@@ -252,7 +314,8 @@ class DispatchSkill(Skill):
         dispatched: list[DispatchedRun],
     ) -> SkillResult:
         """Fold the read models into the coordination report."""
-        candidates = row_keys(tasks, status=_PLANNED_STATUS)
+        sent = {row.task_ref for row in dispatched if row.method == RUN_DISPATCH_METHOD}
+        candidates = [key for key in row_keys(tasks, status=_PLANNED_STATUS) if key not in sent]
         if args.task:
             wanted = set(args.task)
             candidates = [key for key in candidates if key in wanted]
@@ -266,8 +329,8 @@ class DispatchSkill(Skill):
                 frontier=[],
                 stopped_on=[],
                 reason=(
-                    f"batch {args.batch_ref} has no Task standing at {_PLANNED_STATUS}, so the "
-                    "candidate frontier is empty"
+                    f"batch {args.batch_ref} has no undispatched Task standing at "
+                    f"{_PLANNED_STATUS}, so the candidate frontier is empty"
                 ),
             )
         plan = ConcurrencyPlan(

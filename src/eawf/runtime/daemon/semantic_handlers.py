@@ -27,10 +27,28 @@ submit", and the findings are the refusal the submission would have
 produced -- the same function decides both, so the preview cannot drift
 from the act.
 
+``submit_candidate`` records one worker's claim that a tree is ready to
+be integrated. Sealing is a second, separate act gated on an accepted
+terminal report and is not performed here, so the handler reports the
+standing bundle when one already exists and reports none otherwise; the
+claim itself is written once and replayed rather than duplicated when the
+same candidate is submitted again with the same content. Before that
+first write, the submission's commit is pinned under the candidate's ref
+through the same check ``runtime.candidate.submit`` pins through, because
+a claim this gateway wrote and a claim the JSON-RPC method wrote must be
+equally resolvable once the leased branch is gone. A submission naming an
+identity another claim already holds with different content, or naming a
+commit the pin check will not hold, reaches no handler answer at all: it
+raises :class:`HandlerRefusalError`, which the gateway lets propagate
+rather than files as a receipt, because there is no output that could
+report it without inventing one.
+
 No handler opens a session of its own. The gateway is already inside one
 with the Run's locks and the document lock held, and a nested session
 would block on the lock the caller is holding. What a handler needs from
-the tree it reads through the session it was handed.
+the tree it reads through the session it was handed, and the Run's
+active lease -- already resolved by the gateway's own lease check -- is
+handed alongside it for the same reason.
 """
 
 from __future__ import annotations
@@ -44,8 +62,10 @@ from typing import Any, Final, Literal, Self
 
 from pydantic import TypeAdapter, ValidationError, model_validator
 
+from eawf.kernel.runtime.candidate import CandidateSubmission, candidate_identity
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.compiled import JsonPointer, canonical_digest
+from eawf.kernel.runtime.lease import WorkLease
 from eawf.kernel.runtime.provider import ArtifactUrn, Digest, RuntimeRecord
 from eawf.kernel.runtime.semantic import (
     BudgetStatusOutput,
@@ -54,6 +74,8 @@ from eawf.kernel.runtime.semantic import (
     SemanticCall,
     SemanticToolId,
     SemanticToolOutput,
+    SubmitCandidateInput,
+    SubmitCandidateOutput,
     SubmitPlanInput,
     SubmitPlanOutput,
     ValidationFinding,
@@ -61,8 +83,10 @@ from eawf.kernel.runtime.semantic import (
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.epoch2_root import RootSession
+from eawf.runtime.candidate.seal import bundle_of, submission_of, submission_record
+from eawf.runtime.daemon.epoch2_root import RootSession, canonical_entity_urn
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
+from eawf.runtime.integration.git_workspace import CandidatePinError, pin_submission_commit
 from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
 from eawf.workflow.planning.revision import PlanRefusal, PlanRefusalCode
 
@@ -141,6 +165,9 @@ class HandlerInputs:
         run: The stored Run record.
         calls_so_far: How many receipts the Run already holds.
         now: The instant the answer is stamped at.
+        lease: The Run's active workspace lease, already resolved by the
+            gateway's own lease check. ``None`` for a tool the lease check
+            does not gate.
     """
 
     session: RootSession
@@ -149,6 +176,27 @@ class HandlerInputs:
     run: Run
     calls_so_far: int
     now: datetime
+    lease: WorkLease | None = None
+
+
+class HandlerRefusalError(ValueError):
+    """A call reached its handler and still cannot be answered as made.
+
+    Raised instead of returned so the caller's session exits with no
+    receipt appended -- the same "nothing is written" guarantee a
+    pre-handler refusal has, for the one class of refusal that can only be
+    known once the handler reads the tree.
+
+    Attributes:
+        code: The stable code a client branches on.
+        detail: The operator-facing explanation.
+    """
+
+    def __init__(self, *, code: str, detail: str) -> None:
+        """Bind the typed code to its one-sentence detail."""
+        super().__init__(f"{code}: {detail}")
+        self.code = code
+        self.detail = detail
 
 
 def _budget_status(inputs: HandlerInputs) -> SemanticToolOutput:
@@ -203,6 +251,84 @@ def _submit_plan(inputs: HandlerInputs) -> SemanticToolOutput:
     )
 
 
+def _submit_candidate(inputs: HandlerInputs) -> SemanticToolOutput:
+    """Record one worker's claim, or answer the standing one it repeats.
+
+    Raises:
+        HandlerRefusalError: The lease this call names is not the one the
+            Run holds, the submission names no commit or one that is not
+            the leased worktree's own HEAD descending from its base, or
+            the candidate identity is already held by a claim naming
+            other content.
+    """
+    payload = inputs.call.payload
+    assert isinstance(payload, SubmitCandidateInput), "the envelope binds the payload to its tool"
+    lease = inputs.lease
+    assert lease is not None, "the lease check admits only a run holding an active lease"
+    if (
+        canonical_entity_urn(lease.task_ref) != canonical_entity_urn(payload.task_ref)
+        or lease.lease_id != payload.lease_id
+    ):
+        raise HandlerRefusalError(
+            code="candidate_lease_mismatch",
+            detail=(
+                f"run {inputs.run.key!r} holds lease {lease.lease_id!r} for task "
+                f"{lease.task_ref.entity_key}, which is not what this call names"
+            ),
+        )
+    candidate_ref = candidate_identity(
+        task_ref=str(payload.task_ref), resulting_tree_digest=payload.resulting_tree_digest
+    )
+    records = read_ledger_records(inputs.session.ledger_path(Epoch2Collection.RUN))
+    standing = submission_of(records, candidate_ref)
+    if standing is None:
+        try:
+            pin_submission_commit(
+                inputs.session.context,
+                lease=lease,
+                candidate_ref=candidate_ref,
+                submission_ref=payload.submission_ref,
+            )
+        except CandidatePinError as error:
+            raise HandlerRefusalError(code=error.code.value, detail=error.detail) from error
+        standing = CandidateSubmission(
+            candidate_ref=candidate_ref,
+            run_ref=inputs.call.run_ref,
+            task_ref=payload.task_ref,
+            lease_id=lease.lease_id,
+            workspace_handle=lease.workspace_handle,
+            workspace_generation=lease.workspace_generation,
+            base_commit=lease.base_commit,
+            submission_ref=payload.submission_ref,
+            changed_paths=payload.changed_paths,
+            resulting_tree_digest=payload.resulting_tree_digest,
+            submitted_at=inputs.now,
+        )
+        commit_ledger_append(inputs.session, submission_record(standing))
+        logger.info(
+            f"_submit_candidate recorded candidate={candidate_ref} "
+            f"run={inputs.run.key!r} paths={len(standing.changed_paths)}"
+        )
+    elif (
+        standing.submission_ref != payload.submission_ref
+        or standing.changed_paths != payload.changed_paths
+    ):
+        raise HandlerRefusalError(
+            code="candidate_payload_conflict",
+            detail=(
+                f"candidate {candidate_ref} is already held by a claim naming other "
+                "content, so replaying it would answer for a request nobody made"
+            ),
+        )
+    bundle = bundle_of(records, candidate_ref)
+    return SubmitCandidateOutput(
+        tool_id="submit_candidate",
+        candidate_ref=candidate_ref,
+        resulting_tree_digest=payload.resulting_tree_digest,
+        sealed_at=None if bundle is None else bundle.sealed_at,
+    )
+
+
 #: Which function answers each brokered tool. A tool reaches a handler or
 #: it reaches none: the gateway refuses an admitted call whose tool is
 #: absent here rather than inventing an outcome for it.
@@ -210,6 +336,7 @@ SEMANTIC_HANDLERS: Final[Mapping[SemanticToolId, Callable[[HandlerInputs], Seman
     MappingProxyType(
         {
             SemanticToolId.BUDGET_STATUS: _budget_status,
+            SemanticToolId.SUBMIT_CANDIDATE: _submit_candidate,
             SemanticToolId.SUBMIT_PLAN: _submit_plan,
         }
     )
@@ -317,6 +444,7 @@ __all__ = [
     "REPORTABLE_PLAN_CODES",
     "SEMANTIC_HANDLERS",
     "HandlerInputs",
+    "HandlerRefusalError",
     "HandlerTableError",
     "PlanProposalArtifact",
 ]

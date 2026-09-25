@@ -27,9 +27,10 @@ shortcut this module deliberately does not take:
   guard that failed and a remediation. All four are printed as they
   arrived. A CLI that re-spelled them would be a second error vocabulary
   able to drift from the one clients branch on.
-- **There is no create verb.** The lifecycle registry has no creation
-  edge, so this module offers none rather than inventing one that would
-  have to write a record no transition table admits.
+- **There is no create verb here.** A record is admitted by the daemon's
+  ``domain.<entity>.create`` verbs, whose payload is a whole create
+  document rather than a move of a record that exists, so this module of
+  moves offers none.
 
 Every verb takes the same four addressing flags -- the subject URN, the
 revision the caller read it at, the retry key and the actor -- and reads

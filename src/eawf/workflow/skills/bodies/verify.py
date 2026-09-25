@@ -8,7 +8,7 @@ terminal outcome follows from them. Absence of evidence reads as
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,6 +59,12 @@ class VerifyBody(BaseModel):
         settled_criterion_ids: Criteria an independent row cleared.
         rows: The per-criterion verdicts the aggregate is derived from.
         merge_ready: Whether the Batch cleared on this head.
+        approval_ref: The acceptance question the pass opened or found
+            standing, or ``None`` when it asked none.
+        bundle_digest: The digest of the acceptance bundle that question
+            is bound to.
+        acceptance_bundle: That bundle, exactly as filed, which is what an
+            acceptance must later present.
         unresolved_request_fields: The request fields the addressed verb
             names that no surface this invocation reaches resolves. A
             non-empty list is why no call was made.
@@ -81,6 +87,9 @@ class VerifyBody(BaseModel):
     settled_criterion_ids: list[str] = Field(default_factory=list)
     rows: list[CriterionRow] = Field(default_factory=list)
     merge_ready: bool = False
+    approval_ref: str | None = None
+    bundle_digest: str | None = None
+    acceptance_bundle: dict[str, Any] | None = None
     unresolved_request_fields: list[str] = Field(default_factory=list)
     refusal_code: str | None = None
     outcome: VerifyOutcome

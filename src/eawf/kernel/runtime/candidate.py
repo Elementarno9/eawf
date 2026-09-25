@@ -90,6 +90,9 @@ class CandidateRefusal(StrEnum):
     PAYLOAD_CONFLICT = "candidate_payload_conflict"
     SUBMISSION_ABSENT = "candidate_submission_absent"
     BINDING_CONFLICT = "candidate_binding_conflict"
+    SUBMISSION_NOT_COMMIT = "candidate_submission_not_commit"
+    SUBMISSION_NOT_HEAD = "candidate_submission_not_head"
+    SUBMISSION_OFF_BASE = "candidate_submission_off_base"
 
 
 #: The verdicts that propose work for integration. A failed or blocked Run

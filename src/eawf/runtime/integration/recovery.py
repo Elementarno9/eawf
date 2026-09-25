@@ -607,6 +607,11 @@ def integrate_batch(
     slow and any of them may fail. Only the swap takes the lock, and it
     takes it for one read, one comparison and one write.
 
+    The tree is materialized at the Batch head the plan targets, not at
+    the base the candidates were produced from: once the Batch has
+    delivered, its head is ahead of that base, and a delivery authored on
+    the base would silently drop everything already delivered.
+
     Args:
         plan: The delivery to integrate.
         workspace: The daemon-owned tree it runs in.
@@ -622,7 +627,7 @@ def integrate_batch(
         IntegrationRefusedError: The Batch head moved while the slow
             phases ran, so the delivery is a superseded descendant.
     """
-    workspace.materialize(base_commit=plan.manifest.base_commit)
+    workspace.materialize(base_commit=plan.target_base.head_sha)
     applied = apply_serially(plan.ordered, applier=workspace.apply)
     if applied.blocked:
         logger.info(

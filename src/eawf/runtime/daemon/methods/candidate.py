@@ -16,6 +16,14 @@ base commit off that record, so a claim cannot assert a workspace it
 never held. The worker names only what it alone knows: the artifact, the
 paths and the resulting tree.
 
+The artifact is a commit, and the daemon keeps it. A submission names
+``artifact://git/commit/<sha>``; the daemon checks that commit is the
+leased worktree's own HEAD and descends from the lease's base, and pins
+it under a candidate ref before anything is recorded, because the lease's
+branch is deleted when the lease is reconciled and integration must still
+find the work afterwards. A reference that fails either check is refused
+with nothing appended.
+
 A provider loss does not cost a candidate. Identity is derived from the
 Task and the resulting tree, so the same work presented again -- by the
 same Run after a resume, or by the recovery Run a linked retry created --
@@ -66,6 +74,7 @@ from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_dispatch import active_lease_of, run_ledger, stored_run
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.integration.git_workspace import CandidatePinError, pin_submission_commit
 
 logger = logging.getLogger(__name__)
 
@@ -240,8 +249,10 @@ def submit_candidate(
 
     Raises:
         DaemonValidationError: The Run holds no record or no lease, the
-            lease is for another Task, or the identity is already held by
-            a claim with different content.
+            lease is for another Task, the identity is already held by a
+            claim with different content, or the submission names no
+            commit, another commit than the leased worktree's HEAD, or one
+            that does not descend from the lease's base.
     """
     candidate_ref = candidate_identity(
         task_ref=str(args.task_ref), resulting_tree_digest=args.resulting_tree_digest
@@ -259,6 +270,15 @@ def submit_candidate(
             f"the lease of run {args.urn.entity_key!r} is held for another Task, so this claim "
             "would name work the workspace was not borrowed for",
         )
+    try:
+        pin_submission_commit(
+            context,
+            lease=lease,
+            candidate_ref=candidate_ref,
+            submission_ref=args.submission_ref,
+        )
+    except CandidatePinError as error:
+        raise DaemonValidationError(f"validation_failed: {error}") from error
     submission = CandidateSubmission(
         candidate_ref=candidate_ref,
         run_ref=args.urn,

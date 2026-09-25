@@ -240,13 +240,22 @@ def refused_envelope(refusal: TransactionRefusedError, *, operation: str) -> Dom
     )
 
 
-def _schema_refusal(error: ValidationError, *, params: dict[str, Any]) -> DomainEnvelope:
+def schema_refusal(
+    error: ValidationError, *, params: dict[str, Any], operation: str
+) -> DomainEnvelope:
     """Return the envelope of a request that does not parse.
 
-    The pydantic detail is reduced to the offending field paths: the full
-    error text repeats the submitted values, and a refusal that travels to
-    terminals and daemon logs must not carry them. The subject is whatever
-    the request called a URN, bounded to the row's own width.
+    The pydantic detail is reduced to the offending field paths, because
+    the full error text repeats the submitted values and a refusal that
+    travels to terminals and daemon logs must not carry them.
+
+    Args:
+        error: What the parameter model refused.
+        params: The raw request parameters, read only for the subject.
+        operation: The verb the client asked for.
+
+    Returns:
+        An ``error`` envelope naming the fields to correct.
     """
     fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
     named = params.get("urn")
@@ -254,11 +263,11 @@ def _schema_refusal(error: ValidationError, *, params: dict[str, Any]) -> Domain
     return DomainEnvelope(
         schema_version=ENVELOPE_SCHEMA_VERSION,
         status=DomainStatus.ERROR,
-        operation=DOMAIN_TRANSITION_METHOD,
+        operation=operation,
         errors=(
             DomainError(
                 code=DomainErrorCode.SCHEMA_VALIDATION_FAILED,
-                message=f"the request is not a valid transition; check {', '.join(fields)}",
+                message=f"the request is not a valid {operation}; check {', '.join(fields)}",
                 entity_ref=subject,
                 remediation="Correct the named parameters and retry.",
             ),
@@ -292,7 +301,9 @@ async def _apply_domain_transition(
             {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
         )
     except ValidationError as error:
-        return _schema_refusal(error, params=params).model_dump(mode="json")
+        return schema_refusal(error, params=params, operation=DOMAIN_TRANSITION_METHOD).model_dump(
+            mode="json"
+        )
     context = ctx.native_root_context(authority.root)
     try:
         committed = await asyncio.to_thread(
@@ -324,4 +335,5 @@ __all__ = [
     "DomainStatus",
     "accepted_envelope",
     "refused_envelope",
+    "schema_refusal",
 ]

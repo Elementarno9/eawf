@@ -66,6 +66,13 @@ written after the document and journalled inside the WAL envelope, so a
 crash between the two is finished by the replay rather than lost, and
 this module is the only place outside the store that appends a ledger
 line at all.
+
+A record is admitted into the tree by
+:func:`~eawf.runtime.daemon.epoch2_create.run_create`, which builds its
+successor from a create document instead of an edge and then commits
+through :func:`_persist` here, so a create writes the same four things in
+the same order as a transition. A pending action is opened and sealed by
+:mod:`~eawf.runtime.daemon.methods.delivery_approval` through the same step.
 """
 
 from __future__ import annotations
@@ -73,12 +80,12 @@ from __future__ import annotations
 import copy
 import logging
 import uuid
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Final, cast
+from typing import TYPE_CHECKING, Annotated, Any, Final, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -130,6 +137,10 @@ from eawf.workflow.lifecycle.epoch2 import (
     TransitionDenied,
     apply_transition,
 )
+
+if TYPE_CHECKING:
+    from eawf.runtime.daemon.epoch2_create import CreateRequest
+    from eawf.runtime.daemon.methods.delivery_approval import ActionCommitRequest
 
 logger = logging.getLogger(__name__)
 
@@ -309,8 +320,10 @@ class MutationReceipt(BaseModel):
     Attributes:
         event_name: The ``domain.<entity>.<verb>`` name of what happened.
         entity_ref: The record that moved.
-        revision_before: The record's compare-and-swap token before.
-        revision_after: The token after; always one more than before.
+        revision_before: The record's compare-and-swap token before, or
+            ``None`` for a create, whose record had no revision before.
+        revision_after: The token after; one more than before, and ``1``
+            for a create.
         canonical_sequence: The workspace-global position of this
             mutation, allocated inside the committing transaction.
         event_id: The firehose row's envelope id.
@@ -323,7 +336,7 @@ class MutationReceipt(BaseModel):
 
     event_name: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=120)]
     entity_ref: AnyEntityUrn
-    revision_before: StrictPositiveInt
+    revision_before: StrictPositiveInt | None
     revision_after: StrictPositiveInt
     canonical_sequence: StrictPositiveInt
     event_id: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=64)]
@@ -351,12 +364,33 @@ class CommittedTransaction:
     replayed: bool = False
 
 
+#: Every request shape that commits through :func:`_persist`. The alias is
+#: evaluated lazily, so the two shapes defined in modules that import this
+#: one are named without an import cycle.
+type CommittingRequest = TransitionRequest | CreateRequest | ActionCommitRequest
+
+
+class Revisioned(Protocol):
+    """A stored row carrying the revision a receipt reports it at.
+
+    A lifecycle record and a pending action both qualify, which is what
+    lets a pending action commit through the same :func:`_persist` step
+    as every lifecycle mutation rather than through a writer of its own.
+    """
+
+    @property
+    def revision(self) -> int:
+        """Return the row's revision."""
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class _CommitPlan:
     """Everything decided before the first byte of a commit is written.
 
     Attributes:
-        record: The record as the locked document held it.
+        record: The record as the locked document held it, or ``None``
+            for a create, which has no predecessor.
         successor: The record the transition produced.
         event_name: The ``domain.<entity>.<verb>`` name of the move.
         sequence: The ordinal drawn from the committing transaction.
@@ -370,8 +404,8 @@ class _CommitPlan:
             every collection that is not declared at the ledger tier.
     """
 
-    record: LifecycleRecord
-    successor: LifecycleRecord
+    record: Revisioned | None
+    successor: Revisioned
     event_name: str
     sequence: int
     document: dict[str, Any]
@@ -458,12 +492,7 @@ def run_transaction(
                 now=now,
             )
             receipt = _persist(
-                context=context,
-                document_path=session.document_path,
-                plan=plan,
-                request=request,
-                now=now,
-                write_document=session.write_document,
+                context=context, session=session, plan=plan, request=request, now=now
             )
             logger.info(
                 f"epoch2 transaction committed root={context.identity.root_id} "
@@ -475,11 +504,10 @@ def run_transaction(
 def _persist(
     *,
     context: Epoch2RootContext,
-    document_path: Path,
+    session: RootSession,
     plan: _CommitPlan,
-    request: TransitionRequest,
+    request: CommittingRequest,
     now: datetime,
-    write_document: Callable[[dict[str, Any]], None],
 ) -> MutationReceipt:
     """Write the intent, the document, the receipt, the row and the mark.
 
@@ -499,6 +527,7 @@ def _persist(
             shape, refused before the WAL record exists.
     """
     _refuse_leaks(plan, request=request)
+    document_path = session.document_path
     wal_record = WalRecord(
         record_id=uuid.uuid4().hex,
         envelope=plan.envelope,
@@ -511,7 +540,7 @@ def _persist(
     receipt = MutationReceipt(
         event_name=plan.event_name,
         entity_ref=request.urn,
-        revision_before=plan.record.revision,
+        revision_before=None if plan.record is None else plan.record.revision,
         revision_after=plan.successor.revision,
         canonical_sequence=plan.sequence,
         event_id=plan.envelope.id,
@@ -520,7 +549,7 @@ def _persist(
         wal_record_id=wal_record.record_id,
     )
     write_pending(context.wal_dir, wal_record)
-    write_document(plan.new_document)
+    session.write_document(plan.new_document)
     mark_applied(context.wal_dir, wal_record.record_id)
     record_idempotency_receipt(
         context,
@@ -735,7 +764,7 @@ def _compact(context: Epoch2RootContext, *, document_path: Path, record: LedgerR
 
 
 def _replayed_receipt(
-    context: Epoch2RootContext, *, request: TransitionRequest
+    context: Epoch2RootContext, *, request: CommittingRequest
 ) -> MutationReceipt | None:
     """Return the receipt this request already earned, if it earned one.
 
@@ -993,7 +1022,7 @@ def _transition_envelope(
     )
 
 
-def _refuse_leaks(plan: _CommitPlan, *, request: TransitionRequest) -> None:
+def _refuse_leaks(plan: _CommitPlan, *, request: CommittingRequest) -> None:
     """Refuse a commit whose added or changed text carries a leak shape.
 
     Raises:
@@ -1006,7 +1035,7 @@ def _refuse_leaks(plan: _CommitPlan, *, request: TransitionRequest) -> None:
         return
     logger.warning(f"epoch2 transaction refused for leaks entity={request.urn.entity_key!r}")
     raise TransactionRefusedError(
-        revision=plan.record.revision,
+        revision=None if plan.record is None else plan.record.revision,
         code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
         detail=refusal,
         entity_ref=str(request.urn),

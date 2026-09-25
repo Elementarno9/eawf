@@ -10,6 +10,14 @@ reads as ``unverified``, which blocks, and a head that moved under the
 pass reads as ``stale`` rather than as a result. The audit and review
 modes complete from this grammar: walking a cycle needs the Batch
 reference and the judgment criteria the caller names, and nothing else.
+
+Verify is also where a Milestone's acceptance is asked about. When the
+pass names a Milestone and the Batch clears, it opens the protected
+approval the acceptance is taken on, presenting what the acceptance
+journey showed and the exact tree it was shown on. The daemon files that
+journey as the Milestone's acceptance bundle and binds the question to
+its digest; the pass reports both and never answers the question, which
+is a person's to seal.
 The gate mode does not: judging one Task's completion needs the exact
 base binding, the Run's report verdict, the gate specifications its
 criteria reference and the runtime facts its proofs ran under, and no
@@ -61,6 +69,9 @@ DELIVERY_VERIFY_BATCH_METHOD: Final = "runtime.delivery.verify_batch"
 #: The verb that judges whether one Task is finished on the Batch head.
 DELIVERY_ASSESS_COMPLETION_METHOD: Final = "runtime.delivery.assess_completion"
 
+#: The verb that asks the operator to accept a verified Milestone.
+DELIVERY_OPEN_APPROVAL_METHOD: Final = "runtime.delivery.open_acceptance_approval"
+
 #: Every JSON-RPC method this skill may address. A call outside the set
 #: is refused before the transport is touched.
 RPC_SCOPE: Final = RpcScope(
@@ -70,6 +81,7 @@ RPC_SCOPE: Final = RpcScope(
         EVIDENCE_READ_METHOD,
         DELIVERY_VERIFY_BATCH_METHOD,
         DELIVERY_ASSESS_COMPLETION_METHOD,
+        DELIVERY_OPEN_APPROVAL_METHOD,
     ),
 )
 
@@ -77,13 +89,16 @@ RPC_SCOPE: Final = RpcScope(
 INVOCATION_GRAMMAR: Final = (
     "/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] "
     "[--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] "
-    "[--no-cache] [--idempotency-key <key>] [--output <human|json|markdown>]"
+    "[--milestone <ref>] [--journey <step>...] [--accepted-binding <binding>] "
+    "[--requested-by <principal>] [--no-cache] [--idempotency-key <key>] "
+    "[--output <human|json|markdown>]"
 )
 
 #: What this skill may cause, stated as the boundary it never crosses.
 EFFECTS: Final = (
     "Batch and evidence read models plus the Batch verification and Task completion verbs, "
-    "which file verification receipts. The pass resolves no finding and edits no candidate."
+    "which file verification receipts, and the verb that opens a Milestone's acceptance "
+    "question. The pass resolves no finding, edits no candidate, and answers no question."
 )
 
 #: The typed report every invocation produces.
@@ -112,8 +127,22 @@ _GATES_STOP: Final = "proof_receipts_unpresented"
 #: Why the security mode reaches no verb.
 _SECURITY_STOP: Final = "security_verification_unbound"
 
+#: The request fields opening an acceptance question needs beside the
+#: Milestone, as the verb names them beside the args field presenting each.
+_APPROVAL_FIELDS: Final[tuple[tuple[str, str], ...]] = (
+    ("steps", "journey"),
+    ("accepted_binding", "accepted_binding"),
+    ("requested_by", "requested_by"),
+)
+
 #: The refusal-code fragment that means the head moved under the pass.
 _STALE_FRAGMENT: Final = "superseded"
+
+#: Who a verification cycle the pass walks is attributed to. The skill's
+#: own slash-prefixed name is not a valid principal key (the daemon's
+#: ``PrincipalKey`` pattern is uppercase-anchored and admits no ``/``),
+#: so the pass carries its own qualified key instead.
+_ACTOR_PRINCIPAL: Final = "SKILL-VERIFY"
 
 MANIFEST = SkillManifest(
     name="/verify",
@@ -134,6 +163,12 @@ class VerifyArgs(BaseModel):
         severity_floor: The lowest severity a review finding records.
         agents: How many arms the pass fans into.
         budget: The budget spec the pass charges against.
+        milestone: The Milestone whose acceptance to ask about once the
+            Batch clears.
+        journey: What the Milestone's acceptance journey showed, one
+            step outcome per journey step.
+        accepted_binding: The exact tree the acceptance would be taken on.
+        requested_by: The principal the question is recorded as asked by.
         no_cache: Re-derive every leg rather than reusing a receipt.
         idempotency_key: This request's name; minted when omitted.
         repo_root: The tree to address, when not the daemon's own.
@@ -148,6 +183,10 @@ class VerifyArgs(BaseModel):
     severity_floor: str | None = None
     agents: int = Field(default=1, ge=1, le=8)
     budget: str | None = None
+    milestone: str | None = None
+    journey: tuple[dict[str, Any], ...] = ()
+    accepted_binding: dict[str, Any] | None = None
+    requested_by: dict[str, Any] | None = None
     no_cache: bool = False
     idempotency_key: str | None = None
     repo_root: str | None = None
@@ -210,7 +249,7 @@ class VerifySkill(Skill):
             {
                 **params,
                 "urn": args.subject_ref,
-                "actor": self.name,
+                "actor": _ACTOR_PRINCIPAL,
                 "idempotency_key": args.idempotency_key or uuid.uuid4().hex,
                 "judgment_criterion_ids": list(args.gate),
             },
@@ -227,6 +266,7 @@ class VerifySkill(Skill):
         ]
         merge_ready = bool(answer.get("merge_ready", False))
         outcome: VerifyOutcome = "passed" if merge_ready else "unverified"
+        approval, unresolved = self._ask_acceptance(caller, args, params, merge_ready=merge_ready)
         body = VerifyBody(
             subject_ref=args.subject_ref,
             mode=args.mode,
@@ -237,6 +277,10 @@ class VerifySkill(Skill):
             settled_criterion_ids=settled,
             rows=rows,
             merge_ready=merge_ready,
+            approval_ref=approval.get("action_ref"),
+            bundle_digest=approval.get("bundle_digest"),
+            acceptance_bundle=approval.get("acceptance_bundle"),
+            unresolved_request_fields=list(unresolved),
             outcome=outcome,
             reason=str(
                 answer.get(
@@ -252,6 +296,52 @@ class VerifySkill(Skill):
             repair_commands=None if merge_ready else [f"/integrate show {args.subject_ref}"],
             next_valid_actions=[f"/verify {args.subject_ref} --mode all --no-cache"],
         )
+
+    def _ask_acceptance(
+        self,
+        caller: RpcCaller,
+        args: VerifyArgs,
+        params: dict[str, Any],
+        *,
+        merge_ready: bool,
+    ) -> tuple[dict[str, Any], tuple[str, ...]]:
+        """Open the named Milestone's acceptance question once the Batch clears.
+
+        Args:
+            caller: The transport seam.
+            args: The validated invocation.
+            params: The tree-addressing params every call carries.
+            merge_ready: Whether the walk just taken cleared the Batch.
+
+        Returns:
+            The question the daemon answered with, empty when none was
+            asked, and the request fields the invocation left unpresented.
+
+        Raises:
+            RpcRefusedError: The daemon refused to open the question.
+        """
+        if args.milestone is None:
+            return {}, ()
+        unresolved = tuple(
+            request_field
+            for request_field, presented in _APPROVAL_FIELDS
+            if not getattr(args, presented)
+        )
+        if unresolved or not merge_ready:
+            return {}, unresolved
+        opened = RPC_SCOPE.call(
+            caller,
+            DELIVERY_OPEN_APPROVAL_METHOD,
+            {
+                **params,
+                "urn": args.milestone,
+                "actor": _ACTOR_PRINCIPAL,
+                "requested_by": args.requested_by,
+                "steps": list(args.journey),
+                "accepted_binding": args.accepted_binding,
+            },
+        )
+        return opened, ()
 
     def _unresolved(
         self, args: VerifyArgs, *, code: str, unresolved: tuple[str, ...]
@@ -315,6 +405,7 @@ class VerifySkill(Skill):
 __all__ = [
     "BATCH_READ_METHOD",
     "DELIVERY_ASSESS_COMPLETION_METHOD",
+    "DELIVERY_OPEN_APPROVAL_METHOD",
     "DELIVERY_VERIFY_BATCH_METHOD",
     "EFFECTS",
     "EVIDENCE_READ_METHOD",

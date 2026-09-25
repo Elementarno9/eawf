@@ -30,20 +30,27 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Final, Literal, Self
+from typing import Annotated, Any, Final, Literal, Self
 
 from pydantic import AfterValidator, ConfigDict, Field, StringConstraints, model_validator
 
 from eawf.kernel.delivery.integration import IdempotencyKey
-from eawf.kernel.identity import EntityKind, validate_entity_key
+from eawf.kernel.identity import (
+    EntityKind,
+    IdentityError,
+    QualifiedUrn,
+    parse_qualified_urn,
+    validate_entity_key,
+)
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
     PrincipalKey,
     Sha256DigestStr,
+    StrictPositiveInt,
     TitleStr,
 )
-from eawf.kernel.state.epoch2.urns import AnyEntityUrn, EvidenceUrn, RunUrn
+from eawf.kernel.state.epoch2.urns import AnyEntityUrn, EvidenceUrn, PendingActionUrn, RunUrn
 from eawf.kernel.state.types import UtcDatetime
 
 
@@ -181,9 +188,24 @@ class PendingAction(_FrozenModel):
     receipt and no resolver claims an answer nobody gave; both are
     refused, so ``SEALED`` means all of "who", "which" and "proved by"
     are on file.
+
+    ``revision`` is the compare-and-swap token a seal is decided against,
+    so an answer given to a question that has since moved is refused
+    rather than landed on top of it. It defaults to one because a row
+    nothing has moved yet is at its first revision.
+
+    ``urn`` addresses the row itself, the way every other epoch-2 record
+    addresses its own row: a route projection keys and validates every
+    row it renders by this field, so a stored row without one refuses
+    the whole route's read rather than just its own. A row written
+    before the field existed is read the way a fresh write would have
+    set it -- :meth:`_urn_defaults_from_subject` derives it from
+    ``subject_ref``, which is filed in the same repository -- so an
+    older row is still addressable rather than failing to load.
     """
 
     id: PendingActionKey
+    urn: PendingActionUrn
     kind: PendingActionKind
     subject_ref: AnyEntityUrn
     question: NonEmptyStr
@@ -192,12 +214,61 @@ class PendingAction(_FrozenModel):
     default_on_timeout: OptionId | None = None
     idempotency_key: IdempotencyKey
     status: PendingActionStatus
+    revision: StrictPositiveInt = 1
     requested_by: ActionPrincipal
     resolution_actor: HumanPrincipal | None = None
     selected_option_id: OptionId | None = None
     receipt_ref: EvidenceUrn | None = None
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _urn_defaults_from_subject(cls, data: Any) -> Any:
+        """Backfill ``urn`` from ``subject_ref`` and ``id`` for a row that carries none.
+
+        A pending action is filed in the same repository as the record its
+        question is about, so its own urn is that container's prefix with
+        the pending-action kind and its own key swapped in -- the same
+        derivation the row's own writer takes before it is ever asked to
+        default. Leaving the input alone when a resolvable urn cannot be
+        derived is deliberate: it falls through to the field's own
+        required-value refusal, which names the field rather than the
+        subject that failed to parse.
+
+        Args:
+            data: The raw input :meth:`~pydantic.BaseModel.model_validate`
+                or the constructor was given.
+
+        Returns:
+            *data* unchanged, or a copy with ``urn`` filled in.
+        """
+        if not isinstance(data, Mapping) or data.get("urn"):
+            return data
+        key = data.get("id")
+        if not isinstance(key, str):
+            return data
+        subject = data.get("subject_ref")
+        if isinstance(subject, QualifiedUrn):
+            container = subject
+        elif isinstance(subject, str):
+            try:
+                container = parse_qualified_urn(subject)
+            except IdentityError:
+                return data
+        else:
+            return data
+        try:
+            derived = QualifiedUrn(
+                workspace_key=container.workspace_key,
+                project_key=container.project_key,
+                repository_key=container.repository_key,
+                kind=EntityKind.PENDING_ACTION,
+                entity_key=key,
+            )
+        except IdentityError:
+            return data
+        return {**data, "urn": str(derived)}
 
     @property
     def option_ids(self) -> tuple[str, ...]:
@@ -312,7 +383,9 @@ class PendingAction(_FrozenModel):
                 f"reaching {PendingActionStatus.SEALED.value} needs the answer that was given; "
                 "seal the action instead of advancing it"
             )
-        return self.model_validate({**self.model_dump(), "status": to, "updated_at": at})
+        return self.model_validate(
+            {**self.model_dump(), "status": to, "revision": self.revision + 1, "updated_at": at}
+        )
 
     def seal(
         self,
@@ -351,6 +424,7 @@ class PendingAction(_FrozenModel):
             {
                 **self.model_dump(),
                 "status": PendingActionStatus.SEALED,
+                "revision": self.revision + 1,
                 "resolution_actor": resolver.model_dump(),
                 "selected_option_id": option_id,
                 "receipt_ref": receipt_ref,

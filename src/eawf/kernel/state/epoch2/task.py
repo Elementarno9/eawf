@@ -23,7 +23,7 @@ from typing import Final, Self
 from pydantic import model_validator
 
 from eawf.kernel.spec.common import CriterionSpec
-from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictPositiveInt
+from eawf.kernel.state.epoch2.base import Epoch2Model, NonEmptyStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import BatchUrn, DueScopeUrn, RunUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import Epoch2Record, ExactRevisionBinding
 
@@ -75,6 +75,22 @@ _UNDATED: Final = frozenset({TaskStatus.DRAFT, TaskStatus.DEFERRED, TaskStatus.D
 TERMINAL_TASK_STATUSES: Final[frozenset[TaskStatus]] = frozenset(
     {TaskStatus.COMPLETED, TaskStatus.CANCELLED, TaskStatus.FAILED}
 )
+
+
+class TaskCreateSpec(Epoch2Model):
+    """The strict create document for a Task.
+
+    A Task is created as a ``DRAFT`` backlog row, so the create document
+    holds exactly what a draft holds: a key, an intent, a priority and an
+    optional due scope. Placement and criteria arrive with the promotion
+    edge, and the contract revision starts at one because nothing can
+    have revised a contract that did not exist.
+    """
+
+    key: NonEmptyStr
+    priority: TaskPriority
+    intent: NonEmptyStr
+    due_scope: DueScopeUrn | None = None
 
 
 class Task(Epoch2Record):
@@ -154,6 +170,7 @@ class Task(Epoch2Record):
 __all__ = [
     "TERMINAL_TASK_STATUSES",
     "Task",
+    "TaskCreateSpec",
     "TaskPriority",
     "TaskStatus",
 ]

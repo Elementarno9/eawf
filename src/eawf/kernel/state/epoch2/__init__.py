@@ -46,7 +46,7 @@ from eawf.kernel.state.epoch2.base import (
     normalize_phrase,
     reject_normalized_duplicates,
 )
-from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.batch import BatchCreateSpec, BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import (
     EXCLUSIONS_NONE_MARKER,
     AcceptanceStep,
@@ -79,6 +79,7 @@ from eawf.kernel.state.epoch2.run import (
     ReleaseScope,
     RepositoryScope,
     Run,
+    RunCreateSpec,
     RunPurpose,
     RunScope,
     RunStatus,
@@ -90,6 +91,7 @@ from eawf.kernel.state.epoch2.run import (
 from eawf.kernel.state.epoch2.task import (
     TERMINAL_TASK_STATUSES,
     Task,
+    TaskCreateSpec,
     TaskPriority,
     TaskStatus,
 )
@@ -139,6 +141,7 @@ __all__ = [
     "AcceptanceStepId",
     "ActivityBucket",
     "AnyEntityUrn",
+    "BatchCreateSpec",
     "BatchKey",
     "BatchScope",
     "BatchStatus",
@@ -185,6 +188,7 @@ __all__ = [
     "RepositoryScope",
     "RepositoryUrn",
     "Run",
+    "RunCreateSpec",
     "RunKey",
     "RunPurpose",
     "RunScope",
@@ -193,6 +197,7 @@ __all__ = [
     "SlugStr",
     "SuspensionReason",
     "Task",
+    "TaskCreateSpec",
     "TaskPriority",
     "TaskScope",
     "TaskStatus",

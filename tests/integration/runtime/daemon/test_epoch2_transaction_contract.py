@@ -16,6 +16,13 @@ A ledger-only mutation is counted the same way: one WAL record, one
 sequence bump, one ledger line and one firehose row. The census at the end
 is what keeps that true, by refusing any ledger append outside the store
 and the transaction module.
+
+A second census does the same for the generation document itself: outside
+the store, the session, the commit paths and the two writers that build a
+generation before it has authority, nothing names the document writer. The
+create path is where it is proved to red, since a create that wrote its
+record straight into the document is the shortcut the canary rehearsal
+once had to take.
 """
 
 from __future__ import annotations
@@ -643,3 +650,104 @@ def test_ledger_append_refuses_a_closed_session(
 
     assert list_records(context.wal_dir) == []
     assert _run_ledger_lines(canary) == ()
+
+
+# ---- generation-document writes ---------------------------------------------
+
+#: The document writer the census forbids: the store's own function and the
+#: session method that wraps it share the name, so one spelling covers both.
+DOCUMENT_WRITERS: Final = frozenset({"write_document"})
+
+#: Where a document writer may be named outside the store, and why.
+ALLOWED_DOCUMENT_WRITERS: Final = frozenset(
+    {
+        # The session method every native commit writes through.
+        "runtime/daemon/epoch2_root.py",
+        # The one commit path of a transition, a ledger line and a create.
+        "runtime/daemon/epoch2_transaction.py",
+        # The plan-revision commit, which journals its own WAL intent.
+        "workflow/planning/apply.py",
+        # A canary's empty born generation, written before it has authority.
+        "platform/install/canary.py",
+        # The cutover's projection of the epoch-1 corpus into a new generation.
+        "kernel/migration/epoch2/cutover.py",
+    }
+)
+
+#: The create path the seeded write lands in.
+CREATE_MODULE: Final = Path("runtime/daemon/epoch2_create.py")
+
+
+def direct_document_writes(package_root: Path) -> list[str]:
+    """Return every place under *package_root* that names a document writer.
+
+    A create that wrote the generation document itself would skip the WAL
+    intent, the receipt, the sequence and the event, which is exactly the
+    shortcut the canary rehearsal once had to take.
+
+    Returns:
+        ``<relative path>:<line> <name>`` for each finding, in path order.
+    """
+    findings: list[str] = []
+    for path in sorted(package_root.rglob("*.py")):
+        relative = path.relative_to(package_root).as_posix()
+        if relative.startswith(STORE_PACKAGE) or relative in ALLOWED_DOCUMENT_WRITERS:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names: list[str] = []
+            if isinstance(node, ast.ImportFrom):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.Name):
+                names = [node.id]
+            elif isinstance(node, ast.Attribute):
+                names = [node.attr]
+            findings.extend(
+                f"{relative}:{node.lineno} {name}" for name in names if name in DOCUMENT_WRITERS
+            )
+    return findings
+
+
+def _seeded_create_package(tmp_path: Path, *, addition: str) -> Path:
+    """Copy the real create module into a scratch package and append to it."""
+    source = (PACKAGE_ROOT / CREATE_MODULE).read_text(encoding="utf-8")
+    target = tmp_path / "eawf" / CREATE_MODULE
+    target.parent.mkdir(parents=True)
+    target.write_text(f"{source}\n{addition}", encoding="utf-8")
+    return tmp_path / "eawf"
+
+
+def test_census_finds_no_direct_document_write() -> None:
+    assert (PACKAGE_ROOT / CREATE_MODULE).is_file()
+    assert direct_document_writes(PACKAGE_ROOT) == []
+
+
+def test_census_passes_the_unseeded_create_module(tmp_path: Path) -> None:
+    """The seed below is what reds the census, not the module it lands in."""
+    assert direct_document_writes(_seeded_create_package(tmp_path, addition="")) == []
+
+
+@pytest.mark.parametrize(
+    "addition",
+    [
+        pytest.param(
+            "from eawf.kernel.store.compaction import write_document\n\n\n"
+            "def _seeded(path, document):\n    write_document(path, document)\n",
+            id="store-writer",
+        ),
+        pytest.param(
+            "def _seeded(session, document):\n    session.write_document(document)\n",
+            id="session-writer",
+        ),
+        pytest.param(
+            "from eawf.kernel.store import compaction\n\n\n_WRITE = compaction.write_document\n",
+            id="writer-as-value",
+        ),
+    ],
+)
+def test_census_reds_on_a_direct_write_seeded_into_the_create_path(
+    tmp_path: Path, addition: str
+) -> None:
+    findings = direct_document_writes(_seeded_create_package(tmp_path, addition=addition))
+
+    assert findings
+    assert all(item.startswith(f"{CREATE_MODULE.as_posix()}:") for item in findings)

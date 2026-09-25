@@ -64,7 +64,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER, EnforceMode
 from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.control.reducer import decide_control_lease, reduce_run_control
-from eawf.runtime.daemon.budget_interlock import guard_in_flight_budget
+from eawf.runtime.daemon.budget_interlock import InFlightBudgetOutcome, guard_in_flight_budget
 from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
@@ -75,7 +75,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
-from eawf.runtime.runtimes.metering import UsageSample, meter_stream
+from eawf.runtime.runtimes.metering import InFlightMeter, MeterReading, UsageSample, meter_stream
 
 logger = logging.getLogger(__name__)
 
@@ -489,6 +489,104 @@ def _meter(
     return answer, tuple(ledger.envelopes)
 
 
+class InFlightRunMeter:
+    """Meter one dispatched Run reading by reading, and reap it at its cap.
+
+    The verb above folds a batch a caller already collected; this is the
+    producer the native dispatch drives as the child discloses usage, so
+    the cap is tested on every reading while the turn still runs. It trips
+    once: after a reading crosses and the notice is written, later readings
+    are answered from the recorded outcome, because a stream keeps flushing
+    buffered readings after the reap and each of them would otherwise open
+    a second control and signal a group that is already gone.
+
+    Attributes:
+        outcome: The outcome of the reading that crossed the cap, or
+            ``None`` while every reading has stayed under it.
+    """
+
+    def __init__(
+        self,
+        context: Epoch2RootContext,
+        *,
+        urn: RunUrn,
+        actor: PrincipalKey,
+        control_request_ref: ControlRequestId,
+        idempotency_key: str,
+        cap_tokens: int,
+    ) -> None:
+        """Bind the meter to one Run and its hard token cap.
+
+        Args:
+            context: The native context of the root the Run lives in.
+            urn: The Run the readings are of.
+            actor: The principal the termination is attributed to.
+            control_request_ref: The control a crossing opens. Derived by
+                the caller from the dispatch attempt, so a resumed dispatch
+                names the same control.
+            idempotency_key: The key the terminal transition commits under.
+            cap_tokens: The sealed token ceiling, enforced exactly: a
+                capsule ceiling is a limit, not a baseline to scale.
+
+        Raises:
+            pydantic.ValidationError: An argument breaks the verb's own
+                parameter grammar.
+        """
+        self._context = context
+        self._args = _MeterParams(
+            urn=urn,
+            control_request_ref=control_request_ref,
+            actor=actor,
+            base_budget=cap_tokens,
+            enforce="hard",
+            multiplier=1.0,
+            idempotency_key=idempotency_key,
+        )
+        self._meter = InFlightMeter()
+        self.outcome: InFlightBudgetOutcome | None = None
+
+    @property
+    def terminated(self) -> bool:
+        """Return whether a crossing drove the kill ladder."""
+        return self.outcome is not None and self.outcome.terminated
+
+    async def observe(self, sample: UsageSample, pgid: int | None) -> bool:
+        """Adopt *sample* and terminate the Run if the fold crossed its cap.
+
+        Args:
+            sample: The child's cumulative usage at this point in the turn.
+            pgid: The child's process group, or ``None`` when none is
+                addressable; a crossing then records its notice and
+                signals nothing.
+
+        Returns:
+            ``True`` once the Run was terminated at its cap.
+        """
+        if self.outcome is not None:
+            return self.terminated
+        reading = self._meter.observe(sample)
+        outcome = await asyncio.to_thread(self._guard, reading, pgid, datetime.now(UTC))
+        if outcome.notice is not None:
+            self.outcome = outcome
+        return self.terminated
+
+    def _guard(
+        self, reading: MeterReading, pgid: int | None, now: datetime
+    ) -> InFlightBudgetOutcome:
+        """Test *reading* against the cap, writing through the run ledger."""
+        return guard_in_flight_budget(
+            reading=reading,
+            base_budget=self._args.base_budget,
+            enforce=self._args.enforce,
+            multiplier=self._args.multiplier,
+            run_ref=self._args.urn,
+            control_request_ref=self._args.control_request_ref,
+            noticed_at=now,
+            pgid=pgid,
+            ledger=_BudgetLedger(self._context, self._args, now=now),
+        )
+
+
 @native_mutator(RUN_BUDGET_METER_METHOD)
 async def _meter_run_budget(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
@@ -518,5 +616,6 @@ async def _meter_run_budget(
 
 __all__ = [
     "RUN_BUDGET_METER_METHOD",
+    "InFlightRunMeter",
     "RunBudgetAnswer",
 ]

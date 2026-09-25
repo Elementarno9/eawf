@@ -386,7 +386,11 @@ def plan_canary(tmp_path: Path) -> CanaryProvision:
 def test_every_brokered_tool_has_a_handler_and_no_other_tool_does() -> None:
     """The set is derived from the table, so the two cannot disagree."""
     assert frozenset(SEMANTIC_HANDLERS) == BROKERED_TOOLS
-    assert {SemanticToolId.BUDGET_STATUS, SemanticToolId.SUBMIT_PLAN} == BROKERED_TOOLS
+    assert {
+        SemanticToolId.BUDGET_STATUS,
+        SemanticToolId.SUBMIT_CANDIDATE,
+        SemanticToolId.SUBMIT_PLAN,
+    } == BROKERED_TOOLS
     assert set(SemanticToolId) > BROKERED_TOOLS
 
 

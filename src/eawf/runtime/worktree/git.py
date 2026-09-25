@@ -57,8 +57,9 @@ def _run(
     *,
     cwd: Path | None = None,
     timeout: float = _FAST_TIMEOUT,
+    input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Invoke *args* via :func:`subprocess.run`.
+    """Invoke *args* via :func:`subprocess.run`, feeding *input_text* to stdin.
 
     A timeout maps to :class:`StateConflict` (``kind="IntegrityViolation"``).
     """
@@ -68,6 +69,7 @@ def _run(
         return subprocess.run(
             args,
             cwd=str(cwd) if cwd is not None else None,
+            input=input_text,
             capture_output=True,
             text=True,
             check=False,
@@ -127,11 +129,14 @@ def branch_exists(repo: Path, name: str) -> bool:
 def worktree_add(
     repo: Path,
     *,
-    branch: str,
+    branch: str | None,
     path: Path,
     base: str,
 ) -> None:
     """Run ``git worktree add -b <branch> <path> <base>``.
+
+    A ``None`` *branch* runs ``git worktree add --detach <path> <base>``
+    instead, for a tree that must move no branch at all.
 
     Maps git's well-known error strings to the canonical taxonomy:
 
@@ -151,8 +156,7 @@ def worktree_add(
         "worktree",
         "add",
         "--quiet",
-        "-b",
-        branch,
+        *(["--detach"] if branch is None else ["-b", branch]),
         str(path),
         base,
     ]
@@ -472,6 +476,46 @@ def diff_digest(repo: Path, *, base_sha: str, head_sha: str) -> str:
     return hashlib.sha256(res.stdout.encode("utf-8")).hexdigest()
 
 
+def is_ancestor(repo: Path, *, ancestor: str, descendant: str) -> bool:
+    """Return whether *ancestor* is reachable from *descendant* in *repo*.
+
+    A commit is its own ancestor, as ``git merge-base --is-ancestor``
+    answers. An unknown object is answered ``False`` rather than raised:
+    a commit the repository does not hold descends from nothing in it.
+    """
+    res = _run(["git", "-C", str(repo), "merge-base", "--is-ancestor", ancestor, descendant])
+    return res.returncode == 0
+
+
+def update_ref(repo: Path, *, ref: str, sha: str) -> None:
+    """Point *ref* at *sha*, creating the ref when it is absent.
+
+    Raises:
+        StateConflict: ``git update-ref`` refused, for instance because
+            *sha* names no object.
+    """
+    res = _run(["git", "-C", str(repo), "update-ref", ref, sha])
+    if res.returncode != 0:
+        detail = (res.stderr or res.stdout).strip()
+        raise cli_errors.StateConflict(
+            f"git update-ref {ref} failed (rc={res.returncode}): {detail or 'unknown'}",
+            kind="IntegrityViolation",
+        )
+
+
+def invoke(
+    repo: Path, *args: str, input_text: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run ``git -C <repo> <args>`` and return the process unchecked.
+
+    For a caller whose subcommand's exit status is itself the answer --
+    a merge that conflicts, a plumbing call fed on stdin -- and which
+    therefore maps the result itself rather than through a fixed
+    taxonomy.
+    """
+    return _run(["git", "-C", str(repo), *args], timeout=_SLOW_TIMEOUT, input_text=input_text)
+
+
 def branch_delete(repo: Path, *, name: str) -> bool:
     """Run ``git branch -D <name>``. Returns ``True`` on success.
 
@@ -532,6 +576,8 @@ __all__ = [
     "cherry_pick_in_progress",
     "current_branch",
     "head_sha",
+    "invoke",
+    "is_ancestor",
     "merge_ff_only",
     "rebase",
     "rebase_abort",
@@ -540,6 +586,7 @@ __all__ = [
     "repo_root",
     "rev_list",
     "status_porcelain",
+    "update_ref",
     "worktree_add",
     "worktree_list",
     "worktree_remove",

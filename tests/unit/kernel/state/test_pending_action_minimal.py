@@ -11,17 +11,27 @@ into a yes is the approval nobody gave, so the field is refused for that
 kind and admitted for the operator's routing question, which is what
 shows the check has teeth rather than being always-on.
 
-Nothing here reads a clock, opens a socket, or touches the filesystem.
+The last section drives the record's producer: a question opened and
+sealed through the native transaction on a disposable canary under
+``tmp_path``, where a second seal is refused with nothing written.
+
+Nothing here reads a clock or opens a socket, and nothing writes outside
+``tmp_path``.
 """
 
 from __future__ import annotations
 
+import tempfile
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Final
 
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.identity import IdentityError
+from eawf.kernel.state.epoch2.batch import DeliveryBatch
+from eawf.kernel.state.epoch2.milestone import Milestone
 from eawf.kernel.state.epoch2.pending_action import (
     MAX_OPTIONS,
     MIN_OPTIONS,
@@ -32,6 +42,32 @@ from eawf.kernel.state.epoch2.pending_action import (
     PendingAction,
     PendingActionKind,
     PendingActionStatus,
+)
+from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode, TransactionRefusedError
+from eawf.runtime.daemon.methods.delivery_approval import (
+    ApprovalOpenParams,
+    ApprovalSealParams,
+    open_acceptance_approval,
+    seal_acceptance_approval,
+)
+from eawf.workflow.delivery.acceptance_approval import (
+    ApprovalRefusal,
+    ApprovalRefusedError,
+    next_action_key,
+    require_verified_batches,
+    seal_question,
+)
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    document_path,
+    provision,
+    rekeyed,
+    root_context,
+    seed,
+    seed_row,
 )
 
 CONTAINER: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
@@ -395,3 +431,332 @@ def test_advance_raises_a_key_error_for_a_status_outside_the_machine() -> None:
     with pytest.raises(KeyError):
         PENDING_ACTION_EDGES["RESOLVED"]  # type: ignore[index]
     assert action.status is PendingActionStatus.WAITING
+
+
+# ---------- the revision a seal is decided against ----------
+
+
+def test_a_row_nothing_moved_stands_at_revision_one() -> None:
+    """A stored row without a revision reads as its first revision."""
+    assert PendingAction.model_validate(row()).revision == 1
+
+
+def test_a_revision_below_one_is_refused() -> None:
+    """Revision zero names no state the row was ever in."""
+    with pytest.raises(ValidationError, match="revision"):
+        PendingAction.model_validate(row(revision=0))
+
+
+def test_advance_and_seal_each_move_the_revision_on_by_one() -> None:
+    """Every move is one revision, so a stale answer is detectable."""
+    created = PendingAction.model_validate(row(status=PendingActionStatus.CREATED.value))
+    waiting = created.advance(PendingActionStatus.WAITING, at=LATER)
+    sealed = waiting.seal(
+        resolver=HumanPrincipal.model_validate(OPERATOR),
+        option_id="approve",
+        receipt_ref=RECEIPT,
+        at=LATER,
+    )
+    assert (created.revision, waiting.revision, sealed.revision) == (1, 2, 3)
+
+
+# ---------- the producer's rules, held directly ----------
+
+
+def milestone(**overrides: Any) -> Milestone:
+    """Return the seeded Milestone in acceptance review, with *overrides* applied."""
+    return Milestone.model_validate({**seed_row("milestone", "ACCEPTANCE_REVIEW"), **overrides})
+
+
+def batch(status: str = "READY_TO_MERGE", *, key: str = "BAT-0007") -> DeliveryBatch:
+    """Return one seeded Batch of MLS-0030 in *status*."""
+    return DeliveryBatch.model_validate(rekeyed(seed_row("batch", status), key=key))
+
+
+@pytest.mark.parametrize("status", ["READY_TO_MERGE", "MERGING", "COMPLETED"])
+def test_verified_batches_clear_on_every_head_bound_status(status: str) -> None:
+    """A Batch past its verification cycle is verified however far it merged."""
+    refs = require_verified_batches(milestone(), [batch(status)])
+    assert [ref.entity_key for ref in refs] == ["BAT-0007"]
+
+
+@pytest.mark.parametrize("status", ["PLANNED", "ACTIVE", "FAILED"])
+def test_an_unverified_batch_keeps_the_question_closed(status: str) -> None:
+    """One Batch still in work is enough to refuse."""
+    with pytest.raises(ApprovalRefusedError, match="BAT-0008") as caught:
+        require_verified_batches(milestone(), [batch(), batch(status, key="BAT-0008")])
+    assert caught.value.code is ApprovalRefusal.BATCHES_UNVERIFIED
+
+
+def test_a_milestone_with_no_batch_is_not_asked_about() -> None:
+    """The empty boundary: nothing delivered is nothing verified."""
+    with pytest.raises(ApprovalRefusedError, match="owns no batch"):
+        require_verified_batches(milestone(), [])
+
+
+def test_a_cancelled_batch_is_left_out_unless_it_is_required() -> None:
+    """A cancelled optional Batch delivers nothing; a cancelled required one is missing."""
+    cancelled = batch("CANCELLED", key="BAT-0008")
+    assert len(require_verified_batches(milestone(), [batch(), cancelled])) == 1
+    required = milestone(required_batch_refs=[str(cancelled.urn)])
+    with pytest.raises(ApprovalRefusedError, match="requires BAT-0008"):
+        require_verified_batches(required, [batch(), cancelled])
+
+
+def test_a_milestone_outside_review_is_not_asked_about() -> None:
+    """The question is asked in acceptance review and nowhere else."""
+    active = milestone(status="ACTIVE", acceptance_bundle_revision=None)
+    with pytest.raises(ApprovalRefusedError) as caught:
+        require_verified_batches(active, [batch()])
+    assert caught.value.code is ApprovalRefusal.MILESTONE_NOT_IN_REVIEW
+
+
+@pytest.mark.parametrize(
+    ("taken", "expected"),
+    [((), "ACT-0001"), (("ACT-0001",), "ACT-0002"), (("ACT-0009", "ACT-0002"), "ACT-0010")],
+)
+def test_the_next_action_key_follows_the_highest_taken(
+    taken: tuple[str, ...], expected: str
+) -> None:
+    """Keys are never reused, so the next one follows the highest, not the count."""
+    assert next_action_key(taken) == expected
+
+
+def test_the_next_action_key_refuses_a_saturated_key_space() -> None:
+    """The max-length boundary: ``ACT-9999`` has no successor."""
+    with pytest.raises(IdentityError):
+        next_action_key(("ACT-9999",))
+
+
+def test_seal_question_refuses_an_answer_given_to_an_older_revision() -> None:
+    """A question that moved since is not the question that was answered."""
+    with pytest.raises(ApprovalRefusedError) as caught:
+        seal_question(
+            PendingAction.model_validate(row(revision=2)),
+            expected_revision=1,
+            resolver=HumanPrincipal.model_validate(OPERATOR),
+            option_id="approve",
+            receipt_ref=RECEIPT,
+            at=LATER,
+        )
+    assert caught.value.code is ApprovalRefusal.ACTION_STALE
+
+
+# ---------- created and sealed through the transaction ----------
+
+TREE_MILESTONE: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030"
+TREE_ACTION: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/pending-action/ACT-0001"
+EVIDENCE: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/evidence/EVD-0002"
+
+
+@pytest.fixture
+def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Epoch2RootContext, Path]:
+    """A canary holding MLS-0030 in review, its verified Batch and two evidence rows."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    provisioned = provision(tmp_path / "tree", code="SEAL")
+    seed(
+        provisioned,
+        {
+            "milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")},
+            "batch": {"BAT-0007": seed_row("batch", "READY_TO_MERGE")},
+        },
+    )
+    context = root_context(provisioned, tmp_path / "runtime")
+    with context.session([TREE_MILESTONE]) as session:
+        for key, kind in (("EVD-0001", "decision"), ("EVD-0002", "artifact")):
+            append_ledger_record(
+                session.ledger_path(Epoch2Collection.EVIDENCE),
+                LedgerRecord(
+                    collection=Epoch2Collection.EVIDENCE,
+                    record_key=key,
+                    status="recorded",
+                    recorded_at=AT,
+                    payload={
+                        "id": key,
+                        "kind": kind,
+                        "summary": "an observation",
+                        "recorded_at": AT.isoformat(),
+                    },
+                ),
+            )
+    return context, document_path(provisioned)
+
+
+def open_params() -> ApprovalOpenParams:
+    """Return the request verify opens the question with."""
+    return ApprovalOpenParams.model_validate(
+        {
+            "urn": TREE_MILESTONE,
+            "actor": "SKILL-VERIFY",
+            "requested_by": dict(OPERATOR),
+            "steps": [
+                {
+                    "step_id": "AS-01",
+                    "passed": True,
+                    "observation": "the install completed and reported the version",
+                    "evidence_kinds": ["artifact"],
+                    "evidence_refs": [EVIDENCE],
+                }
+            ],
+            "accepted_binding": seed_row("milestone", "COMPLETED")["accepted_binding"],
+        }
+    )
+
+
+def seal_params(**overrides: Any) -> ApprovalSealParams:
+    """Return the operator's answer, with *overrides* applied."""
+    params: dict[str, Any] = {
+        "urn": TREE_ACTION,
+        "expected_revision": 1,
+        "idempotency_key": "req-seal-0001",
+        "actor": "OP-0001",
+        "resolver": dict(OPERATOR),
+        "option_id": "approve",
+        "receipt_ref": RECEIPT,
+    }
+    params.update(overrides)
+    return ApprovalSealParams.model_validate(params)
+
+
+def stored(path: Path) -> PendingAction:
+    """Return ACT-0001 as the document holds it."""
+    return PendingAction.model_validate(
+        document_rows(read_document(path), Epoch2Collection.PENDING_ACTION)["ACT-0001"]
+    )
+
+
+def test_the_question_is_created_waiting_through_the_transaction(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """Opening writes one waiting protected approval bound to the bundle digest."""
+    context, path = tree
+    commit = open_acceptance_approval(context, open_params(), now=AT)
+
+    action = stored(path)
+    assert commit.answer.created is True
+    assert commit.answer.action_ref == TREE_ACTION
+    assert action.status is PendingActionStatus.WAITING
+    assert action.kind is PendingActionKind.PROTECTED_APPROVAL
+    assert action.bundle_digest == commit.answer.bundle_digest
+    assert [item.payload["name"] for item in commit.envelopes] == [
+        "ledger.milestone.appended",
+        "admission.pending_action.created",
+    ]
+
+
+def test_the_question_is_sealed_through_the_transaction(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """The answer lands as one sealed row, one revision on, resolved by a person."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+
+    commit = seal_acceptance_approval(context, seal_params(), now=LATER)
+
+    action = stored(path)
+    assert commit.answer.status == PendingActionStatus.SEALED.value
+    assert action.status is PendingActionStatus.SEALED
+    assert action.revision == 2
+    assert action.resolution_actor is not None
+    assert action.resolution_actor.principal_id == "OP-0001"
+    assert [item.payload["name"] for item in commit.envelopes] == [
+        "resolution.pending_action.sealed"
+    ]
+
+
+def test_a_second_seal_is_refused_with_nothing_written(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """Nothing leaves SEALED: a second answer under a new key is refused outright."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    seal_acceptance_approval(context, seal_params(), now=LATER)
+    before = path.read_bytes()
+
+    with pytest.raises(TransactionRefusedError) as caught:
+        seal_acceptance_approval(
+            context,
+            seal_params(idempotency_key="req-seal-0002", expected_revision=2, option_id="decline"),
+            now=LATER,
+        )
+
+    assert caught.value.code is TransactionRefusalCode.ILLEGAL_TRANSITION
+    assert caught.value.guard == ApprovalRefusal.ACTION_NOT_WAITING.value
+    assert path.read_bytes() == before
+    assert stored(path).selected_option_id == "approve"
+
+
+def test_a_retried_seal_returns_the_standing_answer_and_writes_nothing(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """The same request under the same key is a retry, not a second seal."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    seal_acceptance_approval(context, seal_params(), now=LATER)
+    before = path.read_bytes()
+
+    commit = seal_acceptance_approval(context, seal_params(), now=LATER)
+
+    assert commit.answer.created is False
+    assert commit.envelopes == ()
+    assert path.read_bytes() == before
+
+
+def test_a_seal_against_a_stale_revision_is_refused(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """An answer given to a revision the question is no longer at is a conflict."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    before = path.read_bytes()
+
+    with pytest.raises(TransactionRefusedError) as caught:
+        seal_acceptance_approval(context, seal_params(expected_revision=3), now=LATER)
+
+    assert caught.value.code is TransactionRefusalCode.REVISION_CONFLICT
+    assert path.read_bytes() == before
+
+
+def test_a_seal_citing_unrecorded_evidence_is_refused(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """The receipt of an answer must be a row the tree holds."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    before = path.read_bytes()
+    unheld = RECEIPT.replace("EVD-0001", "EVD-0404")
+
+    with pytest.raises(TransactionRefusedError, match="EVD-0404"):
+        seal_acceptance_approval(context, seal_params(receipt_ref=unheld), now=LATER)
+
+    assert path.read_bytes() == before
+
+
+def test_a_seal_of_a_question_the_tree_does_not_hold_is_refused(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """Nothing was asked, so nothing can be answered."""
+    context, _ = tree
+    with pytest.raises(TransactionRefusedError) as caught:
+        seal_acceptance_approval(context, seal_params(), now=LATER)
+    assert caught.value.code is TransactionRefusalCode.IDENTITY_NOT_FOUND
+
+
+def test_a_seal_naming_an_agent_resolver_does_not_parse() -> None:
+    """The resolver slot of the request is typed a person too."""
+    with pytest.raises(ValidationError, match="resolver"):
+        seal_params(resolver=dict(AGENT))
+
+
+def test_a_seal_in_somebody_elses_name_does_not_parse() -> None:
+    """The actor answers for itself, never on another person's behalf."""
+    with pytest.raises(ValidationError, match="cannot seal an answer"):
+        seal_params(actor="OP-0002")
+
+
+def test_a_seal_addressed_at_another_kind_does_not_parse() -> None:
+    """Only a pending action is sealed."""
+    with pytest.raises(ValidationError, match="not a pending action"):
+        seal_params(urn=TREE_MILESTONE)

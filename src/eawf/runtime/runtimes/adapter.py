@@ -58,6 +58,7 @@ from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.kinds.event import Event, EventKind, EventPayload
+from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.stream_json import vendor_error_signal
 from eawf.runtime.sandbox.policy import TOOL_UNIVERSE
 
@@ -678,6 +679,12 @@ class NativeLaunchRequest(BaseModel):
             that exists.
         prompt: The rendered prompt the child is started with.
         hello_sequence: Which announcement the returned hello must be.
+        usage_sink: Where the launcher hands each cumulative usage reading
+            the child discloses mid-turn, with the child's process-group
+            id so a crossing can be reaped while the turn still runs. It
+            answers ``True`` once the Run was terminated at its cap, after
+            which the launcher stops relaying. ``None`` when the Run
+            carries no token cap, so nothing is metered in flight.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
@@ -688,6 +695,9 @@ class NativeLaunchRequest(BaseModel):
     workspace: Path
     prompt: Annotated[str, Field(min_length=1, max_length=200_000)]
     hello_sequence: Annotated[int, Field(strict=True, ge=1)]
+    usage_sink: Callable[[UsageSample, int | None], Awaitable[bool]] | None = Field(
+        default=None, exclude=True
+    )
 
 
 class NativeLaunchOutcome(BaseModel):

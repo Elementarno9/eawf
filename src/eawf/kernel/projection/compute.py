@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
@@ -285,6 +285,7 @@ def build_route_projection(
     cursor: int,
     scope_id: str,
     generated_at: datetime,
+    ledger_rows: Mapping[Epoch2Collection, Sequence[Mapping[str, Any]]] = MappingProxyType({}),
 ) -> RouteProjection:
     """Return one route's read model, read through *cursor*.
 
@@ -296,6 +297,10 @@ def build_route_projection(
         scope_id: The scope the projection is built for.
         generated_at: When the projection was generated. Supplied by the caller so
             the header's two stamps agree.
+        ledger_rows: Extra rows for a rendered collection, read from its ledger by
+            the caller -- a terminal record the document no longer holds, such as
+            an accepted Milestone. A key the document already holds is the record
+            still in flight and is never shadowed by one of these.
 
     Returns:
         The route's rows under a header whose ``source_cursor`` is *cursor*.
@@ -316,7 +321,11 @@ def build_route_projection(
     rows = tuple(
         _projection_row(key=key, row=row, collection=collection)
         for collection in collections
-        for key, row in sorted(document_rows(document, collection).items())
+        for key, row in sorted(
+            _collection_rows(
+                document=document, collection=collection, ledger_rows=ledger_rows
+            ).items()
+        )
     )
     return RouteProjection(
         schema_version=PROJECTION_SCHEMA_VERSION,
@@ -430,6 +439,26 @@ def _moved_record(envelope: Envelope) -> tuple[QualifiedUrn, str, int]:
         raise ValueError(
             f"event {envelope.id!r} names an entity_ref that is not a qualified URN"
         ) from error
+
+
+def _collection_rows(
+    *,
+    document: dict[str, Any],
+    collection: Epoch2Collection,
+    ledger_rows: Mapping[Epoch2Collection, Sequence[Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Return one collection's rows: the live document, plus its ledger's extras.
+
+    A key the document holds is the record still in flight, or one read at a
+    later cursor than the caller's ledger pass; either way it wins over a row
+    read from the ledger, which only fills a key the document no longer holds.
+    """
+    merged = dict(document_rows(document, collection))
+    for row in ledger_rows.get(collection, ()):
+        key = row.get("key")
+        if isinstance(key, str) and key not in merged:
+            merged[key] = row
+    return merged
 
 
 def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> ProjectionRow:

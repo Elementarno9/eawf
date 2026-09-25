@@ -59,6 +59,7 @@ class IntegrationRefusal(StrEnum):
     GENERATION_SUPERSEDED = "integration_generation_superseded"
     WORKSPACE_ABSENT = "integration_workspace_absent"
     EXIT_UNNAMED = "integration_exit_unnamed"
+    CANDIDATE_UNRESOLVABLE = "integration_candidate_unresolvable"
 
 
 class IntegrationRefusedError(ValueError):

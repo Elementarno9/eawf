@@ -32,6 +32,7 @@ pytestmark = pytest.mark.contract
 REQUIRED_MODELS = frozenset(
     {
         "AcceptanceStep",
+        "BatchCreateSpec",
         "CampaignTemplateRef",
         "DeliveryBatch",
         "DurationBudget",
@@ -46,8 +47,10 @@ REQUIRED_MODELS = frozenset(
         "MilestoneCreateSpec",
         "OwnerPrincipal",
         "PromotionRule",
+        "RunCreateSpec",
         "RepoTrackScope",
         "Task",
+        "TaskCreateSpec",
         "Track",
         "TrackCreateSpec",
         "TrackPolicy",

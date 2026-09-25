@@ -73,7 +73,9 @@ from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictNonNegativeInt
 from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
+from eawf.kernel.store.paths import ledger_path, store_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
@@ -109,6 +111,19 @@ RECONNECT_UNNEGOTIABLE: Final = "projection_reconnect_unnegotiable"
 #: its epoch-1 location, because it is the workspace's event log rather than a
 #: generation's document.
 _TREE_ANCHOR_FILENAME: Final = "state.json"
+
+#: How many of a collection's most recent ledger-held rows a route reads beside
+#: its live document rows. A repository's ledger holds every record it ever
+#: closed, and a route renders a screen of current work, not an archive, so the
+#: read stops at the most recently closed handful rather than the whole file.
+LEDGER_MERGE_ROW_LIMIT: Final = 20
+
+#: The collections a route projection also reads through their ledger, so a
+#: record does not vanish from a route that lists it the instant it compacts
+#: out of the document. Milestone is the one a route needs today -- acceptance
+#: moves it out of the document on the same commit that closes it; a collection
+#: joins here once a route that lists it needs the same read.
+LEDGER_MERGED_COLLECTIONS: Final = (Epoch2Collection.MILESTONE,)
 
 
 class ReconnectParams(BaseModel):
@@ -186,6 +201,42 @@ def _document_cursor(document: dict[str, Any]) -> int:
     return cursor
 
 
+def _terminal_ledger_rows(
+    *, authority: RootAuthority, collection: Epoch2Collection
+) -> tuple[dict[str, Any], ...]:
+    """Return *collection*'s most recent terminal rows, read from its ledger.
+
+    A ledger may hold lines a route's collection did not write -- a
+    Milestone's acceptance-bundle revision is filed in the same ledger as
+    its terminal Milestone rows, under a different key grammar. Such a
+    line's payload carries no ``key`` matching the line's own
+    ``record_key``, which is what tells a genuine row of *collection* apart
+    from one filed there for some other reason.
+
+    Returns:
+        Up to :data:`LEDGER_MERGE_ROW_LIMIT` payloads, oldest of the kept
+        set first, in the order the ledger appended them. Empty when the
+        collection has no ledger file yet.
+    """
+    path = ledger_path(_document_path(authority), collection)
+    records = effective_records(read_ledger_records(path))
+    payloads = [
+        record.payload for record in records if record.payload.get("key") == record.record_key
+    ]
+    return tuple(payloads[-LEDGER_MERGE_ROW_LIMIT:])
+
+
+def _ledger_rows_for(
+    *, route: str, authority: RootAuthority
+) -> dict[Epoch2Collection, tuple[dict[str, Any], ...]]:
+    """Return the ledger-held rows *route*'s merged collections contribute."""
+    return {
+        collection: _terminal_ledger_rows(authority=authority, collection=collection)
+        for collection in ROUTE_COLLECTIONS.get(route, ())
+        if collection in LEDGER_MERGED_COLLECTIONS
+    }
+
+
 def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
     """Build one route's read model from the tree's committed document.
 
@@ -202,6 +253,7 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
             cursor=_document_cursor(document),
             scope_id=RootIdentity.of(authority.root).root_id,
             generated_at=datetime.now(UTC),
+            ledger_rows=_ledger_rows_for(route=route, authority=authority),
         )
     except ValueError as error:
         raise DaemonValidationError(

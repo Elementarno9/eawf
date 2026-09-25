@@ -34,9 +34,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 from eawf.kernel.state.enums import MeasurementQuality, MeasurementStatus
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.platform.subprocess_detach import no_window_kwargs
+from eawf.runtime.mcp.native_launch import native_run_server_config
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -52,6 +55,7 @@ from eawf.runtime.runtimes.adapter import (
     release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
+from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.runtime.sandbox.egress_proxy import (
@@ -771,6 +775,48 @@ def _parse_codex_result(
     )
 
 
+def _usage_sample_from_stream_line(line: str) -> UsageSample | None:
+    """Return the usage reading one codex ``--json`` event line discloses, or None.
+
+    Only a ``type: "turn.completed"`` event carries ``usage`` -- the same
+    event :func:`_scan_codex_events` reads for the terminal spawn result, so
+    a multi-turn tool loop that emits several such events mid-stream yields
+    one cumulative reading per turn. A line that is not JSON, not an object,
+    not a ``turn.completed`` event, or carries no well-formed usage block is
+    skipped rather than raised: a malformed mid-turn line must not abort an
+    otherwise-live spawn.
+
+    Args:
+        line: One decoded stdout line, trailing newline included or not.
+
+    Returns:
+        The cumulative :class:`~eawf.runtime.runtimes.metering.UsageSample`
+        the line reports, or ``None`` when the line carries none.
+    """
+    try:
+        data = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict) or data.get("type") != "turn.completed":
+        return None
+    usage = data.get("usage")
+    if not isinstance(usage, dict):
+        return None
+    input_total = _usage_int(usage, "input_tokens")
+    output_tokens = _usage_int(usage, "output_tokens")
+    cache_read = _usage_int(usage, "cached_input_tokens", missing=0)
+    if input_total is None or output_tokens is None or cache_read is None:
+        return None
+    try:
+        return UsageSample(
+            input_tokens=max(input_total - cache_read, 0),
+            output_tokens=output_tokens,
+            cache_read_input_tokens=cache_read,
+        )
+    except ValidationError:
+        return None
+
+
 class CodexAdapter:
     """Codex CLI runtime adapter (``codex exec`` subprocess primary)."""
 
@@ -1184,16 +1230,44 @@ class CodexNativeLauncher:
             The provider session, the child's pid and the announcement.
 
         Raises:
-            RuntimeSpawnError: The spawn timed out, exited non-zero, or
-                returned an envelope that does not parse.
+            RuntimeSpawnError: The spawn timed out, exited non-zero,
+                returned an envelope that does not parse, or the per-Run
+                MCP configuration could not be built or does not register
+                the Run's server.
         """
         spec = request.spec
+        server_config = native_run_server_config(request, runtime_id=self._adapter.id)
+        pgid_box: list[int | None] = [None]
+        relayed_terminated = False
+
+        def _capture_pgid(pgid: int) -> None:
+            pgid_box[0] = pgid
+
+        async def _relay_usage(line: str) -> None:
+            """Parse *line* for a usage reading and hand it to the sink.
+
+            Stops relaying once the sink reports the Run terminated at its
+            cap -- the kill ladder reaps the child from there, and a
+            terminated meter answers every further reading identically, so
+            relaying past that point buys nothing.
+            """
+            nonlocal relayed_terminated
+            if request.usage_sink is None or relayed_terminated:
+                return
+            sample = _usage_sample_from_stream_line(line)
+            if sample is None:
+                return
+            relayed_terminated = await request.usage_sink(sample, pgid_box[0])
+
         result = await self._adapter.spawn_session(
             request.prompt,
             model=spec.model_id,
             cwd=str(request.workspace),
+            extra_args=server_config.argv_flags,
             denied_tools=ambient_denied_tools(spec),
             timeout=float(spec.limits.wall_seconds),
+            on_pgid=_capture_pgid if request.usage_sink is not None else None,
+            on_chunk=_relay_usage if request.usage_sink is not None else None,
         )
         return NativeLaunchOutcome(
             provider_session_ref=result.session_id,

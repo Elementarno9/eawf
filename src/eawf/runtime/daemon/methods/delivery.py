@@ -17,12 +17,13 @@ frame with no exit is the one thing a blocked attempt must never leave
 behind. Everything else -- which candidates, in what order, under which
 ordinal, against which base -- is read or derived.
 
-The tree half has no implementation yet. Nothing in the tree resolves a
-candidate's submission artifact back to bytes, so there is no honest way
-for the daemon to reproduce a worker's tree in a workspace of its own,
-and :data:`INTEGRATION_WORKSPACE` is therefore unset. The verb refuses
-with a typed code rather than reporting an integration that touched no
-tree; everything before and after that seam is real and runs.
+The tree half runs in a detached git worktree the daemon adds under the
+root's local store for the one call and removes when the call ends,
+delivered or blocked. A candidate resolves to bytes through the commit
+its submission pinned, so the daemon reproduces the worker's tree from
+its own ref rather than from anything the caller names. Which workspace
+a call gets is decided by :data:`INTEGRATION_WORKSPACE_FACTORY`, per
+call and per root, because the repository it runs in is the root's.
 
 ``runtime.delivery.assess_completion``: whether one Task is finished.
 
@@ -62,8 +63,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final
@@ -114,6 +115,7 @@ from eawf.runtime.integration.apply import (
     integration_order,
 )
 from eawf.runtime.integration.commit_policy import CommitSubject
+from eawf.runtime.integration.git_workspace import git_integration_workspace
 from eawf.runtime.integration.recovery import (
     IntegrationOutcome,
     IntegrationOutcomeKind,
@@ -171,9 +173,15 @@ GENERATION_STATUS: Final = "selected"
 #: The status a conflict line records.
 CONFLICT_STATUS: Final = "blocked"
 
-#: The tree an integration runs in. Unset: see the module docstring. The
-#: verb refuses rather than reporting a delivery no workspace produced.
-INTEGRATION_WORKSPACE: IntegrationWorkspace | None = None
+#: Opens the tree one integration call runs in, for one root and one
+#: Batch. The context manager it returns removes the tree on exit.
+IntegrationWorkspaceFactory = Callable[
+    [Epoch2RootContext, BatchUrn], AbstractContextManager[IntegrationWorkspace]
+]
+
+#: The workspace every integration call gets. A module attribute rather
+#: than a constant inlined into the verb so a test can hand in its own.
+INTEGRATION_WORKSPACE_FACTORY: IntegrationWorkspaceFactory = git_integration_workspace
 
 #: The client's name for one request.
 IdempotencyKey = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128)]
@@ -604,10 +612,18 @@ def _run_plans(
     store: _LedgerGenerationStore,
     now: datetime,
 ) -> DeliveryIntegrateAnswer:
-    """Integrate each planned delivery in turn, stopping at the first block."""
+    """Integrate each planned delivery in turn, stopping at the first block.
+
+    Every delivery after the first is applied over the commit the one
+    before it authored. A plan only knows that commit's ordinal when it is
+    drawn up, so its target is replaced by the revision that actually
+    landed before it runs.
+    """
     generations: list[str] = []
     messages: list[str] = []
-    for plan in plans:
+    landed: RevisionBinding | None = None
+    for planned in plans:
+        plan = planned if landed is None else planned.model_copy(update={"target_base": landed})
         try:
             outcome = integrate_batch(plan, workspace=workspace, lock=lock, store=store, now=now)
         except IntegrationRefusedError as error:
@@ -628,6 +644,7 @@ def _run_plans(
                 conflict=conflict.model_dump(mode="json"),
             )
         assert outcome.generation is not None, "a delivered outcome carries its generation"
+        landed = outcome.generation.integrated_revision
         generations.append(outcome.generation.id)
         messages.append(plan.delivery.message)
     logger.info(
@@ -682,13 +699,20 @@ async def _integrate_delivery(
     args = _params(params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(
-        integrate_delivery,
-        context,
-        args,
-        workspace=INTEGRATION_WORKSPACE,
-        now=datetime.now(UTC),
+        _integrate_in_workspace, context, args, factory=INTEGRATION_WORKSPACE_FACTORY
     )
     return answer.model_dump(mode="json")
+
+
+def _integrate_in_workspace(
+    context: Epoch2RootContext,
+    args: DeliveryIntegrateParams,
+    *,
+    factory: IntegrationWorkspaceFactory,
+) -> DeliveryIntegrateAnswer:
+    """Run one integration inside a workspace that is gone when it returns."""
+    with factory(context, args.urn) as workspace:
+        return integrate_delivery(context, args, workspace=workspace, now=datetime.now(UTC))
 
 
 class TaskCompletionParams(BaseModel):

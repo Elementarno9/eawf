@@ -16,9 +16,11 @@ membership that was never accepted. Cutting dev3 with a placeholder would have
 looked like progress and left a false record behind, so the cut was deferred
 rather than forced.
 
-What is asserted here is therefore an absence and its reason: no dev3 record,
-an empty milestones array behind that absence, and a train still standing on
-dev2. The cut belongs to the phase that can first produce an accepted Milestone.
+A later canary walk did accept one: the evidence export now records a
+COMPLETED Milestone whose bundle a ``membership_refs`` entry can name. What is
+asserted here is therefore an absence that is no longer forced: no dev3 record
+yet, an accepted Milestone ready to be named by the cut, and a train still
+standing on dev2 until that cut is taken.
 """
 
 from __future__ import annotations
@@ -56,14 +58,11 @@ def test_dev3_has_no_release_record_on_file() -> None:
     assert records[DEV2_KEY].status is ReleaseStatus.BAKED
 
 
-def test_canary_evidence_accepted_no_milestone() -> None:
-    """The empty milestones array is the reason dev3 cannot be opened."""
+def test_canary_evidence_records_an_accepted_milestone_ahead_of_the_cut() -> None:
+    """A COMPLETED Milestone is on file, so the cut has a bundle to name."""
     evidence = json.loads(CANARY_EVIDENCE.read_text())
 
-    assert evidence["milestones"] == [], (
-        "the canary accepted a Milestone after all, so a membership_refs bundle now exists "
-        "and the dev3 cut is no longer blocked on this"
-    )
+    assert [row["status"] for row in evidence["milestones"]] == ["COMPLETED"]
     assert evidence["release_key"] == DEV3_KEY
 
 

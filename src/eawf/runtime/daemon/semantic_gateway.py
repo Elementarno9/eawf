@@ -90,6 +90,7 @@ from eawf.runtime.daemon.semantic_handlers import (
     BROKERED_TOOLS,
     SEMANTIC_HANDLERS,
     HandlerInputs,
+    HandlerRefusalError,
 )
 from eawf.runtime.workspace.lease import root_leases
 
@@ -949,8 +950,9 @@ def _served_receipt(
 
     Raises:
         SemanticGatewayError: The tool needs a handler this daemon does
-            not install. No receipt is filed, because a receipt is a
-            record of an answer and there is none.
+            not install, or the handler itself cannot answer the call as
+            made. No receipt is filed in either case, because a receipt
+            is a record of an answer and there is none.
     """
     handler = SEMANTIC_HANDLERS.get(call.tool_id)
     if handler is None:
@@ -958,16 +960,20 @@ def _served_receipt(
             code=HANDLER_NOT_BROKERED,
             detail=f"{call.tool_id.value} passed every check and reaches no handler here",
         )
-    output = handler(
-        HandlerInputs(
-            session=session,
-            call=call,
-            capsule=inputs.capsule,
-            run=inputs.run,
-            calls_so_far=inputs.calls_so_far,
-            now=now,
+    try:
+        output = handler(
+            HandlerInputs(
+                session=session,
+                call=call,
+                capsule=inputs.capsule,
+                run=inputs.run,
+                calls_so_far=inputs.calls_so_far,
+                now=now,
+                lease=inputs.lease,
+            )
         )
-    )
+    except HandlerRefusalError as error:
+        raise SemanticGatewayError(code=error.code, detail=error.detail) from error
     return _receipt(call, status="succeeded", error=None, output=output, check=None, now=now)
 
 

@@ -21,6 +21,7 @@ from the ``now`` each call is handed.
 from __future__ import annotations
 
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final
@@ -51,6 +52,8 @@ from eawf.runtime.daemon.native_retry import (
     lineage_of,
     retry_run,
 )
+from eawf.runtime.integration.git_workspace import COMMIT_ARTIFACT_PREFIX
+from eawf.runtime.workspace.lease import workspace_path
 from tests.integration.runtime.daemon.test_native_dispatch import (
     ACTOR,
     RUN_URN,
@@ -160,12 +163,43 @@ def records_of(canary: CanaryProvision, runtime: Path) -> tuple[LedgerRecord, ..
     return ledger_records(canary, runtime)
 
 
+def leased_workspace(canary: CanaryProvision, runtime: Path) -> Path:
+    """Return the directory of the dispatched Run's leased worktree."""
+    context = root_ctx(canary, runtime)
+    lease = active_lease_of(context, run_ref=str(RUN_URN), now=datetime.now(UTC))
+    assert lease is not None, "a dispatched Run holds a lease"
+    return workspace_path(context, handle=lease.workspace_handle)
+
+
+def commit_in_lease(
+    canary: CanaryProvision,
+    runtime: Path,
+    *,
+    paths: tuple[str, ...] = ("src/module.py",),
+    content: str = "x = 2\n",
+) -> str:
+    """Commit *content* to *paths* in the leased worktree and return its artifact reference."""
+    workspace = leased_workspace(canary, runtime)
+    for path in paths:
+        (workspace / path).parent.mkdir(parents=True, exist_ok=True)
+        (workspace / path).write_text(content, encoding="utf-8")
+    subprocess.run(["git", "add", "--", *paths], cwd=workspace, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "candidate work"], cwd=workspace, check=True)
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=workspace, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    return f"{COMMIT_ARTIFACT_PREFIX}{sha}"
+
+
 def submitted(
     tmp_path: Path, *, claim: dict[str, Any]
 ) -> tuple[CanaryProvision, Path, MethodContext, dict[str, Any]]:
-    """Dispatch a Run, submit *claim* from it, and return what was recorded."""
+    """Dispatch a Run, commit and submit *claim* from it, and return what was recorded."""
     canary, runtime, ctx = dispatched(tmp_path)
-    answer = call_verb(CANDIDATE_SUBMIT_METHOD, ctx, submit_params(canary, claim=claim))
+    ref = commit_in_lease(canary, runtime, paths=tuple(claim["changed_paths"]))
+    answer = call_verb(
+        CANDIDATE_SUBMIT_METHOD, ctx, submit_params(canary, claim=claim, submission_ref=ref)
+    )
     return canary, runtime, ctx, answer
 
 
@@ -475,6 +509,7 @@ def test_the_recovery_run_replays_the_candidate_rather_than_duplicating_it(
             claim=LOSS["submission"],
             urn=str(run_urn(SUCCESSOR_KEY)),
             idempotency_key="candidate-recovery",
+            submission_ref=first["submission"]["submission_ref"],
         ),
     )
 
@@ -486,7 +521,7 @@ def test_the_recovery_run_replays_the_candidate_rather_than_duplicating_it(
 
 def test_the_recovery_run_replays_even_though_it_holds_no_lease(tmp_path: Path) -> None:
     """A replay writes nothing, so it needs no workspace of its own."""
-    canary, runtime, ctx, _first = submitted(tmp_path, claim=LOSS["submission"])
+    canary, runtime, ctx, first = submitted(tmp_path, claim=LOSS["submission"])
     successor_lease = active_lease_of(
         root_ctx(canary, runtime), run_ref=str(run_urn(SUCCESSOR_KEY)), now=datetime.now(UTC)
     )
@@ -499,6 +534,7 @@ def test_the_recovery_run_replays_even_though_it_holds_no_lease(tmp_path: Path) 
             claim=LOSS["submission"],
             urn=str(run_urn(SUCCESSOR_KEY)),
             idempotency_key="candidate-recovery",
+            submission_ref=first["submission"]["submission_ref"],
         ),
     )
 
@@ -537,7 +573,12 @@ def test_a_resume_that_proves_continuity_writes_no_second_candidate(
     replayed = call_verb(
         CANDIDATE_SUBMIT_METHOD,
         ctx,
-        submit_params(canary, claim=LOSS["submission"], idempotency_key="candidate-resume"),
+        submit_params(
+            canary,
+            claim=LOSS["submission"],
+            idempotency_key="candidate-resume",
+            submission_ref=first["submission"]["submission_ref"],
+        ),
     )
 
     assert decided.disposition is RetryDisposition.RESUME_SAME_RUN

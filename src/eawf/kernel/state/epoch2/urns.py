@@ -141,6 +141,13 @@ EvidenceUrn = Annotated[
     _JSON_SCHEMA,
 ]
 
+PendingActionUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.PENDING_ACTION)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
 WorkspaceUrn = Annotated[
     QualifiedUrn,
     PlainValidator(_urn_validator(EntityKind.WORKSPACE)),
@@ -200,6 +207,7 @@ __all__ = [
     "DueScopeUrn",
     "EvidenceUrn",
     "MilestoneUrn",
+    "PendingActionUrn",
     "QuestionUrn",
     "ReleaseUrn",
     "RepositoryUrn",

@@ -307,6 +307,18 @@ SUSPENSION_ACTIVITY_BUCKETS: Final[Mapping[SuspensionReason, ActivityBucket]] = 
 _TERMINAL: Final = frozenset({RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED})
 
 
+class RunCreateSpec(Epoch2Model):
+    """The strict create document for a Run.
+
+    A Run is created ``QUEUED``: it has not started, so it carries no
+    clock, no suspension reason and no failure. Only the key and the scope
+    it will execute against are the caller's to say.
+    """
+
+    key: RunKey
+    scope: RunScope
+
+
 class Run(Epoch2Record):
     """One execution episode of one agent against one scope."""
 
@@ -401,6 +413,7 @@ __all__ = [
     "ReleaseScope",
     "RepositoryScope",
     "Run",
+    "RunCreateSpec",
     "RunPurpose",
     "RunScope",
     "RunStatus",

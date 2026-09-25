@@ -6,16 +6,19 @@ integration generation from the read models, then submits exactly one
 candidate or integration request and returns the durable reference that
 came back. A conflict is never resolved by editing a candidate here.
 
-Two of the five branches complete from this grammar and three do not,
-and the report says which. ``show`` binds the Batch and its conflict
-frames and mutates nothing. ``apply`` and ``retry`` address the delivery
-verb, whose request names a full revision binding, a commit subject per
-sealed candidate, a typed exit per conflict kind and a diagnostic
-reference -- fields the grammar carries no option for and no read model
-resolves. ``seal`` addresses the candidate report verb, whose request
-names the accepted report's schema, digest and verdict, which the same
-argument applies to. Those branches stop with the unresolved fields
-named rather than sending a request whose halves were invented.
+``show`` binds the Batch and its conflict frames and mutates nothing.
+``apply`` and ``retry`` complete when the caller presents the three
+references no record holds -- the observed base binding, an exit per
+conflict kind and the diagnostic evidence. The daemon then assembles the
+rest of the delivery request from the Batch plan (the branch, one commit
+subject per sealed candidate, the affected criteria), checks every
+presented reference against the tree, and the skill sends exactly that
+request to the delivery verb. Without the references the branch stops
+naming them. ``seal`` addresses the candidate report verb, whose request
+names the accepted report's schema, digest and verdict, and ``select``
+needs a candidate set no read model renders; both stop with the
+unresolved fields named rather than sending a request whose halves were
+invented.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.surfaces.render.envelope import SkillName
 from eawf.workflow.skills._common import probe_skill_instruments
 from eawf.workflow.skills.bodies.integrate import (
+    CandidateDisposition,
     IntegrateAction,
     IntegrateBody,
     IntegrateOutcome,
@@ -57,6 +61,9 @@ CONFLICT_READ_METHOD: Final = "projection.merge.conflict.read"
 #: The verb that binds a Run's terminal report and attempts the seal.
 CANDIDATE_REPORT_BIND_METHOD: Final = "runtime.candidate.report.bind"
 
+#: The verb that assembles a Batch's delivery request from its plan.
+DELIVERY_ASSEMBLE_METHOD: Final = "runtime.delivery.assemble"
+
 #: The verb that turns a Batch's sealed candidates into one delivery.
 DELIVERY_INTEGRATE_METHOD: Final = "runtime.delivery.integrate"
 
@@ -68,6 +75,7 @@ RPC_SCOPE: Final = RpcScope(
         BATCH_READ_METHOD,
         CONFLICT_READ_METHOD,
         CANDIDATE_REPORT_BIND_METHOD,
+        DELIVERY_ASSEMBLE_METHOD,
         DELIVERY_INTEGRATE_METHOD,
     ),
 )
@@ -76,14 +84,16 @@ RPC_SCOPE: Final = RpcScope(
 INVOCATION_GRAMMAR: Final = (
     "/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> "
     "[--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] "
-    "[--verify-after] [--reason <text>] [--dry-run] [--expected-revision <N>] "
-    "[--idempotency-key <key>] [--output <human|json|markdown>]"
+    "[--verify-after] [--reason <text>] [--base <revision-binding>] "
+    "[--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] "
+    "[--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]"
 )
 
 #: What this skill may cause, stated as the boundary it never crosses.
 EFFECTS: Final = (
-    "Batch and conflict read models plus the candidate-report and delivery-integration verbs. "
-    "The skill authors no product change, edits no candidate, and resolves no conflict itself."
+    "Batch and conflict read models plus the candidate-report, delivery-assembly and "
+    "delivery-integration verbs. The skill authors no product change, edits no candidate, and "
+    "resolves no conflict itself."
 )
 
 #: The typed report every invocation produces.
@@ -100,14 +110,12 @@ TERMINAL_OUTCOMES: Final[tuple[IntegrateOutcome, ...]] = (
     "blocked",
 )
 
-#: The request fields the delivery verb names that no surface resolves.
-_INTEGRATE_UNRESOLVED: Final[tuple[str, ...]] = (
-    "base",
-    "branch",
-    "subject",
-    "subjects",
-    "exit_refs",
-    "diagnostic_ref",
+#: The references a delivery request needs that no record holds, as the
+#: request names them beside the args field that presents each.
+_INTEGRATE_REFERENCES: Final[tuple[tuple[str, str], ...]] = (
+    ("base", "base"),
+    ("exit_refs", "exit"),
+    ("diagnostic_ref", "diagnostic"),
 )
 
 #: The request fields the candidate-report verb names that no surface resolves.
@@ -125,6 +133,12 @@ _INTEGRATE_STOP: Final = "integration_request_unnamed"
 
 #: Why a seal request cannot be assembled from this grammar.
 _SEAL_STOP: Final = "candidate_report_unbound"
+
+#: Who a delivery the skill asks for is attributed to. The skill's own
+#: slash-prefixed name is not a valid principal key (the daemon's
+#: ``PrincipalKey`` pattern is uppercase-anchored and admits no ``/``),
+#: so the skill carries its own qualified key instead.
+_ACTOR_PRINCIPAL: Final = "SKILL-INTEGRATE"
 
 MANIFEST = SkillManifest(
     name="/integrate",
@@ -146,6 +160,9 @@ class IntegrateArgs(BaseModel):
         expected_head: The head the caller believes the Batch delivers.
         verify_after: Request the declared gates once an apply lands.
         reason: The operator's sentence for a retry or a rejection.
+        base: The observed revision binding the Batch starts from.
+        exit: Where each conflict exit lands, by exit kind.
+        diagnostic: The evidence a conflict diagnostic is filed against.
         dry_run: Resolve and validate, record no effect.
         expected_revision: The Batch revision the caller read.
         idempotency_key: This request's name.
@@ -162,6 +179,9 @@ class IntegrateArgs(BaseModel):
     expected_head: str | None = None
     verify_after: bool = False
     reason: str | None = None
+    base: dict[str, Any] | None = None
+    exit: dict[str, str] = Field(default_factory=dict)
+    diagnostic: str | None = None
     dry_run: bool = False
     expected_revision: int | None = None
     idempotency_key: str | None = None
@@ -237,15 +257,72 @@ class IntegrateSkill(Skill):
                     "invocation carries no option for"
                 ),
             )
-        return self._stopped(
-            args,
-            code=_INTEGRATE_STOP,
-            unresolved=_INTEGRATE_UNRESOLVED,
-            reason=(
-                "a delivery request names the exact base, the branch, one commit subject per "
-                "sealed candidate, a typed exit per conflict kind and a diagnostic reference, and "
-                "no surface this invocation reaches resolves them"
-            ),
+        unresolved = tuple(
+            request_field
+            for request_field, presented in _INTEGRATE_REFERENCES
+            if not getattr(args, presented)
+        )
+        if unresolved or args.dry_run:
+            return self._stopped(
+                args,
+                code=_INTEGRATE_STOP,
+                unresolved=unresolved,
+                reason=(
+                    "a delivery request names the exact base, a typed exit per conflict kind and "
+                    "a diagnostic reference, which no record holds, and this invocation presents "
+                    f"{'none of the missing ones' if unresolved else 'them only for a dry run'}"
+                ),
+            )
+        return self._apply(caller, args, params)
+
+    def _apply(self, caller: RpcCaller, args: IntegrateArgs, params: dict[str, Any]) -> SkillResult:
+        """Assemble the Batch's delivery request and send exactly that request.
+
+        Raises:
+            RpcRefusedError: The daemon refused the assembly or the delivery.
+        """
+        request = RPC_SCOPE.call(
+            caller,
+            DELIVERY_ASSEMBLE_METHOD,
+            {
+                **params,
+                "urn": args.subject_ref,
+                "actor": _ACTOR_PRINCIPAL,
+                "base": args.base,
+                "exit_refs": dict(args.exit),
+                "diagnostic_ref": args.diagnostic,
+            },
+        )
+        answer = RPC_SCOPE.call(caller, DELIVERY_INTEGRATE_METHOD, {**params, **request})
+        delivered = bool(answer.get("delivered", False))
+        blocked_on = answer.get("blocked_on")
+        outcome: IntegrateOutcome = "integrated" if delivered else "conflicted"
+        body = IntegrateBody(
+            action=args.action,
+            subject_ref=args.subject_ref,
+            method=DELIVERY_INTEGRATE_METHOD,
+            candidates=[
+                CandidateDisposition(
+                    candidate_ref=str(ref),
+                    included=ref != blocked_on,
+                    reason=(
+                        "it conflicts with the Batch head, so no canonical ref moved"
+                        if ref == blocked_on
+                        else "it is a sealed candidate of a Task the Batch plan lists"
+                    ),
+                )
+                for ref in answer.get("candidates", ())
+            ],
+            generation_ids=[str(item) for item in answer.get("generation_ids", ())],
+            conflict_refs=[str(blocked_on)] if blocked_on else [],
+            outcome=outcome,
+            reason=str(answer.get("reason", f"batch {args.subject_ref} was integrated")),
+        )
+        return SkillResult(
+            status=status_for(outcome),
+            body=body.model_dump(mode="json"),
+            next_valid_actions=[f"/verify {args.subject_ref} --mode all"],
+            repair_commands=None if delivered else [f"/integrate show {args.subject_ref}"],
         )
 
     def _show(self, caller: RpcCaller, args: IntegrateArgs, params: dict[str, Any]) -> SkillResult:
@@ -338,6 +415,7 @@ __all__ = [
     "BATCH_READ_METHOD",
     "CANDIDATE_REPORT_BIND_METHOD",
     "CONFLICT_READ_METHOD",
+    "DELIVERY_ASSEMBLE_METHOD",
     "DELIVERY_INTEGRATE_METHOD",
     "EFFECTS",
     "INVOCATION_GRAMMAR",

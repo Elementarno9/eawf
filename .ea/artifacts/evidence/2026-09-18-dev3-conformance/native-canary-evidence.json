@@ -14,6 +14,10 @@
     {
       "project_code": "W63CANARY",
       "repository": "eawf://WSP-W63CANARY/PRJ-W63CANARY/REP-W63CANARY/repository/REP-W63CANARY"
+    },
+    {
+      "project_code": "W37CANARY",
+      "repository": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/repository/REP-W37CANARY"
     }
   ],
   "certifications": [
@@ -128,7 +132,16 @@
     "production_root_label": "staged production root at HEAD (.ea tree)",
     "rehearsal_scope": "canary provisioning and the native-authority fence"
   },
-  "milestones": [],
+  "milestones": [
+    {
+      "bundle_digest": "sha256:3ae76205b3971f345313bafefbedb1ecd5befcb6d6fd23f545e2f7282ce270e3",
+      "milestone_id": "MLS-0001",
+      "project_code": "W37CANARY",
+      "recorded_at": "2026-09-24T18:31:42.671505Z",
+      "reference": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001",
+      "status": "COMPLETED"
+    }
+  ],
   "release_key": "REL-0.7.0.dev3",
   "run_logs": [],
   "schema_version": "native-canary-evidence/v1"

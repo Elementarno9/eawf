@@ -34,6 +34,7 @@ from eawf.workflow.skills.engine import SkillContext, SkillResult
 from eawf.workflow.skills.lifecycle_rpc import (
     UNTYPED_REFUSAL_CODE,
     RpcCaller,
+    RpcRefusedError,
     refusal_code,
     row_keys,
     status_for,
@@ -347,6 +348,275 @@ def test_verify_mode_that_reaches_no_verb_reports_unverified(mode: str, code: st
     assert body.outcome == "unverified"
     assert body.refusal_code == code
     assert caller.calls == []
+
+
+# ---- the wired branches: dispatch, apply, and the acceptance question ---------
+
+#: The three references an apply presents, which no record holds.
+_REFERENCES: Final[dict[str, Any]] = {
+    "base": {"head_sha": "a" * 40},
+    "exit": {"repair_task": "task-9", "rebase_task": "task-9"},
+    "diagnostic": "evidence-1",
+}
+
+#: What the delivery-assembly verb answers with, which apply must send verbatim.
+_ASSEMBLED: Final[dict[str, Any]] = {
+    "urn": "batch-1",
+    "actor": "SKILL-INTEGRATE",
+    "idempotency_key": "integrate-abc",
+    "branch": "canary/one",
+    "subjects": {"cand-1": "Deliver the value"},
+}
+
+#: The acceptance fields a verify pass presents beside the Milestone.
+_ACCEPTANCE: Final[dict[str, Any]] = {
+    "milestone": "milestone-1",
+    "journey": [{"step_id": "AS-01", "passed": True}],
+    "accepted_binding": {"head_sha": "a" * 40},
+    "requested_by": {"principal_kind": "human", "principal_id": "OP-0001"},
+}
+
+
+def test_dispatch_sends_a_presented_request_for_the_one_named_task() -> None:
+    """With a compiled request, one Task and its Run, the pass dispatches and drains it."""
+    caller = RecordingCaller(
+        {
+            dispatch_skill.TASK_READ_METHOD: {
+                "header": {"source_cursor": 4},
+                "rows": [{"key": "task-a", "status": {"state": "known", "value": "PLANNED"}}],
+            }
+        }
+    )
+    args = {"batch_ref": "batch-1", "task": ["task-a"], "run": "run-1", "run_request": {"k": 1}}
+    result = _run(dispatch_skill, args, caller)
+
+    body = _body(result, DispatchBody)
+    assert isinstance(body, DispatchBody)
+    assert caller.methods()[-2:] == [
+        dispatch_skill.RUN_READ_METHOD,
+        dispatch_skill.RUN_DISPATCH_METHOD,
+    ]
+    sent = caller.calls[-1][1]
+    assert sent["urn"] == "run-1"
+    assert sent["actor"] == "SKILL-DISPATCH"
+    assert sent["k"] == 1
+    assert [(row.task_ref, row.outcome) for row in body.dispatched] == [("task-a", "dispatched")]
+    assert body.outcome == "frontier_empty"
+    assert body.frontier == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        pytest.param({"task": ["task-a", "task-b"]}, id="two-tasks"),
+        pytest.param({"task": []}, id="no-task"),
+        pytest.param({"task": ["task-a"], "dry_run": True}, id="dry-run"),
+        pytest.param({"task": ["task-a"], "run_request": None}, id="no-request"),
+    ],
+)
+def test_dispatch_sends_nothing_unless_one_task_one_run_and_a_request(
+    extra: dict[str, Any],
+) -> None:
+    """Boundary: a presented request opens exactly one Run, so any other shape sends none."""
+    caller = RecordingCaller()
+    args = {"batch_ref": "batch-1", "run": "run-1", "run_request": {"k": 1}, **extra}
+    result = _run(dispatch_skill, args, caller)
+
+    body = _body(result, DispatchBody)
+    assert isinstance(body, DispatchBody)
+    assert dispatch_skill.RUN_DISPATCH_METHOD not in caller.methods()
+    assert body.dispatched == []
+
+
+def test_integrate_apply_sends_exactly_the_assembled_request() -> None:
+    """The delivery verb is asked what the assembly verb answered, nothing invented."""
+    caller = RecordingCaller(
+        {
+            integrate_skill.DELIVERY_ASSEMBLE_METHOD: dict(_ASSEMBLED),
+            integrate_skill.DELIVERY_INTEGRATE_METHOD: {
+                "candidates": ["cand-1"],
+                "generation_ids": ["ING-000002"],
+                "delivered": True,
+                "reason": "batch-1 is delivered in 1 generation(s)",
+            },
+        }
+    )
+    args = {"action": "apply", "subject_ref": "batch-1", **_REFERENCES}
+    result = _run(integrate_skill, args, caller)
+
+    body = _body(result, IntegrateBody)
+    assert isinstance(body, IntegrateBody)
+    assert caller.methods() == [
+        integrate_skill.DELIVERY_ASSEMBLE_METHOD,
+        integrate_skill.DELIVERY_INTEGRATE_METHOD,
+    ]
+    assembled = caller.calls[0][1]
+    assert assembled["actor"] == "SKILL-INTEGRATE"
+    assert assembled["exit_refs"] == _REFERENCES["exit"]
+    assert assembled["diagnostic_ref"] == "evidence-1"
+    assert caller.calls[1][1] == _ASSEMBLED
+    assert body.outcome == "integrated"
+    assert body.generation_ids == ["ING-000002"]
+    assert [row.included for row in body.candidates] == [True]
+    assert result.status == "ok"
+
+
+def test_integrate_apply_reports_a_conflict_as_conflicted() -> None:
+    """A blocked delivery names the candidate it stopped on and moves nothing."""
+    caller = RecordingCaller(
+        {
+            integrate_skill.DELIVERY_ASSEMBLE_METHOD: dict(_ASSEMBLED),
+            integrate_skill.DELIVERY_INTEGRATE_METHOD: {
+                "candidates": ["cand-1"],
+                "delivered": False,
+                "blocked_on": "cand-1",
+                "reason": "candidate cand-1 conflicts",
+            },
+        }
+    )
+    args = {"action": "apply", "subject_ref": "batch-1", **_REFERENCES}
+    result = _run(integrate_skill, args, caller)
+
+    body = _body(result, IntegrateBody)
+    assert isinstance(body, IntegrateBody)
+    assert body.outcome == "conflicted"
+    assert body.conflict_refs == ["cand-1"]
+    assert [row.included for row in body.candidates] == [False]
+    assert result.status == "blocked"
+
+
+@pytest.mark.parametrize(
+    ("missing", "field"),
+    [("base", "base"), ("exit", "exit_refs"), ("diagnostic", "diagnostic_ref")],
+)
+def test_integrate_apply_names_only_the_reference_it_was_not_given(
+    missing: str, field: str
+) -> None:
+    """Boundary: two of three references still send nothing, and name the third."""
+    caller = RecordingCaller()
+    args = {"action": "apply", "subject_ref": "batch-1", **_REFERENCES}
+    del args[missing]
+    result = _run(integrate_skill, args, caller)
+
+    body = _body(result, IntegrateBody)
+    assert isinstance(body, IntegrateBody)
+    assert body.refusal_code == "integration_request_unnamed"
+    assert body.unresolved_request_fields == [field]
+    assert caller.calls == []
+
+
+def test_integrate_apply_dry_run_sends_nothing() -> None:
+    """A dry run with every reference still records no effect."""
+    caller = RecordingCaller()
+    args = {"action": "apply", "subject_ref": "batch-1", "dry_run": True, **_REFERENCES}
+    result = _run(integrate_skill, args, caller)
+
+    body = _body(result, IntegrateBody)
+    assert isinstance(body, IntegrateBody)
+    assert body.outcome == "blocked"
+    assert caller.calls == []
+
+
+def test_integrate_apply_surfaces_an_assembly_refusal_with_its_code() -> None:
+    """Error path: a plan that does not resolve refuses before the delivery verb."""
+
+    def refusing(method: str, params: dict[str, Any]) -> dict[str, Any]:
+        raise RpcRefusedError(method=method, code="base_unbound", detail="another commit")
+
+    args = {"action": "apply", "subject_ref": "batch-1", **_REFERENCES}
+    result = _run(integrate_skill, args, refusing)
+
+    body = _body(result, IntegrateBody)
+    assert isinstance(body, IntegrateBody)
+    assert body.outcome == "blocked"
+    assert body.refusal_code == "base_unbound"
+    assert body.method == integrate_skill.DELIVERY_ASSEMBLE_METHOD
+
+
+def _cleared() -> dict[str, Any]:
+    """Return a verify-batch answer that clears the Batch."""
+    return {"head_generation": 2, "stage": "ready_to_merge", "merge_ready": True, "reason": "ok"}
+
+
+def test_verify_opens_the_acceptance_question_once_the_batch_clears() -> None:
+    """A cleared Batch with a named Milestone asks the operator, and reports the question."""
+    caller = RecordingCaller(
+        {
+            verify_skill.DELIVERY_VERIFY_BATCH_METHOD: _cleared(),
+            verify_skill.DELIVERY_OPEN_APPROVAL_METHOD: {
+                "action_ref": "action-1",
+                "bundle_digest": "sha256:" + "c" * 64,
+                "acceptance_bundle": {"revision": 1},
+            },
+        }
+    )
+    args = {"subject_ref": "batch-1", "mode": "all", **_ACCEPTANCE}
+    result = _run(verify_skill, args, caller)
+
+    body = _body(result, VerifyBody)
+    assert isinstance(body, VerifyBody)
+    assert caller.methods()[-1] == verify_skill.DELIVERY_OPEN_APPROVAL_METHOD
+    opened = caller.calls[-1][1]
+    assert opened["urn"] == "milestone-1"
+    assert opened["actor"] == "SKILL-VERIFY"
+    assert opened["steps"] == _ACCEPTANCE["journey"]
+    assert body.approval_ref == "action-1"
+    assert body.acceptance_bundle == {"revision": 1}
+    assert body.outcome == "passed"
+
+
+def test_verify_asks_nothing_while_the_batch_is_not_cleared() -> None:
+    """An unverified Batch is not a reason to ask anybody to accept anything."""
+    caller = RecordingCaller(
+        {verify_skill.DELIVERY_VERIFY_BATCH_METHOD: {**_cleared(), "merge_ready": False}}
+    )
+    args = {"subject_ref": "batch-1", "mode": "all", **_ACCEPTANCE}
+    result = _run(verify_skill, args, caller)
+
+    body = _body(result, VerifyBody)
+    assert isinstance(body, VerifyBody)
+    assert verify_skill.DELIVERY_OPEN_APPROVAL_METHOD not in caller.methods()
+    assert body.approval_ref is None
+
+
+@pytest.mark.parametrize(
+    ("missing", "field"),
+    [
+        ("journey", "steps"),
+        ("accepted_binding", "accepted_binding"),
+        ("requested_by", "requested_by"),
+    ],
+)
+def test_verify_names_the_acceptance_field_it_was_not_given(missing: str, field: str) -> None:
+    """Boundary: a Milestone named without its journey, binding or asker asks nothing."""
+    caller = RecordingCaller({verify_skill.DELIVERY_VERIFY_BATCH_METHOD: _cleared()})
+    args = {"subject_ref": "batch-1", "mode": "all", **_ACCEPTANCE}
+    del args[missing]
+    result = _run(verify_skill, args, caller)
+
+    body = _body(result, VerifyBody)
+    assert isinstance(body, VerifyBody)
+    assert verify_skill.DELIVERY_OPEN_APPROVAL_METHOD not in caller.methods()
+    assert body.unresolved_request_fields == [field]
+
+
+def test_verify_surfaces_a_refused_question_with_its_code() -> None:
+    """Error path: a Milestone outside review refuses the question, and the pass says so."""
+
+    def answering(method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if method == verify_skill.DELIVERY_OPEN_APPROVAL_METHOD:
+            raise RpcRefusedError(
+                method=method, code="milestone_not_in_review", detail="the Milestone is ACTIVE"
+            )
+        return _cleared() if method == verify_skill.DELIVERY_VERIFY_BATCH_METHOD else _EMPTY_READ
+
+    args = {"subject_ref": "batch-1", "mode": "all", **_ACCEPTANCE}
+    result = _run(verify_skill, args, answering)
+
+    body = _body(result, VerifyBody)
+    assert isinstance(body, VerifyBody)
+    assert body.outcome == "blocked"
+    assert body.refusal_code == "milestone_not_in_review"
 
 
 # ---- boundary and error paths ------------------------------------------------

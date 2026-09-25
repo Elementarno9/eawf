@@ -51,6 +51,7 @@ _INTEGRATE_ROW: Final[tuple[str, ...]] = (
     "projection.batch.detail.read",
     "projection.merge.conflict.read",
     "runtime.candidate.report.bind",
+    "runtime.delivery.assemble",
     "runtime.delivery.integrate",
 )
 
@@ -60,6 +61,7 @@ _VERIFY_ROW: Final[tuple[str, ...]] = (
     "projection.evidence.read",
     "runtime.delivery.verify_batch",
     "runtime.delivery.assess_completion",
+    "runtime.delivery.open_acceptance_approval",
 )
 
 #: Each skill module beside the allowlist its catalog row grants it.
@@ -74,16 +76,46 @@ _INVOCATIONS: Final[tuple[tuple[Any, dict[str, Any]], ...]] = (
     (dispatch_skill, {"batch_ref": "batch-1"}),
     (dispatch_skill, {"batch_ref": "batch-1", "resume": "run-1"}),
     (dispatch_skill, {"batch_ref": "batch-1", "task": ["task-a"], "dry_run": True}),
+    (
+        dispatch_skill,
+        {
+            "batch_ref": "batch-1",
+            "task": ["task-a"],
+            "run": "run-1",
+            "run_request": {"base": "main"},
+        },
+    ),
     (integrate_skill, {"action": "show", "subject_ref": "batch-1"}),
     (integrate_skill, {"action": "seal", "subject_ref": "cand-1"}),
     (integrate_skill, {"action": "select", "subject_ref": "batch-1"}),
     (integrate_skill, {"action": "apply", "subject_ref": "batch-1"}),
     (integrate_skill, {"action": "retry", "subject_ref": "batch-1"}),
+    (
+        integrate_skill,
+        {
+            "action": "apply",
+            "subject_ref": "batch-1",
+            "base": {"head_sha": "a" * 40},
+            "exit": {"repair_task": "task-9"},
+            "diagnostic": "evidence-1",
+        },
+    ),
     (verify_skill, {"subject_ref": "batch-1", "mode": "audit"}),
     (verify_skill, {"subject_ref": "batch-1", "mode": "review"}),
     (verify_skill, {"subject_ref": "batch-1", "mode": "all"}),
     (verify_skill, {"subject_ref": "batch-1", "mode": "gates"}),
     (verify_skill, {"subject_ref": "batch-1", "mode": "security"}),
+    (
+        verify_skill,
+        {
+            "subject_ref": "batch-1",
+            "mode": "all",
+            "milestone": "milestone-1",
+            "journey": [{"step_id": "AS-01"}],
+            "accepted_binding": {"head_sha": "a" * 40},
+            "requested_by": {"principal_kind": "human", "principal_id": "OP-0001"},
+        },
+    ),
 )
 
 

@@ -21,6 +21,12 @@ performed under that guard. A second test proves the guard reds on a real
 write, because a guard that cannot fail proves nothing about the code
 beneath it.
 
+The approval is produced, not seeded. The last section opens the question
+through the verb verify calls once the Milestone's Batches are verified,
+seals it through the operator's verb, and accepts on exactly what those
+two answered; the same opened question left unsealed is refused with
+``protected_approval_required``, which is the gate's fire proof.
+
 Nothing here spawns a daemon, opens a socket, or writes outside
 ``tmp_path``.
 """
@@ -55,6 +61,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     PendingActionKind,
     PendingActionStatus,
 )
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
@@ -910,3 +917,202 @@ def test_the_repair_request_needs_at_least_one_step() -> None:
     """A repaired journey with no steps demonstrates nothing."""
     with pytest.raises(ValidationError, match=r"at least 1|too_short"):
         repair_params(steps=[])
+
+
+# ---------- the approval verify opens and the operator seals ----------
+
+OPEN_METHOD: Final = "runtime.delivery.open_acceptance_approval"
+SEAL_METHOD: Final = "runtime.delivery.seal_acceptance_approval"
+
+
+def verified_canary(
+    tmp_path: Path, *, code: str, batch_status: str = "READY_TO_MERGE"
+) -> CanaryProvision:
+    """Return a canary holding MLS-0030 in review, one Batch and its evidence rows."""
+    provisioned = provision(tmp_path / code.lower(), code=code)
+    seed(
+        provisioned,
+        {
+            "milestone": {"MLS-0030": seed_row("milestone", "ACCEPTANCE_REVIEW")},
+            "batch": {"BAT-0007": seed_row("batch", batch_status)},
+        },
+    )
+    context = root_context(provisioned, tmp_path / "runtime")
+    with context.session([MILESTONE_URN]) as session:
+        for payload in evidence_rows():
+            append_ledger_record(
+                session.ledger_path(Epoch2Collection.EVIDENCE), evidence_line(payload)
+            )
+    return provisioned
+
+
+def call(canary: CanaryProvision, tmp_path: Path, method: str, **params: Any) -> dict[str, Any]:
+    """Dispatch one verb through the real handler against *canary*."""
+    ctx = method_context(tmp_path / "runtime")
+    return asyncio.run(methods.dispatch(method, ctx, {"repo_root": str(canary.root), **params}))
+
+
+def open_approval(canary: CanaryProvision, tmp_path: Path) -> dict[str, Any]:
+    """Open the question the way verify does once the Batches are verified."""
+    return call(
+        canary,
+        tmp_path,
+        OPEN_METHOD,
+        urn=MILESTONE_URN,
+        actor="SKILL-VERIFY",
+        requested_by=dict(OPERATOR),
+        steps=[step()],
+        accepted_binding=ACCEPTED_BINDING,
+    )
+
+
+def seal_approval(
+    canary: CanaryProvision, tmp_path: Path, opened: dict[str, Any], *, chosen: str = "approve"
+) -> dict[str, Any]:
+    """Seal the opened question with the operator's answer."""
+    return call(
+        canary,
+        tmp_path,
+        SEAL_METHOD,
+        urn=opened["action_ref"],
+        expected_revision=opened["revision"],
+        idempotency_key="req-seal-0001",
+        actor=ACTOR,
+        resolver=dict(OPERATOR),
+        option_id=chosen,
+        receipt_ref=RECEIPT_URN,
+    )
+
+
+def accept_on(canary: CanaryProvision, tmp_path: Path, opened: dict[str, Any]) -> dict[str, Any]:
+    """Accept the Milestone on the approval and bundle the open verb answered with."""
+    return accept(
+        canary,
+        tmp_path,
+        approval_receipt_ref=opened["action_ref"],
+        acceptance_bundle=opened["acceptance_bundle"],
+    )
+
+
+def test_the_approval_verbs_are_registered() -> None:
+    """The suite drives the real producer handlers, not stand-ins for them."""
+    assert {OPEN_METHOD, SEAL_METHOD} <= set(methods.registered_methods())
+
+
+def test_a_verify_sealed_approval_clears_the_acceptance(tmp_path: Path) -> None:
+    """End to end: verify opens, the operator seals, acceptance reads it and moves."""
+    canary = verified_canary(tmp_path, code="E2E")
+    opened = open_approval(canary, tmp_path)
+    sealed = seal_approval(canary, tmp_path, opened)
+
+    answer = accept_on(canary, tmp_path, opened)
+
+    assert opened["created"] is True
+    assert sealed["status"] == PendingActionStatus.SEALED.value
+    assert answer["status"] == "ok", answer
+    assert answer["revision_after"] == 2
+
+
+def test_the_acceptance_is_denied_while_the_seal_is_absent(tmp_path: Path) -> None:
+    """Gate-fire: the same opened question, unanswered, refuses the acceptance."""
+    canary = verified_canary(tmp_path, code="NOSEAL")
+    opened = open_approval(canary, tmp_path)
+    before = document_path(canary).read_bytes()
+
+    row = refusal(accept_on(canary, tmp_path, opened))
+
+    assert row["code"] == DomainErrorCode.PROTECTED_APPROVAL_REQUIRED.value
+    assert AcceptanceRefusal.APPROVAL_UNSEALED.value in row["message"]
+    assert document_path(canary).read_bytes() == before
+
+
+def test_a_declined_answer_does_not_clear_the_acceptance(tmp_path: Path) -> None:
+    """A sealed no is still a no."""
+    canary = verified_canary(tmp_path, code="DECLINE")
+    opened = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, opened, chosen="decline")
+
+    row = refusal(accept_on(canary, tmp_path, opened))
+
+    assert row["code"] == DomainErrorCode.PROTECTED_APPROVAL_REQUIRED.value
+    assert AcceptanceRefusal.APPROVAL_WITHHELD.value in row["message"]
+
+
+def test_a_bundle_other_than_the_sealed_one_is_refused(tmp_path: Path) -> None:
+    """The produced seal binds the exact bytes verify filed, and nothing else."""
+    canary = verified_canary(tmp_path, code="MISBOUND")
+    opened = open_approval(canary, tmp_path)
+    seal_approval(canary, tmp_path, opened)
+    other = bundle(steps=[step(evidence=RECEIPT_URN)]).model_dump(mode="json")
+
+    row = refusal(
+        accept(canary, tmp_path, approval_receipt_ref=opened["action_ref"], acceptance_bundle=other)
+    )
+
+    assert AcceptanceRefusal.BUNDLE_SUPERSEDED.value in row["message"]
+
+
+def test_reverifying_the_same_batches_files_no_duplicate(tmp_path: Path) -> None:
+    """Asking about the same bytes twice finds the standing question and writes nothing."""
+    canary = verified_canary(tmp_path, code="TWICE")
+    first = open_approval(canary, tmp_path)
+    before = document_path(canary).read_bytes()
+
+    second = open_approval(canary, tmp_path)
+
+    assert second["created"] is False
+    assert second["action_ref"] == first["action_ref"]
+    assert second["bundle_digest"] == first["bundle_digest"]
+    assert document_path(canary).read_bytes() == before
+    rows = read_document(document_path(canary))[Epoch2Collection.PENDING_ACTION.value]
+    assert sorted(rows) == ["ACT-0001"]
+
+
+def test_a_changed_journey_is_refused_rather_than_refiled(tmp_path: Path) -> None:
+    """A filed revision is never rewritten; a different journey is a repair."""
+    canary = verified_canary(tmp_path, code="DIVERGE")
+    open_approval(canary, tmp_path)
+
+    with pytest.raises(DaemonValidationError, match="acceptance_bundle_diverged"):
+        call(
+            canary,
+            tmp_path,
+            OPEN_METHOD,
+            urn=MILESTONE_URN,
+            actor="SKILL-VERIFY",
+            requested_by=dict(OPERATOR),
+            steps=[step(evidence=RECEIPT_URN)],
+            accepted_binding=ACCEPTED_BINDING,
+        )
+
+
+@pytest.mark.parametrize("status", ["ACTIVE", "FAILED"])
+def test_the_question_is_not_opened_while_a_batch_is_unverified(
+    tmp_path: Path, status: str
+) -> None:
+    """Verify asks only once the Milestone's Batches stand on a verified head."""
+    canary = verified_canary(tmp_path, code="UNVERIFIED", batch_status=status)
+    before = document_path(canary).read_bytes()
+
+    with pytest.raises(DaemonValidationError, match="acceptance_batches_unverified"):
+        open_approval(canary, tmp_path)
+
+    assert document_path(canary).read_bytes() == before
+
+
+def test_the_question_is_not_opened_on_unheld_evidence(tmp_path: Path) -> None:
+    """A journey citing evidence the tree does not hold is not put to the operator."""
+    canary = verified_canary(tmp_path, code="NOEVD")
+    unheld = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/evidence/EVD-0404"
+
+    with pytest.raises(DaemonValidationError, match="acceptance_evidence_unheld"):
+        call(
+            canary,
+            tmp_path,
+            OPEN_METHOD,
+            urn=MILESTONE_URN,
+            actor="SKILL-VERIFY",
+            requested_by=dict(OPERATOR),
+            steps=[step(evidence=unheld)],
+            accepted_binding=ACCEPTED_BINDING,
+        )

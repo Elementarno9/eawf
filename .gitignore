@@ -121,6 +121,10 @@ opencode.json
 # Per Q13 (operator decision 2026-05-18): worktrees live under .ea/worktrees/
 .ea/worktrees/
 
+# Per-Run MCP capsule and binding a native launcher writes into the leased
+# workspace; they must never ride a worker's candidate commit.
+.eawf-mcp/
+
 # State migration backups (kept locally during migration; not committed).
 # Forward-fix is the canonical recovery path. The bare glob covers backups
 # written adjacent to any resolved state.json, not just the .ea/ default.

@@ -26,6 +26,7 @@ module writes.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import secrets
 from collections.abc import Mapping, Sequence
@@ -88,6 +89,7 @@ from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
+from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
 from eawf.runtime.daemon.run_events import (
     hello_facts_of,
     next_hello_sequence,
@@ -159,6 +161,7 @@ class DispatchRefusal(StrEnum):
     RUN_NOT_DISPATCHABLE = "dispatch_run_not_dispatchable"
     LEASE_UNAVAILABLE = "dispatch_lease_unavailable"
     SPAWN_FAILED = "dispatch_spawn_failed"
+    BUDGET_EXHAUSTED = "dispatch_budget_exhausted"
     SUCCESSOR_REQUIRED = "retry_successor_required"
     SUCCESSOR_REFUSED = "retry_successor_refused"
     ATTEMPT_ABSENT = "retry_attempt_absent"
@@ -302,6 +305,9 @@ class CapsuleRequest(BaseModel):
             default a provider can widen.
         tool_denials: The semantic tools withheld; a denial wins.
         stop_conditions: When the Run stops of its own accord.
+        token_budget: The Run's token ceiling, sealed into the capsule and
+            enforced on every usage reading while the turn runs. ``None``
+            leaves the Run uncapped and nothing is metered in flight.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -311,6 +317,7 @@ class CapsuleRequest(BaseModel):
     tool_grants: UniqueToolIds = ()
     tool_denials: UniqueToolIds = ()
     stop_conditions: Annotated[tuple[StopCondition, ...], Field(min_length=1)]
+    token_budget: StrictPositiveInt | None = None
 
 
 class DispatchParams(BaseModel):
@@ -660,6 +667,7 @@ def seal_capsule(
             "filesystem_policy_ref": spec.sandbox.filesystem_policy_ref,
             "network_policy_ref": spec.sandbox.network_policy_ref,
             "budget": CapsuleBudget(
+                tokens=request.token_budget,
                 cost_microusd=spec.limits.cost_microusd,
                 wall_seconds=spec.limits.wall_seconds,
                 output_bytes=spec.limits.output_bytes,
@@ -940,6 +948,7 @@ async def launch_worker(
         sequence = next_hello_sequence(
             hello_facts_of(read_ledger_records(run_ledger(session)), args.urn)
         )
+    meter = run_meter(context, args, attempt=attempt, capsule=capsule)
     try:
         outcome = await launcher.launch(
             NativeLaunchRequest(
@@ -949,11 +958,22 @@ async def launch_worker(
                 workspace=workspace_path(context, handle=lease.workspace_handle),
                 prompt=args.prompt,
                 hello_sequence=sequence,
+                usage_sink=None if meter is None else meter.observe,
             )
         )
     except RuntimeSpawnError as error:
-        logger.info(f"launch_worker failed attempt={attempt.attempt_ref}")
-        raise refused(DispatchRefusal.SPAWN_FAILED, str(error)) from error
+        if meter is None or not meter.terminated:
+            logger.info(f"launch_worker failed attempt={attempt.attempt_ref}")
+            raise refused(DispatchRefusal.SPAWN_FAILED, str(error)) from error
+    # A reaped child either fails its launch or returns a hello for a Run
+    # that is already cancelled; neither may be recorded as a live worker.
+    if meter is not None and meter.terminated:
+        observed = 0 if meter.outcome is None else meter.outcome.decision.consumed
+        raise refused(
+            DispatchRefusal.BUDGET_EXHAUSTED,
+            f"run {args.urn.entity_key!r} reached {observed} tokens against its cap of "
+            f"{capsule.budget.tokens} and was terminated mid-turn",
+        )
     moved = attempt.model_copy(
         update={
             "stage": DispatchStage.SPAWNED,
@@ -965,6 +985,33 @@ async def launch_worker(
     with context.session([args.urn]) as session:
         append_attempt(session, moved)
     return moved, outcome
+
+
+def run_meter(
+    context: Epoch2RootContext,
+    args: DispatchParams,
+    *,
+    attempt: DispatchAttempt,
+    capsule: AuthorityCapsule,
+) -> InFlightRunMeter | None:
+    """Return the in-flight meter of a capped Run, or ``None`` when uncapped.
+
+    The control and the transition key are derived from the attempt, so a
+    dispatch resumed after a lost daemon opens the same control instead of
+    a second one.
+    """
+    cap = capsule.budget.tokens
+    if cap is None:
+        return None
+    body = hashlib.sha256(attempt.attempt_ref.encode("utf-8")).hexdigest()[:16]
+    return InFlightRunMeter(
+        context,
+        urn=args.urn,
+        actor=args.actor,
+        control_request_ref=f"CTL-{body}",
+        idempotency_key=f"budget-{attempt.attempt_ref}",
+        cap_tokens=cap,
+    )
 
 
 def accept_announcement(
@@ -1138,6 +1185,7 @@ __all__ = [
     "refused",
     "run_binding_of",
     "run_ledger",
+    "run_meter",
     "scope_reference",
     "seal_capsule",
     "stage_reached",
