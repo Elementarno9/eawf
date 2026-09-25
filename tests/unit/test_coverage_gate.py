@@ -14,10 +14,12 @@ Covers the standalone gate in ``tools/coverage_gate.py``:
   ``[tool.eawf.coverage.gates]`` and the TUI carries a behavioural floor instead
   of a line/branch ratchet;
 - the real ``pyproject.toml`` floors are GREEN against the real ``coverage.xml``
-  (when that report is present and no older than the HEAD commit) -- the
-  ratchet-is-not-aspirational contract;
-- ``coverage_xml_is_stale`` and ``head_commit_time`` decide that freshness
-  skip, including outside a git work tree.
+  (when that report is present and fresh) -- the ratchet-is-not-aspirational
+  contract;
+- ``coverage_xml_is_stale`` and ``head_commit_time`` decide HEAD freshness,
+  including outside a git work tree;
+- ``main`` refuses a missing report and one older than HEAD or than the newest
+  source file it measures (``stale_report_reason``).
 
 ``tools/`` is excluded from the package, so the gate is loaded via
 :mod:`importlib`. The aggregation + evaluation helpers take injected config +
@@ -302,7 +304,7 @@ def test_tui_line_cov_stays_waived_but_carries_behavioural_floor() -> None:
     assert int(behavioural["min_flows"]) > 0
 
 
-def _real_coverage_skip_reason(coverage_xml: Path, head_committed_at: int | None) -> str | None:
+def _real_coverage_skip_reason(coverage_xml: Path, repo_root: Path) -> str | None:
     """Return why a real-tree check must skip, or ``None`` when it may run.
 
     A ``coverage.xml`` left behind by an earlier local run measured an older
@@ -310,15 +312,12 @@ def _real_coverage_skip_reason(coverage_xml: Path, head_committed_at: int | None
     """
     if not coverage_xml.exists():
         return "no coverage.xml on this tree"
-    if head_committed_at is None:
-        return "HEAD commit time is unavailable outside a git work tree"
-    if _GATE.coverage_xml_is_stale(coverage_xml, head_committed_at=head_committed_at):
-        return "coverage.xml is older than the HEAD commit"
-    return None
+    classes = ET.parse(coverage_xml).getroot().findall(".//class")
+    return _GATE.stale_report_reason(coverage_xml, classes=classes, repo_root=repo_root)
 
 
 def _skip_unless_real_coverage_is_fresh() -> None:
-    reason = _real_coverage_skip_reason(_COVERAGE_XML, _GATE.head_commit_time(_REPO_ROOT))
+    reason = _real_coverage_skip_reason(_COVERAGE_XML, _REPO_ROOT)
     if reason is not None:
         pytest.skip(reason)
 
@@ -376,23 +375,9 @@ def test_head_commit_time_is_none_without_a_git_binary(
     assert _GATE.head_commit_time(_REPO_ROOT) is None
 
 
-def test_real_coverage_skip_reason_skips_a_report_older_than_head(tmp_path: Path) -> None:
-    report = _write_report_at(tmp_path / "coverage.xml", 1_000.0)
-    reason = _real_coverage_skip_reason(report, 1_001)
-    assert reason == "coverage.xml is older than the HEAD commit"
-
-
-def test_real_coverage_skip_reason_runs_on_a_fresh_report(tmp_path: Path) -> None:
-    report = _write_report_at(tmp_path / "coverage.xml", 1_002.0)
-    assert _real_coverage_skip_reason(report, 1_001) is None
-
-
-def test_real_coverage_skip_reason_skips_without_a_report_or_head(tmp_path: Path) -> None:
-    missing = tmp_path / "coverage.xml"
-    assert _real_coverage_skip_reason(missing, 1_001) == "no coverage.xml on this tree"
-    report = _write_report_at(missing, 1_002.0)
-    assert _real_coverage_skip_reason(report, None) == (
-        "HEAD commit time is unavailable outside a git work tree"
+def test_real_coverage_skip_reason_skips_without_a_report(tmp_path: Path) -> None:
+    assert _real_coverage_skip_reason(tmp_path / "coverage.xml", tmp_path) == (
+        "no coverage.xml on this tree"
     )
 
 
@@ -421,3 +406,113 @@ def test_main_passes_with_real_tree() -> None:
     _skip_unless_real_coverage_is_fresh()
     rc = _GATE.main(["--coverage-xml", str(_COVERAGE_XML), "--repo-root", str(_REPO_ROOT)])
     assert rc == 0
+
+
+# --------------------------------------------------------------------------- #
+# Freshness: main refuses a report that no longer measures the tree.
+# --------------------------------------------------------------------------- #
+
+_PASSING_PYPROJECT = """
+[tool.eawf.coverage.gates.pkg]
+path = "src/pkg/"
+line = 50
+branch = 0
+
+[tool.eawf.coverage.tui_behavioural]
+golden_glob = "tests/snapshots/tui/golden/*.txt"
+min_goldens = 0
+flow_glob = "tests/snapshots/tui/test_tui_flow.py"
+min_flows = 0
+""".lstrip()
+
+
+def _seed_tree(root: Path, *, source_mtime: float, report_mtime: float) -> Path:
+    """Write a gate-passing tree whose one source and report carry the given mtimes.
+
+    Returns:
+        The path of the written ``coverage.xml``.
+    """
+    (root / "pyproject.toml").write_text(_PASSING_PYPROJECT, encoding="utf-8")
+    source = root / "src" / "pkg" / "a.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("x = 1\n", encoding="utf-8")
+    os.utime(source, (source_mtime, source_mtime))
+    report_root = ET.Element("coverage")
+    classes = ET.SubElement(
+        ET.SubElement(ET.SubElement(report_root, "packages"), "package"), "classes"
+    )
+    classes.append(_class("src/pkg/a.py", [(1, None)]))
+    coverage_xml = root / "coverage.xml"
+    ET.ElementTree(report_root).write(coverage_xml, encoding="utf-8", xml_declaration=True)
+    os.utime(coverage_xml, (report_mtime, report_mtime))
+    return coverage_xml
+
+
+def _run_main(root: Path, coverage_xml: Path) -> int:
+    return _GATE.main(["--coverage-xml", str(coverage_xml), "--repo-root", str(root)])
+
+
+@pytest.fixture()
+def _no_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin HEAD time to unavailable so only the source-mtime leg decides."""
+    monkeypatch.setattr(_GATE, "head_commit_time", lambda _root: None)
+
+
+@pytest.mark.usefixtures("_no_head")
+def test_main_passes_a_report_newer_than_its_sources(tmp_path: Path) -> None:
+    coverage_xml = _seed_tree(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
+    assert _run_main(tmp_path, coverage_xml) == 0
+
+
+@pytest.mark.usefixtures("_no_head")
+def test_main_refuses_a_report_older_than_a_measured_source(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    coverage_xml = _seed_tree(tmp_path, source_mtime=2_000.0, report_mtime=1_000.0)
+    assert _run_main(tmp_path, coverage_xml) == 1
+    err = capsys.readouterr().err
+    assert "REFUSED" in err
+    assert "older than src/pkg/a.py" in err
+
+
+@pytest.mark.usefixtures("_no_head")
+def test_main_passes_a_report_written_in_the_source_instant(tmp_path: Path) -> None:
+    # Boundary: equal mtimes are fresh; only a strictly newer source is stale.
+    coverage_xml = _seed_tree(tmp_path, source_mtime=1_500.0, report_mtime=1_500.0)
+    assert _run_main(tmp_path, coverage_xml) == 0
+
+
+def test_main_refuses_a_report_written_before_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    coverage_xml = _seed_tree(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
+    monkeypatch.setattr(_GATE, "head_commit_time", lambda _root: 3_000)
+    assert _run_main(tmp_path, coverage_xml) == 1
+    assert "before the HEAD commit" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("_no_head")
+def test_main_refuses_a_missing_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / "pyproject.toml").write_text(_PASSING_PYPROJECT, encoding="utf-8")
+    assert _run_main(tmp_path, tmp_path / "coverage.xml") == 1
+    assert "no report at" in capsys.readouterr().err
+
+
+def test_newest_measured_source_picks_the_latest_existing_file(tmp_path: Path) -> None:
+    for name, mtime in (("old.py", 1_000.0), ("new.py", 3_000.0)):
+        path = tmp_path / name
+        path.write_text("", encoding="utf-8")
+        os.utime(path, (mtime, mtime))
+    classes = [_class("old.py", []), _class("new.py", []), _class("gone.py", [])]
+    assert _GATE.newest_measured_source(classes, tmp_path) == ("new.py", pytest.approx(3_000.0))
+
+
+def test_newest_measured_source_is_none_without_existing_files(tmp_path: Path) -> None:
+    assert _GATE.newest_measured_source([], tmp_path) is None
+    assert _GATE.newest_measured_source([_class("gone.py", [])], tmp_path) is None
+    assert _GATE.newest_measured_source([ET.Element("class")], tmp_path) is None
+
+
+def test_stale_report_reason_raises_for_a_missing_report(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        _GATE.stale_report_reason(tmp_path / "coverage.xml", classes=[], repo_root=tmp_path)

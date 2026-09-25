@@ -2612,6 +2612,32 @@ def test_research_board_n_commit_stages_campaign_and_renders_node(
         app = EaApp(scope="repo", state_path=state_path)
         monkeypatch.setattr(EaApp, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(dc, "DaemonClient", _FakeClient)
+
+        # Await the staging worker's own completion instead of leaning on
+        # settle_screen's frame-stability pump. ComposeCampaignModal.dismiss()
+        # defers _stage_committed via Textual's call_next, which then runs
+        # _stage_campaign_worker's asyncio.to_thread daemon round-trip; under
+        # parallel-test load that thread can be starved by the OS scheduler
+        # while the rendered frame sits unchanged on the in-flight "staging..."
+        # action line, so settle_screen's stability loop can conclude BEFORE
+        # the worker's terminal _rebuild() call lands and the tree assertion
+        # below samples the pre-rebuild board. Patching the worker to flag an
+        # event on completion gives a concrete condition to await instead.
+        staged = asyncio.Event()
+        original_worker = ResearchBoardModeScreen._stage_campaign_worker
+
+        async def _stage_campaign_worker_and_signal(
+            self: ResearchBoardModeScreen, draft: CampaignDraft
+        ) -> None:
+            await original_worker(self, draft)
+            staged.set()
+
+        monkeypatch.setattr(
+            ResearchBoardModeScreen,
+            "_stage_campaign_worker",
+            _stage_campaign_worker_and_signal,
+        )
+
         async with app.run_test(size=(120, 40)) as pilot:
             await settle_screen(pilot)
             await pilot.press("3")
@@ -2627,7 +2653,8 @@ def test_research_board_n_commit_stages_campaign_and_renders_node(
                 f"#{ComposeCampaignModal.DOMAINS_INPUT_ID}", Input
             ).value = "market-structure, pricing-models"
             modal.action_commit()
-            await settle_screen(pilot)  # drains the staging worker
+            await asyncio.wait_for(staged.wait(), timeout=10.0)
+            await settle_screen(pilot)  # quiesce chrome onto the settled frame
             board = app.screen
             assert isinstance(board, ResearchBoardModeScreen)
             tree_body = str(board.query_one("#research-tree-body").render())  # type: ignore[attr-defined]

@@ -164,6 +164,16 @@ def test_probe_writes_no_file_and_skips_dot_ea(mod: Any, monkeypatch: pytest.Mon
 # --------------------------------------------------------------------------- #
 
 
+#: An auditor-report payload as the store holds it once the agent authored a verdict.
+_AUTHORED_REPORT: dict[str, Any] = {
+    "header": {"report_id": "AR-1"},
+    "body": {"verdict": "pass", "report_source": "authored"},
+}
+
+#: A gold-label record pinning a ground truth to one wave.
+_GOLD_LABEL: dict[str, Any] = {"wave_id": "P30-I22-W01", "ground_truth": True}
+
+
 def _fixed_store(rows_by_stem: dict[str, list[dict[str, Any]]]) -> Any:
     """Return an injectable ``store_rows_fn`` over a synthetic store map.
 
@@ -191,9 +201,9 @@ def test_check_contract_exercised_passes_once_rows_exist(mod: Any) -> None:
     """One exercising row per bound contract discharges the dynamic leg."""
     store = _fixed_store(
         {
-            "auditor_report": [{"report_id": "AR-1"}],
+            "auditor_report": [_AUTHORED_REPORT],
             "actual": [{"elapsed_eu": 1.5}],
-            "gold_label": [{"wave_id": "P30-I22-W01", "label": "pass"}],
+            "gold_label": [_GOLD_LABEL],
         }
     )
     findings = mod.check_contract_exercised(store_rows_fn=store, jury_convened_fn=lambda: False)
@@ -204,9 +214,9 @@ def test_check_contract_exercised_ignores_zero_elapsed_eu_row(mod: Any) -> None:
     """Boundary: an actuals row that measured nothing (elapsed_eu == 0) does not count."""
     store = _fixed_store(
         {
-            "auditor_report": [{"report_id": "AR-1"}],
+            "auditor_report": [_AUTHORED_REPORT],
             "actual": [{"elapsed_eu": 0.0}],
-            "gold_label": [{"wave_id": "W", "label": "pass"}],
+            "gold_label": [_GOLD_LABEL],
         }
     )
     findings = mod.check_contract_exercised(store_rows_fn=store, jury_convened_fn=lambda: False)
@@ -294,9 +304,9 @@ def test_main_phase_close_passes_when_every_contract_exercised(
     monkeypatch.setattr(mod, "_default_tree", lambda: [])
     monkeypatch.setattr(mod, "_default_read", lambda _p: "")
     rows = {
-        "auditor_report": [{"report_id": "AR-1"}],
+        "auditor_report": [_AUTHORED_REPORT],
         "actual": [{"elapsed_eu": 3.0}],
-        "gold_label": [{"wave_id": "W", "label": "pass"}],
+        "gold_label": [_GOLD_LABEL],
     }
     monkeypatch.setattr(mod, "_default_store_rows", lambda stem: rows.get(stem, []))
     monkeypatch.setattr(mod, "_default_jury_convened", lambda: False)

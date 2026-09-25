@@ -17,9 +17,10 @@ fires the moment a screen snapshot or a flow is deleted without replacement.
 The gate logic lives here as importable functions (``aggregate``,
 ``evaluate_package_gates``, ``evaluate_tui_behavioural``) so the negative-control
 tests can drive it with injected config + fixture trees without touching the real
-coverage.xml. ``head_commit_time`` and ``coverage_xml_is_stale`` let a caller
-tell whether a ``coverage.xml`` left on the tree still measures HEAD. ``main``
-is the CLI shim CI invokes.
+coverage.xml. ``main`` is the CLI shim CI invokes; before judging any floor it
+refuses a report that no longer measures the checked-out tree
+(``stale_report_reason``): one written before the HEAD commit or before the
+newest source file it measures was last edited.
 
 Invocation:
 
@@ -30,7 +31,7 @@ Exit codes:
   behavioural counts clear their floors.
 - ``1`` -- at least one package fell below a ratchet, a gate matched no source
   files, or a behavioural count fell below its floor (the failures are named on
-  stderr).
+  stderr), or the report is missing or stale.
 """
 
 from __future__ import annotations
@@ -308,6 +309,65 @@ def coverage_xml_is_stale(coverage_xml: Path, *, head_committed_at: int) -> bool
     return coverage_xml.stat().st_mtime < head_committed_at
 
 
+def newest_measured_source(classes: list[Element], repo_root: Path) -> tuple[str, float] | None:
+    """Return the most recently modified source file a report measures.
+
+    Args:
+        classes: The Cobertura ``<class>`` elements from the coverage report.
+        repo_root: The directory the report's repo-relative filenames resolve
+            against.
+
+    Returns:
+        The ``(filename, mtime)`` of the newest measured file, or ``None`` when
+        no measured file exists on disk. A file deleted since the run is
+        skipped: it no longer contributes code the report could misjudge.
+    """
+    newest: tuple[str, float] | None = None
+    for cls in classes:
+        filename = cls.get("filename", "")
+        if not filename:
+            continue
+        try:
+            mtime = (repo_root / filename).stat().st_mtime
+        except FileNotFoundError:
+            continue
+        if newest is None or mtime > newest[1]:
+            newest = (filename, mtime)
+    return newest
+
+
+def stale_report_reason(
+    coverage_xml: Path, *, classes: list[Element], repo_root: Path
+) -> str | None:
+    """Return why *coverage_xml* no longer measures the checked-out tree, if it does not.
+
+    A report written before HEAD was committed, or before a source file it
+    measures was last edited, describes older code; judging the floors against
+    it passes or fails by accident.
+
+    Args:
+        coverage_xml: Path to an existing Cobertura ``coverage.xml``.
+        classes: The report's ``<class>`` elements.
+        repo_root: The repository root the report's filenames resolve against.
+
+    Returns:
+        A one-line refusal reason, or ``None`` when the report is fresh.
+
+    Raises:
+        FileNotFoundError: When *coverage_xml* does not exist.
+    """
+    report_mtime = coverage_xml.stat().st_mtime
+    head_committed_at = head_commit_time(repo_root)
+    if head_committed_at is not None and coverage_xml_is_stale(
+        coverage_xml, head_committed_at=head_committed_at
+    ):
+        return f"{coverage_xml.name} was written before the HEAD commit"
+    newest = newest_measured_source(classes, repo_root)
+    if newest is not None and newest[1] > report_mtime:
+        return f"{coverage_xml.name} is older than {newest[0]}, a source file it measures"
+    return None
+
+
 def run_gate(coverage_xml: Path, pyproject_path: Path, repo_root: Path) -> GateOutcome:
     """Run the full gate: per-package ratchets + TUI behavioural floors.
 
@@ -342,7 +402,8 @@ def main(argv: list[str] | None = None) -> int:
         argv: Command-line arguments (``--coverage-xml`` / ``--repo-root``).
 
     Returns:
-        ``0`` when every gate passes, ``1`` when at least one failed.
+        ``0`` when every gate passes, ``1`` when at least one failed or the
+        report is missing or stale.
     """
     repo_root_default = Path(__file__).resolve().parents[1]
     parser = argparse.ArgumentParser(description="per-package + TUI behavioural coverage gate")
@@ -360,6 +421,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     pyproject_path = args.repo_root / "pyproject.toml"
+    if not args.coverage_xml.is_file():
+        print(f"coverage gate REFUSED: no report at {args.coverage_xml}", file=sys.stderr)
+        return 1
+    classes = ET.parse(args.coverage_xml).getroot().findall(".//class")
+    reason = stale_report_reason(args.coverage_xml, classes=classes, repo_root=args.repo_root)
+    if reason is not None:
+        print(f"coverage gate REFUSED: {reason}; rerun the suite with --cov", file=sys.stderr)
+        return 1
     outcome = run_gate(args.coverage_xml, pyproject_path, args.repo_root)
     if outcome.passed:
         print("\nall coverage gates passed")

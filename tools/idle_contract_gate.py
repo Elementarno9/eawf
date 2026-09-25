@@ -141,22 +141,32 @@ Exit codes:
 from __future__ import annotations
 
 import ast
+import inspect
 import json
 import re
 import subprocess
 import sys
+import textwrap
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
+from types import ModuleType
 from typing import Any, get_args
 
 import pydantic
 
 from eawf.kernel.spec.common import OracleTier, _tier_for_gate_kind
-from eawf.kernel.state.enums import EffortBucket, ProjectStatus, ScopeKind, WaveStatus
+from eawf.kernel.state.enums import (
+    AgentReportVerdict,
+    EffortBucket,
+    ProjectStatus,
+    ReportSource,
+    ScopeKind,
+    WaveStatus,
+)
 from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
 from eawf.platform.lint import eawf024_test_tier_contract as eawf024
 from eawf.platform.lint import eawf025_test_placement as eawf025
@@ -234,6 +244,7 @@ class GateFailure(StrEnum):
     EAWF025_TEST_PLACEMENT_IDLE = "eawf025_test_placement_idle"
     COVERAGE_GATE_IDLE = "coverage_gate_idle"
     CAMPAIGN_PRODUCER_STUB_IDLE = "campaign_producer_stub_idle"
+    CONSOLE_APP_CONSTRUCTION_IDLE = "console_app_construction_idle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -1375,46 +1386,65 @@ def check_eawf025_test_placement_wired(
     )
 
 
-def check_coverage_gate_helpers_wired() -> GateResult:
-    """Assert coverage-gate private matcher + top-level runner stay reachable.
+def _coverage_gate_module() -> ModuleType:
+    """Import the sibling ``tools/coverage_gate.py`` module CI executes."""
+    # ``coverage_gate`` is importable by name only when ``tools/`` is on
+    # ``sys.path``; a caller that loads this gate by path (an out-of-tree unit
+    # test) would otherwise hit ``ModuleNotFoundError``.
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import coverage_gate
 
-    The coverage ratchet lives in ``tools/coverage_gate.py``. This row imports
-    the same module pre-commit/CI execute, calls its ``_classes_for_gate`` helper
-    with a synthetic Cobertura class, and asserts ``run_gate`` remains callable.
-    That gives both newly-added contracts a live, range-checked call-site.
+    return coverage_gate
+
+
+def check_coverage_gate_helpers_wired(*, gate_module: ModuleType | None = None) -> GateResult:
+    """Assert the coverage gate can red on a regression and on a stale report.
+
+    Two probes, both in-process. The ratchet probe feeds
+    ``evaluate_package_gates`` a synthetic half-covered runtime class against a
+    90% line floor and requires a ``line`` failure naming the probe package, so
+    a matcher that selects nothing or an evaluator that never fails reds here.
+    The freshness probe parses ``main`` and requires it to reference
+    ``stale_report_reason``: a ``main`` that stops refusing a stale
+    ``coverage.xml`` would judge floors against a report of older code.
+
+    Args:
+        gate_module: The coverage-gate module to probe; defaults to the live
+            ``tools/coverage_gate.py``.
 
     Returns:
-        A :class:`GateResult` that passes only when the helper selects exactly
-        the matching class and the top-level runner is callable.
+        A :class:`GateResult` that passes only when both probes hold.
     """
-    # ``coverage_gate`` is a sibling ``tools/`` module, importable by name only
-    # when ``tools/`` is on ``sys.path``. The pre-commit invocation and this
-    # module's importlib loaders put it there, but a caller that imports the gate
-    # by path without adjusting ``sys.path`` (e.g. an out-of-tree unit test) would
-    # otherwise hit ``ModuleNotFoundError``. Guard the path so the import is
-    # robust to invocation context.
-    _tools_dir = str(Path(__file__).resolve().parent)
-    if _tools_dir not in sys.path:
-        sys.path.insert(0, _tools_dir)
-    from coverage_gate import _classes_for_gate, run_gate
-
+    gate = gate_module if gate_module is not None else _coverage_gate_module()
     cls = ET.Element("class", {"filename": "src/eawf/runtime/daemon/methods/agent.py"})
-    picked = _classes_for_gate([cls], {"path": "src/eawf/runtime/"})
-    if picked == [cls] and callable(run_gate):
+    lines = ET.SubElement(cls, "lines")
+    ET.SubElement(lines, "line", {"hits": "1"})
+    ET.SubElement(lines, "line", {"hits": "0"})
+    _report, failures = gate.evaluate_package_gates(
+        {"probe": {"path": "src/eawf/runtime/", "line": 90, "branch": 0}}, [cls]
+    )
+    ratchet_fires = any(entry.startswith("probe: line") for entry in failures)
+    main_source = textwrap.dedent(inspect.getsource(gate.main))
+    freshness_wired = _ast_references_symbol(main_source, "stale_report_reason")
+    if ratchet_fires and freshness_wired:
         return GateResult(
             passed=True,
             failure=None,
             message=(
-                "idle-contract gate: ok (coverage_gate._classes_for_gate and "
-                "coverage_gate.run_gate are importable and live)"
+                "idle-contract gate: ok (coverage gate reds a below-floor package "
+                "and main refuses a stale coverage.xml)"
             ),
         )
     return GateResult(
         passed=False,
         failure=GateFailure.COVERAGE_GATE_IDLE,
         message=(
-            "coverage gate helper/runner is idle: _classes_for_gate did not select "
-            "the synthetic runtime class or run_gate is not callable"
+            "coverage gate cannot fail: "
+            f"ratchet_fires={ratchet_fires} freshness_wired={freshness_wired}; "
+            "evaluate_package_gates must red a 50% package under a 90% floor and "
+            "main must call stale_report_reason"
         ),
     )
 
@@ -1715,6 +1745,54 @@ def check_runtime_gate_is_not_idle(
         passed=True,
         failure=None,
         message="runtime close gate binding: ok (idle-contract-gate always runs at pre-commit)",
+    )
+
+
+def _idle_contract_console_module() -> ModuleType:
+    """Import the sibling ``idle_contract_console.py`` (mirrors coverage_gate's loader)."""
+    tools_dir = str(Path(__file__).resolve().parent)
+    if tools_dir not in sys.path:
+        sys.path.insert(0, tools_dir)
+    import idle_contract_console
+
+    return idle_contract_console
+
+
+def check_console_app_construction_wired(*, module: ModuleType | None = None) -> GateResult:
+    """Assert every TUI ``App`` subclass has a reachable production construction site.
+
+    Discovery and the reachability walk (pyproject console-script entry ->
+    CLI dispatcher -> the TUI launcher's ``eawf.*`` imports) live in the
+    sibling :mod:`idle_contract_console` module -- this file is already over
+    its line cap, so the rule itself is defined there and this check only
+    wires it into the gate run.
+
+    Args:
+        module: The ``idle_contract_console`` module to probe; defaults to
+            the live sibling module.
+
+    Returns:
+        A :class:`GateResult` that fails naming any App subclass with no
+        reachable ``ClassName(`` construction call -- built (W30's
+        ``ConsoleApp``, or a future console screen) but never opened by any
+        console-script entry point.
+    """
+    mod = module if module is not None else _idle_contract_console_module()
+    unconstructed = mod.find_unconstructed_console_apps()
+    if unconstructed:
+        return GateResult(
+            passed=False,
+            failure=GateFailure.CONSOLE_APP_CONSTRUCTION_IDLE,
+            message=(
+                "console App subclass ships with no reachable production "
+                f"construction site: {', '.join(unconstructed)} -- built but never "
+                "opened by any console-script entry point"
+            ),
+        )
+    return GateResult(
+        passed=True,
+        failure=None,
+        message="idle-contract gate: ok (every TUI App subclass has a reachable launcher)",
     )
 
 
@@ -2241,12 +2319,36 @@ def _has_call_site(symbol: str, defining_module: str, tree: Iterable[str], read_
     return False
 
 
-def _has_asserting_test(symbol: str, tree: Iterable[str], read_fn: ReadFn) -> bool:
-    """Return whether a test file references *symbol*.
+def _test_function_references_symbol(source: str, symbol: str) -> bool:
+    """Return whether a ``test_*`` function in *source* references *symbol* in code.
 
-    Pragmatically, a test under ``tests/`` that imports or references the
-    symbol name discharges the asserting-test contract: the symbol is pulled
-    into a test module's namespace, so a regression has somewhere to fail.
+    Args:
+        source: Python source text of a test module.
+        symbol: The symbol name to chase.
+
+    Returns:
+        ``True`` when some ``test_*`` function (its body or decorators) names
+        *symbol*; ``False`` when *source* does not parse or only a comment,
+        string, or non-test helper mentions it.
+    """
+    try:
+        module = ast.parse(source)
+    except SyntaxError:
+        return False
+    return any(
+        isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        and node.name.startswith("test_")
+        and any(_node_references_symbol(inner, symbol) for inner in ast.walk(node))
+        for node in ast.walk(module)
+    )
+
+
+def _has_asserting_test(symbol: str, tree: Iterable[str], read_fn: ReadFn) -> bool:
+    """Return whether a test function under ``tests/`` exercises *symbol*.
+
+    Only a code reference inside a ``test_*`` function discharges the contract:
+    a comment, a docstring, or a helper that no test calls gives a regression
+    nowhere to fail, so none of those count.
 
     Args:
         symbol: The contract symbol to chase.
@@ -2254,13 +2356,16 @@ def _has_asserting_test(symbol: str, tree: Iterable[str], read_fn: ReadFn) -> bo
         read_fn: Reader for a repo-relative path.
 
     Returns:
-        ``True`` when some ``tests/`` file references *symbol*.
+        ``True`` when some ``tests/`` file has a ``test_*`` function that
+        references *symbol* in code.
     """
     needle = re.compile(rf"\b{re.escape(symbol)}\b")
     for path in tree:
         if not (path.startswith("tests/") or "/tests/" in path):
             continue
-        if needle.search(read_fn(path)):
+        source = read_fn(path)
+        # The text pre-filter keeps the AST parse to the few files that could match.
+        if needle.search(source) and _test_function_references_symbol(source, symbol):
             return True
     return False
 
@@ -2365,9 +2470,55 @@ class _BoundContract:
     gated_by_jury: bool = False
 
 
-def _row_counts_always(_record: Mapping[str, Any]) -> bool:
-    """A row predicate that counts any store record as runtime output."""
-    return True
+def _row_has_authored_verdict(record: Mapping[str, Any]) -> bool:
+    """Count an auditor report only when its agent authored a typed verdict.
+
+    A daemon-synthesized body is minted after the agent's own output failed
+    validation, so it proves the producer ran without producing a verdict.
+
+    Args:
+        record: A parsed store record (the unwrapped auditor-report payload).
+
+    Returns:
+        ``True`` when ``body.verdict`` is an :class:`AgentReportVerdict` value
+        and ``body.report_source`` is not ``synthesized``.
+    """
+    body = record.get("body")
+    if not isinstance(body, dict):
+        return False
+    verdicts = {verdict.value for verdict in AgentReportVerdict}
+    return (
+        body.get("verdict") in verdicts
+        and body.get("report_source") != ReportSource.SYNTHESIZED.value
+    )
+
+
+def _row_has_ground_truth(record: Mapping[str, Any]) -> bool:
+    """Count a gold label only when it pins a boolean ground truth to a wave.
+
+    Args:
+        record: A parsed gold-label store record.
+
+    Returns:
+        ``True`` when ``wave_id`` is a non-empty string and ``ground_truth`` a bool.
+    """
+    wave_id = record.get("wave_id")
+    return (
+        isinstance(wave_id, str) and bool(wave_id) and isinstance(record.get("ground_truth"), bool)
+    )
+
+
+def _row_has_cast_verdict(record: Mapping[str, Any]) -> bool:
+    """Count a juror ballot only when the juror cast a verdict, not an abstention.
+
+    Args:
+        record: A parsed jury-ballot store record (the unwrapped payload).
+
+    Returns:
+        ``True`` when ``verdict`` is a non-empty string.
+    """
+    verdict = record.get("verdict")
+    return isinstance(verdict, str) and bool(verdict)
 
 
 def _row_has_positive_elapsed_eu(record: Mapping[str, Any]) -> bool:
@@ -2388,14 +2539,15 @@ def _row_has_positive_elapsed_eu(record: Mapping[str, Any]) -> bool:
 
 
 #: The three I22 bound contracts the dynamic leg enforces at phase close: the
-#: verdict producer (an ``auditor_report`` row), EU capture (an ``actual`` row
-#: with a positive ``elapsed_eu``), and calibration (a ``gold_label`` row). The
+#: verdict producer (an ``auditor_report`` row with an authored verdict), EU
+#: capture (an ``actual`` row with a positive ``elapsed_eu``), and calibration (a
+#: ``gold_label`` row pinning a boolean ground truth). The
 #: juror-ballot contract is deliberately absent -- see :data:`_BALLOT_CONTRACT`.
 _I22_BOUND_CONTRACTS: tuple[_BoundContract, ...] = (
     _BoundContract(
         name="verdict_producer",
         store_stem="auditor_report",
-        counts_row=_row_counts_always,
+        counts_row=_row_has_authored_verdict,
     ),
     _BoundContract(
         name="eu_capture",
@@ -2405,7 +2557,7 @@ _I22_BOUND_CONTRACTS: tuple[_BoundContract, ...] = (
     _BoundContract(
         name="calibration",
         store_stem="gold_label",
-        counts_row=_row_counts_always,
+        counts_row=_row_has_ground_truth,
     ),
 )
 
@@ -2417,8 +2569,8 @@ _I22_BOUND_CONTRACTS: tuple[_BoundContract, ...] = (
 #: until a real jury run records its event.
 _BALLOT_CONTRACT = _BoundContract(
     name="juror_ballot",
-    store_stem="ballot",
-    counts_row=_row_counts_always,
+    store_stem="jury_ballot",
+    counts_row=_row_has_cast_verdict,
     gated_by_jury=True,
 )
 
@@ -2618,6 +2770,8 @@ def main(argv: list[str]) -> int:
     binding probes (:func:`check_campaign_claim_fold_wired`,
     :func:`check_campaign_carryover_prune_wired`), then the
     runtime-gate binding check (:func:`check_runtime_gate_is_not_idle`), then the
+    console-app construction-reachability check
+    (:func:`check_console_app_construction_wired`), then the
     registry-wide audit-DSL wired-on sweep
     (:func:`check_audit_dsl_kinds_wired`), then the meta-gate
     (:func:`detect_idle_contracts`) over the staged diff. All must pass; the
@@ -2710,6 +2864,8 @@ def main(argv: list[str]) -> int:
     failed |= _report_result(check_coverage_gate_helpers_wired())
 
     failed |= _report_result(check_runtime_gate_is_not_idle())
+
+    failed |= _report_result(check_console_app_construction_wired())
 
     # Pass the module-level wired-on sources explicitly so a test (or a future
     # caller) can patch them via attribute assignment.

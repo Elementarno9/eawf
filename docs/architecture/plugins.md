@@ -4,10 +4,7 @@
 
 ## Decision
 
-**Eä CLI remains source of truth; plugins are runtime adapters.** A
-plugin renders runtime-native files (skills, agents, hooks, settings)
-from the same composed profile result the CLI uses, so multiple runtimes
-stay synchronized without one becoming authoritative.
+**Eä CLI remains source of truth; plugins are runtime adapters.** A plugin renders runtime-native files (skills, agents, hooks, settings) from the same composed profile result the CLI uses, so multiple runtimes stay synchronized without one becoming authoritative.
 
 ## Claude Code adapter (v0.1)
 
@@ -29,14 +26,11 @@ Responsibilities:
 - inject state summary at session start,
 - provide `/ea:*` commands if the runtime supports them.
 
-Source: `src/eawf/runtimes/claude/`. Plugin lifecycle commands:
-`eawf plugin install claude`, `eawf plugin update claude`,
-`eawf plugin doctor claude`, `eawf plugin package claude`.
+Source: `src/eawf/runtimes/claude/`. Plugin lifecycle commands: `eawf plugin install claude`, `eawf plugin update claude`, `eawf plugin doctor claude`, `eawf plugin package claude`.
 
 ## Two install modes
 
-The Claude Code adapter exposes two distinct emission paths. They are
-designed to coexist — pick the one that matches the audience.
+The Claude Code adapter exposes two distinct emission paths. They are designed to coexist — pick the one that matches the audience.
 
 | Mode | Command | Output | Audience |
 |---|---|---|---|
@@ -45,31 +39,18 @@ designed to coexist — pick the one that matches the audience.
 
 ### Repo install mode
 
-Writes per-repo assets under `<repo>/.claude/`. This is the path the
-Eä `eawf init` wizard wires up. It carries hook scripts (event router
-glue) and patches `settings.json` with an `__eawf_managed` namespace so
-the per-repo plugin doctor can detect drift. Source of truth:
-`src/eawf/runtimes/claude/plugin_install.py`.
+Writes per-repo assets under `<repo>/.claude/`. This is the path the Eä `eawf init` wizard wires up. It carries hook scripts (event router glue) and patches `settings.json` with an `__eawf_managed` namespace so the per-repo plugin doctor can detect drift. Source of truth: `src/eawf/runtimes/claude/plugin_install.py`.
 
 ### Plugin-package mode
 
-Writes a self-contained tree at `<target>/` that Claude Code can install
-through its plugin marketplace surface. The output deliberately differs
-from the repo-install layout:
+Writes a self-contained tree at `<target>/` that Claude Code can install through its plugin marketplace surface. The output deliberately differs from the repo-install layout:
 
-- **No `.claude/` prefix.** The tree IS the plugin; CC mounts it under
-  `~/.claude/plugins/...` automatically when the user runs
-  `/plugin install`.
-- **Session-level `hooks.json` + `hooks/`.** See "Session-level plugin
-  hooks" below.
-- **No `settings.json`.** A marketplace plugin must not write into the
-  user's CC settings; that surface is owned by the user.
-- **No `.ea/`.** Project state lives in the user's repo, not in the
-  plugin.
+- **No `.claude/` prefix.** The tree IS the plugin; CC mounts it under `~/.claude/plugins/...` automatically when the user runs `/plugin install`.
+- **Session-level `hooks.json` + `hooks/`.** See "Session-level plugin hooks" below.
+- **No `settings.json`.** A marketplace plugin must not write into the user's CC settings; that surface is owned by the user.
+- **No `.ea/`.** Project state lives in the user's repo, not in the plugin.
 
-Source of truth: `src/eawf/runtimes/claude/plugin_package.py`. The
-emit is byte-stable: re-running with the same inputs produces a
-byte-identical tree (covered by the W05 idempotence test).
+Source of truth: `src/eawf/runtimes/claude/plugin_package.py`. The emit is byte-stable: re-running with the same inputs produces a byte-identical tree (covered by the W05 idempotence test).
 
 ### Session-level plugin hooks
 
@@ -99,15 +80,9 @@ Source: `src/eawf/runtimes/codex/`. Plugin lifecycle commands: `eawf plugin inst
 
 ### Codex marketplace package
 
-Per the Codex Build-plugin reference, dropping a plugin directory under
-`~/.codex/plugins/<name>/` does **not** auto-load it — Codex requires
-marketplace registration before discovery. The `install codex` command
-writes the plugin tree at the scope-correct location and toggles
-`[plugins.eawf] enabled = true` in `config.toml`, but discovery still
-needs a marketplace step.
+Per the Codex Build-plugin reference, dropping a plugin directory under `~/.codex/plugins/<name>/` does **not** auto-load it — Codex requires marketplace registration before discovery. The `install codex` command writes the plugin tree at the scope-correct location and toggles `[plugins.eawf] enabled = true` in `config.toml`, but discovery still needs a marketplace step.
 
-`eawf plugin package codex [--target ./build/eawf-codex-marketplace]`
-emits a self-contained marketplace tree:
+`eawf plugin package codex [--target ./build/eawf-codex-marketplace]` emits a self-contained marketplace tree:
 
 ```text
 <target>/
@@ -120,13 +95,7 @@ emits a self-contained marketplace tree:
       hooks/<event>.sh
 ```
 
-`marketplace.json` lives at `.agents/plugins/marketplace.json` per the
-Codex Build-plugin reference (root-level `marketplace.json` is rejected
-by `codex plugin marketplace add`). It carries the Codex marketplace
-schema (`name`, `interface.displayName`,
-`plugins[].{name,source,policy,category}`) with
-`source: {source: "local", path: "./plugins/eawf"}`. The operator then
-runs:
+`marketplace.json` lives at `.agents/plugins/marketplace.json` per the Codex Build-plugin reference (root-level `marketplace.json` is rejected by `codex plugin marketplace add`). It carries the Codex marketplace schema (`name`, `interface.displayName`, `plugins[].{name,source,policy,category}`) with `source: {source: "local", path: "./plugins/eawf"}`. The operator then runs:
 
 ```bash
 codex plugin marketplace add ./build/eawf-codex-marketplace
@@ -163,30 +132,18 @@ codex plugin add eawf@eawf
 
 ## OpenCode adapter
 
-Renders the native OpenCode plugin file plus its hash sidecar under
-OpenCode's plugin auto-discovery dir. The renderer does not push the
-plugin file into the `plugins:[...]` array inside `opencode.json` —
-that array is reserved for npm packages; auto-discovery handles local
-plugins. `opencode.json` is patched only in its `mcp` block to leave
-user-authored top-level keys untouched.
+Renders the native OpenCode plugin file plus its hash sidecar under OpenCode's plugin auto-discovery dir. The renderer does not push the plugin file into the `plugins:[...]` array inside `opencode.json` — that array is reserved for npm packages; auto-discovery handles local plugins. `opencode.json` is patched only in its `mcp` block to leave user-authored top-level keys untouched.
 
 | Scope | Plugin file | Config patched |
 |---|---|---|
 | `project` (default) | `<workspace>/.opencode/plugins/eawf.js` + sidecar `.eawf-managed.json` | `<workspace>/opencode.json` |
 | `user` | `$OPENCODE_CONFIG_DIR/plugins/eawf.js` (defaults to `~/.config/opencode/plugins/eawf.js`) + sidecar | `$OPENCODE_CONFIG_DIR/opencode.json` |
 
-Source: `src/eawf/runtimes/opencode/`. Plugin lifecycle commands:
-`eawf plugin install opencode [--scope ...]`,
-`eawf plugin update opencode [--scope ...]`,
-`eawf plugin doctor opencode [--scope ...]`.
+Source: `src/eawf/runtimes/opencode/`. Plugin lifecycle commands: `eawf plugin install opencode [--scope ...]`, `eawf plugin update opencode [--scope ...]`, `eawf plugin doctor opencode [--scope ...]`.
 
 ## `--scope project|user`
 
-Every runtime install command accepts `--scope project` (default) or
-`--scope user`. Project scope writes under the active workspace and
-pairs with `.ea/state.json` and the runtime hook router. User scope
-writes under the runtime's user-config root and applies to every
-workspace the user opens with that runtime.
+Every runtime install command accepts `--scope project` (default) or `--scope user`. Project scope writes under the active workspace and pairs with `.ea/state.json` and the runtime hook router. User scope writes under the runtime's user-config root and applies to every workspace the user opens with that runtime.
 
 | Runtime | `--scope user` supported | Notes |
 |---|---|---|
@@ -194,14 +151,7 @@ workspace the user opens with that runtime.
 | `codex` | yes | writes under `~/.codex/plugins/eawf/`; patches `~/.codex/config.toml`. |
 | `opencode` | yes | writes under `$OPENCODE_CONFIG_DIR/plugins/eawf.js` or `~/.config/opencode/plugins/eawf.js`. |
 
-A project-scope install of `codex` or `opencode` warns when a
-user-scope eawf install of the same runtime already exists (the
-runtime would load two `eawf` plugins with undefined precedence).
-`--force` overrides the warning; `--no-input` mode refuses without
-prompting. The doctor commands additionally surface legacy
-workspace-root paths (`<ws>/plugin.js`, `<ws>/.codex/{skills,agents,hooks}/`)
-under `legacy_paths` so an operator can prune them manually per the
-AGENTS.md deletion rule.
+A project-scope install of `codex` or `opencode` warns when a user-scope eawf install of the same runtime already exists (the runtime would load two `eawf` plugins with undefined precedence). `--force` overrides the warning; `--no-input` mode refuses without prompting. The doctor commands additionally surface legacy workspace-root paths (`<ws>/plugin.js`, `<ws>/.codex/{skills,agents,hooks}/`) under `legacy_paths` so an operator can prune them manually per the AGENTS.md deletion rule.
 
 ## Why plugin integration helps
 
@@ -227,22 +177,17 @@ Therefore: plugin = adapter, CLI = product.
 
 ## Superpowers integration
 
-Drop the Superpowers plugin entirely from Eä installation. Do not offer
-the full plugin, the selected install, or the bootstrap. Best practices
-are internalized into Eä core rules instead:
+Drop the Superpowers plugin entirely from Eä installation. Do not offer the full plugin, the selected install, or the bootstrap. Best practices are internalized into Eä core rules instead:
 
 1. **Fresh-context review** before ship / merge.
 2. **Verification before completion**: no done claim without evidence.
-3. **Systematic debugging**: root cause before fix; after repeated
-   failed fixes, re-question assumptions.
-4. **Safe parallel agents**: parallelize independent investigation;
-   coordinate implementation with wave claims.
+3. **Systematic debugging**: root cause before fix; after repeated failed fixes, re-question assumptions.
+4. **Safe parallel agents**: parallelize independent investigation; coordinate implementation with wave claims.
 5. **Worktree isolation** for non-trivial execution.
 6. **Plan / spec before large edits**, but not generic PLAN.md.
 7. **TDD where applicable**, not universal hard law.
 
-Generated AGENTS.md expresses these as Eä rules, not Superpowers
-references.
+Generated AGENTS.md expresses these as Eä rules, not Superpowers references.
 
 ## Hooks
 
@@ -259,20 +204,14 @@ Eä-provided hooks (rendered by the Claude adapter when enabled):
 | `memory-capture` | Session end, `/ship`, `/polish` | Promote useful memories, mark stale ones | Eä only | Better future context | Ask before prune / delete |
 | `statusline` | Runtime statusline render / prewarm | Show live state / git / context health | Eä; optional `git`, `gh` | Better orientation | Fall back to compact / plain status |
 | `session-restore` | Runtime session start | Detect interrupted sessions and suggest resume | Eä / Python stdlib | Less lost work | Disabled if transcripts unavailable |
-| `runtime-hook-router` | Runtime Pre / Post tool event | Route runtime hook events to enabled hooks through Eä native dispatcher | Eä native preferred | One hook entrypoint | If runtime lacks hooks, features degrade to explicit skill / CLI calls |
+| `runtime-hook-router` | Runtime `Pre`/`Post` tool event | Route runtime hook events to enabled hooks through Eä native dispatcher | Eä native preferred | One hook entrypoint | If runtime lacks hooks, features degrade to explicit skill / CLI calls |
 
 Hook design rules:
 
-- Hooks are fail-open for advisory checks and fail-closed only for
-  state corruption, secrets, destructive actions, or protected-branch
-  VCS policy.
-- Hooks emit structured events to `.ea/store/event.jsonl` when they
-  block, degrade, or skip due to missing tools.
-- Deterministic checks belong in hooks; reasoning-heavy decisions
-  belong in skills.
-- Eä replaces shell `dispatch.sh` with native `eawf hook run <event>`,
-  so `jq` / bash / GNU-tool dependencies disappear from core. Preamble
-  injection is optional for runtimes that support it.
+- Hooks are fail-open for advisory checks and fail-closed only for state corruption, secrets, destructive actions, or protected-branch VCS policy.
+- Hooks emit structured events to `.ea/store/event.jsonl` when they block, degrade, or skip due to missing tools.
+- Deterministic checks belong in hooks; reasoning-heavy decisions belong in skills.
+- Eä replaces shell `dispatch.sh` with native `eawf hook run <event>`, so `jq` / bash / GNU-tool dependencies disappear from core. Preamble injection is optional for runtimes that support it.
 
 ## MCP catalog
 
@@ -285,25 +224,18 @@ First-party catalog kept intentionally small for MVP:
 | `zotero` | external | research / docs / ml / quant | Search / read research library, metadata, citation keys | Stronger citation-backed `/research` | Medium | Local library privacy, write tools must default off |
 | `custom` | user-defined | any | User adds local / team MCP server once | Extensible workflow without Eä release | Varies | Unknown auth / write / security risk |
 
-Deferred MCPs (`ghidra`, `x64dbg`, ...) need dedicated MCP repos, safety
-wrappers, read / write capability metadata, and RE profile policies
-before catalog inclusion.
+Deferred MCPs (`ghidra`, `x64dbg`, ...) need dedicated MCP repos, safety wrappers, read / write capability metadata, and RE profile policies before catalog inclusion.
 
 Defaults:
 
 - `context7` recommended for most programming profiles.
 - `playwright` optional for browser / UI / docs profiles.
-- `zotero` optional for research-heavy profiles; write tools off by
-  default.
-- Custom MCPs default to disabled until the user explicitly trusts
-  them.
-- Secrets are always referenced by env / secret manager, never
-  committed (`${ENV:NAME}` syntax).
-- Eä renders config and runs doctor checks; external MCP server install
-  remains explicit unless the user chooses managed install.
+- `zotero` optional for research-heavy profiles; write tools off by default.
+- Custom MCPs default to disabled until the user explicitly trusts them.
+- Secrets are always referenced by env / secret manager, never committed (`${ENV:NAME}` syntax).
+- Eä renders config and runs doctor checks; external MCP server install remains explicit unless the user chooses managed install.
 
-`eawf mcp add / install / update / remove` only mutates entries with
-`owner: eawf`. Non-Eä MCP entries are never overwritten.
+`eawf mcp add / install / update / remove` only mutates entries with `owner: eawf`. Non-Eä MCP entries are never overwritten.
 
 ## Cross-references
 

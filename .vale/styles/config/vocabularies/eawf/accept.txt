@@ -24,6 +24,7 @@
 [Dd]aemons?
 [Dd]ataclasses
 [Dd]edup
+[Dd]eliverables?
 [Dd]eps
 [Dd]escriptors?
 [Dd]irs
@@ -46,9 +47,11 @@
 [Ii]dempotence
 [Ii]dle-contract
 [Ii]njectivity
+[Jj]ournaled
 [Kk]eypress
 [Ll]iveness
 [Ll]ockfiles?
+[Ll]ossy
 [Mm]itigations?
 [Mm]ockups?
 [Mm]utators?
@@ -59,6 +62,7 @@
 [Pp][Ii][Dd]
 [Pp]aren
 [Pp]arentheticals
+[Pp]arseable
 [Pp]erf
 [Pp]ortalocked
 [Pp]ortalocker
@@ -72,6 +76,8 @@
 [Rr]eflows
 [Rr]egen
 [Rr]elitigate
+[Rr]epin
+[Rr]epinned
 [Rr]epos?
 [Rr]epr
 [Rr]eskins?
@@ -83,11 +89,13 @@
 [Rr]oundtable
 [Rr]unbook
 [Rr]untimes?
+[Ss]andboxed
 [Ss]erialiser
 [Ss]tatecharts?
 [Ss]tatusline
 [Ss]ubagents?
 [Ss]ubstring
+[Ss]ubtrees?
 [Tt]eardown
 [Tt]emplated
 [Tt]erminalizes
@@ -98,6 +106,7 @@
 [Uu][Rr][Nn]s?
 [Uu]buntu
 [Uu]nbisectable
+[Uu]nevidenced
 [Uu]nfetched
 [Uu]nfixable
 [Uu]ngated
@@ -117,6 +126,7 @@ ADRs
 argv
 bubblewrap
 bwrap
+CC's
 conftest
 cross_vendor_jury
 ctx
@@ -133,9 +143,11 @@ iff
 idempotency
 insort
 IPs
+js
 JSON-RPC
 launchd
 LIX
+MCPs
 measurable_signal
 mkdocs
 mypy
@@ -147,9 +159,11 @@ pytest
 quality_dimension
 READMEs
 RPCs
+semgrep
 SIDs
 stderr
 stdin
+stdlib
 stdout
 success_criteria
 TODOs
