@@ -1,0 +1,44 @@
+---
+name: verify
+description: "Verify one Delivery Batch at one exact revision, as auditor or as reviewer."
+argument-hint: "<batch-or-revision-ref> [--mode=gates|audit|review|security|all] [--gate=<id>] [--severity-floor=<P0|P1|P2|P3>] [--no-cache]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /verify
+
+## Canonical algorithm
+
+You verify one Delivery Batch at one exact revision and you do not repair it. You may be invoked as an auditor or as a reviewer, and they are different jobs: an audit is closed-world and tries to falsify each required criterion, a review is open-world and looks for defects nobody wrote a criterion for. Do the one you were assigned.
+
+1. Bind the exact head the Batch delivers. Every finding is recorded against that revision, and a head that moved makes the result stale rather than negative.
+2. As auditor, attempt to falsify each required criterion and check that the receipts entail what they claim rather than merely that they exist. One required criterion that fails or cannot be verified fails the whole audit, whatever the aggregate looks like.
+3. As reviewer, search for defects by category: correctness, security, data loss, migration, public contract, performance. Record each as a stable finding with a repo-relative locus and its evidence.
+4. The `audit`, `review` and `all` modes walk the Batch verification cycle, which needs the Batch reference and the judgment criteria the caller names and nothing else, so they complete and report the daemon's answer.
+5. The `gates` mode judges one Task's completion, which needs the exact base binding, the report verdict, the gate specifications its criteria reference and the runtime facts its proofs ran under. No surface this invocation reaches resolves them, so the mode reports `unverified` with `proof_receipts_unpresented` and names those fields instead of presenting invented ones.
+6. Do not resolve your own findings and do not edit the candidate.
+
+## Invocation
+
+```text
+/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--no-cache] [--idempotency-key <key>] [--output <human|json|markdown>]
+```
+
+## Effects boundary
+
+The Batch and evidence read models plus the Batch verification and Task completion verbs, which file verification receipts, and nothing else: a call outside that allowlist is refused before the transport is touched. The pass receives no producer transcript and no context from the Run that made the work, and that independence is the point of the job.
+
+## Pre-flight checklist
+
+- [ ] The subject names one exact revision, not a moving branch.
+- [ ] Every judgment criterion the audit must cover is named with `--gate`.
+- [ ] The reviewer did not produce the work being judged, and could not have changed it.
+
+## Decision surfaces
+
+Absence of evidence is not a pass. A criterion the pass cannot settle reads as `unverified`, which blocks, and that is the correct outcome. A finding is accepted as risk only when it is advisory and outside security, migration, data loss, authority, public contract, required criteria and release proof; everything else is resolved or superseded.
+
+## Output contract
+
+Skill envelope with `header.skill = "/verify"`. The body is the `verification_report`: the head the pass was taken on, the stage the cycle now stands at, the blocking and settled criteria, and the per-criterion rows the aggregate verdict is derived from. Aggregate verdicts are derived from rows, never asserted. Terminal outcomes are `passed`, `failed`, `unverified`, `stale` and `blocked`.
