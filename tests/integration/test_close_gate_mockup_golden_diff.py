@@ -314,7 +314,7 @@ def _setup(
     double = install_gate_child_double(
         monkeypatch,
         workdir=tmp_path,
-        target_module="eawf.surfaces.tui.snapshot.pilot_harness",
+        target_module="eawf.surfaces.tui.chassis.pilot_harness",
         attribute="capture_mockup_golden_screen_text_sync",
         returns=captured,
     )

@@ -922,7 +922,7 @@ def _live_capture_tui_png(
     absent (CI portability) and ``status="fail"`` on a bad state path or a
     capture/render error. Never raises.
     """
-    from eawf.surfaces.tui.snapshot import pilot_harness
+    from eawf.surfaces.tui.chassis import pilot_harness
 
     state_path_abs: Path | None = None
     if args.state_path is not None:
@@ -1101,7 +1101,7 @@ def _check_mockup_golden_diff(spec: CheckSpec, cwd: Path) -> CheckResult:
             details=state_error,
         )
 
-    from eawf.surfaces.tui.snapshot import pilot_harness
+    from eawf.surfaces.tui.chassis import pilot_harness
 
     try:
         expected = golden_path.read_text(encoding="utf-8").rstrip("\n")

@@ -137,7 +137,7 @@ async def _advertised_keys(
         The advertised key strings, in first-advertised order.
     """
     from eawf.surfaces.tui.app import EaApp
-    from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
+    from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
     from eawf.surfaces.tui.widgets.footer import Footer
 
     app = EaApp(scope="repo", state_path=state_path)
@@ -189,8 +189,8 @@ async def _probe_key(
         the key press classified.
     """
     from eawf.surfaces.tui.app import EaApp
+    from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
     from eawf.surfaces.tui.snapshot.behaviour_probe import record_keypress_transcript
-    from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
     app = EaApp(scope="repo", state_path=state_path)
     async with app.run_test(size=size) as raw_pilot:

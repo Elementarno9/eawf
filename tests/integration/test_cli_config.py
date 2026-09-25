@@ -227,6 +227,29 @@ def test_validate_ignores_the_suite_session_tag(repo_root: Path) -> None:
     assert result.exit_code == 0, result.output
 
 
+def test_env_overrides_skip_a_gate_files_value_over_the_settings_cap() -> None:
+    """A long ``EAWF_GATE_FILES`` value composes into no config key at all.
+
+    The gate runner exports the touched-file list under this name -- easily
+    past the 2000-character cap a settings entry's value is typed to -- so
+    it is a runtime knob (:data:`layered._RESERVED_ENV_VARS`), not a config
+    override. Unreserved, the composed config would carry a ``gate_files``
+    key whose value overflows the cap the moment a settings read surfaces it.
+    """
+    huge = "a" * 2001
+    assert "EAWF_GATE_FILES" in layered._RESERVED_ENV_VARS
+
+    overrides = layered._collect_env_overrides({"EAWF_GATE_FILES": huge})
+
+    assert overrides == {}
+
+
+def test_validate_ignores_a_gate_files_value_over_the_settings_cap(repo_root: Path) -> None:
+    result = runner.invoke(app, ["config", "validate"], env={"EAWF_GATE_FILES": "a" * 2001})
+
+    assert result.exit_code == 0, result.output
+
+
 def test_validate_ok_json_envelope(repo_root: Path) -> None:
     result = runner.invoke(app, ["--json", "config", "validate"])
     assert result.exit_code == 0

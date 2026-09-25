@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 
@@ -13,14 +14,7 @@ _KEYS: tuple[tuple[str, str], ...] = (
     ("k", "kind"),
     ("Esc", "back"),
 )
-_HITS: tuple[list[str], ...] = (
-    ["RUN-538453eb", "task title", "EAWF-0042 Bound replay"],
-    ["RUN-be1e085a", "task title", "EAWF-0051 Coalesce"],
-    ["EAWF-0042", "name", "Bound replay window"],
-    ["BAT-0001", "name", "Semantic event slice"],
-    ["MLS-0001", "name", "Replay-safe activity"],
-    ["CLM-0004", "claim text", "ordering under replay"],
-)
+_HITS: tuple[tuple[str, str, str], ...] = pt.SEARCH_HITS
 
 
 def render(view: View) -> list[str]:
@@ -47,7 +41,7 @@ def render(view: View) -> list[str]:
     )
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Search",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Search",
         ctx="query “replay” · entities only · 14 hits, exact",
         body=body,
         keys=_KEYS,

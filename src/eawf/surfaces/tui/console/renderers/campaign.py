@@ -231,7 +231,7 @@ def render(view: View) -> list[str]:
         body.append(" RECORD      Every artifact is kept with CAM-0001 · digests in each card")
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Research ▸ CAM-0001",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Research ▸ CAM-0001",
         ctx="Campaign CAM-0001 Provider drift · REVIEW · W30 · ~6.2 of 8h · 14 of 20 runs",
         body=body,
         keys=_KEYS,

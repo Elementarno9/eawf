@@ -52,6 +52,9 @@ class Ctx:
         projection: The read model the frame was drawn from, when one is held. A key
             that acts on what the frame shows reads this rather than deriving a second
             answer the operator never saw.
+        unheld: Whether the frame is the unknown frame: the console holds no prototype
+            rows and no read model for the route. A route's own keys act on rows the
+            frame drew, so they claim nothing while it drew none.
     """
 
     session: Session
@@ -61,6 +64,7 @@ class Ctx:
     h: int
     verbose: bool = False
     projection: SpineView | RouteReadModel | None = None
+    unheld: bool = False
 
     @property
     def s(self) -> Session:

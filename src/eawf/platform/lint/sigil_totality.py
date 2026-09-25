@@ -3,7 +3,7 @@
 The reskin's two-axis visual vocabulary promises that NO pane ever prints a
 bare ``.value`` word or a ``?`` fallthrough for a status: every status enum
 value resolves to a real, ratified glyph through the single resolver
-:func:`eawf.surfaces.tui.widgets.sigils.status_sigil`. That promise is only a
+:func:`eawf.surfaces.tui.chassis.sigils.status_sigil`. That promise is only a
 promise unless something proves it holds for EVERY value of EVERY status enum
 the reskin renders -- a hand-maintained map silently rots the moment a new enum
 member lands without a row.
@@ -18,7 +18,7 @@ lifecycle FSM terminals -- the keys of ``WAVE_TRANSITIONS`` /
 state (never as a rendered row yet) is still covered. For each member it asserts
 the resolver returns a glyph that is:
 
-- present -- :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolves it
+- present -- :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` resolves it
   rather than raising (no enum drifted past the map);
 - a REAL mark -- a non-empty glyph string that is NOT the literal ``?``
   fallthrough and NOT the bare ``.value`` word (a row that printed
@@ -55,7 +55,7 @@ from eawf.kernel.state.enums import (
     PhaseStatus,
     WaveStatus,
 )
-from eawf.surfaces.tui.widgets.sigils import ResolvedSigil, status_sigil
+from eawf.surfaces.tui.chassis.sigils import ResolvedSigil, status_sigil
 from eawf.workflow.lifecycle.spec import (
     ITER_TRANSITIONS,
     PHASE_TRANSITIONS,
@@ -63,7 +63,7 @@ from eawf.workflow.lifecycle.spec import (
 )
 
 #: A resolver with the shape of
-#: :func:`eawf.surfaces.tui.widgets.sigils.status_sigil`. Injected so the
+#: :func:`eawf.surfaces.tui.chassis.sigils.status_sigil`. Injected so the
 #: negative-control test can pass a stub that returns a bare ``.value`` word for
 #: one value and confirm this gate catches a resolver that prints a word where a
 #: glyph belongs.
@@ -155,7 +155,7 @@ def _resolves_to_real_glyph(member: StrEnum, *, resolve_fn: ResolveFn) -> str | 
     Args:
         member: The status enum member to resolve.
         resolve_fn: The resolver under test (the real
-            :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` or an
+            :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` or an
             injected stub).
 
     Returns:
@@ -188,7 +188,7 @@ def check_sigil_totality(*, resolve_fn: ResolveFn = status_sigil) -> GateResult:
 
     Args:
         resolve_fn: The status->glyph resolver under test. Defaults to the real
-            :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`.
+            :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil`.
 
     Returns:
         A :class:`GateResult`; ``passed`` is ``True`` only when every covered

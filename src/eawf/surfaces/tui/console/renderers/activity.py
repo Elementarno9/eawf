@@ -16,9 +16,10 @@ from eawf.surfaces.tui.console.frame import (
     header,
     route_keys_bar,
     thin,
+    window_rows,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.reads import reads
+from eawf.surfaces.tui.console.reads import prototype_attached, reads
 from eawf.surfaces.tui.console.renderers.registers import native_frame
 from eawf.surfaces.tui.console.width import pad
 
@@ -50,7 +51,7 @@ def _head(view: View, wide: bool) -> list[str]:
         bar(w),
     ]
     if not rd.complete:
-        rows.append(f" ATTACHED  {rd.age}")
+        rows.append(f" ATTACHED  {prototype_attached(rd, fx)}")
     if s.typing or dv.filter_of(s):
         rows.append(
             " FILTER    \\"
@@ -91,7 +92,7 @@ def render(view: View) -> list[str]:
     """Return the Activity frame."""
     if view.register is not None:
         return native_frame(view, view.register)
-    s, w, h = view.session, view.w, view.h
+    s, w = view.session, view.w
     rows_all = _rows(view)
     if s.sel >= len(rows_all):
         s.sel = max(0, len(rows_all) - 1)
@@ -99,14 +100,10 @@ def render(view: View) -> list[str]:
     col = w - RAIL_W - 1
     rd = reads(s)
     head_rows = _head(view, wide)
-    visible = max(1, h - 1 - len(head_rows) - _FOOTER - _COL_HEAD - s.reserved)
-    if s.sel < s.scroll:
-        s.scroll = s.sel
-    if s.sel >= s.scroll + visible:
-        s.scroll = s.sel - visible + 1
-    s.scroll = max(0, min(s.scroll, max(0, len(rows_all) - visible)))
-    s.visible = visible
-    shown = rows_all[s.scroll : s.scroll + visible]
+    win = window_rows(
+        view, total=len(rows_all), cursor=s.sel, chrome=len(head_rows) + _FOOTER + _COL_HEAD
+    )
+    shown = rows_all[win.start : win.stop]
     row_w = col if wide else w
     cols = [16, 26, 12, max(14, row_w - 16 - 26 - 12 - _AS_OF_W)]
     body: list[str] = [
@@ -129,10 +126,7 @@ def render(view: View) -> list[str]:
         body = _with_rail(view, body, col)
     rows = head_rows + body
     rows.append(thin(w))
-    window = f"{s.scroll + 1}–{s.scroll + len(shown)}" if shown else "0"  # noqa: RUF001
     rows.append(
-        f" WINDOW    {window} of {len(rows_all)}"
-        + ("" if rd.complete else " known")
-        + (" matching" if (s.bucket or dv.filter_of(s)) else "")
+        win.line(complete=rd.complete) + (" matching" if (s.bucket or dv.filter_of(s)) else "")
     )
     return build(view, rows, route_keys_bar(view, ROUTE_KEYS["activity"]))

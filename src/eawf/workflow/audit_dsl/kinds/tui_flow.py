@@ -164,8 +164,8 @@ async def _flow_terminal_state(
         :data:`~eawf.surfaces.tui.snapshot.behaviour_probe.OBSERVABLE_FIELDS`.
     """
     from eawf.surfaces.tui.app import EaApp
+    from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
     from eawf.surfaces.tui.snapshot.behaviour_probe import record_flow_terminal_state
-    from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
     app = EaApp(scope="repo", state_path=state_path, initial_state=state)
     async with app.run_test(size=size) as raw_pilot:

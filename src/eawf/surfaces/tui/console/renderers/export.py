@@ -11,6 +11,7 @@ promises an artifact rather than a state change.
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.renderers.read_model import native
@@ -20,18 +21,7 @@ from eawf.workflow.projection.acceptance import RunReportPlanView, export_report
 #: is not a Run, so there is nothing here an export could be taken of.
 NOTHING_TO_REPORT = "no read model is held, so there is nothing to report"
 
-_PARTS: tuple[tuple[str, str, str, str], ...] = (
-    ("timeline", "yes", "41,208 events", "Every event this Run recorded, in order."),
-    ("usage and cost", "yes", "~ 4.62 · derived", "Derived from the events, not from a bill."),
-    ("transcript", "yes", "6,102 lines known", "What the runner said, quoted exactly."),
-    ("secrets", "never", "∅ redacted by policy", "Policy redacts these; no export can carry them."),
-    (
-        "sandbox decisions",
-        "no",
-        "142 · space includes",
-        "Left out — including them adds 142 lines.",
-    ),
-)
+_PARTS: tuple[tuple[str, str, str, str], ...] = pt.EXPORT_PARTS
 _KEYS: tuple[tuple[str, str], ...] = (("↑↓", "part"), ("Enter", "export"), ("Esc", "cancel"))
 
 
@@ -83,8 +73,8 @@ def render(view: View) -> list[str]:
     lines.extend(["", "Plain text, one line per fact — nothing leaves the machine."])
     return boxed(
         view,
-        crumb="Eä ▸ … ▸ RUN-538453eb ▸ Export",
-        ctx="Run RUN-538453eb · claude · WAIT-PERM",
+        crumb=f"Eä ▸ … ▸ {pt.EXPORT_RUN} ▸ Export",
+        ctx=f"Run {pt.EXPORT_RUN} · claude · WAIT-PERM",
         pre=[],
         title="EXPORT · report this Run",
         lines=lines,

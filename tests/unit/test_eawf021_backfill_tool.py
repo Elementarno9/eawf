@@ -11,7 +11,7 @@ and asserts the active-criteria legacy count drops to ZERO:
 
 The shim is loaded via :mod:`importlib` because ``tools/`` is excluded from the
 package and so is not importable by name -- mirroring the existing
-``tests/unit/test_sigil_totality_gate.py`` loader.
+``tests/unit/platform/lint/test_sigil_totality.py`` loader.
 """
 
 from __future__ import annotations

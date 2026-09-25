@@ -7,6 +7,7 @@ row's Run.
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
@@ -18,8 +19,7 @@ _KEYS: tuple[tuple[str, str], ...] = (
     ("d", "request drain"),
     ("Esc", "back"),
 )
-RUNS: tuple[str, ...] = ("RUN-538453eb", "RUN-7b0e4d31", "RUN-1c93af08", "RUN-4e2b6c77")
-QUEUE_TARGET = "RUN-7b0e4d31"
+RUNS: tuple[str, ...] = tuple(row[0] for row in pt.QUEUE)
 
 
 def run_under_cursor(sel: int) -> str:
@@ -35,10 +35,8 @@ def render(view: View) -> list[str]:
     s, w = view.session, view.w
     not_started = "∅ not started"
     queue = [
-        ["RUN-538453eb", "EAWF-0042", chip("ok", "RUNNING"), "~ 62%"],
-        ["RUN-7b0e4d31", "EAWF-0044", chip("ok", "RUNNING"), "~ 18%"],
-        ["RUN-1c93af08", "EAWF-0051", chip("info", "QUEUED"), not_started],
-        ["RUN-4e2b6c77", "EAWF-0052", chip("info", "QUEUED"), not_started],
+        [run, task, chip(tone, state), progress or not_started]
+        for run, task, tone, state, progress in pt.QUEUE
     ]
     dv.sel_in(s, len(queue))
     grid = Grid([17, 12, 11, 0])
@@ -54,12 +52,12 @@ def render(view: View) -> list[str]:
             "              EAWF-0051 waits on EAWF-0042 · forced sequential",
             thin(w),
             " CONTROL      This surface observes — every verb is a daemon request.",
-            "              the daemon accepted request pause on RUN-7b0e4d31 at 13:58",
+            f"              the daemon accepted request pause on {pt.QUEUE_TARGET} at 13:58",
         ]
     )
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Unattended",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Unattended",
         ctx="Dispatch queue · the daemon owns scheduling · 14:02",
         body=body,
         keys=_KEYS,
@@ -76,7 +74,7 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
         s.c_target = {
             "verb": "request pause" if pause else "request drain",
             "state": None,
-            "id": QUEUE_TARGET,
+            "id": pt.QUEUE_TARGET,
             "kind": "dispatch queue",
             "effects": "the daemon is asked to pause the queue at its next safe point"
             if pause

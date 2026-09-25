@@ -34,7 +34,9 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND
 from eawf.kernel.projection.truth import Completeness, ConnectionState
+from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.seam import KNOWN_COUNT_LABEL, ProjectionSeam
+from eawf.surfaces.tui.console.session import Session, conn_label
 
 #: The nine values, spelled as the wire spells them.
 NINE_VALUES = (
@@ -239,3 +241,65 @@ def test_a_seam_persists_the_selection_and_filters_it_restores_by() -> None:
     assert persisted.filters == {"bucket": "running"}
     assert persisted.projection_revision == 0
     assert persisted.cursor == 0
+
+
+# ---------- the header's connection value, driven by the seam ----------
+
+
+def test_a_console_with_no_seam_reads_as_disconnected() -> None:
+    """A console that holds no seam has read nothing, which is not ``LIVE``."""
+    assert conn_label(None) == "DISCONNECTED"
+
+
+@pytest.mark.parametrize(
+    ("value", "label"),
+    [
+        (ConnectionValue.LIVE_COMPLETE, "LIVE"),
+        (ConnectionValue.LIVE_PARTIAL, "LIVE / PARTIAL"),
+        (ConnectionValue.GAP, "GAP DETECTED"),
+        (ConnectionValue.REPLAYING, "REPLAYING"),
+        (ConnectionValue.SNAPSHOT_REQUIRED, "SNAPSHOT REQUIRED"),
+        (ConnectionValue.SNAPSHOT_LOADING, "SNAPSHOT LOADING"),
+        (ConnectionValue.OFFLINE_SNAPSHOT, "OFFLINE SNAPSHOT"),
+        (ConnectionValue.DISCONNECTED, "DISCONNECTED"),
+        (ConnectionValue.DEGRADED, "DEGRADED"),
+    ],
+)
+def test_every_wire_value_maps_onto_its_own_header_label(
+    value: ConnectionValue, label: str
+) -> None:
+    """The console keeps one translation of the nine values, not a second vocabulary."""
+    assert conn_label(value) == label
+
+
+def test_a_fresh_seams_connection_value_reads_as_disconnected_in_the_header() -> None:
+    """The label is derived from the seam a console actually holds, not asserted."""
+    seam = _seam()
+
+    assert conn_label(seam.connection) == "DISCONNECTED"
+
+
+def test_header_reads_disconnected_when_seam_disconnected() -> None:
+    """The header shows the seam's own state, never a value nothing produced.
+
+    A console with a disconnected seam must not draw ``LIVE``: that would be the
+    console claiming a link it does not have.
+    """
+    session = Session()
+    session.conn = conn_label(_seam().connection)
+
+    row = header_row(session, crumb=" Eä ▸ eawf-core", scope="eawf-core", needs=0, w=60)
+
+    assert "DISCONNECTED" in row
+    assert "LIVE" not in row
+
+
+def test_header_reads_live_when_the_seams_projection_is_complete() -> None:
+    """A seam that vouches for a complete projection draws exactly the LIVE glyph."""
+    session = Session()
+    session.conn = conn_label(_at(_seam(), ConnectionValue.LIVE_COMPLETE).connection)
+
+    row = header_row(session, crumb=" Eä ▸ eawf-core", scope="eawf-core", needs=0, w=60)
+
+    assert "● LIVE" in row
+    assert "PARTIAL" not in row

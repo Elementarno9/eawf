@@ -41,7 +41,7 @@ def render(view: View) -> list[str]:
     verb = "interrupts you" if may == "yes" else "does not interrupt you"
     return boxed(
         view,
-        crumb="Eä ▸ eawf-core ▸ Notifications",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Notifications",
         ctx="26 runs · following",
         pre=[],
         title="NOTIFICATIONS · what may interrupt",

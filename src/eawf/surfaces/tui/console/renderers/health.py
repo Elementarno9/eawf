@@ -77,7 +77,7 @@ def render(view: View) -> list[str]:
     body.extend(foot)
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Health",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Health",
         ctx="Fleet health · conformance runner · as of 14:02",
         body=body,
         keys=_KEYS,

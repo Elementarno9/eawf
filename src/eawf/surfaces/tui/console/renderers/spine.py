@@ -22,9 +22,20 @@ from __future__ import annotations
 
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
-from eawf.surfaces.tui.console.frame import Fixed, Table, View, bar, build, route_keys_bar, thin
+from eawf.surfaces.tui.console.format import group
+from eawf.surfaces.tui.console.frame import (
+    Fixed,
+    Table,
+    View,
+    bar,
+    build,
+    route_keys_bar,
+    thin,
+    window_rows,
+)
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers.read_model import counts, crumb
 from eawf.surfaces.tui.console.session import Session
@@ -88,19 +99,27 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         " " + counts(spine),
         bar(w),
     ]
+    rd = reads(session)
+    if not rd.complete:
+        rows.extend(
+            [f" ATTACHED  {attached(rd, revision=group(int(spine.source_cursor)))}", thin(w)]
+        )
     if regions:
         rows.append(" REGIONS   " + " · ".join(regions))
         rows.append(thin(w))
     rows.append(_ROWS.head(["ROW", "KIND", "STATUS"]))
+    below = [thin(w), _unstated(spine)]
+    win = window_rows(view, total=len(spine.rows), cursor=cursor, chrome=len(rows) + 1 + len(below))
     if not spine.rows:
         rows.append(_EMPTY)
-    for index, row in enumerate(spine.rows):
+    for index in range(win.start, win.stop):
+        row = spine.rows[index]
         status = row.field("status")
         stated = status.value if status.state is TruthState.KNOWN and status.value else None
         # the kind is the collection the read model states, never guessed from the id
         cells = [row.key, row.collection.value, stated or truth_cell("unknown")]
         line = _ROWS.row(cells, index == cursor)
         rows.append(line if index == cursor else Fixed(pad(line, w)))
-    rows.append(thin(w))
-    rows.append(_unstated(spine))
-    return build(view, rows, route_keys_bar(view, ROUTE_KEYS[session.route]))
+    rows.append(win.line(complete=spine.complete))
+    rows.extend(below)
+    return build(view, rows, route_keys_bar(view, native_keys(session.route)))

@@ -7,6 +7,7 @@ recedes.
 
 from __future__ import annotations
 
+from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.attention import bucket_label, open_actions, top_bucket
 from eawf.surfaces.tui.console.fixture import Action
@@ -23,7 +24,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
-from eawf.surfaces.tui.console.reads import attn_cell, reads
+from eawf.surfaces.tui.console.reads import attn_cell, prototype_attached, reads
 from eawf.surfaces.tui.console.registry import route_of
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
@@ -101,7 +102,7 @@ def render(view: View) -> list[str]:
         bar(w),
     ]
     if not rd.complete:
-        rows.extend([f" ATTACHED  {rd.age}", thin(w)])
+        rows.extend([f" ATTACHED  {prototype_attached(rd, fx)}", thin(w)])
     rows.extend(_tree(view, open_, attn))
     rows.append(thin(w))
     rows.extend(_attention(view, open_, attn))
@@ -149,9 +150,13 @@ def _tree_key(ctx: Ctx, key: str) -> bool:
 
 
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
-    """Swap regions on Tab, walk the focused region on the arrows, open on Enter."""
+    """Swap regions on Tab, walk the focused region on the arrows, open on Enter.
+
+    A native frame draws the spine's rows rather than the tree, so its keys fall through
+    to the dispatcher, which walks and pages those rows.
+    """
     s = ctx.s
-    if s.route != "scope.home" or busy(s):
+    if s.route != "scope.home" or busy(s) or isinstance(ctx.projection, SpineView):
         return False
     open_ = open_actions(ctx.fixture)
     if key == "Tab":

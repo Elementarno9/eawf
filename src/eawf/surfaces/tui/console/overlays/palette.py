@@ -9,7 +9,7 @@ from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.palette import CRUMB, PAIRS, Hit, PaletteEntity, hits, palette_rows
 from eawf.surfaces.tui.console.registry import REGISTRY, route_for_id
 
-# Entities the registers do not carry, so every route stays reachable by name.
+# Entities the prototype registers do not carry, so every route stays reachable by name.
 PALETTE_NAMED: tuple[PaletteEntity, ...] = (
     PaletteEntity(id="CAM-0001", route="campaign", what="Provider drift · REVIEW"),
     PaletteEntity(id="CLM-0004", route="evidence", what="normalizer preserves ordering"),
@@ -17,7 +17,11 @@ PALETTE_NAMED: tuple[PaletteEntity, ...] = (
 
 
 def entities(fixture: Fixture) -> list[PaletteEntity]:
-    """Return every entity the palette can open: fleet Runs, stored records, named entities."""
+    """Return every entity the palette can open: fleet Runs, stored records, named entities.
+
+    The named entities are the prototype's own, so a fixture holding no prototype rows
+    names none of them.
+    """
     out: list[PaletteEntity] = []
     seen: set[str] = set()
     for row in fixture.proto.fleet:
@@ -32,7 +36,7 @@ def entities(fixture: Fixture) -> list[PaletteEntity]:
         if route:
             what = dv.field_of(fixture, entity_id, "NAME") or REGISTRY.route_word(route)
             out.append(PaletteEntity(id=entity_id, route=route, what=what))
-    for named in PALETTE_NAMED:
+    for named in PALETTE_NAMED if fixture.prototype else ():
         if named.id not in seen and named.route in REGISTRY.by_id:
             seen.add(named.id)
             out.append(named)

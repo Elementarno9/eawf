@@ -6,6 +6,10 @@ route's own frame is shown. The app never caches the frame size: it reads its ow
 render time, so a terminal resize re-lays the frame on the next render. A held clock
 registers no timer; a live clock sweeps the rack and the go prefix four times a second
 through the app's one interval.
+
+A console holding no prototype rows keeps only the chrome overlays and the go drawer:
+every other overlay and drawer still draws its rows from the prototype registers, so it
+shows the unknown frame instead.
 """
 
 from __future__ import annotations
@@ -43,24 +47,27 @@ from eawf.kernel.projection.verification import (
     build_verification_view,
 )
 from eawf.kernel.runtime.events import RunEventRecord
+from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
     FakeClock,
+    QuitStep,
     expire_prefix,
     notify,
+    quit_step,
     sweep_toasts,
 )
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.frame import View, thin
+from eawf.surfaces.tui.console.frame import View, thin, unheld
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
+from eawf.surfaces.tui.console.renderers import render_route, unknown_frame
+from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn_label
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
 from eawf.workflow.delivery.acceptance import AcceptanceApproval
@@ -73,6 +80,10 @@ if TYPE_CHECKING:
 
 TICK_SECONDS = 0.25
 GO_DRAWER = "go"
+# The worker group the seam's route reads run in.
+SEAM_WORKERS = "seam"
+# The overlays that draw chrome alone: the keymap and the palette's route list.
+CHROME_OVERLAYS: frozenset[str] = frozenset({"help", "palette"})
 # The toolkit's key names that differ from the dispatcher's.
 TOOLKIT_KEYS: Mapping[str, str] = MappingProxyType(
     {
@@ -163,6 +174,8 @@ def compose_frame(view: View) -> list[str]:
     overlay = s.overlay
     if s.prefix == "g":
         rows = _drawer_frame(view, GO_DRAWER)
+    elif overlay is not None and not view.fixture.prototype and overlay not in CHROME_OVERLAYS:
+        rows = unknown_frame(view)
     elif overlay is not None and overlay in DRAWERS and overlay != GO_DRAWER:
         rows = _drawer_frame(view, overlay)
     elif overlay is not None and is_overlay(overlay):
@@ -231,10 +244,12 @@ class KeybarRow(RowsWidget):
 
 
 class ConsoleApp(App[None]):
-    """The operator console over one fixture.
+    """The operator console over the packaged chrome, or over one prototype fixture.
 
     Args:
-        fixture: The registers the console renders.
+        fixture: The prototype registers the golden contract replays. A console given
+            none holds the chrome alone and draws the unknown token wherever its seam
+            holds no read model.
         clock: The console clock; a :class:`FakeClock` holds every timed behaviour.
         verbose: Whether the trace row names the handler of every key.
         seam: The console's one link to the daemon projection. A console given one draws
@@ -260,6 +275,11 @@ class ConsoleApp(App[None]):
             an earlier consent.
         proof_receipts: The receipts a receipt card may open, in record order. A console
             given none opens no card and says the receipt is not held.
+        chrome: The static tables a console given no fixture draws; the packaged chrome
+            when omitted. A fixture carries its own chrome, so passing both is refused.
+
+    Raises:
+        ValueError: both a fixture and a chrome were given.
     """
 
     CSS = """
@@ -268,9 +288,10 @@ class ConsoleApp(App[None]):
 
     def __init__(
         self,
-        fixture: Fixture,
+        fixture: Fixture | None = None,
         clock: Clock | None = None,
         *,
+        chrome: ConsoleChrome | None = None,
         verbose: bool = False,
         seam: ProjectionSeam | None = None,
         health_verdicts: Sequence[RuntimeTupleVerdict] = (),
@@ -281,11 +302,15 @@ class ConsoleApp(App[None]):
         acceptance_approval: AcceptanceApproval | None = None,
         proof_receipts: Sequence[ProofReceipt] = (),
     ) -> None:
+        if fixture is not None and chrome is not None:
+            raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
         super().__init__()
-        self.fixture = fixture
+        self.fixture = fixture or Fixture.from_chrome(chrome or load_chrome())
         self.console_clock: Clock = clock or Clock()
         self.verbose = verbose
         self.seam = seam
+        if seam is not None:
+            seam.watch(self._on_seam_patched)
         self.health_verdicts = tuple(health_verdicts)
         self.integration_generations = tuple(integration_generations)
         self.integration_conflicts = tuple(integration_conflicts)
@@ -315,10 +340,38 @@ class ConsoleApp(App[None]):
         yield KeybarRow(id="keybar")
 
     def on_mount(self) -> None:
-        """Paint the first frame and, under a live clock, start the sweep."""
+        """Paint the first frame, read the routes it owes and, under a live clock, sweep."""
         self.render_frame()
+        self._follow_route()
         if not self.held:
             self.set_interval(TICK_SECONDS, self.tick)
+
+    def _follow_route(self) -> None:
+        """Point the seam at the session's route and read whatever it now owes.
+
+        The read runs off the key path, so the frame shows what is held until the
+        answer arrives and then repaints; a console not yet running only retargets.
+        """
+        seam = self.seam
+        if seam is None:
+            return
+        seam.retarget(self.route_key)
+        if self.is_running and seam.owed():
+            self.run_worker(self._load_owed(), group=SEAM_WORKERS)
+
+    async def _load_owed(self) -> None:
+        """Read the owed routes and repaint once any of them arrived."""
+        seam = self.seam
+        assert seam is not None, "only started with a seam"
+        if await seam.sync() and self.is_running:
+            self.render_frame()
+
+    def _on_seam_patched(self, routes: tuple[str, ...]) -> None:
+        """Repaint when a patch changed the route on screen or the header's count."""
+        if not self.is_running:
+            return
+        if self.route_key in routes or ATTENTION_ROUTE in routes:
+            self.render_frame()
 
     def on_resize(self, event: Resize) -> None:
         """Re-lay the frame at the new size."""
@@ -327,6 +380,26 @@ class ConsoleApp(App[None]):
     def quit(self) -> None:
         """End the console session."""
         self.exit()
+
+    def _ctrl_c_quit(self) -> None:
+        """Apply the guarded quit to Ctrl+C, honoured on every route, overlay and drawer.
+
+        Ctrl+C is the operator's interrupt reflex, so unlike Escape (whose first meaning
+        is "back", contextual to the route) it is never swallowed: it runs the same
+        double-press guard Esc Esc uses at scope home, so a stray Ctrl+C from a terminal
+        burst cannot end the session on its own, and the two guards share one arming
+        timestamp so a Ctrl+C followed by an Esc Esc (or the reverse) still completes it.
+        """
+        self.session.keys += 1
+        check = quit_step(self.session, self.console_clock)
+        if check.step is QuitStep.QUIT:
+            self.session.log_key("Ctrl+C", f"quit - guarded, {check.gap_ms}ms apart")
+            self.quit()
+        elif check.step is QuitStep.BURST:
+            self.session.log_key("Ctrl+C", "too fast to be two presses - still armed")
+        else:
+            self.session.log_key("Ctrl+C", "press again within 1.5s to quit")
+        self.render_frame()
 
     @property
     def frame_size(self) -> tuple[int, int]:
@@ -350,14 +423,20 @@ class ConsoleApp(App[None]):
     def _held_projection(self) -> RouteProjection | None:
         """Return the projection the seam holds for the session's own route.
 
-        The seam carries one route, so a projection for another route is not this route's
-        answer and the frame falls back rather than drawing another route's rows. Each
-        family states its own read model, and a route no family names falls back too.
+        Only the session's own route answers it, so a frame never draws another route's
+        rows. Each family states its own read model, and a route no family names draws
+        nothing from it.
         """
         seam = self.seam
-        if seam is None or seam.route != self.route_key:
+        if seam is None:
             return None
-        return seam.projection
+        return seam.projection_for(self.route_key)
+
+    def attention_view(self) -> RegisterView | None:
+        """Return the Attention register the header counts from, whatever route is drawn."""
+        seam = self.seam
+        held = seam.projection_for(ATTENTION_ROUTE) if seam is not None else None
+        return build_register_view(held) if held is not None else None
 
     def route_view(self) -> SpineView | RouteReadModel | None:
         """Return the read model the session's route draws from, if one is held."""
@@ -406,8 +485,21 @@ class ConsoleApp(App[None]):
             return None
         return seam.settings
 
+    def _sync_conn(self) -> None:
+        """Set the session's connection value from the seam, when the console has one.
+
+        A console holding the prototype registers has no seam and keeps whatever value
+        its setup gave it -- that is the tracked golden contract. A console holding a
+        seam draws its connection value from it on every render, so the header can
+        never be left showing a value nothing produced.
+        """
+        seam = self.seam
+        if seam is not None:
+            self.session.conn = conn_label(seam.connection)
+
     def view(self) -> View:
         """Return the render view at the current frame size."""
+        self._sync_conn()
         w, h = self.frame_size
         register = self.register_view()
         return View(
@@ -419,11 +511,7 @@ class ConsoleApp(App[None]):
             held=self.held,
             projection=self.route_view(),
             register=register,
-            # the header prints the attention count on every route, so it is held only
-            # while the one seam is bound to the route that states it
-            attention=register
-            if register is not None and register.route == ATTENTION_ROUTE
-            else None,
+            attention=self.attention_view(),
             settings=self.settings_view(),
         )
 
@@ -434,6 +522,7 @@ class ConsoleApp(App[None]):
             settings_section_order=self.fixture.settings.section_order,
             now=self.console_clock.now(),
         )
+        self._follow_route()
 
     def raise_toast(self, text: str, *, title: str = "done", sev: Severity = Severity.INFO) -> None:
         """Raise a toast on the rack through the console's notify path."""
@@ -467,14 +556,24 @@ class ConsoleApp(App[None]):
             h=view.h,
             verbose=self.verbose,
             projection=view.projection,
+            unheld=unheld(view),
         )
         dispatch(ctx, key, shift)
+        self._follow_route()
         self.render_frame()
 
     def on_key(self, event: Key) -> None:
-        """Take every key from the toolkit and dispatch it."""
+        """Take every key from the toolkit and dispatch it.
+
+        Ctrl+C is handled here rather than through the route dispatcher: it is a
+        global interrupt, not a route verb, so no overlay, drawer or entry-layer
+        allowlist gets a chance to swallow it the way it used to.
+        """
         event.stop()
         event.prevent_default()
+        if event.key == "ctrl+c":
+            self._ctrl_c_quit()
+            return
         named = dispatcher_key(event.key, event.character)
         if named is not None:
             self.press_key(named[0], shift=named[1])

@@ -15,6 +15,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.projection.connection import ConnectionValue
 from eawf.surfaces.tui.console.tokens import Severity
 
 # The three frame sizes a session renders at, as (columns, rows).
@@ -22,6 +23,39 @@ SIZES: tuple[tuple[int, int], ...] = ((80, 24), (120, 30), (160, 40))
 BACK_CAP = 32
 # The key log keeps this many entries, newest first.
 LOG_CAP = 9
+
+# The header label each of the nine wire values prints, in the packet's own words. A
+# console keeps this one translation rather than a second vocabulary for the link: the
+# wire spells it ``live_complete``, the header spells it ``LIVE``.
+_CONNECTION_LABELS: dict[ConnectionValue, str] = {
+    ConnectionValue.LIVE_COMPLETE: "LIVE",
+    ConnectionValue.LIVE_PARTIAL: "LIVE / PARTIAL",
+    ConnectionValue.GAP: "GAP DETECTED",
+    ConnectionValue.REPLAYING: "REPLAYING",
+    ConnectionValue.SNAPSHOT_REQUIRED: "SNAPSHOT REQUIRED",
+    ConnectionValue.SNAPSHOT_LOADING: "SNAPSHOT LOADING",
+    ConnectionValue.OFFLINE_SNAPSHOT: "OFFLINE SNAPSHOT",
+    ConnectionValue.DISCONNECTED: "DISCONNECTED",
+    ConnectionValue.DEGRADED: "DEGRADED",
+}
+
+
+def conn_label(value: ConnectionValue | None) -> str:
+    """Return the header's connection label for the seam's own connection value.
+
+    A console with no seam at all has read nothing, which is what ``DISCONNECTED``
+    means; a console never claims ``LIVE`` on its own account, because that is a claim
+    only a seam that has actually reached the daemon may make.
+
+    Args:
+        value: The seam's connection value; ``None`` when the console holds no seam.
+
+    Returns:
+        One of the nine header labels.
+    """
+    if value is None:
+        return _CONNECTION_LABELS[ConnectionValue.DISCONNECTED]
+    return _CONNECTION_LABELS[value]
 
 
 class BackEntry(BaseModel):

@@ -7,13 +7,14 @@ absence.
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import cell_len
 
-OWN = "RUN-9e3779b1"
+OWN = pt.OWN_RUN
 # Cells the timeline's first two columns and their gutter take.
 TL_PREFIX = 38
 

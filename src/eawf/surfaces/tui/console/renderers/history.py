@@ -6,6 +6,7 @@ The source note for the fact under the cursor docks to the foot of the frame.
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import (
     TABLES,
     Fixed,
@@ -22,12 +23,7 @@ from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import pad
 
 Fact = tuple[str, str, str, str]
-FACTS: tuple[Fact, ...] = (
-    ("MLS-0004 accepted", "41,208", "operator", "14:01"),
-    ("BAT-0003 authority invalidated", "41,199", "head moved", "13:58"),
-    ("EAWF-0044 criteria set", "41,140", "imported", "Jul 11"),
-    ("RUN-3c6ef367 events purged", "41,002", "retention", "Jul 4"),
-)
+FACTS: tuple[Fact, ...] = pt.HISTORY_FACTS
 
 
 def _note(fact: Fact) -> list[str]:

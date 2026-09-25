@@ -25,6 +25,7 @@ from eawf.kernel.projection.transcript import (
 )
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.runtime.events import RunEventKind
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import (
@@ -48,7 +49,7 @@ from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 PREVIEW = 2
-RUN_ID = "RUN-daa66d18"
+RUN_ID = pt.TRANSCRIPT_RUN
 TR_GLYPH: Mapping[str, str] = MappingProxyType(
     {
         "message": "¶",

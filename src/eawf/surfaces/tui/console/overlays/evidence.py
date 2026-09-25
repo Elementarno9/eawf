@@ -8,6 +8,7 @@ last three body rows.
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import TABLES, View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.overlays.states import with_state_rows
@@ -57,7 +58,7 @@ def _milestone(view: View) -> list[str]:
     dv.sel_in(s, len(_MILESTONE_RECEIPTS))
     table = TABLES["RC"]
     rows = [
-        header(view, " Eä ▸ evidence · MLS-0004"),
+        header(view, f" Eä ▸ evidence · {pt.OWN_MILESTONE}"),
         " at digest 7c1f…a94 · quotable at this exact revision",
         bar(w),
         table.head(["EVIDENCE", "RECEIPT", "CLAIM", "KIND"]),

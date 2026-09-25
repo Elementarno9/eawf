@@ -628,7 +628,6 @@ def upsert_interactive_session_attempt(
     )
 
 
-@register("runtime.capture")
 def _capture_transcript(args: RuntimeCaptureParams) -> Path | None:
     """Return the Claude transcript behind a capture, resolved by its RAW session id.
 
@@ -643,6 +642,7 @@ def _capture_transcript(args: RuntimeCaptureParams) -> Path | None:
     return transcript_path_for_session(args.session_id, cwd=cwd)
 
 
+@register("runtime.capture")
 async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Persist latest runtime counters onto one exactly correlated active wave.
 

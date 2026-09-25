@@ -6,7 +6,8 @@ through :func:`~eawf.surfaces.tui.console.frame.build`, and may provide
 ``True`` claims the key), and ``copy(session, fixture) -> str``, what ``y`` copies about the
 route's subject. The app composes drawers, the rack and the verbose row around the frame.
 A registered route with no module renders a marked placeholder, so the console never
-fails on a route that has no renderer yet.
+fails on a route that has no renderer yet. A console holding no prototype rows draws the
+unknown frame for any route whose read model it does not hold, whatever module is bound.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from types import MappingProxyType
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
+from eawf.surfaces.tui.console.frame import View, bar, build, header, thin, unheld
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.registry import REGISTRY
@@ -59,6 +60,7 @@ from eawf.surfaces.tui.console.renderers import (
     unattended,
 )
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.tokens import TRUTH
 
 Render = Callable[[View], list[str]]
 Seam = Callable[[Ctx, str, bool], bool]
@@ -149,8 +151,23 @@ def placeholder(view: View) -> list[str]:
     return build(view, rows, keybar([("Esc", "back")], w))
 
 
+def unknown_frame(view: View) -> list[str]:
+    """Return the frame of a route whose rows nothing has read: the unknown token, no row."""
+    s, w = view.session, view.w
+    rows = [
+        header(view, f" Eä ▸ {view.fixture.scope} ▸ {s.route}"),
+        f" NOT HELD · {s.route} · no read model is held for this route",
+        bar(w),
+        f" ROWS      {TRUTH['unknown'].unicode} · nothing has been read, so no row is drawn",
+        thin(w),
+    ]
+    return build(view, rows, keybar([("Esc", "back")], w))
+
+
 def render_route(view: View) -> list[str]:
-    """Return the frame of the session's route."""
+    """Return the frame of the session's route, the unknown frame when nothing is held."""
+    if unheld(view):
+        return unknown_frame(view)
     module = ROUTE_MODULES.get(view.session.route)
     return module.render(view) if module else placeholder(view)
 

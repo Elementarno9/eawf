@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import View, bar, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.overlays.question import build_with_states
 from eawf.surfaces.tui.console.reads import can_mutate
 
-RUN = "RUN-a708a7d6"
+RUN = pt.PAUSED_RUN
 
 
 def render(view: View) -> list[str]:

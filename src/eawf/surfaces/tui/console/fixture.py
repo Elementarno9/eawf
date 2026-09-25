@@ -7,6 +7,11 @@ with the files' spellings kept as aliases. Counts are never stored: every render
 derives them from these registers at render time. Two registers stay mutable because a
 confirmed verb writes them: an attention action's state and ledger, and the settings
 values a lens edit stores.
+
+The files carry the chrome tables too (buckets, menus, connection states, entry states
+and the settings catalog). A fixture keeps its own copy of them, so the golden contract
+replays exactly what the prototype drew; a console built from the packaged chrome alone
+holds a fixture with no prototype rows at all (:meth:`Fixture.from_chrome`).
 """
 
 from __future__ import annotations
@@ -19,9 +24,20 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
 from eawf.surfaces.tui.console.action_menu import ActionMenus, MenuVerb, VerbWeight
+from eawf.surfaces.tui.console.chrome import (
+    Bucket,
+    ConsoleChrome,
+    EntryState,
+    SettingsCatalog,
+    States,
+)
+from eawf.surfaces.tui.console.tokens import TRUTH
 
 # The files a fixture directory holds, one per register.
 FIXTURE_FILES: tuple[str, ...] = ("proto.json", "detail.json", "g.json", "settings.json")
+
+#: The scope a console holding no prototype rows names until a projection states one.
+UNKNOWN_SCOPE = TRUTH["unknown"].unicode
 
 
 class _Frozen(BaseModel):
@@ -61,14 +77,6 @@ class FleetRow(_Frozen):
     bucket: str
 
 
-class Bucket(_Frozen):
-    """One exception bucket, with its sub-buckets when it has any."""
-
-    key: str
-    label: str
-    sub: tuple[Bucket, ...] | None = None
-
-
 class Action(BaseModel):
     """One attention action; a confirmed verb writes its state and ledger."""
 
@@ -87,35 +95,6 @@ class Action(BaseModel):
     bucket: str
     state: str
     ledger: list[tuple[str, str]]
-
-
-class States(_Frozen):
-    """The connection values and what each one reads, refuses and marks."""
-
-    connection: tuple[str, ...]
-    reads: dict[str, str]
-    refuse: dict[str, str]
-    muts: dict[str, str]
-    glyph: dict[str, str]
-
-
-class EntryState(_Frozen):
-    """One pre-session state of the entry layer."""
-
-    id: str
-    exit: str
-    state: str
-    glyph: str
-    title: str
-    keys: tuple[tuple[str, str], ...]
-    paths: tuple[tuple[str, str], ...]
-    tail: tuple[str, ...]
-    panes: tuple[tuple[str, str], ...] | None = None
-    cols: tuple[tuple[str, int], ...] | None = None
-    rows: tuple[tuple[str, ...], ...] | None = None
-    paths_label: str | None = Field(default=None, alias="pathsLabel")
-    paths_note: str | None = Field(default=None, alias="pathsNote")
-    paths_ordered: bool | None = Field(default=None, alias="pathsOrdered")
 
 
 class Proto(_Frozen):
@@ -165,29 +144,6 @@ class Registers(_Frozen):
     overlay_routes: tuple[str, ...] = Field(alias="OVERLAY_ROUTES")
 
 
-class SettingsCatalog(_Frozen):
-    """The settings catalog: layers, sections, stored values and their documentation.
-
-    The stored values (``stored``) are the one mutable table: a lens edit writes into it.
-    """
-
-    layers: tuple[dict[str, str], ...] = Field(alias="LAYERS")
-    writable: tuple[str, ...] = Field(alias="WRITABLE")
-    sections: dict[str, Any] = Field(alias="SECTIONS")
-    stored: dict[str, Any] = Field(alias="SET")
-    runtime: dict[str, Any] = Field(alias="RUNTIME")
-    floor: dict[str, Any] = Field(alias="FLOOR")
-    types: dict[str, Any] = Field(alias="TYPE")
-    unset: str = Field(alias="UNSET")
-    doc: dict[str, Any] = Field(alias="DOC")
-    choices: dict[str, Any] = Field(alias="CHOICES")
-    cats: tuple[Any, ...] = Field(alias="CATS")
-    rail: tuple[Any, ...] = Field(alias="RAIL")
-    section_rows: tuple[dict[str, Any], ...] = Field(alias="SECTION_ROWS")
-    section_order: tuple[str, ...] = Field(alias="sectionOrder")
-    names: tuple[str, ...]
-
-
 def menu_verb(columns: tuple[str, ...]) -> MenuVerb:
     """Return the menu verb one ``actions`` register row declares.
 
@@ -219,6 +175,9 @@ class Fixture:
         detail: The entity records.
         registers: The route-local registers.
         settings: The settings catalog.
+        prototype: Whether the registers hold the prototype's rows. A fixture built from
+            the packaged chrome alone holds none, and the console then draws the unknown
+            token wherever no read model is held rather than an empty prototype frame.
 
     Raises:
         ValueError: an ``actions`` row declares a verb the action menu refuses.
@@ -226,10 +185,12 @@ class Fixture:
 
     __slots__ = (
         "attention_by_id",
+        "chrome",
         "detail",
         "fleet_by_run",
         "menus",
         "proto",
+        "prototype",
         "registers",
         "settings",
     )
@@ -240,16 +201,49 @@ class Fixture:
         detail: Detail,
         registers: Registers,
         settings: SettingsCatalog,
+        *,
+        prototype: bool = True,
     ) -> None:
         self.proto = proto
         self.detail: Mapping[str, tuple[tuple[str, str], ...]] = detail.root
         self.registers = registers
         self.settings = settings
+        self.prototype = prototype
+        self.chrome = ConsoleChrome(
+            buckets=proto.buckets,
+            xbuckets=proto.xbuckets,
+            actions=proto.actions,
+            states=proto.states,
+            entry=proto.entry,
+            settings=settings,
+        )
         self.fleet_by_run = {row.run: row for row in proto.fleet}
         self.attention_by_id = {row.id: row for row in proto.attention}
         self.menus = ActionMenus(
             {route: [menu_verb(row) for row in rows] for route, rows in proto.actions.items()}
         )
+
+    @classmethod
+    def from_chrome(cls, chrome: ConsoleChrome) -> Fixture:
+        """Return a fixture that holds ``chrome`` and not one prototype row.
+
+        The scope is the unknown token until a projection names one, every record
+        register is empty, and :attr:`prototype` is false.
+        """
+        proto = Proto(
+            scope=UNKNOWN_SCOPE,
+            revision=0,
+            tracks=(),
+            fleet=(),
+            buckets=chrome.buckets,
+            xbuckets=chrome.xbuckets,
+            attention=(),
+            timeline=(),
+            actions=chrome.actions,
+            states=chrome.states,
+            entry=chrome.entry,
+        )
+        return cls(proto, Detail({}), _EMPTY_REGISTERS, chrome.settings, prototype=False)
 
     @property
     def scope(self) -> str:
@@ -261,6 +255,33 @@ class Fixture:
         if entity_id is None:
             return None
         return self.detail.get(entity_id)
+
+
+_EMPTY_REGISTERS = Registers.model_validate(
+    {
+        "CHIP": {},
+        "EV_RUNGS": (),
+        "TR_EARLY": (),
+        "TR_BLOCKS": (),
+        "TR_FEED": (),
+        "TR_GLYPH": {},
+        "TR_CLS": {},
+        "TR_PAL": {},
+        "RECEIPTS": {},
+        "ROUTE_OF": {},
+        "ROUTE_SUBJ": {},
+        "TAB_OWNER": {},
+        "BACKLOG_GROUPS": (),
+        "CAM_STEPS": (),
+        "CAM_STEP_DETAIL": (),
+        "CAM_EVID": (),
+        "CAM_ART": (),
+        "CAM_SECTS": (),
+        "BL_DRAFTS": (),
+        "BL_DEFERRED": (),
+        "OVERLAY_ROUTES": (),
+    }
+)
 
 
 def _read(path: Path) -> Any:

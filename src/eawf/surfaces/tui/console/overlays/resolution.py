@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 
-TARGET = "RUN-3c6ef367"
+TARGET = pt.PURGED_RUN
 
 
 def render(view: View) -> list[str]:

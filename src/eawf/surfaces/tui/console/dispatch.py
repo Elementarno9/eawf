@@ -16,6 +16,7 @@ from types import MappingProxyType
 
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.action_menu import MenuVerb
 from eawf.surfaces.tui.console.clock import QuitStep, arm_prefix, expire_prefix, quit_step
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -51,7 +52,7 @@ _RECORD_NEEDS: Mapping[str, str] = MappingProxyType(
 )
 _ALIASES: Mapping[str, str] = MappingProxyType({"j": "ArrowDown", "k": "ArrowUp"})
 _DRAFT_FIELDS: tuple[str, ...] = ("criteria", "owner", "batch")
-_PAUSE_RUN = "RUN-a708a7d6"
+_PAUSE_RUN = pt.PAUSED_RUN
 _PAUSE_TARGETS: Mapping[str, dict[str, str]] = MappingProxyType(
     {
         "n": {
@@ -102,7 +103,7 @@ def _frame_keys(ctx: Ctx, key: str, shift: bool) -> bool:
         return True
     if s.record_facts is not None and not s.overlay and _record_key(ctx, k):
         return True
-    hook = seam_for(s.route)
+    hook = None if ctx.unheld else seam_for(s.route)
     if hook is not None and hook(ctx, k, shift):
         return True
     if s.overlay == "question" and not s.reply and k == "w":

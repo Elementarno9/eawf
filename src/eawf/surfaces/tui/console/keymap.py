@@ -12,11 +12,12 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyEntry, Pair
+from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS, KeyEntry, Pair
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.session import Session
 
 ENTRY_ROUTE = "entry"
+_ARROWS = ("ArrowUp", "ArrowDown")
 # The key that dismisses the rack, accepted by every overlay.
 DISMISS = "-"
 
@@ -61,6 +62,7 @@ GLOBAL_HELP: tuple[tuple[str, str, str], ...] = (
     ("y", "copy the value · answers in the notification rack", "y"),
     ("Y", "copy the stable URN", "Y"),
     ("-", "dismiss the notifications — nothing else clears them", "-"),
+    ("Ctrl+C", "quit · guarded, press again within 1.5s", "ctrl+c"),
 )
 ATTACH_LATER = KeyEntry("attach later", ("/",))
 
@@ -81,6 +83,21 @@ def route_keys(
     if target == ENTRY_ROUTE:
         return entry_keys(session, fixture)
     return ROUTE_KEYS.get(target, ())
+
+
+def native_keys(route: str) -> tuple[KeyEntry, ...]:
+    """Return the key table a native frame of ``route`` advertises.
+
+    A native table can outgrow any screen, so its frame pages as well as steps: the page
+    and ends keys follow the arrow entry, which heads the table when there is none.
+
+    Raises:
+        KeyError: ``route`` has no key table.
+    """
+    paging = (KEY["page"], KEY["ends"])
+    table = tuple(entry for entry in ROUTE_KEYS[route] if entry not in paging)
+    at = next((i + 1 for i, entry in enumerate(table) if entry.keys == _ARROWS), 0)
+    return (*table[:at], *paging, *table[at:])
 
 
 def can(session: Session, fixture: Fixture, entry: KeyEntry) -> bool:

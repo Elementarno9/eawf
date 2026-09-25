@@ -6,6 +6,7 @@ Any other task id renders its stored record through the record path or states th
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import (
     TABLES,
     Table,
@@ -20,7 +21,7 @@ from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 
 OWN = "EAWF-0001"
-OWN_RUN = "RUN-9e3779b1"
+OWN_RUN = pt.OWN_RUN
 _CRITERIA: tuple[tuple[str, str], ...] = (
     ("events carry a semantic kind", "receipt EVT-1188"),
     ("no wave vocabulary remains", "receipt EVT-1190"),

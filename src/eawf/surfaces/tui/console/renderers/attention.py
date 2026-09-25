@@ -31,7 +31,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry
-from eawf.surfaces.tui.console.reads import attn_cell, can_mutate, reads
+from eawf.surfaces.tui.console.reads import attn_cell, can_mutate, prototype_attached, reads
 from eawf.surfaces.tui.console.renderers.registers import native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
 
@@ -155,7 +155,7 @@ def render(view: View) -> list[str]:
         bar(w),
     ]
     if not rd.complete:
-        head.extend([f" ATTACHED  {rd.age}", thin(w)])
+        head.extend([f" ATTACHED  {prototype_attached(rd, fx)}", thin(w)])
     wide = w >= 120
     col = w - RAIL_W - 1
     bw = col if wide else w

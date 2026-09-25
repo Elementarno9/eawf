@@ -296,6 +296,13 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         # Spelled out rather than imported: its owner,
         # ``eawf.runtime.daemon.churn.SUITE_SESSION_ENV``, sits above the kernel.
         "EAWF_SUITE_SESSION",
+        # Spelled out rather than imported: its owner,
+        # ``eawf.workflow.audit_dsl.registry``, sits above the kernel. The
+        # command_exit_zero gate runner exports the touched-file list here,
+        # which can run to thousands of characters and otherwise overflows
+        # a settings entry's ``NonEmptyStr`` value cap the moment it is
+        # surfaced as an env-layer entry.
+        "EAWF_GATE_FILES",
     }
 )
 

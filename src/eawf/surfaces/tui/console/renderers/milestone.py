@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.fixture import Milestone, Track
 from eawf.surfaces.tui.console.frame import (
     Table,
@@ -29,6 +30,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.registry import SECTIONS
 from eawf.surfaces.tui.console.renderers.read_model import (
     counts,
@@ -41,7 +43,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 from eawf.surfaces.tui.console.width import cell_len, pad
 from eawf.workflow.projection.acceptance import AcceptanceBundleView
 
-OWN = "MLS-0004"
+OWN = pt.OWN_MILESTONE
 _UNAVAILABLE = "∅ unavailable"
 
 #: What the bundle row says when no acceptance bundle is held for the Milestone.
@@ -182,12 +184,10 @@ def native_frame(view: View, model: AcceptanceBundleView) -> list[str]:
         _lrow("APPROVAL", _approval_text(model)),
         thin(w),
     ]
-    rows.extend(record_rows(view, model, cursor))
-    rows.append(thin(w))
-    rows.extend(_criteria_rows(model))
-    rows.append(thin(w))
-    rows.extend(unstated_rows(model))
-    return build(view, rows, route_keys_bar(view, ROUTE_KEYS["milestone"]))
+    below = [thin(w), *_criteria_rows(model), thin(w), *unstated_rows(model)]
+    rows.extend(record_rows(view, model, cursor, above=len(rows), below=len(below)))
+    rows.extend(below)
+    return build(view, rows, route_keys_bar(view, native_keys("milestone")))
 
 
 def render(view: View) -> list[str]:

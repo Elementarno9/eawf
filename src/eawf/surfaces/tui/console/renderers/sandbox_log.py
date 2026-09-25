@@ -6,6 +6,7 @@ Enter opens the Run a decision was about, and ``p`` the policy it was read again
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
@@ -17,7 +18,7 @@ _KEYS: tuple[tuple[str, str], ...] = (
     ("p", "policy"),
     ("Esc", "back"),
 )
-RUNS: tuple[str, ...] = ("RUN-538453eb", "RUN-538453eb", "RUN-7b0e4d31", "RUN-7b0e4d31")
+RUNS: tuple[str, ...] = pt.SANDBOX_RUNS
 
 
 def _decisions() -> list[list[str]]:
@@ -77,8 +78,8 @@ def render(view: View) -> list[str]:
     body.extend(foot)
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Sandbox log",
-        ctx="Authorisation decisions for every agent in eawf-core",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Sandbox log",
+        ctx=f"Authorisation decisions for every agent in {view.fixture.scope}",
         body=body,
         keys=_KEYS,
     )

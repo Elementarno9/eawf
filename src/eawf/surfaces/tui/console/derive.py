@@ -11,6 +11,7 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.attention import attn_list
 from eawf.surfaces.tui.console.fixture import Fixture, FleetRow, Milestone, Track
 from eawf.surfaces.tui.console.format import group
@@ -597,9 +598,9 @@ def target_id(session: Session, fixture: Fixture) -> str:
     if session.subj_id:
         return session.subj_id
     return {
-        "run.detail": "RUN-9e3779b1",
+        "run.detail": pt.OWN_RUN,
         "batch.detail": "BAT-0001",
-        "milestone": "MLS-0004",
+        "milestone": pt.OWN_MILESTONE,
     }.get(session.route, session.route)
 
 

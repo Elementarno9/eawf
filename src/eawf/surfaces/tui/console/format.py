@@ -32,7 +32,7 @@ _HOUR = 3600
 
 
 def group(n: int) -> str:
-    """Return ``n`` with its thousands grouped by a comma, as in ``41,208``.
+    """Return ``n`` with its thousands grouped by a comma, as in ``12,345``.
 
     The ``,`` format option always emits a comma; only the ``n`` presentation type
     consults the locale, and it is never used.

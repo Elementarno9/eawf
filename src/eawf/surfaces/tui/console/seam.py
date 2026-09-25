@@ -1,7 +1,8 @@
 """The console's one link to the daemon projection, and the way back after a break.
 
 Everything the console draws arrives through this seam, and the seam owns no
-transport of its own: it holds a :class:`~eawf.surfaces.tui.state_binding.StateBinding`
+transport of its own: it holds a
+:class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding`
 and uses its socket push, its always-on poll backstop and its resume cursor. That is
 the point of binding it this way rather than opening a second connection -- a second
 socket would be a second thing to authorise, probe, throttle and reconnect, and the
@@ -26,18 +27,27 @@ A count is the other thing the seam answers, because only the seam knows what th
 can vouch for: outside a live and complete projection a count is labelled rather than
 stated, and a count whose register could not be read at all renders as unavailable and
 never as a zero.
+
+The seam holds more than the route on screen. It keeps a bounded cache of route
+projections over its one binding: a route is read once, on the first navigation to it,
+and every held route is kept current by the keyed patches the one feed pushes, so going
+back to a route costs no read. Attention is pinned in the cache, because the header
+prints its count on every route. The cache is bounded because a large tree makes each
+projection large; the least recently shown unpinned route is evicted first, and is read
+again if the operator returns to it.
 """
 
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from eawf.kernel.projection.compute import KeyedPatch, RouteProjection
+from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, KeyedPatch, RouteProjection
 from eawf.kernel.projection.connection import (
     READ_METHOD_TEMPLATE,
     RECONNECT_METHOD_TEMPLATE,
@@ -52,9 +62,10 @@ from eawf.kernel.projection.connection import (
     staleness_target_seconds,
     vouches_for_counts,
 )
-from eawf.kernel.projection.settings import SETTINGS_ROUTE, SettingsView
+from eawf.kernel.projection.registers import ATTENTION_ROUTE
+from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, SettingsView
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -65,6 +76,19 @@ logger = logging.getLogger(__name__)
 #: is still shown, because a register that was read states something true; what it
 #: may not claim is that it holds every row.
 KNOWN_COUNT_LABEL = "known"
+
+#: The routes the cache never evicts. The header prints the Attention count on every
+#: route, so a console that dropped the register would print a stale or absent count.
+PINNED_ROUTES: frozenset[str] = frozenset({ATTENTION_ROUTE})
+
+#: How many route projections the seam holds at once, the pinned ones included. A
+#: projection of a large tree is megabytes of rows, so the bound is what keeps a long
+#: session's memory flat; eight covers a working set of back-and-forth navigation.
+DEFAULT_ROUTE_CAPACITY = 8
+
+#: Called with the routes one pushed patch changed, so the app can repaint when the
+#: route on screen is among them.
+PatchListener = Callable[[tuple[str, ...]], None]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -110,11 +134,13 @@ class ReconnectOutcome:
 
 
 class ProjectionSeam:
-    """One console route's link to the daemon projection.
+    """The console's link to the daemon projection, holding the routes it has read.
 
     The seam is constructed with the tree it reads and the callbacks the app wants
     for the epoch-1 legs it shares; it builds the one binding it uses and registers
-    itself as that binding's patch sink. It opens no other transport.
+    itself as that binding's patch sink. It opens no other transport. One route is
+    the visible one: it is what a reconnect restores and what the link's value is
+    read from. The other held routes ride the same feed.
     """
 
     def __init__(
@@ -127,12 +153,13 @@ class ProjectionSeam:
         on_state: Callable[[State], Awaitable[None]] | None = None,
         on_degraded: Callable[[bool], Awaitable[None]] | None = None,
         clock: Callable[[], datetime] | None = None,
+        capacity: int = DEFAULT_ROUTE_CAPACITY,
         **binding_options: Any,
     ) -> None:
         """Build the seam and the one binding that carries it.
 
         Args:
-            route: The console route key this seam reads.
+            route: The console route key the seam opens on.
             scope_id: The scope the projection is stated for.
             state_path: The tree's ``state.json``, which the poll backstop watches.
             repo_root: The repository the daemon should answer for; omitted when
@@ -144,16 +171,30 @@ class ProjectionSeam:
                 its own transport signal: a daemon that cannot be reached is a
                 disconnected link, not a live one.
             clock: When a rebuilt projection is stamped; defaults to the wall clock.
+            capacity: How many route projections are held at once, pinned ones
+                included.
             **binding_options: Passed through to the binding, for the poll and probe
                 cadences and the client factory a test drives it with.
+
+        Raises:
+            ValueError: *capacity* leaves no room for a visible route beside the
+                pinned ones.
         """
+        if capacity <= len(PINNED_ROUTES):
+            raise ValueError(
+                f"capacity {capacity} holds no route beside the {len(PINNED_ROUTES)} pinned; "
+                f"it must be at least {len(PINNED_ROUTES) + 1}"
+            )
         self._route = route
         self._scope_id = scope_id
         self._repo_root = repo_root
         self._clock = clock or projection_now
+        self._capacity = capacity
         self._app_state = on_state
         self._app_degraded = on_degraded
-        self._projection: RouteProjection | None = None
+        self._held: OrderedDict[str, RouteProjection] = OrderedDict()
+        self._listeners: list[PatchListener] = []
+        self._reading: set[str] = set()
         self._settings: SettingsView | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
@@ -177,7 +218,7 @@ class ProjectionSeam:
 
     @property
     def route(self) -> str:
-        """Return the console route key the seam is bound to."""
+        """Return the console route key on screen."""
         return self._route
 
     @property
@@ -187,8 +228,93 @@ class ProjectionSeam:
 
     @property
     def projection(self) -> RouteProjection | None:
-        """Return the projection the console draws; ``None`` before the first load."""
+        """Return the visible route's projection; ``None`` before its first load."""
         return self._projection
+
+    @property
+    def _projection(self) -> RouteProjection | None:
+        """Return the visible route's held projection, if any."""
+        return self._held.get(self._route)
+
+    @_projection.setter
+    def _projection(self, projection: RouteProjection | None) -> None:
+        """Hold *projection* as the visible route's, or drop the route for ``None``."""
+        if projection is None:
+            self._held.pop(self._route, None)
+        else:
+            self._hold(self._route, projection)
+
+    @property
+    def held_routes(self) -> tuple[str, ...]:
+        """Return the held routes, least recently shown first."""
+        return tuple(self._held)
+
+    def projection_for(self, route: str) -> RouteProjection | None:
+        """Return the projection held for *route*; ``None`` when it is not held."""
+        return self._held.get(route)
+
+    def owed(self) -> tuple[str, ...]:
+        """Return the routes the console needs held and does not yet hold.
+
+        The visible route is owed when the daemon serves a read for it, and the
+        pinned routes always are. The settings routes are owed their one view,
+        read under the settings route, until it arrives. A route already being read
+        is not owed again, so a quick run of navigations issues one read per route.
+        """
+        wanted = [self._route, *sorted(PINNED_ROUTES - {self._route})]
+        owed = [route for route in wanted if route in ROUTE_COLLECTIONS and route not in self._held]
+        if self._route in SETTINGS_ROUTES and self._settings is None:
+            owed.append(SETTINGS_ROUTE)
+        return tuple(route for route in owed if route not in self._reading)
+
+    def retarget(self, route: str) -> None:
+        """Make *route* the visible one.
+
+        The selection and filters belong to the route they were made on, so a move
+        clears them. The link's value is re-read from the route's projection when it
+        is held; an unheld route leaves the value as the link last stated it.
+        """
+        if route == self._route:
+            return
+        self._route = route
+        self._selected_id = None
+        self._filters = {}
+        held = self._held.get(route)
+        if held is not None:
+            self._held.move_to_end(route)
+            self._connection = self._value_of(held)
+
+    def watch(self, listener: PatchListener) -> None:
+        """Call *listener* with the routes every applied patch changed."""
+        self._listeners.append(listener)
+
+    async def sync(self) -> tuple[str, ...]:
+        """Read every owed route once, and hold what arrives.
+
+        A read that fails leaves its route unheld, so the frame keeps saying it holds
+        nothing rather than drawing a guess; the next navigation owes it again. The
+        failure is not raised, because one unreachable register must not stop the
+        other routes from loading.
+
+        Returns:
+            The routes this call read, in the order they were read.
+        """
+        loaded: list[str] = []
+        owed = self.owed()
+        self._reading.update(owed)
+        for route in owed:
+            try:
+                if route == SETTINGS_ROUTE:
+                    await self.load_settings()
+                else:
+                    await self.load(route)
+            except Exception as exc:
+                logger.warning(f"sync read failed route={route} cause={exc!r}")
+            else:
+                loaded.append(route)
+            finally:
+                self._reading.discard(route)
+        return tuple(loaded)
 
     @property
     def settings(self) -> SettingsView | None:
@@ -263,17 +389,19 @@ class ProjectionSeam:
             return str(value)
         return f"{value} {KNOWN_COUNT_LABEL}"
 
-    async def load(self) -> RouteProjection:
-        """Read the whole route from the daemon and hold it as the console's rows.
+    async def load(self, route: str | None = None) -> RouteProjection:
+        """Read one whole route from the daemon and hold it.
+
+        Args:
+            route: The route to read; the visible route when omitted.
 
         Returns:
             The projection, at whatever cursor the tree stands at.
         """
-        answer = await self._binding.call(
-            READ_METHOD_TEMPLATE.format(route=self._route), self._params()
-        )
-        projection = self._adopt(RouteProjection.model_validate(answer))
-        logger.debug(f"load route={self._route} cursor={projection.header.source_cursor}")
+        route = route or self._route
+        answer = await self._binding.call(READ_METHOD_TEMPLATE.format(route=route), self._params())
+        projection = self._hold(route, RouteProjection.model_validate(answer))
+        logger.debug(f"load route={route} cursor={projection.header.source_cursor}")
         return projection
 
     async def load_settings(self) -> SettingsView:
@@ -324,6 +452,7 @@ class ProjectionSeam:
                 f"reconnect refused route={self._route} "
                 f"gap={negotiation.gap} first_missing={negotiation.first_missing}"
             )
+            self._drop_hidden()
             return self._outcome(negotiation, applied=0)
         if negotiation.disposition is ReconnectDisposition.CURRENT:
             self._adopt(held)
@@ -340,6 +469,7 @@ class ProjectionSeam:
                 generated_at=self._clock(),
             )
         )
+        self._drop_hidden()
         return self._outcome(negotiation, applied=len(patches))
 
     async def load_snapshot(self) -> RouteProjection:
@@ -363,23 +493,48 @@ class ProjectionSeam:
             raise
 
     async def apply_patch(self, patch: KeyedPatch) -> None:
-        """Apply one pushed keyed patch to the held projection.
+        """Apply one pushed keyed patch to every held route it reaches.
 
-        A patch that does not reach this route is ignored: the feed is one stream
-        for every route the console holds. A patch arriving before the first load
-        is ignored too, because there are no rows for it to replace.
+        The feed is one stream for every route the console holds, so a patch fans
+        out to each held route it names and is ignored by the rest. A route not yet
+        held is skipped too, because there are no rows for the patch to replace; its
+        first read will already include it. The watchers hear which routes changed.
         """
-        held = self._projection
-        if held is None or self._route not in patch.routes:
+        patched = self._fan_out(patch)
+        if not patched:
             return
-        self._adopt(
+        for listener in self._listeners:
+            listener(patched)
+
+    def _fan_out(self, patch: KeyedPatch) -> tuple[str, ...]:
+        """Apply *patch* to each held route it reaches; return those routes.
+
+        A route read at or past the patch's ordinal already states it, so the patch
+        is not applied again; that happens when a read and the push race.
+        """
+        patched = tuple(
+            route
+            for route, held in self._held.items()
+            if route in patch.routes and int(held.header.source_cursor) < patch.canonical_sequence
+        )
+        for route in patched:
+            self._patch_route(route, [patch], cursor=patch.canonical_sequence)
+        return patched
+
+    def _patch_route(self, route: str, patches: list[KeyedPatch], *, cursor: int) -> None:
+        """Advance the held *route* by *patches* to *cursor*; no patches is a no-op."""
+        if not patches:
+            return
+        self._hold(
+            route,
             apply_patches(
-                held,
-                (patch,),
-                cursor=patch.canonical_sequence,
+                self._held[route],
+                patches,
+                cursor=cursor,
                 scope_id=self._scope_id,
                 generated_at=self._clock(),
-            )
+            ),
+            shown=False,
         )
 
     async def connect(self) -> None:
@@ -392,18 +547,64 @@ class ProjectionSeam:
         self._connection = ConnectionValue.DISCONNECTED
 
     def _adopt(self, projection: RouteProjection) -> RouteProjection:
-        """Hold *projection* and take the link's value from the header it carries.
+        """Hold *projection* as the visible route's."""
+        return self._hold(self._route, projection)
 
-        The value is derived rather than asserted: a projection states what its
-        producer could vouch for, and a console that overrode that with a live value
-        of its own would be claiming something no producer stated.
+    def _hold(
+        self, route: str, projection: RouteProjection, *, shown: bool = True
+    ) -> RouteProjection:
+        """Hold *projection* for *route*, evicting past the capacity.
+
+        The visible route's projection also sets the link's value. The value is
+        derived rather than asserted: a projection states what its producer could
+        vouch for, and a console that overrode that with a live value of its own
+        would be claiming something no producer stated.
+
+        Args:
+            route: The route the projection answers.
+            projection: The projection to hold.
+            shown: Whether this counts as the route being used, for the eviction
+                order. A patch arriving in the background does not.
         """
-        self._projection = projection
-        self._connection = connection_value(
+        self._held[route] = projection
+        if shown:
+            self._held.move_to_end(route)
+        if route == self._route:
+            self._connection = self._value_of(projection)
+        self._evict()
+        return projection
+
+    def _drop_hidden(self) -> None:
+        """Drop every held route but the visible one, after a break in the link.
+
+        A reconnect negotiates the visible route alone, and its replay carries only
+        that route's patches, so the other held routes still stand before the gap.
+        Holding them would draw a pre-break frame as current; dropping them makes
+        the next sync read the pinned ones afresh, and any other on its next visit.
+        """
+        for route in [route for route in self._held if route != self._route]:
+            del self._held[route]
+
+    def _evict(self) -> None:
+        """Drop the least recently shown unpinned routes until the cache fits.
+
+        The visible route is never dropped: the frame on screen is drawn from it.
+        """
+        spare = [
+            route for route in self._held if route not in PINNED_ROUTES and route != self._route
+        ]
+        while len(self._held) > self._capacity and spare:
+            route = spare.pop(0)
+            del self._held[route]
+            logger.debug(f"evict route={route} held={len(self._held)}")
+
+    @staticmethod
+    def _value_of(projection: RouteProjection) -> ConnectionValue:
+        """Return the link value the projection's own header states."""
+        return connection_value(
             connection_state=projection.header.connection_state,
             completeness=projection.header.completeness,
         )
-        return projection
 
     def _params(self) -> dict[str, Any]:
         """Return the request parameters that address this seam's tree."""
@@ -478,7 +679,10 @@ class ProjectionSeam:
 
 
 __all__ = [
+    "DEFAULT_ROUTE_CAPACITY",
     "KNOWN_COUNT_LABEL",
+    "PINNED_ROUTES",
+    "PatchListener",
     "ProjectionSeam",
     "ReconnectOutcome",
     "SeamCursor",

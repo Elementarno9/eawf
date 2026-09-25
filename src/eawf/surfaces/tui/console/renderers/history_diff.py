@@ -6,12 +6,13 @@
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 
-PAIRS: tuple[str, ...] = ("41,150 → 41,208", "41,088 → 41,150", "40,990 → 41,088")
-ENTITY = "RUN-538453eb"
+PAIRS: tuple[str, ...] = pt.DIFF_PAIRS
+ENTITY = pt.DIFF_ENTITY
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "field"),
     ("Enter", "field"),
@@ -39,7 +40,7 @@ def render(view: View) -> list[str]:
     grid = Grid([12, 17, 17, 0])
     body = [
         f" SUBJECT      {ENTITY} · EAWF-0042 Bound replay",
-        " BETWEEN      41,150  13:58:04   →   41,208  14:02:11",
+        pt.DIFF_BETWEEN,
         thin(w),
         grid.head(["FIELD", "THEN", "NOW", "CAUSED BY"]),
     ]

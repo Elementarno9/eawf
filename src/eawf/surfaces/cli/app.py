@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 from typing import Annotated
 
-import orjson
 import typer
 
 from eawf.surfaces.cli._version_display import compose_display_version
@@ -120,16 +119,23 @@ def _dispatch_tui(
     workspace: Path | None,
     no_input: bool,
     plain: bool,
+    verbose: bool = False,
 ) -> int:
     """Resolve the launch scope and open the TUI.
 
-    On an interactive TTY this resolves the scope via the cwd-upward
-    ladder (``-w/--workspace`` flag wins, else the nearest ``state.json``
-    determines ``repo`` vs ``workspace``) and launches the Textual
-    :class:`~eawf.surfaces.tui.app.EaApp`. When ``--plain`` / ``--no-input`` is
-    set or stdout is not a TTY it falls back to the deterministic
-    single-frame status emission (:func:`eawf.surfaces.tui.offline.emit_status`)
-    so headless callers stay script-stable.
+    On an interactive TTY this resolves the tree's authority epoch
+    (:func:`eawf.kernel.state.epoch2.authority.resolve_authority`) and opens one of
+    two Textual apps: an epoch-2 tree opens the native console over a live
+    projection seam, and an epoch-1 tree keeps the classic
+    :class:`~eawf.surfaces.tui.app.EaApp`. A tree declared for the epoch-2 canary
+    but stuck mid-migration opens the console on its pre-session entry layer
+    instead of either, so the operator reads the exact repair command rather than
+    a silent fallback. When ``--plain`` / ``--no-input`` is set or stdout is not a
+    TTY this falls back to the deterministic single-frame status emission
+    (:func:`eawf.surfaces.tui.chassis.offline.emit_status`) so headless callers stay
+    script-stable, except a terminal entry-layer state off a TTY, which exits
+    ``4`` instead (SURF-085) rather than misstating a tree the resolver could not
+    attach to. See :mod:`eawf.surfaces.tui.launch` for the full decision.
 
     ``tui`` is the only TUI surface, so both the interactive launch and
     the non-TTY fallback route through it.
@@ -138,30 +144,15 @@ def _dispatch_tui(
         workspace: Optional workspace root from ``-w/--workspace``.
         no_input: Fail-closed flag — forces the deterministic fallback.
         plain: Plain-output flag — forces the deterministic fallback.
+        verbose: Whether the native console's key-trace row is shown (SURF-173).
+            Has no effect on the epoch-1 app, which carries no such row.
 
     Returns:
         Process exit code (``0`` on a clean quit).
     """
-    import sys
+    from eawf.surfaces.tui.launch import launch_tui
 
-    from eawf.surfaces.tui.offline import emit_status
-
-    if no_input or plain or not sys.stdout.isatty():
-        return emit_status(workspace=workspace, no_input=no_input, plain=plain)
-
-    from eawf.kernel.state.enums import ScopeKind
-    from eawf.kernel.state.resolve import resolve_with_reason
-    from eawf.surfaces.tui.app import resolve_scope, run_app
-
-    state_path, _reason = resolve_with_reason(workspace=workspace)
-    if state_path.is_file():
-        try:
-            payload = orjson.loads(state_path.read_bytes())
-            scope_kind = ScopeKind(payload["scope_kind"])
-        except orjson.JSONDecodeError, OSError, KeyError, ValueError:
-            return run_app("repo", state_path)
-        return run_app(resolve_scope(scope_kind), state_path)
-    return run_app("user", None)
+    return launch_tui(workspace=workspace, no_input=no_input, plain=plain, verbose=verbose)
 
 
 @app.command(name="version", rich_help_panel=panel_for("version"))
@@ -197,9 +188,23 @@ def scope_debug(ctx: typer.Context) -> None:
     help="Open the Eä Textual TUI (or deterministic status fallback off-TTY).",
     rich_help_panel=panel_for("tui"),
 )
-def _tui_cmd(ctx: typer.Context) -> None:
+def _tui_cmd(
+    ctx: typer.Context,
+    verbose: Annotated[
+        bool,
+        typer.Option(
+            "--verbose",
+            help="Show the native console's key-trace row (SURF-173). No effect on epoch-1.",
+        ),
+    ] = False,
+) -> None:
     flags: GlobalFlags = ctx.obj
-    rc = _dispatch_tui(workspace=flags.workspace, no_input=flags.no_input, plain=flags.plain_output)
+    rc = _dispatch_tui(
+        workspace=flags.workspace,
+        no_input=flags.no_input,
+        plain=flags.plain_output,
+        verbose=verbose,
+    )
     raise typer.Exit(code=rc)
 
 

@@ -61,7 +61,7 @@ def render(view: View) -> list[str]:
     )
     return boxed(
         view,
-        crumb="Eä ▸ eawf-core ▸ Settings",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Settings",
         ctx=f"LAYER ▸ {lens}",
         pre=[f"  {name.upper()} · {k[0]}"],
         title="STACK · nine layers",

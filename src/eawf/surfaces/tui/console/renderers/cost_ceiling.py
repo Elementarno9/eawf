@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.renderers.registers import native_frame
 from eawf.surfaces.tui.console.session import Session
 
 _KEYS: tuple[tuple[str, str], ...] = (("↑↓", "row"), ("Enter", "run"), ("Esc", "back"))
-_STOPPED: tuple[list[str], ...] = (
-    ["RUN-1c93af08", "13:41", "hard limit reached"],
-    ["RUN-4e2b6c77", "12:08", "hard limit reached"],
-)
+_STOPPED: tuple[tuple[str, str, str], ...] = pt.STOPPED_RUNS
 
 
 def stopped_run(session: Session) -> str | None:
@@ -52,7 +50,7 @@ def render(view: View) -> list[str]:
     )
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Cost ceiling",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Cost ceiling",
         ctx="spend against ceiling · observe only",
         body=body,
         keys=_KEYS,

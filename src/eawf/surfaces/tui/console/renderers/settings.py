@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from eawf.surfaces.tui.console.fixture import SettingsCatalog
+from eawf.surfaces.tui.console.chrome import SettingsCatalog
 from eawf.surfaces.tui.console.frame import Fixed, View, g_frame, g_pad, rule_n
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.renderers.provenance import list_frame
@@ -556,7 +556,11 @@ def render(view: View) -> list[str]:
         + (" · editing" if s.edit else "")
     )
     return g_frame(
-        view, crumb="Eä ▸ eawf-core ▸ Settings", ctx=ctx, body=rows, keys=_keys(view, name, k)
+        view,
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Settings",
+        ctx=ctx,
+        body=rows,
+        keys=_keys(view, name, k),
     )
 
 

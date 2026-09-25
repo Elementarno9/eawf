@@ -74,7 +74,7 @@ def render(view: View) -> list[str]:
     source = f"{art['f']} · {art['k']} · {art['sz']} · written {art['at']} by {art['by']}"
     return boxed(
         view,
-        crumb=f"Eä ▸ eawf-core ▸ Research ▸ CAM-0001 ▸ {art['f']}",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Research ▸ CAM-0001 ▸ {art['f']}",
         ctx=f"Campaign CAM-0001 · artifact {arts.index(art) + 1} of {len(arts)} · as of 14:02",
         pre=[
             f" SOURCE     {source}",

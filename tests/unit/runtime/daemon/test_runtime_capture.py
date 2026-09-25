@@ -17,7 +17,7 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, dispatch
 from eawf.runtime.daemon.methods.state import codex_lifecycle, runtime_capture
 from eawf.runtime.daemon.session import resolve_session_log
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
@@ -174,6 +174,28 @@ def test_runtime_capture_updates_one_active_wave(tmp_path: Path) -> None:
         assert latest["api_duration_ms"] == 17000
         assert latest["cost_usd"] == 0.42
         assert latest["captured_at"] == "2026-06-10T12:00:00Z"
+
+    _run(body)
+
+
+def test_runtime_capture_is_registered_under_runtime_capture(tmp_path: Path) -> None:
+    """The ``@register`` decorator binds ``runtime.capture`` to ``runtime_capture``.
+
+    W33 inserted the private ``_capture_transcript`` helper directly between
+    the decorator and ``runtime_capture``, which silently re-targeted the
+    decorator onto the helper -- the RPC dispatcher then called a sync
+    ``(args) -> Path | None`` function with ``(ctx, params)``. Routing the
+    call through :func:`dispatch` (the real JSON-RPC entry point, not a
+    direct import of ``runtime_capture``) is what makes this red on that
+    defect; every other test here imports the handler directly and would
+    have stayed green regardless of which function the decorator bound.
+    """
+    ctx, _state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W04"]))
+
+    async def body() -> None:
+        result = await dispatch("runtime.capture", ctx, _capture_params())
+        assert result["active_wave_ids"] == ["P30-I05-W04"]
+        assert result["active_count"] == 1
 
     _run(body)
 

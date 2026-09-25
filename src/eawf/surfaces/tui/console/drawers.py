@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.action_menu import menu_rows
 from eawf.surfaces.tui.console.attention import menu_verbs, verb_available
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -53,8 +54,8 @@ def inspect_rows(view: View) -> list[str]:
             f" INSPECT   value       {value}",
             "           quality     measured · as stored in the snapshot",
             "           answered by none · no projection exists yet",
-            "           revision    41,208 · the last known revision",
-            "           freshness   snapshot · 6m 12s old, not live",
+            f"           revision    {group(fx.proto.revision)} · the last known revision",
+            f"           freshness   snapshot · {pt.SNAPSHOT_AGE} old, not live",
         ]
     derived = s.route == "run.detail"
     return [
@@ -68,11 +69,12 @@ def inspect_rows(view: View) -> list[str]:
 def raw_rows(view: View) -> list[str]:
     """Return the raw drawer: a bounded, scrubbed segment of the runner's own words."""
     target = dv.target_id(view.session, view.fixture)
+    last = view.fixture.proto.revision
     return [
         f" RAW       {target} · the runner’s own words, quoted exactly",  # noqa: RUF001
-        "           seq 41,206  kind=progress          ×212 coalesced",  # noqa: RUF001
-        "           seq 41,207  kind=heartbeat         bytes=48",
-        "           seq 41,208  kind=tool.completed    bytes=380",
+        f"           seq {group(last - 2)}  kind=progress          ×212 coalesced",  # noqa: RUF001
+        f"           seq {group(last - 1)}  kind=heartbeat         bytes=48",
+        f"           seq {group(last)}  kind=tool.completed    bytes=380",
         "           bounded · scrubbed · retention-governed",
     ]
 

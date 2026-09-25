@@ -110,7 +110,7 @@ def render(view: View) -> list[str]:
         body.append(lab("GRAPH", "CLM-0004 ← CLM-0002 probe evidence ← EVT-0119"))
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ Evidence ▸ CLM-0004",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Evidence ▸ CLM-0004",
         ctx=f"Claim CLM-0004 · {len(rungs)} rungs · uncertified · as of 14:02",
         body=body,
         keys=_KEYS,

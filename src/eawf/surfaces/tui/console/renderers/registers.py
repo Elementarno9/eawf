@@ -44,9 +44,10 @@ from eawf.surfaces.tui.console.frame import (
     needs_count,
     route_keys_bar,
     thin,
+    window_rows,
 )
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.renderers.read_model import UNAVAILABLE, counts, crumb
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import truth_cell
@@ -166,17 +167,21 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     rows.extend(_BLOCKS[register.route](view, register))
     rows.append(thin(w))
     rows.append(_ROWS.head(["ROW", "KIND", "STATUS"]))
+    withheld = _withheld(register)
+    below = [thin(w), *withheld] if withheld else []
+    win = window_rows(
+        view, total=len(register.rows), cursor=cursor, chrome=len(rows) + 1 + len(below)
+    )
     if not register.rows:
         rows.append(_EMPTY)
-    for index, row in enumerate(register.rows):
+    for index in range(win.start, win.stop):
+        row = register.rows[index]
         status = row.status
         stated = status.value if status.state is TruthState.KNOWN and status.value else None
         # the kind is the collection the read model states, never guessed from the id
         cells = [row.key, row.collection.value, stated or _unknown_token()]
         line = _ROWS.row(cells, index == cursor)
         rows.append(line if index == cursor else Fixed(pad(line, w)))
-    withheld = _withheld(register)
-    if withheld:
-        rows.append(thin(w))
-        rows.extend(withheld)
-    return build(view, rows, route_keys_bar(view, ROUTE_KEYS[register.route]))
+    rows.append(win.line(complete=register.complete))
+    rows.extend(below)
+    return build(view, rows, route_keys_bar(view, native_keys(register.route)))

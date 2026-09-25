@@ -24,7 +24,9 @@ from eawf.kernel.projection.settings import SettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console.attention import open_count
-from eawf.surfaces.tui.console.fixture import EntryState, Fixture
+from eawf.surfaces.tui.console.chrome import EntryState
+from eawf.surfaces.tui.console.fixture import Fixture
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.header import ProcessValue, header_row
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry, Pair, keybar
 from eawf.surfaces.tui.console.session import Session, Toast
@@ -42,7 +44,7 @@ class View:
 
     Attributes:
         session: The session the render reads and publishes into.
-        fixture: The registers.
+        fixture: The registers; one built from the packaged chrome holds no prototype row.
         w: The frame width in cells.
         h: The frame height in rows.
         verbose: Whether the ``--verbose`` trace row is painted.
@@ -71,6 +73,20 @@ class View:
     register: RegisterView | None = None
     attention: RegisterView | None = None
     settings: SettingsView | None = None
+
+
+def unheld(view: View) -> bool:
+    """Return whether the frame has nothing to draw: no prototype rows, no read model held.
+
+    A console built from the packaged chrome alone draws a route only from what its seam
+    holds; anything else would be an empty prototype frame posing as a real one.
+    """
+    return (
+        not view.fixture.prototype
+        and view.projection is None
+        and view.register is None
+        and view.settings is None
+    )
 
 
 class Fixed(str):
@@ -182,6 +198,56 @@ def route_keys_bar(view: View, entries: Sequence[KeyEntry]) -> str:
     nav = view.session.record_nav
     one_row = nav is not None and len(nav) < 2
     return keybar([e.pair() for e in entries if not (one_row and e == KEY["up"])], view.w)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RowWindow:
+    """The slice of a table a frame draws.
+
+    Attributes:
+        start: The offset of the first row drawn.
+        stop: One past the offset of the last row drawn.
+        total: The rows the table holds, drawn or not.
+    """
+
+    start: int
+    stop: int
+    total: int
+
+    def line(self, *, complete: bool = True) -> str:
+        """Return the ``WINDOW`` row, which says how much of the table is off screen.
+
+        Args:
+            complete: Whether the table claims every row; a partial one says ``known``,
+                because its total is a floor rather than a count.
+        """
+        span = f"{group(self.start + 1)}–{group(self.stop)}" if self.stop > self.start else "0"  # noqa: RUF001
+        return f" WINDOW    {span} of {group(self.total)}" + ("" if complete else " known")
+
+
+def window_rows(view: View, *, total: int, cursor: int, chrome: int) -> RowWindow:
+    """Return the rows of a table that fit the frame, the cursor always among them.
+
+    The window moves only when the cursor would leave it, so a keystroke inside the
+    window never scrolls. ``session.scroll`` carries the window between renders and
+    ``session.visible`` is published because the dispatcher pages by it.
+
+    Args:
+        view: The render being built; its height and the rack's reserved rows bound the
+            window.
+        total: The rows the table holds.
+        cursor: The row offset the caret sits on.
+        chrome: Every row of the frame that is not a table row, the keybar excepted.
+
+    Returns:
+        The window, at least one row tall however little room the frame leaves.
+    """
+    session = view.session
+    room = max(1, view.h - 1 - chrome - session.reserved)
+    start = max(min(session.scroll, cursor), cursor - room + 1)
+    start = max(0, min(start, total - room))
+    session.scroll, session.visible = start, room
+    return RowWindow(start=start, stop=min(total, start + room), total=total)
 
 
 def _swapped_keys(session: Session, keys: str, w: int) -> str:

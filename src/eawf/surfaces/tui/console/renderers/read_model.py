@@ -40,9 +40,19 @@ from eawf.kernel.projection.truth import TruthField, TruthState
 from eawf.kernel.projection.verification import HealthReadModel, RuntimeTupleRow
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import group
-from eawf.surfaces.tui.console.frame import Fixed, Table, View, bar, build, route_keys_bar, thin
+from eawf.surfaces.tui.console.frame import (
+    Fixed,
+    Table,
+    View,
+    bar,
+    build,
+    route_keys_bar,
+    thin,
+    window_rows,
+)
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, truth_cell
@@ -185,29 +195,38 @@ def restore(session: Session, model: RouteReadModel) -> int:
     return index
 
 
-def record_rows(view: View, model: RouteReadModel, cursor: int) -> list[str]:
-    """Return the record table: its head, then one line per row the projection carried.
+def record_rows(
+    view: View, model: RouteReadModel, cursor: int, *, above: int, below: int
+) -> list[str]:
+    """Return the record table: its head, the rows around the cursor, and its window.
 
     The table is the part every native frame shares below its own sections, so the routes
     that draw a bundle, a candidate's readiness or a card above it print the same rows in
-    the same columns as the routes that draw nothing else.
+    the same columns as the routes that draw nothing else. The rows are windowed into
+    whatever height the sections around the table leave.
 
     Args:
         view: The render being built; its width is what each line is padded to.
         model: The read model whose rows are drawn.
         cursor: The row offset the caret sits on, as :func:`restore` published it.
+        above: The frame rows drawn above the table.
+        below: The frame rows drawn below the table.
 
     Returns:
-        The head row, then the rows; a read model with none says so on one line.
+        The head row, the windowed rows, then the ``WINDOW`` row; a read model with no
+        rows says so on one line.
     """
     rows = [_ROWS.head(["ROW", "KIND", "STATUS"])]
+    win = window_rows(view, total=len(model.rows), cursor=cursor, chrome=above + 2 + below)
     if not model.rows:
         rows.append(_EMPTY)
-    for index, row in enumerate(model.rows):
+    for index in range(win.start, win.stop):
+        row = model.rows[index]
         # the kind is the collection the read model states, never guessed from the id
         cells = [row.key, row.collection.value, cell(row.field("status"))]
         line = _ROWS.row(cells, index == cursor)
         rows.append(line if index == cursor else Fixed(pad(line, view.w)))
+    rows.append(win.line(complete=model.complete))
     return rows
 
 
@@ -257,16 +276,19 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
         " " + counts(model),
         bar(w),
     ]
+    rd = reads(session)
+    if not rd.complete:
+        rows.extend(
+            [f" ATTACHED  {attached(rd, revision=group(int(model.source_cursor)))}", thin(w)]
+        )
     if regions:
         rows.append(" REGIONS   " + " · ".join(regions))
         rows.append(thin(w))
-    rows.extend(record_rows(view, model, cursor))
-    if isinstance(model, HealthReadModel):
-        rows.append(thin(w))
-        rows.extend(_tuple_rows(model.tuples, w))
-    rows.append(thin(w))
-    rows.extend(unstated_rows(model))
-    return build(view, rows, route_keys_bar(view, ROUTE_KEYS[session.route]))
+    below = [thin(w), *_tuple_rows(model.tuples, w)] if isinstance(model, HealthReadModel) else []
+    below += [thin(w), *unstated_rows(model)]
+    rows.extend(record_rows(view, model, cursor, above=len(rows), below=len(below)))
+    rows.extend(below)
+    return build(view, rows, route_keys_bar(view, native_keys(session.route)))
 
 
 def native(view: View) -> RouteReadModel | None:

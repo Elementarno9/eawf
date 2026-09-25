@@ -150,7 +150,7 @@ def render(view: View) -> list[str]:
     n = str(step[0]).split(" ")[0]
     return g_frame(
         view,
-        crumb=f"Eä ▸ eawf-core ▸ Research ▸ CAM-0001 ▸ Step {n}",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Research ▸ CAM-0001 ▸ Step {n}",
         ctx=f"Campaign CAM-0001 · step {n} of {len(reg.cam_steps)} · as of 14:02",
         body=body,
         keys=keys,

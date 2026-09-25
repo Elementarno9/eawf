@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import (
     TABLES,
     Fixed,
@@ -45,11 +46,7 @@ NO_APPROVAL = "∅ no approval is bound to this candidate"
 
 #: What the membership table says when the projection carried no Milestone.
 NO_MEMBERS = "   this candidate carries no Milestone the read model renders"
-_MEMBERS: tuple[tuple[str, str, str], ...] = (
-    ("MLS-0001 Replay-safe activity", "Runtime", "Jul 14"),
-    ("MLS-0007 Calibration set", "Research", "Jul 15"),
-    ("MLS-0004 Escape-ledger", "Trust", "not yet"),
-)
+_MEMBERS: tuple[tuple[str, str, str], ...] = pt.RELEASE_MEMBERS
 SIGNALS: tuple[tuple[str, str, str], ...] = (
     ("acceptance complete", "no", "1 still in review"),
     ("policy gate", "passed", "receipt EVT-3301"),

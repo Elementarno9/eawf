@@ -53,7 +53,7 @@ def render(view: View) -> list[str]:
     )
     return g_frame(
         view,
-        crumb="Eä ▸ eawf-core ▸ MLS-0007 ▸ Trust",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ MLS-0007 ▸ Trust",
         ctx="Milestone MLS-0007 · 3 truth fields · as of 14:02",
         body=body,
         keys=_KEYS,

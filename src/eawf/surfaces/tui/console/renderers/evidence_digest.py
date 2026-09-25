@@ -57,7 +57,7 @@ def render(view: View) -> list[str]:
     outcome = _UNKNOWN_PREFIX.sub("", str(r["out"])).upper()
     return boxed(
         view,
-        crumb=f"Eä ▸ eawf-core ▸ Evidence ▸ CLM-0004 ▸ Rung {n}",
+        crumb=f"Eä ▸ {view.fixture.scope} ▸ Evidence ▸ CLM-0004 ▸ Rung {n}",
         ctx=f"Claim CLM-0004 · rung {n} of {len(fx.registers.ev_rungs)} · as of 14:02",
         pre=[],
         title=f"RUNG {str(r['n']).upper()} · {outcome}",

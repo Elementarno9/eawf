@@ -43,7 +43,7 @@ from eawf.platform.lint.sigil_totality import (
 )
 from eawf.surfaces.tui.widgets.sigils import ResolvedSigil, status_sigil
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _GATE_PATH = _REPO_ROOT / "tools" / "sigil_totality_gate.py"
 _TOOL_DIR = _GATE_PATH.parent
 

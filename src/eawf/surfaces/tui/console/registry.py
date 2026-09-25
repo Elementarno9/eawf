@@ -37,6 +37,7 @@ from eawf.kernel.projection.read_models import (
     ReadModelKind,
     route_binding_mismatches,
 )
+from eawf.surfaces.tui.console import prototype as pt
 
 
 class RouteFamily(StrEnum):
@@ -432,7 +433,7 @@ def kind_of(entity_id: str | None) -> str:
     return KIND.get((entity_id or "").split("-")[0], "entity")
 
 
-_RUN_PARENT = ("run.detail", "RUN-538453eb")
+_RUN_PARENT = ("run.detail", pt.RUN_PARENT)
 _RM = ReadModelKind
 
 ROUTES: tuple[RouteSpec, ...] = (
