@@ -30,9 +30,9 @@ from textual.geometry import Region
 from textual.theme import Theme
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.pilot_harness import SNAPSHOT_REGEN_ENV
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.console.token_map import TOKEN_MAP, Channel, render_css
-from eawf.surfaces.tui.snapshot.pilot_harness import SNAPSHOT_REGEN_ENV
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 
 from .goldens import GOLDEN_ROOT
 

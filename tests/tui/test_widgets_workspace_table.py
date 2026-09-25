@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import Any
 
 from eawf.surfaces.render.brand import ACCENT_HEX as BRAND_ACCENT_HEX
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_BAND_PALETTE, DEFAULT_RENDER_MODE, EMPTY_STATE
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.surfaces.tui.widgets.workspace_table import (
     PortfolioTotals,

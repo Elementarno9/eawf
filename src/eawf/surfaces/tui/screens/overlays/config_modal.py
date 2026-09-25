@@ -77,6 +77,7 @@ from eawf.kernel.config.registry import (
     tabs_sorted,
 )
 from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.screens.overlays.config_modal_logic import (
     _KEY_COL_FLOOR,
     ConfigModalState,
@@ -98,7 +99,6 @@ from eawf.surfaces.tui.screens.overlays.config_modal_logic import (
     writable_layers_for,
 )
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -361,7 +361,7 @@ class ConfigModal(ModalScreen[None]):
         ``claimed`` lifecycle sigil so the row reads as "this value departs
         from the persisted baseline" with the same half-claimed shape the
         roadmap tree uses for a partially-resolved entity, sourced from the
-        single :mod:`~eawf.surfaces.tui.widgets.sigils` home rather than a
+        single :mod:`~eawf.surfaces.tui.chassis.sigils` home rather than a
         hardcoded ``*``.
 
         Returns:
@@ -398,7 +398,7 @@ class ConfigModal(ModalScreen[None]):
         The line leads with the ``overview`` chrome sigil (the triple-bar
         identity mark, or its ASCII ``=`` fallback) so the writable-layer
         indicator reads as the modal's identity row, resolved through the
-        single :mod:`~eawf.surfaces.tui.widgets.sigils` home rather than a
+        single :mod:`~eawf.surfaces.tui.chassis.sigils` home rather than a
         bare ``save layer:`` label.
         """
         marker = chrome("overview", mode=self._render_mode())
@@ -438,7 +438,7 @@ class ConfigModal(ModalScreen[None]):
         A field whose value departs from the persisted baseline (it sits
         in the staged dirty map) carries the half-filled ``claimed`` sigil
         as its overridden marker, sourced from
-        :func:`~eawf.surfaces.tui.widgets.sigils.glyph` rather than a
+        :func:`~eawf.surfaces.tui.chassis.sigils.glyph` rather than a
         hardcoded ``*`` (see :meth:`_override_marker`); a clean field pads
         with a space so the columns stay aligned.
 

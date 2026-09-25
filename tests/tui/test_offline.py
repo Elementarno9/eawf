@@ -1,6 +1,6 @@
 """Tests for the ``tui`` non-interactive text renderers.
 
-Covers the two deterministic surfaces in :mod:`eawf.surfaces.tui.offline`:
+Covers the two deterministic surfaces in :mod:`eawf.surfaces.tui.chassis.offline`:
 
 * :func:`build_status_text` + :func:`emit_status` — the non-TTY status
   frame contract (``Eä`` brand + ``keymap:`` line + lifecycle counts);
@@ -18,8 +18,8 @@ import orjson
 
 from eawf.kernel.state.models import State
 from eawf.surfaces.render.brand import render_wordmark_ansi
-from eawf.surfaces.tui.offline import build_status_text, emit_status, offline_render
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.offline import build_status_text, emit_status, offline_render
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 #: The two-tone green brand head every offline frame now leads with. Asserting
 #: the full wordmark (not the bare ``Eä`` literal) keeps these contracts in

@@ -20,7 +20,7 @@ from __future__ import annotations
 from textual.app import App
 from textual.filter import Monochrome
 
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 
 
 class PaletteHarnessApp(App[None]):

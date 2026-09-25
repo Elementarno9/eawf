@@ -20,8 +20,8 @@ from textual.app import App, ComposeResult
 from textual.reactive import reactive
 
 from eawf.surfaces.render.bars import BLOCK_EIGHTHS
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.snapshot import settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.surfaces.tui.widgets.variance_tile import EMPTY_STATE, VarianceTile
 

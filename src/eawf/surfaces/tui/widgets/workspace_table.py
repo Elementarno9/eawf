@@ -34,7 +34,7 @@ the totals row LEAD with a lifecycle sigil (:func:`repo_row_sigil` /
 ABANDONED circled-slash for a stale repo, the CLOSED circle otherwise. The
 per-repo phase bar is tinted the green status hue (:func:`_green_hex`); the
 blocker / stale attention chip renders as the warn marker (the
-:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle, warn
+:func:`~eawf.surfaces.tui.chassis.sigils.chrome` ``attention`` triangle, warn
 band) rather than a bare word. The roll-up totals row reads in the BRAND voice
 (:func:`_brand_hex`) so the summary lifts off the per-repo rows as the
 portfolio's own line; its EU bar keeps the consumed-fraction burn band.
@@ -70,6 +70,7 @@ from textual.widgets import DataTable
 
 from eawf.platform.registry.staleness import read_repo_state
 from eawf.surfaces.render.brand import ACCENT_HEX as BRAND_ACCENT_HEX
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_BAND_PALETTE,
     DEFAULT_RENDER_MODE,
@@ -79,7 +80,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
 )
 from eawf.surfaces.tui.widgets.git_pane import gather_git_fields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 if TYPE_CHECKING:
@@ -534,8 +534,8 @@ def totals_row_sigil(totals: PortfolioTotals) -> Sigil:
 def _sigil_hex(sigil: Sigil, *, mode: RenderMode, palette: Mapping[str, str]) -> str:
     """Render *sigil*'s glyph tinted by its lifecycle status, as Rich markup.
 
-    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and the
-    COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the shared
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) and the
+    COLOUR (:func:`~eawf.surfaces.tui.chassis.sigils.tint`) from the shared
     sigils helper so a row leads with a tinted lifecycle mark. The colour is
     baked to a concrete ``#rrggbb`` -- a :class:`textual.widgets.DataTable`
     ``str`` cell is Rich-parsed and cannot resolve the Textual ``$`` palette
@@ -628,7 +628,7 @@ def warn_chip_markup(row: RepoRow, *, mode: RenderMode) -> str | None:
 
     The reskin twin of :func:`attention_chip`: a repo tripping the blocker or
     stale-band threshold renders the warn marker -- the
-    :func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``attention`` triangle,
+    :func:`~eawf.surfaces.tui.chassis.sigils.chrome` ``attention`` triangle,
     tinted the warn band -- followed by the alarm word, rather than a bare
     ``(blocked)`` / ``(stale)`` parenthesised word. A repo tripping both
     trails both words after one shared triangle (``<triangle> blocked stale``,

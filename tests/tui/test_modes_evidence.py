@@ -55,6 +55,7 @@ from eawf.kernel.store.kinds.agent_report import (
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.cross_vendor_jury import PerItemJurorBallot, RubricItemVote
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.modals.report_detail import (
     NO_EVIDENCE_REFS_NOTICE,
     NO_FOLLOWUPS_NOTICE,
@@ -93,7 +94,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests.conftest import make_intent
 

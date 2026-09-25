@@ -12,8 +12,8 @@ import asyncio
 
 from textual.app import App, ComposeResult
 
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 # The bare ``App[None]`` harness exposes no ``render_mode`` reactive, so the
 # checklist falls back to the unicode column: the filled ``check_on``

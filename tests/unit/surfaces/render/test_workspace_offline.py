@@ -22,7 +22,7 @@ from pathlib import Path
 import orjson
 import pytest
 
-from eawf.surfaces.tui.offline import offline_render
+from eawf.surfaces.tui.chassis.offline import offline_render
 from eawf.surfaces.tui.widgets.workspace_table import (
     TOTALS_ROW_LABEL,
     format_totals_line,

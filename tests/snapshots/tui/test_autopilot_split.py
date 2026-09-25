@@ -36,6 +36,7 @@ from eawf.kernel.spec.auq_bridge import compute_ready_frontier
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind, WaveStatus
 from eawf.kernel.state.models import CurrentPointers, Project, State, Wave
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis import sigils
 from eawf.surfaces.tui.modes.autopilot import (
     BLOCKED_BY_MARKER,
     BLOCKED_CAPTION,
@@ -63,7 +64,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
     toast_messages,
 )
-from eawf.surfaces.tui.widgets import sigils
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 _SIZE = (120, 40)

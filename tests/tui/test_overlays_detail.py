@@ -63,6 +63,9 @@ from eawf.observability.telemetry.join import WaveSessionRollup
 from eawf.surfaces.render.link_wrap import PreMarkedText
 from eawf.surfaces.render.units import format_compact_utc, format_tokens
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis import sigils
+from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
+from eawf.surfaces.tui.chassis.sigils import Sigil, status_sigil
 from eawf.surfaces.tui.screens.overlays.detail import (
     _HISTORY_LINK_LINE,
     _TAB_LABEL_TEXT,
@@ -73,12 +76,9 @@ from eawf.surfaces.tui.screens.overlays.detail import (
     tab_label,
 )
 from eawf.surfaces.tui.snapshot import capture_screen_text
-from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
-from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.surfaces.tui.widgets.sigils import Sigil, status_sigil
 from eawf.workflow.agent_report.rollup import AgentReportRow
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
@@ -2394,7 +2394,7 @@ def _assert_golden(golden_path: Path, actual: str) -> None:
     """Compare *actual* to *golden_path* with the standard regen toggle."""
     import os
 
-    from eawf.surfaces.tui.snapshot.pilot_harness import SNAPSHOT_REGEN_ENV
+    from eawf.surfaces.tui.chassis.pilot_harness import SNAPSHOT_REGEN_ENV
 
     if os.environ.get(SNAPSHOT_REGEN_ENV) == "1":
         golden_path.parent.mkdir(parents=True, exist_ok=True)

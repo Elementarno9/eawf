@@ -9,7 +9,7 @@ appears at the top of the scroll as it arrives.
 Non-blocking delivery
 ---------------------
 The pane never touches the streaming socket itself. The App's read-only
-:class:`~eawf.surfaces.tui.state_binding.StateBinding` already consumes the
+:class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` already consumes the
 ``event.subscribe`` stream on a worker thread (``asyncio.to_thread`` ->
 blocking ``readline`` loop) and marshals each decoded envelope back to the
 event loop via ``run_coroutine_threadsafe`` -> :meth:`EaApp._on_event`. So
@@ -33,8 +33,8 @@ list.
 Cosmic-terminal reskin
 ----------------------
 Each event row leads with a two-cell lifecycle-sigil column -- the
-shared SHAPE glyph (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) tinted
-by its Wong status hue (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) --
+shared SHAPE glyph (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) tinted
+by its Wong status hue (:func:`~eawf.surfaces.tui.chassis.sigils.tint`) --
 so the operator reads the lifecycle of each event (claimed / running /
 closed / failed) at a glance without parsing the summary prose. The
 sigil is followed by a fixed-width wall-clock column and the
@@ -64,6 +64,7 @@ from textual.widgets import Static
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
@@ -74,7 +75,6 @@ from eawf.surfaces.tui.widgets.empty_state import (
 )
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ _DEFAULT_RENDER_MODE: str = "unicode"
 #: ring, a completed transition (closed / activated-then-done / ok) the
 #: filled CLOSED circle, a failure / drift / alarm the FAILED cross, and an
 #: in-flight transition the RUNNING diamond. The SHAPE comes from the shared
-#: :mod:`~eawf.surfaces.tui.widgets.sigils` home; no glyph is invented here.
+#: :mod:`~eawf.surfaces.tui.chassis.sigils` home; no glyph is invented here.
 _STATUS_SIGIL: dict[str, Sigil] = {
     "pending": Sigil.PENDING,
     "claimed": Sigil.CLAIMED,
@@ -288,8 +288,8 @@ def format_event_row(envelope: Envelope) -> str:
 def format_event_markup(envelope: Envelope, *, mode: str) -> str:
     """Return the tinted content markup for one feed row in render *mode*.
 
-    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and
-    the COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) of the event's
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) and
+    the COLOUR (:func:`~eawf.surfaces.tui.chassis.sigils.tint`) of the event's
     lifecycle sigil so the leading two-cell column reads as a tinted
     lifecycle mark, then escapes the timestamp / kind / summary tail so an
     arbitrary summary (which may carry literal ``[`` brackets) renders

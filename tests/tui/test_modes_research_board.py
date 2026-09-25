@@ -66,6 +66,7 @@ from eawf.kernel.store.kinds.research_campaign import (
 from eawf.kernel.store.paths import store_path
 from eawf.platform.artifacts.references import Citation
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import status_sigil
 from eawf.surfaces.tui.modes.brief_viewer import (
     BRIEF_EMPTY_MARKDOWN,
     BRIEF_VIEWER_ID,
@@ -127,7 +128,6 @@ from eawf.surfaces.tui.snapshot import (
     toast_messages,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
-from eawf.surfaces.tui.widgets.sigils import status_sigil
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import OpenPause, record_pause
 
@@ -1304,7 +1304,7 @@ def test_empty_tick_preserves_seal_hero_no_glyph_re_added(tmp_path: Path) -> Non
     """
     from textual.widgets import Static as _Static
 
-    from eawf.surfaces.tui.widgets.sigils import chrome
+    from eawf.surfaces.tui.chassis.sigils import chrome
 
     state_path = _write_state(tmp_path, _project_state())
 
@@ -1349,7 +1349,7 @@ def test_empty_tick_keeps_glyph_when_ascii_mode(tmp_path: Path) -> None:
     """
     from textual.widgets import Static as _Static
 
-    from eawf.surfaces.tui.widgets.sigils import chrome
+    from eawf.surfaces.tui.chassis.sigils import chrome
 
     state_path = _write_state(tmp_path, _project_state())
 
@@ -3010,7 +3010,7 @@ def test_render_tree_blocked_question_renders_warn_marker_before_title() -> None
     hue) rather than raise ``KeyError`` on the map lookup -- the error-path guard
     for the shape map's missing key.
     """
-    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+    from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 
     question = _question("OQ-0001", status=OpenQuestionStatus.BLOCKED, blocking=True)
     nodes = build_tree_nodes((), (question,))
@@ -3638,7 +3638,7 @@ def test_compute_round_progress_empty_scope_is_idle_zeroed() -> None:
 
 def test_round_sigil_markup_running_leads_with_the_live_diamond() -> None:
     """A running round leads with the RUNNING diamond, never a raw state word."""
-    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+    from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 
     markup = round_sigil_markup(RoundState.RUNNING, mode=DEFAULT_RENDER_MODE)
     assert glyph(Sigil.RUNNING, mode=DEFAULT_RENDER_MODE) in markup
@@ -3647,7 +3647,7 @@ def test_round_sigil_markup_running_leads_with_the_live_diamond() -> None:
 
 def test_round_sigil_markup_pruned_is_the_withheld_abandoned_mark() -> None:
     """A pruned round wears the withheld ABANDONED mark, never the clean circle."""
-    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+    from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 
     markup = round_sigil_markup(RoundState.PRUNED, mode=DEFAULT_RENDER_MODE)
     assert glyph(Sigil.ABANDONED, mode=DEFAULT_RENDER_MODE) in markup
@@ -3670,7 +3670,7 @@ def test_round_sigil_markup_covers_every_state() -> None:
 
 def test_build_tree_nodes_running_round_carries_running_state_and_sigil() -> None:
     """A campaign with an open question renders a RUNNING round node + sigil."""
-    from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+    from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 
     nodes = build_tree_nodes(
         (_campaign_row(),),

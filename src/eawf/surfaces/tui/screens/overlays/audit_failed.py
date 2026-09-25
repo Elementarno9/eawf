@@ -53,9 +53,9 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.chassis import sigils
+from eawf.surfaces.tui.chassis.sigils import Sigil
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
-from eawf.surfaces.tui.widgets.sigils import Sigil
 
 logger = logging.getLogger(__name__)
 

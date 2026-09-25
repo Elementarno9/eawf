@@ -15,6 +15,8 @@ from pathlib import Path
 from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis import sigils
+from eawf.surfaces.tui.chassis.sigils import Sigil
 from eawf.surfaces.tui.screens.overlays.audit_running import (
     AuditProgress,
     AuditRunningModal,
@@ -22,8 +24,6 @@ from eawf.surfaces.tui.screens.overlays.audit_running import (
     CheckState,
     open_audit_running,
 )
-from eawf.surfaces.tui.widgets import sigils
-from eawf.surfaces.tui.widgets.sigils import Sigil
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

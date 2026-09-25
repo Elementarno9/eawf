@@ -23,7 +23,7 @@ from typing import cast
 from textual.pilot import Pilot
 
 from eawf.surfaces.tui.app import DEGRADED_BANNER_ID, EaApp
-from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
+from eawf.surfaces.tui.chassis.pilot_harness import capture_screen_text, settle_screen
 from eawf.surfaces.tui.widgets.header import CRUMB_SEP
 
 #: A populated repo state (phase / iter / wave active) so the header renders a

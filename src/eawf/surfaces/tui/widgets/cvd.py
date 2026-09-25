@@ -194,7 +194,7 @@ def colour_distance(hex_a: str, hex_b: str) -> float:
 
 #: The five EA_CB (IBM colourblind-safe) lifecycle band swatches, in
 #: lifecycle order, sourced from the canonical
-#: :data:`eawf.surfaces.tui.theme._IBM_VARIABLES` ``status-*`` hexes. Kept
+#: :data:`eawf.surfaces.tui.chassis.theme._IBM_VARIABLES` ``status-*`` hexes. Kept
 #: as an ordered tuple of ``(label, hex)`` so the legend SVG renders the
 #: swatches left-to-right in a stable order (the golden pins that order).
 EA_CB_BANDS: Final[tuple[tuple[str, str], ...]] = (

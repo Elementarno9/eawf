@@ -30,7 +30,7 @@ from textual.app import App
 from textual.pilot import Pilot
 
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.snapshot.pilot_harness import (
+from eawf.surfaces.tui.chassis.pilot_harness import (
     capture_screen_text,
     normalize_snapshot,
     quiesce_volatile_chrome,

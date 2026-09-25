@@ -52,6 +52,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.platform.registry import Registry, RegistryReadError, read_registry
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.pr_list import (
     PrFetch,
     PrFetchStatus,
@@ -61,7 +62,6 @@ from eawf.surfaces.tui.screens.overlays.pr_list import (
     fetch_open_prs,
 )
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -324,7 +324,7 @@ class CrossRepoPrModal(ModalScreen[None]):
         App's resolved render mode so its leading ``dispatch`` sigil tracks a
         unicode <-> ASCII flip; the card title leads with the shared
         ``overview`` sigil, resolved through the single
-        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home.
+        :mod:`~eawf.surfaces.tui.chassis.sigils` SHAPE home.
         """
         mode = self._render_mode()
         title_sigil = chrome("overview", mode=mode)

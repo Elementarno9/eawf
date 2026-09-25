@@ -52,8 +52,8 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import chrome
 from eawf.workflow.lifecycle._capacity import DEFAULT_MAX_PARALLEL_WAVES
 
 logger = logging.getLogger(__name__)

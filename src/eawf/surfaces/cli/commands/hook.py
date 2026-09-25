@@ -1397,7 +1397,7 @@ def sigil_totality(ctx: typer.Context) -> None:
 
     Sweeps every status enum the reskin renders (plus the lifecycle FSM
     terminals) and proves each member resolves through the single resolver
-    :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` to a non-empty glyph
+    :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` to a non-empty glyph
     that is neither the ``?`` fallthrough nor the bare ``.value`` word. The
     check is pure -- it sweeps a fixed enum surface, builds no widget, and
     mutates no state, so it takes no file arguments. It BLOCKS: a value that

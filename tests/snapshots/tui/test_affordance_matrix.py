@@ -52,6 +52,7 @@ from typing import TYPE_CHECKING, NamedTuple
 import pytest
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
 from eawf.surfaces.tui.modes.nav import NAV_SCOPES, legal_scopes_for_mode
 from eawf.surfaces.tui.modes.registry import MODE_REGISTRY
 from eawf.surfaces.tui.snapshot.behaviour_probe import (
@@ -62,7 +63,6 @@ from eawf.surfaces.tui.snapshot.behaviour_probe import (
     record_keypress_transcript,
     sweep_unresolved_affordances,
 )
-from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 from eawf.workflow.audit_dsl import CheckSpec
 from eawf.workflow.audit_dsl.kinds import affordance_parity as ap_module
 from eawf.workflow.audit_dsl.kinds.affordance_parity import (

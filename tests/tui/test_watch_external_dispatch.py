@@ -47,6 +47,7 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.agent_watch import (
     EMPTY_NOTICE,
     WATCH_DEGRADED,
@@ -58,7 +59,6 @@ from eawf.surfaces.tui.modes.agent_watch import (
     watch_empty_notice,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 _T0 = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)

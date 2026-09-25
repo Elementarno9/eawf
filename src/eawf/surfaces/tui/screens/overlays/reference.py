@@ -3,7 +3,7 @@
 The :class:`ReferenceModal` reuses the cosmic-terminal detail-chassis look
 its sibling :class:`~eawf.surfaces.tui.screens.overlays.detail.DetailModal`
 established: the card title carries the overview chrome-glyph mnemonic from
-the shared :mod:`~eawf.surfaces.tui.widgets.sigils` vocabulary, and the
+the shared :mod:`~eawf.surfaces.tui.chassis.sigils` vocabulary, and the
 field rows are aligned ``[$accent]<label>:[/] <value>`` pairs so the
 colons line up in one column. A reference card therefore reads as a
 single-tab slice of the detail card rather than a differently-styled
@@ -25,7 +25,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.urn import parse as parse_urn
 from eawf.surfaces.render.link_wrap import ReferenceKind, iter_refs, linkify_text
-from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.chassis import sigils
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 
 logger = logging.getLogger(__name__)

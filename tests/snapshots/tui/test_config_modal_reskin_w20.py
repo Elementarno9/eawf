@@ -3,7 +3,7 @@
 The reskin migrates the config modal off its hardcoded ``> *`` markers
 onto the shared sigil vocabulary: the overridden-key marker now renders
 the half-filled ``claimed`` sigil (sourced from
-:func:`~eawf.surfaces.tui.widgets.sigils.glyph`), the typed (bool / choice
+:func:`~eawf.surfaces.tui.chassis.sigils.glyph`), the typed (bool / choice
 / float) value cells render as ``<...>`` chips in the green ``$accent``
 palette, and the writable-layer indicator leads with the ``overview``
 chrome sigil. The scalar :class:`~eawf.surfaces.tui.screens.overlays.edit_field.EditFieldModal`
@@ -41,6 +41,7 @@ import pytest
 
 from eawf.kernel.config.registry import ConfigKey, registry_lookup
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.screens.overlays.config_modal import ConfigModal
 from eawf.surfaces.tui.screens.overlays.edit_field import EditFieldModal
 from eawf.surfaces.tui.snapshot import (
@@ -50,7 +51,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 _SIZE = (120, 40)
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "states" / "valid"

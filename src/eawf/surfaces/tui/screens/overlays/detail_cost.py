@@ -44,12 +44,12 @@ from eawf.observability.telemetry.pricing import lookup_pricing
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.surfaces.render.link_wrap import PreMarkedText
 from eawf.surfaces.render.units import format_tokens
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     RenderMode,
     render_eu_bar_plain,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import SessionAttempt, State, Wave

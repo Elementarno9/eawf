@@ -1,6 +1,6 @@
 """Tests for ``/theme auto`` OSC 11 terminal-background detection.
 
-Covers the three detection units added to :mod:`eawf.surfaces.tui.theme` and the
+Covers the three detection units added to :mod:`eawf.surfaces.tui.chassis.theme` and the
 ``apply_theme("auto")`` wiring in :mod:`eawf.surfaces.tui.app`:
 
 * :func:`resolve_auto_theme` — the pure luminance classifier (no I/O):
@@ -30,9 +30,9 @@ from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.tui import theme as theme_mod
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.theme import (
+from eawf.surfaces.tui.chassis import theme as theme_mod
+from eawf.surfaces.tui.chassis.theme import (
     EA_DARK,
     EA_LIGHT,
     OSC11_QUERY,
@@ -44,7 +44,7 @@ from eawf.surfaces.tui.theme import (
     query_terminal_background,
     resolve_auto_theme,
 )
-from eawf.surfaces.tui.theme import (
+from eawf.surfaces.tui.chassis.theme import (
     _parse_osc11 as parse_osc11,
 )
 

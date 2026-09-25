@@ -32,13 +32,13 @@ from textual.binding import Binding
 from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.confirm import ConfirmModal
 from eawf.surfaces.tui.screens.overlays.cross_repo_pr import CrossRepoGroup, CrossRepoPrModal
 from eawf.surfaces.tui.screens.overlays.init_wizard import InitWizardContext, InitWizardModal
 from eawf.surfaces.tui.screens.overlays.multichoice_checklist import MultichoiceChecklist
 from eawf.surfaces.tui.screens.overlays.pr_list import PrFetchStatus, PrListModal, PrRow
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

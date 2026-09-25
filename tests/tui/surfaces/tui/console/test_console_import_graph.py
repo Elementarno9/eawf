@@ -1,7 +1,7 @@
 """The console imports nothing from the epoch-1 TUI tree.
 
 Before this wave the console's projection seam reached into
-``eawf.surfaces.tui.state_binding`` -- a module of the epoch-1 tree -- for its
+``eawf.surfaces.tui.chassis.state_binding`` -- a module of the epoch-1 tree -- for its
 daemon transport. That edge meant the epoch-1 tree could never be deleted
 (the P35 flag day) without breaking the console it was meant to retire in
 favour of. ``state_binding`` (and five siblings it shares no console

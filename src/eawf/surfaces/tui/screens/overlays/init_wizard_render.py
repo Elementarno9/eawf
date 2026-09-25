@@ -35,8 +35,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from eawf.kernel.state.ids import RE_PROJECT_CODE
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -170,7 +170,7 @@ class SubstepState(Enum):
     FAILED = "failed"
 
 
-#: :class:`SubstepState` -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: :class:`SubstepState` -> the lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
 #: whose glyph renders the row. Routed through the single sigil home so the
 #: wizard never hardcodes a glyph: queued -> pending ring (``◌``), running ->
 #: half circle (``◐`` = :attr:`Sigil.CLAIMED`, consistent with the step-rail

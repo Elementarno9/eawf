@@ -39,8 +39,8 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.kernel.state.models import FleetRun
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 logger = logging.getLogger(__name__)
 

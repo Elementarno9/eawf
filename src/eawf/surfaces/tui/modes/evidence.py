@@ -49,6 +49,7 @@ from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.platform.scrub import scan_text
 from eawf.surfaces.render.units import format_compact_utc
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph, status_sigil, tint
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
@@ -59,7 +60,6 @@ from eawf.surfaces.tui.widgets.empty_state import (
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.seal import SEAL_ART_ID
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, status_sigil, tint
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 
@@ -156,7 +156,7 @@ def verdict_sigil(verdict: str, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> Te
     """Return the tinted ratified sigil for an agent-report *verdict*.
 
     Resolves the verdict string through the single extended resolver
-    (:func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`) so the verdict
+    (:func:`~eawf.surfaces.tui.chassis.sigils.status_sigil`) so the verdict
     column wears the same ratified glyph + tint (+ follow-up badge) every
     other pane renders for :class:`~eawf.kernel.state.enums.AgentReportVerdict`
     -- a ``blocked`` verdict wears the warn-tinted withheld mark, not a
@@ -239,7 +239,7 @@ def evidence_legend(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> Text:
     joined wave terminal-failed, so an operator can read a ``@ x`` row without
     memorising the sigil alphabet. Every glyph routes through the same render-
     mode-aware helpers the column uses (:func:`verdict_sigil` for the verdict
-    sigils, :func:`~eawf.surfaces.tui.widgets.sigils.glyph` for the failed
+    sigils, :func:`~eawf.surfaces.tui.chassis.sigils.glyph` for the failed
     cross), so the legend's ascii / unicode column always matches the table's.
 
     Args:

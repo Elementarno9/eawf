@@ -53,6 +53,7 @@ from textual.widgets import Static
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.modals.calibration_drill import (
     CalibrationSet,
     calibration_set_from_report,
@@ -60,7 +61,6 @@ from eawf.surfaces.tui.modals.calibration_drill import (
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 from eawf.workflow.estimation.buckets import FIT_N_MIN, resolve_wave_actual
 from eawf.workflow.estimation.trust_scorecard import (
     TrustScorecard,
@@ -476,9 +476,9 @@ def render_jury_authority(*, mode: RenderMode = DEFAULT_RENDER_MODE) -> str:
     marker pins each metric the next roadmap owns.
 
     The leading banner wears the attention sigil (``glyph`` via the
-    :func:`~eawf.surfaces.tui.widgets.sigils.chrome` helper) so the advisory
+    :func:`~eawf.surfaces.tui.chassis.sigils.chrome` helper) so the advisory
     state reads as "needs attention", never as a pending ring. The OVERRIDDEN
-    marker (the half-filled :data:`~eawf.surfaces.tui.widgets.sigils.Sigil.CLAIMED`
+    marker (the half-filled :data:`~eawf.surfaces.tui.chassis.sigils.Sigil.CLAIMED`
     sigil) lands ONLY on the authority row, marking that the jury's verdict is
     currently held / overridden to advisory.
 

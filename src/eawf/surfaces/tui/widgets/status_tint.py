@@ -13,7 +13,7 @@ runtime ``/theme`` swap stays a CSS var rebind.
 Before this module the Wong deuteranopia-safe fallback hexes were
 hardcoded in three places — ``roadmap_tree.STATUS_COLOURS`` (lifecycle
 status -> hex), ``eu_bar.DEFAULT_BAND_PALETTE`` (ok/warn/err -> hex), and
-the canonical :data:`eawf.surfaces.tui.theme.WONG_VARIABLES` palette. This
+the canonical :data:`eawf.surfaces.tui.chassis.theme.WONG_VARIABLES` palette. This
 module is the single home: it derives both the lifecycle-status tint map
 and the band palette from the canonical Wong palette so a palette retune
 lands in one place, and the widgets import from here rather than re-typing
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import Final
 
-from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 
 #: The brand-book accent-dim hex the selected / focused row wears as its
 #: highlight rectangle -- the fourth brand accent ("accent / dim", named in the
@@ -40,7 +40,7 @@ from eawf.surfaces.tui.theme import WONG_VARIABLES
 SELECTION_TINT: Final[str] = "#0c5a44"
 
 #: Canonical Wong deuteranopia-safe band hexes (``ok`` / ``warn`` / ``err``),
-#: derived from the single :data:`~eawf.surfaces.tui.theme.WONG_VARIABLES`
+#: derived from the single :data:`~eawf.surfaces.tui.chassis.theme.WONG_VARIABLES`
 #: palette so the fallback tint matches the live theme's dark baseline
 #: byte-for-byte. The EU / burn bars resolve their colour band to one of
 #: these hexes when they render into a Rich-parsed cell.

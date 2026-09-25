@@ -1,7 +1,7 @@
 """The console seam rides the binder it was given, and moves nothing that was on it.
 
 The seam owns no transport. It holds one
-:class:`~eawf.surfaces.tui.state_binding.StateBinding` and uses its socket push, its
+:class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` and uses its socket push, its
 always-on poll backstop, its resume cursor and its client for request/response calls.
 A second socket would be a second thing to authorise, probe, throttle and reconnect,
 and the console would then hold two answers to "am I live" that could disagree.
@@ -39,12 +39,12 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     PROJECTION_PUSH_METHOD,
     PROJECTION_SUBSCRIBE_METHOD,
 )
-from eawf.surfaces.tui.console.seam import ProjectionSeam
-from eawf.surfaces.tui.state_binding import (
+from eawf.surfaces.tui.chassis.state_binding import (
     DEFAULT_SUBSCRIBE_METHOD,
     StateBinding,
     StateBindingCallbacks,
 )
+from eawf.surfaces.tui.console.seam import ProjectionSeam
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import MILESTONE_URN
 from tests.integration.runtime.daemon.test_close_lock_split import _state_payload, _write_state
 

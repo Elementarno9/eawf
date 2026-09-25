@@ -42,7 +42,7 @@ def test_mockup_golden_diff_passes_when_capture_matches(
         return expected
 
     monkeypatch.setattr(
-        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
+        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
         _capture,
     )
 
@@ -73,7 +73,7 @@ def test_mockup_golden_diff_fails_with_region_diff(
 ) -> None:
     _write_golden(tmp_path, "+---+\n| expected |\n+---+")
     monkeypatch.setattr(
-        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
+        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
         lambda **_kwargs: "+---+\n| actual |\n+---+",
     )
 
@@ -107,7 +107,7 @@ def test_mockup_golden_diff_detail_is_bounded_for_a_wholesale_divergence(
     """
     _write_golden(tmp_path, "\n".join("e" * 100 for _ in range(60)))
     monkeypatch.setattr(
-        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
+        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
         lambda **_kwargs: "\n".join("c" * 100 for _ in range(60)),
     )
 
@@ -128,7 +128,7 @@ def test_mockup_golden_diff_detail_keeps_a_short_diff_whole(
     """A diff that fits the budget carries no truncation marker."""
     _write_golden(tmp_path, "+---+\n| expected |\n+---+")
     monkeypatch.setattr(
-        "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_text_sync",
+        "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_text_sync",
         lambda **_kwargs: "+---+\n| actual |\n+---+",
     )
 

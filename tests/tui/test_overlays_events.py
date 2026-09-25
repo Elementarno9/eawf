@@ -17,6 +17,7 @@ from rich.text import Text
 from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil
 from eawf.surfaces.tui.screens.overlays.events import (
     EVENT_FILTERS,
     EVENT_RING_SIZE,
@@ -27,7 +28,6 @@ from eawf.surfaces.tui.screens.overlays.events import (
     load_recent_events,
     next_filter,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

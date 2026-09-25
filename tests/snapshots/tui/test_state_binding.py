@@ -6,7 +6,7 @@ loads -- the file has not been migrated up yet -- the bound view trails the
 live schema. This wave surfaces that drift two ways:
 
 * the bound state is migrated IN MEMORY up to the live schema version
-  (:func:`~eawf.surfaces.tui.state_binding.migrate_bound_state`) so every
+  (:func:`~eawf.surfaces.tui.chassis.state_binding.migrate_bound_state`) so every
   pane renders against the current shape; and
 * a staleness banner
   (:func:`~eawf.surfaces.tui.app.stale_schema_banner_message`) surfaces
@@ -44,20 +44,20 @@ from eawf.surfaces.tui.app import (
     EaApp,
     stale_schema_banner_message,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
+from eawf.surfaces.tui.chassis.state_binding import (
+    is_state_schema_stale,
+    live_schema_version,
+    load_state,
+    migrate_bound_state,
+)
 from eawf.surfaces.tui.snapshot import (
     assert_screen_snapshot,
     capture_screen_text,
     normalize_snapshot,
     settle_screen,
 )
-from eawf.surfaces.tui.state_binding import (
-    is_state_schema_stale,
-    live_schema_version,
-    load_state,
-    migrate_bound_state,
-)
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 _SIZE = (120, 40)
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "states" / "valid"

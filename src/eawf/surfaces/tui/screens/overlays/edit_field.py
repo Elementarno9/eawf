@@ -36,7 +36,7 @@ from textual.widgets import Input, Static
 
 from eawf.kernel.config.registry import ConfigKey, coerce_and_validate
 from eawf.surfaces.cli.errors import UserError
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -155,7 +155,7 @@ class EditFieldModal(ModalScreen[Any]):
         as the focused cursor, and the validation row seeds the calm
         (no-error) chip in the same green palette -- it flips to ``$error``
         only when a validation failure lands. Both glyphs are sourced from
-        the single :mod:`~eawf.surfaces.tui.widgets.sigils` home.
+        the single :mod:`~eawf.surfaces.tui.chassis.sigils` home.
         """
         mode = self._render_mode()
         caret = chrome("dispatch", mode=mode)

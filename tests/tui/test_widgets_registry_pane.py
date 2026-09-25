@@ -31,6 +31,7 @@ import pytest
 
 from eawf.platform.registry import Registry, RegistryRepoEntry
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph, tint
 from eawf.surfaces.tui.scopes import WorkspaceScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.git_pane import GitFields
@@ -47,7 +48,6 @@ from eawf.surfaces.tui.widgets.registry_pane import (
     load_registry_rows,
     registry_line_sigil,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _WORKSPACE = _FIXTURES / "05-workspace-state.json"

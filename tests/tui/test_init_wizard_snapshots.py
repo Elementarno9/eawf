@@ -28,6 +28,7 @@ from textual.app import App
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.screens.overlays import init_wizard_render as render
 from eawf.surfaces.tui.screens.overlays.init_wizard import (
     InitWizardContext,
@@ -36,7 +37,6 @@ from eawf.surfaces.tui.screens.overlays.init_wizard import (
     SubstepState,
 )
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"

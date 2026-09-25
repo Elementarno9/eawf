@@ -52,8 +52,8 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import AgentSessionStatus
 from eawf.surfaces.render.brand import render_wordmark_markup
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -252,7 +252,7 @@ def runtime_cell_text(state: State | None, *, mode: str = "unicode") -> str:
     Args:
         state: The currently bound state, or ``None``.
         mode: The App's resolved render-mode label forwarded to
-            :func:`~eawf.surfaces.tui.widgets.sigils.chrome` -- ``"ascii"``
+            :func:`~eawf.surfaces.tui.chassis.sigils.chrome` -- ``"ascii"``
             selects the ASCII harmony glyph, any other value the unicode one.
 
     Returns:

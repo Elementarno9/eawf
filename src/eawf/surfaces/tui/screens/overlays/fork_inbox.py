@@ -60,9 +60,9 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import RiskTier
 from eawf.kernel.state.models import FleetForkResolution
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.toast_emitter import notify_result
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import FleetFork

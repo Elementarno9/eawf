@@ -42,7 +42,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Static
 
 from eawf.platform.subprocess_detach import detached_subprocess_kwargs
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -301,7 +301,7 @@ def _render_row(row: PrRow, *, mode: str = _DEFAULT_RENDER_MODE) -> str:
 
     The cosmic-terminal reskin leads each row with the shared ``dispatch``
     chrome sigil drawn through the single
-    :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home -- a single-cell
+    :mod:`~eawf.surfaces.tui.chassis.sigils` SHAPE home -- a single-cell
     glyph in the ``$accent`` green, so it never strands against the
     ``-selected`` reverse rectangle the way a wide marker would. The grid
     then reads sigil + ``#number`` + title + ``@author`` + state count, each
@@ -423,7 +423,7 @@ class PrListModal(ModalScreen[None]):
         render mode so the leading ``dispatch`` sigil tracks a unicode <->
         ASCII flip; the title leads with the shared ``overview`` sigil so the
         card head reads as a list surface, resolved through the single
-        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home.
+        :mod:`~eawf.surfaces.tui.chassis.sigils` SHAPE home.
         """
         mode = self._render_mode()
         title_sigil = chrome("overview", mode=mode)

@@ -50,10 +50,10 @@ from textual.theme import Theme
 import eawf.surfaces.tui as tui_package
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State
-from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT, EA_THEMES
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import EA_CB, EA_DARK, EA_LIGHT, EA_THEMES
 from eawf.surfaces.tui.widgets.header import Header
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.status_tint import STATUS_COLOURS
 
 from ._palette_harness import PaletteHarnessApp

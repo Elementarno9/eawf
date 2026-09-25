@@ -24,7 +24,7 @@ redirected to a short, disposable directory this suite owns *before* the
 seam's ``connect()`` is ever called, so the one call that resolves the
 well-known runtime socket
 (``StateBinding._daemon_socket_available`` in
-``eawf.surfaces.tui.state_binding``, which reads
+``eawf.surfaces.tui.chassis.state_binding``, which reads
 ``runtime_dir() / "eawfd.sock"`` directly, independent of the injected
 transport) finds this suite's own socket rather than
 ``~/.eawfd/eawfd.sock``. ``connect()`` is therefore genuinely safe to call,

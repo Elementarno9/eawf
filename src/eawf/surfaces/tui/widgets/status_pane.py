@@ -52,6 +52,7 @@ from eawf.kernel.state.enums import (
     WorktreeStatus,
 )
 from eawf.kernel.state.wave_graph import blocked_by
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
@@ -61,7 +62,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
 )
 from eawf.surfaces.tui.widgets.heartbeat import PULSE_INTERVAL_S, pulse_glyph
 from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.variance_tile import render_variance_plain
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 
@@ -123,10 +123,10 @@ _GATE_ASCII: dict[str, str] = {
 
 #: The lifecycle sigil that marks a "live" row (waves / audits / worktrees /
 #: gate). These rows track in-flight activity, so the running mark
-#: (:attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.RUNNING`) flags them as the
+#: (:attr:`~eawf.surfaces.tui.chassis.sigils.Sigil.RUNNING`) flags them as the
 #: live, moving counters -- distinct from the static project / phase / iter
 #: pointer rows that carry no leading sigil. The glyph is resolved through the
-#: shared :func:`~eawf.surfaces.tui.widgets.sigils.glyph` helper so the mark
+#: shared :func:`~eawf.surfaces.tui.chassis.sigils.glyph` helper so the mark
 #: honours the active render mode (unicode diamond vs ASCII ``*``).
 _LIVE_ROW_SIGIL: Sigil = Sigil.RUNNING
 

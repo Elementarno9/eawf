@@ -38,6 +38,7 @@ from eawf.kernel.state.models import (
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 from eawf.surfaces.tui.modes.autopilot import (
     EMPTY_NOTICE,
     FRONTIER_ROW_CLASS,
@@ -55,7 +56,6 @@ from eawf.surfaces.tui.snapshot import (
     normalize_snapshot,
     settle_screen,
 )
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
 
 _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 
@@ -262,7 +262,7 @@ def test_wave_scoped_push_reaches_app_live_event_buffer(
     calls: list[tuple[str, dict[str, object]]] = []
 
     async def body() -> None:
-        from eawf.surfaces.tui import state_binding as sb
+        from eawf.surfaces.tui.chassis import state_binding as sb
 
         monkeypatch.setattr(sb.StateBinding, "_daemon_socket_available", lambda _self: True)
         monkeypatch.setattr(sb, "DaemonClient", lambda *a, **k: _FakeDaemonClient([push], calls))

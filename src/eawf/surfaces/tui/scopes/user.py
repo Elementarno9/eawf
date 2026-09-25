@@ -43,13 +43,13 @@ from eawf.kernel.state.models import (
 )
 from eawf.kernel.state.urn import build as build_urn
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.scopes import ScopeScreen, attention_band
 from eawf.surfaces.tui.scopes._zoom import RepoZoomMixin
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import MODE_ROW_SEP, render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.registry_pane import REGISTRY_EMPTY_CELL, REGISTRY_HINT_LINE
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.workspace_table import WorkspaceTable, build_repo_rows
 
 logger = logging.getLogger(__name__)

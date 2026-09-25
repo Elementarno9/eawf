@@ -60,6 +60,8 @@ from eawf.kernel.state.models import (
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.research_board import (
     EMPTY_ID,
     EMPTY_NOTICE,
@@ -69,9 +71,7 @@ from eawf.surfaces.tui.modes.research_board import (
     question_sigil_markup,
 )
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _THEME = Path(__file__).resolve().parents[3] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _GOLDEN = Path(__file__).resolve().parent / "golden"
@@ -328,7 +328,7 @@ def test_claim_sigil_maps_every_status_to_a_lifecycle_shape() -> None:
 
 def test_claim_sigil_supported_is_tinted_closed_green() -> None:
     """A supported claim's sigil carries the Wong closed-green tint hex."""
-    from eawf.surfaces.tui.widgets.sigils import tint
+    from eawf.surfaces.tui.chassis.sigils import tint
 
     markup = claim_sigil_markup(ClaimStatus.SUPPORTED, mode="unicode")
     assert tint(Sigil.CLOSED) is not None

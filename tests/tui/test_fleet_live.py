@@ -55,6 +55,11 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.pilot_harness import (
+    mutating_action_keys_resolve,
+    push_state_revision,
+    tick_poll_backstop,
+)
 from eawf.surfaces.tui.modes.autopilot import (
     COCKPIT_IDLE,
     COCKPIT_VITALS_ID,
@@ -63,11 +68,6 @@ from eawf.surfaces.tui.modes.autopilot import (
 )
 from eawf.surfaces.tui.screens.overlays.fork_inbox import ForkInboxModal
 from eawf.surfaces.tui.snapshot import settle_screen, toast_messages
-from eawf.surfaces.tui.snapshot.pilot_harness import (
-    mutating_action_keys_resolve,
-    push_state_revision,
-    tick_poll_backstop,
-)
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 

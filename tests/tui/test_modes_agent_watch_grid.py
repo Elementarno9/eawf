@@ -50,6 +50,7 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.kernel.store.envelope import Envelope
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.agent_watch import (
     EMPTY_NOTICE,
     WATCH_DEGRADED,
@@ -63,7 +64,6 @@ from eawf.surfaces.tui.modes.agent_watch import (
     tile_dom_id,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"

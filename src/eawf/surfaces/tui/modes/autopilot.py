@@ -70,7 +70,7 @@ Ready vs blocked split (the cosmetic-terminal reskin)
 -----------------------------------------------------
 The list renders the frontier as two bands. The **ready** band lists the
 claim-ready waves, each leading with the multi-select checkbox affordance
-(:func:`~eawf.surfaces.tui.widgets.sigils.chrome` ``check_on`` / ``check_off``)
+(:func:`~eawf.surfaces.tui.chassis.sigils.chrome` ``check_on`` / ``check_off``)
 and the dispatch chrome arrow. The **blocked** band lists the PENDING waves
 held off the frontier, each naming the dep blocking it (e.g. ``<- P29-I04-W06``)
 so the operator reads what must close or dispatch first. Both glyph columns
@@ -126,9 +126,9 @@ from eawf.kernel.spec.auq_bridge import (
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import latest_close_attempt, resolve_close_budget
+from eawf.surfaces.tui.chassis import sigils
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.toast_emitter import ToastSeverity, notify_result
-from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.empty_state import (
     HONEST_EMPTY_CSS,
     render_empty_state,
@@ -189,7 +189,7 @@ COCKPIT_FRONTIER_SUFFIX: str = "left"
 COCKPIT_THROUGHPUT_LABEL: str = "wv/hr"
 
 #: Run-state sigil map: a :class:`~eawf.kernel.state.models.FleetRunState` value
-#: -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` whose shape
+#: -> the lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil` whose shape
 #: reads the run-state honestly. DRAINING wears the RUNNING diamond (the loop is
 #: actively claiming), PAUSED / HALTED the CLAIMED half-circle (held, not
 #: progressing), DONE the CLOSED filled circle (terminal), IDLE the PENDING ring

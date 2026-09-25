@@ -32,7 +32,7 @@ the timeline IS empty in the happy path.
 Cosmic-terminal reskin
 ----------------------
 The severity column resolves through the shared
-:func:`~eawf.surfaces.tui.widgets.sigils.enforcement_sigil` home (no glyph is
+:func:`~eawf.surfaces.tui.chassis.sigils.enforcement_sigil` home (no glyph is
 invented here): a ``block`` decision wears the hard-deny cross tinted the
 failed hue, a ``warn`` / ``info`` decision the warn triangle. The row
 formatter (:func:`format_enforcement_row`) is pure (markup-free, layout only)
@@ -57,6 +57,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import chrome, enforcement_sigil
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.empty_state import (
     SEAL_HERO_ID,
@@ -67,7 +68,6 @@ from eawf.surfaces.tui.widgets.empty_state import (
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import chrome, enforcement_sigil
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -295,7 +295,7 @@ def format_enforcement_markup(row: EnforcementRow, *, mode: RenderMode) -> str:
     """Return the tinted content markup for one timeline row in render *mode*.
 
     Composes the severity sigil's SHAPE + COLOUR (via
-    :func:`~eawf.surfaces.tui.widgets.sigils.enforcement_sigil`) so the leading
+    :func:`~eawf.surfaces.tui.chassis.sigils.enforcement_sigil`) so the leading
     two-cell column reads as a tinted severity mark -- the hard-deny cross for
     a ``block`` decision, the warn triangle for a ``warn`` / ``info`` one --
     then escapes the time / session / kind / target tail so an arbitrary

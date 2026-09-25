@@ -8,7 +8,7 @@ control that asks the daemon to stop the spawned child.
 Reusing the live-event seam (not a second subscription)
 ------------------------------------------------------
 The pane never opens its own daemon subscription. The App's read-only
-:class:`~eawf.surfaces.tui.state_binding.StateBinding` already consumes the
+:class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` already consumes the
 ``event.subscribe`` push stream on a worker thread and marshals each decoded
 envelope back to the event loop via :meth:`EaApp._on_event`, which fans it
 out to every registered :class:`~eawf.surfaces.tui.modes.feed.FeedListener`.
@@ -101,6 +101,7 @@ from eawf.kernel.state.enums import (
 from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.reputation import FleetVerdictRow, fleet_verdict_rollup
 from eawf.surfaces.render.units import format_tokens
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, status_sigil, tint
 from eawf.surfaces.tui.modes.feed import FEED_ROW_CLASS, format_event_row
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.toast_emitter import ToastSeverity, notify_result
@@ -115,7 +116,6 @@ from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import Footer, render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.output_tail import OutputTail, format_agent_output_lines
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, status_sigil, tint
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 from eawf.workflow.estimation.buckets import BUCKET_EU, EU_MINUTES
 
@@ -345,8 +345,8 @@ _SESSION_SIGIL: dict[AgentSessionStatus, Sigil] = {
 def _sigil_markup(sigil: Sigil, *, mode: RenderMode) -> str:
     """Return *sigil*'s shape tinted by its lifecycle status.
 
-    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and
-    the COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the sigils
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) and
+    the COLOUR (:func:`~eawf.surfaces.tui.chassis.sigils.tint`) from the sigils
     helper so a status renders as a tinted lifecycle mark rather than a raw
     status word; a sigil whose mapped status has no tint falls back to the
     muted span so the mark still renders.
@@ -440,7 +440,7 @@ def verdict_sigil_markup(verdict: AgentReportVerdict, *, mode: RenderMode) -> st
     """Return *verdict*'s outcome-tinted sigil markup for the rollup row.
 
     Resolves the verdict to its ratified glyph + tint + optional badge via the
-    shared :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver (the
+    shared :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` resolver (the
     one home for the verdict -> outcome shape / colour mapping), so a ``pass``
     wears the CLOSED green circle, a ``fail`` the FAILED red cross, a
     ``pass-with-followups`` the closed circle plus its follow-up badge, and a
@@ -1657,7 +1657,7 @@ class LaneState(Enum):
     :attr:`CLOSED` once its wave closed clean, :attr:`FAILED` when its wave
     ended FAILED / ABANDONED, and :attr:`FORK` when the loop paused it to a
     blocking fork (it left the slot for the operator-resolved fork queue). Each
-    state draws a distinct lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+    state draws a distinct lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
     (the SHAPE) and a short detail word so the grid reads at a glance.
     """
 
@@ -1667,7 +1667,7 @@ class LaneState(Enum):
     FORK = "fork"
 
 
-#: A :class:`LaneState` -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: A :class:`LaneState` -> the lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
 #: its row mark draws from. RUNNING wears the diamond (the lane is draining),
 #: CLOSED the filled circle (clean terminal), FAILED the cross (a genuine
 #: failure), FORK the withheld circled-slash (paused for operator resolution) so

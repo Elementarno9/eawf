@@ -5,22 +5,22 @@ TUI lessons and pins the live behaviour the snapshot + Pilot tests cannot:
 
 * **push beside poll** -- a fresh daemon state revision pushed into a mounted
   fleet pane re-renders the rows WITHOUT an app restart
-  (:func:`~eawf.surfaces.tui.snapshot.pilot_harness.push_state_revision`);
+  (:func:`~eawf.surfaces.tui.chassis.pilot_harness.push_state_revision`);
 * **always-on poll backstop** -- with the daemon push leg dark (no socket), the
   binder's mtime-gated poll loop still refreshes the bound state when the
   on-disk ``state.json`` advances
-  (:func:`~eawf.surfaces.tui.snapshot.pilot_harness.tick_poll_backstop`); and
+  (:func:`~eawf.surfaces.tui.chassis.pilot_harness.tick_poll_backstop`); and
 * **non-no-op app.-namespaced actions** -- the new mutating cancel key
   (``k`` -> ``cancel_session``) resolves to a real ``action_*`` handler on the
   screen namespace rather than a silent no-op, and Textual's own
   ``run_action`` dispatcher fires it
-  (:func:`~eawf.surfaces.tui.snapshot.pilot_harness.mutating_action_keys_resolve`).
+  (:func:`~eawf.surfaces.tui.chassis.pilot_harness.mutating_action_keys_resolve`).
 
 The three new harness probes themselves are unit-checked here too (boundary +
 error paths) so the reusable live-behaviour API is covered, not only its first
 caller. Determinism follows the project Pilot-worker rule: each Pilot body
 drains workers via
-:func:`~eawf.surfaces.tui.snapshot.pilot_harness.settle_screen` before
+:func:`~eawf.surfaces.tui.chassis.pilot_harness.settle_screen` before
 asserting.
 """
 
@@ -45,15 +45,15 @@ from eawf.kernel.state.models import (
     State,
 )
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.modes.agent_watch import (
-    AgentWatchModeScreen,
-    WatchGrid,
-)
-from eawf.surfaces.tui.snapshot.pilot_harness import (
+from eawf.surfaces.tui.chassis.pilot_harness import (
     mutating_action_keys_resolve,
     push_state_revision,
     settle_screen,
     tick_poll_backstop,
+)
+from eawf.surfaces.tui.modes.agent_watch import (
+    AgentWatchModeScreen,
+    WatchGrid,
 )
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)

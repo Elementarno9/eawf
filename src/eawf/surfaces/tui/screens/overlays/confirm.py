@@ -26,7 +26,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +121,7 @@ class ConfirmModal(ModalScreen[bool]):
         triangle, or the ASCII ``!`` fallback) in the ``$warn`` attention
         colour so a destructive confirm reads as a pause demanding the
         operator's eye, resolved through the single
-        :mod:`~eawf.surfaces.tui.widgets.sigils` SHAPE home. The footer
+        :mod:`~eawf.surfaces.tui.chassis.sigils` SHAPE home. The footer
         renders the key-hint chord vocab shared across the reskin overlays.
         """
         mode = self._render_mode()

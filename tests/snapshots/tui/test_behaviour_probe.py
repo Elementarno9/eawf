@@ -22,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
 from eawf.surfaces.tui.snapshot.behaviour_probe import (
     OBSERVABLE_FIELDS,
     BehaviourTranscript,
@@ -31,7 +32,6 @@ from eawf.surfaces.tui.snapshot.behaviour_probe import (
     record_flow_terminal_state,
     render_transcript_evidence,
 )
-from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 
 _REPO_STATE = (
     Path(__file__).resolve().parents[2]

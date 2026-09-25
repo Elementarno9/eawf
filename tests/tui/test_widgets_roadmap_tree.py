@@ -20,7 +20,8 @@ from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.models import State
 from eawf.surfaces.render.bars import BLOCK_EIGHTHS
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, settle_screen
+from eawf.surfaces.tui.chassis.pilot_harness import capture_screen_text, settle_screen
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.eu_bar import (
     CANONICAL_BAR_CELLS,
     COMPLETION_FULL,
@@ -47,7 +48,6 @@ from eawf.surfaces.tui.widgets.roadmap_tree import (
     _truncate_body,
     _wave_completion,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 from ._palette_harness import PaletteHarnessApp
 

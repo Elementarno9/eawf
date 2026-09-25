@@ -42,6 +42,7 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, enforcement_sigil, glyph
 from eawf.surfaces.tui.modes.registry import MODE_REGISTRY, mode_bindings, mode_for_name
 from eawf.surfaces.tui.modes.sandbox_events import (
     EMPTY_NOTICE,
@@ -54,7 +55,6 @@ from eawf.surfaces.tui.modes.sandbox_events import (
     load_enforcement_rows,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
-from eawf.surfaces.tui.widgets.sigils import Sigil, enforcement_sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"

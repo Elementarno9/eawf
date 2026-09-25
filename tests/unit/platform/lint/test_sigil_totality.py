@@ -2,7 +2,7 @@
 
 Covers the structural gate that proves every TUI-render status enum value (and
 every lifecycle FSM terminal) resolves to a REAL glyph through the single
-resolver :func:`eawf.surfaces.tui.widgets.sigils.status_sigil` -- never a bare
+resolver :func:`eawf.surfaces.tui.chassis.sigils.status_sigil` -- never a bare
 ``.value`` word, never a ``?`` fallthrough:
 
 - the gate PASSES on the REAL resolver: every covered status value resolves to
@@ -41,7 +41,7 @@ from eawf.platform.lint.sigil_totality import (
     check_sigil_totality,
     covered_members,
 )
-from eawf.surfaces.tui.widgets.sigils import ResolvedSigil, status_sigil
+from eawf.surfaces.tui.chassis.sigils import ResolvedSigil, status_sigil
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _GATE_PATH = _REPO_ROOT / "tools" / "sigil_totality_gate.py"

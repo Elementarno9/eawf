@@ -41,7 +41,7 @@ from eawf.runtime.daemon.methods.state_subscribe import (
     SUBSCRIBE_METHODS,
 )
 from eawf.runtime.daemon.server import handle_connection
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     MILESTONE_URN,
     method_context,

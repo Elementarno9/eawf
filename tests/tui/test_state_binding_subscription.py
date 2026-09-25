@@ -22,7 +22,7 @@ import asyncio
 import orjson
 
 from eawf.kernel.state.enums import StoreKind
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 
 
 def _binding() -> StateBinding:

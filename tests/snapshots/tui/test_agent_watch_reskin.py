@@ -58,6 +58,8 @@ from eawf.kernel.state.models import (
     Project,
     State,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph, tint
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.agent_watch import (
     CANCEL_IDLE,
     CANCEL_NO_DAEMON,
@@ -75,11 +77,9 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
     toast_messages,
 )
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.empty_state import SEAL_HERO_ID
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.surfaces.tui.widgets.seal import SEAL_ART_LINES
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 _THEME = Path(__file__).resolve().parents[3] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _GOLDEN = Path(__file__).resolve().parent / "golden"

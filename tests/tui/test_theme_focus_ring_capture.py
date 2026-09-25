@@ -39,7 +39,7 @@ from textual.theme import Theme
 from textual.widgets import Static
 
 import eawf.surfaces.tui as tui_package
-from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT, EA_THEMES
+from eawf.surfaces.tui.chassis.theme import EA_CB, EA_DARK, EA_LIGHT, EA_THEMES
 
 from ._contrast import contrast_ratio
 from ._palette_harness import PaletteHarnessApp

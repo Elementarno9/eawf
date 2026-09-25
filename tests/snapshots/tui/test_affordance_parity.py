@@ -42,11 +42,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
 from eawf.surfaces.tui.snapshot.behaviour_probe import (
     ProbeStatus,
     record_keypress_transcript,
 )
-from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckResult, CheckSpec
 from eawf.workflow.audit_dsl import models as models_module
 from eawf.workflow.audit_dsl.kinds import affordance_parity as ap_module

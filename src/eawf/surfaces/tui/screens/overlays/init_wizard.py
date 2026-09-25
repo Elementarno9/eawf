@@ -61,6 +61,7 @@ from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.init_wizard_render import (
     CODE_INVALID_HELP,
     CREATED_TITLE,
@@ -125,7 +126,6 @@ from eawf.surfaces.tui.screens.overlays.init_wizard_render import (
 )
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.seal import seal_art_widget
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App

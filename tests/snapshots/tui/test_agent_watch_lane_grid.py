@@ -56,6 +56,8 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.agent_watch import (
     LANE_GRID_EMPTY,
     LANE_GRID_EMPTY_ID,
@@ -63,9 +65,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     AgentWatchModeScreen,
 )
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _THEME = Path(__file__).resolve().parents[3] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"
 _GOLDEN = Path(__file__).resolve().parent / "golden"

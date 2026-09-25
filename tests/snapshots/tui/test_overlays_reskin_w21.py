@@ -36,6 +36,7 @@ from textual.app import App
 from textual.reactive import reactive
 from textual.screen import ModalScreen
 
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.screens.overlays.audit_failed import AuditFailedModal, FailingCheck
 from eawf.surfaces.tui.screens.overlays.audit_running import (
     AuditProgress,
@@ -52,7 +53,6 @@ from eawf.surfaces.tui.screens.overlays.plan_preview import (
 )
 from eawf.surfaces.tui.screens.overlays.reference import ReferenceCard, ReferenceModal
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 
 _THEME = Path(__file__).resolve().parents[3] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"

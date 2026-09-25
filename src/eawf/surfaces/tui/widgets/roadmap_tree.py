@@ -4,7 +4,7 @@ A :class:`~textual.widgets.Tree` that renders the full
 phase → iter → wave hierarchy from the reactive
 :class:`~eawf.kernel.state.models.State`, prefixing each row with a
 lifecycle **sigil** drawn from the shared cosmic-terminal vocabulary
-(:func:`eawf.surfaces.tui.widgets.sigils.glyph`) keyed off the row's
+(:func:`eawf.surfaces.tui.chassis.sigils.glyph`) keyed off the row's
 lifecycle status, and surfacing a right-pinned bar on every row: iter and
 phase rows carry a completion bar (closed ÷ total child waves) rendered by
 the unified :func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar`
@@ -70,6 +70,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.surfaces.render.plan_view import build_roadmap_rows
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.eu_bar import (
     CANONICAL_BAR_CELLS,
     DEFAULT_RENDER_MODE,
@@ -78,7 +79,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_completion_bar,
     render_size_bar,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.status_tint import STATUS_COLOURS, status_colour
 
 if TYPE_CHECKING:
@@ -152,7 +152,7 @@ _MIN_BODY_CHARS: int = 4
 #: :meth:`RoadmapTree.on_resize`.
 _UNSIZED_BUDGET: int = 1024
 
-#: Wave lifecycle status -> the FULL :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: Wave lifecycle status -> the FULL :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
 #: set a leaf row draws. ``ABANDONED`` has no sigil of its own (the cosmic
 #: vocabulary carries no abandoned mark); it reads as :attr:`Sigil.FAILED`
 #: because an abandoned wave is a terminal non-success the same as a failed

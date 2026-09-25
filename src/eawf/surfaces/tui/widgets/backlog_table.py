@@ -35,10 +35,10 @@ from textual.widgets import DataTable
 
 from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.ids import natural_key
-from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
     from textual.events import Resize
@@ -74,7 +74,7 @@ _CLOSED_STATUSES: frozenset[BacklogStatus] = frozenset({BacklogStatus.CLOSED})
 #: ``P1`` as a warning (the ``warn`` amber), and the lower priorities fade
 #: to the ``muted`` grey -- a descending salience ladder from the top
 #: priority down. The hexes are read off the canonical Wong dark palette
-#: (:data:`~eawf.surfaces.tui.theme.WONG_VARIABLES`) because a DataTable
+#: (:data:`~eawf.surfaces.tui.chassis.theme.WONG_VARIABLES`) because a DataTable
 #: ``str`` cell is Rich-parsed and cannot resolve the ``$err`` / ``$warn``
 #: / ``$muted`` palette vars (see the shared
 #: :mod:`~eawf.surfaces.tui.widgets.status_tint` helper's docstring); the
@@ -87,7 +87,7 @@ _PRIORITY_TINT: dict[BacklogPriority, str] = {
     BacklogPriority.P3: WONG_VARIABLES["muted"],
 }
 
-#: Backlog status -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: Backlog status -> the lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
 #: rendered as the row's leading mark. The shape signals the item's
 #: lifecycle stage independently of the priority hue (colour is additive on
 #: top of the glyph, colour-blind safe): an OPEN item is PENDING work, an
@@ -170,7 +170,7 @@ def priority_tint(priority: BacklogPriority) -> str:
 def status_sigil_glyph(status: BacklogStatus, *, mode: str) -> str:
     """Return the leading sigil glyph for a backlog *status* in *mode*.
 
-    Maps the backlog status to its lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+    Maps the backlog status to its lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
     (:data:`_STATUS_SIGIL`) and resolves the glyph in the active render
     mode, so the row carries a single-cell shape mark whose meaning does
     not depend on the priority hue.

@@ -6,7 +6,7 @@ filter cycle (all → errors-only → reports-only → all). ``Esc`` closes.
 
 **Data source.** The long-term shape is a session-only ring buffer
 fed by the daemon ``event.subscribe`` push stream; that stream
-does not exist on the read-only :class:`~eawf.surfaces.tui.state_binding.StateBinding`
+does not exist on the read-only :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding`
 fallback this band ships. So this wave reads the **on-disk event store**
 (``<state_dir>/store/event.jsonl``) read-only via :func:`load_recent_events`
 and renders the tail — the same rows the daemon would replay on subscribe.
@@ -35,9 +35,9 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -63,7 +63,7 @@ _OK_STATUS: str = "ok"
 #: reports-only filter (report events carry ``report`` in their type).
 _REPORT_MARKER: str = "report"
 
-#: Lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` keyed off a
+#: Lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil` keyed off a
 #: lowercased event-status word. A claim transition wears the half-filled
 #: CLAIMED ring, a completed / ok transition the filled CLOSED circle, a
 #: failure the FAILED cross, an in-flight transition the RUNNING diamond.
@@ -287,8 +287,8 @@ def _render_row(row: EventRow, *, mode: RenderMode = DEFAULT_RENDER_MODE) -> str
     """Render one :class:`EventRow` as a tinted, sigil-led content-markup line.
 
     Leads with a two-cell lifecycle-sigil column (the shared SHAPE
-    :func:`~eawf.surfaces.tui.widgets.sigils.glyph` tinted by its Wong status
-    hue via :func:`~eawf.surfaces.tui.widgets.sigils.tint`), then the
+    :func:`~eawf.surfaces.tui.chassis.sigils.glyph` tinted by its Wong status
+    hue via :func:`~eawf.surfaces.tui.chassis.sigils.tint`), then the
     timestamp / type / status / summary tail. The tail is markup-escaped so an
     arbitrary summary (which may carry literal ``[`` brackets) renders verbatim
     through Textual's content-markup parser. Error rows keep their ``$error``

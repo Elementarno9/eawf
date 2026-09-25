@@ -2,7 +2,7 @@
 
 The Watch mode leads its body with a fleet verdict-rollup pane: one row per
 wave that has an auditor verdict, each tinted by its outcome (the
-:class:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver paints a
+:class:`~eawf.surfaces.tui.chassis.sigils.status_sigil` resolver paints a
 ``pass`` green, a ``fail`` red). A fleet with zero verdict rows renders the
 honest-empty
 :data:`~eawf.surfaces.tui.modes.agent_watch.ROLLUP_EMPTY_NOTICE` line rather
@@ -60,6 +60,8 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.observability.eval.reputation import FleetVerdictRow
+from eawf.surfaces.tui.chassis.sigils import chrome, status_sigil
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.agent_watch import (
     ROLLUP_EMPTY_NOTICE,
     SYNTHESIZED_BADGE,
@@ -75,9 +77,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     verdict_sigil_markup,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
-from eawf.surfaces.tui.widgets.sigils import chrome, status_sigil
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"

@@ -29,7 +29,7 @@ or any other false-busy chrome), then the byte-for-byte
 ``<title> - coming soon`` copy in the same green ``$accent``, and a muted
 sub-note that names the empty state as deliberate. The pending sigil is
 the same SHAPE the lifecycle panes draw for a wave that has not started
-(:data:`~eawf.surfaces.tui.widgets.sigils.Sigil.PENDING`), so an
+(:data:`~eawf.surfaces.tui.chassis.sigils.Sigil.PENDING`), so an
 unbuilt mode reads in the project's shared vocabulary -- pending, not
 failed. No spinner, no progress bar, no fabricated activity: a calm,
 green, intentionally-empty mark.
@@ -50,10 +50,10 @@ from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 logger = logging.getLogger(__name__)
 

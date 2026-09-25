@@ -20,7 +20,7 @@ The app remains read-only for ordinary navigation. State enters through `StateBi
 
 `eawf.surfaces.tui.run_app(scope, state_path)` is the interactive entry point. The CLI resolves a `ScopeName` (`repo`, `workspace`, or `user`) before launch and passes the state path to `EaApp`. On mount, `EaApp` pushes the matching scope screen from `EaApp.SCREENS`.
 
-Headless callers do not start Textual. `eawf.surfaces.tui.offline.emit_status` prints a three-line status frame for non-TTY, `--plain`, and `--no-input` paths:
+Headless callers do not start Textual. `eawf.surfaces.tui.chassis.offline.emit_status` prints a three-line status frame for non-TTY, `--plain`, and `--no-input` paths:
 
 ```text
 Eä  <breadcrumb>

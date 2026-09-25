@@ -23,13 +23,13 @@ from textual.app import ComposeResult
 from eawf.kernel.state.enums import EffortBucket
 from eawf.kernel.state.models import State
 from eawf.surfaces.render.bars import BLOCK_FULL
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.heartbeat import (
     HEARTBEAT_GLYPH,
     HEARTBEAT_GLYPH_ASCII,
     HEARTBEAT_GLYPH_DIM,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.status_pane import (
     COLUMN_GAP,
     DASH,

@@ -50,7 +50,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.widget import Widget
 from textual.widgets import Static
 
-from eawf.surfaces.tui.state_binding import load_state
+from eawf.surfaces.tui.chassis.state_binding import load_state
 from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.git_pane import GitPane

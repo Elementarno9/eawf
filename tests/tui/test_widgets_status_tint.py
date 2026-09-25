@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
-from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.status_tint import (
     BAND_HEX,
     SELECTION_TINT,

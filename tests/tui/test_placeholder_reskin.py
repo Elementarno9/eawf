@@ -36,6 +36,7 @@ from pathlib import Path
 from textual.widgets import Static
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.modes.placeholder import (
     COMING_SOON_SUFFIX,
     INTENTIONAL_EMPTY_NOTE,
@@ -48,7 +49,6 @@ from eawf.surfaces.tui.snapshot import (
     normalize_snapshot,
     settle_screen,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"

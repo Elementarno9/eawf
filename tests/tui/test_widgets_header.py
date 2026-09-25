@@ -24,6 +24,7 @@ from eawf.kernel.state.enums import ScopeKind
 from eawf.kernel.state.models import State
 from eawf.surfaces.render.brand import render_wordmark_markup
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.widgets import header as header_mod
 from eawf.surfaces.tui.widgets.header import (
     BRAND,
@@ -36,7 +37,6 @@ from eawf.surfaces.tui.widgets.header import (
     render_header,
     runtime_cell_text,
 )
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 from ._palette_harness import PaletteHarnessApp
 

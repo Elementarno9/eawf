@@ -52,7 +52,7 @@ _BRAND_GAP: str = "  "
 # The cosmic-terminal reskin accent green. The brand wordmark carries
 # this hex on its ``ae`` (U+00E4) glyph via :func:`render_wordmark_markup`;
 # it mirrors the green-rotated ``$accent`` / ``$primary`` palette var the
-# TUI themes resolve (see :data:`eawf.surfaces.tui.theme.WONG_VARIABLES`).
+# TUI themes resolve (see :data:`eawf.surfaces.tui.chassis.theme.WONG_VARIABLES`).
 # Callers that style the brand with ANSI 24-bit colour can pass this
 # through their colour helper; the constant lives here so the canonical
 # hex is grep-able from one place.

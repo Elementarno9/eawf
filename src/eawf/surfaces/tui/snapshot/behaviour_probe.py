@@ -57,7 +57,7 @@ evidence the jury grounds in is pinned to a specific build of the code --
 a transcript divorced from its commit is not admissible.
 
 Determinism: every probe drains the background workers
-(:func:`~eawf.surfaces.tui.snapshot.pilot_harness.settle_screen`, which
+(:func:`~eawf.surfaces.tui.chassis.pilot_harness.settle_screen`, which
 awaits ``app.workers.wait_for_complete()``) before sampling, so a probe
 that offloads work to a worker is observed after the worker settles --
 re-running the same probe list yields the same transcript.
@@ -79,7 +79,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.kernel.state.ids import natural_key
-from eawf.surfaces.tui.snapshot.pilot_harness import settle_screen
+from eawf.surfaces.tui.chassis.pilot_harness import settle_screen
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -442,7 +442,7 @@ async def record_behaviour_transcript(
     resolution path a click would. Around each probe the harness samples
     the observable app state (:func:`_sample_observable_state`), draining
     the background workers first (via
-    :func:`~eawf.surfaces.tui.snapshot.pilot_harness.settle_screen`) so a
+    :func:`~eawf.surfaces.tui.chassis.pilot_harness.settle_screen`) so a
     probe that offloads work to a worker is observed after it settles --
     keeping the transcript deterministic across runs.
 

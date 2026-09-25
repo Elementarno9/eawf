@@ -26,7 +26,7 @@ from itertools import combinations
 
 import pytest
 
-from eawf.surfaces.tui.theme import _IBM_VARIABLES
+from eawf.surfaces.tui.chassis.theme import _IBM_VARIABLES
 from eawf.surfaces.tui.widgets.cvd import (
     CVD_TYPES,
     EA_CB_BANDS,

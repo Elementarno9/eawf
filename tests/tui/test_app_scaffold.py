@@ -43,9 +43,9 @@ from eawf.surfaces.tui.app import (
     _swap_root_logging_to_textual,
     resolve_scope,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks, load_state
 from eawf.surfaces.tui.snapshot import capture_screen_text
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks, load_state
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
@@ -685,7 +685,7 @@ def test_eaapp_healthy_mounts_neither_banner(tmp_path: Path) -> None:
     both either unmounted or hidden, so a healthy operator sees the clean
     chrome.
     """
-    from eawf.surfaces.tui.state_binding import live_schema_version
+    from eawf.surfaces.tui.chassis.state_binding import live_schema_version
 
     payload = orjson.loads(_EMPTY_REPO.read_bytes())
     payload["schema_version"] = live_schema_version()

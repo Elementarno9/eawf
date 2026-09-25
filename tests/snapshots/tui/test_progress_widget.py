@@ -1,6 +1,6 @@
 """Pilot tests for the ProgressBar widget over the unified cell-bar.
 
-Mounts a lone :class:`~eawf.surfaces.tui.widgets.progress.ProgressBar` in a
+Mounts a lone :class:`~eawf.surfaces.tui.chassis.progress.ProgressBar` in a
 bare host carrying the ``render_mode`` reactive (the same seam the live app
 exposes) and asserts the W10 reuse: the progress widget paints the *unified*
 block cell-bar (:func:`~eawf.surfaces.tui.widgets.eu_bar.render_completion_bar`
@@ -20,6 +20,7 @@ import pytest
 from textual.app import App, ComposeResult
 from textual.reactive import reactive
 
+from eawf.surfaces.tui.chassis.progress import ProgressBar
 from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import (
     COMPLETION_FULL,
@@ -27,7 +28,6 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     EMPTY_STATE,
     RenderMode,
 )
-from eawf.surfaces.tui.widgets.progress import ProgressBar
 
 
 class _ProgressHostApp(App[None]):

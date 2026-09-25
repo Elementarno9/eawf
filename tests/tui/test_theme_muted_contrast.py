@@ -20,7 +20,7 @@ This suite pins the fix as a computed budget rather than a hex snapshot:
 ``$panel`` is the tighter of the two backgrounds on the dark themes (it is
 lifted off ``$surface``), so it is the constraint that actually binds; the
 themes pin ``panel`` explicitly for exactly that reason -- see
-:mod:`eawf.surfaces.tui.theme`.
+:mod:`eawf.surfaces.tui.chassis.theme`.
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from __future__ import annotations
 import pytest
 from textual.theme import Theme
 
-from eawf.surfaces.tui.theme import EA_DARK, EA_THEMES
+from eawf.surfaces.tui.chassis.theme import EA_DARK, EA_THEMES
 
 from ._contrast import contrast_ratio, relative_luminance
 

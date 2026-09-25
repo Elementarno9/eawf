@@ -38,6 +38,7 @@ from eawf.surfaces.render.artifact_chassis import (
 )
 from eawf.surfaces.render.brand import render_wordmark_markup
 from eawf.surfaces.render.link_wrap import iter_refs
+from eawf.surfaces.tui.chassis.sigils import status_sigil
 from eawf.surfaces.tui.modes.research_board import (
     EMPTY_NOTICE,
     NONE_YET,
@@ -45,7 +46,6 @@ from eawf.surfaces.tui.modes.research_board import (
     has_research_signal,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
-from eawf.surfaces.tui.widgets.sigils import status_sigil
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Claim, OpenQuestion
@@ -143,7 +143,7 @@ def build_brief_preview_markdown(
     (via :func:`eawf.surfaces.render.artifact_chassis.render_references`) whose
     rows cite the real on-disk sources the preview was projected from. Each claim
     AND open-question row leads with its resolved status sigil
-    (:func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`) so the body speaks
+    (:func:`~eawf.surfaces.tui.chassis.sigils.status_sigil`) so the body speaks
     the Eae sigil language throughout, not just on the single claim bullet. The
     inline ``[N]`` summary markers are linkified to their ``#ref-N`` anchors
     (:func:`link_inline_citations`) so the brief, mounted in a

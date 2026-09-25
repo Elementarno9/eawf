@@ -42,8 +42,8 @@ from eawf.surfaces.tui.app import (
     PaneErrorBoundary,
     render_pane_crash_frame,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.scopes import ATTENTION_BAND_PANE
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

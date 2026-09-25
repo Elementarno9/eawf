@@ -30,6 +30,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import Urgency
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.needs_user import NeedsUserModal, open_needs_user
 from eawf.surfaces.tui.screens.overlays.needs_user_inbox import (
     EMPTY_INBOX_TEXT,
@@ -37,7 +38,6 @@ from eawf.surfaces.tui.screens.overlays.needs_user_inbox import (
     open_needs_user_inbox,
     rank_pauses_by_urgency,
 )
-from eawf.surfaces.tui.widgets.sigils import chrome
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import OpenPause
 

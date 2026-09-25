@@ -7,7 +7,7 @@ The v0.3+ TUI is **Textual** (reversing the prior ``rich`` pick);
   one of three scope screens (``repo`` / ``workspace`` / ``user``) on
   launch, loads the Textual theme, declares the global key bindings
   (arrows primary, vim keys as aliases), and binds ``state.json`` into a
-  reactive attribute via :class:`~eawf.surfaces.tui.state_binding.StateBinding`.
+  reactive attribute via :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding`.
 * The three scope screens are minimal placeholders here — the concrete
   2x2 quadrant / strip+zoom / attention-effort-portfolio compositions
   land in the follow-up waves of this band. The shell establishes the
@@ -25,7 +25,7 @@ outside-left of the scope breadcrumb; navigation lists arrow keys first
 ``Esc``) with vim keys (``hjkl``) as secondary aliases only.
 
 Performance: first paint is dominated by the screen ``compose`` + the
-single read-only :func:`~eawf.surfaces.tui.state_binding.load_state` call
+single read-only :func:`~eawf.surfaces.tui.chassis.state_binding.load_state` call
 issued from ``on_mount``; the mtime-poll task is created but its first
 probe is deferred behind ``asyncio.sleep``, so it never blocks first
 paint. The placeholder screens compose a constant number of widgets,
@@ -63,6 +63,16 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.runtime_dir import runtime_dir
 from eawf.surfaces.render.link_wrap import REFERENCE_KINDS
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.chassis.theme import (
+    DEFAULT_THEME,
+    EA_THEMES,
+    THEME_POLL_INTERVAL_S,
+    detect_auto_theme,
+    detect_os_appearance,
+    resolve_theme_name,
+)
 from eawf.surfaces.tui.modes import (
     DEFAULT_MODE,
     MODE_REGISTRY,
@@ -79,15 +89,6 @@ from eawf.surfaces.tui.screens.overlays.reference import (
     ReferenceTarget,
     resolve_reference,
 )
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
-from eawf.surfaces.tui.theme import (
-    DEFAULT_THEME,
-    EA_THEMES,
-    THEME_POLL_INTERVAL_S,
-    detect_auto_theme,
-    detect_os_appearance,
-    resolve_theme_name,
-)
 from eawf.surfaces.tui.toast_emitter import ToastEmitter
 from eawf.surfaces.tui.widgets.eu_bar import EUBar, RenderMode
 from eawf.surfaces.tui.widgets.header import (
@@ -97,7 +98,6 @@ from eawf.surfaces.tui.widgets.header import (
     build_breadcrumb,
 )
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 if TYPE_CHECKING:
     from eawf.surfaces.tui.modes.feed import FeedListener
@@ -593,7 +593,7 @@ class EaApp(App[None]):
     via :paramref:`scope`; this app pushes the matching screen in
     ``on_mount`` and binds ``state.json`` into the
     reactive :attr:`state` attribute through
-    :class:`~eawf.surfaces.tui.state_binding.StateBinding`.
+    :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding`.
     """
 
     CSS_PATH: ClassVar[str] = "theme.tcss"
@@ -877,7 +877,7 @@ class EaApp(App[None]):
         if initial_state is not None:
             self.state = self._track_and_migrate_state(initial_state)
         elif self._scope != "user" and self._state_path is not None:
-            from eawf.surfaces.tui.state_binding import load_state
+            from eawf.surfaces.tui.chassis.state_binding import load_state
 
             initial_state = load_state(self._state_path)
             if initial_state is not None:
@@ -959,7 +959,7 @@ class EaApp(App[None]):
         event store surfaces an unresolved pause for the active scope and
         no needs_user modal is already open, the modal is auto-opened so
         the operator can answer the paused question. Detection rides the
-        :class:`~eawf.surfaces.tui.state_binding.StateBinding` refresh because
+        :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` refresh because
         there is no daemon push bus yet.
         """
         new_state = self._track_and_migrate_state(new_state)
@@ -1282,7 +1282,7 @@ class EaApp(App[None]):
         """
         from eawf.platform.registry import RegistryReadError, read_registry
         from eawf.surfaces.tui.attention import build_portfolio_attention_feed
-        from eawf.surfaces.tui.state_binding import load_state
+        from eawf.surfaces.tui.chassis.state_binding import load_state
 
         try:
             registry = read_registry()
@@ -1593,7 +1593,7 @@ class EaApp(App[None]):
 
         The TUI binds state read-only, so a state written under an older
         schema is migrated IN MEMORY up to the live daemon schema version
-        (:func:`~eawf.surfaces.tui.state_binding.migrate_bound_state`) before it
+        (:func:`~eawf.surfaces.tui.chassis.state_binding.migrate_bound_state`) before it
         reaches the reactive, so every pane renders against the current shape.
         The pre-migration staleness verdict is recorded on
         :attr:`_stale_schema_seen` (and mirrored onto :attr:`stale_schema`
@@ -1607,7 +1607,7 @@ class EaApp(App[None]):
             The state migrated to the live daemon schema version (unchanged
             when already current or the migration could not run).
         """
-        from eawf.surfaces.tui.state_binding import (
+        from eawf.surfaces.tui.chassis.state_binding import (
             is_state_schema_stale,
             migrate_bound_state,
         )
@@ -1652,7 +1652,7 @@ class EaApp(App[None]):
             return
         banner = cast(Static, matched[0])
         if self.stale_schema:
-            from eawf.surfaces.tui.state_binding import live_schema_version
+            from eawf.surfaces.tui.chassis.state_binding import live_schema_version
 
             bound_version = self._bound_schema_version or "?"
             banner.set_class(False, STALE_SCHEMA_BANNER_HIDDEN_CLASS)
@@ -1911,13 +1911,13 @@ class EaApp(App[None]):
             self.stale_schema = False
             self.state = synthesize_user_state()
         elif scope == "repo" and self._active_repo_path is not None:
-            from eawf.surfaces.tui.state_binding import load_state
+            from eawf.surfaces.tui.chassis.state_binding import load_state
 
             self.state = self._bind_loaded_state(
                 load_state(self._active_repo_path / ".ea" / "state.json")
             )
         elif self._state_path is not None:
-            from eawf.surfaces.tui.state_binding import load_state
+            from eawf.surfaces.tui.chassis.state_binding import load_state
 
             self.state = self._bind_loaded_state(load_state(self._state_path))
         self._scope = scope  # type: ignore[assignment]
@@ -2004,7 +2004,7 @@ class EaApp(App[None]):
         terminal-background verdict cached at construction
         (:attr:`_auto_logical`), so the dark/light choice reflects the real
         terminal without a mid-run TTY query; every other name resolves via
-        the pure :func:`~eawf.surfaces.tui.theme.resolve_theme_name`. An
+        the pure :func:`~eawf.surfaces.tui.chassis.theme.resolve_theme_name`. An
         unrecognised name leaves the theme unchanged and returns ``False`` so
         callers can surface a rejection.
 

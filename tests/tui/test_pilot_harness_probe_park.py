@@ -1,13 +1,13 @@
 """The snapshot harness parks the state binder's daemon probe during quiesce.
 
-:func:`~eawf.surfaces.tui.snapshot.pilot_harness.quiesce_volatile_chrome`
+:func:`~eawf.surfaces.tui.chassis.pilot_harness.quiesce_volatile_chrome`
 forces ``app.degraded`` back to ``False`` before a golden capture. With no
 daemon up, the binder's probe keeps counting socket failures after that, and
 once the count crosses the threshold it flips ``degraded`` true again, so a
 capture taken a moment later held whichever side of that flip the host had
 reached. These tests run the probe at 50 ms with no daemon and prove the flag
 stays down once quiesce has run, and pin
-:meth:`~eawf.surfaces.tui.state_binding.StateBinding.park_daemon_probe` on its
+:meth:`~eawf.surfaces.tui.chassis.state_binding.StateBinding.park_daemon_probe` on its
 own.
 """
 
@@ -22,8 +22,8 @@ from textual.pilot import Pilot
 
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.snapshot.pilot_harness import quiesce_volatile_chrome
-from eawf.surfaces.tui.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.chassis.pilot_harness import quiesce_volatile_chrome
+from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 
 _REPO_STATE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"

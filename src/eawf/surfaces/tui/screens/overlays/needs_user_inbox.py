@@ -39,7 +39,7 @@ from textual.widgets import Static
 
 from eawf.kernel.state.enums import Urgency
 from eawf.surfaces.tui.attention import AttentionKind, format_time_ago
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 if TYPE_CHECKING:
     from textual.app import App
@@ -137,7 +137,7 @@ def _render_row(pause: OpenPause, *, now: datetime, mode: str) -> str:
     The row leads with the shared ``attention`` chrome sigil (the triangle,
     or the ASCII ``!`` fallback) in the ``$warn`` attention colour so each
     open pause is marked at a glance through the single
-    :mod:`~eawf.surfaces.tui.widgets.sigils` home. The urgency token is
+    :mod:`~eawf.surfaces.tui.chassis.sigils` home. The urgency token is
     tinted to draw the eye to the more-immediate rows: ``URGENT`` / ``HIGH``
     render in ``$warn``, the calmer tiers in ``$text-muted``. The pause's
     scope / session label names it in the green ``$accent`` and a muted

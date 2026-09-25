@@ -5,7 +5,7 @@ an ``audit_started`` event for a scope visible in the current screen, it
 shows one row per audit check with a lifecycle-sigil status glyph (the
 closed sigil = pass / the failed sigil = fail / the running sigil = still
 running, drawn from the shared
-:mod:`~eawf.surfaces.tui.widgets.sigils` vocabulary), a block-progress bar
+:mod:`~eawf.surfaces.tui.chassis.sigils` vocabulary), a block-progress bar
 over the reported-check share, and a running ``done/total`` tally. The
 overlay pops on the
 ``audit_completed`` event (the host swaps in
@@ -41,13 +41,13 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.chassis import sigils
+from eawf.surfaces.tui.chassis.sigils import Sigil
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     RenderMode,
     render_completion_bar,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class CheckState(StrEnum):
     FAIL = "fail"
 
 
-#: :class:`CheckState` -> the lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil`
+#: :class:`CheckState` -> the lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil`
 #: whose glyph renders the per-check row. A running check ticks the running
 #: sigil, a pass folds onto the closed sigil, a fail onto the failed sigil --
 #: so the audit overlay shares the SHAPE vocabulary every reskin pane reads
@@ -83,7 +83,7 @@ def _check_glyph(state: CheckState, *, mode: RenderMode) -> str:
     """Return the per-check glyph for *state* in the active render *mode*.
 
     Routes through the single-home sigil vocabulary
-    (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) so the audit overlay
+    (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) so the audit overlay
     never hardcodes a glyph: a running check renders the running sigil, a
     pass the closed sigil, a fail the failed sigil.
 

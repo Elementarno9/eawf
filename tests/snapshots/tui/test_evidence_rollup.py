@@ -54,6 +54,7 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, status_sigil, tint
 from eawf.surfaces.tui.modes.evidence import (
     EMPTY_NOTICE,
     EvidenceModeScreen,
@@ -69,7 +70,6 @@ from eawf.surfaces.tui.snapshot import (
 )
 from eawf.surfaces.tui.widgets.empty_state import brand_sigil_markup
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, status_sigil, tint
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from tests.conftest import make_intent
 

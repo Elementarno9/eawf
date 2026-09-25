@@ -35,7 +35,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 if TYPE_CHECKING:
     from eawf.workflow.skills.bodies.user_question import UserQuestion
@@ -132,7 +132,7 @@ class NeedsUserModal(ModalScreen[str]):
         (the triangle, or the ASCII ``!`` fallback) in the ``$warn``
         attention colour so the prompt reads as a pause demanding the
         operator's eye, resolved through the single
-        :mod:`~eawf.surfaces.tui.widgets.sigils` home. Each option renders as
+        :mod:`~eawf.surfaces.tui.chassis.sigils` home. Each option renders as
         a green ``$accent`` chip prefixed with a leading dot marker.
         """
         mode = self._render_mode()

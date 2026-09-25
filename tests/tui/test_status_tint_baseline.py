@@ -6,7 +6,7 @@ dark ``status-pending`` grey onto the packet's ``#828a94``; every other
 Wong/IBM lifecycle ``status-*`` tint and the ``ok`` / ``warn`` / ``err``
 band hexes stay byte-identical. The sibling
 :mod:`tests.tui.test_widgets_status_tint` suite proves the maps DERIVE
-from :data:`~eawf.surfaces.tui.theme.WONG_VARIABLES` (the DRY contract),
+from :data:`~eawf.surfaces.tui.chassis.theme.WONG_VARIABLES` (the DRY contract),
 but that derivation tracks any WONG retune silently -- a future edit that
 recolours a Wong ``status-*`` hex would keep those tests green.
 
@@ -19,7 +19,7 @@ and the green ``status-closed``.
 
 from __future__ import annotations
 
-from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX, STATUS_COLOURS
 
 #: The documented Wong deuteranopia-safe lifecycle tints, with the pending

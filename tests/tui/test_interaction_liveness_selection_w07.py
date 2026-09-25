@@ -11,9 +11,9 @@ bug: before W01 the roadmap-tree arrows scrolled the pane without advancing its
 cursor, yet the frame changed.
 
 This module gates that class. It pins
-:func:`~eawf.surfaces.tui.snapshot.pilot_harness.assert_footer_movement_key_moves_selection`,
+:func:`~eawf.surfaces.tui.chassis.pilot_harness.assert_footer_movement_key_moves_selection`,
 which captures the active surface's SELECTION identity
-(:func:`~eawf.surfaces.tui.snapshot.pilot_harness._selection_signature`) around
+(:func:`~eawf.surfaces.tui.chassis.pilot_harness._selection_signature`) around
 the press and asserts it changed -- not merely that some pixels repainted. Where
 a surface exposes no selection identity the helper falls back to the frame-change
 assertion so the gate stays total.
@@ -83,16 +83,16 @@ from eawf.kernel.store.kinds.agent_report import (
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.modes.agent_watch import LaneGrid, LaneGridRow, LaneState
-from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
-from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
-from eawf.surfaces.tui.snapshot.pilot_harness import (
+from eawf.surfaces.tui.chassis.pilot_harness import (
     _selection_signature,
     assert_footer_key_responds,
     assert_footer_movement_key_moves_selection,
     settle_screen,
 )
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
+from eawf.surfaces.tui.modes.agent_watch import LaneGrid, LaneGridRow, LaneState
+from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
+from eawf.surfaces.tui.modes.research_board import ResearchBoardModeScreen
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 

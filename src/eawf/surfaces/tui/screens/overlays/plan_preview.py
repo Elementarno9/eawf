@@ -39,7 +39,7 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 from textual.widgets import Static, Tree
 
-from eawf.surfaces.tui.widgets import sigils
+from eawf.surfaces.tui.chassis import sigils
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.workflow.estimation.buckets import wave_estimate_eu
 

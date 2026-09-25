@@ -36,6 +36,8 @@ from textual.app import App, ComposeResult
 from textual.widgets import OptionList
 from textual.widgets.option_list import Option
 
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.palette.command_palette import (
     LIFECYCLE_VERB_NAMES,
     NO_MATCH_PROMPT,
@@ -52,8 +54,6 @@ from eawf.surfaces.tui.snapshot import (
     normalize_snapshot,
     settle_screen,
 )
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 _SIZE = (120, 40)
 _GOLDEN = Path(__file__).resolve().parent / "golden"

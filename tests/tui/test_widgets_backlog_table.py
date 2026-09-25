@@ -18,7 +18,8 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.enums import BacklogPriority, BacklogStatus
 from eawf.kernel.state.models import BacklogItem, State
-from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.chassis.sigils import ASCII_MODE, Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets.backlog_table import (
     _COLUMN_LABELS,
     _ELLIPSIS,
@@ -38,7 +39,6 @@ from eawf.surfaces.tui.widgets.backlog_table import (
     status_sigil_glyph,
     title_budget,
 )
-from eawf.surfaces.tui.widgets.sigils import ASCII_MODE, Sigil, glyph
 
 from ._palette_harness import PaletteHarnessApp
 

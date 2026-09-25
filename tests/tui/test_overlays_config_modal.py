@@ -1780,7 +1780,7 @@ def test_config_enter_expands_multichoice_checklist() -> None:
                 assert choice in text
             # The empty default seeds all-cleared: every row wears the
             # chrome check_off hollow square (reskin replaced "[ ]").
-            from eawf.surfaces.tui.widgets.sigils import chrome
+            from eawf.surfaces.tui.chassis.sigils import chrome
 
             assert chrome("check_off", mode="unicode") in text
 
@@ -1851,7 +1851,7 @@ def test_config_multichoice_space_toggle_then_enter_commits() -> None:
             assert modal._view.dirty.get("ui.dashboard_panes") == [first_choice]
             # The restored static row carries the overridden-key marker --
             # the half-filled claimed sigil the reskin migrated off ``*``.
-            from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
+            from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 
             overridden_marker = glyph(Sigil.CLAIMED, mode="unicode")
             row = modal.query_one(f"#{modal._field_row_id('ui', index)}", Static)

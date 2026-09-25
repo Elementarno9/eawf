@@ -16,7 +16,7 @@ import pytest
 from textual.app import ComposeResult
 
 from eawf.platform.subprocess_detach import detached_subprocess_kwargs
-from eawf.surfaces.tui.theme import WONG_VARIABLES
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
 from eawf.surfaces.tui.widgets import git_pane as git_pane_mod
 from eawf.surfaces.tui.widgets.git_pane import (
     ADDED_VAR,

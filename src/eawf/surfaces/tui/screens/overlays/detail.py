@@ -80,6 +80,8 @@ from eawf.surfaces.render.narrative import (
     render_narrative_bundle,
 )
 from eawf.surfaces.render.units import format_compact_utc, format_tokens
+from eawf.surfaces.tui.chassis import sigils
+from eawf.surfaces.tui.chassis.sigils import Sigil, status_sigil
 from eawf.surfaces.tui.screens.overlays.detail_attempts import attempt_rollup_rows
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     wave_cost_rollup_for_wave,
@@ -90,14 +92,12 @@ from eawf.surfaces.tui.screens.overlays.detail_incident import (
     load_incident_timeline,
 )
 from eawf.surfaces.tui.screens.overlays.reference import tooltip_for_text
-from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.eu_bar import (
     DEFAULT_RENDER_MODE,
     EMPTY_STATE,
     RenderMode,
     render_completion_bar,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, status_sigil
 from eawf.workflow.agent_report.rollup import (
     AgentReportRow,
     error_kind_by_attempt_from_store,
@@ -121,11 +121,11 @@ logger = logging.getLogger(__name__)
 #: section is non-empty.
 #:
 #: The marks are sourced from the single-home sigil vocabulary
-#: (:mod:`~eawf.surfaces.tui.widgets.sigils`): every tab marker --
+#: (:mod:`~eawf.surfaces.tui.chassis.sigils`): every tab marker --
 #: ``overview`` / ``gates`` / ``metrics`` / ``criteria`` / ``cost`` /
-#: ``history`` -- is a :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role,
+#: ``history`` -- is a :func:`~eawf.surfaces.tui.chassis.sigils.chrome` role,
 #: and ``evidence`` reuses the closed lifecycle
-#: :func:`~eawf.surfaces.tui.widgets.sigils.glyph`.
+#: :func:`~eawf.surfaces.tui.chassis.sigils.glyph`.
 _TAB_LABEL_TEXT: dict[str, str] = {
     "overview": "overview",
     "criteria": "criteria",
@@ -137,9 +137,9 @@ _TAB_LABEL_TEXT: dict[str, str] = {
 }
 
 #: Each chassis tab id -> its
-#: :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role. ``evidence`` is the
+#: :func:`~eawf.surfaces.tui.chassis.sigils.chrome` role. ``evidence`` is the
 #: one tab that reuses a lifecycle
-#: :func:`~eawf.surfaces.tui.widgets.sigils.glyph` (the closed circle) rather
+#: :func:`~eawf.surfaces.tui.chassis.sigils.glyph` (the closed circle) rather
 #: than a chrome role, so it is handled separately; every other tab marker --
 #: including the ``criteria`` / ``cost`` / ``history`` markers now folded out
 #: of this module into the single-home chrome vocabulary --
@@ -160,10 +160,10 @@ def _tab_glyph(tab_id: str, *, mode: RenderMode) -> str:
     Routes each tab to the single-home sigil vocabulary so the chassis
     never invents a glyph: every tab marker -- ``overview`` / ``gates`` /
     ``metrics`` and the ``criteria`` / ``cost`` / ``history`` markers folded
-    into :data:`~eawf.surfaces.tui.widgets.sigils._CHROME` -- resolves through
-    a :func:`~eawf.surfaces.tui.widgets.sigils.chrome` role
+    into :data:`~eawf.surfaces.tui.chassis.sigils._CHROME` -- resolves through
+    a :func:`~eawf.surfaces.tui.chassis.sigils.chrome` role
     (:data:`_TAB_CHROME_ROLE`); only ``evidence`` reuses the closed lifecycle
-    :func:`~eawf.surfaces.tui.widgets.sigils.glyph`.
+    :func:`~eawf.surfaces.tui.chassis.sigils.glyph`.
 
     Args:
         tab_id: One of the chassis tab ids.
@@ -199,9 +199,9 @@ def tab_label(tab_id: str, *, mode: RenderMode) -> str:
 
 #: An :class:`~eawf.kernel.state.enums.IncidentStatus` member -> the covered
 #: lifecycle-status member whose ratified
-#: :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` glyph it borrows.
+#: :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` glyph it borrows.
 #: ``IncidentStatus`` is the one detail-card status enum the single-home
-#: :data:`~eawf.surfaces.tui.widgets.sigils._EXTENDED` table does not cover,
+#: :data:`~eawf.surfaces.tui.chassis.sigils._EXTENDED` table does not cover,
 #: so an incident status is first folded onto its nearest covered lifecycle
 #: shape (open -> the OPEN ring, mitigated -> the in-progress diamond,
 #: resolved -> the CLOSED circle, wont-fix -> the DEFERRED withheld slash)
@@ -220,7 +220,7 @@ def _status_with_sigil(status: object, *, mode: RenderMode) -> str:
 
     Routes *status* (a lifecycle-status enum member off the resolved entity)
     through the single-home
-    :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver, so the
+    :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` resolver, so the
     overview / pill reads e.g. the closed filled-circle then ``closed`` rather
     than a bare ``closed`` word -- and the glyph is the SAME ratified mark the
     roadmap tree and status pane render, never an ad-hoc parallel mapping. The
@@ -235,7 +235,7 @@ def _status_with_sigil(status: object, *, mode: RenderMode) -> str:
 
     Returns:
         The ``"<glyph> <status>"`` string, with the glyph resolved via
-        :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil`.
+        :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil`.
     """
     resolved_key = (
         _INCIDENT_STATUS_SIGIL_KEY.get(status) if isinstance(status, IncidentStatus) else status
@@ -345,7 +345,7 @@ class DetailCard:
     #: The resolved entity's lifecycle-status ENUM member (not its ``.value``
     #: word), carried so the overview ``status`` row + the wave status pill
     #: resolve their glyph through the canonical
-    #: :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` resolver at render
+    #: :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` resolver at render
     #: time. ``None`` only on the total fallback card (an unknown id), which
     #: carries no status row to sigil-prefix.
     status_enum: object | None = None

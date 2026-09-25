@@ -56,6 +56,7 @@ from eawf.kernel.store.kinds.agent_report import (
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.modals.evidence_drill import EvidenceDrillModal
 from eawf.surfaces.tui.modals.report_detail import ReportDetailModal
 from eawf.surfaces.tui.modes.evidence import (
@@ -72,7 +73,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.workflow.lifecycle.transitions import open_iter, open_phase, plan_wave
 from eawf.workflow.verify.models import CloseReadiness, CriterionView, GateResult
 from tests.conftest import make_intent

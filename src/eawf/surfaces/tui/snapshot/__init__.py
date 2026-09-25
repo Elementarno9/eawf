@@ -3,7 +3,7 @@
 Two deterministic, CI-stable capture surfaces driven by Textual's
 ``App.run_test()`` Pilot:
 
-* :mod:`~eawf.surfaces.tui.snapshot.pilot_harness` — captures a running
+* :mod:`~eawf.surfaces.tui.chassis.pilot_harness` — captures a running
   screen's rendered terminal as **plain ASCII text** (one line per
   terminal row, trailing whitespace trimmed). Snapshots are ASCII text
   — not SVG / binary — so the goldens are diffable in code review,
@@ -34,14 +34,13 @@ The TUI band is closed and ``tui`` is the sole TUI surface:
    :class:`~eawf.surfaces.tui.app.EaApp`.
 3. **The non-TTY / ``--plain`` / ``--no-input`` fallback uses the
    ``tui`` deterministic status emitter**
-   (:func:`eawf.surfaces.tui.offline.emit_status`); the workspace dashboard
-   text frame is rendered by :func:`eawf.surfaces.tui.offline.offline_render`.
+   (:func:`eawf.surfaces.tui.chassis.offline.emit_status`); the workspace dashboard
+   text frame is rendered by :func:`eawf.surfaces.tui.chassis.offline.offline_render`.
 """
 
 from __future__ import annotations
 
-from eawf.surfaces.tui.snapshot.asciinema import record_cast, write_cast
-from eawf.surfaces.tui.snapshot.pilot_harness import (
+from eawf.surfaces.tui.chassis.pilot_harness import (
     SNAPSHOT_REGEN_ENV,
     assert_screen_snapshot,
     capture_screen_text,
@@ -49,6 +48,7 @@ from eawf.surfaces.tui.snapshot.pilot_harness import (
     settle_screen,
     toast_messages,
 )
+from eawf.surfaces.tui.snapshot.asciinema import record_cast, write_cast
 
 __all__ = [
     "SNAPSHOT_REGEN_ENV",

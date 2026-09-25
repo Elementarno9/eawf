@@ -38,8 +38,8 @@ from textual.app import App, ComposeResult
 from textual.reactive import reactive
 
 from eawf.kernel.state.models import State
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot, settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.surfaces.tui.widgets.status_pane import StatusPane
 

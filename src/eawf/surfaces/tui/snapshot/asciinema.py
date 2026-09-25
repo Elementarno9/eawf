@@ -17,7 +17,7 @@ between frames:
 
 An initial frame is captured before the first step; one frame is captured
 after each step. The captured frames are normalised
-(:func:`~eawf.surfaces.tui.snapshot.pilot_harness.normalize_snapshot`) so the
+(:func:`~eawf.surfaces.tui.chassis.pilot_harness.normalize_snapshot`) so the
 volatile header clock does not churn the cast.
 """
 
@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text, normalize_snapshot
+from eawf.surfaces.tui.chassis.pilot_harness import capture_screen_text, normalize_snapshot
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

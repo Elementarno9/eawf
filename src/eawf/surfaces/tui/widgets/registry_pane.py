@@ -27,7 +27,7 @@ mounting the widget.
 
 The pane paints in the Eae cosmic-terminal language: each repo line leads
 with a lifecycle sigil drawn from the shared I02 sigils source
-(:func:`registry_line_sigil` + :mod:`eawf.surfaces.tui.widgets.sigils`) --
+(:func:`registry_line_sigil` + :mod:`eawf.surfaces.tui.chassis.sigils`) --
 the RUNNING diamond for the active repo, the ABANDONED circled-slash for a
 stale one, the CLOSED circle otherwise -- and the ``(active)`` / ``(stale)``
 chips render in the green accent palette (:data:`CHIP_ACCENT`). The
@@ -54,15 +54,15 @@ from eawf.platform.registry import (
     read_registry,
     registry_mtime,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph, tint
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.markup import escape_markup
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 logger = logging.getLogger(__name__)
 
 #: The content-markup style the ``(active)`` / ``(stale)`` chips wear. The
 #: theme's ``$accent`` palette var is the green-rotated accent of the Eae
-#: cosmic-terminal reskin (see :mod:`eawf.surfaces.tui.theme`), so a chip
+#: cosmic-terminal reskin (see :mod:`eawf.surfaces.tui.chassis.theme`), so a chip
 #: tinted with it reads in the same green as every other reskinned pane's
 #: accent rather than inventing a local colour.
 CHIP_ACCENT: str = "$accent"
@@ -165,8 +165,8 @@ def registry_line_sigil(*, is_active: bool, is_stale: bool) -> Sigil:
 def _sigil_markup(sigil: Sigil, *, mode: RenderMode) -> str:
     """Return *sigil*'s glyph tinted by its lifecycle status, as markup.
 
-    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and
-    the COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) and
+    the COLOUR (:func:`~eawf.surfaces.tui.chassis.sigils.tint`) from the
     shared sigils helper so a registry line leads with a tinted lifecycle
     mark; a sigil whose mapped status carries no tint falls back to the
     muted span so the mark still renders.

@@ -7,7 +7,7 @@ the dispatch contract at the boundary
 
 * an interactive TTY launches the Textual :class:`~eawf.surfaces.tui.app.EaApp`;
 * the non-TTY / ``--plain`` / ``--no-input`` path emits the deterministic
-  ``tui`` status frame (:func:`eawf.surfaces.tui.offline.emit_status`).
+  ``tui`` status frame (:func:`eawf.surfaces.tui.chassis.offline.emit_status`).
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _stub_dispatch(
         return 0
 
     monkeypatch.setattr("eawf.surfaces.tui.app.run_app", fake_run_app)
-    monkeypatch.setattr("eawf.surfaces.tui.offline.emit_status", fake_emit_status)
+    monkeypatch.setattr("eawf.surfaces.tui.chassis.offline.emit_status", fake_emit_status)
 
     class _Stdout:
         @staticmethod

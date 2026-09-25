@@ -47,11 +47,11 @@ from textual.app import ComposeResult
 
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.scopes.user import PortfolioTable
 from eawf.surfaces.tui.snapshot import capture_screen_text, normalize_snapshot, settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_BAND_PALETTE
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.widgets.workspace_table import (
     _COLUMNS,
     _NARROW_BAR_CELLS,

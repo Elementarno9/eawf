@@ -16,12 +16,13 @@ from textual.reactive import reactive
 from textual.screen import ModalScreen
 
 from eawf.kernel.spec.common import GateSpec
+from eawf.surfaces.tui.chassis import pilot_harness
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.screens.overlays.init_wizard import (
     InitWizardContext,
     InitWizardModal,
 )
-from eawf.surfaces.tui.snapshot import pilot_harness, settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
+from eawf.surfaces.tui.snapshot import settle_screen
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
 from eawf.workflow.audit_dsl import CHECK_REGISTRY, CheckResult, CheckSpec
 from eawf.workflow.audit_dsl.kinds.mockup_image_diff import LIVE_CAPTURE_SENTINEL
@@ -39,7 +40,7 @@ _ROUND_MOCKUP_REL = f"{_FIXTURES_REL}/mockup_round_1col.png"
 _FAITHFUL_TUI_REL = f"{_FIXTURES_REL}/tui_round_1col_faithful.png"
 _SQUARE_TUI_REL = f"{_FIXTURES_REL}/tui_square_1col_divergent.png"
 #: Dotted path to the live PNG capture the image gate calls in live mode.
-_CAPTURE_PNG_SYNC = "eawf.surfaces.tui.snapshot.pilot_harness.capture_mockup_golden_screen_png_sync"
+_CAPTURE_PNG_SYNC = "eawf.surfaces.tui.chassis.pilot_harness.capture_mockup_golden_screen_png_sync"
 _SIZE = (120, 44)
 _RESVG = "resvg"
 _HAS_RESVG = shutil.which(_RESVG) is not None

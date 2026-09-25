@@ -1,7 +1,7 @@
 """Pure snapshot-text normalisation, free of any Textual dependency.
 
 The TUI snapshot harness
-(:mod:`eawf.surfaces.tui.snapshot.pilot_harness`) captures a live
+(:mod:`eawf.surfaces.tui.chassis.pilot_harness`) captures a live
 Textual screen and normalises two volatile cells before comparing
 against a golden ``.txt`` fixture: the header wall-clock and the
 environment-dependent daemon-degraded banner.

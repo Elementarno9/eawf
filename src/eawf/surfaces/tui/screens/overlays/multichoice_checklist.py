@@ -11,7 +11,7 @@ their ``MultichoiceChecklist`` qualname so the modal's
 ``on_multichoice_checklist_*`` handler names resolve unchanged.
 
 The cosmic-terminal reskin draws the per-line toggle marks through the
-shared :func:`~eawf.surfaces.tui.widgets.sigils.chrome` SHAPE home -- the
+shared :func:`~eawf.surfaces.tui.chassis.sigils.chrome` SHAPE home -- the
 filled ``check_on`` lozenge for a selected choice and the hollow
 ``check_off`` square for a cleared one -- so the marks track the App's
 render mode (the unicode lozenges under a unicode surface, the ``[x]`` /
@@ -28,7 +28,7 @@ from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static
 
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 #: Render-mode label threaded into the sigil helper when the host App
 #: exposes no ``render_mode`` (a bare standalone harness): the unicode
@@ -42,7 +42,7 @@ class MultichoiceChecklist(Static):
     Mounted in place of the focused field row when the operator presses
     ``Enter`` on a ``multichoice`` field. Each declared choice renders the
     shared ``check_on`` filled mark (selected) or ``check_off`` empty mark
-    (cleared) drawn through the :mod:`~eawf.surfaces.tui.widgets.sigils`
+    (cleared) drawn through the :mod:`~eawf.surfaces.tui.chassis.sigils`
     SHAPE home; a ``>`` caret marks the focused line. The widget owns the
     keyboard while open:
 

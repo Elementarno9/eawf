@@ -1,7 +1,7 @@
 """Close-gate bar for the W32 offline daemon-down brand-frame reskin.
 
 The headless brand frame (the full-screen daemon-down splash rendered by
-:mod:`eawf.surfaces.tui.offline` when no daemon is reachable) used to head
+:mod:`eawf.surfaces.tui.chassis.offline` when no daemon is reachable) used to head
 with a colourless / old-teal ``Eä`` while the live interactive header
 (:func:`eawf.surfaces.tui.widgets.header.render_header`) was reskinned to the
 two-tone cosmic-terminal green. This suite proves the offline frame now paints
@@ -37,8 +37,8 @@ from eawf.surfaces.render.brand import (
     accent_sgr,
     render_wordmark_ansi,
 )
-from eawf.surfaces.tui.offline import build_status_text, offline_render
-from eawf.surfaces.tui.widgets.sigils import chrome
+from eawf.surfaces.tui.chassis.offline import build_status_text, offline_render
+from eawf.surfaces.tui.chassis.sigils import chrome
 
 #: The leading brand glyph (UX-19) + single space the offline frame now heads
 #: with, before the two-tone wordmark -- the brand mark the live header leads

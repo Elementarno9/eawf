@@ -177,7 +177,7 @@ def _launch_entry(*, chrome: ConsoleChrome, state_id: str, verbose: bool) -> int
     from eawf.surfaces.tui.console.session import SessionSetup
 
     app = ConsoleApp(chrome=chrome, clock=Clock(), verbose=verbose)
-    app.reset(SessionSetup(route=_ENTRY_ROUTE, entry_sel=_entry_sel(chrome, state_id)))
+    app.reset(SessionSetup(route=_ENTRY_ROUTE, entrySel=_entry_sel(chrome, state_id)))
     _run_console(app, None)
     if _is_terminal(chrome, state_id):
         return TERMINAL_ENTRY_EXIT_CODE

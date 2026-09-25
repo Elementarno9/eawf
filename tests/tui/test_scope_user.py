@@ -24,6 +24,7 @@ import pytest
 
 from eawf.kernel.state.models import State
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.scopes import ScopeScreen, UserScreen
 from eawf.surfaces.tui.scopes.user import (
     HONEST_EMPTY_DIRECTIVE,
@@ -41,7 +42,6 @@ from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.header import BRAND, DEFAULT_PROJECT_CODE, Header
 from eawf.surfaces.tui.widgets.registry_pane import REGISTRY_EMPTY_CELL, REGISTRY_HINT_LINE
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.widgets.workspace_table import (
     TOTALS_ROW_LABEL,
     WorkspaceTable,

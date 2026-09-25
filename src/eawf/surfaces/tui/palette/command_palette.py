@@ -43,6 +43,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.palette.verbs import (
     PaletteVerb,
     ScopeName,
@@ -50,7 +51,6 @@ from eawf.surfaces.tui.palette.verbs import (
     split_verb_args,
     visible_verbs,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 
 if TYPE_CHECKING:
     from textual.app import App

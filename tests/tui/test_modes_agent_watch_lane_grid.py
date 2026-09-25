@@ -4,7 +4,7 @@ The Watch mode's FA3 lane grid generalizes the I07-W08 watch grid into a
 one-row-per-lane fleet lens: each row reads
 ``<sigil> <wave> <vendor> <elapsed> <tok/$> <tier> <sandbox> <detail>`` (the
 ``<sandbox>`` column is the U5 cross-vendor parity lens) with a distinct
-lifecycle :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` per running / closed /
+lifecycle :class:`~eawf.surfaces.tui.chassis.sigils.Sigil` per running / closed /
 failed / fork state. Arrows move the selection; Enter posts a
 :class:`~eawf.surfaces.tui.modes.agent_watch.LaneGrid.Zoom` message naming the
 selected lane's wave so the host zooms it to the FA4 single-session view (C1). A
@@ -67,6 +67,8 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.runtime.sandbox.policy import SandboxPolicy
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.modes.agent_watch import (
     LANE_GRID_EMPTY,
     LANE_GRID_EMPTY_ID,
@@ -81,9 +83,7 @@ from eawf.surfaces.tui.modes.agent_watch import (
     render_lane_row,
 )
 from eawf.surfaces.tui.snapshot import settle_screen
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.eu_bar import RenderMode
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.surfaces.tui.widgets.status_tint import SELECTION_TINT
 
 _THEME = Path(__file__).resolve().parents[2] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"

@@ -56,7 +56,7 @@ from eawf.surfaces.tui.attention import (
     has_acute,
     idle_next_action,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -90,7 +90,7 @@ def _kind_glyph(kind: AttentionKind, *, mode: str) -> str:
     the FAILED lifecycle sigil (the multiplication cross); every other acute
     kind (pause / incident / blocking question) wears the shared
     ``attention`` chrome triangle. The mark column (unicode vs ASCII) is
-    chosen by *mode* through the single :mod:`~eawf.surfaces.tui.widgets.sigils`
+    chosen by *mode* through the single :mod:`~eawf.surfaces.tui.chassis.sigils`
     home, so no glyph is invented locally.
 
     Args:
@@ -113,7 +113,7 @@ def _kind_mark_markup(kind: AttentionKind, *, mode: str) -> str:
     so it stands out from the rest of the band; every other acute kind wears
     the shared ``attention`` chrome triangle in the band's ``$warn`` colour.
     Both columns (unicode / ASCII) resolve through the single
-    :mod:`~eawf.surfaces.tui.widgets.sigils` home.
+    :mod:`~eawf.surfaces.tui.chassis.sigils` home.
 
     Args:
         kind: The acute source category to mark.

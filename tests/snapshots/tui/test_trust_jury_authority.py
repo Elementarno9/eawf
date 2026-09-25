@@ -39,6 +39,7 @@ from pathlib import Path
 import pytest
 
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.modes.trust import (
     JURY_AUTHORITY_ADVISORY,
     JURY_ECE_STARVED,
@@ -57,7 +58,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 
 _SIZE = (120, 40)
 _FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "states" / "valid"

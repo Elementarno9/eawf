@@ -36,10 +36,7 @@ from eawf.kernel.state.enums import (
     WaveStatus,
 )
 from eawf.surfaces.tui.app import resolve_render_mode
-from eawf.surfaces.tui.theme import WONG_VARIABLES
-from eawf.surfaces.tui.widgets.eu_bar import GLYPH_EMPTY, GLYPH_FULL
-from eawf.surfaces.tui.widgets.header import render_header
-from eawf.surfaces.tui.widgets.sigils import (
+from eawf.surfaces.tui.chassis.sigils import (
     _CHROME,
     FOLLOWUP_BADGE,
     Sigil,
@@ -48,6 +45,9 @@ from eawf.surfaces.tui.widgets.sigils import (
     status_sigil,
     tint,
 )
+from eawf.surfaces.tui.chassis.theme import WONG_VARIABLES
+from eawf.surfaces.tui.widgets.eu_bar import GLYPH_EMPTY, GLYPH_FULL
+from eawf.surfaces.tui.widgets.header import render_header
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
 
 # The expected rendered glyphs, written as the actual code points so the

@@ -39,6 +39,7 @@ import pytest
 from eawf.kernel.state.models import State
 from eawf.observability.doctor.checks import CheckResult
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.modes.doctor import (
     DoctorHealth,
     DoctorModeScreen,
@@ -58,7 +59,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.git_pane import GitFields
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 from eawf.workflow.lifecycle.wave_sha import Drift
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"

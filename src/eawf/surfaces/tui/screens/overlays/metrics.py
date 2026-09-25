@@ -53,6 +53,7 @@ from eawf.observability.telemetry.models import TelemetrySession
 from eawf.observability.telemetry.store import metrics_db_path, open_store
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
 from eawf.surfaces.render.units import format_tokens
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     aggregate_session_cost,
     render_cost_tile,
@@ -62,7 +63,6 @@ from eawf.surfaces.tui.widgets.calibration_table import (
     render_role_calibration_tile,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
-from eawf.surfaces.tui.widgets.sigils import chrome
 from eawf.surfaces.tui.widgets.variance_tile import render_variance_markup
 from eawf.workflow.estimation.metrics import compute_wave_elapsed
 

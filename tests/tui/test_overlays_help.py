@@ -293,7 +293,7 @@ def test_help_renders_mode_action_and_reference_sections() -> None:
     async def body() -> None:
         from textual.containers import VerticalScroll
 
-        from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text
+        from eawf.surfaces.tui.chassis.pilot_harness import capture_screen_text
 
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:

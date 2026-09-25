@@ -13,7 +13,7 @@ the surface speaks the Eae cosmic-terminal render language end to end:
 * the green ``$accent`` rides the chassis border + header band; and
 * the markdown body sigil-prefixes BOTH the claim rows AND the open-question
   rows (not just the single ClaimStatus bullet RS-28 touched), via the shared
-  :func:`~eawf.surfaces.tui.widgets.sigils.status_sigil` helper.
+  :func:`~eawf.surfaces.tui.chassis.sigils.status_sigil` helper.
 
 These tests pin three halves:
 
@@ -48,6 +48,7 @@ from eawf.kernel.state.enums import ClaimStatus, OpenQuestionStatus
 from eawf.kernel.state.models import Claim, OpenQuestion
 from eawf.surfaces.render.brand import BRAND_LITERAL, render_wordmark_markup
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import status_sigil
 from eawf.surfaces.tui.modes.brief_viewer import (
     BRIEF_HEADER_ID,
     BRIEF_HEADER_TITLE,
@@ -62,7 +63,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
-from eawf.surfaces.tui.widgets.sigils import status_sigil
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"

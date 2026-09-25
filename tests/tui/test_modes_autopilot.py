@@ -58,6 +58,7 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.modes.autopilot import (
     BATCH_NO_DAEMON,
     COCKPIT_IDLE,
@@ -101,7 +102,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
     toast_messages,
 )
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
@@ -440,7 +440,7 @@ def test_render_cockpit_vitals_draining_surfaces_every_vital_off_persisted_run()
 
 def test_render_cockpit_vitals_run_state_sigil_matches_run_state() -> None:
     """The vitals header leads with the run-state sigil for the run's state."""
-    from eawf.surfaces.tui.widgets import sigils
+    from eawf.surfaces.tui.chassis import sigils
 
     run = _draining_run()
     body = render_cockpit_vitals(run, mode="unicode")
@@ -450,7 +450,7 @@ def test_render_cockpit_vitals_run_state_sigil_matches_run_state() -> None:
 
 def test_render_cockpit_vitals_fork_badge_only_when_forked() -> None:
     """The fork badge trails the header only when the run recorded a fork."""
-    from eawf.surfaces.tui.widgets import sigils
+    from eawf.surfaces.tui.chassis import sigils
 
     cross = sigils.glyph(sigils.Sigil.FAILED, mode="unicode")
     clean = render_cockpit_vitals(_draining_run(forked=0), mode="unicode")
@@ -477,7 +477,7 @@ def test_render_cockpit_vitals_uncapped_budget_reads_honestly() -> None:
 
 def test_render_cockpit_vitals_ascii_mode_uses_ascii_sigil() -> None:
     """ASCII render mode resolves the run-state sigil in the ASCII column."""
-    from eawf.surfaces.tui.widgets import sigils
+    from eawf.surfaces.tui.chassis import sigils
 
     run = _draining_run()
     body = render_cockpit_vitals(run, mode="ascii")
@@ -568,7 +568,7 @@ def test_render_lane_cell_in_flight_shows_repair_counter() -> None:
 
 def test_render_lane_cell_exhausted_escalates_to_fork_badge() -> None:
     """An exhausted lane cell escalates to the fork badge, not a repair counter."""
-    from eawf.surfaces.tui.widgets import sigils
+    from eawf.surfaces.tui.chassis import sigils
 
     body = render_lane_cell(
         LaneCellRow(wave_id="P01-I01-W02", attempt=REPAIR_BUDGET, exhausted=True),
@@ -581,7 +581,7 @@ def test_render_lane_cell_exhausted_escalates_to_fork_badge() -> None:
 
 def test_render_lane_cell_exhausted_ascii_uses_ascii_badge() -> None:
     """ASCII render mode resolves the fork-escalation badge in the ASCII column."""
-    from eawf.surfaces.tui.widgets import sigils
+    from eawf.surfaces.tui.chassis import sigils
 
     body = render_lane_cell(
         LaneCellRow(wave_id="P01-I01-W02", attempt=REPAIR_BUDGET, exhausted=True),

@@ -8,7 +8,7 @@ resolved to handlers that did nothing visible. Those specific defects are fixed
 Two halves, matching the wave's success criteria:
 
 * **The helper.** :func:`assert_footer_key_responds` (in
-  :mod:`eawf.surfaces.tui.snapshot.pilot_harness`) presses a key and asserts a
+  :mod:`eawf.surfaces.tui.chassis.pilot_harness`) presses a key and asserts a
   visible response -- a text-frame delta, a toast, a screen change, or a
   selection-cursor move. It lifts the older ``mutating_action_keys_resolve``
   check from "an ``action_<name>`` handler EXISTS" up to "the key VISIBLY
@@ -58,13 +58,13 @@ from eawf.kernel.store.kinds.agent_report import (
 )
 from eawf.kernel.store.paths import store_path
 from eawf.surfaces.tui.app import EaApp
-from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
-from eawf.surfaces.tui.modes.registry import MODE_REGISTRY, ModeSpec
-from eawf.surfaces.tui.snapshot.pilot_harness import (
+from eawf.surfaces.tui.chassis.pilot_harness import (
     assert_footer_key_responds,
     probe_footer_key_response,
     settle_screen,
 )
+from eawf.surfaces.tui.modes.evidence import EvidenceModeScreen
+from eawf.surfaces.tui.modes.registry import MODE_REGISTRY, ModeSpec
 from eawf.surfaces.tui.widgets.footer import Footer
 from eawf.surfaces.tui.widgets.git_pane import GitFields
 from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree

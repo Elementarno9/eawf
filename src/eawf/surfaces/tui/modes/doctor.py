@@ -52,10 +52,10 @@ from textual.binding import Binding, BindingType
 from textual.containers import Horizontal, VerticalScroll
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph, tint
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph, tint
 
 if TYPE_CHECKING:
     from eawf.observability.doctor.checks import CheckResult
@@ -81,7 +81,7 @@ def _status_mark(status: HealthStatus, *, mode: str) -> str:
     """Return the tinted status-sigil content-markup span for *status*.
 
     The shape resolves through the single
-    :mod:`~eawf.surfaces.tui.widgets.sigils` home so the pane invents no
+    :mod:`~eawf.surfaces.tui.chassis.sigils` home so the pane invents no
     glyph: ``ok`` wears the CLOSED lifecycle sigil (filled circle),
     ``fail`` wears the FAILED sigil (multiplication cross), and ``warn``
     wears the ``attention`` chrome triangle -- shape-distinct from the
@@ -535,7 +535,7 @@ def render_health_lines(health: DoctorHealth, *, mode: str = _DEFAULT_RENDER_MOD
     the count + the distinct kinds (capped at :data:`_DRIFT_ROW_CAP`). An
     all-ok / honest-empty health renders the rollup + the sections with no
     DRIFT block. Each row's leading mark is the status sigil from the shared
-    :mod:`~eawf.surfaces.tui.widgets.sigils` home, resolved in *mode*.
+    :mod:`~eawf.surfaces.tui.chassis.sigils` home, resolved in *mode*.
 
     Args:
         health: The folded health view.

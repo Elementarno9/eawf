@@ -25,8 +25,8 @@ from pathlib import Path
 import pytest
 
 from eawf.surfaces.tui.app import EaApp, _persisted_glyphs, _persisted_theme
+from eawf.surfaces.tui.chassis.theme import EA_CB, EA_DARK, EA_LIGHT, resolve_theme_name
 from eawf.surfaces.tui.palette.verbs import _handle_theme
-from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT, resolve_theme_name
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"

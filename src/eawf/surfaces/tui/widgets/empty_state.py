@@ -13,7 +13,7 @@ The *centering* is structural CSS the host pane applies to its empty
 ``Static`` (``content-align: center middle; text-align: center;`` + no border) --
 :data:`HONEST_EMPTY_CSS` is the canonical snippet so every mode centers the hero
 identically. This module owns only the *content* markup; the brand sigil is the
-single terminal-renderable brand mark (:func:`~eawf.surfaces.tui.widgets.sigils.chrome`
+single terminal-renderable brand mark (:func:`~eawf.surfaces.tui.chassis.sigils.chrome`
 ``"brand"``), muted so the hero reads calm rather than as an accent call-to-arms.
 """
 
@@ -23,13 +23,13 @@ from typing import TYPE_CHECKING
 
 from textual.containers import Vertical
 
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.seal import (
     SEAL_ART_CLASS,
     SEAL_ART_LINES,
     seal_art_widget,
 )
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

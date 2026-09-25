@@ -29,8 +29,8 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

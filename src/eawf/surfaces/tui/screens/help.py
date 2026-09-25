@@ -36,9 +36,9 @@ from textual.containers import VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Static
 
+from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.palette.verbs import ScopeName, visible_verbs
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
-from eawf.surfaces.tui.widgets.sigils import chrome
 
 logger = logging.getLogger(__name__)
 
@@ -372,7 +372,7 @@ class HelpScreen(ModalScreen[None]):
 
         The row whose mode is the App's :attr:`current_mode` is marked with
         the shared dispatch sigil
-        (:func:`~eawf.surfaces.tui.widgets.sigils.chrome`) cursor + an
+        (:func:`~eawf.surfaces.tui.chassis.sigils.chrome`) cursor + an
         ``(active)`` tag and carries the ``help-row-active`` style class, so
         the operator reads at a glance which mode they are in. The marker is
         plain text so it survives the text-only snapshot capture (the CSS

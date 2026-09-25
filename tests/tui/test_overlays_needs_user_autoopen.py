@@ -3,7 +3,7 @@
 Covers the TUI side of wiring ``NeedsUserModal`` to the pause store:
 
 - A pending pause for the active scope auto-opens the modal off the
-  :class:`~eawf.surfaces.tui.state_binding.StateBinding` refresh.
+  :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` refresh.
 - A pick routes through the shared resume library function (the pause is
   resolved with the chosen label).
 - A resume failure surfaces an ``error``-severity toast.

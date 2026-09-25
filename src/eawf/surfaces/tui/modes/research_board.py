@@ -81,15 +81,15 @@ from eawf.kernel.state.models import Round
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.kernel.store.paths import store_path
+from eawf.surfaces.tui.chassis import sigils
+from eawf.surfaces.tui.chassis.sigils import Sigil
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.toast_emitter import notify_result
-from eawf.surfaces.tui.widgets import sigils
 from eawf.surfaces.tui.widgets.empty_state import render_empty_state
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.seal import seal_art_widget
-from eawf.surfaces.tui.widgets.sigils import Sigil
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.operator_input import CampaignProgressState
@@ -346,14 +346,14 @@ _RESEARCH_HINTS: tuple[str, ...] = (
 RESEARCH_REFRESH_S: float = 5.0
 
 #: :class:`~eawf.kernel.state.enums.ClaimStatus` -> the lifecycle
-#: :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` whose SHAPE the claim row
+#: :class:`~eawf.surfaces.tui.chassis.sigils.Sigil` whose SHAPE the claim row
 #: renders, or ``None`` for a status with no live lifecycle shape (it renders
 #: a muted dot instead). A claim's status is its evidence verdict, so the
 #: shape reads as the closest lifecycle phase: ``OPEN`` is still pending
 #: (hollow circle), ``SUPPORTED`` reads as closed-resolved (filled circle),
 #: ``REFUTED`` reads as failed (the multiplication x), and ``SUPERSEDED`` is
 #: inert (no shape -- a muted dot). The COLOUR comes from
-#: :func:`~eawf.surfaces.tui.widgets.sigils.tint` so shape + hue stay
+#: :func:`~eawf.surfaces.tui.chassis.sigils.tint` so shape + hue stay
 #: single-homed in the sigils helper, never a raw status word.
 _CLAIM_SIGIL: dict[ClaimStatus, Sigil | None] = {
     ClaimStatus.OPEN: Sigil.PENDING,
@@ -363,7 +363,7 @@ _CLAIM_SIGIL: dict[ClaimStatus, Sigil | None] = {
 }
 
 #: :class:`~eawf.kernel.state.enums.OpenQuestionStatus` -> the lifecycle
-#: :class:`~eawf.surfaces.tui.widgets.sigils.Sigil` whose SHAPE an open-question
+#: :class:`~eawf.surfaces.tui.chassis.sigils.Sigil` whose SHAPE an open-question
 #: marker renders, or ``None`` for a status with no live lifecycle shape (a
 #: muted dot). ``OPEN`` is pending (hollow circle), ``ANSWERED`` reads as
 #: closed-resolved (filled circle), and ``DROPPED`` is inert (no shape).
@@ -389,19 +389,19 @@ class RoundState(StrEnum):
     Members:
         RUNNING: At least one open question still needs an answer -- the
             round is being worked (the auto-run live-round state). Renders
-            the :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.RUNNING`
+            the :attr:`~eawf.surfaces.tui.chassis.sigils.Sigil.RUNNING`
             filled-diamond.
         SATURATED: Every tracked question is resolved (none open) yet at
             least one was answered -- the round saturated (no more candidate
             answers to add). Renders the
-            :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.CLOSED` circle.
+            :attr:`~eawf.surfaces.tui.chassis.sigils.Sigil.CLOSED` circle.
         PRUNED: Every tracked question was pruned (dropped) without an
             answer -- the round closed out with nothing kept. Renders the
-            withheld :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.ABANDONED`
+            withheld :attr:`~eawf.surfaces.tui.chassis.sigils.Sigil.ABANDONED`
             mark so a pruned round never reads as a clean close.
         IDLE: The campaign is staged but carries no tracked question yet --
             the pre-auto-run round (no live round to classify). Renders the
-            :attr:`~eawf.surfaces.tui.widgets.sigils.Sigil.PENDING` ring.
+            :attr:`~eawf.surfaces.tui.chassis.sigils.Sigil.PENDING` ring.
     """
 
     RUNNING = "running"
@@ -674,8 +674,8 @@ def _muted_sigil_markup(*, mode: RenderMode) -> str:
 def _sigil_markup(sigil: Sigil | None, *, mode: RenderMode) -> str:
     """Return *sigil*'s shape tinted by its lifecycle status, or the muted dot.
 
-    Composes the SHAPE (:func:`~eawf.surfaces.tui.widgets.sigils.glyph`) and the
-    COLOUR (:func:`~eawf.surfaces.tui.widgets.sigils.tint`) from the sigils
+    Composes the SHAPE (:func:`~eawf.surfaces.tui.chassis.sigils.glyph`) and the
+    COLOUR (:func:`~eawf.surfaces.tui.chassis.sigils.tint`) from the sigils
     helper so a status renders as a tinted lifecycle mark, never a raw status
     word. A ``None`` *sigil* (a status with no live lifecycle shape) falls back
     to the muted inert dot.

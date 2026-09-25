@@ -18,8 +18,8 @@ from typing import Any
 import pytest
 from textual.theme import Theme
 
+from eawf.surfaces.tui.chassis.theme import EA_CB, EA_DARK, EA_LIGHT, EA_THEMES
 from eawf.surfaces.tui.console.token_map import TOKEN_MAP
-from eawf.surfaces.tui.theme import EA_CB, EA_DARK, EA_LIGHT, EA_THEMES
 
 TESTS_ROOT = Path(__file__).resolve().parents[4]
 ORACLE_PATH = TESTS_ROOT / "fixtures" / "console" / "colour-oracle.json"

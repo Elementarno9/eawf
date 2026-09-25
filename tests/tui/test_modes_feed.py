@@ -2,7 +2,7 @@
 
 The Feed mode renders a live, newest-first view of the daemon
 ``event.subscribe`` push stream. It does not open its own subscription:
-the App's read-only :class:`~eawf.surfaces.tui.state_binding.StateBinding`
+the App's read-only :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding`
 already consumes the stream on a worker thread (``asyncio.to_thread`` ->
 blocking ``readline`` loop) and marshals each decoded envelope back to the
 event loop via ``run_coroutine_threadsafe`` -> :meth:`EaApp._on_event`,
@@ -38,6 +38,7 @@ import pytest
 
 from eawf.kernel.store.envelope import Envelope
 from eawf.surfaces.tui.app import LIVE_EVENT_BUFFER_MAX, EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph, tint
 from eawf.surfaces.tui.modes.feed import (
     FEED_EMPTY_DEGRADED,
     FEED_EMPTY_ID,
@@ -54,7 +55,6 @@ from eawf.surfaces.tui.snapshot import (
     normalize_snapshot,
     settle_screen,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph, tint
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _REPO = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -572,7 +572,7 @@ def test_feed_pane_receives_worker_delivered_push_end_to_end(
     """A push delivered via the real binding's worker thread lands in the feed.
 
     Exercises the full non-blocking path: the App's
-    :class:`~eawf.surfaces.tui.state_binding.StateBinding` runs its real
+    :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` runs its real
     ``asyncio.to_thread`` subscribe loop against a fake daemon client, the
     decoded envelope is marshalled back to the event loop, fanned out to the
     mounted Feed pane, and rendered. The UI event loop is never blocked on
@@ -593,7 +593,7 @@ def test_feed_pane_receives_worker_delivered_push_end_to_end(
     calls: list[tuple[str, dict[str, object]]] = []
 
     async def body() -> None:
-        from eawf.surfaces.tui import state_binding as sb
+        from eawf.surfaces.tui.chassis import state_binding as sb
 
         # Force the binding onto its daemon-push leg with a fake client that
         # streams the canned frame; the socket-availability probe is stubbed

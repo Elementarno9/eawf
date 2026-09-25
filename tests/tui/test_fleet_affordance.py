@@ -60,6 +60,7 @@ from eawf.surfaces.tui.app import (
     DEGRADED_BANNER_ID,
     EaApp,
 )
+from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.modes.autopilot import (
     COCKPIT_LANES_LABEL,
     REPAIR_BUDGET,
@@ -80,7 +81,6 @@ from eawf.surfaces.tui.snapshot.behaviour_probe import (
     ProbeStatus,
     record_keypress_transcript,
 )
-from eawf.surfaces.tui.widgets.sigils import Sigil, glyph
 from eawf.workflow.audit_dsl import CheckResult, CheckSpec
 from eawf.workflow.audit_dsl.kinds import affordance_parity as ap_module
 from eawf.workflow.audit_dsl.kinds.affordance_parity import check_affordance_parity

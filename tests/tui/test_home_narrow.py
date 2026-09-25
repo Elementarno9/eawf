@@ -49,6 +49,7 @@ from eawf.kernel.spec.auq_bridge import compute_ready_frontier
 from eawf.kernel.state.enums import WaveStatus
 from eawf.kernel.state.models import State, Wave
 from eawf.surfaces.tui.app import EaApp
+from eawf.surfaces.tui.chassis.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.modes.autopilot import (
     BLOCKED_BY_MARKER,
     BLOCKED_ROW_CLASS,
@@ -67,7 +68,6 @@ from eawf.surfaces.tui.snapshot import (
 )
 from eawf.surfaces.tui.widgets.eu_bar import EMPTY_STATE
 from eawf.surfaces.tui.widgets.roadmap_tree import ELLIPSIS, RoadmapTree
-from eawf.surfaces.tui.widgets.sigils import Sigil, chrome, glyph
 from eawf.surfaces.tui.widgets.status_pane import (
     StatusPane,
     build_status_columns,

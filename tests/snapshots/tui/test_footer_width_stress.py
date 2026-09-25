@@ -43,12 +43,12 @@ from pathlib import Path
 import pytest
 from textual.app import App, ComposeResult
 
+from eawf.surfaces.tui.chassis.pilot_harness import capture_screen_text
+from eawf.surfaces.tui.chassis.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.scopes.repo import _REPO_HINTS
 from eawf.surfaces.tui.scopes.user import _USER_HINTS
 from eawf.surfaces.tui.scopes.workspace import _WORKSPACE_HINTS
 from eawf.surfaces.tui.snapshot import assert_screen_snapshot
-from eawf.surfaces.tui.snapshot.pilot_harness import capture_screen_text
-from eawf.surfaces.tui.theme import EA_THEMES, LOGICAL_THEMES
 from eawf.surfaces.tui.widgets.footer import Footer, format_hints
 
 _THEME = Path(__file__).resolve().parents[3] / "src" / "eawf" / "surfaces" / "tui" / "theme.tcss"

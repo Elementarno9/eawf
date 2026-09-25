@@ -18,27 +18,17 @@ per-scope screen reuses the same three widgets with no per-scope
 duplication. Each widget is driven by the App's reactive ``state``
 (read-only) and is unit-testable standalone via the Textual Pilot
 harness.
+
+This package holds no eager re-exports: every caller in the tree imports
+a widget from its own submodule (``eawf.surfaces.tui.widgets.header``
+and siblings), and several of those submodules (:mod:`~.backlog_table`
+among them) import :mod:`eawf.surfaces.tui.chassis.sigils`, which itself
+imports :mod:`~.status_tint`. An eager ``from .backlog_table import
+BacklogTable`` here would force this package's ``__init__`` to finish
+before that chain can, which is exactly backwards when something reaches
+``chassis.sigils`` first: importing ``status_tint`` from inside it would
+need this package's own init already complete. Keeping this file import-free
+breaks that cycle without touching either side of it.
 """
 
 from __future__ import annotations
-
-from eawf.surfaces.tui.widgets.backlog_table import BacklogTable
-from eawf.surfaces.tui.widgets.eu_bar import EUBar
-from eawf.surfaces.tui.widgets.footer import Footer, Heartbeat
-from eawf.surfaces.tui.widgets.git_pane import GitPane
-from eawf.surfaces.tui.widgets.header import Header
-from eawf.surfaces.tui.widgets.roadmap_tree import RoadmapTree
-from eawf.surfaces.tui.widgets.status_pane import StatusPane
-from eawf.surfaces.tui.widgets.variance_tile import VarianceTile
-
-__all__ = [
-    "BacklogTable",
-    "EUBar",
-    "Footer",
-    "GitPane",
-    "Header",
-    "Heartbeat",
-    "RoadmapTree",
-    "StatusPane",
-    "VarianceTile",
-]

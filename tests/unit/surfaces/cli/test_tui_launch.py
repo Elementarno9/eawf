@@ -171,7 +171,8 @@ def test_tui_migration_required_exits_4_off_tty(
     called = {"n": 0}
     monkeypatch.setattr(launch, "_run_console", lambda app, seam: called.__setitem__("n", 1) or 0)
     monkeypatch.setattr(
-        "eawf.surfaces.tui.offline.emit_status", lambda **_kwargs: called.__setitem__("n", 1) or 0
+        "eawf.surfaces.tui.chassis.offline.emit_status",
+        lambda **_kwargs: called.__setitem__("n", 1) or 0,
     )
 
     rc = launch.launch_tui(workspace=None, no_input=False, plain=False)
@@ -179,6 +180,36 @@ def test_tui_migration_required_exits_4_off_tty(
     assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
     assert rc == 4
     assert called["n"] == 0
+
+
+def test_tui_migration_required_builds_entry_session_on_a_held_tty(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A stuck migration on a held TTY reaches ``_launch_entry``, unlike the off-TTY
+    case above: with a TTY open, ``launch_tui`` does not short-circuit on
+    :func:`launch._is_terminal` and instead builds a real ``SessionSetup`` for the
+    entry layer. No prior test exercised that construction -- the only other
+    stuck-migration test holds the TTY closed, which returns before
+    ``_launch_entry`` runs at all. This test stubs only ``_run_console`` (the
+    event loop), so ``SessionSetup(..., entrySel=...)`` at
+    :func:`eawf.surfaces.tui.launch._launch_entry` runs unstubbed.
+    """
+    _declare_canary(tmp_path)
+    monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
+    _set_isatty(monkeypatch, value=True)
+
+    apps: list[object] = []
+    monkeypatch.setattr(launch, "_run_console", lambda app, seam: apps.append(app) or 0)
+
+    rc = launch.launch_tui(workspace=None, no_input=False, plain=False)
+
+    assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
+    assert len(apps) == 1
+    app = apps[0]
+    from eawf.surfaces.tui.console.chrome import load_chrome
+
+    assert app.session.route == "entry"
+    assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
 
 
 # --------------------------------------------------------------------------
