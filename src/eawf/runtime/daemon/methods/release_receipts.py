@@ -258,7 +258,16 @@ async def produce_receipts(ctx: MethodContext, params: dict[str, Any]) -> dict[s
     args = ProduceReceiptsParams.model_validate(params)
     state_path = require_state_path(ctx)
     rung = _rung(args.version)
-    config = resolve_config(args.version)
+    # A rung that requires membership only resolves against the refs its
+    # record was cut with, but a rung with no authored configuration is
+    # refused for that before anyone asks whether it was cut.
+    try:
+        stored = read_release_record(state_path, rung.release_key)
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    config = resolve_config(
+        args.version, membership_refs=() if stored is None else stored.membership_refs
+    )
     release = _stored_record(state_path, rung.release_key)
     bindings = _bindings(rung)
     try:

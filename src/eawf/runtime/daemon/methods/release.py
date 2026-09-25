@@ -139,12 +139,13 @@ from eawf.runtime.daemon.methods.release_keyed import (
 from eawf.runtime.release.chokepoint import sweep_pinned_source
 from eawf.surfaces.cli.errors import CliError, UserError
 from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence.provider_certification import CanaryEvidence, load_canary_evidence
 from eawf.workflow.release.adapters import collect_observation
 from eawf.workflow.release.admission import (
     create_checkpoint_release,
     required_contract_ids,
 )
-from eawf.workflow.release.advance import derive_train
+from eawf.workflow.release.advance import TrainAdvanceError, derive_train
 from eawf.workflow.release.ledger import record_operation
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
 from eawf.workflow.release.observation import (
@@ -153,7 +154,11 @@ from eawf.workflow.release.observation import (
     assert_manifest_binds,
     observation_request,
 )
-from eawf.workflow.release.preflight import approve_release, record_preflight_result
+from eawf.workflow.release.preflight import (
+    approve_release,
+    assert_approval_receipts,
+    record_preflight_result,
+)
 from eawf.workflow.release.publication import (
     begin_publication,
     burn_release,
@@ -174,7 +179,7 @@ from eawf.workflow.release.records import (
 from eawf.workflow.release.settlement import follow_guarded_edges, observe_target
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN
-from eawf.workflow.release.train_store import read_train_advances
+from eawf.workflow.release.train_store import read_checkpoint_receipts, read_train_advances
 from eawf.workflow.verify.checkpoint_succession import (
     CheckpointSuccessionError,
     assert_predecessor_terminal,
@@ -456,11 +461,30 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             root, the record or sweep is invalid, or the transition is
             denied -- the message leads with the named denial code
             (``release_not_ready`` when a required signal is not
-            passing).
+            passing, ``prerequisite_receipt_missing`` or
+            ``prerequisite_receipt_stale`` when an epoch-2 rung lacks a
+            fresh stored gate receipt bound to the candidate).
     """
     args = ApproveParams.model_validate(params)
     state_path = require_state_path(ctx)
     candidate = validated_release(args.release)
+    config = resolve_config(candidate.version, membership_refs=candidate.membership_refs)
+    try:
+        assert_approval_receipts(
+            candidate,
+            config,
+            read_checkpoint_receipts(state_path, candidate.key),
+            rung=V07_TRAIN.checkpoint_for_version(candidate.version),
+            now=datetime.now(UTC),
+            train_id=V07_TRAIN.train_id,
+        )
+    except TrainAdvanceError as exc:
+        raise DaemonValidationError(
+            f"validation_failed: {exc.code.value}: {exc}; produce fresh receipts with "
+            f"`eawf release receipts {candidate.version}`"
+        ) from exc
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
     try:
         readiness = ReleaseReadiness.model_validate(args.readiness)
     except ValidationError as exc:
@@ -1145,6 +1169,33 @@ def _require_state(ctx: MethodContext) -> State:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
+def _membership_evidence(state_path: Path, membership_refs: list[str]) -> CanaryEvidence | None:
+    """Return the canary export *membership_refs* resolve against.
+
+    Read only when references are declared, so an unreadable export
+    cannot block a rung that names none.
+
+    Args:
+        state_path: Bound ``state.json``; the export sits in its checkout.
+        membership_refs: The references the create declares.
+
+    Returns:
+        The committed export, or ``None`` when no reference is declared
+        or no export is committed.
+
+    Raises:
+        DaemonValidationError: When an export is committed but does not
+            load, since references resolved against it would be resolved
+            against nothing.
+    """
+    if not membership_refs:
+        return None
+    try:
+        return load_canary_evidence(state_path.parent.parent)
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: membership_unresolved: {exc}") from exc
+
+
 def _terminal_predecessor(state_path: Path, version: str) -> Release | None:
     """Return the finished record *version* succeeds, or refuse the open.
 
@@ -1215,8 +1266,10 @@ def _superseding(record: Release, predecessor_key: str) -> Release:
 async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Open the DRAFT record of one checkpoint, after measured admission.
 
-    Two things gate the open. Every measured contract the checkpoint
-    asserts over must be promoted and resolvable, and the rung below must
+    Three things gate the open. Every measured contract the checkpoint
+    asserts over must be promoted and resolvable, every membership
+    reference must name an accepted Milestone bundle in the committed
+    canary export, and the rung below must
     be recorded and finished with, so two records never claim one line at
     once and the reply can name the predecessor the new record
     supersedes. A predecessor that shipped counts as finished with only
@@ -1248,6 +1301,9 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     Raises:
         DaemonValidationError: With ``measured_contract_missing`` when a
             required contract is not promoted, with
+            ``membership_unresolved`` when a membership reference names
+            no accepted Milestone bundle in the committed canary export,
+            with
             ``predecessor_unrecorded`` / ``predecessor_live`` /
             ``predecessor_not_advanced`` when the rung below has not
             finished, or when the train declares no such rung.
@@ -1262,6 +1318,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             version=args.version,
             uid=uuid4(),
             membership_refs=tuple(args.membership_refs),
+            canary_evidence=_membership_evidence(state_path, args.membership_refs),
         )
     except UserError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc

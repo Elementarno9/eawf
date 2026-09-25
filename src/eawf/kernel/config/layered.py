@@ -293,6 +293,9 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_SKIP_PERF",
         "EAWF_BLITZ_DEPTH",
         "EAWF_BLITZ_DEPTH_COUNTER",
+        # Spelled out rather than imported: its owner,
+        # ``eawf.runtime.daemon.churn.SUITE_SESSION_ENV``, sits above the kernel.
+        "EAWF_SUITE_SESSION",
     }
 )
 

@@ -52,7 +52,13 @@ from eawf.workflow.verify.checkpoint_succession import (
     SuccessionDenialCode,
     assert_predecessor_terminal,
 )
-from tests._release_helpers import dev1_adoption, dev1_config, dev1_draft
+from tests._release_helpers import (
+    accepted_canary_export,
+    dev1_adoption,
+    dev1_config,
+    dev1_draft,
+    stage_canary_export,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -119,10 +125,15 @@ def context(
     state: State,
     records: Sequence[Release],
 ) -> MethodContext:
-    """Write *state* and *records* under *tmp_path* and bind a context to them."""
+    """Write *state* and *records* under *tmp_path* and bind a context to them.
+
+    The checkout also carries a canary export accepting the dev3 bundle,
+    so a dev3 open is decided on succession rather than on membership.
+    """
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_state(state_path, state)
+    stage_canary_export(tmp_path, accepted_canary_export())
     for record in records:
         record_release(state_path, record, recorded_at=datetime.now(UTC), summary="seed")
     return MethodContext(

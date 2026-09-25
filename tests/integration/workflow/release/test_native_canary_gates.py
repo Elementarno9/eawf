@@ -21,15 +21,28 @@ here too.
 **The proof command is pinned.** ``canary_isolation`` resolves only
 against a 40-hex source SHA, so a rehearsal run against whatever the
 working tree happens to hold is unrepresentable.
+
+**A missing receipt refuses approval.** An epoch-2 checkpoint is
+approved only on a fresh stored receipt per required gate, bound to the
+candidate's source and manifest. The gate-fire proof runs
+``release.approve`` over a tmp state root: fifteen fresh receipts
+approve, and dropping any one of them, binding one to other source, or
+letting one expire refuses with the gate named and writes no approval.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import pytest
 import yaml
 
+from eawf.kernel.release.checkpoint_template import with_membership_refs
 from eawf.kernel.release.gate_binding import (
     DEV1_GATES,
     DEV2_ADDED_GATES,
@@ -43,14 +56,27 @@ from eawf.kernel.release.gate_binding import (
     resolved_proof_commands,
 )
 from eawf.kernel.release.signals import ReleaseSignalName
-from eawf.kernel.spec.release import ReleaseGateProfile
-from eawf.kernel.spec.release_config import ReleaseGateName
+from eawf.kernel.spec.release import Release, ReleaseChannel, ReleaseGateProfile, ReleaseStatus
+from eawf.kernel.spec.release_config import ReleaseConfig, ReleaseGateName, load_release_config
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.release import approve
+from eawf.workflow.evidence.provider_certification import load_canary_evidence
+from eawf.workflow.release.advance import (
+    CheckpointGateReceipt,
+)
+from eawf.workflow.release.preflight import assert_approval_receipts
+from eawf.workflow.release.records import read_release_record
 from eawf.workflow.release.train import (
     DEV2_GATE_BINDINGS_YAML,
     NATIVE_CANARY_GATE_BINDINGS_YAML,
+    V07_TRAIN,
+    checkpoint_config_yaml,
     gate_bindings_for,
 )
-from tests._release_helpers import SOURCE_SHA
+from eawf.workflow.release.train_store import record_checkpoint_receipt
+from eawf.workflow.verify.release_readiness import compute_readiness
+from tests._release_helpers import MANIFEST_DIGEST, SOURCE_SHA, TREE_SHA, all_passing
 
 #: The profile under test.
 PROFILE = ReleaseGateProfile.NATIVE_CANARY
@@ -249,3 +275,190 @@ def test_load_rejects_a_canary_isolation_row_carrying_a_signal_as_well() -> None
     with pytest.raises(GateBindingError) as excinfo:
         load_gate_bindings({"bindings": rows}, profile=PROFILE)
     assert excinfo.value.code is GateBindingRejection.SCHEMA_INVALID
+
+
+# --- every gate receipted, and a missing receipt refuses approval ----
+
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+DEV3_VERSION = "0.7.0.dev3"
+DEV3_KEY = f"REL-{DEV3_VERSION}"
+
+
+def membership_ref() -> str:
+    """Return the acceptance bundle the committed canary export records."""
+    evidence = load_canary_evidence(REPO_ROOT)
+    assert evidence is not None, "no canary evidence export is committed"
+    reference: str = evidence.milestones[0].reference
+    return reference
+
+
+def dev3_config(membership_refs: tuple[str, ...]) -> ReleaseConfig:
+    """Return the dev3 configuration resolved against *membership_refs*."""
+    document = with_membership_refs(
+        checkpoint_config_yaml(DEV3_VERSION), membership_refs=membership_refs
+    )
+    return load_release_config(document, train=V07_TRAIN)
+
+
+def required_gates() -> tuple[ReleaseGateName, ...]:
+    """Return the gates the dev3 configuration requires, in gate order."""
+    return tuple(dev3_config((membership_ref(),)).gates.required)
+
+
+def candidate() -> Release:
+    """Return a dev3 candidate pinned to the shared test source and manifest."""
+    return Release(
+        uid=UUID(int=73),
+        key=DEV3_KEY,
+        version=DEV3_VERSION,
+        channel=ReleaseChannel.DEV,
+        authority_epoch=2,
+        membership_refs=(membership_ref(),),
+        status=ReleaseStatus.CANDIDATE,
+        source_sha=SOURCE_SHA,
+        source_tree_sha=TREE_SHA,
+        manifest_ref="artifact://release/dev3-manifest",
+        manifest_digest=MANIFEST_DIGEST,
+        revision=1,
+    )
+
+
+def receipt(gate: ReleaseGateName, **overrides: Any) -> CheckpointGateReceipt:
+    """Return a receipt for *gate* bound to :func:`candidate`, fresh now."""
+    now = datetime.now(UTC)
+    payload: dict[str, Any] = {
+        "gate": gate,
+        "release_key": DEV3_KEY,
+        "source_sha": SOURCE_SHA,
+        "manifest_digest": MANIFEST_DIGEST,
+        "issued_at": now - timedelta(hours=1),
+        "expires_at": now + timedelta(hours=1),
+        "receipt_ref": f"checkpoint-receipt://{DEV3_KEY}/{gate.value}/fresh",
+    }
+    payload.update(overrides)
+    return CheckpointGateReceipt.model_validate(payload)
+
+
+def staged_context(root: Path, receipts: list[CheckpointGateReceipt]) -> MethodContext:
+    """Return a context over a tmp state root holding *receipts*."""
+    state_dir = root / ".ea"
+    state_dir.mkdir()
+    state_path = state_dir / "state.json"
+    state_path.write_text(json.dumps({}), encoding="utf-8")
+    now = datetime.now(UTC)
+    for row in receipts:
+        record_checkpoint_receipt(state_path, row, recorded_at=now, summary="seed")
+    return MethodContext(
+        started_at=now.isoformat(),
+        pid=4242,
+        protocol_version=PROTOCOL_VERSION,
+        version="test",
+        state_path=state_path,
+    )
+
+
+def approve_params() -> dict[str, Any]:
+    """Return approve params over :func:`candidate` and an all-green sweep."""
+    readiness = compute_readiness(
+        dev3_config((membership_ref(),)), probes=all_passing(), computed_at=datetime.now(UTC)
+    )
+    return {
+        "release": candidate().model_dump(mode="json"),
+        "readiness": readiness.model_dump(mode="json"),
+        "approval_ref": "receipt://approval/dev3",
+    }
+
+
+def refused_approval(ctx: MethodContext) -> str:
+    """Return the refusal of an approval that must not succeed."""
+    with pytest.raises(DaemonValidationError) as excinfo:
+        asyncio.run(approve(ctx, approve_params()))
+    return str(excinfo.value)
+
+
+def test_dev3_requires_every_native_canary_gate() -> None:
+    assert set(required_gates()) == set(profile_gates(PROFILE))
+    assert len(required_gates()) == 15
+
+
+def test_approve_admits_a_dev3_candidate_with_every_gate_receipted(tmp_path: Path) -> None:
+    ctx = staged_context(tmp_path, [receipt(gate) for gate in required_gates()])
+
+    result = asyncio.run(approve(ctx, approve_params()))
+
+    assert result["release"]["status"] == ReleaseStatus.APPROVED.value
+    stored = read_release_record(Path(str(ctx.state_path)), DEV3_KEY)
+    assert stored is not None
+    assert stored.status is ReleaseStatus.APPROVED
+
+
+@pytest.mark.parametrize("dropped", profile_gates(PROFILE), ids=lambda gate: gate.value)
+def test_approve_refuses_a_dev3_candidate_missing_one_receipt(
+    tmp_path: Path, dropped: ReleaseGateName
+) -> None:
+    """Gate-fire: removing any single receipt refuses and records nothing."""
+    ctx = staged_context(
+        tmp_path, [receipt(gate) for gate in required_gates() if gate is not dropped]
+    )
+
+    message = refused_approval(ctx)
+
+    assert "prerequisite_receipt_missing" in message
+    assert repr(dropped.value) in message
+    assert "eawf release receipts 0.7.0.dev3" in message
+    assert read_release_record(Path(str(ctx.state_path)), DEV3_KEY) is None
+
+
+def test_approve_refuses_a_receipt_bound_to_other_source(tmp_path: Path) -> None:
+    gates = required_gates()
+    rows = [receipt(gate) for gate in gates[1:]]
+    rows.append(receipt(gates[0], source_sha="d" * 40))
+    ctx = staged_context(tmp_path, rows)
+
+    message = refused_approval(ctx)
+
+    assert "prerequisite_receipt_stale" in message
+    assert "source_sha" in message
+
+
+def test_approve_refuses_an_expired_receipt(tmp_path: Path) -> None:
+    gates = required_gates()
+    now = datetime.now(UTC)
+    rows = [receipt(gate) for gate in gates[:-1]]
+    rows.append(
+        receipt(gates[-1], issued_at=now - timedelta(days=2), expires_at=now - timedelta(days=1))
+    )
+    ctx = staged_context(tmp_path, rows)
+
+    message = refused_approval(ctx)
+
+    assert "prerequisite_receipt_stale" in message
+    assert "expired" in message
+
+
+def test_approval_receipts_are_not_asked_of_an_epoch1_rung() -> None:
+    """dev2 was approved before receipts existed, so its approval is not re-judged."""
+    dev2 = V07_TRAIN.checkpoint_for_version("0.7.0.dev2")
+    assert dev2.authority_epoch == 1
+    refs = assert_approval_receipts(
+        candidate(),
+        dev3_config((membership_ref(),)),
+        (),
+        rung=dev2,
+        now=datetime.now(UTC),
+        train_id=V07_TRAIN.train_id,
+    )
+    assert refs == ()
+
+
+def test_approval_receipts_refuse_a_naive_instant() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        assert_approval_receipts(
+            candidate(),
+            dev3_config((membership_ref(),)),
+            [receipt(gate) for gate in required_gates()],
+            rung=V07_TRAIN.checkpoint_for_version(DEV3_VERSION),
+            now=datetime(2026, 9, 24, 12, 0),
+            train_id=V07_TRAIN.train_id,
+        )

@@ -24,7 +24,7 @@ from eawf.kernel.release.signals import (
     ReleaseSignalStatus,
 )
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.commands.release import _dirty_paths
+from eawf.surfaces.cli.commands.release_tag import _dirty_paths
 from eawf.workflow.verify.release_probes import (
     TagPreflightInputs,
     build_tag_probes,

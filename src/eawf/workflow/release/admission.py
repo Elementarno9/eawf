@@ -27,19 +27,34 @@ an instruction.
 absent from it requires nothing, which is the honest reading for the
 ``dev1`` rung: it predates the measured-before-build rule and has no
 probes to cite.
+
+A rung that requires membership is admitted on its acceptance bundles
+too: every reference must resolve to a COMPLETED Milestone in a declared
+canary before the record is built, the same test the preflight
+``membership`` row applies later.
 """
 
 from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 from typing import Final
 from uuid import UUID
 
 from eawf.kernel.spec.release import Release, ReleaseTrain, validate_release_against_train
+from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.state.models import Artifact, State
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
+from eawf.workflow.evidence.provider_certification import (
+    CanaryEvidence,
+    CanaryEvidenceGap,
+    CanaryFinding,
+    load_canary_evidence,
+    membership_findings,
+    summarise_findings,
+)
 from eawf.workflow.release.advance import draft_release_for
 
 logger = logging.getLogger(__name__)
@@ -148,6 +163,98 @@ def assert_measured_contracts(state: State, version: str) -> tuple[Artifact, ...
     return tuple(resolved)
 
 
+def assert_membership_resolves(
+    evidence: CanaryEvidence | None,
+    membership_refs: Sequence[str],
+) -> None:
+    """Refuse unless every reference names an accepted Milestone bundle.
+
+    The same resolution the preflight ``membership`` row applies, asked
+    at the open instead. Answering it only at preflight let an invented
+    reference through the open, so a DRAFT record sat on file claiming a
+    membership nobody accepted until a later sweep went red.
+
+    Args:
+        evidence: The committed canary export, or ``None`` when none is
+            committed -- in which case no reference can resolve.
+        membership_refs: The acceptance-bundle references being opened.
+
+    Raises:
+        UserError: ``kind="membership_unresolved"`` naming every
+            reference that resolves to no COMPLETED Milestone recorded
+            in a declared canary.
+    """
+    if not membership_refs:
+        return
+    if evidence is None:
+        findings: tuple[CanaryFinding, ...] = tuple(
+            CanaryFinding(
+                subject=reference,
+                gap=CanaryEvidenceGap.MEMBERSHIP_UNRESOLVED,
+                detail="no canary evidence export is committed, so no Milestone is recorded",
+            )
+            for reference in membership_refs
+        )
+    else:
+        findings = membership_findings(evidence, membership_refs)
+    if findings:
+        unresolved = sorted({finding.subject for finding in findings})
+        logger.warning(
+            f"assert_membership_resolves refused declared={len(membership_refs)} "
+            f"unresolved={unresolved}"
+        )
+        raise UserError(
+            f"{len(unresolved)} of {len(membership_refs)} membership reference(s) do not "
+            f"resolve to an accepted Milestone bundle -- {summarise_findings(findings)}",
+            kind="membership_unresolved",
+        )
+
+
+def committed_membership_refs(repo_root: Path, release_key: str) -> tuple[str, ...]:
+    """Return the accepted Milestone refs the committed canary export names for *release_key*.
+
+    ``release tag`` and ``release preflight`` run before ``release
+    create`` opens a record, so there is no stored ``membership_refs``
+    to resolve the checkpoint's configuration against -- and neither
+    verb can take the refs as an operator-supplied option either, since
+    the tag is pushed and the CI preflight job runs from an automated
+    pipeline step with nothing to pass. The committed canary export is
+    what exists at that point instead: every Milestone it records
+    COMPLETED, in a canary it declares, for this exact release key is a
+    bundle this checkout can already show accepted, so the loader's
+    cardinality gate resolves against those rather than against nothing.
+
+    This is a narrower question than the one ``release create`` answers.
+    The record it opens still carries its own, independently supplied
+    ``membership_refs``, checked against the same export by
+    :func:`assert_membership_resolves`; naming refs the export already
+    backs at tag/preflight time only proves the export exists and names
+    something for this release, not that it will agree with whatever
+    refs the eventual record is opened with.
+
+    Args:
+        repo_root: Checkout the export is read from.
+        release_key: The checkpoint whose acceptance bundles are wanted.
+
+    Returns:
+        The Milestone references, in export order; empty when no export
+        is committed, the committed export names a different release
+        key, or it records no Milestone accepted in a declared canary.
+
+    Raises:
+        ValueError: When an export is committed but does not load.
+    """
+    evidence = load_canary_evidence(repo_root)
+    if evidence is None or evidence.release_key != release_key:
+        return ()
+    return tuple(
+        record.reference
+        for record in evidence.milestones
+        if record.status is MilestoneStatus.COMPLETED
+        and evidence.declares_canary(record.project_code)
+    )
+
+
 def create_checkpoint_release(
     state: State,
     *,
@@ -155,6 +262,7 @@ def create_checkpoint_release(
     version: str,
     uid: UUID,
     membership_refs: Sequence[str] = (),
+    canary_evidence: CanaryEvidence | None = None,
 ) -> Release:
     """Open the DRAFT record of checkpoint *version*, after admission.
 
@@ -169,13 +277,17 @@ def create_checkpoint_release(
         uid: Identity for the new record.
         membership_refs: Milestone acceptance bundles, for the rungs that
             require them.
+        canary_evidence: The committed canary export *membership_refs*
+            resolve against, or ``None`` when none is committed.
 
     Returns:
         The DRAFT :class:`~eawf.kernel.spec.release.Release`.
 
     Raises:
         UserError: ``kind="measured_contract_missing"`` when a required
-            measured contract is not promoted.
+            measured contract is not promoted, or
+            ``kind="membership_unresolved"`` when a membership reference
+            names no accepted Milestone bundle.
         KeyError: When *train* declares no rung for *version*.
         ValueError: When *version* is not a train version, or the rung
             requires membership bundles the caller did not supply.
@@ -184,6 +296,8 @@ def create_checkpoint_release(
     """
     rung = train.checkpoint_for_version(version)
     assert_measured_contracts(state, version)
+    if rung.requires_membership:
+        assert_membership_resolves(canary_evidence, membership_refs)
     record = draft_release_for(rung, uid=uid, membership_refs=membership_refs)
     validate_release_against_train(record, train)
     logger.info(
@@ -198,6 +312,8 @@ __all__ = [
     "CONTRACT_LABELS",
     "PROMOTION_COMMAND",
     "assert_measured_contracts",
+    "assert_membership_resolves",
+    "committed_membership_refs",
     "create_checkpoint_release",
     "required_contract_ids",
 ]

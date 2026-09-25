@@ -688,6 +688,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 | `land-batch` | Apply ``wave land`` to every eligible wave in dep order; stop on failure. |
 | `next-ready` | List pending waves whose every dep is ``closed``. |
 | `plan` | Plan a new pending wave under an open iter. |
+| `prune-branches` | Delete local branch heads that ``wave archive-refs`` has already preserved. |
 | `release` | Release a claimed/in-progress wave back to pending (the inverse of claim). |
 | `review` | Attach review findings to a wave, or render a reviewer prompt. |
 | `show` | Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt. |

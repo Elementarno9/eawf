@@ -10,9 +10,13 @@ rather than each recomputing their own view of "green".
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Final
 
-from eawf.kernel.spec.release import Release, ReleaseStatus
+from eawf.kernel.spec.release import Release, ReleaseCheckpoint, ReleaseStatus
+from eawf.kernel.spec.release_config import ReleaseConfig
+from eawf.workflow.release.advance import CheckpointGateReceipt, assert_prerequisite_receipts
 from eawf.workflow.release.boundaries import PublicationBoundary, durable_boundary
 from eawf.workflow.release.lifecycle import (
     ReleaseDenialCode,
@@ -23,6 +27,12 @@ from eawf.workflow.release.lifecycle import (
 from eawf.workflow.verify.release_readiness import ReleaseReadiness
 
 logger = logging.getLogger(__name__)
+
+#: The first authority epoch whose checkpoints are approved on stored
+#: gate receipts. The epoch-1 rungs were approved before any receipt
+#: could be issued, so re-judging their approvals would refuse history
+#: rather than guard a decision still to be taken.
+RECEIPTED_APPROVAL_EPOCH: Final[int] = 2
 
 
 @durable_boundary(PublicationBoundary.TRANSITION_APPLY)
@@ -108,6 +118,47 @@ def approve_release(
         ) from exc
 
 
+def assert_approval_receipts(
+    release: Release,
+    config: ReleaseConfig,
+    receipts: Sequence[CheckpointGateReceipt],
+    *,
+    rung: ReleaseCheckpoint,
+    now: datetime,
+    train_id: str,
+) -> tuple[str, ...]:
+    """Return the receipt refs an approval of *release* stands on.
+
+    A readiness sweep says the gates were green when it was computed; a
+    receipt says a gate was proven on the exact source and manifest the
+    candidate pins. From :data:`RECEIPTED_APPROVAL_EPOCH` on, an
+    approval needs both, so a checkpoint cannot be approved on a gate
+    nobody proved at the commit it will publish.
+
+    Args:
+        release: The candidate being approved.
+        config: Its loaded configuration; ``gates.required`` names every
+            gate that must carry a receipt.
+        receipts: The newest stored receipt of each gate.
+        rung: The train rung *release* occupies.
+        now: Timezone-aware UTC instant freshness is judged at.
+        train_id: Train the rung belongs to, for the error.
+
+    Returns:
+        The validated receipt references in gate order, or ``()`` for a
+        rung of an earlier epoch.
+
+    Raises:
+        TrainAdvanceError: ``prerequisite_receipt_missing`` or
+            ``prerequisite_receipt_stale``, naming the gate.
+        ValueError: When *now* is naive, *config* describes another
+            checkpoint, or a gate is offered twice.
+    """
+    if rung.authority_epoch < RECEIPTED_APPROVAL_EPOCH:
+        return ()
+    return assert_prerequisite_receipts(release, config, receipts, now=now, train_id=train_id)
+
+
 def _blocker(readiness: ReleaseReadiness) -> str:
     """Return the clause naming what is holding *readiness* back.
 
@@ -143,4 +194,9 @@ def _assert_same_release(release: Release, readiness: ReleaseReadiness) -> None:
         )
 
 
-__all__ = ["approve_release", "record_preflight_result"]
+__all__ = [
+    "RECEIPTED_APPROVAL_EPOCH",
+    "approve_release",
+    "assert_approval_receipts",
+    "record_preflight_result",
+]

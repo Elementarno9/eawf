@@ -27,6 +27,14 @@ Ancestry and tree cleanliness are questions about a repository, so the
 fixture is a real checkout whose ``origin/main`` already carries HEAD --
 the shape the cut commit has once the phase branch merges, which is
 deliberately *not* the shape this branch has while the work is in flight.
+
+The sweep's ``package_version`` is the dev2 literal, not the running
+package's. The checkout being described carried dev2; the train has since
+walked past it, and binding the sweep to whatever version this process
+is at would describe today's checkpoint under dev2's name. The verb has
+no such choice, since it reports its own version, so the verb-level case
+asserts the superseded-checkpoint refusal, and each red-path case reads
+the one row it removed an input from off the sweep instead.
 """
 
 from __future__ import annotations
@@ -205,7 +213,7 @@ def chokepoint_sweep(
         version=CUT_VERSION,
         repo_root=repo,
         remote=PUBLISHING_REMOTE,
-        package_version=__version__,
+        package_version=CUT_VERSION,
         source=_git(repo, "rev-parse", "HEAD").stdout.strip(),
         waiver_count=waiver_count,
         computed_at=NOW,
@@ -223,9 +231,9 @@ def tag_dry_run(repo: Path, monkeypatch: pytest.MonkeyPatch, *args: str) -> obje
 # --- the version module and the changelog agree -----------------------
 
 
-def test_the_package_version_is_the_checkpoint_being_cut() -> None:
-    """``_version.py`` says what this checkpoint claims to be."""
-    assert __version__ == CUT_VERSION
+def test_the_package_version_has_moved_past_the_cut_checkpoint() -> None:
+    """``_version.py`` names a later checkpoint, so dev2 is described, not cut."""
+    assert __version__ != CUT_VERSION
 
 
 def test_the_changelog_carries_a_section_for_the_cut_version() -> None:
@@ -279,19 +287,15 @@ def test_the_migration_row_passes_over_the_committed_rehearsals(
 # --- the chokepoint passes, and the pass is earned ---------------------
 
 
-def test_the_tag_chokepoint_passes_on_the_cut_commit(
+def test_the_tag_chokepoint_refuses_the_superseded_checkpoint_on_the_version_row(
     cut_commit: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """``release tag --push`` clears its preflight and would tag."""
+    """The verb reads its own package version, which is no longer dev2."""
     result = tag_dry_run(cut_commit, monkeypatch)
 
-    assert result.exit_code == 0, result.output
-    plan = json.loads(result.output)
-    assert plan["tag"] == CUT_TAG
-    assert plan["push"] is True
-    assert plan["dry_run"] is True
-    assert plan["preflight_ready"] is True
-    assert plan["waiver"] is None
+    assert result.exit_code != 0
+    assert "version_consistency" in result.output
+    assert CUT_TAG not in json.loads(result.output).get("tag", "")
 
 
 def test_every_working_copy_row_passes_on_the_cut_commit(
@@ -316,10 +320,10 @@ def test_the_chokepoint_refuses_when_the_changelog_section_is_removed(
     _git(cut_commit, "commit", "--quiet", "--all", "--message", "docs: drop the section")
     _git(cut_commit, "update-ref", f"refs/remotes/{PUBLISHING_REMOTE}/main", "HEAD")
 
-    result = tag_dry_run(cut_commit, monkeypatch)
+    sweep = chokepoint_sweep(cut_commit, monkeypatch)
 
-    assert result.exit_code != 0
-    assert "changelog" in result.output
+    assert sweep.row(ReleaseSignalName.CHANGELOG).status is ReleaseSignalStatus.FAIL
+    assert sweep.ready is False
 
 
 def test_the_chokepoint_refuses_when_the_tree_is_dirty(
@@ -350,10 +354,10 @@ def test_the_chokepoint_refuses_when_the_commit_is_not_on_the_remote_branch(
     """A commit the remote branch does not carry cannot be published."""
     _git(cut_commit, "update-ref", "-d", f"refs/remotes/{PUBLISHING_REMOTE}/main")
 
-    result = tag_dry_run(cut_commit, monkeypatch)
+    sweep = chokepoint_sweep(cut_commit, monkeypatch)
 
-    assert result.exit_code != 0
-    assert "ancestry" in result.output
+    assert sweep.row(ReleaseSignalName.ANCESTRY).status is ReleaseSignalStatus.FAIL
+    assert sweep.ready is False
 
 
 def test_the_chokepoint_refuses_when_the_rehearsal_records_are_absent(
@@ -364,10 +368,10 @@ def test_the_chokepoint_refuses_when_the_rehearsal_records_are_absent(
     _git(cut_commit, "commit", "--quiet", "--all", "--message", "test: drop the rehearsals")
     _git(cut_commit, "update-ref", f"refs/remotes/{PUBLISHING_REMOTE}/main", "HEAD")
 
-    result = tag_dry_run(cut_commit, monkeypatch)
+    sweep = chokepoint_sweep(cut_commit, monkeypatch)
 
-    assert result.exit_code != 0
-    assert "migration" in result.output
+    assert sweep.row(ReleaseSignalName.MIGRATION).status is ReleaseSignalStatus.UNAVAILABLE
+    assert sweep.ready is False
 
 
 def test_the_chokepoint_refuses_a_version_the_train_never_declared(
@@ -393,7 +397,7 @@ def test_sweep_for_tag_refuses_a_naive_instant(cut_commit: Path) -> None:
             version=CUT_VERSION,
             repo_root=cut_commit,
             remote=PUBLISHING_REMOTE,
-            package_version=__version__,
+            package_version=CUT_VERSION,
             source=None,
             waiver_count=0,
             computed_at=datetime(2026, 9, 11, 12, 0),
@@ -408,7 +412,7 @@ def test_sweep_for_tag_refuses_a_blank_remote(cut_commit: Path) -> None:
             version=CUT_VERSION,
             repo_root=cut_commit,
             remote="",
-            package_version=__version__,
+            package_version=CUT_VERSION,
             source=None,
             waiver_count=0,
             computed_at=NOW,
@@ -423,7 +427,7 @@ def test_sweep_for_tag_refuses_a_negative_waiver_count(cut_commit: Path) -> None
             version=CUT_VERSION,
             repo_root=cut_commit,
             remote=PUBLISHING_REMOTE,
-            package_version=__version__,
+            package_version=CUT_VERSION,
             source=None,
             waiver_count=-1,
             computed_at=NOW,

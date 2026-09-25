@@ -339,6 +339,32 @@ def test_produce_receipts_refuses_an_unpinned_record(ctx: MethodContext) -> None
     assert not checkpoint_receipts_path(state_path).exists()
 
 
+def test_produce_receipts_resolves_a_membership_rung_against_its_record(
+    ctx: MethodContext,
+) -> None:
+    """dev3 requires membership, so its configuration takes the record's refs.
+
+    Resolved without them the loader refuses the cardinality before any
+    gate is looked at, so a dev3 checkpoint could never be receipted. An
+    unpinned dev3 DRAFT therefore has to get as far as the pin check.
+    """
+    state_path = Path(str(ctx.state_path))
+    draft = Release(
+        uid=dev1_draft().uid,
+        key="REL-0.7.0.dev3",
+        version="0.7.0.dev3",
+        channel=dev1_draft().channel,
+        authority_epoch=2,
+        membership_refs=("eawf://WSP-ABC/PRJ-ABC/REP-ABC/milestone/MLS-0001#MAB-0001-MLS-0001",),
+    )
+    record_release(state_path, draft, recorded_at=NOW, summary="seed")
+
+    message = refused(ctx, version="0.7.0.dev3")
+
+    assert "release_not_pinned" in message
+    assert "membership_cardinality" not in message
+
+
 def test_produce_receipts_refuses_a_checkpoint_with_no_stored_record(ctx: MethodContext) -> None:
     """Nothing stored for the rung means nothing to prove."""
     assert "no release record is stored" in refused(ctx)

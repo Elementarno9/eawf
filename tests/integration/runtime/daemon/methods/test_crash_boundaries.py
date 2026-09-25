@@ -36,7 +36,7 @@ from eawf.kernel.spec.release import ReleaseStatus, ReleaseTargetStatus
 from eawf.kernel.store.append import append_envelope
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.release import observe, publish, reconcile, retry_target
-from eawf.surfaces.cli.commands.release import _create_and_push_tag
+from eawf.surfaces.cli.commands.release_tag import _create_and_push_tag
 from eawf.workflow.release.boundaries import IN_PACKAGE_BOUNDARIES, PublicationBoundary
 from eawf.workflow.release.ledger import current_operation, ledger_path
 from eawf.workflow.release.observation import configured_target

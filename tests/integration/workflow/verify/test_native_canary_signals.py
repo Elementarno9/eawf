@@ -285,16 +285,26 @@ def test_the_membership_row_cites_each_accepted_bundle(tmp_path: Path) -> None:
     assert row.evidence_refs == (ACCEPTED_REF,)
 
 
-def test_this_checkout_has_accepted_no_canary_milestone() -> None:
-    """The honest state: no Milestone has been driven inside a canary yet."""
+_CANARY_MILESTONE_REF = (
+    "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001"
+)
+
+
+def test_this_checkout_records_one_accepted_canary_milestone() -> None:
+    """The committed export holds the one Milestone the canary walk accepted.
+
+    A ref the export does not hold still resolves to nothing, so the
+    membership signal cannot pass on a name it was never shown.
+    """
     evidence = load_canary_evidence(REPO_ROOT)
     assert evidence is not None
 
-    assert evidence.milestones == ()
+    assert len(evidence.milestones) == 1
+    assert membership_findings(evidence, (_CANARY_MILESTONE_REF,)) == ()
+    assert membership_evidence_refs(evidence, (_CANARY_MILESTONE_REF,)) != ()
     assert membership_findings(evidence, (MEMBERSHIP_REF,))[0].gap is (
         CanaryEvidenceGap.MEMBERSHIP_UNRESOLVED
     )
-    assert membership_evidence_refs(evidence, (MEMBERSHIP_REF,)) == ()
 
 
 def test_membership_findings_of_no_declared_ref_is_empty() -> None:

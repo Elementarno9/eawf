@@ -44,6 +44,7 @@ from eawf.kernel.spec.release import (
     semver_equivalent,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
+from eawf.workflow.evidence.provider_certification import canary_evidence_path
 from eawf.workflow.release.adapters import RegistryReader
 from eawf.workflow.release.advance import draft_release_for
 from eawf.workflow.release.dependencies import (
@@ -469,3 +470,52 @@ def stage_passing_receipts(repo_root: Path, *, version: str, source_sha: str) ->
             reproduced=True,
         ),
     )
+
+
+#: The acceptance bundle a dev3 open names.
+DEV3_MEMBERSHIP_REF = "milestone://epoch2/native-canary"
+
+
+def accepted_canary_export(*records: Mapping[str, Any]) -> dict[str, Any]:
+    """Return this checkout's committed canary export with Milestones accepted.
+
+    A membership reference is resolved when the checkpoint is opened, so
+    any test that opens dev3 needs an export in which its bundle is a
+    COMPLETED Milestone of a declared canary. The committed export is
+    the base, so the canary list stays the one the checkout declares.
+
+    Args:
+        records: Field overrides, one per Milestone to record. None
+            records the dev3 bundle alone, accepted as-is.
+
+    Returns:
+        The export document, ready to validate or to stage.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    document: dict[str, Any] = json.loads(
+        canary_evidence_path(repo_root).read_text(encoding="utf-8")
+    )
+    base: dict[str, Any] = {
+        "reference": DEV3_MEMBERSHIP_REF,
+        "project_code": document["canaries"][0]["project_code"],
+        "milestone_id": "MS-0001",
+        "status": "COMPLETED",
+        "bundle_digest": f"sha256:{'c' * 64}",
+        "recorded_at": "2026-09-18T00:00:00+00:00",
+    }
+    document["milestones"] = [base | dict(record) for record in records or ({},)]
+    return document
+
+
+def stage_canary_export(repo_root: Path, document: Mapping[str, Any] | str) -> None:
+    """Write *document* as the committed canary export of *repo_root*.
+
+    Args:
+        repo_root: The scratch checkout the export is written under.
+        document: The export, as a mapping written as JSON or as text
+            written verbatim.
+    """
+    path = canary_evidence_path(repo_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = document if isinstance(document, str) else json.dumps(document)
+    path.write_text(text, encoding="utf-8")

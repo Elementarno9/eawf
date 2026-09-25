@@ -33,7 +33,11 @@ from eawf.kernel.spec.release import (
     ReleaseTrain,
     validate_release_against_train,
 )
-from eawf.kernel.spec.release_config import ReleaseGateName
+from eawf.kernel.spec.release_config import (
+    ReleaseConfig,
+    ReleaseGateName,
+    load_release_config,
+)
 from eawf.workflow.release.advance import (
     ADVANCING_STATUSES,
     CheckpointGateReceipt,
@@ -43,13 +47,16 @@ from eawf.workflow.release.advance import (
     TrainAdvanceRecord,
     advance_train,
     assert_checkpoint_terminal,
+    derive_train,
     draft_release_for,
 )
-from eawf.workflow.release.train import V07_TRAIN
+from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 from eawf.workflow.release.train_store import (
     checkpoint_receipts_path,
     read_checkpoint_receipts,
+    read_train_advances,
     record_checkpoint_receipt,
+    record_train_advance,
 )
 from tests._release_helpers import (
     MANIFEST_DIGEST,
@@ -490,3 +497,111 @@ def test_draft_release_for_an_epoch1_rung_refuses_membership_bundles() -> None:
 
     with pytest.raises(ValueError, match="membership_refs must be empty"):
         draft_release_for(rung, uid=NEXT_UID, membership_refs=("bundle://early",))
+
+
+# --- the dev2 checkpoint -----------------------------------------------------
+
+#: The dev2 record the train closes, and the rung it opens.
+DEV2_KEY = "REL-0.7.0.dev2"
+DEV3_KEY = "REL-0.7.0.dev3"
+
+
+def dev2_config() -> ReleaseConfig:
+    """Return the authored dev2 configuration, whose profile requires twelve gates."""
+    return load_release_config(checkpoint_config_yaml("0.7.0.dev2"), train=V07_TRAIN)
+
+
+def baked_dev2() -> Release:
+    """Return the dev2 record at ``baked``, pinned to the shared source."""
+    return release_record(
+        uid=UUID(int=32),
+        key=DEV2_KEY,
+        version="0.7.0.dev2",
+        status=ReleaseStatus.BAKED,
+        approval_ref="receipt://approval/dev2",
+    )
+
+
+def train_on_dev2() -> ReleaseTrain:
+    """Return the train standing on dev2, as the stores place it once dev2 is recorded."""
+    train = derive_train(V07_TRAIN, recorded_keys=("REL-0.7.0.dev1", DEV2_KEY), advances=())
+    assert train.current_checkpoint.release_key == DEV2_KEY
+    return train
+
+
+def advance_dev2(state_path: Path) -> TrainAdvance:
+    """Advance past dev2 on the receipts stored under *state_path*."""
+    return advance_train(
+        train_on_dev2(),
+        current=baked_dev2(),
+        config=dev2_config(),
+        receipts=read_checkpoint_receipts(state_path, DEV2_KEY),
+        now=NOW,
+    )
+
+
+def test_dev2_profile_requires_twelve_gates_including_epoch1_stabilization() -> None:
+    """The count the advance judges is the authored dev2 profile, not a fixture's."""
+    required = dev2_config().gates.required
+
+    assert len(required) == 12
+    assert ReleaseGateName.EPOCH1_STABILIZATION in required
+
+
+def test_advance_train_refuses_dev2_with_eleven_of_twelve_receipts(tmp_path: Path) -> None:
+    """dev2 with every gate but ``epoch1_stabilization`` stored does not move."""
+    state_path = tmp_path / ".ea" / "state.json"
+    eleven = [
+        gate
+        for gate in dev2_config().gates.required
+        if gate is not ReleaseGateName.EPOCH1_STABILIZATION
+    ]
+    store_receipts(state_path, gate_receipts(release_key=DEV2_KEY, gates=eleven))
+
+    assert len(read_checkpoint_receipts(state_path, DEV2_KEY)) == 11
+    with pytest.raises(TrainAdvanceError) as excinfo:
+        advance_dev2(state_path)
+
+    assert excinfo.value.code is TrainAdvanceDenialCode.PREREQUISITE_RECEIPT_MISSING
+    assert excinfo.value.gate is ReleaseGateName.EPOCH1_STABILIZATION
+    assert excinfo.value.release_key == DEV2_KEY
+    assert read_train_advances(state_path) == ()
+
+
+def test_advance_train_accepts_dev2_with_twelve_receipts_and_records_it(
+    tmp_path: Path,
+) -> None:
+    """All twelve dev2 receipts open dev3, and the recorded row moves the derived train."""
+    state_path = tmp_path / ".ea" / "state.json"
+    required = dev2_config().gates.required
+    store_receipts(state_path, gate_receipts(release_key=DEV2_KEY, gates=required))
+
+    result = advance_dev2(state_path)
+    record_train_advance(state_path, result.record, recorded_at=NOW, summary="advance dev2")
+
+    assert result.record.closed_key == DEV2_KEY
+    assert result.record.opened_key == DEV3_KEY
+    assert len(result.receipt_refs) == 12
+    assert read_train_advances(state_path) == (result.record,)
+    moved = derive_train(
+        V07_TRAIN,
+        recorded_keys=("REL-0.7.0.dev1", DEV2_KEY),
+        advances=read_train_advances(state_path),
+    )
+    assert moved.current_checkpoint.release_key == DEV3_KEY
+
+
+def test_advance_train_refuses_dev2_receipts_bound_to_other_source(tmp_path: Path) -> None:
+    """Twelve receipts earned at a different commit do not vouch for dev2."""
+    state_path = tmp_path / ".ea" / "state.json"
+    store_receipts(
+        state_path,
+        gate_receipts(
+            release_key=DEV2_KEY, source_sha="d" * 40, gates=dev2_config().gates.required
+        ),
+    )
+
+    with pytest.raises(TrainAdvanceError) as excinfo:
+        advance_dev2(state_path)
+
+    assert excinfo.value.code is TrainAdvanceDenialCode.PREREQUISITE_RECEIPT_STALE

@@ -52,6 +52,7 @@ from eawf.workflow.evidence.measured_contract import (
     promote_measured_contract,
     resolve_contract_citation,
 )
+from eawf.workflow.evidence.provider_certification import CanaryEvidence
 from eawf.workflow.release.admission import (
     CONTRACT_LABELS,
     assert_measured_contracts,
@@ -64,7 +65,15 @@ from eawf.workflow.release.publication import burn_release
 from eawf.workflow.release.records import read_release_record, record_release
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.release.train_store import record_train_advance
-from tests._release_helpers import NOW, dev1_adoption, dev1_config, dev1_draft, release_record
+from tests._release_helpers import (
+    NOW,
+    accepted_canary_export,
+    dev1_adoption,
+    dev1_config,
+    dev1_draft,
+    release_record,
+    stage_canary_export,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -121,7 +130,8 @@ def create_dev3(state: State) -> Release:
         train=V07_TRAIN,
         version=DEV3,
         uid=DEV2_UID,
-        membership_refs=("milestone://epoch2/native-canary",),
+        membership_refs=tuple(DEV3_MEMBERSHIP),
+        canary_evidence=CanaryEvidence.model_validate(accepted_canary_export()),
     )
 
 
@@ -413,11 +423,16 @@ def test_release_create_rpc_refuses_without_an_on_disk_state() -> None:
 def _dev3_context(tmp_path: Path, state: State, *, advanced: bool) -> MethodContext:
     """Return a context whose stores hold burned dev1 and baked dev2.
 
+    The checkout carries a canary export accepting the dev3 bundle, so
+    the membership resolution admits and the cases stay about contracts
+    and succession.
+
     With *advanced* the dev2 train advance is recorded as well, before
     any dev3 create is attempted, which is the order the operator walks.
     """
     ctx = _context(tmp_path, state)
     state_path = Path(str(ctx.state_path))
+    stage_canary_export(tmp_path, accepted_canary_export())
     baked = release_record(
         key="REL-0.7.0.dev2",
         version=DEV2,

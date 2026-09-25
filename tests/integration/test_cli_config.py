@@ -28,6 +28,7 @@ import yaml
 from typer.testing import CliRunner
 
 from eawf.kernel.config import layered
+from eawf.runtime.daemon.churn import SUITE_SESSION_ENV
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -209,6 +210,19 @@ def test_validate_ignores_reserved_runtime_env_vars(repo_root: Path) -> None:
     env = dict.fromkeys(layered._RESERVED_ENV_VARS | {"EAWF_SKIP_PERF"}, "1")
 
     result = runner.invoke(app, ["config", "validate"], env=env)
+
+    assert result.exit_code == 0, result.output
+
+
+def test_validate_ignores_the_suite_session_tag(repo_root: Path) -> None:
+    """The tag the suite exports for its daemons is not a ``suite_session`` config key.
+
+    The reserved set spells the name out, so this pins it to the owning
+    constant: renaming one without the other reds here.
+    """
+    assert SUITE_SESSION_ENV in layered._RESERVED_ENV_VARS
+
+    result = runner.invoke(app, ["config", "validate"], env={SUITE_SESSION_ENV: "tag"})
 
     assert result.exit_code == 0, result.output
 

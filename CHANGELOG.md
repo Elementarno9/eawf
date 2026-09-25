@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0.dev3]
+
+This is the third development checkpoint of the v0.7.0 release train, and the first that runs on epoch-2 authority. It is the native-canary rung: the epoch-2 lifecycle is driven end to end inside a disposable canary repository, one Milestone is accepted there through the lifecycle skills, and the checkpoint is gated on fifteen gates rather than dev2's twelve. It is still a development checkpoint, not a stable release: the limitations below name what remains unproven.
+
+### Added
+
+- **The native-canary gate profile, fifteen gates.** It is dev2's twelve in dev2's order plus `provider`, `membership` and `canary_isolation`. `membership` passes only when every acceptance bundle the checkpoint names resolves to an accepted Milestone, and `canary_isolation` runs a proof command at the pinned source that shows the canary walk leaves the production repository untouched.
+- **One canary Milestone accepted through the lifecycle skills.** The canary walk now carries a Milestone from draft to COMPLETED, and its acceptance bundle is the reference this checkpoint's record names.
+- **Delivery from Batch plan records.** A delivery request is assembled from the Batch plan, integration runs in a daemon-owned git worktree, `submit_candidate` is a registered semantic handler, and a per-Run MCP server is attached and streams its usage, so a capped native Run is metered on every usage reading.
+- **Milestone acceptance reads.** The PendingAction acceptance reads open and seal through the native transaction, and epoch-2 records are admitted through a native create transition.
+- **The native console.** `eawf tui` launches the native console on an epoch-2 tree, built from packaged chrome rather than prototype data, with tables windowed around the cursor, a per-route projection cache and the header connection value driven from the seam.
+- **Operator repair verbs.** A bounded correction verb for closed backlog rows; a one-way, reason-required rewrite that gives a closed wave's criterion a command gate, with red re-receipts recorded rather than hidden; phase landing by fast-forward, with rewritten wave pins repinned by trailer after the old branch heads are archived; and pruning of archived wave branches.
+
+### Changed
+
+- **An epoch-2 checkpoint is approved only on stored gate receipts.** From dev3 on, `eawf release approve` refuses unless every gate the checkpoint requires has a fresh receipt bound to the candidate's exact source and manifest, and the refusal names the gate. The epoch-1 checkpoints keep the approval they were given.
+- **A membership reference is resolved when the checkpoint is opened.** `eawf release create` refuses a reference that does not resolve to an accepted Milestone bundle and writes no record, instead of accepting it and failing later at preflight.
+- **`eawf release receipts` proves a checkpoint that requires membership** against the references its record was cut with.
+
+### Fixed
+
+- **Native mutations that touch only a ledger commit through the transaction,** and a torn ledger tail that no write-ahead record names is truncated at boot.
+- **The jailed Codex runtime starts on macOS,** and the Claude child environment is narrowed to what it needs.
+- **State writers for worktrees and agents refuse payloads that would leak** a local path or identifier.
+- **Lifecycle skill calls are attributed to a valid principal,** and runtime-directory churn is attributed to the daemon's own ledger.
+- **Gates that could not fail can now fail:** the idle-contract and coverage-freshness gates red on a real defect, the wave pin check is scoped to first-parent main and release tags, and a classifier crash fails open while state paths are gated as code.
+- **The status surface reports the true backlog count and derives the open train rung,** and workspace overlay profiles resolve in `enable` and `doctor`.
+- **Plugin packagers emit only hooks with a handler,** a turn straddling a claim is pro-rated, and a default research block ships.
+
+### Migration
+
+- **No new migration step.** The epoch-2 offline migration is the one dev2 shipped. Every field the epoch-2 entities gained in this checkpoint carries a default, so an epoch-2 tree written by dev2 loads unchanged.
+- **Release records are written under the `release/v2` tag.** The tag records the `Release.adoption` field dev2 added without a bump. Readers accept both `release/v1` and `release/v2`, so the records already on file are read as they are.
+
+### Limitations
+
+- **The checkpoint record is cut after the merge.** The dev3 record is opened, pinned, receipted and approved from the merged tag, because the manifest an approval binds is frozen from the receipts its publish jobs leave. Until the read-back of each target bakes it, the train stays on dev3.
+- **The canary is one Milestone in one disposable repository.** It proves the lifecycle can be walked end to end, not that it holds across providers or real projects; those are later rungs of this train.
+
 ## [0.7.0.dev2]
 
 This is the second development checkpoint of the v0.7.0 release train. It is the checkpoint that carries the epoch-2 state-tree cutover from a written target shape to running, rehearsed code, and it runs under a twelve-gate profile rather than dev1's eight. It is still a development checkpoint, not a stable release: the limitations below name exactly what remains unproven.
