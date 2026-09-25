@@ -310,6 +310,12 @@ def package_plugin(
             atomic_write_text(path, payload.decode("utf-8"))
         skill_deltas.append(FileDelta(path=path, action=action))
 
+    # _codex_hook_specs() already returns only CODEX_HOOK_EVENT_TYPES, the
+    # provider-native lifecycle events register_runtime_capture_hooks
+    # genuinely handles under the Codex runtime (verified at import by
+    # codex.hook_map's boot guard) -- no further has_handler filtering
+    # needed here, unlike the Claude packager where most session-level
+    # events are idle no-ops.
     hook_deltas: list[FileDelta] = []
     for hook_spec in _codex_hook_specs():
         path = _hook_target(plugin_root, hook_spec)

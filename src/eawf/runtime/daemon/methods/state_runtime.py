@@ -13,6 +13,7 @@ import hashlib
 import logging
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import orjson
@@ -408,6 +409,67 @@ def rebase_for_session(wave: Wave, incoming: RuntimeLatest, session_id: str | No
     )
 
 
+def settle_straddling_claim(
+    wave: Wave, incoming: RuntimeLatest, *, transcript: Path | None
+) -> None:
+    """Raise the baseline by the work its session did before the claim instant.
+
+    A claim runs as a tool call inside a turn, and Claude writes that turn's
+    duration only when the turn ends -- after the claim-time snapshot. Left alone,
+    the whole turn lands in the first later capture and the wave is charged for
+    the minutes before it was claimed. Re-reading the transcript as of the
+    baseline's instant charges the baseline with that turn's pre-claim share
+    instead. The reading is a pure function of an append-only file, so repeating
+    it on every capture is idempotent; before the turn ends it adds nothing.
+
+    The baseline only ever rises, and never past the counters being captured, so
+    this cannot make the snapshot pair read as a counter reset.
+
+    Args:
+        wave: The wave whose baseline is settled in place.
+        incoming: The capture about to be merged, already hashed.
+        transcript: The capturing session's transcript, or ``None`` when it does
+            not resolve (then nothing changes).
+    """
+    from eawf.runtime.runtimes.claude.transcript_counters import (
+        MEASURE_VERSION,
+        aggregate_transcript_counters,
+    )
+
+    baseline = wave.runtime_baseline
+    if (
+        transcript is None
+        or baseline is None
+        or baseline.measure_version != MEASURE_VERSION
+        or not same_vendor_session(baseline.session_id, incoming.session_id)
+    ):
+        return
+    as_of = aggregate_transcript_counters(transcript, as_of=baseline.captured_at)
+    if as_of is None:
+        return
+    updates: dict[str, int | float] = {}
+    for field in _RUNTIME_COUNTER_FIELDS:
+        current = getattr(baseline, field)
+        raw = getattr(as_of, field)
+        # A counter the claim did not capture stays absent: filling it here would
+        # invent an origin the close-time delta never had.
+        if current is None or raw is None:
+            continue
+        settled: int | float = float(raw) if field == "cost_usd" else raw
+        ceiling = getattr(incoming, field)
+        if ceiling is not None:
+            settled = min(settled, ceiling)
+        if settled > current:
+            updates[field] = settled
+    if updates:
+        wave.runtime_baseline = baseline.model_copy(update=updates)
+        logger.info(
+            f"settle_straddling_claim wave={wave.id} "
+            f"api_duration_ms={baseline.api_duration_ms}->"
+            f"{wave.runtime_baseline.api_duration_ms}"
+        )
+
+
 #: Per-class token fields a runtime.capture merge must never null-clobber.
 _RUNTIME_TOKEN_FIELDS: Final[tuple[str, ...]] = (
     "input_tokens",
@@ -567,6 +629,20 @@ def upsert_interactive_session_attempt(
 
 
 @register("runtime.capture")
+def _capture_transcript(args: RuntimeCaptureParams) -> Path | None:
+    """Return the Claude transcript behind a capture, resolved by its RAW session id.
+
+    Resolved before the id is hashed (the digest names no file) and before the
+    state lock is taken (the lookup may glob every project directory).
+    """
+    if args.harness != "claude-code" or not args.session_id:
+        return None
+    from eawf.runtime.runtimes.claude.transcript_counters import transcript_path_for_session
+
+    cwd = Path(args.repo_root) if args.repo_root else None
+    return transcript_path_for_session(args.session_id, cwd=cwd)
+
+
 async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Persist latest runtime counters onto one exactly correlated active wave.
 
@@ -590,6 +666,7 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         args = RuntimeCaptureParams.model_validate(params)
     except ValidationError as exc:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    transcript = _capture_transcript(args)
     # The raw id names the runtime's local transcript, so only its digest may
     # reach the snapshots, the attempt row and the event. An empty id names no
     # session and is treated as absent.
@@ -630,6 +707,7 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                     wave.runtime_baseline, latest
                 ):
                     reorigin_on_reset(wave, latest)
+                settle_straddling_claim(wave, latest, transcript=transcript)
                 wave.runtime_latest = merge_runtime_latest(wave.runtime_latest, latest)
                 # The interactive-Claude lifecycle mints no SessionAttempt on
                 # its own (only the headless spawn does); record one here off the

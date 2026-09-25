@@ -77,6 +77,28 @@ _JAIL_WRAPPER_BINARY: dict[str, str] = {
     "linux": "bwrap",
 }
 
+#: The codex sandbox mode a seatbelt-jailed child is started with. Codex
+#: wraps every model-issued command in its own ``sandbox-exec`` profile, and
+#: macOS refuses to apply a seatbelt profile inside a process that already
+#: runs under one (``sandbox_apply: Operation not permitted``), so a jailed
+#: codex on darwin dies before it reaches the model. The eawf jail is the
+#: enforced boundary on that path, which is the externally-sandboxed case
+#: this mode exists for.
+_OUTER_SEATBELT_SANDBOX_ARGS: tuple[str, ...] = ("--sandbox", "danger-full-access")
+
+
+def _defer_to_outer_seatbelt(argv: list[str]) -> list[str]:
+    """Return a ``codex exec`` *argv* that leaves sandboxing to the eawf jail.
+
+    Args:
+        argv: The child's own argv, ``[<binary>, "exec", ...]``.
+
+    Returns:
+        A new argv with :data:`_OUTER_SEATBELT_SANDBOX_ARGS` spliced in right
+        after the ``exec`` subcommand, so the prompt stays the last token.
+    """
+    return [*argv[:2], *_OUTER_SEATBELT_SANDBOX_ARGS, *argv[2:]]
+
 
 def _record_env_scrub(
     child_env: dict[str, str],
@@ -181,7 +203,10 @@ def _maybe_jail_argv(
 
     Returns:
         Either ``jail_command(argv, ...)`` (jailed) or *argv* unchanged
-        (unjailed fallback).
+        (unjailed fallback). Under the seatbelt wrapper the jailed argv also
+        turns codex's own sandbox off (:func:`_defer_to_outer_seatbelt`),
+        because a nested seatbelt profile cannot be applied; an unjailed
+        child keeps codex's own sandbox.
     """
     if not jail_supported():
         logger.warning(
@@ -218,6 +243,8 @@ def _maybe_jail_argv(
         )
         return argv
 
+    if wrapper == _JAIL_WRAPPER_BINARY["darwin"]:
+        argv = _defer_to_outer_seatbelt(argv)
     jailed = jail_command(argv, runtime=runtime, cwd=cwd_path, root=root)
     logger.info(f"spawn_session jail=on wrapper={wrapper!r} runtime={runtime!r} cwd={cwd_path!s}")
     return jailed

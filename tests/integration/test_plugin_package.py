@@ -70,31 +70,22 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert len(list((target / "skills").iterdir())) == _SKILL_COUNT
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
-    # Session-level plugin hooks emitted by default (B015 — P13 W05).
+    # Only handler-backed hooks are emitted by default -- today just
+    # SESSION_END, so the seven idle no-op wrappers (SessionStart,
+    # PreToolUse/PostToolUse, SubagentStop, PreCompact) are absent.
     assert (target / "hooks").exists()
     assert (target / "hooks.json").exists()
-    assert (target / "hooks" / "session_start.sh").exists()
     assert (target / "hooks" / "session_end.sh").exists()
-    assert (target / "hooks" / "pre_commit.sh").exists()
-    assert (target / "hooks" / "post_commit.sh").exists()
-    assert (target / "hooks" / "pre_push.sh").exists()
-    assert (target / "hooks" / "post_push.sh").exists()
-    assert (target / "hooks" / "pre_compact.sh").exists()
-    assert (target / "hooks" / "subagent_stop.sh").exists()
-    # Only the eight plugin-level hook wrappers appear — workflow-internal
-    # lifecycle events (wave_*, iter_*, phase_*, *_audit) stay fired by
-    # the state CLI through ``eawf hook run``, not by the CC plugin
-    # manifest.
-    assert len(list((target / "hooks").iterdir())) == 8
+    assert not (target / "hooks" / "session_start.sh").exists()
+    assert not (target / "hooks" / "pre_commit.sh").exists()
+    assert not (target / "hooks" / "post_commit.sh").exists()
+    assert not (target / "hooks" / "pre_push.sh").exists()
+    assert not (target / "hooks" / "post_push.sh").exists()
+    assert not (target / "hooks" / "pre_compact.sh").exists()
+    assert not (target / "hooks" / "subagent_stop.sh").exists()
+    assert len(list((target / "hooks").iterdir())) == 1
     hooks_manifest = json.loads((target / "hooks.json").read_text())
-    assert set(hooks_manifest["hooks"].keys()) == {
-        "PreCompact",
-        "SessionStart",
-        "Stop",
-        "PreToolUse",
-        "PostToolUse",
-        "SubagentStop",
-    }
+    assert set(hooks_manifest["hooks"].keys()) == {"Stop"}
     # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
     # variable so the manifest installs cleanly regardless of where CC
     # mounts the plugin.
@@ -162,17 +153,10 @@ def test_package_skips_hooks_when_disabled(tmp_path: Path) -> None:
 
 
 def test_package_hook_scripts_are_executable(tmp_path: Path) -> None:
-    """The six wrapper scripts land on disk with mode 0o755."""
+    """The handler-backed wrapper script lands on disk with mode 0o755."""
     target = tmp_path / "eawf-plugin"
     package_plugin(target)
-    for name in (
-        "session_start.sh",
-        "session_end.sh",
-        "pre_commit.sh",
-        "post_commit.sh",
-        "pre_push.sh",
-        "post_push.sh",
-    ):
+    for name in ("session_end.sh",):
         path = target / "hooks" / name
         mode = path.stat().st_mode & 0o777
         assert mode == 0o755, f"{name} mode={oct(mode)} expected 0o755"

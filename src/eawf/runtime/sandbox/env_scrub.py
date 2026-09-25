@@ -22,7 +22,8 @@ Public API:
 The shared floor (every lane) keeps ``HOME``, a PINNED ``PATH`` floor
 (never the parent ``PATH``), ``LANG`` / ``LC_*`` (defaulting to
 ``C.UTF-8`` when absent), and ``TERM``. Each lane adds only its own
-account credential family (claude: ``CLAUDE_*`` / ``ANTHROPIC_*``; codex:
+account credential family (claude: ``CLAUDE_CONFIG_DIR`` /
+``CLAUDE_CODE_OAUTH_TOKEN`` / ``ANTHROPIC_*``; codex:
 ``CODEX_HOME`` / ``OPENAI_*``) and drops the cross-lane key. Everything
 not on the allowlist -- ``AWS_*``, ``GH_*`` / ``GITHUB_*``, ``SSH_*``,
 ``KUBECONFIG``, ``EAWF_*`` daemon internals, and any unknown variable --
@@ -112,9 +113,14 @@ _CLAUDE_AUTH_EXACT: frozenset[str] = frozenset(
 )
 
 #: claude-lane auth: prefix families kept when present. ``ANTHROPIC_*`` is
-#: an optional higher-precedence override, never required; ``CLAUDE_*``
-#: covers the on-disk subscription config.
-_CLAUDE_AUTH_PREFIXES: tuple[str, ...] = ("CLAUDE_", "ANTHROPIC_")
+#: an optional higher-precedence override, never required. ``CLAUDE_*`` is
+#: deliberately NOT a family: a daemon started from inside an operator's own
+#: Claude Code session carries that session's ``CLAUDE_CODE_*`` variables
+#: (its session id, its messaging socket and the token that authenticates
+#: to it), and a child handed them attaches to the operator's session
+#: rather than running as a clean install. The two ``CLAUDE_*`` keys the
+#: child authenticates with are admitted by exact match above.
+_CLAUDE_AUTH_PREFIXES: tuple[str, ...] = ("ANTHROPIC_",)
 
 #: codex-lane auth: exact-match keys kept when present.
 _CODEX_AUTH_EXACT: frozenset[str] = frozenset({"CODEX_HOME"})

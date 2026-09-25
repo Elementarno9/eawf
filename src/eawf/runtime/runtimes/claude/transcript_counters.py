@@ -47,6 +47,11 @@ Two transcript quirks the aggregator must handle:
   rather than the transcript's span -- the span is the operator's whole-session wall
   clock, which is measure 1, the first defect this module ever had. Reporting it
   under a later version number would make it undetectable rather than correct.
+- **A claim can land mid-turn.** The claim runs as a tool call inside a turn, so
+  that turn's ``turn_duration`` row lands after the claim-time snapshot and the
+  whole turn would be charged to the wave. Reading the counters *as of* the claim
+  instant splits that one turn at the claim (:func:`_pre_cutoff_share_ms`), so
+  the wave is charged only the share that followed it.
 
 Every read fails open: a missing, unreadable, or usage-free transcript yields
 ``None`` so the Stop hook stays non-blocking.
@@ -59,7 +64,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Final
@@ -98,7 +103,11 @@ _HARNESS_ID = "claude-code"
 #:     clamp was a no-op on every real case but one (76.26 h / 152.5 EU still landed
 #:     from this repo's own transcript). An interrupted turn is not mis-measured, it
 #:     is unmeasurable, so it contributes nothing.
-MEASURE_VERSION: int = 7
+#: 8 = the same sum, readable AS OF an instant: a turn that straddles the instant
+#:     is split at it (:func:`_pre_cutoff_share_ms`). Version 7 banked a turn to
+#:     whichever snapshot first saw its ``turn_duration`` row, so a wave claimed
+#:     mid-turn was charged the whole turn, the minutes before its claim included.
+MEASURE_VERSION: int = 8
 
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
@@ -365,7 +374,79 @@ class _TranscriptScan:
     messages: int
 
 
-def _completed_turn_durations(rows: list[dict[str, Any]]) -> tuple[int, int]:
+def _utc_timestamp(row: dict[str, Any]) -> datetime | None:
+    """Return the row's timestamp, reading an offset-less one as UTC."""
+    stamp = _row_timestamp(row)
+    if stamp is not None and stamp.tzinfo is None:
+        return stamp.replace(tzinfo=UTC)
+    return stamp
+
+
+def _cutoff_index(rows: list[dict[str, Any]], as_of: datetime) -> int:
+    """Return how many leading *rows* happened at or before *as_of*.
+
+    The transcript is append-only, so the first row stamped after *as_of* ends the
+    prefix; an unstamped row belongs to whichever side its position puts it on.
+    """
+    for index, row in enumerate(rows):
+        stamp = _utc_timestamp(row)
+        if stamp is not None and stamp > as_of:
+            return index
+    return len(rows)
+
+
+def _pre_cutoff_share_ms(
+    turn_rows: list[dict[str, Any]],
+    duration_ms: int,
+    *,
+    pre_rows: int,
+    as_of: datetime,
+) -> int:
+    """Return the part of a turn straddling *as_of* that was worked before it.
+
+    Claude reports one figure per turn, so the split is a proportion of that
+    figure, never a span of the turn's own rows (the span holds approval stalls
+    the figure excludes). The proportion is read off the turn's row timestamps
+    when a row before the cutoff carries one: the turn runs from its earliest
+    stamp to its latest, and the pre-cutoff share ends at the LAST stamped row at
+    or before *as_of*, so the gap the cutoff falls in -- for a claim, the claim
+    command itself -- goes to the later side. When no pre-cutoff row is stamped,
+    the turn is placed as ``duration_ms`` ending at its latest stamp and split
+    linearly at *as_of*.
+
+    Args:
+        turn_rows: The turn's rows, its closing ``turn_duration`` row last.
+        duration_ms: Claude's figure for the turn.
+        pre_rows: How many leading *turn_rows* fall at or before *as_of*; at
+            least one, and fewer than ``len(turn_rows)``.
+        as_of: The instant the turn is split at.
+
+    Returns:
+        The pre-cutoff share in whole milliseconds, within ``[0, duration_ms]``.
+    """
+    if duration_ms == 0:
+        return 0
+    stamps = [
+        (index, stamp)
+        for index, stamp in enumerate(_utc_timestamp(row) for row in turn_rows)
+        if stamp is not None
+    ]
+    # The row at ``pre_rows`` is the one stamped after the cutoff, so ``end``
+    # exists and lies after every pre-cutoff stamp.
+    end = max(stamp for _, stamp in stamps)
+    before = [stamp for index, stamp in stamps if index < pre_rows]
+    if before:
+        start = min(stamp for _, stamp in stamps)
+        fraction = (max(before) - start) / (end - start)
+    else:
+        start = end - timedelta(milliseconds=duration_ms)
+        fraction = min(1.0, max(0.0, (as_of - start) / (end - start)))
+    return int(duration_ms * fraction)
+
+
+def _completed_turn_durations(
+    rows: list[dict[str, Any]], *, as_of: datetime | None = None
+) -> tuple[int, int]:
     """Return ``(summed duration of COMPLETED turns, count of interrupted turns)``.
 
     An INTERRUPTED turn's figure is that turn's WALL CLOCK, not its work. Claude
@@ -378,26 +459,51 @@ def _completed_turn_durations(rows: list[dict[str, Any]]) -> tuple[int, int]:
     bounded by one turn. Believing the row is unbounded: 76.26 hours (152.5 EU) sits
     in this repo's own transcripts and would have entered the calibration corpus as
     clean data.
+
+    With *as_of*, only the work done by then counts: a turn closed out by then
+    counts whole, a turn that began after it counts nothing, and the one turn
+    straddling it contributes its pre-cutoff share (:func:`_pre_cutoff_share_ms`).
+    A turn is every row after the previous ``turn_duration`` row up to its own.
     """
+    cut = len(rows) if as_of is None else _cutoff_index(rows, as_of)
     total_ms = 0
     interrupted = 0
+    turn_start = 0
     for index, row in enumerate(rows):
         if not _is_turn_duration_row(row):
             continue
+        start, turn_start = turn_start, index + 1
         if index > 0 and _is_interrupt_signal(rows[index - 1]):
             interrupted += 1
             continue
-        total_ms += _non_negative_int(row.get("durationMs"))
+        duration_ms = _non_negative_int(row.get("durationMs"))
+        if index < cut:
+            total_ms += duration_ms
+        elif start < cut and as_of is not None:
+            total_ms += _pre_cutoff_share_ms(
+                rows[start : index + 1], duration_ms, pre_rows=cut - start, as_of=as_of
+            )
     return total_ms, interrupted
 
 
-def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
-    """Fold the transcript rows into token, duration, and attribution totals."""
+def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> _TranscriptScan:
+    """Fold the transcript rows into token, duration, and attribution totals.
+
+    With *as_of*, tokens and the model come only from rows at or before it, and
+    the duration is the work done by then (:func:`_completed_turn_durations`).
+    """
     tally = _TokenTally()
     seen: set[str] = set()
-    turn_duration_ms, interrupted_turns = _completed_turn_durations(rows)
+    turn_duration_ms, interrupted_turns = _completed_turn_durations(rows, as_of=as_of)
+    # The lifetime ceiling below judges the WHOLE file, so a snapshot taken as of
+    # an earlier instant trips it exactly when the full reading does; otherwise
+    # the two readings of one transcript could disagree on whether it is sane.
+    full_turn_duration_ms = (
+        turn_duration_ms if as_of is None else _completed_turn_durations(rows)[0]
+    )
+    counted = rows if as_of is None else rows[: _cutoff_index(rows, as_of)]
     model: str | None = None
-    for row in rows:
+    for row in counted:
         message = row.get("message")
         if not isinstance(message, dict):
             continue
@@ -442,10 +548,10 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     # above, no real transcript reaches this branch: it is a canary, not a path.
     span_ms = _transcript_span_ms(rows)
     duration_ms = turn_duration_ms
-    if turn_duration_ms > span_ms:
+    if full_turn_duration_ms > span_ms:
         duration_ms = 0
         logger.warning(
-            f"_scan_rows turn_duration_ms={turn_duration_ms} span_ms={span_ms} "
+            f"_scan_rows turn_duration_ms={full_turn_duration_ms} span_ms={span_ms} "
             f"interrupted_turns={interrupted_turns} duration_ms=0 status='unmeasurable'; "
             "the summed turn durations outrun the transcript's own lifetime -- "
             "reporting no duration rather than the operator's wall clock"
@@ -465,12 +571,18 @@ def _scan_rows(rows: list[dict[str, Any]]) -> _TranscriptScan:
     )
 
 
-def aggregate_transcript_counters(transcript_path: Path | str | None) -> RuntimeCounters | None:
+def aggregate_transcript_counters(
+    transcript_path: Path | str | None, *, as_of: datetime | None = None
+) -> RuntimeCounters | None:
     """Aggregate a Claude session transcript into cumulative runtime counters.
 
     Args:
         transcript_path: Path to the session JSONL, typically read off the Stop
             hook payload's ``transcript_path``. ``None`` short-circuits.
+        as_of: Read the counters as they stood at this instant rather than at
+            the end of the file: token rows stamped after it are left out, and
+            a turn straddling it counts only its pre-instant share. ``None``
+            reads the whole file.
 
     Returns:
         :class:`RuntimeCounters` stamped ``harness="claude-code"`` carrying the
@@ -485,7 +597,13 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
         absent, unreadable, or carries no usable counter (neither a duration nor
         a token tally), so the caller degrades rather than capturing an empty
         snapshot.
+
+    Raises:
+        ValueError: When *as_of* carries no timezone, since the transcript's
+            stamps are UTC and a naive instant names no point on that clock.
     """
+    if as_of is not None and as_of.tzinfo is None:
+        raise ValueError(f"as_of must be timezone-aware: {as_of!r}")
     if transcript_path is None:
         return None
     path = Path(transcript_path)
@@ -495,7 +613,7 @@ def aggregate_transcript_counters(transcript_path: Path | str | None) -> Runtime
         logger.debug(f"aggregate_transcript_counters path={path.name!r} err={exc!r}")
         return None
 
-    scan = _scan_rows(rows)
+    scan = _scan_rows(rows, as_of=as_of)
     tally = scan.tally
     model = scan.model
     duration_ms = scan.duration_ms

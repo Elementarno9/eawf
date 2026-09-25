@@ -71,64 +71,31 @@ Source of truth: `src/eawf/runtimes/claude/plugin_package.py`. The
 emit is byte-stable: re-running with the same inputs produces a
 byte-identical tree (covered by the W05 idempotence test).
 
-### Session-level plugin hooks (B015 resolved in v0.2)
+### Session-level plugin hooks
 
-The packaged tree includes a `hooks.json` manifest at the plugin root
-plus a `hooks/<event>.sh` wrapper per subscribed event. The split
-between what CC sees and what stays eawf-internal is deliberate:
+The packaged tree includes a `hooks.json` manifest at the plugin root plus a `hooks/<event>.sh` wrapper per subscribed event. The split between what CC sees and what stays eawf-internal is deliberate, and within what CC can see, only handler-backed events are wired:
 
 | Layer | Surface | Events |
 |---|---|---|
-| CC plugin manifest (`hooks.json`) | What Claude Code can observe reliably | `SessionStart`, `Stop`, `PreToolUse(Bash)`, `PostToolUse(Bash)` filtered to `git commit` / `git push` |
+| CC plugin manifest (`hooks.json`) | Handler-backed events Claude Code can observe reliably | `Stop` (`SESSION_END`) today; `SessionStart`, `PreToolUse(Bash)`/`PostToolUse(Bash)` filtered to `git commit`/`git push`, `SubagentStop`, `PreCompact` are observable but currently have no runner-registered handler, so they are not wired |
 | State CLI (`eawf hook run`) | Workflow-internal lifecycle the state writer controls | `wave_open`/`wave_close`, `iter_open`/`iter_close`, `phase_open`/`phase_close`, `pre_audit`/`post_audit` |
 
-The six session-level entries in `hooks.json` cover the events Claude
-Code emits regardless of which skill, agent, or slash command is
-driving the session. The workflow-internal events stay fired from
-inside the state CLI because CC's `UserPromptSubmit` matcher cannot
-observe slash-command sub-skill dispatch (e.g. `/flow` runs sub-skills
-internally without re-emitting their slash prompts) and agent calls
-to the state CLI never trigger a prompt at all. A manifest-level
-subscription to those events would be lossy in both directions, so the
-state writer keeps ownership.
+Wiring an event with no registered handler would ship an idle no-op script that still fires on every matching Claude Code event (e.g. every `Bash` tool call), so both the repo-install and plugin-package paths subscribe only the handler-backed subset. The workflow-internal events stay fired from inside the state CLI because CC's `UserPromptSubmit` matcher cannot observe slash-command sub-skill dispatch (e.g. `/flow` runs sub-skills internally without re-emitting their slash prompts) and agent calls to the state CLI never trigger a prompt at all. A manifest-level subscription to those events would be lossy in both directions, so the state writer keeps ownership.
 
-Each `hooks.json` entry resolves to
-`${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh`, the same wrapper script the
-repo-install path emits — payload synthesis, CLI dispatch, and exit
-codes are byte-identical between the two install modes. The mapping
-table lives in `src/eawf/runtimes/claude/hook_map.py` and is the
-single source of truth for which events surface in the CC plugin
-manifest.
+Each `hooks.json` entry resolves to `${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh`, the same wrapper script the repo-install path emits -- payload synthesis, CLI dispatch, and exit codes are byte-identical between the two install modes. The mapping table lives in `src/eawf/runtimes/claude/hook_map.py`; the handler-backed subset is derived from `src/eawf/surfaces/render/hooks.py`'s `HookSpec.has_handler` and is the single source of truth for which events surface in the CC plugin manifest.
 
-Tracked as backlog item B015; resolved in P13 W05.
-
-Generated assets update only Eä-owned files or managed regions
-(`<!-- BEGIN EAWF:managed ... -->` / `<!-- END EAWF:managed ... -->`).
-Hash mismatch or unmanaged conflicts raise an error with a diff and
-repair instructions; `eawf sync` fixes managed-region drift when the
-prior managed hash matches.
+Generated assets update only Eä-owned files or managed regions (`<!-- BEGIN EAWF:managed ... -->` / `<!-- END EAWF:managed ... -->`). Hash mismatch or unmanaged conflicts raise an error with a diff and repair instructions; `eawf sync` fixes managed-region drift when the prior managed hash matches.
 
 ## Codex adapter
 
-Renders a native Codex CLI plugin under
-`<plugin_root>/.codex-plugin/plugin.json` (the canonical Codex manifest
-file). Skills, agents, and hooks live in subdirectories of the same
-plugin root; an `[plugins.eawf] enabled = true` table is patched into
-the scope-correct `config.toml` between
-`# ---- __eawf_managed begin/end ----` markers so user-authored TOML
-elsewhere stays untouched. A sidecar `.codex-plugin/.eawf-managed.json`
-carries the hash registry the `plugin doctor` command checks.
+Renders a native Codex CLI plugin under `<plugin_root>/.codex-plugin/plugin.json` (the canonical Codex manifest file). Skills, agents, and hooks live in subdirectories of the same plugin root; an `[plugins.eawf] enabled = true` table is patched into the scope-correct `config.toml` between `# ---- __eawf_managed begin/end ----` markers so user-authored TOML elsewhere stays untouched. A sidecar `.codex-plugin/.eawf-managed.json` carries the hash registry the `plugin doctor` command checks.
 
 | Scope | Plugin root | Config patched |
 |---|---|---|
 | `project` (default) | `<workspace>/.codex/plugins/eawf/` | `<workspace>/.codex/config.toml` |
 | `user` | `~/.codex/plugins/eawf/` | `~/.codex/config.toml` |
 
-Source: `src/eawf/runtimes/codex/`. Plugin lifecycle commands:
-`eawf plugin install codex [--scope ...]`,
-`eawf plugin update codex [--scope ...]`,
-`eawf plugin doctor codex [--scope ...]`,
-`eawf plugin package codex [--target ...]`.
+Source: `src/eawf/runtimes/codex/`. Plugin lifecycle commands: `eawf plugin install codex [--scope ...]`, `eawf plugin update codex [--scope ...]`, `eawf plugin doctor codex [--scope ...]`, `eawf plugin package codex [--target ...]`.
 
 ### Codex marketplace package
 

@@ -20,14 +20,19 @@ and NO ``.ea/`` — it is a self-contained plugin, not a per-repo workspace
 render.
 
 The packaged tree also emits a session-level ``hooks.json`` at the plugin
-root plus the corresponding wrapper scripts under ``hooks/``. Only the six
-session-level events Claude Code can observe reliably (``SessionStart``,
-``Stop``, ``PreToolUse``/``PostToolUse`` on bash ``git commit``/``git push``)
-appear in the manifest — workflow-internal lifecycle events (``wave_*``,
-``iter_*``, ``phase_*``, ``*_audit``) stay fired by explicit
-``eawf hook run`` calls from the lifecycle surfaces because CC's
-``UserPromptSubmit`` matcher cannot observe slash-command sub-skill
-dispatch or daemon-proxied state writes.
+root plus the corresponding wrapper scripts under ``hooks/``. Only
+handler-backed events — those with a real runner-registered handler, per
+:func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`
+(today just ``SESSION_END``) — appear in the manifest, mirroring what
+``eawf plugin install claude`` wires locally. Every other session-level
+event Claude Code can observe (``SessionStart``, ``PreToolUse``/
+``PostToolUse`` on bash ``git commit``/``git push``, ``SubagentStop``,
+``PreCompact``) would render an idle wrapper (exit 0, empty result list),
+so packaging it would wire an npm user's session to a no-op script.
+Workflow-internal lifecycle events (``wave_*``, ``iter_*``, ``phase_*``,
+``*_audit``) stay fired by explicit ``eawf hook run`` calls from the
+lifecycle surfaces because CC's ``UserPromptSubmit`` matcher cannot observe
+slash-command sub-skill dispatch or daemon-proxied state writes.
 
 Public API::
 
@@ -53,7 +58,10 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 import eawf
 from eawf.kernel.config.layered import resolve_agent_extra_tools
-from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY, render_plugin_hooks_json
+from eawf.runtime.runtimes.claude.hook_map import (
+    handler_backed_plugin_hooks,
+    render_plugin_hooks_json,
+)
 from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
@@ -450,9 +458,8 @@ def package_plugin(
             self-hosted published pointer at the npm artifact.
         include_readme: Emit ``README.md`` describing install steps.
         include_hooks: Emit ``hooks.json`` at the plugin root plus
-            ``hooks/<event>.sh`` wrappers for the six session-level
-            events in
-            :data:`eawf.runtime.runtimes.claude.hook_map.PLUGIN_HOOK_REGISTRY`.
+            ``hooks/<event>.sh`` wrappers for the handler-backed events in
+            :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`.
             Defaults to ``True``; pass ``False`` to package a
             skills/agents-only tree.
         force: Bypass the non-empty-target check.
@@ -510,10 +517,10 @@ def package_plugin(
         path = target_dir / "agents" / f"{agent_spec.role}.md"
         agent_outputs.append((path, _render_agent(agent_spec, tools_grant)))
 
-    # Pre-render hooks.json + per-event wrappers (B015). Only the six
-    # session-level events in PLUGIN_HOOK_REGISTRY are emitted; the
-    # workflow-internal lifecycle events stay fired by explicit
-    # ``eawf hook run`` calls (see hook_map.py for the rationale).
+    # Pre-render hooks.json + per-event wrappers. Only handler-backed
+    # events are emitted (see hook_map.handler_backed_plugin_hooks); the
+    # rest would be idle no-op scripts, and workflow-internal lifecycle
+    # events stay fired by explicit ``eawf hook run`` calls instead.
     hooks_manifest: str | None = None
     hook_outputs: list[tuple[Path, str]] = []
     if include_hooks:
@@ -522,7 +529,7 @@ def package_plugin(
         # list the same event under multiple CC events in a future
         # extension; we only need one wrapper per event_type on disk.
         seen: set[str] = set()
-        for hook_spec in PLUGIN_HOOK_REGISTRY:
+        for hook_spec in handler_backed_plugin_hooks():
             value = hook_spec.event_type.value
             if value in seen:
                 continue
