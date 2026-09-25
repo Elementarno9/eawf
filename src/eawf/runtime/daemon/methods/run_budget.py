@@ -57,7 +57,6 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerRecord,
-    append_ledger_record,
     effective_records,
     read_ledger_records,
 )
@@ -71,6 +70,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusedError,
     TransitionRequest,
+    commit_ledger_append,
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
@@ -199,10 +199,10 @@ def _stored_run(session: RootSession, records: tuple[LedgerRecord, ...], urn: Qu
     )
 
 
-def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> None:
-    """Append one control fact as a line of the run ledger."""
-    append_ledger_record(
-        _ledger(session),
+def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> Envelope:
+    """Commit one control fact as a line of the run ledger."""
+    return commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=fact.control_request_ref,
@@ -213,10 +213,10 @@ def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> N
     )
 
 
-def _append_notice(session: RootSession, notice: BudgetNotice, *, now: datetime) -> None:
-    """Append one budget notice as a line of the run ledger."""
-    append_ledger_record(
-        _ledger(session),
+def _append_notice(session: RootSession, notice: BudgetNotice, *, now: datetime) -> Envelope:
+    """Commit one budget notice as a line of the run ledger."""
+    return commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=f"{_NOTICE_KEY_PREFIX}{notice.control_request_ref}",
@@ -288,7 +288,7 @@ class _BudgetLedger:
         self._now = now
         self._opened = False
         self.notice: BudgetNotice | None = None
-        self.envelope: Envelope | None = None
+        self.envelopes: list[Envelope] = []
 
     def open(self, notice: BudgetNotice) -> bool:
         """Record the reading and ask for the control it justifies.
@@ -309,7 +309,7 @@ class _BudgetLedger:
             # crossing look like a second one.
             standing = _notice_of(records, notice.control_request_ref)
             if standing is None:
-                _append_notice(session, notice, now=self._now)
+                self.envelopes.append(_append_notice(session, notice, now=self._now))
             self.notice = standing if standing is not None else notice
             facts = self._request(session, facts)
             facts, disposition = self._acknowledge(session, facts)
@@ -341,13 +341,15 @@ class _BudgetLedger:
             )
             if standing is None:
                 fact = self._effect_fact(facts)
-                _append_fact(session, fact, now=self._now)
+                self.envelopes.append(_append_fact(session, fact, now=self._now))
                 facts = (*facts, fact)
         logger.info(
             f"confirm budget-termination run={self._args.urn.entity_key!r} "
             f"sigkill={termination.sigkill_sent} observed={notice.observed_tokens}"
         )
-        self.envelope = self._commit(run, facts)
+        transition = self._commit(run, facts)
+        if transition is not None:
+            self.envelopes.append(transition)
 
     def _commit(self, run: Run, facts: tuple[ControlFact, ...]) -> Envelope | None:
         """Commit the transition the confirmed effect makes a fact, if any.
@@ -388,7 +390,7 @@ class _BudgetLedger:
             phase=ControlPhase.REQUESTED,
             disposition=ControlDisposition.REQUESTING,
         )
-        _append_fact(session, fact, now=self._now)
+        self.envelopes.append(_append_fact(session, fact, now=self._now))
         return (*facts, fact)
 
     def _acknowledge(
@@ -404,7 +406,7 @@ class _BudgetLedger:
             control_request_ref=self._args.control_request_ref, facts=facts
         )
         fact = self._fact(facts, phase=ControlPhase.ACKNOWLEDGED, disposition=decision.disposition)
-        _append_fact(session, fact, now=self._now)
+        self.envelopes.append(_append_fact(session, fact, now=self._now))
         return (*facts, fact), decision.disposition
 
     def _effect_fact(self, facts: tuple[ControlFact, ...]) -> ControlFact:
@@ -440,7 +442,7 @@ class _BudgetLedger:
 
 def _meter(
     context: Epoch2RootContext, args: _MeterParams, *, now: datetime
-) -> tuple[RunBudgetAnswer, Envelope | None]:
+) -> tuple[RunBudgetAnswer, tuple[Envelope, ...]]:
     """Meter the turn so far and terminate the Run if it crossed its cap.
 
     Raises:
@@ -484,7 +486,7 @@ def _meter(
         run_status=state.status,
         control_cursor=state.control_cursor,
     )
-    return answer, ledger.envelope
+    return answer, tuple(ledger.envelopes)
 
 
 @native_mutator(RUN_BUDGET_METER_METHOD)
@@ -495,19 +497,21 @@ async def _meter_run_budget(
 
     The notice and the control reach the ledger while the child is still
     running, and the confirmed effect is appended only once the kill
-    ladder has seen the group die. A replay that the transaction answered
-    from its receipt store carries no envelope and publishes nothing.
+    ladder has seen the group die. Every committed line and transition is
+    published once the locks are released; a replay that wrote nothing
+    publishes nothing.
     """
     args = _validated(params)
     context = ctx.native_root_context(authority.root)
     try:
-        answer, envelope = await asyncio.to_thread(_meter, context, args, now=datetime.now(UTC))
+        answer, envelopes = await asyncio.to_thread(_meter, context, args, now=datetime.now(UTC))
     except TransactionRefusedError as refusal:
         logger.info(f"_meter_run_budget refused code={refusal.code.value}")
         raise DaemonValidationError(
             f"validation_failed: {refusal.code.value}: {refusal.detail}"
         ) from refusal
-    if envelope is not None and not publish_projection(ctx.bus, envelope):
+    published = [publish_projection(ctx.bus, envelope) for envelope in envelopes]
+    if not all(published):
         answer = answer.model_copy(update={"warnings": (PROJECTION_DEGRADED,)})
     return answer.model_dump(mode="json")
 

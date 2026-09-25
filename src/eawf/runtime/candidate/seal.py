@@ -26,7 +26,6 @@ import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Final, Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -41,7 +40,7 @@ from eawf.kernel.runtime.candidate import (
 )
 from eawf.kernel.runtime.lease import WorkLease
 from eawf.kernel.state.epoch2.run import WriteSetPath
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 
 logger = logging.getLogger(__name__)
@@ -312,10 +311,9 @@ def bundle_of(records: tuple[LedgerRecord, ...], candidate_ref: str) -> Candidat
     return None
 
 
-def append_submission(path: Path, submission: CandidateSubmission) -> None:
-    """File one candidate submission as a line of the run ledger."""
-    _append(
-        path,
+def submission_record(submission: CandidateSubmission) -> LedgerRecord:
+    """Return the run-ledger line one candidate submission is filed as."""
+    return _run_line(
         key=f"{SUBMISSION_KEY_PREFIX}{submission.candidate_ref}",
         status=SUBMISSION_STATUS,
         recorded_at=submission.submitted_at,
@@ -323,10 +321,9 @@ def append_submission(path: Path, submission: CandidateSubmission) -> None:
     )
 
 
-def append_binding(path: Path, binding: CandidateReportBinding) -> None:
-    """File one accepted report binding as a line of the run ledger."""
-    _append(
-        path,
+def binding_record(binding: CandidateReportBinding) -> LedgerRecord:
+    """Return the run-ledger line one accepted report binding is filed as."""
+    return _run_line(
         key=f"{BINDING_KEY_PREFIX}{binding.candidate_ref}",
         status=BINDING_STATUS,
         recorded_at=binding.bound_at,
@@ -334,10 +331,9 @@ def append_binding(path: Path, binding: CandidateReportBinding) -> None:
     )
 
 
-def append_bundle(path: Path, bundle: CandidateBundle) -> None:
-    """File one sealed bundle as a line of the run ledger."""
-    _append(
-        path,
+def bundle_record(bundle: CandidateBundle) -> LedgerRecord:
+    """Return the run-ledger line one sealed bundle is filed as."""
+    return _run_line(
         key=f"{BUNDLE_KEY_PREFIX}{bundle.candidate_ref}",
         status=BUNDLE_STATUS,
         recorded_at=bundle.sealed_at,
@@ -345,19 +341,16 @@ def append_bundle(path: Path, bundle: CandidateBundle) -> None:
     )
 
 
-def _append(
-    path: Path, *, key: str, status: str, recorded_at: datetime, payload: dict[str, Any]
-) -> None:
-    """Append one candidate line to the run collection's ledger."""
-    append_ledger_record(
-        path,
-        LedgerRecord(
-            collection=Epoch2Collection.RUN,
-            record_key=key,
-            status=status,
-            recorded_at=recorded_at,
-            payload=payload,
-        ),
+def _run_line(
+    *, key: str, status: str, recorded_at: datetime, payload: dict[str, Any]
+) -> LedgerRecord:
+    """Return one candidate line of the run collection's ledger."""
+    return LedgerRecord(
+        collection=Epoch2Collection.RUN,
+        record_key=key,
+        status=status,
+        recorded_at=recorded_at,
+        payload=payload,
     )
 
 
@@ -370,14 +363,14 @@ __all__ = [
     "SealCheckTableError",
     "SealInputs",
     "SealOutcome",
-    "append_binding",
-    "append_bundle",
-    "append_submission",
     "binding_of",
+    "binding_record",
     "bundle_of",
+    "bundle_record",
     "compile_seal_checks",
     "failed_seal_checks",
     "path_within_roots",
     "seal_candidate",
     "submission_of",
+    "submission_record",
 ]

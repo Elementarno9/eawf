@@ -1,15 +1,16 @@
 """Guard: the suite's daemon runtime dir is isolated from live ``~/.eawfd``.
 
-Proves the ``runtime_dir_isolation`` autouse fixture (``tests/conftest.py``,
-P30-I23-W14) holds three invariants for every worker process:
+Proves the ``runtime_dir_isolation`` autouse fixture (``tests/conftest.py``)
+holds three invariants for every worker process:
 
 * ``EAWF_RUNTIME_DIR`` resolves to a per-worker tmp dir under ``$TMPDIR``,
   never the operator's live ``~/.eawfd``;
 * the resolved socket path fits the 104-byte macOS AF_UNIX ``sun_path``
   cap, so a real daemon bind under it would succeed; and
-* the live ``~/.eawfd`` directory signature is unchanged between the
-  fixture's setup (the "before" snapshot) and test time (the "after"),
-  so the suite never spawned or rebound a daemon in the live runtime dir.
+* every change to the live ``~/.eawfd`` entry set between the fixture's
+  setup (the "before" snapshot) and test time (the "after") is explained
+  by the live daemon's own churn ledger, so the suite never spawned or
+  rebound a daemon, nor wrote a file, in the live runtime dir.
 
 Gate G-01 runs this file alone, so its session is exactly this file: the
 before/after comparison then spans the whole gated run.
@@ -20,8 +21,9 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from eawf.runtime.daemon.churn import read_churn_records, unattributed_changes
 from eawf.runtime.daemon.runtime_dir import runtime_dir, socket_path
-from tests.conftest import RuntimeDirIsolation, home_runtime_dir_signature
+from tests.conftest import RuntimeDirIsolation, home_runtime_dir_snapshot
 
 # macOS caps the AF_UNIX sun_path at 104 bytes (Linux allows 108); use the
 # tighter bound so a socket that binds on macOS binds everywhere.
@@ -58,7 +60,8 @@ def test_socket_path_fits_afunix_cap(runtime_dir_isolation: RuntimeDirIsolation)
 
 
 def test_home_runtime_dir_untouched(runtime_dir_isolation: RuntimeDirIsolation) -> None:
-    """The live ``~/.eawfd`` signature is unchanged before vs after the run."""
-    before = runtime_dir_isolation.home_signature_before
-    after = home_runtime_dir_signature()
-    assert after == before
+    """Every live ``~/.eawfd`` change since setup is the live daemon's own churn."""
+    before = runtime_dir_isolation.home_snapshot_before
+    after = home_runtime_dir_snapshot()
+    records = read_churn_records(Path.home() / ".eawfd")
+    assert unattributed_changes(before, after, records) == ()

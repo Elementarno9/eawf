@@ -348,6 +348,28 @@ def test_runtime_capture_params_forbid_extra_keys(tmp_path: Path) -> None:
     _run(body)
 
 
+def test_runtime_capture_refuses_home_path_in_harness(tmp_path: Path) -> None:
+    """B156 sibling: ``runtime_capture`` shares the canonical mutator shape
+
+    (post-mutation ``validate_state`` then persist) with ``state.mutate``, so
+    it must run the same leak scrub before writing ``harness`` onto
+    ``runtime_latest``.
+    """
+    ctx, state_path = _ctx(tmp_path, _state_payload(active_wave_ids=["P30-I05-W04"]))
+    leaked = "/".join(("", "Users", "alice", "repo"))
+
+    async def body() -> None:
+        before = state_path.read_bytes()
+        with pytest.raises(DaemonValidationError) as excinfo:
+            await runtime_capture(ctx, _capture_params(harness=f"claude-code {leaked}"))
+        message = str(excinfo.value)
+        assert message.startswith("validation_failed: state_leak_refused: ")
+        assert leaked not in message
+        assert state_path.read_bytes() == before
+
+    _run(body)
+
+
 def _codex_agent_session_payload(*, ambiguous: bool = False) -> dict[str, Any]:
     session = {
         "id": "SES-CODEX-01",
@@ -448,6 +470,64 @@ def test_codex_lifecycle_correlates_timed_subagent_attempt(tmp_path: Path) -> No
         assert attempt.measurement_status.value == "usage_observed"
         assert str(transcript) not in attempt.session_log_handle
         assert resolve_session_log(attempt.session_log_handle) == transcript
+
+    _run(body)
+
+
+def test_codex_lifecycle_refuses_home_path_in_measurement_reason(tmp_path: Path) -> None:
+    """B156 sibling: ``codex_lifecycle`` shares the canonical mutator shape
+
+    with ``state.mutate``, so a leak-shaped ``measurement_reason`` threaded
+    onto the ``SessionAttempt`` at ``subagent_stop`` must refuse the same way.
+    """
+    payload = _state_payload(active_wave_ids=["P30-I05-W03", "P30-I05-W04"])
+    payload["agent_sessions"] = _codex_agent_session_payload()
+    ctx, state_path = _ctx(tmp_path, payload)
+    leaked = "/".join(("", "Users", "alice", "repo"))
+
+    async def body() -> None:
+        await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "session_start",
+                "provider_session_id": "provider-session-01",
+                "occurred_at": _now().isoformat(),
+            },
+        )
+        started_at = _now() + timedelta(minutes=1)
+        await codex_lifecycle(
+            ctx,
+            {
+                "event_type": "subagent_start",
+                "provider_session_id": "provider-session-01",
+                "agent_id": "agent-01",
+                "occurred_at": started_at.isoformat(),
+            },
+        )
+        before = state_path.read_bytes()
+        stopped_at = _now() + timedelta(minutes=3)
+        with pytest.raises(DaemonValidationError) as excinfo:
+            await codex_lifecycle(
+                ctx,
+                {
+                    "event_type": "subagent_stop",
+                    "provider_session_id": "provider-session-01",
+                    "agent_id": "agent-01",
+                    "occurred_at": stopped_at.isoformat(),
+                    "counters": {
+                        "input_tokens": 100,
+                        "output_tokens": 35,
+                        "measure_version": 201,
+                    },
+                    "measurement_quality": "exact",
+                    "measurement_status": "usage_observed",
+                    "measurement_reason": f"synced from {leaked}",
+                },
+            )
+        message = str(excinfo.value)
+        assert message.startswith("validation_failed: state_leak_refused: ")
+        assert leaked not in message
+        assert state_path.read_bytes() == before
 
     _run(body)
 

@@ -152,6 +152,36 @@ def append_ledger_record(path: Path, record: LedgerRecord, *, timeout: float = 5
     return append_json_line(path, render_ledger_line(record), timeout=timeout)
 
 
+def append_ledger_record_once(path: Path, record: LedgerRecord) -> bool:
+    """Append *record* unless the ledger already holds its exact line.
+
+    A crash replay re-issues a line its journal says was committed without
+    knowing whether the append itself reached the disk, so the replay has
+    to be a no-op when it did. A line is recognised by its digest, which
+    covers the timestamp and the payload, so a later line that merely
+    reuses the key is still appended.
+
+    Args:
+        path: The ledger file, created with its parent if missing.
+        record: The record the journal says was committed.
+
+    Returns:
+        ``True`` when the line was appended now, ``False`` when the ledger
+        already held it.
+
+    Raises:
+        LedgerTornTailError: The ledger ends mid-line, so whether it holds
+            the line cannot be read until the tail is repaired.
+        ValueError: The record's collection has no ledger.
+    """
+    wanted = line_digest(render_ledger_line(record))
+    held = {line_digest(render_ledger_line(item)) for item in read_ledger_records(path)}
+    if wanted in held:
+        return False
+    append_ledger_record(path, record)
+    return True
+
+
 def append_correction(path: Path, record: LedgerRecord, *, timeout: float = 5.0) -> int:
     """Append a correction that supersedes an existing line.
 
@@ -246,16 +276,27 @@ def truncate_torn_tail(path: Path) -> int:
     """
     if not path.exists():
         return 0
-    content = path.read_bytes()
-    if not content or content.endswith(b"\n"):
+    kept, torn = split_torn_tail(path.read_bytes())
+    if not torn:
         return 0
-    kept = content.rpartition(b"\n")[0]
-    if kept:
-        kept += b"\n"
     _atomic_write(path, kept)
-    dropped = len(content) - len(kept)
-    logger.warning(f"truncate_torn_tail path={path} dropped_bytes={dropped}")
-    return dropped
+    logger.warning(f"truncate_torn_tail path={path} dropped_bytes={len(torn)}")
+    return len(torn)
+
+
+def split_torn_tail(content: bytes) -> tuple[bytes, bytes]:
+    """Split a ledger's bytes into its complete lines and its torn tail.
+
+    Args:
+        content: The whole file as read.
+
+    Returns:
+        ``(kept, torn)``: every byte up to and including the last newline,
+        and whatever follows it. ``torn`` is empty when the ledger ends on
+        a line boundary, which an empty ledger does.
+    """
+    cut = content.rfind(b"\n") + 1
+    return content[:cut], content[cut:]
 
 
 def _atomic_write(path: Path, content: bytes) -> None:
@@ -279,6 +320,7 @@ __all__ = [
     "LedgerTornTailError",
     "append_correction",
     "append_ledger_record",
+    "append_ledger_record_once",
     "content_digest",
     "effective_records",
     "guarded_ledger_write",
@@ -286,6 +328,7 @@ __all__ = [
     "read_ledger_records",
     "render_ledger_line",
     "split_ledger_lines",
+    "split_torn_tail",
     "truncate_torn_tail",
     "verify_append_only",
 ]

@@ -99,12 +99,12 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.kinds.gate_receipt import GateIdentityStr
 from eawf.kernel.store.ledger import (
     LedgerRecord,
-    append_ledger_record,
     effective_records,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_dispatch import run_ledger
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
@@ -367,8 +367,8 @@ class _LedgerGenerationStore:
         self._lock = lock
         self._batch_ref = batch_ref
 
-    def _ledger(self) -> Path:
-        """Return the Batch ledger of the held session.
+    def _session(self) -> RootSession:
+        """Return the held session.
 
         Raises:
             RuntimeError: The lock is not held, so the swap would run
@@ -377,17 +377,18 @@ class _LedgerGenerationStore:
         session = self._lock.session
         if session is None:
             raise RuntimeError("the generation store is only read under the state lock")
-        return session.ledger_path(Epoch2Collection.BATCH)
+        return session
 
     def read(self) -> IntegrationGenerationLedger:
         """Return the Batch's generation history as the ledger holds it."""
-        return _read_generation_ledger(self._ledger(), self._batch_ref)
+        ledger = self._session().ledger_path(Epoch2Collection.BATCH)
+        return _read_generation_ledger(ledger, self._batch_ref)
 
     def write(self, ledger: IntegrationGenerationLedger) -> None:
         """Append the new head; the lines already written are history."""
         head = ledger.head
         assert head is not None, "a written ledger always has a head"
-        _append_generation(self._ledger(), head)
+        _append_generation(self._session(), head)
 
 
 def _read_generation_ledger(path: Path, batch_ref: BatchUrn) -> IntegrationGenerationLedger:
@@ -410,10 +411,10 @@ def _read_generation_ledger(path: Path, batch_ref: BatchUrn) -> IntegrationGener
     )
 
 
-def _append_generation(path: Path, generation: IntegrationGeneration) -> None:
+def _append_generation(session: RootSession, generation: IntegrationGeneration) -> None:
     """File one selected generation as a line of the Batch ledger."""
-    append_ledger_record(
-        path,
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.BATCH,
             record_key=generation_record_key(generation),
@@ -424,10 +425,10 @@ def _append_generation(path: Path, generation: IntegrationGeneration) -> None:
     )
 
 
-def _append_conflict(path: Path, conflict: IntegrationConflict, *, at: datetime) -> None:
+def _append_conflict(session: RootSession, conflict: IntegrationConflict, *, at: datetime) -> None:
     """File one conflict frame as a line of the Batch ledger."""
-    append_ledger_record(
-        path,
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.BATCH,
             record_key=f"{conflict.id}-{conflict.batch_ref.entity_key}",
@@ -515,7 +516,7 @@ def _record_conflict(
         at=now,
     )
     with context.session([str(plan.batch_ref)]) as session:
-        _append_conflict(session.ledger_path(Epoch2Collection.BATCH), blocked.conflict, at=now)
+        _append_conflict(session, blocked.conflict, at=now)
     return blocked.conflict
 
 
@@ -1019,10 +1020,10 @@ def _read_cycle(path: Path, batch_ref: BatchUrn) -> BatchVerificationCycle | Non
     return BatchVerificationCycle.model_validate(payloads[-1])
 
 
-def _append_cycle(path: Path, cycle: BatchVerificationCycle, *, at: datetime) -> None:
+def _append_cycle(session: RootSession, cycle: BatchVerificationCycle, *, at: datetime) -> None:
     """File one verification cycle as a line of the Batch ledger."""
-    append_ledger_record(
-        path,
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.BATCH,
             record_key=_cycle_record_key(cycle.batch_ref),
@@ -1204,7 +1205,7 @@ def verify_batch(
     except VerificationRefusedError as error:
         raise DaemonValidationError(f"validation_failed: {error}") from error
     with context.session([str(args.urn)]) as session:
-        _append_cycle(session.ledger_path(Epoch2Collection.BATCH), walked, at=now)
+        _append_cycle(session, walked, at=now)
     logger.info(
         f"verify_batch batch={args.urn.entity_key} head={walked.generation} "
         f"stage={walked.stage.value} blocking={len(decision.blocking_criterion_ids)}"

@@ -334,6 +334,39 @@ def test_commit_worktree_state_matches_repo_root_and_bound_path(tmp_path: Path) 
     assert state_path.read_bytes() == restored
 
 
+def test_commit_worktree_state_refuses_home_path(tmp_path: Path) -> None:
+    """A mutator that writes a home-anchored path is refused, nothing written.
+
+    ``commit_worktree_state`` serves ``wave land``, ``wave autoland`` and
+    ``track sync`` -- the writers an agent's dispatch drives -- so it must
+    run the same leak scrub the other canonical mutators run.
+    """
+    state_path = _seed_state(tmp_path)
+    before = _snapshot(state_path, tmp_path / "wal")
+    ctx = _build_ctx(tmp_path, state_path)
+    leaked = "/".join(("", "Users", "alice", "repo"))
+
+    def _apply(state: State) -> dict[str, Any]:
+        state.waves[_WAVE].title = f"synced from {leaked}"
+        return {"ok": True}
+
+    with pytest.raises(DaemonValidationError) as excinfo:
+        commit_worktree_state(
+            ctx=ctx,
+            repo_root=None,
+            params={},
+            command="state.track_sync",
+            scope_id=None,
+            apply_func=_apply,
+        )
+
+    message = str(excinfo.value)
+    assert message.startswith("validation_failed: state_leak_refused: ")
+    assert f"waves.{_WAVE}.title (home_path)" in message
+    assert leaked not in message
+    assert _snapshot(state_path, tmp_path / "wal") == before
+
+
 def test_commit_worktree_state_tracks_each_state_path_separately(tmp_path: Path) -> None:
     bound_path = _seed_state(tmp_path / "bound")
     other_root = tmp_path / "other"

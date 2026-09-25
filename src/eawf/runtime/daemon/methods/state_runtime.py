@@ -34,6 +34,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.validate.strict import validate_state
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.observability.telemetry.join import (
     DEFAULT_EU_MINUTES,
 )
@@ -648,6 +649,8 @@ async def runtime_capture(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
+            if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+                raise DaemonValidationError(f"validation_failed: {leak_refusal}")
             after_version = state_version(new_payload)
             event_params = args.model_dump(mode="json", exclude={"repo_root"})
             envelope = _build_runtime_capture_event_envelope(

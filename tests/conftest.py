@@ -24,6 +24,7 @@ from eawf.kernel.spec.common import (
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.models import CriteriaFloorWaiver
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
+from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
 
 # --- Hypothesis CI example-budget profile --------------------
 #
@@ -108,24 +109,20 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 _HOME_RUNTIME_DIR: Path = Path.home() / ".eawfd"
 
 
-def home_runtime_dir_signature() -> tuple[bool, int]:
-    """Return an ``(exists, mtime_ns)`` signature for the live ``~/.eawfd``.
+def home_runtime_dir_snapshot() -> RuntimeDirSnapshot:
+    """Snapshot the live ``~/.eawfd`` entry set for the before/after guard.
 
-    The directory mtime moves only when its entry set changes (a socket,
-    PID, lock, or WAL segment created / removed / renamed), not when an
-    already-open log is appended to, so an idle live daemon does not bump
-    it. That makes the signature a low-noise witness that a suite run never
-    spawned or rebound a daemon in the operator's live runtime dir.
+    Entry names and inodes move only when an entry is created, removed or
+    replaced, not when an already-open log is appended to, so an idle
+    live daemon leaves the snapshot unchanged. A live daemon that idles
+    out or boots does change it; the guard explains that churn from the
+    daemon's own intent ledger (``eawf.runtime.daemon.churn``) and reds
+    on anything the ledger does not cover.
 
     Returns:
-        ``(False, 0)`` when ``~/.eawfd`` is absent, else ``(True,
-        st_mtime_ns)`` of the directory.
+        The snapshot of the operator's live runtime dir.
     """
-    try:
-        stat = _HOME_RUNTIME_DIR.stat()
-    except FileNotFoundError:
-        return (False, 0)
-    return (True, stat.st_mtime_ns)
+    return snapshot_runtime_dir(_HOME_RUNTIME_DIR)
 
 
 def _isolated_runtime_dir() -> Path:
@@ -146,12 +143,12 @@ class RuntimeDirIsolation:
 
     Attributes:
         runtime_dir: The per-worker tmp dir ``EAWF_RUNTIME_DIR`` points at.
-        home_signature_before: ``~/.eawfd`` signature captured before any
+        home_snapshot_before: ``~/.eawfd`` snapshot captured before any
             test ran, for the guard test's before/after comparison.
     """
 
     runtime_dir: Path
-    home_signature_before: tuple[bool, int]
+    home_snapshot_before: RuntimeDirSnapshot
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -160,28 +157,37 @@ def runtime_dir_isolation() -> Iterator[RuntimeDirIsolation]:
 
     Autouse + session-scoped, so it runs once per worker process before the
     first test and stays active for every test in that worker. Captures the
-    live ``~/.eawfd`` signature up front (the before/after baseline), points
-    ``EAWF_RUNTIME_DIR`` at a fresh per-worker tmp dir, and restores the
-    prior env value and removes the tmp dir on teardown.
+    live ``~/.eawfd`` snapshot up front (the before/after baseline), points
+    ``EAWF_RUNTIME_DIR`` at a fresh per-worker tmp dir, tags the session
+    so any daemon it spawns records itself as suite-spawned, and restores
+    the prior env values and removes the tmp dir on teardown.
 
     Yields:
         The :class:`RuntimeDirIsolation` handle the guard test asserts on.
     """
-    home_signature_before = home_runtime_dir_signature()
+    home_snapshot_before = home_runtime_dir_snapshot()
     isolated = _isolated_runtime_dir()
     isolated.mkdir(parents=True, exist_ok=True)
     previous = os.environ.get("EAWF_RUNTIME_DIR")
+    previous_session = os.environ.get(SUITE_SESSION_ENV)
     os.environ["EAWF_RUNTIME_DIR"] = str(isolated)
+    # setdefault: an outer suite's tag (a pytest run nested in a gate
+    # proof) must survive so its daemons stay attributed to it.
+    os.environ.setdefault(SUITE_SESSION_ENV, uuid.uuid4().hex)
     try:
         yield RuntimeDirIsolation(
             runtime_dir=isolated,
-            home_signature_before=home_signature_before,
+            home_snapshot_before=home_snapshot_before,
         )
     finally:
         if previous is None:
             os.environ.pop("EAWF_RUNTIME_DIR", None)
         else:
             os.environ["EAWF_RUNTIME_DIR"] = previous
+        if previous_session is None:
+            os.environ.pop(SUITE_SESSION_ENV, None)
+        else:
+            os.environ[SUITE_SESSION_ENV] = previous_session
         shutil.rmtree(isolated, ignore_errors=True)
 
 

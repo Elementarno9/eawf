@@ -46,9 +46,10 @@ from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt
 from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.native_dispatch import (
     ACCEPTANCE_STAGE,
     LINEAGE_KEY_PREFIX,
@@ -347,8 +348,8 @@ def unmet_resume_guards(inputs: ResumeInputs) -> tuple[ResumeGuard, ...]:
 
 def _lineage_record(session: RootSession, lineage: RetryLineage) -> None:
     """Append one retry lineage line to the run ledger."""
-    append_ledger_record(
-        run_ledger(session),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=f"{LINEAGE_KEY_PREFIX}{lineage.run_ref.entity_key}",

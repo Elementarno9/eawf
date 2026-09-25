@@ -33,9 +33,15 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
 from eawf.observability.logging.scrub import SensitiveScrubber
+from eawf.platform.registry.models import RegistryReadError, read_registry
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.epoch2_recovery import recover_native_store_trees, replay_native_wal
+from eawf.runtime.daemon.churn import ChurnOp, record_churn
+from eawf.runtime.daemon.epoch2_recovery import (
+    recover_native_store_trees,
+    repair_native_ledger_tails,
+    replay_native_wal,
+)
 from eawf.runtime.daemon.idle import IdleTimeoutWatchdog
 from eawf.runtime.daemon.limits import (
     MUTATION_HARD_LIMIT_SECONDS,
@@ -44,6 +50,7 @@ from eawf.runtime.daemon.limits import (
     mutation_hard_limit_for,
 )
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.native_guard import EA_DIRNAME
 from eawf.runtime.daemon.recovery import replay_wal
 from eawf.runtime.daemon.runtime_dir import (
     ensure_runtime_dir,
@@ -669,6 +676,70 @@ def _schedule_loop_lag_monitor(ctx: MethodContext) -> asyncio.Task[int] | None:
     return asyncio.create_task(run_loop_lag_monitor(ctx.shutdown_event))
 
 
+def _native_tree_roots(project_state_path: Path) -> tuple[Path, ...]:
+    """Return every tree a boot repair should look at, WAL or not.
+
+    A native request addresses either the bound tree or a named repository,
+    and every repository a request can name is one ``init`` registered, so
+    the bound tree plus the registry covers the trees a swept WAL forgets.
+    A registry that cannot be read costs only its own rows: the bound tree
+    and the WAL's trees are still scanned.
+
+    Args:
+        project_state_path: The ``state.json`` the daemon is bound to.
+
+    Returns:
+        The candidate tree roots. Whether each is epoch 2 is the repair's
+        question, not this function's.
+    """
+    roots = [project_state_path.parent]
+    override = os.environ.get("EAWF_REGISTRY_PATH")
+    try:
+        registry = read_registry(path=Path(override) if override else None)
+    except RegistryReadError as error:
+        logger.info(f"_native_tree_roots registry_unreadable reason={error}")
+        return tuple(roots)
+    roots.extend(Path(entry.path) / EA_DIRNAME for entry in registry.repos.values())
+    return tuple(roots)
+
+
+def _boot_touched_names(pid_file: Path, sock_path: Path | None) -> tuple[str, ...]:
+    """Return the runtime-dir entries a booting daemon creates or replaces.
+
+    Args:
+        pid_file: The PID file the boot writes through a ``.tmp`` sibling.
+        sock_path: The socket the boot unlinks if stale and binds, or
+            ``None`` on Windows where the listener is a named pipe.
+
+    Returns:
+        Entry names for the boot churn record.
+    """
+    names = [pid_file.name, f"{pid_file.name}.tmp", "wal"]
+    if sock_path is not None:
+        names.append(sock_path.name)
+    return tuple(names)
+
+
+def _remove_runtime_entries(rt_dir: Path, *, pid_file: Path, sock_path: Path | None) -> None:
+    """Record, then remove, the socket and PID file on daemon exit.
+
+    The record goes first so a runtime-dir guard that sees the entries
+    vanish always finds the record explaining it.
+
+    Args:
+        rt_dir: The daemon's runtime directory.
+        pid_file: The PID file to remove.
+        sock_path: The socket to remove, or ``None`` on Windows.
+    """
+    touched = (pid_file.name,) if sock_path is None else (sock_path.name, pid_file.name)
+    record_churn(rt_dir, op=ChurnOp.EXIT, touched=touched)
+    if sock_path is not None:
+        with contextlib.suppress(FileNotFoundError):
+            sock_path.unlink()
+    with contextlib.suppress(FileNotFoundError):
+        pid_file.unlink()
+
+
 def _write_pid_file(path: Path, pid: int, started_at: str) -> None:
     """Atomically write the daemon PID file.
 
@@ -917,6 +988,8 @@ def run(*, foreground: bool = True) -> int:
     try:
         with acquire_daemon_singleton(rt_dir):
             pid_file = pid_path()
+            sock_path = socket_path() if sys.platform != "win32" else None
+            record_churn(rt_dir, op=ChurnOp.BOOT, touched=_boot_touched_names(pid_file, sock_path))
 
             started_at = datetime.now(UTC).isoformat()
             pid = os.getpid()
@@ -955,6 +1028,21 @@ def run(*, foreground: bool = True) -> int:
                     f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
                     f"operator should run 'eawf daemon replay-wal --inspect'"
                 )
+
+            # Torn ledger tails: a ledger killed mid-append refuses every
+            # read, the native replay's own included, and the WAL record
+            # that would name its tree may already be swept. Cut each torn
+            # tail back to its last complete line first, so a line the
+            # replay re-appends lands on a clean boundary.
+            tail_report = repair_native_ledger_tails(
+                daemon_wal_dir, tree_roots=_native_tree_roots(project_state_path)
+            )
+            logger.info(
+                f"run ledger-tail-repair trees={tail_report.tree_count} "
+                f"truncated={tail_report.truncated_ledgers} "
+                f"journaled={tail_report.journaled_rows} "
+                f"skipped={tail_report.skipped_trees}"
+            )
 
             # Native replay: epoch-2 roots keep their WAL records in a
             # namespace per root under the same directory, which the pass
@@ -1011,7 +1099,6 @@ def run(*, foreground: bool = True) -> int:
             )
 
             logger.info(f"run boot pid={pid} version={__version__!r} protocol={PROTOCOL_VERSION!r}")
-            sock_path = socket_path() if sys.platform != "win32" else None
             try:
                 if sys.platform == "win32":
                     asyncio.run(_run_windows_server(ctx))
@@ -1022,11 +1109,7 @@ def run(*, foreground: bool = True) -> int:
                         sock_path.unlink()
                     asyncio.run(_run_server(sock_path, ctx, expected_uid=os.geteuid()))
             finally:
-                if sock_path is not None:
-                    with contextlib.suppress(FileNotFoundError):
-                        sock_path.unlink()
-                with contextlib.suppress(FileNotFoundError):
-                    pid_file.unlink()
+                _remove_runtime_entries(rt_dir, pid_file=pid_file, sock_path=sock_path)
                 logger.info("run exit")
     except DaemonAlreadyRunningError:
         logger.info(f"run duplicate-daemon runtime={rt_dir.name!r}")

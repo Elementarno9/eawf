@@ -30,6 +30,13 @@ would re-derive fresh ids and a different answer. A document reading as
 the replay appends the firehose row if the log does not already hold that
 envelope id, and marks the record durable.
 
+A ledger-only mutation journals its ledger line inside the envelope and
+writes the line only after the document, so a document that landed may
+still be missing the line. The replay appends it before the firehose row
+unless the ledger already holds that exact line, which keeps a line from
+ever being written twice and keeps the row from naming a line that is not
+there.
+
 The envelope-id check is what makes the replay safe to run on every boot:
 a row already in the log is never appended twice, so a torn transaction
 recovers to exactly one event and a recovered one stays at one.
@@ -47,6 +54,17 @@ is dropped, never the other way round, because deleting a committed
 ledger line is what the append-only tier forbids. The pass runs at boot
 after the replay, so a still-pending intent is judged against the
 document it wrote before that document is reconciled against a ledger.
+
+A ledger killed mid-append is the one repair that cannot wait for a WAL
+record to name its tree. A swept record, or an append that never had
+one, still leaves a tail with no newline, and a torn ledger refuses every
+read -- the replay's own "is this line already there" check included. So
+the first boot pass takes its trees from every source the daemon has, WAL
+or not, and cuts each torn tail back to its last complete line before the
+replay runs, which lets a replayed line land on a clean boundary. Each cut
+is journalled to the tree's firehose ahead of the cut, under an id derived
+from the bytes it drops, so a crash between the two re-cuts without a
+second row and a clean ledger journals nothing.
 """
 
 from __future__ import annotations
@@ -55,9 +73,9 @@ import hashlib
 import logging
 import os
 import secrets
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final
 
@@ -65,20 +83,31 @@ import orjson
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from eawf.kernel.fsync import fsync_parent_dir
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.io import state_version
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.append import append_json_line
 from eawf.kernel.store.compaction import read_document, recover_store_tree
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import LedgerError
-from eawf.kernel.store.paths import store_path
+from eawf.kernel.store.ledger import (
+    LedgerError,
+    LedgerRecord,
+    append_ledger_record_once,
+    split_torn_tail,
+    truncate_torn_tail,
+)
+from eawf.kernel.store.paths import ledger_path, store_path
+from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.epoch2_root import (
     NATIVE_WAL_DIRNAME,
     Epoch2RootContext,
     root_id_for,
 )
+from eawf.runtime.lock import portalock
+from eawf.surfaces.cli.errors import StateConflict
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +143,20 @@ REASON_ROOT_UNRESOLVED: Final = "native_root_unresolved"
 
 #: A record whose bytes do not decode or do not validate.
 REASON_RECORD_UNREADABLE: Final = "native_record_unreadable"
+
+#: The envelope payload key holding the exact ledger line a ledger-only
+#: mutation committed. It lives here rather than beside the commit path,
+#: because the replay reads it and the commit path already depends on
+#: this module.
+LEDGER_LINE_KEY: Final = "ledger_line"
+
+#: Version of the payload a ledger-tail repair row carries.
+TAIL_REPAIR_EVENT_SCHEMA_VERSION: Final = "1"
+
+#: The last segment of a ledger-tail repair event name. The row shares the
+#: ``ledger`` namespace with the append rows, so a reader filtering one
+#: collection's ledger events sees the cut beside the lines it follows.
+TAIL_REPAIR_EVENT_SUFFIX: Final = "tail_truncated"
 
 
 class IdempotencyReceipt(BaseModel):
@@ -155,6 +198,8 @@ class NativeReplayReport(BaseModel):
             the intent was poisoned and the mutation never happened.
         replayed_event_count: Firehose rows the replay appended. Always a
             row the log did not already hold.
+        replayed_ledger_count: Ledger lines the replay appended for a
+            ledger-only mutation whose document landed before its line.
         poisoned_count: Records under ``poisoned/`` once the pass ended,
             pre-existing ones included.
     """
@@ -167,6 +212,7 @@ class NativeReplayReport(BaseModel):
     completed_count: int = 0
     abandoned_count: int = 0
     replayed_event_count: int = 0
+    replayed_ledger_count: int = 0
     poisoned_count: int = 0
 
 
@@ -193,6 +239,29 @@ class NativeStoreRecoveryReport(BaseModel):
     regenerated_indexes: int = 0
 
 
+class LedgerTailRepairReport(BaseModel):
+    """What one boot's torn-tail pass found across the native trees.
+
+    Attributes:
+        tree_count: Distinct epoch-2 documents whose ledgers were scanned.
+        truncated_ledgers: Ledgers cut back to their last complete line.
+        journaled_rows: Repair rows appended to a firehose. Lower than
+            ``truncated_ledgers`` only when a crash had already journalled
+            a cut the previous boot did not finish.
+        dropped_bytes: Torn bytes removed, summed over every ledger.
+        skipped_trees: Trees whose scan failed and were left untouched,
+            so a boot still starts when one tree is unreadable.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tree_count: int = 0
+    truncated_ledgers: int = 0
+    journaled_rows: int = 0
+    dropped_bytes: int = 0
+    skipped_trees: int = 0
+
+
 @dataclass
 class _Tally:
     """The running counts one replay pass builds its report from."""
@@ -203,6 +272,7 @@ class _Tally:
     completed_count: int = 0
     abandoned_count: int = 0
     replayed_event_count: int = 0
+    replayed_ledger_count: int = 0
     poisoned_count: int = 0
 
 
@@ -356,6 +426,142 @@ def publish_projection(bus: Any, envelope: Envelope) -> bool:
     return True
 
 
+def repair_native_ledger_tails(
+    daemon_wal_dir: Path, *, tree_roots: Iterable[Path]
+) -> LedgerTailRepairReport:
+    """Cut every torn ledger tail back to its last complete line.
+
+    Run once at daemon start, before :func:`replay_native_wal`: the replay
+    reads a ledger to learn whether its journalled line already landed,
+    and a torn ledger refuses that read. Safe to run on every boot: a
+    ledger ending on a newline is left alone and journals nothing.
+
+    Args:
+        daemon_wal_dir: The daemon's WAL directory. Every tree a native
+            record still names is scanned, whatever *tree_roots* holds.
+        tree_roots: Tree roots to scan beyond the WAL's, such as the tree
+            the daemon is bound to and every registered repository's. A
+            root that is not epoch 2 is skipped without being written.
+
+    Returns:
+        What the pass cut and journalled, per :class:`LedgerTailRepairReport`.
+    """
+    found = list(_selected_documents(tree_roots))
+    native = daemon_wal_dir / NATIVE_WAL_DIRNAME
+    if native.is_dir():
+        found.extend(_native_documents(native))
+    documents = dict.fromkeys(path.resolve() for path in found)
+    truncated = journaled = dropped = skipped = 0
+    for document in documents:
+        firehose = store_path(document.parents[2] / TREE_ANCHOR_FILENAME, StoreKind.EVENT)
+        try:
+            ids = _envelope_ids(firehose)
+            for collection in LEDGER_COLLECTIONS:
+                cut = _repair_tail(ledger_path(document, collection), collection, firehose, ids)
+                if cut is None:
+                    continue
+                truncated += 1
+                dropped += cut[0]
+                journaled += int(cut[1])
+        except LedgerError, OSError, ValueError, StateConflict, portalock.LockTimeout:
+            skipped += 1
+            logger.warning(
+                f"repair_native_ledger_tails unreadable tree={document.parents[2].name!r}",
+                exc_info=True,
+            )
+    report = LedgerTailRepairReport(
+        tree_count=len(documents),
+        truncated_ledgers=truncated,
+        journaled_rows=journaled,
+        dropped_bytes=dropped,
+        skipped_trees=skipped,
+    )
+    logger.info(
+        f"repair_native_ledger_tails trees={report.tree_count} "
+        f"truncated={report.truncated_ledgers} journaled={report.journaled_rows} "
+        f"dropped_bytes={report.dropped_bytes} skipped={report.skipped_trees}"
+    )
+    return report
+
+
+def _selected_documents(tree_roots: Iterable[Path]) -> tuple[Path, ...]:
+    """Return the selected generation's document of each epoch-2 root."""
+    documents: list[Path] = []
+    for root in tree_roots:
+        authority = resolve_authority(root)
+        if authority.target is None or authority.generation_id is None:
+            continue
+        documents.append(
+            authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+        )
+    return tuple(documents)
+
+
+def _repair_tail(
+    ledger: Path, collection: Epoch2Collection, firehose: Path, ids: set[str]
+) -> tuple[int, bool] | None:
+    """Journal and cut one ledger's torn tail, under the ledger's append lock.
+
+    The lock is the one every append holds while it writes and fsyncs, so
+    a live writer in another process is never mistaken for a torn one.
+
+    Returns:
+        ``None`` when the ledger ends on a line boundary; otherwise the
+        bytes dropped and whether a repair row was appended now, which is
+        ``False`` when a crashed earlier boot had journalled this same cut.
+    """
+    if not ledger.exists():
+        return None
+    with portalock.acquire(ledger):
+        kept, torn = split_torn_tail(ledger.read_bytes())
+        if not torn:
+            return None
+        envelope = _tail_repair_envelope(collection, kept=kept, torn=torn)
+        journaled = envelope.id not in ids
+        if journaled:
+            append_json_line(firehose, envelope.model_dump_json())
+            ids.add(envelope.id)
+        truncate_torn_tail(ledger)
+    logger.warning(
+        f"_repair_tail cut collection={collection.value} dropped_bytes={len(torn)} "
+        f"journaled={journaled}"
+    )
+    return len(torn), journaled
+
+
+def _tail_repair_envelope(collection: Epoch2Collection, *, kept: bytes, torn: bytes) -> Envelope:
+    """Return the firehose row that records one torn-tail cut.
+
+    The id is derived from the kept prefix and the dropped bytes, so the
+    same cut re-attempted after a crash names the row already written.
+    The row carries no canonical sequence: the cut moves no record, so no
+    projection has anything to patch from it.
+    """
+    kept_digest = hashlib.sha256(kept).hexdigest()
+    torn_digest = hashlib.sha256(torn).hexdigest()
+    seed = f"{collection.value}:{kept_digest}:{torn_digest}"
+    event_id = f"evt-{hashlib.sha256(seed.encode()).hexdigest()[:32]}"
+    name = f"ledger.{collection.value}.{TAIL_REPAIR_EVENT_SUFFIX}"
+    now = datetime.now(UTC)
+    return Envelope(
+        id=event_id,
+        kind=StoreKind.EVENT,
+        scope_id=None,
+        created_at=now,
+        summary=f"{name} dropped {len(torn)} bytes after byte {len(kept)}",
+        payload={
+            "schema_version": TAIL_REPAIR_EVENT_SCHEMA_VERSION,
+            "name": name,
+            "event_id": event_id,
+            "occurred_at": now.isoformat(),
+            "collection": collection.value,
+            "kept_bytes": len(kept),
+            "dropped_bytes": len(torn),
+            "dropped_digest": f"sha256:{torn_digest}",
+        },
+    )
+
+
 def replay_native_wal(daemon_wal_dir: Path) -> NativeReplayReport:
     """Reconcile every native root's WAL against the tree it wrote to.
 
@@ -387,13 +593,14 @@ def replay_native_wal(daemon_wal_dir: Path) -> NativeReplayReport:
         completed_count=tally.completed_count,
         abandoned_count=tally.abandoned_count,
         replayed_event_count=tally.replayed_event_count,
+        replayed_ledger_count=tally.replayed_ledger_count,
         poisoned_count=tally.poisoned_count,
     )
     logger.info(
         f"replay_native_wal roots={report.root_count} pending={report.pending_count} "
         f"applied={report.applied_count} completed={report.completed_count} "
         f"abandoned={report.abandoned_count} replayed={report.replayed_event_count} "
-        f"poisoned={report.poisoned_count}"
+        f"ledger={report.replayed_ledger_count} poisoned={report.poisoned_count}"
     )
     return report
 
@@ -546,7 +753,8 @@ def _finish(
     known: dict[Path, set[str]],
     tally: _Tally,
 ) -> None:
-    """Append the missing firehose row, if it is missing, and mark durable."""
+    """Append the missing ledger line and firehose row, then mark durable."""
+    _finish_ledger_line(record, record_id=record_id, tally=tally)
     firehose = store_path(tree_root / TREE_ANCHOR_FILENAME, StoreKind.EVENT)
     ids = known.get(firehose)
     if ids is None:
@@ -559,6 +767,28 @@ def _finish(
         tally.replayed_event_count += 1
         logger.info(f"_finish replayed record={record_id!r} envelope_id={envelope_id!r}")
     wal.mark_fsynced(root_dir, record_id)
+
+
+def _finish_ledger_line(record: wal.WalRecord, *, record_id: str, tally: _Tally) -> None:
+    """Append the ledger line a ledger-only mutation journalled, if missing.
+
+    Raises:
+        ValidationError: The journalled line is not a ledger record. The
+            record's digest already verified, so this is a writer defect
+            rather than a torn file, and it is left to fail loudly.
+    """
+    payload = record.envelope.payload
+    line = payload.get(LEDGER_LINE_KEY)
+    if not isinstance(line, str) or record.state_path is None:
+        return
+    ledger_record = LedgerRecord.model_validate_json(line)
+    target = ledger_path(Path(record.state_path), ledger_record.collection)
+    if append_ledger_record_once(target, ledger_record):
+        tally.replayed_ledger_count += 1
+        logger.info(
+            f"_finish_ledger_line replayed record={record_id!r} "
+            f"collection={ledger_record.collection.value} key={ledger_record.record_key!r}"
+        )
 
 
 def _load_record(root_dir: Path, path: Path) -> tuple[str, wal.WalRecord] | None:
@@ -678,6 +908,7 @@ def _atomic_write_bytes(target: Path, payload: bytes) -> None:
 
 
 __all__ = [
+    "LEDGER_LINE_KEY",
     "PROJECTION_DEGRADED",
     "REASON_DOCUMENT_DIVERGED",
     "REASON_INTENT_ABANDONED",
@@ -685,8 +916,11 @@ __all__ = [
     "REASON_ROOT_UNRESOLVED",
     "RECEIPT_LOCATOR",
     "RECEIPT_SCHEMA_VERSION",
+    "TAIL_REPAIR_EVENT_SCHEMA_VERSION",
+    "TAIL_REPAIR_EVENT_SUFFIX",
     "TREE_ANCHOR_FILENAME",
     "IdempotencyReceipt",
+    "LedgerTailRepairReport",
     "NativeReplayReport",
     "NativeStoreRecoveryReport",
     "canonical_params_digest",
@@ -695,5 +929,6 @@ __all__ = [
     "read_idempotency_receipt",
     "record_idempotency_receipt",
     "recover_native_store_trees",
+    "repair_native_ledger_tails",
     "replay_native_wal",
 ]

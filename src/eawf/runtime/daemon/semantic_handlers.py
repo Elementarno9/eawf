@@ -59,9 +59,10 @@ from eawf.kernel.runtime.semantic import (
     ValidationFinding,
 )
 from eawf.kernel.state.epoch2.run import Run
-from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
+from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import RootSession
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.workflow.planning.apply import PlanRevisionProposal, validate_plan_proposal
 from eawf.workflow.planning.revision import PlanRefusal, PlanRefusalCode
 
@@ -244,8 +245,8 @@ def _record_plan_proposal_artifact(
     session: RootSession, artifact: PlanProposalArtifact, *, now: datetime
 ) -> None:
     """File one plan proposal as a line of the root's artifact ledger."""
-    append_ledger_record(
-        session.ledger_path(Epoch2Collection.ARTIFACT),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.ARTIFACT,
             record_key=artifact.artifact_ref,

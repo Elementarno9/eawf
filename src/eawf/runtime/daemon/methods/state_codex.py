@@ -34,6 +34,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.validate.strict import validate_state
+from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
@@ -359,6 +360,8 @@ async def codex_lifecycle(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 raise DaemonValidationError(
                     f"validation_failed: post-mutation invariants violated: {violation_codes}"
                 )
+            if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
+                raise DaemonValidationError(f"validation_failed: {leak_refusal}")
             after_version = state_version(new_payload)
             result = result.model_copy(
                 update={

@@ -30,7 +30,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
@@ -54,15 +53,16 @@ from eawf.kernel.state.epoch2.urns import RunUrn, TaskUrn
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.runtime.candidate.seal import (
     SealInputs,
-    append_binding,
-    append_bundle,
-    append_submission,
     binding_of,
+    binding_record,
     bundle_of,
+    bundle_record,
     seal_candidate,
     submission_of,
+    submission_record,
 )
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_dispatch import active_lease_of, run_ledger, stored_run
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
@@ -273,7 +273,7 @@ def submit_candidate(
         submitted_at=now,
     )
     with context.session([args.urn]) as session:
-        append_submission(run_ledger(session), submission)
+        commit_ledger_append(session, submission_record(submission))
     logger.info(
         f"submit_candidate recorded candidate={candidate_ref} run={args.urn.entity_key!r} "
         f"paths={len(submission.changed_paths)}"
@@ -341,8 +341,7 @@ def accept_report(
             candidate, or a different report is already bound to it.
     """
     with context.session([args.urn]) as session:
-        ledger = run_ledger(session)
-        records = read_ledger_records(ledger)
+        records = read_ledger_records(run_ledger(session))
         submission = submission_of(records, args.candidate_ref)
         if submission is None:
             raise _refused(
@@ -353,7 +352,7 @@ def accept_report(
         sealed = bundle_of(records, args.candidate_ref)
         if sealed is not None:
             return _replayed_seal(sealed)
-        binding = _bound_report(ledger, records, args, now=now)
+        binding = _bound_report(session, records, args, now=now)
     lease = active_lease_of(context, run_ref=str(submission.run_ref), now=now)
     outcome = seal_candidate(
         SealInputs(submission=submission, binding=binding, lease=lease), now=now
@@ -371,7 +370,7 @@ def accept_report(
             ),
         )
     with context.session([args.urn]) as session:
-        append_bundle(run_ledger(session), outcome.bundle)
+        commit_ledger_append(session, bundle_record(outcome.bundle))
     logger.info(
         f"accept_report sealed candidate={args.candidate_ref} run={args.urn.entity_key!r} "
         f"verdict={binding.verdict.value}"
@@ -380,7 +379,7 @@ def accept_report(
 
 
 def _bound_report(
-    ledger: Path,
+    session: RootSession,
     records: tuple[LedgerRecord, ...],
     args: CandidateReportParams,
     *,
@@ -407,7 +406,7 @@ def _bound_report(
     )
     standing = binding_of(records, args.candidate_ref)
     if standing is None:
-        append_binding(ledger, binding)
+        commit_ledger_append(session, binding_record(binding))
         return binding
     if _report_identity(standing) != _report_identity(binding):
         raise _refused(

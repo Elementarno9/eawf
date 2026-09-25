@@ -80,13 +80,13 @@ from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import (
     LedgerRecord,
-    append_ledger_record,
     effective_records,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.run_events import (
     hello_facts_of,
@@ -745,8 +745,8 @@ class _AttemptState:
 
 def append_attempt(session: RootSession, attempt: DispatchAttempt) -> None:
     """Append one attempt line to the run ledger."""
-    append_ledger_record(
-        run_ledger(session),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=f"{_ATTEMPT_KEY_PREFIX}{attempt.attempt_ref}",
@@ -763,8 +763,8 @@ def _bind_contract(
     """Record the contract this Run was dispatched under, once."""
     if run_binding_of(records, binding.run_ref) is not None:
         return
-    append_ledger_record(
-        run_ledger(session),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=f"{BINDING_KEY_PREFIX}{binding.run_ref.entity_key}",
@@ -1003,8 +1003,8 @@ def accept_announcement(
             actor=args.actor,
             recorded_at=now,
         )
-        append_ledger_record(
-            run_ledger(session),
+        commit_ledger_append(
+            session,
             LedgerRecord(
                 collection=Epoch2Collection.RUN,
                 record_key=f"HLO-{hello.hello_sequence}",

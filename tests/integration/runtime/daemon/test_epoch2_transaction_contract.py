@@ -11,15 +11,21 @@ The lock files a session takes are not counted as writes. They are the
 mechanism that makes the count trustworthy and they live outside the
 generation on purpose, so what is asserted here is the three artifacts and
 the document bytes themselves.
+
+A ledger-only mutation is counted the same way: one WAL record, one
+sequence bump, one ledger line and one firehose row. The census at the end
+is what keeps that true, by refusing any ledger append outside the store
+and the transaction module.
 """
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 
@@ -27,15 +33,21 @@ from eawf.kernel.state.epoch2.domain_events import DOMAIN_EVENT_NAMES
 from eawf.kernel.state.epoch2.transitions import ObservedFact
 from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records, render_ledger_line
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.epoch2_recovery import LEDGER_LINE_KEY
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import (
     CANONICAL_SEQUENCE_KEY,
+    LEDGER_EVENT_NAMES,
     TransactionRefusalCode,
     TransactionRefusedError,
     TransitionRequest,
+    commit_ledger_append,
     run_transaction,
 )
 from eawf.runtime.daemon.methods.domain_envelope import (
@@ -421,3 +433,213 @@ def test_the_transition_method_is_registered_on_the_server() -> None:
     import eawf.runtime.daemon.server  # noqa: F401
 
     assert DOMAIN_TRANSITION_METHOD in methods.registered_methods()
+
+
+# ---- ledger-only mutations ----------------------------------------------------
+
+#: The package the census walks.
+PACKAGE_ROOT: Final = Path(__file__).resolve().parents[4] / "src" / "eawf"
+
+#: The ledger-line writers the census forbids. ``guarded_ledger_write`` is
+#: not one of them: it replaces a whole append-only file and is the
+#: migration journal's writer, not a native mutation's.
+LEDGER_WRITERS: Final = frozenset(
+    {"append_ledger_record", "append_ledger_record_once", "append_correction"}
+)
+
+#: Where a writer may be named outside the store, relative to the package.
+#: The transaction is the one commit path; the replay finishes a line the
+#: transaction journalled, and only through the idempotent writer.
+ALLOWED_WRITERS: Final = {
+    "runtime/daemon/epoch2_transaction.py": frozenset({"append_ledger_record"}),
+    "runtime/daemon/epoch2_recovery.py": frozenset({"append_ledger_record_once"}),
+}
+
+#: The store package, which owns the writers and may name them freely.
+STORE_PACKAGE: Final = "kernel/store/"
+
+RUN_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010"
+
+
+def direct_ledger_appends(package_root: Path) -> list[str]:
+    """Return every place under *package_root* that names a ledger writer.
+
+    A name is flagged wherever it appears -- imported, called, aliased or
+    passed along as a value -- because each of those is a route to an
+    append that skips the transaction.
+
+    Returns:
+        ``<relative path>:<line> <name>`` for each finding, in path order.
+    """
+    findings: list[str] = []
+    for path in sorted(package_root.rglob("*.py")):
+        relative = path.relative_to(package_root).as_posix()
+        if relative.startswith(STORE_PACKAGE):
+            continue
+        allowed = ALLOWED_WRITERS.get(relative, frozenset())
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names: list[str] = []
+            if isinstance(node, ast.ImportFrom):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.Name):
+                names = [node.id]
+            elif isinstance(node, ast.Attribute):
+                names = [node.attr]
+            for name in names:
+                if name in LEDGER_WRITERS and name not in allowed:
+                    findings.append(f"{relative}:{node.lineno} {name}")
+    return findings
+
+
+def _seeded_package(tmp_path: Path, *, addition: str) -> Path:
+    """Copy the real delivery verb module into a scratch package and append to it."""
+    relative = Path("runtime/daemon/methods/delivery.py")
+    source = (PACKAGE_ROOT / relative).read_text(encoding="utf-8")
+    target = tmp_path / "eawf" / relative
+    target.parent.mkdir(parents=True)
+    target.write_text(f"{source}\n{addition}", encoding="utf-8")
+    return tmp_path / "eawf"
+
+
+def _run_line(key: str = "HLO-1", **payload: Any) -> LedgerRecord:
+    return LedgerRecord(
+        collection=Epoch2Collection.RUN,
+        record_key=key,
+        status="accepted",
+        recorded_at=AT,
+        payload={"payload_kind": "probe", **payload},
+    )
+
+
+def _run_ledger_lines(canary: CanaryProvision) -> tuple[LedgerRecord, ...]:
+    return read_ledger_records(ledger_path(document_path(canary), Epoch2Collection.RUN))
+
+
+def test_census_finds_no_direct_ledger_append() -> None:
+    assert PACKAGE_ROOT.is_dir()
+    assert direct_ledger_appends(PACKAGE_ROOT) == []
+
+
+def test_census_passes_the_unseeded_delivery_module(tmp_path: Path) -> None:
+    """The seed below is what reds the census, not the module it lands in."""
+    assert direct_ledger_appends(_seeded_package(tmp_path, addition="")) == []
+
+
+@pytest.mark.parametrize(
+    "addition",
+    [
+        pytest.param(
+            "from eawf.kernel.store.ledger import append_ledger_record\n\n\n"
+            "def _seeded(path, record):\n    append_ledger_record(path, record)\n",
+            id="direct-call",
+        ),
+        pytest.param(
+            "from eawf.kernel.store.ledger import append_ledger_record as put\n",
+            id="aliased-import",
+        ),
+        pytest.param(
+            "from eawf.kernel.store import ledger\n\n\n"
+            "def _seeded(path, record):\n    ledger.append_correction(path, record)\n",
+            id="module-attribute",
+        ),
+    ],
+)
+def test_census_reds_on_a_seeded_delivery_append(tmp_path: Path, addition: str) -> None:
+    findings = direct_ledger_appends(_seeded_package(tmp_path, addition=addition))
+
+    assert findings
+    assert all(item.startswith("runtime/daemon/methods/delivery.py:") for item in findings)
+
+
+def test_ledger_append_writes_one_intent_one_line_and_one_row(
+    context: Epoch2RootContext, canary: CanaryProvision
+) -> None:
+    record = _run_line()
+
+    with context.session([RUN_URN]) as session:
+        envelope = commit_ledger_append(session, record)
+
+    records = list_records(context.wal_dir)
+    assert [path.name.endswith(f".{WalStatus.FSYNCED.value}.json") for path in records] == [True]
+    assert _run_ledger_lines(canary) == (record,)
+    rows = _firehose_rows(canary)
+    assert len(rows) == 1
+    payload = rows[0]["payload"]
+    assert payload["name"] == "ledger.run.appended"
+    assert payload["name"] in LEDGER_EVENT_NAMES
+    assert payload["name"] not in DOMAIN_EVENT_NAMES
+    assert payload[LEDGER_LINE_KEY] == render_ledger_line(record)
+    assert payload["entity_refs"] == [RUN_URN]
+    assert rows[0]["id"] == envelope.id
+    assert read_record(records[0]).envelope.id == envelope.id
+    assert read_document(document_path(canary))[CANONICAL_SEQUENCE_KEY] == 1
+
+
+def test_ledger_append_shares_the_sequence_with_transitions(
+    context: Epoch2RootContext, canary: CanaryProvision
+) -> None:
+    run_transaction(context=context, request=_request(), now=AT)
+    with context.session([RUN_URN]) as session:
+        envelope = commit_ledger_append(session, _run_line())
+    committed = run_transaction(
+        context=context,
+        request=_request(to_status="CANCELLED", expected_revision=2, idempotency_key="req-2"),
+        now=AT,
+    )
+
+    assert envelope.payload["canonical_sequence"] == 2
+    assert committed.receipt.canonical_sequence == 3
+    assert [row["payload"]["canonical_sequence"] for row in _firehose_rows(canary)] == [1, 2, 3]
+
+
+def test_leaky_ledger_append_writes_nothing(
+    context: Epoch2RootContext, canary: CanaryProvision
+) -> None:
+    before = document_path(canary).read_bytes()
+
+    with context.session([RUN_URN]) as session, pytest.raises(TransactionRefusedError) as caught:
+        commit_ledger_append(session, _run_line(note="ghp_" + "a" * 36))
+
+    assert caught.value.code is TransactionRefusalCode.SCHEMA_VALIDATION_FAILED
+    assert "ghp_" not in caught.value.detail
+    assert document_path(canary).read_bytes() == before
+    assert list_records(context.wal_dir) == []
+    assert _run_ledger_lines(canary) == ()
+    assert _firehose_rows(canary) == []
+
+
+def test_ledger_append_refuses_a_collection_without_a_ledger(
+    context: Epoch2RootContext, canary: CanaryProvision
+) -> None:
+    unledgered = next(
+        collection
+        for collection in Epoch2Collection
+        if tier_for(collection) is not StorageTier.LEDGER
+    )
+    record = LedgerRecord.model_construct(
+        collection=unledgered,
+        record_key="KEY-1",
+        status="noted",
+        recorded_at=AT,
+        payload={},
+    )
+    before = document_path(canary).read_bytes()
+
+    with context.session([RUN_URN]) as session, pytest.raises(ValueError, match="no ledger"):
+        commit_ledger_append(session, record)
+
+    assert document_path(canary).read_bytes() == before
+    assert list_records(context.wal_dir) == []
+
+
+def test_ledger_append_refuses_a_closed_session(
+    context: Epoch2RootContext, canary: CanaryProvision
+) -> None:
+    with context.session([RUN_URN]) as session:
+        pass
+
+    with pytest.raises(RuntimeError, match="closed"):
+        commit_ledger_append(session, _run_line())
+
+    assert list_records(context.wal_dir) == []
+    assert _run_ledger_lines(canary) == ()

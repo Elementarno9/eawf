@@ -79,13 +79,13 @@ from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import (
     LedgerRecord,
-    append_ledger_record,
     effective_records,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.control.reducer import reduce_run_control
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession, canonical_entity_urn
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.semantic_handlers import (
     BROKERED_TOOLS,
     SEMANTIC_HANDLERS,
@@ -1006,8 +1006,8 @@ def _receipt(
 
 def _append_receipt(session: RootSession, receipt: SemanticCallReceipt, *, now: datetime) -> None:
     """File one receipt as a line of the root's receipt ledger."""
-    append_ledger_record(
-        session.ledger_path(Epoch2Collection.RECEIPT),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RECEIPT,
             record_key=receipt.call_id,

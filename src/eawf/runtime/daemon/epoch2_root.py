@@ -349,6 +349,11 @@ class RootSession:
         self.closed = False
 
     @property
+    def context(self) -> Epoch2RootContext:
+        """Return the root context that opened the session."""
+        return self._context
+
+    @property
     def document_path(self) -> Path:
         """Return the declared path of the selected generation's document."""
         target, generation_id = self.authority.target, self.authority.generation_id

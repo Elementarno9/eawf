@@ -63,12 +63,12 @@ from eawf.kernel.state.epoch2.values import ExactRevisionBinding
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import (
     LedgerRecord,
-    append_ledger_record,
     effective_records,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.workflow.delivery.acceptance import (
@@ -268,10 +268,10 @@ def _batch_of(session: RootSession, urn: BatchUrn) -> DeliveryBatch:
     )
 
 
-def _append_reconciliation(path: Path, decision: MergeReconciliation) -> None:
+def _append_reconciliation(session: RootSession, decision: MergeReconciliation) -> None:
     """File one reconciliation as a line of the Batch ledger."""
-    append_ledger_record(
-        path,
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.BATCH,
             record_key=reconciliation_record_key(decision),
@@ -327,7 +327,7 @@ def reconcile_batch_merge(
     except ReconciliationRefusedError as error:
         raise DaemonValidationError(f"validation_failed: {error}") from error
     with context.session([str(args.urn)]) as session:
-        _append_reconciliation(session.ledger_path(Epoch2Collection.BATCH), decision)
+        _append_reconciliation(session, decision)
     logger.info(
         f"reconcile_merge batch={args.urn.entity_key} outcome={decision.outcome.value} "
         f"to={decision.to_status.value} resolved={decision.resolved}"
@@ -373,10 +373,10 @@ def _read_bundle_ledger(path: Path, milestone_ref: MilestoneUrn) -> AcceptanceBu
     return AcceptanceBundleLedger.model_validate({"milestone_ref": wanted, "bundles": payloads})
 
 
-def _append_bundle(path: Path, bundle: MilestoneAcceptanceBundle) -> None:
+def _append_bundle(session: RootSession, bundle: MilestoneAcceptanceBundle) -> None:
     """File one bundle revision as a line of the Milestone ledger."""
-    append_ledger_record(
-        path,
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.MILESTONE,
             record_key=_bundle_record_key(bundle.milestone_ref, bundle.revision),
@@ -493,7 +493,7 @@ def open_acceptance_repair(
         raise DaemonValidationError(f"validation_failed: {error}") from error
     assert prior is not None, "a repair always supersedes the revision it was asked about"
     with context.session([str(args.urn)]) as session:
-        _append_bundle(session.ledger_path(Epoch2Collection.MILESTONE), successor)
+        _append_bundle(session, successor)
     logger.info(
         f"request_acceptance_repair milestone={args.urn.entity_key} "
         f"from_revision={prior.revision} to_revision={successor.revision} cited={len(cited)}"

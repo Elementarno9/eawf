@@ -56,6 +56,16 @@ The high-water mark of the sequence lives in the document itself. It is
 the only figure that survives a restart, and keeping it beside the rows
 it orders means one locked read answers both "what does this record look
 like" and "what number comes next".
+
+A mutation that only files a ledger line -- a control fact, a dispatch
+attempt, a receipt -- walks the same steps inside the session its caller
+already holds, through :func:`commit_ledger_append`. There is no guarded
+edge to evaluate, so step 4 is the leak scrub alone, and the document
+write of step 6 is the sequence bump the line is ordered by. The line is
+written after the document and journalled inside the WAL envelope, so a
+crash between the two is finished by the replay rather than lost, and
+this module is the only place outside the store that appends a ledger
+line at all.
 """
 
 from __future__ import annotations
@@ -65,14 +75,14 @@ import logging
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Final, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from eawf.kernel.identity import EntityKind, QualifiedUrn
+from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
@@ -94,16 +104,22 @@ from eawf.kernel.store.compaction import (
     document_rows,
 )
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import LedgerError, LedgerRecord
+from eawf.kernel.store.ledger import (
+    LedgerError,
+    LedgerRecord,
+    append_ledger_record,
+    render_ledger_line,
+)
 from eawf.kernel.store.paths import ledger_path, store_path
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
 from eawf.observability.logging.state_leak import state_leak_refusal
 from eawf.runtime.daemon.epoch2_recovery import (
+    LEDGER_LINE_KEY,
     canonical_params_digest,
     read_idempotency_receipt,
     record_idempotency_receipt,
 )
-from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
+from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.methods import DaemonValidationError
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
 from eawf.surfaces.cli.errors import StateConflict
@@ -126,6 +142,23 @@ CANONICAL_SEQUENCE_KEY: Final = "canonical_sequence"
 
 #: Version of the transition-event payload a firehose row carries.
 TRANSITION_EVENT_SCHEMA_VERSION: Final = "1"
+
+#: Version of the ledger-append event payload a firehose row carries.
+LEDGER_EVENT_SCHEMA_VERSION: Final = "1"
+
+#: The first segment of a ledger-append event name. A ledger line is not a
+#: lifecycle edge, and the ``domain`` vocabulary is closed to registered
+#: edges, so the line's event lives in a namespace of its own rather than
+#: inventing a verb no transition carries.
+LEDGER_EVENT_NAMESPACE: Final = "ledger"
+
+#: Every legal ledger-append event name: one per collection declared at the
+#: ledger tier, since only those have a line to append.
+LEDGER_EVENT_NAMES: Final[frozenset[str]] = frozenset(
+    f"{LEDGER_EVENT_NAMESPACE}.{collection.value}.appended"
+    for collection in Epoch2Collection
+    if tier_for(collection) is StorageTier.LEDGER
+)
 
 #: The file name the JSONL path resolver is anchored on. An epoch-2 tree
 #: keeps its firehose at the epoch-1 location, because the firehose is not
@@ -503,6 +536,133 @@ def _persist(
     return receipt
 
 
+def commit_ledger_append(session: RootSession, record: LedgerRecord) -> Envelope:
+    """Commit one ledger line through the seven steps, inside *session*.
+
+    The caller passes the session it decided the line under, because it
+    read the ledger under those locks to learn the line was due; a session
+    reopened here would let another writer land between that decision and
+    the append.
+
+    The line is written after the document and before the firehose row.
+    A crash before the document write leaves an intent the replay
+    abandons with nothing appended; a crash after it leaves a durable
+    sequence bump whose line and row the replay appends from the WAL
+    envelope, each only if it is missing.
+
+    Args:
+        session: The open session the line was decided under. Its first
+            locked entity is the subject the event is scoped to.
+        record: The already-validated line to commit.
+
+    Returns:
+        The firehose row the commit appended, for a caller that publishes
+        it once the session is released.
+
+    Raises:
+        ValueError: The record's collection has no ledger, or the document
+            holds a non-integer sequence. Raised before the WAL record
+            exists.
+        TransactionRefusedError: The line carries a leak shape. Nothing
+            was written.
+        RuntimeError: The session is closed.
+        UndeclaredPathError: The commit policy declares no row for the
+            ledger or the firehose.
+    """
+    if tier_for(record.collection) is not StorageTier.LEDGER:
+        raise ValueError(
+            f"{record.collection.value!r} is declared at the "
+            f"{tier_for(record.collection).value} tier, so it has no ledger"
+        )
+    context = session.context
+    subject = parse_qualified_urn(session.locked_urns[0])
+    document = session.read_document()
+    line = render_ledger_line(record)
+    refusal = state_leak_refusal(
+        {}, {record.collection.value: {record.record_key: record.model_dump(mode="json")}}
+    )
+    if refusal is not None:
+        logger.warning(
+            f"epoch2 ledger append refused for leaks collection={record.collection.value} "
+            f"key={record.record_key!r}"
+        )
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=refusal,
+            entity_ref=str(subject),
+            remediation="Remove the flagged text from the ledger line and retry.",
+        )
+    ledger = session.ledger_path(record.collection)
+    allocator = CanonicalSequenceAllocator.recover(
+        workspace_key=subject.workspace_key,
+        high_water_mark=_high_water_mark(document),
+    )
+    with allocator.transaction() as sequences:
+        sequence = sequences.allocate()
+        new_document = {**document, CANONICAL_SEQUENCE_KEY: sequence}
+        envelope = _ledger_envelope(
+            session, subject=subject, record=record, line=line, sequence=sequence
+        )
+        wal_record = WalRecord(
+            record_id=uuid.uuid4().hex,
+            envelope=envelope,
+            written_at=datetime.now(UTC),
+            before_state_version=state_version(document),
+            after_state_version=state_version(new_document),
+            state_path=str(session.document_path),
+        )
+        write_pending(context.wal_dir, wal_record)
+        session.write_document(new_document)
+        mark_applied(context.wal_dir, wal_record.record_id)
+        append_ledger_record(ledger, record)
+        append_json_line(_firehose_path(context), envelope.model_dump_json())
+        mark_fsynced(context.wal_dir, wal_record.record_id)
+    logger.info(
+        f"epoch2 ledger append committed root={context.identity.root_id} "
+        f"collection={record.collection.value} key={record.record_key!r} sequence={sequence}"
+    )
+    return envelope
+
+
+def _ledger_envelope(
+    session: RootSession,
+    *,
+    subject: QualifiedUrn,
+    record: LedgerRecord,
+    line: str,
+    sequence: int,
+) -> Envelope:
+    """Return the one firehose row a ledger append writes.
+
+    The row carries the exact line, so the replay can finish an append the
+    crash interrupted and a reader can rebuild the ledger's view from the
+    firehose alone.
+    """
+    event_id = f"evt-{uuid.uuid4().hex}"
+    name = f"{LEDGER_EVENT_NAMESPACE}.{record.collection.value}.appended"
+    return Envelope(
+        id=event_id,
+        kind=StoreKind.EVENT,
+        scope_id=session.locked_urns[0],
+        created_at=record.recorded_at,
+        summary=f"{name} {record.record_key} {record.status}",
+        payload={
+            "schema_version": LEDGER_EVENT_SCHEMA_VERSION,
+            "name": name,
+            "event_id": event_id,
+            "occurred_at": record.recorded_at.isoformat(),
+            "workspace_ref": subject.workspace_key,
+            "project_ref": subject.project_key,
+            "entity_refs": list(session.locked_urns),
+            "collection": record.collection.value,
+            "record_key": record.record_key,
+            "status": record.status,
+            "canonical_sequence": sequence,
+            LEDGER_LINE_KEY: line,
+        },
+    )
+
+
 def _terminal_ledger_record(
     *,
     entity: LifecycleEntity,
@@ -866,6 +1026,9 @@ def _firehose_path(context: Epoch2RootContext) -> Path:
 
 __all__ = [
     "CANONICAL_SEQUENCE_KEY",
+    "LEDGER_EVENT_NAMES",
+    "LEDGER_EVENT_NAMESPACE",
+    "LEDGER_EVENT_SCHEMA_VERSION",
     "LIFECYCLE_ENTITIES",
     "RECORD_CLASSES",
     "TRANSITION_EVENT_SCHEMA_VERSION",
@@ -874,5 +1037,6 @@ __all__ = [
     "TransactionRefusalCode",
     "TransactionRefusedError",
     "TransitionRequest",
+    "commit_ledger_append",
     "run_transaction",
 ]

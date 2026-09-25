@@ -81,7 +81,6 @@ from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
     LedgerRecord,
-    append_ledger_record,
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -97,6 +96,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusedError,
     TransitionRequest,
+    commit_ledger_append,
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
@@ -437,8 +437,8 @@ _stored_run = stored_run
 
 def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> None:
     """Append one control fact as a line of the run ledger."""
-    append_ledger_record(
-        _ledger(session),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=fact.control_request_ref,
@@ -502,8 +502,8 @@ def _bind(context: Epoch2RootContext, args: _BindParams, *, now: datetime) -> di
             route_policy_revision=args.route_policy_revision,
             bound_at=now,
         )
-        append_ledger_record(
-            _ledger(session),
+        commit_ledger_append(
+            session,
             LedgerRecord(
                 collection=Epoch2Collection.RUN,
                 record_key=f"{_BINDING_KEY_PREFIX}{args.urn.entity_key}",
@@ -725,8 +725,8 @@ def _terminal_updates(run: Run, *, now: datetime) -> dict[str, Any]:
 
 def _append_event_line(session: RootSession, event: RunEventRecord, *, now: datetime) -> None:
     """Append one Run event as a line of the run ledger."""
-    append_ledger_record(
-        _ledger(session),
+    commit_ledger_append(
+        session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
             record_key=event.event_ref,
@@ -784,8 +784,8 @@ def _hello(context: Epoch2RootContext, args: _HelloParams, *, now: datetime) -> 
             actor=args.actor,
             recorded_at=now,
         )
-        append_ledger_record(
-            _ledger(session),
+        commit_ledger_append(
+            session,
             LedgerRecord(
                 collection=Epoch2Collection.RUN,
                 record_key=f"{_HELLO_KEY_PREFIX}{args.hello.hello_sequence}",
