@@ -23158,6 +23158,16 @@
       "uri": "repo:.ea/artifacts/audits/2026-09-24-A-P34-I01-eval.md",
       "urn": "urn:eawf:v1:artifact:P34/ART-audit-2026-09-24-p34-i01-eval"
     },
+    "ART-audit-2026-09-25-p34-ship-gate": {
+      "created_at": "2026-09-25T00:51:57.507810Z",
+      "id": "ART-audit-2026-09-25-p34-ship-gate",
+      "kind": "audit_report",
+      "metadata": {},
+      "sha256": "db8a07324e201ee61dd63853737f60dfa826f8a7647a3526e62aa3031bd75717",
+      "size_bytes": 3097,
+      "uri": "repo:.ea/artifacts/audits/2026-09-25-A-P34-ship-gate.md",
+      "urn": "urn:eawf:v1:artifact:P34/ART-audit-2026-09-25-p34-ship-gate"
+    },
     "ART-research-2026-05-24-python-package-structure": {
       "created_at": "2026-05-24T00:47:22.443335Z",
       "id": "ART-research-2026-05-24-python-package-structure",
@@ -23955,6 +23965,17 @@
       "kind": "evaluation",
       "report_artifact_id": "ART-audit-2026-09-24-p34-i01-eval",
       "scope_id": "P34-I01",
+      "status": "complete",
+      "verdict": "minor"
+    },
+    "A-P34-SHIP": {
+      "check_results": [],
+      "created_at": "2026-09-25T00:51:58.395480Z",
+      "id": "A-P34-SHIP",
+      "integrity_results": [],
+      "kind": "ship-gate",
+      "report_artifact_id": "ART-audit-2026-09-25-p34-ship-gate",
+      "scope_id": "P34",
       "status": "complete",
       "verdict": "minor"
     },
@@ -38652,8 +38673,8 @@
       "SES-20260925T002622.744409Z-operator-claude-a51c851e-4738-4b53-a230-9ed9bfd2fb88"
     ],
     "active_wave_ids": [],
-    "iter_id": "P34-I01",
-    "phase_id": "P34",
+    "iter_id": null,
+    "phase_id": null,
     "project_code": "EAWF",
     "track_id": null
   },
@@ -56253,16 +56274,16 @@
       ]
     },
     "P34-I01": {
-      "audit_id": null,
+      "audit_id": "A-P34-I01-EVAL",
       "candidate_tag": null,
-      "closed_at": null,
+      "closed_at": "2026-09-25T00:50:47.014225Z",
       "description": "Evidence hygiene first (repin to main and tags, receipts, inert gates, status counts), then the epoch-2 correctness fixes and native producers, the console live seam and launcher, and the dev3 cut to BAKED.",
       "estimate_id": null,
       "id": "P34-I01",
       "intent": null,
       "opened_at": "2026-09-03T18:03:29.399855Z",
       "phase_id": "P34",
-      "status": "active",
+      "status": "closed",
       "title": "Repair the evidence trail, land the native producers and cut dev3",
       "trigger": "none",
       "wave_ids": [
@@ -56876,6 +56897,17 @@
       "status": "active",
       "store_record_id": "MEM-P33-I02-close-A-P33-I02-EVAL",
       "summary": "iter P33-I02 closed with audit A-P33-I02-EVAL; waves closed=1; outcomes P33-I02-W01: The daemon server now imports only the liveness module; every other method module registers o...",
+      "tier": "working"
+    },
+    "MEM-P34-I01-close-A-P34-I01-EVAL": {
+      "confidence": "high",
+      "id": "MEM-P34-I01-close-A-P34-I01-EVAL",
+      "promoted_to_artifact_id": null,
+      "review_due": "2026-09-25T00:50:47.014225Z",
+      "scope_id": "P34-I01",
+      "status": "active",
+      "store_record_id": "MEM-P34-I01-close-A-P34-I01-EVAL",
+      "summary": "iter P34-I01 closed with audit A-P34-I01-EVAL; waves closed=49; outcomes P34-I01-W01: pin reachability resolves against first-parent main, release tags and the live phase branch; ... | P34-I01-W02: wave branch heads archived under refs/eawf/archive; repair refuses while an unarchived branch... | P34-I01-W03: 76 archived local branches and the stale proof worktree pruned; only main, plugins-dist and t...",
       "tier": "working"
     }
   },
@@ -57620,8 +57652,8 @@
       "track_id": null
     },
     "P34": {
-      "audit_id": null,
-      "closed_at": null,
+      "audit_id": "A-P34-SHIP",
+      "closed_at": "2026-09-25T00:52:06.428560Z",
       "depends_on": [
         "P33"
       ],
@@ -57636,7 +57668,7 @@
       "release": null,
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "active",
+      "status": "closed",
       "title": "Cut the 0.7.0.dev3 native canary checkpoint",
       "track_id": null
     },
@@ -57759,7 +57791,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-25T00:26:52.285261Z",
+  "updated_at": "2026-09-25T00:52:06.428728Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
