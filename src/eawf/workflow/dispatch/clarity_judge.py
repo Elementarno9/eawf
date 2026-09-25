@@ -66,8 +66,7 @@ Spawn-free
 ----------
 Every function here is pure or injected: the prompt is a string, the rollup
 is a reducer over already-collected ballots, and the live-juror seam is a
-:data:`ClarityBallotFn` callback (mirroring
-:data:`eawf.workflow.evidence.rung3.BallotFn`) the deferred live rung will
+:data:`ClarityBallotFn` callback the deferred live rung will
 bind to a real spawn. Nothing in this module spawns a subprocess.
 """
 
@@ -112,8 +111,7 @@ CLARITY_DESCRIPTION_SURFACE: str = "entity_description"
 
 #: Default panel size for the clarity jury. Three cheap jurors with
 #: minority-veto: an LLM judge misses problems more than it false-alarms, so
-#: a single dissent vetoes. Mirrors
-#: :data:`eawf.workflow.evidence.rung3.DEFAULT_JUROR_COUNT`.
+#: a single dissent vetoes.
 DEFAULT_CLARITY_JUROR_COUNT: int = 3
 
 #: A dimension scored at or above this on the anchored ``0..ANCHOR_SCORE_MAX``

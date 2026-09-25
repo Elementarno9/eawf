@@ -29,7 +29,8 @@ toward refuting / escalating rather than passing. Concretely
 * ``p >= ENTAIL_THRESHOLD`` -> ``ENTAILED`` (the only passing verdict).
 * ``p <= REFUTE_THRESHOLD`` -> ``REFUTED`` (a confident contradiction).
 * otherwise -> ``ESCALATE`` (the uncertain middle band; rung-2 declines
-  to pass and hands the claim to the rung-3 jury).
+  to pass and the claim stays unresolved -- no automated rung sits above
+  it, so it needs a jury or an operator).
 
 The uncertain band collapses into ESCALATE, not ENTAILED — an unsure
 rung-2 never silently certifies. That is the refute-first contract: the

@@ -9,6 +9,18 @@ state_extensions:
 
 instrument_requirements: []
 
+# Default campaign domains so `eawf research campaign new` stages a campaign
+# on a fresh repo; a later profile's own research: block replaces this one.
+research:
+  default_depth: medium
+  domains:
+    prior-art:
+      focus: "Published work, existing tools, and how others solved this"
+    codebase:
+      focus: "What this repository already does and where the change would land"
+    risks:
+      focus: "Failure modes, constraints, and what would make the approach wrong"
+
 render_blocks:
   - id: research-workflow
     target: AGENTS.md

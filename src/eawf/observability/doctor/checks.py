@@ -9,6 +9,10 @@ Severity convention: ``fail`` means blocking and is reserved for faults that
 make the install wrong rather than degraded — a hard tool missing, or an
 AGENTS.md past the byte cap where the truncated tail is silently unread.
 """
+# noqa: EAWF010 cohesive doctor check-registry surface (one small check_*
+# per install facet plus the run_all rollup); splitting along per-domain
+# check groups is deferred to a follow-up wave rather than riding a
+# targeted overlay-profile fix.
 
 from __future__ import annotations
 
@@ -22,13 +26,14 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from eawf.kernel.config.layered import get_dotted, merge_config
-from eawf.kernel.config.profile import KNOWN_PROFILES
 from eawf.kernel.config.registry import LEAF_KEY_REGISTRY
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.observability.doctor import daemon_checks
 from eawf.observability.doctor.models import CheckResult as CheckResult
 from eawf.observability.doctor.models import CheckStatus as CheckStatus
 from eawf.platform.install.instrument_probe import probe
+from eawf.platform.profiles.discovery import discover_profile
+from eawf.platform.profiles.loader import list_profiles
 from eawf.surfaces.render.agents_md import measure_agents_md_byte_cap
 from eawf.surfaces.render.drift import detect_drift
 from eawf.surfaces.render.envelope import OutputEnvelope, from_markdown, to_markdown
@@ -224,17 +229,28 @@ def check_config_resolves(*, workspace: Path | None) -> CheckResult:
         raw_enabled = profiles_section.get("enabled")
         if isinstance(raw_enabled, list):
             enabled_profiles = [p for p in raw_enabled if isinstance(p, str)]
-    unknown = [p for p in enabled_profiles if p not in KNOWN_PROFILES]
+    # Resolve through the workspace-overlay-aware registry (workspace >
+    # user > built-in) so a profile id defined only under
+    # ``<anchor>/.ea/profiles/`` is not flagged unknown -- the same
+    # registry ``resolve_enabled_profiles`` feeds the AGENTS.md renderer.
+    known_ids = list_profiles(workspace=anchor)
+    unknown = [p for p in enabled_profiles if p not in known_ids]
     if unknown:
         return CheckResult(
             name="config_resolves",
             status="warn",
             detail=f"unknown profile(s) enabled: {', '.join(unknown)}",
         )
+    overlays: list[str] = []
+    for pid in enabled_profiles:
+        loc = discover_profile(pid, workspace=anchor)
+        if loc.source != "builtin":
+            overlays.append(f"{pid}={loc.source}")
+    overlay_note = f"; overlay: {', '.join(overlays)}" if overlays else ""
     return CheckResult(
         name="config_resolves",
         status="ok",
-        detail=f"{len(enabled_profiles)} profile(s) enabled",
+        detail=f"{len(enabled_profiles)} profile(s) enabled{overlay_note}",
     )
 
 

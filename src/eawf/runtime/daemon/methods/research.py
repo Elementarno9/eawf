@@ -876,7 +876,7 @@ def reconcile_round_claims(
     resolved_scope = _resolve_research_scope(state, scope_id)
     claims = dict(state.claims or {})
     written: list[str] = []
-    # W20 compaction (dedup-only policy): a finding whose normalized full text
+    # Compaction (dedup-only policy): a finding whose normalized full text
     # matches a LIVE claim already on the scope's ledger -- or one written
     # earlier this round -- is collapsed (not re-added), so a trivial question
     # that keeps re-surfacing the same finding across rounds does not grow the
@@ -910,39 +910,36 @@ def reconcile_round_claims(
                 created_at=now,
             )
             written.append(claim_id)
-    # W17: link answering claims to the scope's OPEN questions and resolve them.
-    # A round's findings answer the campaign's seeded open question(s); pair each
-    # OPEN, non-blocking question (blocked ones are operator checkpoints, W18)
-    # with a written claim so an answered question no longer lingers open and its
-    # answering claim is linked both ways.
+    # A finding carries no link to the question it addresses, so a claim can
+    # only be paired by elimination: when the scope has exactly one OPEN,
+    # non-blocking question, that question is every claim's single candidate
+    # and the round's first claim answers it. With two or more candidates the
+    # pairing would be a guess, so every question stays OPEN for the operator.
+    # Blocking questions are operator checkpoints and never auto-answer.
     questions = dict(state.open_questions or {})
     answered = 0
-    if written:
-        open_qs = [
-            q
-            for q in questions.values()
-            if q.scope_id == resolved_scope
-            and q.status is OpenQuestionStatus.OPEN
-            and not q.blocking
-        ]
-        for claim_id, question in zip(written, open_qs, strict=False):
-            claims[claim_id] = claims[claim_id].model_copy(
-                update={"answers_question_id": question.id}
-            )
-            questions[question.id] = question.model_copy(
-                update={
-                    "status": OpenQuestionStatus.ANSWERED,
-                    "answered_by_claim_id": claim_id,
-                    "resolved_at": now,
-                }
-            )
-            answered += 1
+    candidates = [
+        q
+        for q in questions.values()
+        if q.scope_id == resolved_scope and q.status is OpenQuestionStatus.OPEN and not q.blocking
+    ]
+    if written and len(candidates) == 1:
+        claim_id, question = written[0], candidates[0]
+        claims[claim_id] = claims[claim_id].model_copy(update={"answers_question_id": question.id})
+        questions[question.id] = question.model_copy(
+            update={
+                "status": OpenQuestionStatus.ANSWERED,
+                "answered_by_claim_id": claim_id,
+                "resolved_at": now,
+            }
+        )
+        answered = 1
     state.claims = claims
     state.open_questions = questions
-    # W18: a researcher that returns verdict=blocked with a clarification
+    # A researcher that returns verdict=blocked with a clarification
     # question raises a BLOCKING OpenQuestion -- an operator checkpoint gating
     # its round -- through the shared add-question writer, so the operator
-    # answers it via the existing approve/steer channel (per D-2 the block
+    # answers it via the existing approve/steer channel (the block
     # pauses only its round, not the whole campaign). Runs after the resolution
     # commit so _apply_add_question reads the updated open_questions.
     raised = 0
@@ -2491,8 +2488,9 @@ class BroadcastParams(BaseModel):
     """Params for :func:`broadcast`.
 
     Attributes:
-        notice: The free-text notice fanned to every running round (the board
-            ``b`` key sends only this).
+        notice: The free-text notice recorded on the campaign's channel (the
+            board ``b`` key sends only this). It reaches no running round; it
+            surfaces on the ``steer_notes`` of the next round record.
         campaign_id: The campaign the broadcast targets; ``None`` uses the
             most-recent ACTIVE campaign.
         scope: The blackboard scope addressed; defaults to the whole campaign.

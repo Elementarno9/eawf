@@ -13,10 +13,6 @@ truth for verdict-bearing rules and is invoked at write time via
 
 from __future__ import annotations
 
-from eawf.workflow.evidence.chain import (
-    NumericClaimError,
-    drive_text_claim_chain,
-)
 from eawf.workflow.evidence.evibound import (
     BriefPromotionGate,
     BriefRefOutcome,
@@ -47,17 +43,6 @@ from eawf.workflow.evidence.rung2 import (
     score_claims,
     verdict_to_status,
 )
-from eawf.workflow.evidence.rung3 import (
-    DEFAULT_JUROR_COUNT,
-    BallotFn,
-    Rung3ConveneError,
-    Rung3Outcome,
-    build_juror_prompt,
-    convene_entailment_jury,
-    escalate_to_rung3,
-    jury_outcome_to_verdict,
-    parse_juror_ballot,
-)
 
 # Rung-4 exposes its own ``EviBoundVerdict``-to-status mapper that shares
 # the bare name ``verdict_to_status`` with the rung-2 ``Rung2Verdict``
@@ -73,8 +58,6 @@ from eawf.workflow.evidence.rung4 import (
 )
 
 __all__ = [
-    "DEFAULT_JUROR_COUNT",
-    "BallotFn",
     "BriefPromotionGate",
     "BriefRefOutcome",
     "ClaimRung",
@@ -82,27 +65,18 @@ __all__ = [
     "EntailmentScorer",
     "EviBoundVerdict",
     "LexicalEntailmentScorer",
-    "NumericClaimError",
     "ResolveCheck",
     "ResolveResult",
     "ResolveStatus",
     "Rung2ClaimResult",
     "Rung2Config",
     "Rung2Verdict",
-    "Rung3ConveneError",
-    "Rung3Outcome",
-    "build_juror_prompt",
     "check_brief_promotable",
     "classify_probability",
-    "convene_entailment_jury",
     "criterion_verdict_to_status",
     "dominant_verdict",
-    "drive_text_claim_chain",
-    "escalate_to_rung3",
-    "jury_outcome_to_verdict",
     "load_default_scorer",
     "looks_numeric",
-    "parse_juror_ballot",
     "render_attested_verdict",
     "require_complete_audit",
     "resolve",

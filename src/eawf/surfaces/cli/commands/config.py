@@ -753,6 +753,7 @@ def profile_enable(
             layer=scope,
             layer_file_path=target_path,
             state_path=state_arg,
+            workspace=workspace,
         )
     except (UserError, ValidationError) as exc:
         emit_error(exc, flags=flags)

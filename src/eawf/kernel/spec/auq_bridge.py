@@ -36,9 +36,8 @@ runtime ids (:data:`~eawf.runtime.runtimes.manifest.RuntimeId`):
 The operator's selection parses back through :meth:`AUQRequest.parse_answer`
 into a typed :class:`AUQAnswer` (the selected option key, validated against
 the request's own option set). A ``needs_user`` outcome from the jury
-reducer (:class:`~eawf.observability.eval.jury.JuryAggregate`) or the
-EviBound rung-3 convener (:class:`~eawf.workflow.evidence.rung3.Rung3Outcome`)
-converts into an :class:`AUQRequest` via :func:`needs_user_to_auq` so an
+reducer (:class:`~eawf.observability.eval.jury.JuryAggregate`) converts
+into an :class:`AUQRequest` via :func:`needs_user_to_auq` so an
 unresolvable vote routes straight to the operator-pause surface instead of
 falling through as a silent pass.
 
@@ -71,7 +70,6 @@ from eawf.kernel.state.enums import Urgency, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.observability.eval.jury import JuryAggregate, JuryAggregateOutcome
 from eawf.runtime.runtimes.manifest import RuntimeId
-from eawf.workflow.evidence.rung3 import Rung3Outcome
 
 logger = logging.getLogger(__name__)
 
@@ -396,28 +394,24 @@ _NEEDS_USER_OPTIONS: tuple[AUQOption, ...] = (
 
 
 def needs_user_to_auq(
-    signal: JuryAggregate | Rung3Outcome,
+    signal: JuryAggregate,
     *,
     question: str | None = None,
     header: str = "Unresolved -- needs you",
 ) -> AUQRequest:
     """Convert a ``needs_user`` signal into an operator :class:`AUQRequest`.
 
-    Both needs_user producers feed this one converter: a jury aggregate whose
-    outcome is
+    The producer is a jury aggregate whose outcome is
     :attr:`~eawf.observability.eval.jury.JuryAggregateOutcome.NEEDS_USER` (a
-    split with no veto, or a high-variance graded vote) and a rung-3 outcome
-    whose :attr:`~eawf.workflow.evidence.rung3.Rung3Outcome.needs_user` bit is
-    set (the same aggregate seen through the EviBound chain). An unresolvable
+    split with no veto, or a high-variance graded vote). An unresolvable
     signal becomes an :class:`AUQRequest` at
     :attr:`~eawf.kernel.state.enums.Urgency.URGENT` so it routes straight to
     the operator-pause surface rather than falling through as a silent pass --
-    the refute-first contract the jury / rung-3 modules already hold.
+    the refute-first contract the jury reducer already holds.
 
     Args:
         signal: The needs_user producer -- a
-            :class:`~eawf.observability.eval.jury.JuryAggregate` or a
-            :class:`~eawf.workflow.evidence.rung3.Rung3Outcome`.
+            :class:`~eawf.observability.eval.jury.JuryAggregate`.
         question: Optional override for the question text. ``None`` derives a
             question from the signal's reasons.
         header: The :attr:`AUQRequest.header` for the pause. Defaults to a
@@ -429,8 +423,7 @@ def needs_user_to_auq(
 
     Raises:
         ValueError: when *signal* does not actually carry a needs_user state
-            (a resolved jury aggregate, or a rung-3 outcome with
-            ``needs_user`` unset) -- converting a resolved signal to an
+            (a resolved jury aggregate) -- converting a resolved signal to an
             operator pause would be a category error.
     """
     reasons = _needs_user_reasons(signal)
@@ -447,23 +440,16 @@ def needs_user_to_auq(
     )
 
 
-def _needs_user_reasons(signal: JuryAggregate | Rung3Outcome) -> tuple[str, ...]:
+def _needs_user_reasons(signal: JuryAggregate) -> tuple[str, ...]:
     """Return the signal's reasons, asserting it is genuinely needs_user.
 
     Raises:
         ValueError: when the signal is not in a needs_user state.
     """
-    if isinstance(signal, JuryAggregate):
-        if signal.outcome is not JuryAggregateOutcome.NEEDS_USER:
-            raise ValueError(
-                f"jury aggregate is not needs_user (outcome={signal.outcome.value!r}); "
-                "cannot convert a resolved vote to an operator pause"
-            )
-        return signal.reasons
-    if not signal.needs_user:
+    if signal.outcome is not JuryAggregateOutcome.NEEDS_USER:
         raise ValueError(
-            "rung-3 outcome does not need the operator (needs_user is false); "
-            "cannot convert a resolved outcome to an operator pause"
+            f"jury aggregate is not needs_user (outcome={signal.outcome.value!r}); "
+            "cannot convert a resolved vote to an operator pause"
         )
     return signal.reasons
 

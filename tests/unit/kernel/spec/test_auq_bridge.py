@@ -6,7 +6,7 @@ frontier drain:
 1. An :class:`AUQRequest` projects to a claude ``AskUserQuestion`` shape
    (question + header + two-line options) and to the codex / opencode text
    prompts (numbered / bracket-keyed).
-2. A ``needs_user`` signal -- a jury aggregate or a rung-3 outcome -- converts
+2. A ``needs_user`` jury aggregate converts
    into an :class:`AUQRequest` at ``URGENT``; a resolved signal is rejected.
 3. An operator selection parses to a typed :class:`AUQAnswer`; an unknown key
    is rejected.
@@ -49,8 +49,6 @@ from eawf.observability.eval.jury import (
     JuryAggregateOutcome,
     aggregate_jury,
 )
-from eawf.workflow.evidence.rung3 import Rung3Outcome
-from eawf.workflow.evidence.rung4 import EviBoundVerdict
 
 # ---------------------------------------------------------------------------
 # Fixtures / builders
@@ -181,18 +179,6 @@ def test_needs_user_to_auq_from_jury_aggregate_builds_urgent_request() -> None:
     assert "no clean consensus" in req.question
 
 
-def test_needs_user_to_auq_from_rung3_outcome_builds_urgent_request() -> None:
-    outcome = Rung3Outcome(
-        convened=True,
-        verdict=EviBoundVerdict.UNRESOLVED,
-        needs_user=True,
-        reasons=("panel split with no veto",),
-    )
-    req = needs_user_to_auq(outcome)
-    assert req.urgency is Urgency.URGENT
-    assert "panel split with no veto" in req.question
-
-
 def test_needs_user_to_auq_honors_question_override() -> None:
     req = needs_user_to_auq(_split_jury(), question="Adjudicate the jury tie?")
     assert req.question == "Adjudicate the jury tie?"
@@ -214,16 +200,15 @@ def test_needs_user_to_auq_resolved_jury_raises() -> None:
         needs_user_to_auq(resolved)
 
 
-def test_needs_user_to_auq_resolved_rung3_raises() -> None:
-    resolved = Rung3Outcome(convened=True, verdict=EviBoundVerdict.SUPPORTED, needs_user=False)
-    with pytest.raises(ValueError, match="rung-3 outcome does not need the operator"):
-        needs_user_to_auq(resolved)
-
-
 def test_needs_user_to_auq_empty_reasons_uses_generic_question() -> None:
-    # A graded high-variance NEEDS_USER carries a reason; force the empty-reason
-    # path through a rung-3 outcome with no reasons set.
-    outcome = Rung3Outcome(convened=True, verdict=EviBoundVerdict.UNRESOLVED, needs_user=True)
+    # The reducer always attaches a reason to NEEDS_USER; build the aggregate
+    # directly to reach the empty-reason path.
+    outcome = JuryAggregate(
+        outcome=JuryAggregateOutcome.NEEDS_USER,
+        acceptance_style="binary",
+        ballot_count=2,
+        veto_count=1,
+    )
     req = needs_user_to_auq(outcome)
     assert req.question == (
         "An automated check could not resolve this. How do you want to proceed?"
