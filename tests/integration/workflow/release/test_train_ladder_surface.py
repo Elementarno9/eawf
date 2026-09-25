@@ -30,6 +30,10 @@ from eawf.workflow.release.records import record_release
 from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML
 from eawf.workflow.release.train_store import record_checkpoint_receipt
 
+#: uid for the dev2 record staged by the "derives from records" test. Distinct
+#: from ``dev1_record``'s so the two never collide in a shared collection.
+DEV2_UID = UUID(int=32)
+
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
@@ -124,8 +128,25 @@ def test_the_authored_gate_names_are_the_eight_dev1_gates() -> None:
     assert DEV1_GATE_NAMES[0] == "version_consistency"
 
 
-def test_train_show_json_emits_the_ladder_index_and_statuses() -> None:
+def _isolate_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point ``EA_STATE`` at an empty *tmp_path* so no record store exists yet.
+
+    ``release train show`` now reads the release-record and train-advance
+    stores under the resolved state path; without this, the CLI-invoking
+    tests below would read this checkout's own stores instead of a
+    controlled fixture.
+    """
+    state_path = tmp_path / ".ea" / "state.json"
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    return state_path
+
+
+def test_train_show_json_emits_the_ladder_index_and_statuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The command-local --json flag renders the machine-readable ladder."""
+    _isolate_state(tmp_path, monkeypatch)
+
     result = runner.invoke(app, ["release", "train", "show", "--json"])
 
     assert result.exit_code == 0, result.output
@@ -135,8 +156,12 @@ def test_train_show_json_emits_the_ladder_index_and_statuses() -> None:
     assert [row["status"] for row in payload["checkpoints"]] == ["open", *["pending"] * 6]
 
 
-def test_train_show_honours_the_global_json_flag() -> None:
+def test_train_show_honours_the_global_json_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``eawf --json release train show`` renders the same body."""
+    _isolate_state(tmp_path, monkeypatch)
+
     local = runner.invoke(app, ["release", "train", "show", "--json"])
     globally = runner.invoke(app, ["--json", "release", "train", "show"])
 
@@ -144,13 +169,50 @@ def test_train_show_honours_the_global_json_flag() -> None:
     assert json.loads(globally.stdout) == json.loads(local.stdout)
 
 
-def test_train_show_text_marks_the_open_rung() -> None:
+def test_train_show_text_marks_the_open_rung(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The default rendering points at the checkpoint currently open."""
+    _isolate_state(tmp_path, monkeypatch)
+
     result = runner.invoke(app, ["release", "train", "show"])
 
     assert result.exit_code == 0, result.output
     assert "* REL-0.7.0.dev1  status=open" in result.stdout
     assert "REL-0.7.0.dev2  status=pending" in result.stdout
+
+
+def test_train_show_derives_the_open_rung_from_release_records(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recorded dev2 draft reads as the open rung, not the ladder's start.
+
+    ``open_rung_index`` treats any recorded key as proof the train stands
+    at least that far up (see its docstring), so recording a dev2 DRAFT --
+    with no train-advance row at all -- is enough to move the reported
+    open index off the source-declared zero.
+    """
+    state_path = _isolate_state(tmp_path, monkeypatch)
+    record_release(
+        state_path, Release.model_validate(dev1_record()), recorded_at=NOW, summary="seed"
+    )
+    dev2_draft = Release(
+        uid=DEV2_UID,
+        key="REL-0.7.0.dev2",
+        version="0.7.0.dev2",
+        channel=ReleaseChannel.DEV,
+        authority_epoch=1,
+    )
+    record_release(state_path, dev2_draft, recorded_at=NOW, summary="seed")
+
+    result = runner.invoke(app, ["release", "train", "show", "--json"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["current_checkpoint_index"] == 1
+    assert payload["current_checkpoint"] == "REL-0.7.0.dev2"
+    statuses = [row["status"] for row in payload["checkpoints"]]
+    assert statuses == ["passed", "open", *["pending"] * 5]
 
 
 def test_train_without_a_subcommand_lists_show() -> None:

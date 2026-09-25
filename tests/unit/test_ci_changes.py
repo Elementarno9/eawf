@@ -2,7 +2,8 @@
 
 The classifier decides whether a run may skip the test matrix and the
 twice-green job: only when every path changed since the last green
-``ci.yaml`` tree is state bookkeeping. Git and the GitHub API are both
+``ci.yaml`` tree is ``.secrets.baseline`` -- the one path the ``.ea/``
+commit-policy census never reads. Git and the GitHub API are both
 injected, so no test spawns git or touches the network; the two default
 adapters are exercised through patched ``subprocess.run`` / ``urlopen``.
 ``tools/`` is not a package, so the module is loaded by path.
@@ -138,19 +139,19 @@ def _pr_git(mod: ModuleType, *, head_diff: str, base_log: str) -> FakeGit:
 # --- bookkeeping paths -------------------------------------------------------
 
 
+def test_is_bookkeeping_accepts_only_the_secrets_baseline(mod: ModuleType) -> None:
+    assert mod.is_bookkeeping(".secrets.baseline") is True
+
+
 @pytest.mark.parametrize(
     "path",
-    [
-        ".ea/state.json",
-        ".ea/store/evidence.jsonl",
-        ".ea/store/nested/row.jsonl",
-        ".secrets.baseline",
-    ],
+    [".ea/state.json", ".ea/store/evidence.jsonl", ".ea/store/nested/row.jsonl"],
 )
-def test_is_bookkeeping_accepts_state_ledgers_and_secrets_baseline(
-    mod: ModuleType, path: str
-) -> None:
-    assert mod.is_bookkeeping(path) is True
+def test_is_bookkeeping_rejects_the_paths_the_census_reads(mod: ModuleType, path: str) -> None:
+    """The ``.ea/`` commit-policy census inspects these on every run, so a
+    push that only touches them still has to run the suite that carries it.
+    """
+    assert mod.is_bookkeeping(path) is False
 
 
 @pytest.mark.parametrize(
@@ -175,7 +176,21 @@ def test_is_bookkeeping_rejects_code_and_other_ea_paths(mod: ModuleType, path: s
 # --- push runs ---------------------------------------------------------------
 
 
-def test_classify_push_state_only_diff_reports_no_code(mod: ModuleType, tmp_path: Path) -> None:
+def test_classify_push_secrets_baseline_only_diff_reports_no_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".secrets.baseline")})
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is False
+    assert "only state bookkeeping" in verdict.reason
+    assert _GREEN[:12] in verdict.reason
+    assert verdict.green == _GREEN
+
+
+def test_classify_push_census_read_state_paths_report_code(mod: ModuleType, tmp_path: Path) -> None:
+    """A push touching only the paths the ``.ea/`` census reads still runs
+    the suite that carries it, even though nothing under ``src/`` changed.
+    """
     git = FakeGit(
         mod,
         {
@@ -185,10 +200,10 @@ def test_classify_push_state_only_diff_reports_no_code(mod: ModuleType, tmp_path
         },
     )
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
-    assert verdict.code is False
-    assert "only state bookkeeping" in verdict.reason
-    assert _GREEN[:12] in verdict.reason
-    assert verdict.green == _GREEN
+    assert verdict.code is True
+    assert ".ea/state.json" in verdict.reason
+    assert ".ea/store/gate.jsonl" in verdict.reason
+    assert ".secrets.baseline" not in verdict.reason
 
 
 def test_classify_push_identical_tree_reports_no_code(mod: ModuleType, tmp_path: Path) -> None:
@@ -202,7 +217,7 @@ def test_classify_push_code_diff_reports_code(mod: ModuleType, tmp_path: Path) -
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
     assert "src/eawf/cli.py" in verdict.reason
-    assert ".ea/state.json" not in verdict.reason
+    assert ".ea/state.json" in verdict.reason
 
 
 def test_classify_push_non_state_ea_path_reports_code(mod: ModuleType, tmp_path: Path) -> None:
@@ -242,7 +257,7 @@ def test_classify_push_red_and_foreign_runs_are_no_baseline(
 
 def test_classify_push_uses_the_newest_green_run(mod: ModuleType, tmp_path: Path) -> None:
     runs = _runs(_run(_GREEN), _run(_BASE))
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/state.json")})
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".secrets.baseline")})
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(runs))
     assert verdict.code is False
     assert git.calls == [_diff_key(_GREEN, "HEAD")]
@@ -365,7 +380,7 @@ def test_runs_url_encodes_a_slashed_branch(mod: ModuleType) -> None:
 def test_classify_pull_request_state_only_head_and_base_reports_no_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
-    git = _pr_git(mod, head_diff=_z(".ea/state.json"), base_log=_z(".ea/store/release.jsonl"))
+    git = _pr_git(mod, head_diff=_z(".secrets.baseline"), base_log=_z(".secrets.baseline"))
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is False
     assert "head and base branch" in verdict.reason
@@ -395,7 +410,7 @@ def test_classify_pull_request_base_code_change_reports_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
     git = _pr_git(
-        mod, head_diff=_z(".ea/state.json"), base_log=_z(".ea/state.json", "src/eawf/app.py")
+        mod, head_diff=_z(".secrets.baseline"), base_log=_z(".ea/state.json", "src/eawf/app.py")
     )
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
@@ -484,7 +499,7 @@ def test_main_appends_code_false_to_github_output(
     env = _push_env(tmp_path)
     output = Path(env["GITHUB_OUTPUT"])
     output.write_text("earlier=1\n", encoding="utf-8")
-    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/state.json")})
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".secrets.baseline")})
     assert mod.main(env, git=git, fetch=FakeFetch(_runs(_run(_GREEN)))) == 0
     assert output.read_text(encoding="utf-8") == f"earlier=1\ncode=false\ngreen={_GREEN}\n"
     assert capsys.readouterr().out.startswith("code=false: ")

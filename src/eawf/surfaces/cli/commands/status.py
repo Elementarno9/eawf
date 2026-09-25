@@ -16,6 +16,7 @@ Output payload (JSON envelope, all keys always present):
       "last_closed_waves": ["P01-I01-W01", ...],
       "recent_decisions": [{"id", "title", "status"}, ...],
       "open_backlog": [{"id", "title", "priority", "status"}, ...],
+      "open_backlog_count": <int>,
       "git": {"head": "<sha>" | null,
               "branch": "<name>" | null,
               "dirty": true | false | null},
@@ -277,6 +278,22 @@ def _open_backlog(state: State, limit: int = 10) -> list[dict[str, str]]:
     ]
 
 
+def _open_backlog_count(state: State) -> int:
+    """Return how many backlog items are OPEN or IN_PROGRESS, before display truncation.
+
+    ``_open_backlog`` mirrors this same live-status filter but slices its
+    result to ``limit`` rows so the status envelope stays small; reading the
+    count off the truncated preview instead of this full tally is what made
+    ``eawf status`` report a backlog of 10 when 68 items were actually open.
+    """
+    pool = state.backlog or {}
+    return sum(
+        1
+        for item in pool.values()
+        if item.status in (BacklogStatus.OPEN, BacklogStatus.IN_PROGRESS)
+    )
+
+
 def _research_campaign_summary(state: State, state_path: Path) -> dict[str, Any] | None:
     """Fold the active research campaign's progress into a status summary.
 
@@ -477,6 +494,7 @@ def status(
         "last_closed_waves": _last_closed_waves(state),
         "recent_decisions": _recent_decisions(state),
         "open_backlog": _open_backlog(state),
+        "open_backlog_count": _open_backlog_count(state),
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
         "blockers": _blockers(state),
@@ -535,8 +553,9 @@ def _format_text(payload: dict[str, Any]) -> str:
         else "recent decisions: none"
     )
     backlog = payload.get("open_backlog") or []
+    backlog_count = payload.get("open_backlog_count", len(backlog))
     backlog_line = (
-        f"open backlog: {len(backlog)} ({', '.join(b['id'] for b in backlog)})"
+        f"open backlog: {backlog_count} ({', '.join(b['id'] for b in backlog)})"
         if backlog
         else "open backlog: none"
     )

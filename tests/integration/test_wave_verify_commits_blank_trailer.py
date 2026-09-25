@@ -212,6 +212,7 @@ def test_verify_commits_blank_line_trailer_pin_is_repaired(
             "state_commit": pre_squash,
             "git_commit": landed,
             "repairable": True,
+            "resolution": "repairable",
         }
     ]
     assert _read_pin(state_path) == pre_squash

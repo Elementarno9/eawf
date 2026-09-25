@@ -295,6 +295,7 @@ def test_status_payload_keys_documented_set(
         "last_closed_waves",
         "recent_decisions",
         "open_backlog",
+        "open_backlog_count",
         "git",
         "drift",
         "blockers",

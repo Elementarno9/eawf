@@ -13,6 +13,8 @@ command bodies live in four sibling modules:
 - :mod:`eawf.surfaces.cli.commands.lifecycle_wave_read` — wave read / dispatch /
   budget verbs (graph / next-ready / blocks-rebuild / dispatch /
   dispatch-batch / budget set·consume·show).
+- :mod:`eawf.surfaces.cli.commands.lifecycle_wave_prune` — the
+  ``wave prune-branches`` verb.
 - :mod:`eawf.surfaces.cli.commands.domain` — the native epoch-2 verbs of
   the ``milestone`` / ``batch`` / ``task`` apps plus ``track retire``.
   Those forward to the daemon's per-entity lifecycle RPCs rather than
@@ -847,6 +849,9 @@ from eawf.surfaces.cli.commands import domain as _domain  # noqa: E402, F401
 from eawf.surfaces.cli.commands import lifecycle_iter as _lifecycle_iter  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_phase as _lifecycle_phase  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_wave as _lifecycle_wave  # noqa: E402, F401
+from eawf.surfaces.cli.commands import (  # noqa: E402
+    lifecycle_wave_prune as _lifecycle_wave_prune,  # noqa: F401
+)
 from eawf.surfaces.cli.commands import (  # noqa: E402
     lifecycle_wave_read as _lifecycle_wave_read,  # noqa: F401
 )

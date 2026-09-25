@@ -85,6 +85,7 @@ Manage backlog items (add / close).
 | `add` | Add a new backlog item. |
 | `backfill-titles` | Sweep + normalize backlog titles to the entity-title rule. |
 | `close` | Close a backlog item; requires --audit of a complete audit. |
+| `correct` | Correct a closed backlog item's commit or resolution; never reopens it. |
 | `edit` | Edit an open backlog item's title, description, and/or intent. |
 | `set-priority` | Update the priority of an open backlog item. |
 
@@ -597,6 +598,7 @@ Manage phase / iter / wave specs (init / validate / promote / archive / show).
 | `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
 | `repoint-gates` | Rewrite the recorded gate argv of a CLOSED wave after a tree move. |
 | `repoint-scopes` | Re-derive a wave's file scopes and rewrite a named criterion's text. |
+| `rewrite-gate-kind` | Strengthen a CLOSED wave's grep gates into command gates. |
 | `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
 | `sync` | Parse a wave spec body + materialise its criteria + gates onto state. |
 | `validate` | Re-hash the on-disk spec body + refresh the daemon cache row. |
@@ -671,6 +673,7 @@ Wave lifecycle (plan, claim, close, fail, graph, next-ready).
 | Verb | Summary |
 |---|---|
 | `ack-drift` | Acknowledge historical git/state commit drift so ``doctor`` stops warning. |
+| `archive-refs` | Archive every local wave branch head under ``refs/eawf/archive/<phase>/<wave>``. |
 | `autoland` | Cherry-pick closed waves' worktree commits home in dependency order. |
 | `blocks-rebuild` | Rebuild ``Wave.blocks`` reverse-index from sister waves' ``deps``. |
 | `claim` | Claim a pending wave for *session*. Exactly-once across concurrent calls. |

@@ -115,7 +115,11 @@ Enforces:
    exists to carry only exist once the wave is closed. Adding
    deliverable bytes under a CLOSED wave stays rejected.
 
-All checks run as a ``commit-msg``-stage pre-commit hook. The first
+7. A rewrite keeps every wave trailer. ``--check-rewrite OLD NEW`` and the
+   ``--pre-push`` hook refuse replacing a tip with history that no longer
+   names a wave the old side named; see ``wave_trailer_guard.py``.
+
+Checks 1-6 run as a ``commit-msg``-stage pre-commit hook. The first
 argument is the commit-message file path (pre-commit passes it). The
 linter consults ``git diff --cached --name-only`` for staged paths.
 
@@ -1355,6 +1359,18 @@ def lint(
 
 
 def main(argv: list[str]) -> int:
+    if argv[1:2] in (["--check-rewrite"], ["--pre-push"]):
+        from wave_trailer_guard import check_pre_push, check_rewrite
+
+        if argv[1] == "--pre-push":
+            exit_code, diag = check_pre_push(os.environ)
+        elif len(argv) == 4:
+            exit_code, diag = check_rewrite(argv[2], argv[3])
+        else:
+            exit_code, diag = 1, "usage: commit_prefix_lint.py --check-rewrite <old-tip> <new-tip>"
+        if diag:
+            print(diag, file=sys.stderr)
+        return exit_code
     if len(argv) < 2:
         print("usage: commit_prefix_lint.py <commit-msg-path>", file=sys.stderr)
         return 1

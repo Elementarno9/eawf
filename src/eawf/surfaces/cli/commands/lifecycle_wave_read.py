@@ -690,27 +690,38 @@ def _commit_pin_issue_payload(issue: Any) -> dict[str, Any]:
         "state_commit": issue.state_commit,
         "git_commit": issue.git_commit,
         "repairable": issue.repairable,
+        "resolution": issue.resolution,
     }
+
+
+def _resolution_counts(issues: list[Any]) -> str:
+    """Summarise *issues* as ``N repairable, N ambiguous, N unresolvable``."""
+    counts = {"repairable": 0, "ambiguous": 0, "unresolvable": 0}
+    for issue in issues:
+        counts[issue.resolution] += 1
+    return ", ".join(f"{count} {name}" for name, count in counts.items())
 
 
 def _render_verify_commits_markdown(issues: list[Any]) -> str:
     """Render the verify-commits scan as a markdown table.
 
     One row per drifting wave with its kind, the pinned SHA, the
-    git-derived SHA, and whether ``--repair`` can fix it. Renders an
-    honest "no drift" line when *issues* is empty.
+    git-derived SHA, and how it resolves (repairable, ambiguous or
+    unresolvable). Renders an honest "no drift" line when *issues* is empty.
     """
     if not issues:
         return "All closed waves carry an in-sync commit pin."
     lines = [
-        "| wave | kind | pinned | derived | repairable |",
+        f"{len(issues)} drift(s): {_resolution_counts(issues)}",
+        "",
+        "| wave | kind | pinned | derived | resolution |",
         "| --- | --- | --- | --- | --- |",
     ]
     for issue in issues:
         pinned = issue.state_commit or "-"
         derived = issue.git_commit or "-"
-        repairable = "yes" if issue.repairable else "no"
-        lines.append(f"| {issue.wave_id} | {issue.kind} | {pinned} | {derived} | {repairable} |")
+        row = f"| {issue.wave_id} | {issue.kind} | {pinned} | {derived} | {issue.resolution} |"
+        lines.append(row)
     return "\n".join(lines)
 
 
@@ -718,12 +729,13 @@ def _verify_commits_text(issues: list[Any]) -> str:
     """Render the verify-commits scan as a compact multi-line summary."""
     if not issues:
         return "wave verify-commits: all closed waves reconcile (0 drift)"
-    lines = [f"wave verify-commits: {len(issues)} drift(s)"]
+    lines = [f"wave verify-commits: {len(issues)} drift(s) ({_resolution_counts(issues)})"]
     for issue in issues:
         pinned = issue.state_commit or "-"
         derived = issue.git_commit or "-"
-        suffix = "" if issue.repairable else " (unrepairable)"
-        lines.append(f"  {issue.wave_id} {issue.kind} pinned={pinned} derived={derived}{suffix}")
+        lines.append(
+            f"  {issue.wave_id} {issue.kind} pinned={pinned} derived={derived} ({issue.resolution})"
+        )
     return "\n".join(lines)
 
 
@@ -750,15 +762,20 @@ def wave_verify_commits_cmd(
     """Verify (and optionally repair) every CLOSED wave's commit SHA pin.
 
     Walks each closed wave and compares ``Wave.commit`` against the SHA
-    derived from the bracketed commit subject
-    (:func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`). Surfaces
-    five issue kinds:
+    derived from the wave's commit subject prefix or ``Eawf-Wave`` line on
+    integration history: first-parent ``main``, release tags, and the
+    checked-out branch back to its merge-base with main. A pin kept alive
+    only by another local branch is drift. Surfaces six issue kinds:
 
     - ``pinned_mismatch`` -- pin and git disagree (repairable).
     - ``unpinned_derivable`` -- no pin but git can derive one (repairable).
-    - ``pinned_but_missing`` -- pinned SHA not reachable from any ref.
+    - ``ambiguous_successor`` -- several candidates; needs a human pick.
+    - ``pinned_but_missing`` -- pinned SHA not on integration history.
     - ``closed_no_pin`` -- no pin and nothing derivable.
     - ``closed_unfindable`` -- git unavailable on PATH; indeterminate.
+
+    Every row carries a ``resolution`` of ``repairable``, ``ambiguous`` or
+    ``unresolvable``.
 
     Without ``--repair`` the verb is read-only: it prints the per-wave
     report and exits ``VALIDATION_ERROR`` (2) when any drift is found so
@@ -768,7 +785,9 @@ def wave_verify_commits_cmd(
     git-derived SHA through the canonical writer (the same locked,
     WAL-backed state-mutation path ``wave close --commit`` uses), prints
     a per-wave repaired/skipped summary, and exits 0. The repair is
-    idempotent: a second run finds the just-pinned waves clean.
+    idempotent: a second run finds the just-pinned waves clean. It
+    refuses, writing nothing, while any old pin it would drop is held only
+    by a wave branch whose head ``eawf wave archive-refs`` has not archived.
 
     ``--md`` emits a markdown table; ``--json`` (top-level flag) emits
     the JSON payload.
@@ -816,6 +835,7 @@ def wave_verify_commits_cmd(
 
     def _mutator(state: State) -> None:
         issues = scan_commit_pins(state, repo_root=repo_root)
+        _refuse_unarchived_repair(issues, repo_root=repo_root)
         repaired, skipped = repair_commit_pins(state, issues)
         result["repaired"] = repaired
         result["skipped"] = skipped
@@ -833,6 +853,24 @@ def wave_verify_commits_cmd(
         ),
         mutate=_mutator,
     )
+
+
+def _refuse_unarchived_repair(issues: list[Any], *, repo_root: Path | None) -> None:
+    """Refuse a repair that would drop the last archived citation of a wave branch commit."""
+    from eawf.workflow.lifecycle.wave_archive import WaveArchiveError, branches_orphaning
+
+    old_pins = [i.state_commit for i in issues if i.repairable and i.state_commit is not None]
+    try:
+        at_risk = branches_orphaning(old_pins, repo_root=repo_root)
+    except WaveArchiveError as exc:
+        raise cli_errors.UserError(f"repair refused: {exc}", kind="ArchiveMissing") from exc
+    if at_risk:
+        names = ", ".join(b.branch for b in at_risk)
+        raise cli_errors.UserError(
+            f"repair refused: {len(at_risk)} wave branch head(s) are not archived and hold "
+            f"pins the repair would drop ({names}); run `eawf wave archive-refs` first",
+            kind="ArchiveMissing",
+        )
 
 
 def _verify_commits_repair_envelope(repaired: list[Any], skipped: list[Any]) -> dict[str, Any]:
@@ -863,6 +901,85 @@ def _verify_commits_repair_text(repaired: list[Any], skipped: list[Any]) -> str:
     for issue in skipped:
         lines.append(f"  skipped {issue.wave_id} {issue.kind} (unrepairable)")
     return "\n".join(lines)
+
+
+# ---- Wave branch archive ------------------------------------
+
+
+@wave_app.command("archive-refs")
+def wave_archive_refs_cmd(
+    ctx: typer.Context,
+    include_misc: Annotated[
+        bool,
+        typer.Option(
+            "--include-misc",
+            help=(
+                "Also archive non-wave local branches (worktree-agent-* "
+                "harness leftovers, presquash forks, stale long-running "
+                "copies) under refs/eawf/archive/misc/<branch-name>."
+            ),
+        ),
+    ] = False,
+) -> None:
+    """Archive every local wave branch head under ``refs/eawf/archive/<phase>/<wave>``.
+
+    Run before ``wave verify-commits --repair`` and before any branch prune,
+    so pre-squash SHAs cited by evidence and old pins stay resolvable once
+    the ``-pNN-wMM`` branches are gone. Creates missing refs, fast-forwards
+    a ref whose branch moved on, and leaves matching refs untouched, so a
+    re-run is a no-op. Refuses the whole batch, writing nothing, when a ref
+    would move to a commit that does not descend from its current target.
+
+    ``--include-misc`` also archives every other local branch except
+    ``main``, ``plugins-dist``, and the checked-out branch, under
+    ``refs/eawf/archive/misc/<branch-name>``. Pair with
+    ``wave prune-branches`` for a one-shot hygiene sweep of harness
+    leftovers.
+    """
+    from eawf.workflow.lifecycle.wave_archive import (
+        WaveArchiveConflictError,
+        WaveArchiveError,
+        archive_wave_branches,
+    )
+
+    flags: GlobalFlags = ctx.obj
+    repo_root = _resolve_repo_root_for_drift(flags.workspace)
+    try:
+        entries = archive_wave_branches(repo_root=repo_root, include_misc=include_misc)
+    except WaveArchiveConflictError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="ArchiveConflict"), flags=flags)
+        return
+    except WaveArchiveError as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(str(exc), kind="ArchiveUnavailable"), flags=flags
+        )
+        return
+
+    written = [e for e in entries if e.outcome != "unchanged"]
+    payload: dict[str, Any] = {
+        "written_count": len(written),
+        "unchanged_count": len(entries) - len(written),
+        "refs": [
+            {
+                "branch": e.wave_branch.branch,
+                "ref": e.wave_branch.archive_ref,
+                "commit": e.wave_branch.head,
+                "outcome": e.outcome,
+                "previous": e.previous,
+            }
+            for e in entries
+        ],
+    }
+    lines = [
+        f"wave archive-refs: {len(written)} written, "
+        f"{len(entries) - len(written)} unchanged ({len(entries)} wave branch(es))"
+    ]
+    lines.extend(
+        f"  {e.outcome} {e.wave_branch.archive_ref} -> {e.wave_branch.head[:12]} "
+        f"({e.wave_branch.branch})"
+        for e in written
+    )
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
 
 
 # ---- Wave drift acknowledgement -----------------------------

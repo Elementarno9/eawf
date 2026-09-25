@@ -50,7 +50,7 @@ EXPECTED_ARTIFACT_VERBS = {
     "verify",
     "promote-contract",
 }
-EXPECTED_BACKLOG_VERBS = {"add", "edit", "backfill-titles", "set-priority", "close"}
+EXPECTED_BACKLOG_VERBS = {"add", "edit", "backfill-titles", "set-priority", "close", "correct"}
 
 
 def _verb_names(app: typer.Typer) -> set[str]:

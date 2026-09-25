@@ -224,8 +224,8 @@ The ~72-column wrap convention is reserved for **commit messages** (subject + bo
 <!-- BEGIN EAWF:managed id=release-process version=1.2 hash=e9197d40232446a3 -->
 `release-process` — Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.2 hash=79ff416238f54342 -->
-`ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and merge with rebase. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
+<!-- BEGIN EAWF:managed id=ship-process version=1.3 hash=ee5fbe64154110e3 -->
+`ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and fast-forward main. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
 <!-- END EAWF:managed id=ship-process -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=600b85c26e27f28b -->
 ### Agent report contract

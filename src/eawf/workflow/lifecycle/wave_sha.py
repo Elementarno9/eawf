@@ -103,6 +103,11 @@ _TRANSIENT_REF_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Pin verification counts only integration history; see _integration_log_revs.
+# Non-``v`` tags (spikes, proofs of concept) can name history that never landed.
+_MAIN_REFS = ("refs/heads/main", "refs/remotes/origin/main")
+_RELEASE_TAGS_ARG = "--tags=v*"
+
 # Integration commits win over transient ones; within a tier, most-recent wins.
 _TIER_INTEGRATION = 0
 _TIER_TRANSIENT = 1
@@ -127,8 +132,8 @@ class Drift:
         kind: Which mismatch shape we hit:
 
             - ``pinned_but_missing`` — state has ``Wave.commit`` set, but
-              ``git log --grep`` returns no commit (commit not on any
-              reachable ref; suggests a force-push or repo-clean).
+              integration history (first-parent main, release tags, the
+              checked-out branch) has neither it nor a wave successor.
             - ``pinned_mismatch`` — state and git both produce a SHA,
               but they disagree (suggests a rebase that rewrote the
               wave commit without ``eawf wave close --commit <ref>``).
@@ -414,37 +419,67 @@ def commit_identity_digest(commit: str, *, repo_root: Path | None = None) -> str
     return f"sha256:{hashlib.sha256(payload).hexdigest()}"
 
 
-def _reachable_wave_keys(repo_root: Path | None) -> dict[str, set[str]]:
-    """Return every reachable commit and its explicit wave identity keys."""
+def _integration_log_revs(repo_root: Path | None) -> list[list[str]]:
+    """Return the ``git log`` rev lists that together span integration history.
+
+    Integration history is the first-parent chain of ``main`` (local and
+    ``origin/main``) and of every release tag, plus the checked-out branch's
+    first-parent chain back to its merge-base with main. A commit reachable
+    only from some other local branch does not count: pre-squash worktree
+    branches outlive their merge and would keep a stale pin looking clean in
+    one checkout while a fresh clone reports it as drift. The checked-out
+    branch does count, so a live phase branch does not report its own
+    not-yet-merged wave pins as drift. Without any main ref, the whole
+    checked-out first-parent chain stands in for main.
+    """
+    refs = _run_git(["for-each-ref", "--format=%(refname)", *_MAIN_REFS], repo_root=repo_root)
+    main_refs = refs.stdout.split() if refs is not None and refs.returncode == 0 else []
+    if not main_refs:
+        return [["HEAD", _RELEASE_TAGS_ARG]]
+    revs = [[*main_refs, _RELEASE_TAGS_ARG]]
+    base = _run_git(["merge-base", "HEAD", *main_refs], repo_root=repo_root)
+    if base is not None and base.returncode == 0 and base.stdout.strip():
+        revs.insert(0, [f"{base.stdout.strip()}..HEAD"])
+    return revs
+
+
+def _integration_commits(repo_root: Path | None, *, timeout: float) -> list[tuple[str, list[str]]]:
+    """Return ``(sha, wave keys)`` per integration commit; empty if any pass fails.
+
+    All-or-nothing, so a failed probe never yields a partial history that
+    would misreport clean pins as drift.
+    """
     fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(("%H", "%s", _BODY_PLACEHOLDER))
-    out = _run_git(["log", "--all", f"--format={fmt}"], repo_root=repo_root, timeout=20.0)
-    if out is None or out.returncode != 0:
-        return {}
-    result: dict[str, set[str]] = {}
-    for raw_record in out.stdout.split(_REC_SEP):
-        fields = raw_record.strip("\n").split(_FIELD_SEP, 2)
-        if len(fields) != 3:
-            continue
-        sha, subject, body = fields
-        result[sha] = set(_commit_wave_keys(subject, body))
-    return result
+    commits: list[tuple[str, list[str]]] = []
+    seen: set[str] = set()
+    for revs in _integration_log_revs(repo_root):
+        out = _run_git(
+            ["log", "--first-parent", f"--format={fmt}", *revs, "--"],
+            repo_root=repo_root,
+            timeout=timeout,
+        )
+        if out is None or out.returncode != 0:
+            return []
+        for raw_record in out.stdout.split(_REC_SEP):
+            fields = raw_record.strip("\n").split(_FIELD_SEP, 2)
+            if len(fields) != 3 or fields[0] in seen:
+                continue
+            sha, subject, body = fields
+            seen.add(sha)
+            commits.append((sha, _commit_wave_keys(subject, body)))
+    return commits
+
+
+def _reachable_wave_keys(repo_root: Path | None) -> dict[str, set[str]]:
+    """Return every integration-history commit and its explicit wave identity keys."""
+    return {sha: set(keys) for sha, keys in _integration_commits(repo_root, timeout=20.0)}
 
 
 def _first_parent_wave_candidates(repo_root: Path | None) -> dict[str, list[str]]:
-    """Index all wave identities on the current integration first-parent."""
-    fmt = _REC_SEP_PLACEHOLDER + _FIELD_SEP_PLACEHOLDER.join(("%H", "%s", _BODY_PLACEHOLDER))
-    out = _run_git(["log", "--first-parent", "HEAD", f"--format={fmt}"], repo_root=repo_root)
-    if out is None or out.returncode != 0:
-        return {}
+    """Index all wave identities on integration history, newest first."""
     indexed: dict[str, list[str]] = {}
-    for raw_record in out.stdout.split(_REC_SEP):
-        if not raw_record:
-            continue
-        fields = raw_record.strip("\n").split(_FIELD_SEP, 2)
-        if len(fields) != 3:
-            continue
-        sha, subject, body = fields
-        for key in _commit_wave_keys(subject, body):
+    for sha, keys in _integration_commits(repo_root, timeout=_TIMEOUT_SECONDS):
+        for key in keys:
             indexed.setdefault(key, []).append(sha)
     return indexed
 
@@ -853,18 +888,17 @@ def _classify_unreachable_pin(
     *,
     matching_shas: list[str],
     candidate_shas: list[str],
-    commit_digest: str | None,
     wave_title: str,
     repo_root: Path | None,
     identity: Callable[[str], str | None],
     subject_cache: dict[str, str | None],
 ) -> PinClassification:
-    """Classify an unreachable commit object without losing legacy misbindings."""
+    """Classify an unreachable pin, even one whose object this clone lacks."""
     if len(matching_shas) == 1:
         return "pinned_mismatch", matching_shas[0], True
     if len(matching_shas) > 1:
         return "ambiguous_successor", None, False
-    if commit_digest is None or not candidate_shas:
+    if not candidate_shas:
         return "pinned_but_missing", None, False
     selected = _select_repair_target(
         matching_shas=[],
@@ -926,7 +960,6 @@ def _classify_wave_pin(
         return _classify_unreachable_pin(
             matching_shas=matching,
             candidate_shas=candidate_shas,
-            commit_digest=commit_digest,
             wave_title=wave_title,
             repo_root=repo_root,
             identity=identity,
@@ -962,7 +995,9 @@ def detect_git_state_drift(
     surfaced (see :class:`DriftKind`):
 
     1. ``Wave.commit`` is set AND ``derive_wave_sha`` returns ``None``
-       — the pinned commit is no longer reachable from any ref.
+       — the pinned commit is not on integration history (first-parent
+       main, release tags, the checked-out branch back to its merge-base
+       with main); a pin kept alive only by another local branch drifts.
     2. ``Wave.commit`` is set AND ``derive_wave_sha`` returns a
        different SHA — the wave was rebased after pinning.
     3. ``Wave.commit`` is ``None`` AND ``derive_wave_sha`` returns
@@ -1041,26 +1076,12 @@ def detect_git_state_drift(
             identity_cache=identity_cache,
             subject_cache=subject_cache,
         )
-        if classified is None or classified[0] == "unpinned_derivable":
+        if classified is None:
             continue
         kind, successor, _repairable = classified
         if kind == "unpinned_derivable":
             continue
-        if kind in {
-            "pinned_but_missing",
-            "pinned_mismatch",
-            "ambiguous_successor",
-            "closed_no_pin",
-            "closed_unfindable",
-        }:
-            drifts.append(
-                Drift(
-                    wave_id=wave_id,
-                    kind=kind,
-                    state_commit=pinned,
-                    git_commit=successor,
-                )
-            )
+        drifts.append(Drift(wave_id=wave_id, kind=kind, state_commit=pinned, git_commit=successor))
     logger.info(
         f"detect_git_state_drift waves={len(state.waves)} drifts={len(drifts)} "
         f"acked={len(acked)} git_available={git_available}"
@@ -1106,6 +1127,7 @@ RepairBasis = Literal[
     "unique_first_parent",
     "unique_legacy_title_match",
 ]
+PinResolution = Literal["repairable", "ambiguous", "unresolvable"]
 
 
 @dataclass(frozen=True)
@@ -1137,6 +1159,15 @@ class CommitPinIssue:
     git_identity_digest: str | None = None
     repair_basis: RepairBasis | None = None
     repairable: bool = False
+
+    @property
+    def resolution(self) -> PinResolution:
+        """Return repairable (re-pinnable), ambiguous (needs a pick) or unresolvable."""
+        if self.repairable:
+            return "repairable"
+        if self.kind == "ambiguous_successor":
+            return "ambiguous"
+        return "unresolvable"
 
 
 def _repair_basis(

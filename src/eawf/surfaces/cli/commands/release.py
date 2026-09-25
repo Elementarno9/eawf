@@ -534,16 +534,33 @@ def release_train_show(
         typer.Option("--json", help="Shorthand for the global --json flag."),
     ] = False,
 ) -> None:
-    """Render the ladder, the open index and each checkpoint's status."""
-    from eawf.workflow.release.advance import render_train_ladder, render_train_ladder_text
+    """Render the ladder, the open index and each checkpoint's status.
+
+    The open index is derived from the release-record and train-advance
+    stores (:func:`~eawf.workflow.release.advance.derive_train`), not read
+    off the source-declared :data:`~eawf.workflow.release.train.V07_TRAIN`
+    constant -- that constant always starts at rung zero, so rendering it
+    unread would report ``dev1`` open long after the train walked past it.
+    """
+    from eawf.workflow.release.advance import (
+        derive_train,
+        render_train_ladder,
+        render_train_ladder_text,
+    )
+    from eawf.workflow.release.records import read_release_records
     from eawf.workflow.release.train import V07_TRAIN
+    from eawf.workflow.release.train_store import read_train_advances
 
     flags: GlobalFlags = ctx.obj
     if json_output:
         flags = replace(flags, json_output=True)
-    emit_json_or_text(
-        render_train_ladder(V07_TRAIN), render_train_ladder_text(V07_TRAIN), flags=flags
+    state_path, _reason = resolve_with_reason(flags.workspace)
+    train = derive_train(
+        V07_TRAIN,
+        recorded_keys=read_release_records(state_path).keys(),
+        advances=read_train_advances(state_path),
     )
+    emit_json_or_text(render_train_ladder(train), render_train_ladder_text(train), flags=flags)
 
 
 def _read_json_document(path: Path, *, label: str) -> dict[str, object]:

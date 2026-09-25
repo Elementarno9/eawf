@@ -750,3 +750,64 @@ def backlog_close(
         f"backlog {item_id} closed",
         flags,
     )
+
+
+@backlog_app.command("correct")
+def backlog_correct(
+    ctx: typer.Context,
+    item_id: Annotated[str, typer.Argument(help="Closed backlog item id")],
+    reason: Annotated[str, typer.Option("--reason", help="Why the recorded closure was wrong")],
+    audit: Annotated[
+        str,
+        typer.Option("--audit", help="Audit id vouching for the correction (must be complete)"),
+    ],
+    commit: Annotated[
+        str | None,
+        typer.Option("--commit", help="Replacement closure commit; must be an ancestor of HEAD"),
+    ] = None,
+    resolution: Annotated[
+        str | None,
+        typer.Option("--resolution", help="Replacement resolution text"),
+    ] = None,
+) -> None:
+    """Correct a closed backlog item's commit or resolution; never reopens it."""
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.evidence import backlog as backlog_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        landed = (
+            None
+            if commit is None
+            else backlog_evi.resolve_landed_commit(state_path.parent.parent, commit)
+        )
+        with state_transaction(state_path) as state:
+            event = backlog_evi.correct_backlog(
+                state,
+                item_id=item_id,
+                reason=reason,
+                audit_id=audit,
+                commit=landed,
+                resolution=resolution,
+            )
+            append_jsonl(store_paths(state_path)[StoreKind.EVENT], event)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _warn_on_backlog_fold_parity(flags)
+    fields = sorted(f for f, v in (("commit", landed), ("resolution", resolution)) if v is not None)
+    _emit(
+        {
+            "item_id": item_id,
+            "fields": fields,
+            "commit": landed,
+            "audit_id": audit,
+            "status": "closed",
+        },
+        f"backlog {item_id} corrected fields={','.join(fields)}",
+        flags,
+    )

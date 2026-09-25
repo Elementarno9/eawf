@@ -9,19 +9,20 @@ Mutating verbs plus one read-only recovery verb:
 * ``eawf spec sync <wave-id> [--spec-path PATH]``
 * ``eawf spec repoint-gates <wave-id> --gate 'G-01=<argv>'``
 * ``eawf spec repoint-scopes <wave-id> [--from-commit] [--criterion 'CR-01=<text>' --reason ...]``
+* ``eawf spec rewrite-gate-kind <wave-id> --gate 'G-01[@CR-01]=<argv>' --reason ...``
 * ``eawf spec show <urn> [--from-git]`` (read-only)
 
 Every verb but ``show`` is a mutator and routes through the daemon's
-``spec.{init,validate,promote,archive,sync,repoint_gates,repoint_scopes}``
-JSON-RPC methods per authority-map row 9-10. The dispatch matches the existing
+``spec.{init,validate,promote,archive,sync,repoint_gates,repoint_scopes,
+rewrite_gate_kind}`` JSON-RPC methods per authority-map row 9-10. The dispatch matches the existing
 ``_persist_registry`` shape: daemon-proxy arm by default; the
 daemonless carve-out (``EAWF_DAEMONLESS=1`` or daemon unreachable)
 falls back to the in-process writer for the operations that do not
 require a running daemon. ``archive`` always requires the daemon up because the
 ``git rm`` + cache atomicity is daemon-owned. ``sync`` is likewise always
 daemon-mediated because materialising the parsed criteria + gates onto
-``state.json`` is a canonical state mutation (AGENTS rule 4), and both
-``repoint-gates`` and ``repoint-scopes`` for the same reason.
+``state.json`` is a canonical state mutation (AGENTS rule 4), and so are
+``repoint-gates``, ``repoint-scopes`` and ``rewrite-gate-kind``.
 
 ``show`` is the recovery surface: it reads the daemon-resident cache
 to find ``file_path`` + ``file_sha``, then either reads the file from
@@ -788,6 +789,130 @@ def spec_repoint_scopes_cmd(
         raise
     result["proxied"] = True
     _emit_scope_repoint_result(result, flags=flags)
+
+
+def parse_gate_kind_rewrite(spec: str) -> dict[str, Any]:
+    """Parse one ``--gate GATE_ID[@CRITERION_ID]=<argv>`` value into a rewrite row.
+
+    The ``@CRITERION_ID`` half names the criterion a new gate proves; a
+    recorded gate already carries its binding, so it may be omitted there.
+
+    Args:
+        spec: The raw option value.
+
+    Returns:
+        A ``{"gate_id", "criterion_id", "argv"}`` row for the RPC params.
+
+    Raises:
+        typer.BadParameter: When the value carries no ``=``, names an
+            empty gate or criterion id, or supplies an empty argv.
+    """
+    target, separator, argv_text = spec.partition("=")
+    if not separator:
+        raise typer.BadParameter(f"expected <gate-id>[@<criterion-id>]=<argv>, got {spec!r}")
+    gate_id, at, criterion_id = target.partition("@")
+    gate_id, criterion_id = gate_id.strip(), criterion_id.strip()
+    if not gate_id:
+        raise typer.BadParameter(f"empty gate id in {spec!r}")
+    if at and not criterion_id:
+        raise typer.BadParameter(f"empty criterion id after '@' in {spec!r}")
+    argv = shlex.split(argv_text)
+    if not argv:
+        raise typer.BadParameter(f"empty argv for gate {gate_id!r}")
+    return {"gate_id": gate_id, "criterion_id": criterion_id or None, "argv": argv}
+
+
+def _emit_kind_rewrite_result(payload: dict[str, Any], *, flags: GlobalFlags) -> None:
+    """Emit the ``spec.rewrite_gate_kind`` RPC result as JSON or terse text."""
+    mode = "dry-run" if payload.get("dry_run") else "applied"
+    lines = [
+        f"rewrite-gate-kind {mode} wave={payload.get('wave_id')!r} "
+        f"changed={payload.get('changed_count')}"
+    ]
+    for row in payload.get("changed", []):
+        lines.append(
+            f"  {row.get('gate_id')} ({row.get('criterion_id')}): "
+            f"{row.get('before_kind') or 'added'} -> {row.get('after_kind')} "
+            f"{' '.join(row.get('after_argv', []))}"
+        )
+    for gate_id in payload.get("unchanged_gate_ids", []):
+        lines.append(f"  {gate_id}: unchanged")
+    emit_json_or_text(payload, "\n".join(lines), flags=flags)
+
+
+@spec_app.command("rewrite-gate-kind")
+def spec_rewrite_gate_kind_cmd(
+    ctx: typer.Context,
+    wave_id: Annotated[str, typer.Argument(help="Closed wave id: P##-I##-W##.")],
+    gate: Annotated[
+        list[str],
+        typer.Option(
+            "--gate",
+            help=(
+                "Bind one command gate: 'GATE-ID=uv run pytest tests/x.py -q' rewrites a "
+                "recorded grep gate; 'NEW-ID@CR-01=<argv>' adds one. Repeatable."
+            ),
+        ),
+    ],
+    reason: Annotated[
+        str,
+        typer.Option("--reason", help="Why the verification record is strengthened. Required."),
+    ] = "",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report the would-change set without writing state."),
+    ] = False,
+) -> None:
+    """Strengthen a CLOSED wave's grep gates into command gates.
+
+    A wave that closed on single-token grep gates, or on attested criteria
+    with no gate at all, has a verification record that cannot fail. This
+    verb binds a real ``command_exit_zero`` gate in its place: a recorded
+    grep-style gate is rewritten, or a criterion gains a new gate, and the
+    owning criterion becomes deterministic so the gate actually runs.
+
+    It only strengthens. A request for any other target kind, a rewrite
+    of a gate that is already a command gate or is not grep-style, and
+    any movement of the wave's text, outcome, ``closed_at`` or other
+    gates are refused. ``--reason`` lands on the audit event.
+
+    Always daemon-mediated: the state mutation is daemon-owned, so there
+    is no in-process fallback.
+    """
+    from eawf.surfaces.cli._mutation import _daemon_reachable
+
+    flags: GlobalFlags = ctx.obj
+    repo_root = (flags.workspace or Path.cwd()).resolve()
+
+    rewrites = [parse_gate_kind_rewrite(entry) for entry in gate]
+    if not reason.strip():
+        raise cli_errors.UserError(
+            "spec rewrite-gate-kind needs a non-empty --reason",
+            kind="InvalidInput",
+        )
+    if not _daemon_proxy_enabled_for_spec() or not _daemon_reachable():
+        raise cli_errors.StateConflict(
+            "daemon_required: spec rewrite-gate-kind requires the daemon up; "
+            "run `eawf daemon start`",
+            kind="IntegrityViolation",
+        )
+
+    params: dict[str, Any] = {
+        "wave_id": wave_id,
+        "rewrites": rewrites,
+        "reason": reason,
+        "dry_run": dry_run,
+        "repo_root": str(repo_root),
+    }
+    try:
+        with DaemonClient() as client:
+            result = client.call("spec.rewrite_gate_kind", params)
+    except DaemonRpcError as exc:
+        if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
+            raise cli_errors.ValidationError(exc.message) from exc
+        raise
+    result["proxied"] = True
+    _emit_kind_rewrite_result(result, flags=flags)
 
 
 # ---- Read-only surface ----------------------------------------------------

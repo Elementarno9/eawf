@@ -1,8 +1,10 @@
-"""Backlog-area mutators: add / close.
+"""Backlog-area mutators: add / close / correct.
 
 * ``add`` registers a new backlog item with a priority + scope.
 * ``close`` closes it with a resolution + commit and *requires* ``--audit``
   of a complete audit per the audit-evidence guard.
+* ``correct`` repairs a closed item's recorded commit or resolution, under
+  the same audit guard, without reopening it.
 
 Mutators take a typed :class:`State` and mutate it in place; the CLI handler
 runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
@@ -10,9 +12,12 @@ runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction`.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
+import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -36,6 +41,8 @@ logger = logging.getLogger(__name__)
 #: keeps the collision from recurring; rows already on disk keep their
 #: historical ids because the model's id type stays permissive.
 RE_BACKLOG_ID = re.compile(r"^B\d{3,}$")
+
+_GIT_TIMEOUT_SECONDS = 30
 
 
 class BacklogTitleRow(BaseModel):
@@ -416,4 +423,133 @@ def close_backlog(
             "audit_id": audit_id,
         },
         summary=f"backlog {item_id} closed",
+    )
+
+
+def resolve_landed_commit(repo_root: Path, ref: str) -> str:
+    """Resolve *ref* to the full SHA of a commit reachable from ``HEAD``.
+
+    A closure citing a commit that only a per-wave branch keeps alive stops
+    resolving the moment that branch is deleted, so a correction accepts
+    only history that has landed.
+
+    Args:
+        repo_root: Repository the backlog's ``state.json`` belongs to.
+        ref: Any commit-ish the operator typed (short or full SHA, ref name).
+
+    Returns:
+        The 40-character SHA *ref* resolves to.
+
+    Raises:
+        UserError: when *ref* does not resolve to a commit, or the commit is
+            not an ancestor of ``HEAD`` (``kind="InvalidInput"``).
+    """
+    resolved = _git(repo_root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+    if resolved.returncode != 0:
+        raise UserError(f"commit {ref!r} does not resolve in this repository", kind="InvalidInput")
+    sha = resolved.stdout.strip()
+    if _git(repo_root, "merge-base", "--is-ancestor", sha, "HEAD").returncode != 0:
+        raise UserError(
+            f"commit {sha} is not an ancestor of HEAD; cite the landed commit, "
+            "not a branch-only one",
+            kind="InvalidInput",
+        )
+    return sha
+
+
+def correct_backlog(
+    state: State,
+    *,
+    item_id: str,
+    reason: str,
+    audit_id: str,
+    commit: str | None = None,
+    resolution: str | None = None,
+) -> Envelope:
+    """Rewrite a closed item's closure commit and/or resolution in place.
+
+    The only edit a closed row accepts: status, id, title and closure time
+    stay frozen, so a correction can repair what the closure recorded but
+    never reopen or re-identify the row. The prior values ride the returned
+    event's ``message`` so the append-only event log keeps what was replaced.
+
+    Args:
+        reason: Why the recorded closure was wrong; must be non-blank.
+        audit_id: A complete audit vouching for the corrected values.
+        commit: Replacement closure commit, already resolved by the caller
+            (see :func:`resolve_landed_commit`); ``None`` keeps the current one.
+        resolution: Replacement resolution text; ``None`` keeps the current one.
+
+    Raises:
+        UserError: when ``item_id`` is absent (``kind="NotFound"``); when the
+            item is not closed, neither field is given, ``reason`` is blank,
+            or the new values equal the recorded ones (``kind="InvalidInput"``).
+        ValidationError: when ``audit_id`` is not a complete audit.
+    """
+    if commit is None and resolution is None:
+        raise UserError(
+            "nothing to correct: pass --commit and/or --resolution", kind="InvalidInput"
+        )
+    if not reason.strip():
+        raise UserError("--reason must say why the closure was wrong", kind="InvalidInput")
+    if resolution is not None and not resolution.strip():
+        raise UserError("--resolution must not be blank", kind="InvalidInput")
+
+    backlog: dict[str, BacklogItem] = dict(state.backlog or {})
+    if item_id not in backlog:
+        raise UserError(f"backlog item {item_id!r} not found", kind="NotFound")
+    prior = backlog[item_id]
+    if prior.status != BacklogStatus.CLOSED:
+        raise UserError(
+            f"backlog item {item_id!r} is {prior.status.value}, not closed; "
+            "only a closed row's closure can be corrected",
+            kind="InvalidInput",
+        )
+
+    changes: dict[str, str] = {}
+    if commit is not None and commit != prior.commit:
+        changes["commit"] = commit
+    if resolution is not None and resolution != prior.resolution:
+        changes["resolution"] = resolution
+    if not changes:
+        raise UserError(
+            f"backlog item {item_id!r} already records these values", kind="InvalidInput"
+        )
+
+    require_complete_audit(state, audit_id)
+
+    now = datetime.now(UTC)
+    backlog[item_id] = prior.model_copy(update=changes)
+    state.backlog = backlog
+    state.updated_at = now
+
+    fields = sorted(changes)
+    prior_values = {field: getattr(prior, field) for field in fields}
+    return _io.event_envelope(
+        event_id=f"EVT-backlog-correct-{item_id}-{int(now.timestamp() * 1000)}",
+        scope_id=prior.scope_id,
+        event_type="backlog.correct",
+        actor="cli",
+        command="backlog correct",
+        args={
+            "item_id": item_id,
+            "audit_id": audit_id,
+            "reason": reason,
+            **changes,
+        },
+        summary=f"backlog {item_id} corrected fields={','.join(fields)} audit={audit_id}",
+        message=json.dumps(
+            {"audit_id": audit_id, "reason": reason, "prior": prior_values, "new": changes},
+            sort_keys=True,
+        ),
+    )
+
+
+def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=_GIT_TIMEOUT_SECONDS,
     )

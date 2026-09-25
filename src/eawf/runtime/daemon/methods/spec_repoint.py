@@ -13,9 +13,13 @@ verification record whose gate argv names a path a later test-tree move
 retired, so replaying it exits on a usage error. ``spec.repoint_scopes``
 repairs the other two after-the-fact defects: ``file_scopes`` that the
 wave's own pinned commit contradicts, and the prose of a named success
-criterion. Both keep the record usable without reopening the wave; the
-bounded mutations live in :mod:`eawf.workflow.lifecycle.gate_repoint`
-and :mod:`eawf.workflow.lifecycle.scope_repoint`, which refuse any edit
+criterion. ``spec.rewrite_gate_kind`` strengthens a record whose gates
+cannot prove their criteria, turning a grep-style gate into a command
+gate (or giving an ungated criterion one) and never the reverse. All
+three keep the record usable without reopening the wave; the bounded
+mutations live in :mod:`eawf.workflow.lifecycle.gate_repoint`,
+:mod:`eawf.workflow.lifecycle.scope_repoint` and
+:mod:`eawf.workflow.lifecycle.gate_kind_rewrite`, which refuse any edit
 that moves anything outside the field each verb owns.
 """
 
@@ -23,6 +27,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -51,6 +56,11 @@ from eawf.runtime.daemon.methods.state_context import (
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle._errors import LifecycleError
+from eawf.workflow.lifecycle.gate_kind_rewrite import (
+    GateKindRewrite,
+    GateKindRewriteReport,
+    rewrite_closed_wave_gate_kinds,
+)
 from eawf.workflow.lifecycle.gate_repoint import (
     GateArgvRepoint,
     GateRepointReport,
@@ -64,6 +74,61 @@ from eawf.workflow.lifecycle.scope_repoint import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _commit_repair(
+    ctx: MethodContext,
+    *,
+    state: State,
+    paths: tuple[Path, Path, Path],
+    idempotency_key: str | None,
+    before_version: str,
+    build_envelope: Callable[[str], Envelope],
+) -> tuple[str, Envelope]:
+    """Persist one repaired wave row: validate, WAL, write, append, publish.
+
+    Every repair verb in this module commits the same way, mirroring the
+    spec-sync transaction; only the audit envelope differs, so the caller
+    supplies it as a function of the post-mutation state digest.
+
+    Args:
+        ctx: Server context (publish bus).
+        state: The mutated state, written as-is.
+        paths: ``(state_path, event_path, wal_path)``.
+        idempotency_key: Caller's retry key, recorded on the WAL row.
+        before_version: State digest before the mutation.
+        build_envelope: Builds the event envelope from the after digest.
+
+    Returns:
+        ``(after_version, envelope)`` for the result payload.
+
+    Raises:
+        DaemonValidationError: The post-mutation state fails schema or
+            invariant validation; nothing is written.
+    """
+    state_path, event_path, wal_path = paths
+    state.updated_at = datetime.now(UTC)
+    new_payload = state.model_dump(mode="json")
+    after_version = validate_post_sync(new_payload)
+
+    mutation_id = uuid.uuid4().hex
+    envelope = build_envelope(after_version)
+    record = WalRecord(
+        record_id=mutation_id,
+        envelope=envelope,
+        idempotency_key=idempotency_key,
+        written_at=datetime.now(UTC),
+        before_state_version=before_version,
+        after_state_version=after_version,
+        state_path=str(state_path),
+    )
+    wal.write_pending(wal_path, record)
+    atomic_write_json_locked(state_path, new_payload)
+    wal.mark_applied(wal_path, mutation_id)
+    append_envelope(event_path, envelope)
+    wal.mark_fsynced(wal_path, mutation_id)
+    publish_envelope(ctx, envelope)
+    return after_version, envelope
 
 
 class RepointGatesParams(BaseModel):
@@ -243,33 +308,20 @@ def _apply_repoint_locked(
             args, report, before=before_version, after=before_version, envelope=None
         )
 
-    state.updated_at = datetime.now(UTC)
-    new_payload = state.model_dump(mode="json")
-    after_version = validate_post_sync(new_payload)
-
-    mutation_id = uuid.uuid4().hex
-    envelope = _build_repoint_envelope(
-        wave_id=args.wave_id,
-        changed_count=len(report.changed),
-        changed_gate_ids=[change.gate_id for change in report.changed],
-        before_version=before_version,
-        after_version=after_version,
-    )
-    record = WalRecord(
-        record_id=mutation_id,
-        envelope=envelope,
+    after_version, envelope = _commit_repair(
+        ctx,
+        state=state,
+        paths=(state_path, event_path, wal_path),
         idempotency_key=args.idempotency_key,
-        written_at=datetime.now(UTC),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        state_path=str(state_path),
+        before_version=before_version,
+        build_envelope=lambda after: _build_repoint_envelope(
+            wave_id=args.wave_id,
+            changed_count=len(report.changed),
+            changed_gate_ids=[change.gate_id for change in report.changed],
+            before_version=before_version,
+            after_version=after,
+        ),
     )
-    wal.write_pending(wal_path, record)
-    atomic_write_json_locked(state_path, new_payload)
-    wal.mark_applied(wal_path, mutation_id)
-    append_envelope(event_path, envelope)
-    wal.mark_fsynced(wal_path, mutation_id)
-    publish_envelope(ctx, envelope)
     logger.info(
         f"repoint_gates ok wave={args.wave_id} changed={len(report.changed)} "
         f"before={before_version} after={after_version}"
@@ -583,33 +635,20 @@ def _apply_scope_repoint_locked(
             args, report, before=before_version, after=before_version, envelope=None
         )
 
-    state.updated_at = datetime.now(UTC)
-    new_payload = state.model_dump(mode="json")
-    after_version = validate_post_sync(new_payload)
-
-    mutation_id = uuid.uuid4().hex
-    envelope = _build_scope_repoint_envelope(
-        wave_id=args.wave_id,
-        report=report,
-        reason=args.reason,
-        before_version=before_version,
-        after_version=after_version,
-    )
-    record = WalRecord(
-        record_id=mutation_id,
-        envelope=envelope,
+    after_version, envelope = _commit_repair(
+        ctx,
+        state=state,
+        paths=(state_path, event_path, wal_path),
         idempotency_key=args.idempotency_key,
-        written_at=datetime.now(UTC),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        state_path=str(state_path),
+        before_version=before_version,
+        build_envelope=lambda after: _build_scope_repoint_envelope(
+            wave_id=args.wave_id,
+            report=report,
+            reason=args.reason,
+            before_version=before_version,
+            after_version=after,
+        ),
     )
-    wal.write_pending(wal_path, record)
-    atomic_write_json_locked(state_path, new_payload)
-    wal.mark_applied(wal_path, mutation_id)
-    append_envelope(event_path, envelope)
-    wal.mark_fsynced(wal_path, mutation_id)
-    publish_envelope(ctx, envelope)
     logger.info(
         f"repoint_scopes ok wave={args.wave_id} scopes_changed={report.scopes_changed} "
         f"texts_changed={len(report.changed_criteria)} "
@@ -725,11 +764,248 @@ def _build_scope_repoint_envelope(
     )
 
 
+class RewriteGateKindParams(BaseModel):
+    """Params for :func:`rewrite_gate_kind`.
+
+    Attributes:
+        wave_id: ``P##-I##-W##`` -- the CLOSED wave whose grep gates are
+            strengthened. Phase / iter scopes are refused.
+        rewrites: Per-gate rewrites or additions; at least one.
+        reason: Why the record is strengthened; recorded on the event row.
+        dry_run: When ``True`` the rewrite is computed against an
+            in-memory copy and reported with no state write.
+        repo_root: Optional absolute repo working-tree path (default cwd).
+        idempotency_key: Optional caller-supplied retry key.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    wave_id: str = Field(min_length=1)
+    rewrites: list[GateKindRewrite] = Field(min_length=1)
+    reason: str | None = None
+    dry_run: bool = False
+    repo_root: str | None = None
+    idempotency_key: str | None = None
+
+
+class SpecRewriteGateKindResult(BaseModel):
+    """Result shape for the :func:`rewrite_gate_kind` RPC."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: str
+    wave_id: str
+    dry_run: bool
+    changed_count: int
+    changed: list[dict[str, Any]]
+    unchanged_gate_ids: list[str]
+    reason: str | None
+    before_version: str | None
+    after_version: str | None
+    envelope: dict[str, Any] | None
+    idempotent_replay: bool = False
+
+
+def _apply_kind_rewrite(state: State, args: RewriteGateKindParams) -> GateKindRewriteReport:
+    """Run the bounded kind rewrite against *state*, mapping refusals to RPC errors.
+
+    Raises:
+        DaemonValidationError: The wave is unknown or not CLOSED, the
+            reason is blank, or the lifecycle guard refuses a rewrite
+            (mapped to ``-32002``).
+    """
+    if args.wave_id not in state.waves:
+        raise DaemonValidationError(f"validation_failed: unknown wave: {args.wave_id!r}")
+    try:
+        return rewrite_closed_wave_gate_kinds(
+            state,
+            wave_id=args.wave_id,
+            rewrites=list(args.rewrites),
+            reason=args.reason,
+        )
+    except LifecycleError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+
+
+@register("spec.rewrite_gate_kind")
+async def rewrite_gate_kind(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Strengthen a CLOSED wave's grep gates into command gates, and nothing else.
+
+    The audited path for a verification record whose gates cannot prove
+    their criteria: a grep-style gate becomes a ``command_exit_zero`` gate,
+    or a criterion with no gate gains one. The reverse direction does not
+    exist; the lifecycle guard refuses any weakening and any movement
+    outside the touched gates and their criteria's proof fields.
+
+    Args:
+        ctx: Server context. ``ctx.wal_dir`` MUST be configured for a
+            non-dry-run call.
+        params: JSON-RPC params per :class:`RewriteGateKindParams`.
+
+    Returns:
+        Dict matching :class:`SpecRewriteGateKindResult`.
+
+    Raises:
+        ValueError: When the params do not validate or *wave_id* is not a
+            wave scope (mapped to ``-32602``).
+        DaemonValidationError: When the rewrite is refused or the
+            post-mutation state fails validation (mapped to ``-32002``).
+    """
+    try:
+        args = RewriteGateKindParams.model_validate(params)
+    except ValidationError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+    try:
+        kind = spec_writer.classify_scope(args.wave_id)
+    except ValueError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
+    if kind != "wave":
+        raise ValueError(
+            f"validation_failed: gate-kind rewrite targets a wave scope, got {args.wave_id!r}"
+        )
+
+    replay = idempotent_replay(ctx, args.idempotency_key)
+    if replay is not None:
+        logger.info(f"rewrite_gate_kind idempotent_replay wave={args.wave_id!r}")
+        return replay
+
+    state_path, event_path, wal_path = resolve_mutator_paths(
+        repo_root=args.repo_root,
+        ctx=ctx,
+    )
+
+    if args.dry_run:
+        state, _payload = read_state(state_path)
+        report = _apply_kind_rewrite(state.model_copy(deep=True), args)
+        return _kind_rewrite_result(args, report, before=None, after=None, envelope=None)
+
+    from eawf.runtime.lock import portalock
+
+    ctx.in_flight_mutations += 1
+    try:
+        with portalock.acquire(state_path, timeout=5.0):
+            state, _payload = read_state(state_path)
+            before_version = state_version(state.model_dump(mode="json"))
+            report = _apply_kind_rewrite(state, args)
+            if not report.changed:
+                result = _kind_rewrite_result(
+                    args, report, before=before_version, after=before_version, envelope=None
+                )
+            else:
+                after_version, envelope = _commit_repair(
+                    ctx,
+                    state=state,
+                    paths=(state_path, event_path, wal_path),
+                    idempotency_key=args.idempotency_key,
+                    before_version=before_version,
+                    build_envelope=lambda after: _build_kind_rewrite_envelope(
+                        wave_id=args.wave_id,
+                        report=report,
+                        reason=args.reason or "",
+                        before_version=before_version,
+                        after_version=after,
+                    ),
+                )
+                logger.info(
+                    f"rewrite_gate_kind ok wave={args.wave_id} changed={len(report.changed)} "
+                    f"before={before_version} after={after_version}"
+                )
+                result = _kind_rewrite_result(
+                    args,
+                    report,
+                    before=before_version,
+                    after=after_version,
+                    envelope=envelope.model_dump(mode="json"),
+                )
+        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
+        return result
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+
+
+def _kind_rewrite_result(
+    args: RewriteGateKindParams,
+    report: GateKindRewriteReport,
+    *,
+    before: str | None,
+    after: str | None,
+    envelope: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Assemble the :class:`SpecRewriteGateKindResult` payload dict."""
+    return SpecRewriteGateKindResult(
+        operation="rewrite_gate_kind",
+        wave_id=args.wave_id,
+        dry_run=args.dry_run,
+        changed_count=len(report.changed),
+        changed=[change.model_dump(mode="json") for change in report.changed],
+        unchanged_gate_ids=list(report.unchanged_gate_ids),
+        reason=args.reason,
+        before_version=before,
+        after_version=after,
+        envelope=envelope,
+    ).model_dump(mode="json")
+
+
+def _build_kind_rewrite_envelope(
+    *,
+    wave_id: str,
+    report: GateKindRewriteReport,
+    reason: str,
+    before_version: str,
+    after_version: str,
+) -> Envelope:
+    """Build the canonical event envelope for a gate-kind rewrite.
+
+    The event log is the append-only record of the repair: it names every
+    gate that moved, the kind it moved from (``added`` for a new gate) and
+    the operator's reason, so a reader can reconstruct why a closed
+    wave's verification record differs from the one it closed with.
+    """
+    now = datetime.now(UTC)
+    moves = [
+        f"{change.gate_id}:{change.before_kind or 'added'}->{change.after_kind}"
+        for change in report.changed
+    ]
+    summary = f"spec.rewrite_gate_kind wave={wave_id} changed={len(report.changed)}"
+    payload = EventPayload(
+        timestamp=now,
+        event_type="state.mutate.spec_rewrite_gate_kind",
+        actor="daemon",
+        command="spec.rewrite_gate_kind",
+        args_hash="",
+        before_state_version=before_version,
+        after_state_version=after_version,
+        status="ok",
+        message=summary,
+        extras={
+            "changed_count": len(report.changed),
+            # ``extras`` is a scalar map, so the moves ride as a joined string.
+            "gate_kind_moves": ",".join(moves),
+            "reason": reason,
+        },
+    ).model_dump(mode="json")
+    return Envelope(
+        schema_version="1.0",
+        id=f"EV-{uuid.uuid4().hex[:12]}",
+        kind=StoreKind.EVENT,
+        scope_id=wave_id,
+        created_at=now,
+        updated_at=None,
+        summary=summary,
+        payload=payload,
+        blob_refs=[],
+        artifact_ids=[],
+    )
+
+
 __all__ = [
     "RepointGatesParams",
     "RepointScopesParams",
+    "RewriteGateKindParams",
     "SpecRepointGatesResult",
     "SpecRepointScopesResult",
+    "SpecRewriteGateKindResult",
     "repoint_gates",
     "repoint_scopes",
+    "rewrite_gate_kind",
 ]

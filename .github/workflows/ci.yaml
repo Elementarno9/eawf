@@ -19,18 +19,22 @@ concurrency:
 jobs:
   changes:
     name: Classify changes since the last green tree
-    # A phase close pushes state-only commits onto a tree CI already proved
-    # green, and re-running the matrix and twice-green on it costs about half
-    # an hour per push. This job compares the checkout with the last green
-    # ci.yaml run on the same ref and exposes code=false only when every
-    # changed path is state bookkeeping; the heavy jobs gate on that output.
-    # The green output names the green commit it compared against, which
-    # the green-tree job records as the tree a skipped run inherits.
-    # It must stay unconditional and must not swallow a failure: a skipped or
-    # crashed classifier would leave the output empty and skip the matrix.
-    # Every lookup failure fails open to code=true inside the tool, and a
-    # scheduled or dispatched run, which has no diff to classify, always
-    # reports code=true.
+    # A push that only edits .secrets.baseline leaves the code tree exactly
+    # as it was when CI last went green, and re-running the matrix and
+    # twice-green on it costs about half an hour proving nothing new. This
+    # job compares the checkout with the last green ci.yaml run on the same
+    # ref and exposes code=false only for that one bookkeeping path; every
+    # other path, including .ea/state.json and the .ea/store/ ledgers,
+    # writes code=true, because the .ea/ commit-policy census reads exactly
+    # those paths and needs the suite that carries it to run whenever they
+    # change. The green output names the green commit it compared against,
+    # which the green-tree job records as the tree a skipped run inherits.
+    # It must stay unconditional: every lookup failure fails open to
+    # code=true inside the tool, and a scheduled or dispatched run, which
+    # has no diff to classify, always reports code=true. The heavy jobs
+    # below also fail open at the job level -- their conditions still run
+    # them when this job itself did not conclude success -- so a classifier
+    # crash cannot read as a passing required check.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -56,9 +60,13 @@ jobs:
   test:
     name: ${{ matrix.os }} / py${{ matrix.python }}
     needs: changes
-    # Skipped only when the changes job proved the code tree is the one the
-    # last green run tested.
-    if: needs.changes.outputs.code == 'true'
+    # Skipped only when the changes job concluded successfully and proved
+    # the code tree is the one the last green run tested; always() keeps
+    # this condition evaluating (instead of the default auto-skip-on-
+    # dependency-failure) when the changes job itself failed, so a
+    # classifier crash runs the full matrix rather than reading as a
+    # passing required check.
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -286,14 +294,18 @@ jobs:
     # request push it bounded CI wall-clock while its second run never
     # caught a defect the first run missed, so a flake it finds now
     # surfaces after merge and holds the release gate until fixed. A push
-    # still skips it when the changes job proved the code tree already
-    # went green. A scheduled or dispatched run has no diff to classify and
-    # exists to re-prove the whole tree, so the changes gate does not apply
-    # to it and it always runs.
+    # still skips it when the changes job concluded successfully and proved
+    # the code tree already went green; always() keeps this condition
+    # evaluating when the changes job itself failed, so a classifier crash
+    # runs the rerun rather than reading as a passing required check. A
+    # scheduled or dispatched run has no diff to classify and exists to
+    # re-prove the whole tree, so the changes gate does not apply to it and
+    # it always runs.
     needs: changes
     if: >-
-      (github.event_name == 'push' && needs.changes.outputs.code == 'true')
-      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+      always() && ((github.event_name == 'push' &&
+      (needs.changes.result != 'success' || needs.changes.outputs.code == 'true'))
+      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:

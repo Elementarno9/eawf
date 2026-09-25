@@ -39,6 +39,10 @@ class GateRereceiptOutcome(BaseModel):
     runnable spec, or a run whose observations came back incomplete. The
     row keeps the gate rather than dropping it so the binding always
     accounts for every required gate.
+
+    ``argv`` and ``exit_status`` restate what ran and how it ended, so the
+    committed row reads as a finding on its own: the receipt carries only
+    digests, and the full diagnostic stays local.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -47,6 +51,22 @@ class GateRereceiptOutcome(BaseModel):
     criterion_id: GateIdentityStr | None = None
     result: GateReceiptResult
     receipt_id: GateReceiptIdStr | None = None
+    argv: list[str] | None = None
+    exit_status: int | None = None
+
+    @model_validator(mode="after")
+    def _pass_means_exit_zero(self) -> GateRereceiptOutcome:
+        """Reject a pass whose command exited non-zero.
+
+        A red re-run is evidence against the wave and must be recorded as
+        the failure it is; a binding that pairs a non-zero exit with a
+        pass would turn that finding into a silent waiver.
+        """
+        if self.result == GateReceiptResult.PASS and self.exit_status not in (None, 0):
+            raise ValueError(
+                f"gate {self.gate_id!r} exited {self.exit_status} and cannot be recorded as a pass"
+            )
+        return self
 
 
 class GateRereceiptBinding(BaseModel):

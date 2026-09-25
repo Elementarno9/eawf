@@ -445,15 +445,22 @@ def test_linux_real_host_gate_reds_on_a_missing_job() -> None:
 
 # --- twice-green full-suite gate --------------------------------------------
 
+#: True once the classifier proved the tree already green, or the classifier
+#: job itself did not conclude success -- a crashed or cancelled classifier
+#: fails open to running rather than silently skipping a required check.
+_CLASSIFIER_SAYS_RUN = "(needs.changes.result != 'success' || needs.changes.outputs.code == 'true')"
+
 #: The one job-level condition the test matrix carries: skip only when the
-#: changes job proved the code tree is the one the last green run tested.
-_CHANGES_CONDITION = "needs.changes.outputs.code == 'true'"
+#: changes job concluded successfully and proved the code tree is the one
+#: the last green run tested; always() keeps the condition evaluating
+#: instead of auto-skipping when the changes job itself failed.
+_CHANGES_CONDITION = f"always() && {_CLASSIFIER_SAYS_RUN}"
 
 #: The one job-level condition twice-green carries: a push runs it under the
 #: changes gate, a scheduled or dispatched run always, a pull request never.
 _TWICE_GREEN_CONDITION = (
-    f"(github.event_name == 'push' && {_CHANGES_CONDITION})"
-    " || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'"
+    f"always() && ((github.event_name == 'push' && {_CLASSIFIER_SAYS_RUN})"
+    " || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')"
 )
 
 #: The push branches the twice-green cadence names: main and the release train.
@@ -840,6 +847,8 @@ def test_twice_green_comment_gate_reds_on_a_cadence_in_another_job() -> None:
 #: Jobs expensive enough to skip on a bookkeeping-only diff, each with the
 #: one condition it may carry. Twice-green applies the changes gate to push
 #: runs only, since a scheduled or dispatched run has no diff to classify.
+#: Both conditions fail open to running when the classifier job itself did
+#: not conclude success.
 _HEAVY_JOBS: dict[str, str] = {
     "test": _CHANGES_CONDITION,
     "twice-green": _TWICE_GREEN_CONDITION,
@@ -860,11 +869,12 @@ def _needs(job: dict[str, Any]) -> list[str]:
 def changes_gate_violations(workflow: dict[str, Any]) -> list[str]:
     """Report every way *workflow* could skip a job it must run.
 
-    The heavy jobs skip when the changes job says the tree is already
-    green, so the gate is only as sound as that job: a conditional or
-    error-swallowing classifier leaves the output empty, and an empty
-    output skips the matrix on a run that still concludes success. The
-    cheap jobs must never see the classifier at all.
+    The heavy jobs skip only when the changes job concluded successfully
+    and said the tree is already green: each job's own condition also
+    fails open, via ``always()`` plus a check on the classifier job's own
+    result, so a crashed or cancelled classifier runs the matrix instead of
+    silently skipping a required check that would otherwise read as
+    passing. The cheap jobs must never see the classifier at all.
 
     Args:
         workflow: The parsed CI workflow.
@@ -973,10 +983,28 @@ def test_changes_gate_reds_on_an_open_gate() -> None:
         "the changes job checks out no full history to diff against",
         "the changes job's code output is not wired from the classifier step",
         "the test job does not need the changes job",
-        "the test job is not gated on exactly \"needs.changes.outputs.code == 'true'\"",
+        f"the test job is not gated on exactly {_CHANGES_CONDITION!r}",
         f"the twice-green job is not gated on exactly {_TWICE_GREEN_CONDITION!r}",
         "the windows job depends on the changes job, so it can be skipped",
         "the snapshot-pairing job depends on the changes job, so it can be skipped",
+    ]
+
+
+def test_changes_gate_reds_on_a_required_job_that_skips_on_a_classifier_failure() -> None:
+    """The gate fires on the real defect: a classifier crash reads as green.
+
+    A failed changes job leaves ``outputs.code`` unset, so the old bare
+    ``needs.changes.outputs.code == 'true'`` condition skips ``test``
+    instead of running it -- and GitHub counts a skipped required check as
+    passing, so the PR merges with the classifier's crash unproven. The
+    live workflow's fixed condition (asserted empty by
+    ``test_ci_gates_the_heavy_jobs_on_the_changes_output``) is what closes
+    this gap.
+    """
+    workflow = _load_ci()
+    workflow["jobs"]["test"]["if"] = "needs.changes.outputs.code == 'true'"
+    assert changes_gate_violations(workflow) == [
+        f"the test job is not gated on exactly {_CHANGES_CONDITION!r}"
     ]
 
 

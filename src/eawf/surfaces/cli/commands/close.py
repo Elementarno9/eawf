@@ -319,6 +319,16 @@ def render_rereceipt(result: dict[str, Any]) -> str:
     ]
     receipt_ids = result.get("receipt_ids") or []
     lines.append(f"receipts={', '.join(receipt_ids) if receipt_ids else 'none'}")
+    # A red gate is a finding against the wave, so each one is named with
+    # what ran rather than folded into the count.
+    for gate in result.get("gates") or []:
+        if gate.get("result") == "pass":
+            continue
+        argv = " ".join(gate.get("argv") or []) or "-"
+        lines.append(
+            f"  {gate.get('gate_id')}: {gate.get('result')} "
+            f"exit={gate.get('exit_status')} argv={argv}"
+        )
     return "\n".join(lines)
 
 

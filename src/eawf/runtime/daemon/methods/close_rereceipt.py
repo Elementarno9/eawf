@@ -324,6 +324,8 @@ def _persist_rereceipt(
             criterion_id=identity.criterion_id,
             result=GateReceiptResult.BLOCKED,
             receipt_id=None,
+            argv=result.argv,
+            exit_status=result.exit_status,
         )
     _write_diagnostic(
         state_path=state_path,
@@ -339,6 +341,8 @@ def _persist_rereceipt(
         criterion_id=identity.criterion_id,
         result=receipt.result,
         receipt_id=receipt.id,
+        argv=result.argv,
+        exit_status=receipt.exit_status,
     )
 
 
@@ -471,11 +475,13 @@ def _rerun_gate_row(
         dependency_binding_digest=facts.dependency_binding_digest,
         runner_environment_digest=facts.runner_environment_digest,
     )
+    recorded_argv = gate.args.get("argv")
     blocked = GateRereceiptOutcome(
         gate_id=gate.id,
         criterion_id=gate.criterion_id,
         result=GateReceiptResult.BLOCKED,
         receipt_id=None,
+        argv=list(recorded_argv) if isinstance(recorded_argv, list) else None,
     )
     if criterion is None:
         logger.warning(f"close_rereceipt gate={gate.id!r} status='blocked' reason=no-criterion")

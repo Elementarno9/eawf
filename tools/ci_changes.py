@@ -1,16 +1,22 @@
 """Decide whether a CI run must execute the heavy test jobs.
 
-A push that changes only state bookkeeping (``.ea/state.json``, the
-``.ea/store/`` ledgers and ``.secrets.baseline``) leaves the code tree
+A push that changes only ``.secrets.baseline`` leaves the code tree
 exactly as it was when CI last went green, so re-running the test matrix
 and the twice-green job on it spends half an hour proving nothing new.
 This tool compares the checked-out tree with the last green ``ci.yaml``
 run on the same ref and writes ``code=false`` to ``$GITHUB_OUTPUT`` only
-when every changed path is bookkeeping (an identical tree changes no path
-at all). Any other path writes ``code=true``, and the workflow gates the
-heavy jobs on that output. The ``green`` output names the green commit
-the tree was compared with, so a skipped run can record which green tree
-it inherits; it is empty when no baseline was established.
+when every changed path is that one bookkeeping file (an identical tree
+changes no path at all). Any other path writes ``code=true``, including
+``.ea/state.json`` and the ``.ea/store/`` ledgers: the ``.ea/``
+commit-policy census (``tests/lint/test_ea_commit_census.py``, via
+:func:`eawf.kernel.store.commit_census.run_census`) reads exactly those
+paths on every run to prove the tree matches its commit declaration, so a
+push that only touches them still has to run the suite that carries that
+census -- a state-only push is exactly the case where a path could land
+there misdeclared with nothing else to catch it. The workflow gates the
+heavy jobs on the ``code`` output. The ``green`` output names the green
+commit the tree was compared with, so a skipped run can record which
+green tree it inherits; it is empty when no baseline was established.
 
 The baseline is the last *successful* run, never ``github.event.before``:
 a push whose predecessor was cancelled or red must not inherit a green it
@@ -68,11 +74,9 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-#: Paths whose change never alters what the heavy test jobs exercise.
-BOOKKEEPING_FILES: frozenset[str] = frozenset({".ea/state.json", ".secrets.baseline"})
-
-#: Directories whose every file is bookkeeping.
-BOOKKEEPING_PREFIXES: tuple[str, ...] = (".ea/store/",)
+#: The only path whose change never alters what the heavy test jobs
+#: exercise or what the ``.ea/`` commit-policy census checks.
+BOOKKEEPING_FILES: frozenset[str] = frozenset({".secrets.baseline"})
 
 #: Events that run the heavy jobs unconditionally: a nightly or hand-started
 #: run carries no diff and exists to re-prove the whole tree.
@@ -131,16 +135,16 @@ class Verdict:
 
 
 def is_bookkeeping(path: str) -> bool:
-    """Return whether *path* is a state-bookkeeping file.
+    """Return whether *path* is a bookkeeping file the census does not read.
 
     Args:
         path: A repo-relative, slash-separated path as git lists it.
 
     Returns:
-        True for the bookkeeping files and anything beneath a bookkeeping
-        directory; False for every other path.
+        True for the bookkeeping files; False for every other path,
+        including the ``.ea/`` paths the commit-policy census reads.
     """
-    return path in BOOKKEEPING_FILES or path.startswith(BOOKKEEPING_PREFIXES)
+    return path in BOOKKEEPING_FILES
 
 
 def runs_url(*, api_url: str, repository: str, branch: str, event: str) -> str:

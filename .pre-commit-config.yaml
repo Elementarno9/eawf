@@ -94,6 +94,13 @@ repos:
         entry: python3 tools/commit_prefix_lint.py
         language: system
         stages: [commit-msg]
+      - id: wave-trailer-guard
+        name: wave-trailer-guard
+        entry: python3 tools/commit_prefix_lint.py --pre-push
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       - id: mypy-pre-push
         name: mypy-pre-push
         entry: uv run mypy src/
