@@ -125,7 +125,7 @@ def test_no_live_journey_frame_carries_a_fixture_literal(tmp_path: Path) -> None
     async def body() -> dict[str, str]:
         frames: dict[str, str] = {}
         async with (
-            live_console(walk, runtime_root) as (app, _seam),
+            live_console(walk.canary.root, runtime_root) as (app, _seam),
             app.run_test(size=SIZES[0]) as pilot,
         ):
             for size_index, (w, h) in enumerate(SIZES):

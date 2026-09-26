@@ -57,6 +57,7 @@ _DIGEST = "cd" * 32
 
 def _activate_epoch2(root: Path) -> None:
     """Declare and activate ``root`` as an epoch-2 canary tree."""
+    root.mkdir(parents=True, exist_ok=True)
     (root / CANARY_DECLARATION_FILENAME).write_text(
         json.dumps({"disposable": True, "declared_by": "test", "purpose": "operator launch"})
     )
@@ -128,7 +129,7 @@ class _Daemon:
 @pytest.fixture
 def launched(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[tuple[ConsoleApp, Any]]:
     """Put a TTY over an epoch-2 tree and catch the app and seam the launcher runs."""
-    _activate_epoch2(tmp_path)
+    _activate_epoch2(tmp_path / ".ea")
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     monkeypatch.delenv("EAWF_ACTOR", raising=False)
     monkeypatch.delenv("EAWF_RECEIPT_REF", raising=False)

@@ -1,0 +1,24 @@
+ Eä ▸ root-fa6049a562f1396a                                               ● LIVE
+ 0 tracks · 3 milestones · cursor 4
+════════════════════════════════════════════════════════════════════════════════
+ REGIONS   outcomes · attention
+────────────────────────────────────────────────────────────────────────────────
+   ROW                               KIND        STATUS
+ ▸ P36                               milestone   ACTIVE
+   P37                               milestone   PLANNED
+   P38                               milestone   PLANNED
+ WINDOW    1–3 of 3
+────────────────────────────────────────────────────────────────────────────────
+ UNSTATED  runs ? · attention ? · progress ?
+
+
+
+
+
+
+
+
+
+
+
+ ↑↓ tree   PageUp PageDown page   Home End ends   Enter drill   Tab list   g go

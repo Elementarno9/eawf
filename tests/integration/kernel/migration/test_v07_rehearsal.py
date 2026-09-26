@@ -111,6 +111,7 @@ from tests.integration.kernel.migration._live_corpus import (
     committed_sources,
     is_committed,
     magnitude_for,
+    pre_cutover_revision,
     quiesce_clone,
     register_live_workspace,
     stage_live_corpus,
@@ -1473,7 +1474,9 @@ def clone_rehearsal(tmp_path_factory: pytest.TempPathFactory) -> CloneRehearsal:
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("EAWF_HOME", str(home))
         patch.setenv("EAWF_DAEMONLESS", "1")
-        clone_at_revision(repo_root=REPO_ROOT, destination=clone)
+        clone_at_revision(
+            repo_root=REPO_ROOT, destination=clone, revision=pre_cutover_revision(REPO_ROOT)
+        )
         ea_root = clone / ".ea"
         quiesce_clone(clone, booted_at=datetime.now(UTC))
         revision = commit_live_state(clone)

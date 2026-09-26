@@ -28,6 +28,7 @@ from eawf.kernel.state.epoch2.authority import AuthorityGap, resolve_authority
 
 def _declare_canary(root: Path) -> None:
     """Declare ``root`` a disposable epoch-2 canary, undeclared/unmarked otherwise."""
+    root.mkdir(parents=True, exist_ok=True)
     (root / CANARY_DECLARATION_FILENAME).write_text(
         json.dumps({"disposable": True, "declared_by": "test", "purpose": "W30 launch test"})
     )
@@ -72,12 +73,18 @@ def _set_isatty(monkeypatch: pytest.MonkeyPatch, *, value: bool) -> None:
 
 
 def test_tui_opens_console_on_native_tree(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    _activate_epoch2(tmp_path)
+    _activate_epoch2(tmp_path / ".ea")
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     _set_isatty(monkeypatch, value=True)
 
     calls: list[tuple[object, object]] = []
     monkeypatch.setattr(launch, "_run_console", lambda app, seam: calls.append((app, seam)) or 0)
+
+    def _no_epoch1(**_kwargs: object) -> int:
+        # The epoch is declared inside ``.ea``; resolving it anywhere else reads epoch 1.
+        raise AssertionError("an epoch-2 tree opened the epoch-1 app")
+
+    monkeypatch.setattr(launch, "_launch_epoch1", _no_epoch1)
 
     rc = launch.launch_tui(workspace=None, no_input=False, plain=False, verbose=False)
 
@@ -91,11 +98,13 @@ def test_tui_opens_console_on_native_tree(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert isinstance(seam, ProjectionSeam)
     assert app.seam is seam
     assert app.fixture.prototype is False
+    # The daemon appends ``.ea`` to the root it is sent, so the seam names the repository.
+    assert seam._repo_root == tmp_path
 
 
 def test_tui_verbose_reserves_trace_row(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """SURF-173: ``--verbose`` reaches the console's ``verbose`` flag, off by default."""
-    _activate_epoch2(tmp_path)
+    _activate_epoch2(tmp_path / ".ea")
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     _set_isatty(monkeypatch, value=True)
 
@@ -159,13 +168,13 @@ def test_tui_migration_required_exits_4_off_tty(
     expected_gap: AuthorityGap,
     expected_state: str,
 ) -> None:
-    _declare_canary(tmp_path)
+    _declare_canary(tmp_path / ".ea")
     if break_marker:
-        (tmp_path / GENERATIONS_DIRNAME / MARKER_FILENAME).write_text("not json")
+        (tmp_path / ".ea" / GENERATIONS_DIRNAME / MARKER_FILENAME).write_text("not json")
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     _set_isatty(monkeypatch, value=False)
 
-    authority = resolve_authority(tmp_path)
+    authority = resolve_authority(tmp_path / ".ea")
     assert authority.gap is expected_gap
     assert launch.entry_state_id_for(authority) == expected_state
 
@@ -181,7 +190,9 @@ def test_tui_migration_required_exits_4_off_tty(
     assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
     assert rc == 4
     assert called["n"] == 0
-    assert f"eawf migrate epoch2 --recover --target-root {tmp_path}" in capsys.readouterr().err
+    assert (
+        f"eawf migrate epoch2 --recover --target-root {tmp_path / '.ea'}" in capsys.readouterr().err
+    )
 
 
 def test_tui_migration_required_builds_entry_session_on_a_held_tty(
@@ -196,7 +207,7 @@ def test_tui_migration_required_builds_entry_session_on_a_held_tty(
     event loop), so ``SessionSetup(..., entrySel=...)`` at
     :func:`eawf.surfaces.tui.launch._launch_entry` runs unstubbed.
     """
-    _declare_canary(tmp_path)
+    _declare_canary(tmp_path / ".ea")
     monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
     _set_isatty(monkeypatch, value=True)
 
@@ -213,7 +224,7 @@ def test_tui_migration_required_builds_entry_session_on_a_held_tty(
     assert app.session.route == "entry"
     assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
     tail = app.fixture.proto.entry[app.session.entry_sel].tail
-    assert f"  eawf migrate epoch2 --recover --target-root {tmp_path}" in tail
+    assert f"  eawf migrate epoch2 --recover --target-root {tmp_path / '.ea'}" in tail
 
 
 # --------------------------------------------------------------------------

@@ -32,7 +32,7 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import portalocker
 import pytest
@@ -50,6 +50,7 @@ from eawf.kernel.migration.epoch2.canary import (
     CANARY_DECLARATION_FILENAME,
     CanaryDeclaration,
     DisposableTarget,
+    OptInDeclaration,
     read_declaration,
 )
 from eawf.kernel.migration.epoch2.dispositions import COLLECTION_DISPOSITION_INDEX
@@ -248,16 +249,16 @@ def test_canary_fence_refuses_a_declaration_that_is_not_json(tmp_path: Path) -> 
         read_declaration(root)
 
 
-def test_canary_fence_refuses_this_repository_own_state_directory() -> None:
-    """This repository is not a canary, and the fence is what says so.
+def test_canary_fence_reads_this_repository_as_opted_in_not_disposable() -> None:
+    """This repository is live, never a canary, and the fence says which.
 
-    A read, never an apply: the assertion is that the declaration is
-    absent, which is exactly what the apply checks first.
+    A read, never an apply: the repository reached epoch 2 through the
+    opt-in declaration that pins its backup, so the fence returns that
+    declaration and no disposable-canary claim sits beside it.
     """
-    with pytest.raises(MigrationTargetNotDisposableError) as excinfo:
-        read_declaration(REPO_ROOT / ".ea")
+    declaration = read_declaration(REPO_ROOT / ".ea")
 
-    assert excinfo.value.code == "migration_target_not_disposable"
+    assert isinstance(declaration, OptInDeclaration)
     assert not (REPO_ROOT / ".ea" / CANARY_DECLARATION_FILENAME).exists()
 
 
@@ -797,6 +798,13 @@ def _git(repo: Path, *args: str) -> None:
     )
 
 
+#: The revision the dev4 clone rehearsal pinned. Its committed document still
+#: carries the stale worktree rows the live cut later reconciled, so it is the
+#: corpus the reconcile has real work on; HEAD's frozen document has none.
+# pragma: allowlist nextline secret
+PRE_RECONCILE_REVISION: Final = "e2d6a5df8b599a30aa08d5306335ac5381a3d0c6"
+
+
 def _repo_with_document(root: Path, document: dict[str, Any]) -> Path:
     """Return a git repository whose ``.ea`` holds ``document`` as its state."""
     repo = root / "repo"
@@ -877,8 +885,14 @@ def _synthetic_document() -> dict[str, Any]:
 def test_worktree_reconcile_rpc_empties_quiescence_over_the_staged_live_corpus(
     tmp_path: Path,
 ) -> None:
-    """Every stale active row in the committed corpus is retired with its reason."""
-    live = json.loads((REPO_ROOT / ".ea" / "state.json").read_text(encoding="utf-8"))
+    """Every stale active row in a committed live corpus is retired with its reason."""
+    committed = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "show", f"{PRE_RECONCILE_REVISION}:.ea/state.json"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    live = json.loads(committed.stdout)
     repo = _repo_with_document(tmp_path, live)
     before = _staged_findings(repo, tmp_path / "before")
     assert before, "the committed corpus should carry stale holders to reconcile"
