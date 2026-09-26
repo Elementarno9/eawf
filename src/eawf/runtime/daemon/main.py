@@ -27,6 +27,7 @@ from typing import Final
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.io import epoch_marker_present
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
@@ -543,9 +544,9 @@ def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None
 
     Returns:
         The scheduled task, or ``None`` when no state path is available
-        for sweeping.
+        for sweeping or the tree carries the epoch marker.
     """
-    if ctx.state_path is None:
+    if ctx.state_path is None or epoch_marker_present(Path(ctx.state_path).parent):
         return None
     ttl_seconds = _resolve_session_ttl_seconds()
     publish = ctx.bus.publish if ctx.bus is not None else None
@@ -561,8 +562,8 @@ def _schedule_session_ttl_sweep(ctx: MethodContext) -> asyncio.Task[None] | None
 
 
 def _schedule_stale_wave_sweep(ctx: MethodContext) -> asyncio.Task[None] | None:
-    """Schedule the stale-wave detector loop on the running loop."""
-    if ctx.state_path is None:
+    """Schedule the stale-wave detector loop; ``None`` without an unfrozen state path."""
+    if ctx.state_path is None or epoch_marker_present(Path(ctx.state_path).parent):
         return None
     absolute_backstop_seconds = _resolve_stale_wave_seconds()
 
@@ -1011,23 +1012,31 @@ def run(*, foreground: bool = True) -> int:
             # gets reconciled against the event log. Idempotent on subsequent
             # boots — fully-replayed records rename to ``.fsynced.json`` and
             # the next pass is a no-op.
-            replay_report = replay_wal(
-                daemon_wal_dir,
-                state_path=project_state_path,
-                event_path=project_event_path,
-            )
-            logger.info(
-                f"run wal-replay pending={replay_report.pending_count} "
-                f"applied={replay_report.applied_count} "
-                f"fsynced={replay_report.fsynced_count} "
-                f"poisoned={replay_report.poisoned_count} "
-                f"replayed={replay_report.replayed_event_count}"
-            )
-            if replay_report.poisoned_count > 0:
-                logger.warning(
-                    f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
-                    f"operator should run 'eawf daemon replay-wal --inspect'"
+            #
+            # A tree carrying the epoch marker has frozen its epoch-1 surfaces,
+            # so every epoch-1 pass of the sweep (this replay and the orphan
+            # reconcile below) leaves it alone; the native passes still run.
+            legacy_frozen = epoch_marker_present(project_state_path.parent)
+            if legacy_frozen:
+                logger.info("run epoch1-boot-sweep skipped reason=epoch_marker_present")
+            else:
+                replay_report = replay_wal(
+                    daemon_wal_dir,
+                    state_path=project_state_path,
+                    event_path=project_event_path,
                 )
+                logger.info(
+                    f"run wal-replay pending={replay_report.pending_count} "
+                    f"applied={replay_report.applied_count} "
+                    f"fsynced={replay_report.fsynced_count} "
+                    f"poisoned={replay_report.poisoned_count} "
+                    f"replayed={replay_report.replayed_event_count}"
+                )
+                if replay_report.poisoned_count > 0:
+                    logger.warning(
+                        f"run wal-replay poisoned-present count={replay_report.poisoned_count}; "
+                        f"operator should run 'eawf daemon replay-wal --inspect'"
+                    )
 
             # Torn ledger tails: a ledger killed mid-append refuses every
             # read, the native replay's own included, and the WAL record
@@ -1081,9 +1090,10 @@ def run(*, foreground: bool = True) -> int:
             # A fresh daemon owns no live children, so every ACTIVE session at
             # boot is orphaned -- flip them all to STALE. Single-threaded here,
             # pre-listener, so there is no contention on the state lock.
-            orphaned = reconcile_orphaned_sessions(project_state_path, project_event_path)
-            if orphaned:
-                logger.info(f"run reconciled-orphan-sessions flipped={orphaned}")
+            if not legacy_frozen:
+                orphaned = reconcile_orphaned_sessions(project_state_path, project_event_path)
+                if orphaned:
+                    logger.info(f"run reconciled-orphan-sessions flipped={orphaned}")
 
             ctx = MethodContext(
                 started_at=started_at,

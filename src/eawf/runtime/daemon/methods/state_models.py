@@ -286,6 +286,32 @@ class TrackSyncRpcResult(BaseModel):
     changed: int
 
 
+class WorktreeReconcileParams(BaseModel):
+    """Params for :func:`worktree_reconcile_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    repo_root: str = Field(min_length=1)
+    dry_run: bool = False
+
+
+class WorktreeReconcileRow(BaseModel):
+    """One row the reconcile retired, or would retire, and why."""
+
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["worktree", "session"]
+    row_id: str
+    reason: Literal["no_git_worktree", "bound_worktrees_gone", "predates_daemon_boot"]
+
+
+class WorktreeReconcileRpcResult(BaseModel):
+    """Result of :func:`worktree_reconcile_rpc`."""
+
+    model_config = ConfigDict(extra="forbid")
+    retired: list[WorktreeReconcileRow]
+    dry_run: bool
+    written: bool
+
+
 # ---- Idempotency cache ------------------------------------------------------
 
 

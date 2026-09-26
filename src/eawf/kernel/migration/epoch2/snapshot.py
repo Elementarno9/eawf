@@ -18,10 +18,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import subprocess
 from collections.abc import Iterator
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Final
 
 from pydantic import Field
 
@@ -29,8 +30,10 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationDuplicateKeyError,
     MigrationSourceMutatedError,
     MigrationSourceUnreadableError,
+    MigrationStagingRefusedError,
 )
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
+from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
 
 logger = logging.getLogger(__name__)
 
@@ -372,3 +375,351 @@ class SourceSnapshot(StrictMigrationModel):
                     f"{surface.locator} changed under the read barrier: "
                     f"pinned {surface.digest}, found {current}"
                 )
+
+
+#: Where the committed corpus lives, relative to the repository root.
+LIVE_STATE_LOCATOR: Final = ".ea/state.json"
+LIVE_STORE_LOCATOR: Final = ".ea/store"
+LIVE_CONFIG_LOCATOR: Final = ".ea/config.yaml"
+
+#: The ``.ea`` directory the staging reads and must never write into.
+LIVE_TREE_DIRNAME: Final = ".ea"
+
+#: The file the committed layered config lands in inside the snapshot.
+STAGED_CONFIG_FILENAME: Final = "base.yaml"
+
+#: The one timestamp the synthesised registry carries. Fixed so two
+#: stagings of one revision are byte-identical.
+STAGED_REGISTRY_TIMESTAMP: Final = "2026-01-01T00:00:00Z"
+
+#: The neutral telemetry body a staged snapshot carries. The live
+#: ``.ea/telemetry.db`` is uncommitted because it embeds this machine's
+#: absolute paths, so no clone could reproduce it.
+STAGED_TELEMETRY_BODY: Final[dict[str, Any]] = {
+    "row_counts": {"events": 0},
+    "schema_version": "1.0",
+    "tables": ["events", "spans"],
+}
+
+#: How long one git call may take before the staging gives up on it.
+GIT_TIMEOUT_SECONDS: Final = 60
+
+
+class StagedSource(StrictMigrationModel):
+    """One committed file the snapshot is assembled from.
+
+    Attributes:
+        locator: The file's repo-relative path, which is the string the
+            commit policy classifies.
+        destination: Where the file lands inside the staged snapshot,
+            relative to the snapshot root.
+        object_id: The git blob the bytes are read from, so a staging
+            can be reproduced from the revision alone.
+    """
+
+    locator: Annotated[str, Field(min_length=1)]
+    destination: Annotated[str, Field(min_length=1)]
+    object_id: Annotated[str, Field(pattern=r"^[0-9a-f]{40}([0-9a-f]{24})?$")]
+
+
+class StagedCorpus(StrictMigrationModel):
+    """The result of staging one revision's committed corpus.
+
+    Attributes:
+        root: The snapshot root the corpus was assembled in.
+        revision: The commit every staged byte was read from.
+        sources: The committed files copied, in staging order.
+    """
+
+    root: Path
+    revision: Annotated[str, Field(pattern=r"^[0-9a-f]{40}([0-9a-f]{24})?$")]
+    sources: tuple[StagedSource, ...]
+
+
+def is_committed(locator: str) -> bool:
+    """Report whether version control carries one path under ``.ea/``.
+
+    Args:
+        locator: A repo-relative, forward-slash path.
+
+    Returns:
+        ``True`` when the commit policy declares the path committed.
+
+    Raises:
+        UndeclaredPathError: When no policy row matches, which means the
+            tree grew a file family nobody declared.
+    """
+    return classify_path(locator).policy is CommitPolicy.COMMITTED
+
+
+def require_committed(locator: str) -> str:
+    """Return a locator the snapshot layout needs, once the policy admits it.
+
+    Args:
+        locator: A repo-relative path the fixed part of the layout maps.
+
+    Returns:
+        The locator unchanged.
+
+    Raises:
+        ValueError: When the policy declares the path uncommitted. The
+            layout and the policy then disagree about what a
+            repository's reproducible state is, and that is a defect in
+            one of the two rather than something to route around.
+        UndeclaredPathError: When no policy row matches the path.
+    """
+    if not is_committed(locator):
+        raise ValueError(f"{locator} is declared uncommitted, so the snapshot cannot stage it")
+    return locator
+
+
+def _git(repo_root: Path, *args: str) -> bytes:
+    """Run one read-only git command and return its raw stdout.
+
+    Args:
+        repo_root: The directory to run in.
+        *args: The git arguments, without the leading ``git``.
+
+    Returns:
+        The command's stdout, undecoded so blob bytes survive intact.
+
+    Raises:
+        MigrationSourceUnreadableError: git is missing, timed out, or
+            exited non-zero, which means the committed corpus cannot be
+            read at all.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+            timeout=GIT_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise MigrationSourceUnreadableError(
+            f"git {args[0]} could not run: {error.__class__.__name__}"
+        ) from error
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise MigrationSourceUnreadableError(f"git {args[0]} failed: {detail}")
+    return completed.stdout
+
+
+def _tree_blobs(repo_root: Path, *, revision: str, pathspec: str) -> dict[str, str]:
+    """Return every blob a revision tracks directly under ``pathspec``.
+
+    Args:
+        repo_root: The repository top level.
+        revision: The commit to list.
+        pathspec: A repo-relative file or ``dir/`` to list one level of.
+
+    Returns:
+        Blob object id keyed by repo-relative path. Trees and submodules
+        are skipped: only a blob has bytes to stage.
+    """
+    listing = _git(repo_root, "ls-tree", "-z", "--full-tree", revision, "--", pathspec)
+    blobs: dict[str, str] = {}
+    for entry in listing.decode("utf-8").split("\0"):
+        if not entry:
+            continue
+        header, path = entry.split("\t", 1)
+        _mode, kind, object_id = header.split(" ")
+        if kind == "blob":
+            blobs[path] = object_id
+    return blobs
+
+
+def repository_revision(start: Path) -> tuple[Path, str]:
+    """Return the repository top level containing ``start`` and its HEAD commit.
+
+    Args:
+        start: Any directory inside the repository.
+
+    Returns:
+        The top-level directory and the full commit id HEAD names.
+
+    Raises:
+        MigrationSourceUnreadableError: ``start`` is not inside a git
+            repository, or the repository has no commit yet.
+    """
+    top = Path(_git(start, "rev-parse", "--show-toplevel").decode("utf-8").strip())
+    revision = _git(top, "rev-parse", "--verify", "HEAD^{commit}").decode("utf-8").strip()
+    return top, revision
+
+
+def committed_sources(repo_root: Path, *, revision: str) -> tuple[StagedSource, ...]:
+    """Return every committed file the snapshot stages at ``revision``.
+
+    Selection is the intersection of two facts: git tracks the path at
+    the revision, and the commit policy declares it committed. The
+    document and the layered config sit at fixed destinations the
+    snapshot layout requires, so their absence is raised rather than
+    filtered: a corpus missing its document is not a smaller corpus, it
+    is a broken one.
+
+    Args:
+        repo_root: The repository top level.
+        revision: The commit to read.
+
+    Returns:
+        The document, the config, then each committed store ledger sorted
+        by filename.
+
+    Raises:
+        MigrationSourceUnreadableError: The revision tracks no document
+            or no config, or git cannot list the tree.
+        ValueError: When a locator the layout requires is uncommitted.
+    """
+    fixed = _tree_blobs(repo_root, revision=revision, pathspec=LIVE_STATE_LOCATOR)
+    fixed |= _tree_blobs(repo_root, revision=revision, pathspec=LIVE_CONFIG_LOCATOR)
+    for locator in (LIVE_STATE_LOCATOR, LIVE_CONFIG_LOCATOR):
+        if locator not in fixed:
+            raise MigrationSourceUnreadableError(
+                f"{locator} is not tracked at {revision}, so there is no committed corpus"
+            )
+    ledgers = _tree_blobs(repo_root, revision=revision, pathspec=f"{LIVE_STORE_LOCATOR}/")
+    return (
+        StagedSource(
+            locator=require_committed(LIVE_STATE_LOCATOR),
+            destination=DOCUMENT_LOCATOR,
+            object_id=fixed[LIVE_STATE_LOCATOR],
+        ),
+        StagedSource(
+            locator=require_committed(LIVE_CONFIG_LOCATOR),
+            destination=f"{CONFIG_DIRECTORY}/{STAGED_CONFIG_FILENAME}",
+            object_id=fixed[LIVE_CONFIG_LOCATOR],
+        ),
+        *(
+            StagedSource(
+                locator=locator,
+                destination=f"{STORE_DIRECTORY}/{locator.rsplit('/', 1)[1]}",
+                object_id=object_id,
+            )
+            for locator, object_id in sorted(ledgers.items())
+            if locator.endswith(LEDGER_SUFFIX) and is_committed(locator)
+        ),
+    )
+
+
+def staged_registry(*, workspace_key: str, project_key: str) -> dict[str, Any]:
+    """Return the one-workspace registry a staged snapshot ships beside its corpus.
+
+    The machine registry is not copied: it names this machine's
+    repository paths, and no clone carries it. The snapshot instead holds
+    the single workspace the corpus is imported under, which is all the
+    importer resolves.
+
+    Args:
+        workspace_key: The addressing workspace, already validated.
+        project_key: The project the workspace is rooted on.
+
+    Returns:
+        The registry document.
+    """
+    return {
+        "active_code": None,
+        "repos": {},
+        "updated_at": STAGED_REGISTRY_TIMESTAMP,
+        "version": "1",
+        "workspaces": {
+            workspace_key: {
+                "home_project_code": project_key,
+                "key": workspace_key,
+                "member_project_codes": [project_key],
+                "revision": 1,
+                "title": f"the workspace the staged corpus imports under as {project_key}",
+                "updated_at": STAGED_REGISTRY_TIMESTAMP,
+            }
+        },
+    }
+
+
+def _require_stageable(destination: Path, *, repo_root: Path) -> None:
+    """Refuse a destination the staging cannot own outright.
+
+    Args:
+        destination: Where the snapshot is to be assembled.
+        repo_root: The repository top level.
+
+    Raises:
+        MigrationStagingRefusedError: The destination is inside the live
+            ``.ea`` tree, or already holds files.
+    """
+    live_tree = (repo_root / LIVE_TREE_DIRNAME).resolve()
+    resolved = destination.resolve()
+    if resolved == live_tree or live_tree in resolved.parents:
+        raise MigrationStagingRefusedError(
+            f"{destination} is inside the live {LIVE_TREE_DIRNAME} tree; stage outside it"
+        )
+    if destination.exists() and (not destination.is_dir() or any(destination.iterdir())):
+        raise MigrationStagingRefusedError(
+            f"{destination} already holds files, which the read barrier would pin as corpus"
+        )
+
+
+def _write_staged_json(path: Path, payload: object) -> None:
+    """Write ``payload`` as sorted, newline-terminated JSON."""
+    path.write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def stage_committed_corpus(
+    *, repo_root: Path, destination: Path, workspace_key: str, project_key: str
+) -> StagedCorpus:
+    """Assemble the committed ``.ea`` corpus at HEAD into a snapshot root.
+
+    Every byte is read from git objects rather than from the working
+    tree, so the result depends on the revision alone: an uncommitted
+    daemon write, a gitignored firehose, or a live writer racing the copy
+    cannot reach the snapshot. Nothing under the live ``.ea`` tree is
+    opened, for reading or for writing.
+
+    Args:
+        repo_root: Any directory inside the repository to stage.
+        destination: Where to assemble the snapshot. Created when absent;
+            refused when it already holds files.
+        workspace_key: The addressing workspace the synthesised registry
+            declares, already validated.
+        project_key: The project that workspace is rooted on.
+
+    Returns:
+        The staged corpus, naming the revision it was read at.
+
+    Raises:
+        MigrationSourceUnreadableError: The directory is not in a git
+            repository, or HEAD tracks no committed corpus.
+        MigrationStagingRefusedError: The destination is inside the live
+            tree or is not empty.
+        ValueError: A locator the layout requires is declared uncommitted.
+    """
+    top, revision = repository_revision(repo_root)
+    _require_stageable(destination, repo_root=top)
+    sources = committed_sources(top, revision=revision)
+    (destination / STORE_DIRECTORY).mkdir(parents=True, exist_ok=True)
+    (destination / CONFIG_DIRECTORY).mkdir(parents=True, exist_ok=True)
+    for source in sources:
+        blob = _git(top, "cat-file", "blob", source.object_id)
+        (destination / source.destination).write_bytes(blob)
+    _write_staged_json(
+        destination / REGISTRY_LOCATOR,
+        staged_registry(workspace_key=workspace_key, project_key=project_key),
+    )
+    _write_staged_json(destination / TELEMETRY_LOCATOR, STAGED_TELEMETRY_BODY)
+    logger.debug(f"stage_committed_corpus revision={revision} sources={len(sources)}")
+    return StagedCorpus(root=destination, revision=revision, sources=sources)
+
+
+def staged_envelope(corpus: StagedCorpus) -> dict[str, Any]:
+    """Return the envelope one staging is reported as.
+
+    Args:
+        corpus: The staged corpus.
+
+    Returns:
+        The snapshot root, the revision, and each staged locator.
+    """
+    return {
+        "staged_to": str(corpus.root),
+        "revision": corpus.revision,
+        "sources": [source.locator for source in corpus.sources],
+    }

@@ -55,6 +55,17 @@ class MigrationSourceUnreadableError(MigrationRuleError):
     code: ClassVar[str] = "migration_source_unreadable"
 
 
+class MigrationStagingRefusedError(MigrationRuleError):
+    """A staging destination would mix the corpus with bytes it did not stage.
+
+    Raised for a destination inside the live ``.ea`` tree, which has a
+    writer the staging must never race, and for a destination that
+    already holds files, which the read barrier would pin as corpus.
+    """
+
+    code: ClassVar[str] = "migration_staging_refused"
+
+
 class MigrationSourceMutatedError(MigrationRuleError):
     """A read surface changed bytes after the barrier was taken.
 
@@ -133,6 +144,18 @@ class MigrationPlanNotApplicableError(MigrationRuleError):
     code: ClassVar[str] = "migration_plan_not_applicable"
 
 
+class MigrationTrackUndeclaredError(MigrationPlanNotApplicableError):
+    """The plan leaves Track ownership open and no default Track was declared.
+
+    The source never recorded which Track owns an imported Milestone or
+    outcome metric, and the importer may not infer one. The only honest
+    answer is an operator's declaration, so a plan without one is not a
+    plan an apply can run.
+    """
+
+    code: ClassVar[str] = "migration_track_undeclared"
+
+
 class MigrationValidationDivergedError(MigrationRuleError):
     """Two validation passes over one pinned revision did not agree.
 
@@ -193,6 +216,19 @@ class MigrationTargetNotDisposableError(MigrationRuleError):
     """
 
     code: ClassVar[str] = "migration_target_not_disposable"
+
+
+class MigrationBackupUnverifiedError(MigrationRuleError):
+    """An opted-in tree names a backup the apply cannot verify.
+
+    A live repository is admitted without calling itself disposable only
+    because its owner took a backup first. A snapshot that is missing,
+    holds no document, or no longer digests to the value the declaration
+    pinned is not a backup anybody could restore from, so the apply
+    refuses before it writes anything.
+    """
+
+    code: ClassVar[str] = "migration_backup_unverified"
 
 
 class MigrationNotQuiescentError(MigrationRuleError):

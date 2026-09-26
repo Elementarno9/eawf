@@ -342,20 +342,20 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
     probe_command="uv run pytest tests/integration/kernel/migration/test_v07_rehearsal.py -q",
     observed={
         "corpus_magnitude": "thousands",
-        "corpus_rows": 4638,
-        "generation_multiplier": 1.319,
-        "apply_wall_clock_s": 3.849,
-        "residual_document_bytes": 396720,
+        "corpus_rows": 6212,
+        "generation_multiplier": 0.98,
+        "apply_wall_clock_s": 5.093,
+        "residual_document_bytes": 541112,
         "rehearsed_corpora": 10,
         "apply_journal_stages": 12,
         "rollback_boundaries": 11,
         "scrub_findings": 0,
-        "observed_at_revision": "4a0659cbba0e",  # pragma: allowlist secret
+        "observed_at_revision": "af9e555278f2",  # pragma: allowlist secret
     },
     limits=(
         ObservedLimit(
             name="corpus_rows",
-            value=4638.0,
+            value=6212.0,
             unit="count",
             direction="floor",
             basis=(
@@ -370,7 +370,7 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
             direction="ceiling",
             basis=(
                 "published epoch-2 generation over staged epoch-1 corpus bytes; "
-                "observed 1.319 against a declared ceiling of 1.60"
+                "observed 0.980 against a declared ceiling of 1.60"
             ),
         ),
         ObservedLimit(
@@ -378,7 +378,7 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
             value=30.0,
             unit="s",
             direction="ceiling",
-            basis="one apply over the live corpus; observed 3.849 s against a 30 s budget",
+            basis="one apply over the live corpus; observed 5.093 s against a 30 s budget",
         ),
         ObservedLimit(
             name="residual_document_bytes",
@@ -387,13 +387,13 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
             direction="ceiling",
             basis=(
                 "the generation's own document after the terminal records move to their "
-                "ledgers; observed 396,720 B against a 1.6 MB bound"
+                "ledgers; observed 541,112 B against a 1.6 MB bound"
             ),
         ),
     ),
     boundary=(
         "Measured over the production corpus -- this project's own live epoch-1 .ea tree "
-        "at cutover, 4,638 rows in the thousands band -- plus nine committed corpora that "
+        "at cutover, 6,212 rows in the thousands band -- plus nine committed corpora that "
         "cover the structural shapes the live one does not exhibit. Ten corpora is the "
         "whole measured population: a corpus shape outside that set is unmeasured, not "
         "passing. The four legs are dry run, apply, idempotent rerun and rollback over a "
@@ -403,16 +403,16 @@ _IMPORTER_AT_PRODUCTION_CORPUS = MeasuredContract(
         "measured about them is that the refusal repeats identically and leaves the "
         "target byte-identical -- not that the importer handles their content."
     ),
-    observed_at=datetime(2026, 9, 9, tzinfo=UTC),
+    observed_at=datetime(2026, 9, 26, tzinfo=UTC),
     observed_at_ref="tests/fixtures/migration/live-cutover/corpus-pin.json",
     environment=MeasurementEnvironment(
         scale_band=ScaleBand.PRODUCTION,
         population=(
-            "the live epoch-1 corpus at cutover: 4,638 rows, a thousands corpus magnitude, "
+            "the live epoch-1 corpus at cutover: 6,212 rows, a thousands corpus magnitude, "
             "rehearsed alongside nine committed corpora covering the empty, terminal, "
             "multi-root, interrupted, attention-bearing, historical and refused shapes"
         ),
-        population_size=4638,
+        population_size=6212,
         host_platform="darwin",
         toolchain="python 3.14.3",
     ),

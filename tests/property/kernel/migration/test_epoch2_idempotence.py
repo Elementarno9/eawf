@@ -60,17 +60,13 @@ ALIAS_COLLISION_SNAPSHOT = FIXTURES / "alias-collision" / "snapshot"
 SEALED_AT = datetime(2026, 1, 1, tzinfo=UTC)
 SEALED_BY = "idempotence-test"
 
-#: The five rows the full-shape corpus declares a conversion for and no
-#: importer rule places yet. Measured against the fixture rather than
-#: quoted from a design note: the fixture holds two decisions, one
-#: incident, one sandbox policy and the project block.
-FULL_UNRESOLVED_ADDRESSES = (
-    "decisions/D01",
-    "decisions/D02",
-    "incidents/INC01",
-    "project",
-    "sandbox_policies/SP01",
-)
+#: A collection whose conversion is declared but no importer rule
+#: implements, and the row seeded into a corpus copy so the plan names
+#: something unplaceable. The pinned full-shape corpus converts every
+#: collection it holds, so the unresolved row has to be planted.
+UNCONVERTED_COLLECTION = "hypotheses"
+UNCONVERTED_ROW = "H01-01"
+UNRESOLVED_ADDRESSES = (f"{UNCONVERTED_COLLECTION}/{UNCONVERTED_ROW}",)
 
 
 def _plan(snapshot_root: Path) -> MigrationPlan:
@@ -191,18 +187,27 @@ def test_any_edited_metadata_field_refuses_the_approved_plan(
         document.write_text(original)
 
 
-def test_unresolved_rows_keep_apply_refused(full_plan: MigrationPlan) -> None:
+def test_unresolved_rows_keep_apply_refused(staged_corpus: Path) -> None:
     """A row with no epoch-2 target refuses the apply and names itself."""
-    addresses = tuple(row.address for row in full_plan.manifest.unresolved_rows)
-    assert addresses == FULL_UNRESOLVED_ADDRESSES
-    assert all(
-        row.reason is UnresolvedReason.NO_CONVERTER for row in full_plan.manifest.unresolved_rows
-    )
+    document_path = staged_corpus / "document.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    document[UNCONVERTED_COLLECTION] = {UNCONVERTED_ROW: {"id": UNCONVERTED_ROW}}
+    document_path.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
+    plan = _plan(staged_corpus)
+
+    addresses = tuple(row.address for row in plan.manifest.unresolved_rows)
+    assert addresses == UNRESOLVED_ADDRESSES
+    assert all(row.reason is UnresolvedReason.NO_CONVERTER for row in plan.manifest.unresolved_rows)
     with pytest.raises(MigrationPlanNotApplicableError) as excinfo:
-        full_plan.require_applicable()
+        plan.require_applicable()
     assert excinfo.value.code == "migration_plan_not_applicable"
-    for address in FULL_UNRESOLVED_ADDRESSES:
+    for address in UNRESOLVED_ADDRESSES:
         assert address in str(excinfo.value)
+
+
+def test_the_full_corpus_leaves_no_unresolved_row(full_plan: MigrationPlan) -> None:
+    """Every collection the full-shape corpus holds has a converter."""
+    assert full_plan.manifest.unresolved_rows == ()
 
 
 def test_ambiguous_track_is_an_assignment_and_still_refuses_apply() -> None:

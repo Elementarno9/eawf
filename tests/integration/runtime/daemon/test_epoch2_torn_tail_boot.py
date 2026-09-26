@@ -1,11 +1,12 @@
 """A ledger killed mid-append reads again after the next boot, WAL or not.
 
 Each test kills the in-flight cap verb inside a ledger append, after part
-of the line reached the disk and before its newline did, then runs the
-daemon's boot passes in the order ``run`` does: the torn-tail repair, the
-native replay, the compaction recovery. The WAL record that would name the
-tree is swept in the cases that matter, because that is the gap the repair
-closes: recovery that finds trees only through the WAL never sees them.
+of the line reached the disk and before its newline did, then boots the
+daemon through its real entry, ``run``, with only the listener stubbed out.
+The canary is known to that boot the way a real one is -- through the
+registry -- and the WAL record that would name the tree is swept in the
+cases that matter, because that is the gap the repair closes: recovery that
+finds trees only through the WAL never sees them.
 
 The kill is a ``BaseException``, so no handler on the way out tidies up
 after it; what the disk holds when it propagates is what a killed process
@@ -16,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-import tempfile
+import sys
 from pathlib import Path
 from typing import Any, Final
 
@@ -37,10 +38,10 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.platform.registry.models import Registry, RegistryRepoEntry
 from eawf.runtime.daemon import epoch2_transaction, methods
+from eawf.runtime.daemon import main as daemon_main
 from eawf.runtime.daemon.epoch2_recovery import (
     TAIL_REPAIR_EVENT_SUFFIX,
     LedgerTailRepairReport,
-    recover_native_store_trees,
     repair_native_ledger_tails,
     replay_native_wal,
 )
@@ -57,7 +58,10 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     tree_root,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(sys.platform == "win32", reason="the boot stub binds a POSIX socket"),
+]
 
 RUN_KEY: Final = "RUN-00000010"
 RUN_URN: Final = f"eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/{RUN_KEY}"
@@ -72,14 +76,6 @@ REPAIR_NAME: Final = f"ledger.run.{TAIL_REPAIR_EVENT_SUFFIX}"
 
 class _Kill(BaseException):
     """The process dying at the seam a test chose."""
-
-
-@pytest.fixture(autouse=True)
-def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Allocate every canary runtime directory under this test's tmp dir."""
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
 
 
 @pytest.fixture
@@ -156,15 +152,50 @@ def _sweep_wal(ctx: MethodContext) -> None:
 
 
 def _boot(
-    ctx: MethodContext, canary: CanaryProvision, *, scan: bool = True
+    ctx: MethodContext,
+    canary: CanaryProvision,
+    mp: pytest.MonkeyPatch,
+    *,
+    scan: bool = True,
 ) -> LedgerTailRepairReport | None:
-    """Run the native boot passes in ``run``'s order."""
-    report = None
-    if scan:
-        report = repair_native_ledger_tails(_wal_dir(ctx), tree_roots=(tree_root(canary),))
-    replay_native_wal(_wal_dir(ctx))
-    recover_native_store_trees(_wal_dir(ctx))
-    return report
+    """Boot the daemon through ``run`` and return what its tail repair reported.
+
+    The daemon is bound to a placeholder project of its own and finds the
+    canary only through the registry, as a boot after a swept WAL does.
+    Only the listener is stubbed out, so every boot pass runs in ``run``'s
+    own order. With ``scan`` off the repair is replaced by a no-op, which
+    is the defect the repair closes.
+
+    Returns:
+        The repair's report, or ``None`` when the boot never ran the repair.
+    """
+    runtime_root = _wal_dir(ctx).parent
+    project = runtime_root.parent / "project" / ".ea"
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "state.json").write_bytes(orjson.dumps({"placeholder": True}))
+    registry_path = runtime_root.parent / "registry.json"
+    registry = Registry(repos={"TXN": RegistryRepoEntry(code="TXN", path=str(canary.root))})
+    registry_path.write_text(registry.model_dump_json(), encoding="utf-8")
+    reports: list[LedgerTailRepairReport] = []
+
+    def spy(wal_dir: Path, *, tree_roots: tuple[Path, ...]) -> LedgerTailRepairReport:
+        if not scan:
+            return LedgerTailRepairReport()
+        report = repair_native_ledger_tails(wal_dir, tree_roots=tree_roots)
+        reports.append(report)
+        return report
+
+    mp.setenv("EA_STATE", str(project / "state.json"))
+    mp.setenv("EAWF_REGISTRY_PATH", str(registry_path))
+    mp.setattr(daemon_main, "repair_native_ledger_tails", spy)
+    mp.setattr(daemon_main, "ensure_runtime_dir", lambda: runtime_root)
+    mp.setattr(daemon_main, "pid_path", lambda: runtime_root / "eawfd.pid")
+    mp.setattr(daemon_main, "log_path", lambda: runtime_root / "eawfd.log")
+    mp.setattr(daemon_main, "socket_path", lambda: runtime_root / "eawfd.sock")
+    mp.setattr(daemon_main.asyncio, "run", lambda coro: coro.close())
+
+    assert daemon_main.run(foreground=True) == 0
+    return reports[-1] if reports else None
 
 
 def _killed(ctx: MethodContext, canary: CanaryProvision, mp: pytest.MonkeyPatch, n: int) -> None:
@@ -184,7 +215,7 @@ def test_repair_native_ledger_tails_cuts_a_tail_no_wal_record_names(
     kept, torn = split_torn_tail(before)
     assert torn
 
-    report = _boot(ctx, canary)
+    report = _boot(ctx, canary, monkeypatch)
 
     records = read_ledger_records(_ledger(canary))
     assert [item.payload.get("payload_kind") for item in records] == ["budget_notice", "control"]
@@ -207,7 +238,7 @@ def test_boot_without_the_scan_leaves_the_swept_torn_ledger_unreadable(
     _killed(ctx, canary, monkeypatch, 3)
     _sweep_wal(ctx)
 
-    _boot(ctx, canary, scan=False)
+    _boot(ctx, canary, monkeypatch, scan=False)
 
     with pytest.raises(LedgerTornTailError):
         read_ledger_records(_ledger(canary))
@@ -219,11 +250,11 @@ def test_repair_native_ledger_tails_is_idempotent_on_a_second_boot(
     """A second boot finds nothing to cut and journals nothing."""
     _killed(ctx, canary, monkeypatch, 2)
     _sweep_wal(ctx)
-    _boot(ctx, canary)
+    _boot(ctx, canary, monkeypatch)
     ledger_bytes = _ledger(canary).read_bytes()
     firehose_bytes = firehose_path(canary).read_bytes()
 
-    report = _boot(ctx, canary)
+    report = _boot(ctx, canary, monkeypatch)
 
     assert report is not None
     assert report.truncated_ledgers == 0
@@ -239,7 +270,7 @@ def test_repair_runs_before_the_replay_so_a_pending_line_lands_clean(
     _killed(ctx, canary, monkeypatch, 1)
     assert _rows(canary) == []
 
-    _boot(ctx, canary)
+    _boot(ctx, canary, monkeypatch)
 
     records = read_ledger_records(_ledger(canary))
     assert [item.payload.get("payload_kind") for item in records] == ["budget_notice"]
@@ -270,11 +301,11 @@ def test_repair_journals_once_when_a_crash_split_the_row_from_the_cut(
 
     monkeypatch.setattr("eawf.runtime.daemon.epoch2_recovery.truncate_torn_tail", dead)
     with pytest.raises(_Kill):
-        _boot(ctx, canary)
+        _boot(ctx, canary, monkeypatch)
     monkeypatch.undo()
     assert len(_repair_rows(canary)) == 1
 
-    report = _boot(ctx, canary)
+    report = _boot(ctx, canary, monkeypatch)
 
     assert report is not None
     assert report.truncated_ledgers == 1
@@ -290,7 +321,7 @@ def test_repair_native_ledger_tails_empties_a_ledger_holding_only_a_fragment(
     _killed(ctx, canary, monkeypatch, 1)
     _sweep_wal(ctx)
 
-    _boot(ctx, canary)
+    _boot(ctx, canary, monkeypatch)
 
     assert _ledger(canary).read_bytes() == b""
     assert read_ledger_records(_ledger(canary)) == ()

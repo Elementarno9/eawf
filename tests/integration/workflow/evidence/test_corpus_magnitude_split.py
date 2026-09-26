@@ -74,8 +74,8 @@ PROMOTE_CMD = "eawf artifact promote-contract"
 
 #: The ``population`` prose as it read before the split, when it called a
 #: corpus size a scale band next to an environment field of the same name.
-STALE_POPULATION_PHRASE = "4,638 rows in the thousands scale band"
-CURRENT_POPULATION_PHRASE = "4,638 rows, a thousands corpus magnitude"
+STALE_POPULATION_PHRASE = "6,212 rows in the thousands scale band"
+CURRENT_POPULATION_PHRASE = "6,212 rows, a thousands corpus magnitude"
 
 runner = CliRunner()
 

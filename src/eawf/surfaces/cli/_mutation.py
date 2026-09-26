@@ -47,6 +47,7 @@ from typing import Literal
 
 import orjson
 
+from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.validate.strict import validate_state
@@ -125,6 +126,19 @@ def daemonless_flag_requested() -> bool:
     return _DAEMONLESS_FLAG_REQUESTED
 
 
+def _refuse_frozen_tree(state_path: Path) -> None:
+    """Refuse a mutating transaction on a tree that carries the epoch marker.
+
+    Raises:
+        ValidationError: The tree is frozen for epoch-1 writers
+            (``legacy_operation_removed``); nothing was read or locked.
+    """
+    try:
+        refuse_legacy_write(state_path)
+    except LegacyOperationRemovedError as exc:
+        raise cli_errors.ValidationError(str(exc), kind="LegacyOperationRemoved") from exc
+
+
 @contextmanager
 def state_transaction(
     state_path: Path,
@@ -170,9 +184,10 @@ def state_transaction(
             flag was passed (``kind="InvalidInput"`` — mutating verbs
             cannot run daemonless); or when *state_path* does not exist
             (``kind="NotFound"``).
-        ValidationError: When the loaded payload fails schema
-            validation, the post-mutation payload fails schema or
-            invariant checks, or the mutation adds a string carrying a
+        ValidationError: When the tree carries the epoch marker
+            (``legacy_operation_removed``, before the lock), when the
+            loaded payload fails schema validation, the post-mutation
+            payload fails schema or invariant checks, or the mutation adds a string carrying a
             state leak shape (the message names its field path).
         StateConflict: When the sibling lock cannot be acquired within
             *timeout* (``kind="LockConflict"``).
@@ -195,6 +210,8 @@ def state_transaction(
         )
     if not state_path.exists():
         raise cli_errors.UserError(f"state file not found: {state_path}", kind="NotFound")
+    if not read_only:
+        _refuse_frozen_tree(state_path)
     try:
         with portalock.acquire(state_path, timeout=timeout):
             raw = state_path.read_bytes()

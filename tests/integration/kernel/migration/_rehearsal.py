@@ -349,6 +349,7 @@ _SHAPE_VOLATILE_KEYS: Final[dict[str, tuple[str, ...]]] = {
 def plan_request_for(corpus: Path) -> Epoch2PlanRequest:
     """Return the plan request the rehearsal seals ``corpus`` under."""
     from tests.integration.kernel.migration._corpus_shapes import (
+        DEFAULT_TRACK_KEY,
         PROJECT_KEY,
         REPOSITORY_KEY,
         WORKSPACE_KEY,
@@ -361,6 +362,7 @@ def plan_request_for(corpus: Path) -> Epoch2PlanRequest:
         project_key=PROJECT_KEY,
         repository_key=REPOSITORY_KEY,
         sealed_by=SEALED_BY,
+        default_track_key=DEFAULT_TRACK_KEY,
     )
 
 

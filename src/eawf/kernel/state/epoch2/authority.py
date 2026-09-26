@@ -1,12 +1,13 @@
 """Deciding which authority epoch one tree is in, and refusing native writes.
 
 Epoch 2 is not something a caller asks for. A tree is in epoch 2 when it
-carries two files, and only then: the disposable-canary declaration its
-owner wrote into it, and the epoch marker the cutover (or a canary's
-birth) writes last. Either file alone is a tree that is still epoch 1 --
-a declared canary nobody activated, or an activated tree nobody declared
-throwaway -- and a native mutation against either would be a second
-writer on a tree whose epoch-1 authority is still the real one.
+carries two files, and only then: the declaration its owner wrote into it
+-- a disposable canary, or a live repository's opt-in against a verified
+backup -- and the epoch marker the cutover (or a canary's birth) writes
+last. Either file alone is a tree that is still epoch 1 -- a declared tree
+nobody activated, or an activated tree nobody declared -- and a native
+mutation against either would be a second writer on a tree whose epoch-1
+authority is still the real one.
 
 The answer is read from the tree on every call rather than cached. A
 tree's epoch changes exactly when one of the two files appears or goes
@@ -38,6 +39,7 @@ from eawf.kernel.migration.epoch2.canary import (
     CANARY_DECLARATION_FILENAME,
     GENERATIONS_DIRNAME,
     MARKER_FILENAME,
+    OPT_IN_DECLARATION_FILENAME,
     DisposableTarget,
 )
 from eawf.kernel.migration.epoch2.errors import MigrationTargetNotDisposableError
@@ -57,9 +59,9 @@ class AuthorityGap(StrEnum):
     """Why a tree was not granted epoch-2 authority.
 
     Attributes:
-        UNDECLARED: The tree carries no valid disposable-canary
-            declaration. Absent, unreadable and malformed are one answer,
-            as they are at the cutover's own fence.
+        UNDECLARED: The tree carries no valid declaration of either
+            kind, or carries both. Absent, unreadable and malformed are one
+            answer, as they are at the cutover's own fence.
         MARKER_ABSENT: The tree is declared but no epoch marker was
             written, so nothing activated it.
         MARKER_UNREADABLE: A marker exists but does not parse, so the
@@ -155,7 +157,7 @@ class NativeAuthorityRequiredError(Exception):
         self.gap = gap
         super().__init__(
             f"{root_name} resolves to authority epoch 1 ({gap.value}): a native mutation "
-            f"needs both {CANARY_DECLARATION_FILENAME} and "
+            f"needs {CANARY_DECLARATION_FILENAME} or {OPT_IN_DECLARATION_FILENAME}, and "
             f"{GENERATIONS_DIRNAME}/{MARKER_FILENAME}, so nothing was written"
         )
 

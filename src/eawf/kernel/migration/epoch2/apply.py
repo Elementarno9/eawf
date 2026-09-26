@@ -5,7 +5,10 @@ stating plainly.
 
 The **fence** runs first, before anything else in the function, and it
 returns the typed target every later write derives its paths from. A bug
-further down cannot reach a write helper without one.
+further down cannot reach a write helper without one. A tree admitted by
+an opt-in rather than a disposable declaration also has its named backup
+verified here, so a live repository with no usable backup is refused
+before anything else is read.
 
 The **workspace check** runs second, before plan mode, because plan mode
 mints a URN for every imported record under the workspace key. Finding
@@ -72,6 +75,7 @@ from eawf.kernel.migration.epoch2.generation import (
 )
 from eawf.kernel.migration.epoch2.journal import CutoverJournal, CutoverStage
 from eawf.kernel.migration.epoch2.manifest import BackupRecord, RollbackBoundary
+from eawf.kernel.migration.epoch2.opt_in import VerifiedBackup, verify_opt_in_backup
 from eawf.kernel.migration.epoch2.plan_mode import (
     Epoch2PlanRequest,
     MigrationPlan,
@@ -109,7 +113,8 @@ class Epoch2ApplyRequest(StrictMigrationModel):
             recomputes exactly the plan that was approved rather than a
             reassembled near-copy of it.
         target_root: The tree the new generation is built in. It must
-            declare itself a disposable canary.
+            declare itself a disposable canary, or opt in against a
+            verified backup.
         registry_path: The workspace registry the addressing key is
             resolved against.
         plan_digest: The approval digest the operator approved. The apply
@@ -458,7 +463,7 @@ def _commit(
         backup = authority_snapshot(
             target, registry_path=Path(request.registry_path), taken_at=applied_at
         )
-        capture_restore_point(
+        restore_point = capture_restore_point(
             target=target,
             backup=backup,
             generation_id=generation_id_for(plan.manifest.manifest_digest),
@@ -470,7 +475,10 @@ def _commit(
             stage=CutoverStage.SNAPSHOT_TAKEN,
             boundary=RollbackBoundary.PLAN_ONLY,
             recorded_at=applied_at,
-            detail=f"pinned and copied {len(backup.surfaces)} authority surfaces",
+            detail=(
+                f"pinned and copied {len(backup.surfaces)} authority surfaces; restore point "
+                f"sealed at {restore_point.restore_digest}"
+            ),
         )
         written += journal.flush()
 
@@ -548,6 +556,23 @@ def _commit(
     )
 
 
+def _fence_detail(target: DisposableTarget, *, verified: VerifiedBackup | None) -> str:
+    """Return the journal line naming which declaration admitted the tree.
+
+    Args:
+        target: The fence-cleared target tree.
+        verified: The backup an opted-in tree was admitted on, or ``None``
+            for a disposable canary.
+
+    Returns:
+        One line naming the declarer and, for an opt-in, the backup.
+    """
+    declared_by = target.declaration.declared_by
+    if verified is None:
+        return f"target declared disposable by {declared_by}"
+    return f"target opted in by {declared_by}; backup {verified.ts} verified at {verified.digest}"
+
+
 def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> CutoverResult:
     """Apply one approved cutover plan, or report it is already applied.
 
@@ -563,8 +588,10 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
         the run changed nothing.
 
     Raises:
-        MigrationTargetNotDisposableError: The target has not declared
-            itself a disposable canary.
+        MigrationTargetNotDisposableError: The target has declared itself
+            neither a disposable canary nor an opt-in.
+        MigrationBackupUnverifiedError: The target opted in against a
+            backup that is missing or no longer digests to its pin.
         MigrationWorkspaceNotRegisteredError: The addressing workspace is
             not registered.
         MigrationNotQuiescentError: Something is still holding the tree.
@@ -576,6 +603,7 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
         LockTimeout: An authority surface is held elsewhere.
     """
     target = DisposableTarget.require(Path(request.target_root))
+    verified = verify_opt_in_backup(target)
     _require_registered_workspace(request)
 
     journal = CutoverJournal(target.journal_path)
@@ -583,7 +611,7 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
         stage=CutoverStage.FENCE_CLEARED,
         boundary=RollbackBoundary.PLAN_ONLY,
         recorded_at=applied_at,
-        detail=f"target declared disposable by {target.declaration.declared_by}",
+        detail=_fence_detail(target, verified=verified),
     )
     journal.record(
         stage=CutoverStage.WORKSPACE_RESOLVED,

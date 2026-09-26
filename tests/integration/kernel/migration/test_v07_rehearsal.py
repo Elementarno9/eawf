@@ -31,11 +31,15 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import subprocess
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
+from click.testing import Result
 from typer.testing import CliRunner
 
 from eawf.kernel.migration.epoch2.apply import (
@@ -52,6 +56,10 @@ from eawf.kernel.migration.epoch2.canary import (
     DisposableTarget,
 )
 from eawf.kernel.migration.epoch2.dispositions import Disposition
+from eawf.kernel.migration.epoch2.errors import (
+    MigrationSourceUnreadableError,
+    MigrationStagingRefusedError,
+)
 from eawf.kernel.migration.epoch2.generation import (
     GENERATION_DOCUMENT,
     generation_id_for,
@@ -67,13 +75,15 @@ from eawf.kernel.migration.epoch2.plan_mode import (
     MigrationPlan,
     plan_cutover,
 )
+from eawf.kernel.migration.epoch2.restore import read_restore_manifest
 from eawf.kernel.migration.epoch2.scrub import scan_text
-from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
+from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot, repository_revision
 from eawf.kernel.store.commit_policy import EA_PATH_CLASSES, CommitPolicy
 from eawf.kernel.store.compaction import read_document
 from eawf.surfaces.cli.app import app
 from tests.integration.kernel.migration._corpus_builders import CorpusPlan
 from tests.integration.kernel.migration._corpus_shapes import (
+    DEFAULT_TRACK_KEY,
     INTERRUPTED_CLOSE_SESSION,
     MISSING_ITER_ID,
     STRUCTURAL_CORPORA,
@@ -88,14 +98,22 @@ from tests.integration.kernel.migration._historical_freeze import (
     row_counts,
 )
 from tests.integration.kernel.migration._live_corpus import (
+    LIVE_PROJECT_KEY,
+    LIVE_REPOSITORY_KEY,
     LIVE_STORE_LOCATOR,
+    LIVE_TRACK_KEY,
+    LIVE_WORKSPACE_KEY,
     PIN_FILENAME,
     CorpusMagnitude,
     LiveCorpusPin,
+    clone_at_revision,
     committed_sources,
     is_committed,
     magnitude_for,
+    quiesce_clone,
+    register_live_workspace,
     stage_live_corpus,
+    write_opt_in,
 )
 from tests.integration.kernel.migration._rehearsal import (
     HISTORICAL_CORPUS_ROOT,
@@ -140,23 +158,18 @@ REAPPLIED_AT = datetime(2026, 2, 2, tzinfo=UTC)
 runner = CliRunner()
 
 #: The rows the pinned corpus cannot place, pinned so a converter that
-#: resolves one of them reds here rather than silently widening the set an
-#: apply is allowed to wave through.
-EXPECTED_UNRESOLVED = (
-    "decisions/D01",
-    "decisions/D02",
-    "incidents/INC01",
-    "project",
-    "sandbox_policies/SP01",
-)
+#: stops resolving one of them reds here rather than silently widening the
+#: set an apply is allowed to wave through. Every collection of the pinned
+#: corpus converts, so the waiver is empty.
+EXPECTED_UNRESOLVED: tuple[str, ...] = ()
 
 #: What the pinned corpus leaves in the published generation. Pinned rather
 #: than derived from the manifest, so an apply that builds a thinner tree
 #: and a manifest that agrees with it reds here instead of agreeing with
 #: itself.
-EXPECTED_LEDGER_RECORDS = 511
-EXPECTED_TARGET_ROWS = 515
-EXPECTED_LEDGER_FILES = 9
+EXPECTED_LEDGER_RECORDS = 514
+EXPECTED_TARGET_ROWS = 520
+EXPECTED_LEDGER_FILES = 11
 
 #: The stages one clean apply records, in order.
 EXPECTED_STAGES = (
@@ -189,6 +202,7 @@ def plan_request_for(corpus: Path) -> Epoch2PlanRequest:
         project_key=PROJECT_KEY,
         repository_key=REPOSITORY_KEY,
         sealed_by=SEALED_BY,
+        default_track_key=DEFAULT_TRACK_KEY,
     )
 
 
@@ -523,6 +537,8 @@ def test_apply_through_the_cli_selects_a_generation(tmp_path: Path) -> None:
             PROJECT_KEY,
             "--repository-key",
             REPOSITORY_KEY,
+            "--default-track-key",
+            DEFAULT_TRACK_KEY,
             "--target-root",
             str(target_root),
             "--registry-path",
@@ -963,17 +979,55 @@ def test_the_live_corpus_stages_only_paths_the_commit_policy_carries() -> None:
     from an exclusion list kept alongside it is what stops the fixture
     and the policy from disagreeing about which files those are.
     """
-    sources = committed_sources(REPO_ROOT)
+    top, revision = repository_revision(REPO_ROOT)
+    sources = committed_sources(top, revision=revision)
     uncommitted = [source.locator for source in sources if not is_committed(source.locator)]
+    tracked = _git(top, "ls-tree", "--name-only", revision, f"{LIVE_STORE_LOCATOR}/").split()
 
     assert sources, "the live corpus staged nothing, so the rehearsal would be vacuous"
     assert uncommitted == [], f"staged paths no clone carries: {uncommitted}"
     assert [source.locator for source in sources[:2]] == [".ea/state.json", ".ea/config.yaml"]
     assert {source.locator for source in sources[2:]} == {
-        f"{LIVE_STORE_LOCATOR}/{path.name}"
-        for path in (REPO_ROOT / LIVE_STORE_LOCATOR).glob("*.jsonl")
-        if is_committed(f"{LIVE_STORE_LOCATOR}/{path.name}")
+        locator for locator in tracked if locator.endswith(".jsonl") and is_committed(locator)
     }
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run one git command in ``repo`` and return its stdout."""
+    return subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, check=True
+    ).stdout
+
+
+def _commit_tree(repo: Path) -> None:
+    """Make ``repo`` a git repository whose HEAD holds every file in it."""
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "add", "-A")
+    _git(
+        repo,
+        "-c",
+        "user.name=rehearsal",
+        "-c",
+        "user.email=rehearsal@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "-q",
+        "--no-verify",
+        "-m",
+        "corpus",
+    )
+
+
+def _built_repo(root: Path) -> Path:
+    """Return a committed repository carrying a minimal ``.ea`` corpus."""
+    repo = root / "repo"
+    (repo / ".ea" / "store").mkdir(parents=True)
+    (repo / ".ea" / "state.json").write_text('{"schema_version": "1.19"}\n', encoding="utf-8")
+    (repo / ".ea" / "config.yaml").write_text("epoch: 1\n", encoding="utf-8")
+    (repo / ".ea" / "store" / "audit.jsonl").write_text(SEEDED_AUDIT_ROW, encoding="utf-8")
+    _commit_tree(repo)
+    return repo
 
 
 def _seed_uncommitted_families(repo_root: Path, *, leak: str) -> tuple[str, ...]:
@@ -1020,6 +1074,9 @@ def test_the_staged_tree_drops_every_family_the_commit_policy_excludes(tmp_path:
     (ea_root / "config.yaml").write_text("epoch: 1\n", encoding="utf-8")
     (ea_root / "store" / "audit.jsonl").write_text(SEEDED_AUDIT_ROW, encoding="utf-8")
     excluded = _seed_uncommitted_families(ea_root.parent, leak=leak)
+    _commit_tree(ea_root.parent)
+    # An uncommitted edit is exactly what the staging must not see.
+    (ea_root / "state.json").write_text('{"schema_version": "9.99"}\n', encoding="utf-8")
 
     staged = stage_live_corpus(repo_root=ea_root.parent, destination=tmp_path / "staged")
     names = sorted(
@@ -1039,6 +1096,203 @@ def test_the_staged_tree_drops_every_family_the_commit_policy_excludes(tmp_path:
         "telemetry.json",
     ]
     assert scrub_corpus(staged) == ()
+    assert (staged / "document.json").read_text(encoding="utf-8") == (
+        '{"schema_version": "1.19"}\n'
+    )
+
+
+def _tree_bytes(root: Path) -> dict[str, bytes]:
+    """Return every file under ``root`` keyed by its root-relative path."""
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _stage_to(repo: Path, destination: Path) -> Result:
+    """Invoke ``eawf migrate epoch2 --stage-to --json`` over ``repo``."""
+    return runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(repo),
+            "migrate",
+            "epoch2",
+            "--stage-to",
+            str(destination),
+            "--workspace-key",
+            WORKSPACE_KEY,
+            "--project-key",
+            PROJECT_KEY,
+        ],
+    )
+
+
+def test_stage_to_matches_stage_live_corpus_byte_for_byte(tmp_path: Path) -> None:
+    """The operator verb and the rehearsal stage one snapshot, byte for byte.
+
+    Driven over this repository's own committed corpus, which is the tree
+    the operator stages at the flag day.
+    """
+    helper = stage_live_corpus(repo_root=REPO_ROOT, destination=tmp_path / "helper")
+    result = _stage_to(REPO_ROOT, tmp_path / "verb")
+
+    assert result.exit_code == 0, result.output
+    envelope = json.loads(result.output)
+    assert envelope["revision"] == repository_revision(REPO_ROOT)[1]
+    assert envelope["sources"][:2] == [".ea/state.json", ".ea/config.yaml"]
+    verb = _tree_bytes(tmp_path / "verb")
+    assert verb == _tree_bytes(helper)
+    assert {"document.json", "registry.json", "telemetry.json", "config/base.yaml"} <= set(verb)
+
+
+def test_stage_to_stages_a_corpus_with_no_ledgers(tmp_path: Path) -> None:
+    """A committed store with no ledger is staged as an empty store, not refused."""
+    repo = _built_repo(tmp_path)
+    (repo / ".ea" / "store" / "audit.jsonl").unlink()
+    (repo / ".ea" / "store" / ".keep").write_text("", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(
+        repo,
+        "-c",
+        "user.name=rehearsal",
+        "-c",
+        "user.email=rehearsal@example.invalid",
+        "commit",
+        "-q",
+        "--no-verify",
+        "-m",
+        "drop",
+    )
+
+    result = _stage_to(repo, tmp_path / "staged")
+
+    assert result.exit_code == 0, result.output
+    assert sorted(_tree_bytes(tmp_path / "staged")) == [
+        "config/base.yaml",
+        "document.json",
+        "registry.json",
+        "telemetry.json",
+    ]
+    assert (tmp_path / "staged" / "store").is_dir()
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--workspace-key", "--project-key"],
+)
+def test_stage_to_refuses_a_malformed_key_as_a_typed_usage_error(
+    option: str, tmp_path: Path
+) -> None:
+    """A malformed addressing key exits 2 with a typed envelope and writes nothing."""
+    repo = _built_repo(tmp_path)
+    args = {"--workspace-key": WORKSPACE_KEY, "--project-key": PROJECT_KEY, option: "wsp bad"}
+    result = runner.invoke(
+        app,
+        [
+            "--json",
+            "-w",
+            str(repo),
+            "migrate",
+            "epoch2",
+            "--stage-to",
+            str(tmp_path / "staged"),
+            *(part for pair in args.items() for part in pair),
+        ],
+    )
+
+    assert result.exit_code == 2, result.output
+    assert "Traceback" not in result.output
+    envelope = json.loads(result.output)
+    assert envelope["exit_name"] == "VALIDATION_ERROR"
+    assert "symbol_key_invalid" in envelope["message"]
+    assert not (tmp_path / "staged").exists()
+
+
+def test_plan_refuses_a_malformed_workspace_key_as_a_typed_usage_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A malformed key is refused at the CLI boundary, not deep in the importer."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    corpus = tmp_path / "snapshot"
+    shutil.copytree(FULL_SNAPSHOT, corpus)
+    result = runner.invoke(
+        app,
+        [
+            "migrate",
+            "epoch2",
+            "--plan",
+            "--snapshot-root",
+            str(corpus),
+            "--allowlist",
+            str(ALLOWLIST),
+            "--workspace-key",
+            "wsp-default",
+            "--project-key",
+            PROJECT_KEY,
+            "--repository-key",
+            REPOSITORY_KEY,
+        ],
+    )
+
+    assert result.exit_code == 2, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "Traceback" not in result.output
+    assert "--workspace-key: symbol_key_invalid" in result.output
+
+
+def test_stage_to_refuses_a_destination_inside_the_live_tree(tmp_path: Path) -> None:
+    """The staging never writes under the ``.ea`` tree it reads."""
+    repo = _built_repo(tmp_path)
+    before = _tree_bytes(repo / ".ea")
+
+    result = _stage_to(repo, repo / ".ea" / "staged")
+
+    assert result.exit_code == 2, result.output
+    assert "migration_staging_refused" in result.output
+    assert _tree_bytes(repo / ".ea") == before
+
+
+def test_stage_committed_corpus_refuses_a_non_empty_destination(tmp_path: Path) -> None:
+    """A leftover file would be pinned as corpus, so the staging refuses it."""
+    repo = _built_repo(tmp_path)
+    destination = tmp_path / "staged"
+    destination.mkdir()
+    (destination / "stray.json").write_text("{}\n", encoding="utf-8")
+
+    with pytest.raises(MigrationStagingRefusedError, match="already holds files"):
+        stage_live_corpus(repo_root=repo, destination=destination)
+
+
+def test_stage_committed_corpus_refuses_a_tree_outside_git(tmp_path: Path) -> None:
+    """Without a revision there is no committed corpus to stage."""
+    (tmp_path / "loose" / ".ea").mkdir(parents=True)
+
+    with pytest.raises(MigrationSourceUnreadableError, match="rev-parse"):
+        stage_live_corpus(repo_root=tmp_path / "loose", destination=tmp_path / "staged")
+
+
+def test_stage_committed_corpus_refuses_a_revision_without_a_document(tmp_path: Path) -> None:
+    """A revision that tracks no ``.ea/state.json`` is a broken corpus, not an empty one."""
+    repo = _built_repo(tmp_path)
+    _git(repo, "rm", "-q", ".ea/state.json")
+    _git(
+        repo,
+        "-c",
+        "user.name=rehearsal",
+        "-c",
+        "user.email=rehearsal@example.invalid",
+        "commit",
+        "-q",
+        "--no-verify",
+        "-m",
+        "drop document",
+    )
+
+    with pytest.raises(MigrationSourceUnreadableError, match="not tracked"):
+        stage_live_corpus(repo_root=repo, destination=tmp_path / "staged")
 
 
 # ---------------------------------------------------------------------------
@@ -1081,3 +1335,304 @@ def test_frozen_historical_corpus_agrees_with_its_recorded_provenance() -> None:
     assert PHASE_BATCH_POINTER not in document["phases"][SLICE_PHASE_ID]
     assert set(document["iters"]) == {SLICE_ITER_ID}
     assert set(document["iters"][SLICE_ITER_ID]["wave_ids"]) == set(document["waves"])
+
+
+# ---------------------------------------------------------------------------
+# The pinned clone.
+#
+# Everything above imports this repository's corpus into a scratch target.
+# What follows cuts the repository itself over -- a clone of it, pinned at
+# one revision -- through the operator verbs the live cut runs, in the order
+# the runbook runs them: back up, opt in, stage, plan, apply, apply again,
+# roll back. The target is the clone's own ``.ea``, so the fence, the
+# quiescence probe and the restore point all meet the tree they will meet on
+# the day, not a seeded stand-in.
+# ---------------------------------------------------------------------------
+
+#: The allowlist the live cut plans under, read from the clone so it is
+#: pinned at the same revision as the corpus.
+LIVE_ALLOWLIST_LOCATOR = "tests/fixtures/migration/allowed_legacy_symbols.txt"
+
+#: The collection whose conversion is declared but not implemented, and the
+#: one row the negative corpus adds to it.
+UNCONVERTED_COLLECTION = "hypotheses"
+UNCONVERTED_ROW = "H01-01"
+
+
+@dataclass(frozen=True)
+class CloneRehearsal:
+    """What one pinned-clone rehearsal recorded, leg by leg.
+
+    Attributes:
+        home: The user-scope home the backup was written under.
+        revision: The commit the clone is pinned at.
+        clone: The clone's repository root.
+        staged: The snapshot root ``--stage-to`` assembled.
+        registry: The registry the apply resolved the workspace in.
+        stage: The staging envelope.
+        plan: The plan envelope.
+        apply: The first apply's envelope.
+        rerun: The second apply's envelope.
+        tree_before_rerun: A digest per content file before the second apply.
+        tree_after_rerun: The same digests after it.
+        restore_point: The digest the restore point pinned per restorable
+            surface.
+        rollback: The rollback envelope.
+        boundary_after_rollback: The boundary report once rolled back.
+        surfaces_after_rollback: The digest per restorable surface once
+            rolled back, ``absent`` for one that is not on disk.
+    """
+
+    home: Path
+    revision: str
+    clone: Path
+    staged: Path
+    registry: Path
+    stage: dict[str, Any]
+    plan: dict[str, Any]
+    apply: dict[str, Any]
+    rerun: dict[str, Any]
+    tree_before_rerun: dict[str, str]
+    tree_after_rerun: dict[str, str]
+    restore_point: dict[str, str]
+    rollback: dict[str, Any]
+    boundary_after_rollback: dict[str, Any]
+    surfaces_after_rollback: dict[str, str]
+
+    @property
+    def ea_root(self) -> Path:
+        """The clone's ``.ea`` tree, which is the cutover's target."""
+        return self.clone / ".ea"
+
+
+def _eawf(*argv: str) -> dict[str, Any]:
+    """Run one ``eawf --json`` command and return its envelope."""
+    result = runner.invoke(app, ["--json", *argv])
+    assert result.exit_code == 0, result.output
+    payload: dict[str, Any] = json.loads(result.output)
+    return payload
+
+
+def _corpus_argv(*, staged: Path, allowlist: Path) -> list[str]:
+    """Return the corpus and addressing options the live cut plans with."""
+    return [
+        "--snapshot-root",
+        str(staged),
+        "--allowlist",
+        str(allowlist),
+        "--workspace-key",
+        LIVE_WORKSPACE_KEY,
+        "--project-key",
+        LIVE_PROJECT_KEY,
+        "--repository-key",
+        LIVE_REPOSITORY_KEY,
+        "--default-track-key",
+        LIVE_TRACK_KEY,
+    ]
+
+
+def _apply_argv(*, corpus: list[str], ea_root: Path, registry: Path, digest: str) -> list[str]:
+    """Return the full ``migrate epoch2 --apply`` argv for one approved plan."""
+    return [
+        "migrate",
+        "epoch2",
+        "--apply",
+        *corpus,
+        "--target-root",
+        str(ea_root),
+        "--registry-path",
+        str(registry),
+        "--plan-digest",
+        digest,
+    ]
+
+
+def _surface_digests(ea_root: Path, locators: tuple[str, ...]) -> dict[str, str]:
+    """Return the digest per surface, ``absent`` for one not on disk."""
+    return {
+        locator: hashlib.sha256((ea_root / locator).read_bytes()).hexdigest()
+        if (ea_root / locator).is_file()
+        else ABSENT_SURFACE
+        for locator in locators
+    }
+
+
+@pytest.fixture(scope="module")
+def clone_rehearsal(tmp_path_factory: pytest.TempPathFactory) -> CloneRehearsal:
+    """Cut a pinned clone of this repository over, once for the module.
+
+    Returns:
+        The record of every leg. The legs are one transaction -- a re-run
+        and a rollback only mean something after the apply they follow --
+        so they run once and the tests assert over the record.
+    """
+    root = tmp_path_factory.mktemp("pinned_clone")
+    clone = root / "eawf-rehearsal"
+    home = root / "home"
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("EAWF_HOME", str(home))
+        patch.setenv("EAWF_DAEMONLESS", "1")
+        revision = clone_at_revision(repo_root=REPO_ROOT, destination=clone)
+        ea_root = clone / ".ea"
+        quiesce_clone(clone, booted_at=datetime.now(UTC))
+        backup = _eawf("-w", str(clone), "backup", "create", "--note", "pre epoch-2 cutover")
+        write_opt_in(ea_root, backup_ts=backup["ts"], backup_digest=backup["digest"])
+        registry = register_live_workspace(root / "registry.json")
+        staged = root / "staged"
+        stage = _eawf(
+            "-w",
+            str(clone),
+            "migrate",
+            "epoch2",
+            "--stage-to",
+            str(staged),
+            "--workspace-key",
+            LIVE_WORKSPACE_KEY,
+            "--project-key",
+            LIVE_PROJECT_KEY,
+        )
+        corpus = _corpus_argv(staged=staged, allowlist=clone / LIVE_ALLOWLIST_LOCATOR)
+        plan = _eawf("migrate", "epoch2", "--plan", *corpus)
+        apply_argv = _apply_argv(
+            corpus=corpus, ea_root=ea_root, registry=registry, digest=plan["approval_digest"]
+        )
+        applied = _eawf(*apply_argv)
+        before = content_digests(ea_root)
+        rerun = _eawf(*apply_argv)
+        after = content_digests(ea_root)
+        manifest = read_restore_manifest(DisposableTarget.require(ea_root).restore_manifest_path)
+        restorable = tuple(surface.locator for surface in manifest.surfaces if surface.restorable)
+        rollback = _eawf("migrate", "epoch2", "--rollback", "--target-root", str(ea_root))
+        boundary = _eawf("migrate", "epoch2", "--rollback-boundary", "--target-root", str(ea_root))
+    return CloneRehearsal(
+        home=home,
+        revision=revision,
+        clone=clone,
+        staged=staged,
+        registry=registry,
+        stage=stage,
+        plan=plan,
+        apply=applied,
+        rerun=rerun,
+        tree_before_rerun=before,
+        tree_after_rerun=after,
+        restore_point={
+            surface.locator: surface.digest for surface in manifest.surfaces if surface.restorable
+        },
+        rollback=rollback,
+        boundary_after_rollback=boundary,
+        surfaces_after_rollback=_surface_digests(ea_root, restorable),
+    )
+
+
+def test_pinned_clone_rehearsal_stages_the_revision_it_pinned(
+    clone_rehearsal: CloneRehearsal,
+) -> None:
+    """The corpus is the clone's committed tree at the one pinned commit."""
+    head = _git(clone_rehearsal.clone, "rev-parse", "HEAD").strip()
+
+    assert head == clone_rehearsal.revision
+    assert clone_rehearsal.stage["revision"] == clone_rehearsal.revision
+    assert clone_rehearsal.stage["sources"][:2] == [".ea/state.json", ".ea/config.yaml"]
+
+
+def test_pinned_clone_rehearsal_plans_an_applicable_cutover(
+    clone_rehearsal: CloneRehearsal,
+) -> None:
+    """Every row of the real corpus has a target, so the plan needs no waiver."""
+    plan = clone_rehearsal.plan
+
+    assert plan["applicable"] is True
+    assert plan["unresolved_row_count"] == 0
+    assert plan["required_operator_assignment_count"] == 0
+    assert plan["target_rows"] > 0
+    assert plan["manifest_digest"] != plan["approval_digest"]
+
+
+def test_pinned_clone_rehearsal_apply_selects_the_planned_manifest(
+    clone_rehearsal: CloneRehearsal,
+) -> None:
+    """The apply builds exactly the generation the approved plan named."""
+    plan, applied = clone_rehearsal.plan, clone_rehearsal.apply
+    target = DisposableTarget.require(clone_rehearsal.ea_root)
+
+    assert applied["status"] == "applied"
+    assert applied["manifest_digest"] == plan["manifest_digest"]
+    assert applied["approval_digest"] == plan["approval_digest"]
+    assert applied["generation_id"] == generation_id_for(plan["manifest_digest"])
+    assert applied["journal_rows"] == len(EXPECTED_STAGE_VALUES)
+    assert applied["rollback_boundary"] == RollbackBoundary.MARKER_WRITTEN.value
+    assert applied["accepted_unresolved_rows"] == []
+    assert applied["target_rows"] == plan["target_rows"]
+    require_chain_intact(read_journal(target.journal_path))
+
+
+def test_pinned_clone_rehearsal_second_apply_writes_nothing_and_keeps_the_manifest(
+    clone_rehearsal: CloneRehearsal,
+) -> None:
+    """A re-run of the approved plan recognises its own work, byte for byte."""
+    applied, rerun = clone_rehearsal.apply, clone_rehearsal.rerun
+
+    assert rerun["status"] == "already-selected"
+    assert rerun["applied"] is False
+    assert rerun["journal_rows"] == 0
+    assert rerun["manifest_digest"] == applied["manifest_digest"]
+    assert rerun["generation_id"] == applied["generation_id"]
+    assert rerun["generation_count"] == 1
+    assert clone_rehearsal.tree_after_rerun == clone_rehearsal.tree_before_rerun
+
+
+def test_pinned_clone_rehearsal_rollback_restores_the_restore_point(
+    clone_rehearsal: CloneRehearsal,
+) -> None:
+    """Before any native write, the whole activation is reversible."""
+    rollback = clone_rehearsal.rollback
+    boundary = clone_rehearsal.boundary_after_rollback
+
+    assert rollback["outcome"] == "surfaces_restored"
+    assert rollback["authority"] == {"epoch": 1, "generation_count": 0, "generation_id": None}
+    assert rollback["manifest_digest"] == clone_rehearsal.apply["manifest_digest"]
+    assert clone_rehearsal.surfaces_after_rollback == clone_rehearsal.restore_point
+    assert boundary["boundary"] == RollbackBoundary.PLAN_ONLY.value
+    assert boundary["generation_id"] is None
+    assert boundary["declaration"] == "opt_in"
+
+
+def test_pinned_clone_rehearsal_refuses_a_corpus_with_one_unconverted_row(
+    clone_rehearsal: CloneRehearsal, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One row with no epoch-2 target turns the plan inapplicable and the apply away.
+
+    The row is added to the clone's own staged corpus, so the only
+    difference from the applicable plan above is that one row.
+    """
+    monkeypatch.setenv("EAWF_HOME", str(clone_rehearsal.home))
+    corpus = tmp_path / "staged"
+    shutil.copytree(clone_rehearsal.staged, corpus)
+    document_path = corpus / "document.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    document[UNCONVERTED_COLLECTION] = {UNCONVERTED_ROW: {"id": UNCONVERTED_ROW}}
+    document_path.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
+    argv = _corpus_argv(staged=corpus, allowlist=clone_rehearsal.clone / LIVE_ALLOWLIST_LOCATOR)
+
+    plan = _eawf("migrate", "epoch2", "--plan", *argv)
+    before = content_digests(clone_rehearsal.ea_root)
+    refused = runner.invoke(
+        app,
+        [
+            "--json",
+            *_apply_argv(
+                corpus=argv,
+                ea_root=clone_rehearsal.ea_root,
+                registry=clone_rehearsal.registry,
+                digest=plan["approval_digest"],
+            ),
+        ],
+    )
+
+    assert plan["applicable"] is False
+    assert plan["unresolved_row_count"] == 1
+    assert refused.exit_code == 2, refused.output
+    assert "migration_plan_not_applicable" in refused.output
+    assert UNCONVERTED_ROW in refused.output
+    assert content_digests(clone_rehearsal.ea_root) == before

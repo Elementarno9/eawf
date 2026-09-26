@@ -15,7 +15,9 @@ the document bytes themselves.
 A ledger-only mutation is counted the same way: one WAL record, one
 sequence bump, one ledger line and one firehose row. The census at the end
 is what keeps that true, by refusing any ledger append outside the store
-and the transaction module.
+and the few functions that own one: the transaction's commit, the replay
+that finishes a journalled line, and the two migration writers that
+extend a ledger before its tree has authority.
 
 A second census does the same for the generation document itself: outside
 the store, the session, the commit paths and the two writers that build a
@@ -31,6 +33,7 @@ import ast
 import asyncio
 import json
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, Final
 
@@ -103,6 +106,15 @@ def canary(tmp_path: Path) -> CanaryProvision:
 def context(canary: CanaryProvision, tmp_path: Path) -> Epoch2RootContext:
     """The native context of the canary, with a WAL directory of its own."""
     return root_context(canary, tmp_path / "runtime")
+
+
+def test_the_canary_runtime_dir_stays_under_the_canary_root(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    """The fixture's canary allocates nothing outside the root it was given."""
+    assert canary.runtime_dir.is_relative_to(canary.root)
+    assert canary.runtime_dir.is_dir()
+    assert list((tmp_path / "scratch").iterdir()) == []
 
 
 def _request(**overrides: Any) -> TransitionRequest:
@@ -448,18 +460,35 @@ def test_the_transition_method_is_registered_on_the_server() -> None:
 PACKAGE_ROOT: Final = Path(__file__).resolve().parents[4] / "src" / "eawf"
 
 #: The ledger-line writers the census forbids. ``guarded_ledger_write`` is
-#: not one of them: it replaces a whole append-only file and is the
-#: migration journal's writer, not a native mutation's.
+#: among them: it replaces a whole ledger with an extension of itself, so a
+#: caller holding it can append as surely as through the line writers.
 LEDGER_WRITERS: Final = frozenset(
-    {"append_ledger_record", "append_ledger_record_once", "append_correction"}
+    {
+        "append_ledger_record",
+        "append_ledger_record_once",
+        "append_correction",
+        "guarded_ledger_write",
+    }
 )
 
-#: Where a writer may be named outside the store, relative to the package.
-#: The transaction is the one commit path; the replay finishes a line the
-#: transaction journalled, and only through the idempotent writer.
+#: The functions that may name a writer outside the store, keyed by path
+#: relative to the package and qualified name within the module. A module
+#: holding one may import that writer; nothing else in it may name it.
 ALLOWED_WRITERS: Final = {
-    "runtime/daemon/epoch2_transaction.py": frozenset({"append_ledger_record"}),
-    "runtime/daemon/epoch2_recovery.py": frozenset({"append_ledger_record_once"}),
+    # The one commit path of a native ledger line.
+    ("runtime/daemon/epoch2_transaction.py", "commit_ledger_append"): frozenset(
+        {"append_ledger_record"}
+    ),
+    # The replay finishes a line the transaction journalled, idempotently.
+    ("runtime/daemon/epoch2_recovery.py", "_finish_ledger_line"): frozenset(
+        {"append_ledger_record_once"}
+    ),
+    # The cutover journal, which is the migration's own record, not a store ledger.
+    ("kernel/migration/epoch2/journal.py", "CutoverJournal.flush"): frozenset(
+        {"guarded_ledger_write"}
+    ),
+    # The cutover's projection of epoch-1 records into a staged generation.
+    ("kernel/migration/epoch2/cutover.py", "_write_ledgers"): frozenset({"guarded_ledger_write"}),
 }
 
 #: The store package, which owns the writers and may name them freely.
@@ -468,39 +497,73 @@ STORE_PACKAGE: Final = "kernel/store/"
 RUN_URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010"
 
 
+def _named(node: ast.AST) -> list[str]:
+    """Return every name *node* spells, the ``getattr`` string form included."""
+    if isinstance(node, ast.ImportFrom):
+        return [alias.name for alias in node.names]
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, ast.Attribute):
+        return [node.attr]
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    return []
+
+
+def _scoped_nodes(tree: ast.Module) -> Iterator[tuple[ast.AST, str]]:
+    """Yield every node with the qualified name of the def or class enclosing it."""
+    stack: list[tuple[ast.AST, str]] = [(child, "") for child in tree.body]
+    while stack:
+        node, scope = stack.pop()
+        yield node, scope
+        inner = scope
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            inner = f"{scope}.{node.name}" if scope else node.name
+        stack.extend((child, inner) for child in ast.iter_child_nodes(node))
+
+
 def direct_ledger_appends(package_root: Path) -> list[str]:
     """Return every place under *package_root* that names a ledger writer.
 
-    A name is flagged wherever it appears -- imported, called, aliased or
-    passed along as a value -- because each of those is a route to an
-    append that skips the transaction.
+    A name is flagged wherever it appears -- imported, called, aliased,
+    passed along as a value or spelled as a string for ``getattr`` --
+    because each of those is a route to an append that skips the
+    transaction. Only the functions in :data:`ALLOWED_WRITERS` may name
+    their writer, and their modules may import it.
 
     Returns:
         ``<relative path>:<line> <name>`` for each finding, in path order.
     """
-    findings: list[str] = []
+    findings: list[tuple[str, int, str]] = []
     for path in sorted(package_root.rglob("*.py")):
         relative = path.relative_to(package_root).as_posix()
         if relative.startswith(STORE_PACKAGE):
             continue
-        allowed = ALLOWED_WRITERS.get(relative, frozenset())
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            names: list[str] = []
-            if isinstance(node, ast.ImportFrom):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.Name):
-                names = [node.id]
-            elif isinstance(node, ast.Attribute):
-                names = [node.attr]
-            for name in names:
-                if name in LEDGER_WRITERS and name not in allowed:
-                    findings.append(f"{relative}:{node.lineno} {name}")
-    return findings
+        importable = frozenset().union(
+            *(names for (module, _), names in ALLOWED_WRITERS.items() if module == relative)
+        )
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node, scope in _scoped_nodes(tree):
+            allowed = (
+                importable
+                if isinstance(node, ast.ImportFrom) and not scope
+                else ALLOWED_WRITERS.get((relative, scope), frozenset())
+            )
+            findings.extend(
+                (relative, getattr(node, "lineno", 0), name)
+                for name in _named(node)
+                if name in LEDGER_WRITERS and name not in allowed
+            )
+    return [f"{relative}:{line} {name}" for relative, line, name in sorted(findings)]
 
 
-def _seeded_package(tmp_path: Path, *, addition: str) -> Path:
-    """Copy the real delivery verb module into a scratch package and append to it."""
-    relative = Path("runtime/daemon/methods/delivery.py")
+def _seeded_package(
+    tmp_path: Path,
+    *,
+    addition: str,
+    relative: Path = Path("runtime/daemon/methods/delivery.py"),
+) -> Path:
+    """Copy one real module into a scratch package and append to it."""
     source = (PACKAGE_ROOT / relative).read_text(encoding="utf-8")
     target = tmp_path / "eawf" / relative
     target.parent.mkdir(parents=True)
@@ -549,6 +612,17 @@ def test_census_passes_the_unseeded_delivery_module(tmp_path: Path) -> None:
             "def _seeded(path, record):\n    ledger.append_correction(path, record)\n",
             id="module-attribute",
         ),
+        pytest.param(
+            "from eawf.kernel.store import ledger\n\n\n"
+            "def _seeded(path, record):\n"
+            "    getattr(ledger, 'append_ledger_record')(path, record)\n",
+            id="getattr-string",
+        ),
+        pytest.param(
+            "from eawf.kernel.store import ledger\n\n\n"
+            "def _seeded(path, content):\n    ledger.guarded_ledger_write(path, content)\n",
+            id="guarded-write",
+        ),
     ],
 )
 def test_census_reds_on_a_seeded_delivery_append(tmp_path: Path, addition: str) -> None:
@@ -556,6 +630,48 @@ def test_census_reds_on_a_seeded_delivery_append(tmp_path: Path, addition: str) 
 
     assert findings
     assert all(item.startswith("runtime/daemon/methods/delivery.py:") for item in findings)
+
+
+#: Modules that own an allowed writer, each seeded with a second function
+#: that names the same writer outside the one function allowed to.
+_OWNER_SEEDS: Final = (
+    pytest.param(
+        Path("runtime/daemon/epoch2_transaction.py"),
+        "def _seeded(path, record):\n    append_ledger_record(path, record)\n",
+        id="transaction-second-append",
+    ),
+    pytest.param(
+        Path("kernel/migration/epoch2/journal.py"),
+        "def _seeded(path, content):\n    guarded_ledger_write(path, content)\n",
+        id="journal-second-guarded-write",
+    ),
+    pytest.param(
+        Path("kernel/migration/epoch2/cutover.py"),
+        "_WRITE = guarded_ledger_write\n",
+        id="cutover-writer-as-value",
+    ),
+)
+
+
+@pytest.mark.parametrize(("relative", "addition"), _OWNER_SEEDS)
+def test_census_passes_an_unseeded_owner_module(
+    tmp_path: Path, relative: Path, addition: str
+) -> None:
+    """Boundary: the allowed function alone is not a finding."""
+    assert direct_ledger_appends(_seeded_package(tmp_path, addition="", relative=relative)) == []
+
+
+@pytest.mark.parametrize(("relative", "addition"), _OWNER_SEEDS)
+def test_census_reds_on_a_writer_outside_the_allowed_function(
+    tmp_path: Path, relative: Path, addition: str
+) -> None:
+    """An allowance covers one function, not the module that holds it."""
+    package = _seeded_package(tmp_path, addition=addition, relative=relative)
+
+    findings = direct_ledger_appends(package)
+
+    assert findings
+    assert all(item.startswith(f"{relative.as_posix()}:") for item in findings)
 
 
 def test_ledger_append_writes_one_intent_one_line_and_one_row(

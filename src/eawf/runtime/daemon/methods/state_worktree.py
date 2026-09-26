@@ -1,9 +1,11 @@
-"""Daemon-owned worktree landing and ``track.*`` mutators.
+"""Daemon-owned worktree landing, reconcile and ``track.*`` mutators.
 
 ``wave land`` / ``wave autoland`` / ``track sync`` mutate ``state.json``
 through a generic commit wrapper rather than the ``state.mutate``
 transaction: each runs an arbitrary in-process mutator under the same
 portalock + WAL + event-append discipline the canonical mutator uses.
+``worktree reconcile`` retires rows whose holder is gone through
+:func:`eawf.runtime.worktree.reconcile.reconcile_stale_rows`.
 """
 
 from __future__ import annotations
@@ -56,6 +58,9 @@ from eawf.runtime.daemon.methods.state_models import (
     WaveLandBatchRpcResult,
     WaveLandParams,
     WaveLandRpcResult,
+    WorktreeReconcileParams,
+    WorktreeReconcileRow,
+    WorktreeReconcileRpcResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -383,6 +388,58 @@ async def wave_autoland_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[
                 )
             ),
         )
+
+
+@register("state.worktree_reconcile")
+async def worktree_reconcile_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Retire active worktree and session rows whose holder is gone.
+
+    Worktree rows are judged against ``git worktree list`` and session
+    rows against this daemon's boot time, so a session that started
+    before the daemon did is reported as orphaned. The write goes through
+    :func:`eawf.kernel.state.io.write_state_unlocked` under the state lock.
+
+    Raises:
+        StateRegressedError: ``state.json`` is older than this daemon's
+            last write to it; nothing is written.
+        DaemonValidationError: The rewritten document would carry a leak
+            shape, or git cannot list the worktrees; nothing is written.
+    """
+    from eawf.kernel.state.io import StateValidationError
+    from eawf.runtime.worktree import worktree_registry_lock
+    from eawf.runtime.worktree.reconcile import reconcile_stale_rows
+    from eawf.surfaces.cli import errors as cli_errors
+
+    args = WorktreeReconcileParams.model_validate(params)
+    repo_root = Path(args.repo_root)
+    state_path, event_path, _wal_dir = resolve_mutator_paths(repo_root=args.repo_root, ctx=ctx)
+    ctx.in_flight_mutations += 1
+    try:
+        with worktree_registry_lock(repo_root, timeout=5.0):
+            result = reconcile_stale_rows(
+                state_path,
+                event_path,
+                repo_root=repo_root,
+                booted_at=datetime.fromisoformat(ctx.started_at),
+                dry_run=args.dry_run,
+                check_loaded=lambda state: ctx.refuse_regressed_state(
+                    state_path, updated_at=state.updated_at
+                ),
+            )
+    except (StateValidationError, cli_errors.CliError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    finally:
+        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
+    if result.updated_at is not None:
+        ctx.note_state_written(state_path, updated_at=result.updated_at)
+    return WorktreeReconcileRpcResult(
+        retired=[
+            WorktreeReconcileRow(kind=row.kind.value, row_id=row.row_id, reason=row.reason.value)
+            for row in result.rows
+        ],
+        dry_run=result.dry_run,
+        written=result.written,
+    ).model_dump(mode="json")
 
 
 # ---- track.* mutators --------------------------------------------------------

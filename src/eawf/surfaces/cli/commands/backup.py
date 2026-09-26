@@ -38,6 +38,7 @@ from eawf.platform.backup import (
     list_backups,
     prune_backups,
     restore_backup,
+    snapshot_digest,
 )
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -77,13 +78,15 @@ def backup_create(
         cli_errors.emit_error(cli_errors.UserError(str(exc)), flags=flags)
         return
 
+    digest = snapshot_digest(snapshot)
     payload: dict[str, object] = {
         "ts": snapshot.ts,
         "path": str(snapshot.path),
         "artifacts": list(snapshot.artifacts),
         "note": snapshot.note,
+        "digest": digest,
     }
-    text = f"backup create: {snapshot.ts} ({', '.join(snapshot.artifacts)})"
+    text = f"backup create: {snapshot.ts} ({', '.join(snapshot.artifacts)}) digest {digest}"
     emit_json_or_text(payload, text, flags=flags)
 
 
@@ -100,6 +103,7 @@ def backup_list(ctx: typer.Context) -> None:
                 "ts": s.ts,
                 "artifacts": list(s.artifacts),
                 "note": s.note,
+                "digest": snapshot_digest(s),
             }
             for s in snapshots
         ],

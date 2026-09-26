@@ -22,6 +22,12 @@ metric hangs off -- and the row imports without it, annotated. An
 refuses the apply. Collapsing the two would either block a cutover on
 questions an operator can answer afterwards, or quietly write rows whose
 target nobody decided.
+
+An operator may answer the Track question up front by declaring one
+default Track on the plan request. The manifest then lists each answered
+question as a **declared Track assignment** instead of a required one, so
+the record shows both that the source was silent and what the operator
+said in its place.
 """
 
 from __future__ import annotations
@@ -42,6 +48,7 @@ from eawf.kernel.migration.epoch2.manifest_rows import (
     GIT_EVIDENCE_FIELDS,
     VALIDATION_PASS_COUNT,
     BackupRecord,
+    DeclaredTrackAssignment,
     GitEvidence,
     GitFact,
     GitFactKind,
@@ -110,6 +117,8 @@ class MigrationManifest(StrictMigrationModel):
         store_mappings: One row per epoch-2 collection receiving records.
         git_evidence: Every git reference the source recorded.
         track_assignments: The Track ownership an operator must supply.
+        declared_track_assignments: The Track ownership the operator
+            declared on the plan request, one row per question it answered.
         unresolved_rows: Every row the cutover cannot place.
         source_digest: The pinned revision of the corpus.
         manifest_digest: A digest over every content field, excluding the
@@ -138,6 +147,7 @@ class MigrationManifest(StrictMigrationModel):
     store_mappings: tuple[StoreMapping, ...]
     git_evidence: GitEvidence
     track_assignments: tuple[OperatorAssignment, ...]
+    declared_track_assignments: tuple[DeclaredTrackAssignment, ...] = ()
     unresolved_rows: tuple[UnresolvedRow, ...]
     source_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     manifest_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
@@ -370,6 +380,7 @@ def manifest_content_payload(
     store_mappings: tuple[StoreMapping, ...],
     git_evidence: GitEvidence,
     track_assignments: tuple[OperatorAssignment, ...],
+    declared_track_assignments: tuple[DeclaredTrackAssignment, ...],
     unresolved_rows: tuple[UnresolvedRow, ...],
     validation_results: tuple[ValidationPass, ...],
 ) -> dict[str, Any]:
@@ -388,13 +399,17 @@ def manifest_content_payload(
         store_mappings: One row per epoch-2 collection receiving records.
         git_evidence: The git references the source recorded.
         track_assignments: The Track ownership an operator must supply.
+        declared_track_assignments: The Track ownership the operator
+            declared. The key is written only when there is one, so a
+            manifest sealed before declarations existed still digests to
+            the value it was sealed under.
         unresolved_rows: Every row the cutover cannot place.
         validation_results: The validation passes.
 
     Returns:
         The JSON-ready payload, in one fixed key order.
     """
-    return {
+    payload: dict[str, Any] = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "source": source.model_dump(mode="json"),
         "source_census": source_census.model_dump(mode="json"),
@@ -407,6 +422,11 @@ def manifest_content_payload(
         "unresolved_rows": [row.model_dump(mode="json") for row in unresolved_rows],
         "validation_results": [row.model_dump(mode="json") for row in validation_results],
     }
+    if declared_track_assignments:
+        payload["declared_track_assignments"] = [
+            row.model_dump(mode="json") for row in declared_track_assignments
+        ]
+    return payload
 
 
 def idempotence_payload(
@@ -670,6 +690,7 @@ def _require_digests_consistent(manifest: MigrationManifest) -> None:
             store_mappings=manifest.store_mappings,
             git_evidence=manifest.git_evidence,
             track_assignments=manifest.track_assignments,
+            declared_track_assignments=manifest.declared_track_assignments,
             unresolved_rows=manifest.unresolved_rows,
             validation_results=manifest.validation_results,
         )
@@ -776,6 +797,7 @@ __all__ = [
     "UNADDRESSED_TARGETS",
     "VALIDATION_PASS_COUNT",
     "BackupRecord",
+    "DeclaredTrackAssignment",
     "GitEvidence",
     "GitFact",
     "GitFactKind",

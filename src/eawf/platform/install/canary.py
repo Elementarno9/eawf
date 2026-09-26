@@ -15,8 +15,9 @@ anything, so a canary can never be an existing repository relabelled,
 and tearing one down may remove the whole directory it created.
 
 Its daemon runtime directory is fresh. Provisioning allocates a new one
-and records it, so a daemon serving the canary never shares a socket,
-lock or write-ahead log with the daemon serving production.
+inside the canary's own machine-local tree and records it, so a daemon
+serving the canary never shares a socket, lock or write-ahead log with the
+daemon serving production, and the directory goes wherever the tree goes.
 
 Its registry row is explicit and removable. The row is added under the
 canary's own project code, refused if that code already names a
@@ -89,6 +90,11 @@ CANARY_PURPOSE: Final = (
 #: ``local/`` because the runtime directory it names is a fact about one
 #: machine, and a clone must not inherit another machine's canary.
 PROVISION_RECORD_LOCATOR: Final = "local/epoch2-canary.json"
+
+#: Where a canary's runtime directory is allocated inside the fenced tree.
+#: Under ``local/`` for the same reason as the record, and inside the tree
+#: at all so that removing the tree can never leave the directory behind.
+RUNTIME_PARENT_LOCATOR: Final = "local"
 
 #: The name prefix of every canary runtime directory. Teardown removes a
 #: recorded runtime directory only when its name carries this prefix, so a
@@ -277,7 +283,8 @@ def provision_canary(
             back through the public readers.
         RuntimeError: The finished tree does not resolve to epoch 2,
             which would make every claim this function returns false.
-        OSError: A file or the runtime directory could not be written.
+        OSError: A file or the runtime directory could not be written. The
+            runtime directory is removed again before the error propagates.
     """
     root = repo_root.resolve()
     tree_root = root / EA_DIRNAME
@@ -299,17 +306,20 @@ def provision_canary(
     if resolve_authority(tree_root).epoch != 2:
         raise RuntimeError(f"{root.name} was provisioned but does not resolve to epoch 2")
 
-    provision = CanaryProvision(
-        ref=ref,
-        root=root,
-        runtime_dir=Path(tempfile.mkdtemp(prefix=RUNTIME_DIR_PREFIX)),
-        generation_id=generation_id,
-        provisioned_at=provisioned_at,
-    )
+    runtime_parent = tree_root / RUNTIME_PARENT_LOCATOR
+    runtime_parent.mkdir(parents=True, exist_ok=True)
+    runtime_dir = Path(tempfile.mkdtemp(prefix=RUNTIME_DIR_PREFIX, dir=runtime_parent))
     try:
+        provision = CanaryProvision(
+            ref=ref,
+            root=root,
+            runtime_dir=runtime_dir,
+            generation_id=generation_id,
+            provisioned_at=provisioned_at,
+        )
         write_json_record(tree_root / PROVISION_RECORD_LOCATOR, provision.model_dump(mode="json"))
-    except OSError:
-        shutil.rmtree(provision.runtime_dir, ignore_errors=True)
+    except BaseException:
+        shutil.rmtree(runtime_dir, ignore_errors=True)
         raise
     logger.info(
         f"provision_canary code={ref.project_code} generation={generation_id} "
@@ -467,9 +477,9 @@ def discard_canary(
     require_no_live_daemon(provision)
     runtime_dir = provision.runtime_dir
     owned_runtime = runtime_dir.name.startswith(RUNTIME_DIR_PREFIX) and runtime_dir.is_dir()
-    shutil.rmtree(provision.root)
     if owned_runtime:
         shutil.rmtree(runtime_dir)
+    shutil.rmtree(provision.root)
     logger.info(
         f"discard_canary code={provision.ref.project_code} "
         f"registry_rows={len(removed_registry_codes)} runtime_dir_removed={owned_runtime}"
@@ -487,6 +497,7 @@ __all__ = [
     "DEFAULT_CANARY_CODE",
     "PROVISION_RECORD_LOCATOR",
     "RUNTIME_DIR_PREFIX",
+    "RUNTIME_PARENT_LOCATOR",
     "CanaryProvision",
     "CanaryProvisionError",
     "CanaryTeardown",

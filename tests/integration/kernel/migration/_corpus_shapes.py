@@ -59,6 +59,11 @@ WORKSPACE_KEY: Final = "WSP-DEFAULT"
 PROJECT_KEY: Final = "PRJ-DEMO"
 REPOSITORY_KEY: Final = "REP-DEMO"
 
+#: The Track the operator declares for every imported phase and goal
+#: whose source names none; without it an apply refuses rather than
+#: inferring an owner.
+DEFAULT_TRACK_KEY: Final = "TRK-EAWF-CORE"
+
 #: The second workspace only the multi-root corpus registers.
 SECOND_WORKSPACE_KEY: Final = "WSP-SATELLITE"
 

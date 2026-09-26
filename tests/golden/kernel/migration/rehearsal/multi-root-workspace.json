@@ -1,8 +1,8 @@
 {
   "apply": {
     "applied": true,
-    "generation_bytes": 6248,
-    "generation_id": "gen-0ae57b25acb6a282",
+    "generation_bytes": 8080,
+    "generation_id": "gen-b50e820486db134f",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -19,11 +19,11 @@
     ],
     "ledger_files": 2,
     "ledger_records": 2,
-    "residual_document_bytes": 3464
+    "residual_document_bytes": 5296
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "9149d6aa4acea0af875d7efd19e73759fafd190b5aa5bdc48c907bc1eac6f780",
+    "approval_digest": "29796a4b81a7bbb05308348ed77200c1b6fb619f3e02e24f05677186e36c2e5c",
     "collections": {
       "actuals": [
         0,
@@ -152,13 +152,13 @@
       ],
       "project": [
         3,
-        0,
-        1
+        1,
+        0
       ],
       "sandbox_policies": [
         1,
-        0,
-        1
+        1,
+        0
       ],
       "schema_version": [
         0,
@@ -216,21 +216,19 @@
         0
       ]
     },
-    "manifest_digest": "0ae57b25acb6a28276eae8b41b5ffa20c147b54618fbb93edde12111974b1f6d",
+    "manifest_digest": "b50e820486db134f4a063b0b8bdc994deda17efa974bcf5b50530e83822c770d",
     "reproducible": true,
     "source_digest": "83a271ceeda3a07980af884f4a8bcc7be0ee2682baa85b6059cffe211323a0f0",
     "source_rows": 14,
-    "target_rows": 4,
+    "target_rows": 6,
     "unresolved_rows": [
-      "project",
-      "sandbox_policies/SP01",
       "workspace"
     ]
   },
   "fixture": "multi-root-workspace",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-0ae57b25acb6a282",
+    "generation_id": "gen-b50e820486db134f",
     "journal_rows": 0,
     "tree_unchanged": true
   },

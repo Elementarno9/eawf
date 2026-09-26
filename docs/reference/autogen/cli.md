@@ -744,7 +744,7 @@ Workspace-scoped state and repo linkage.
 
 ### `eawf worktree`
 
-Manage per-wave git worktrees (create / list / merge-back / cleanup).
+Manage per-wave git worktrees (create / list / merge-back / cleanup / reconcile).
 
 | Verb | Summary |
 |---|---|
@@ -753,3 +753,4 @@ Manage per-wave git worktrees (create / list / merge-back / cleanup).
 | `list` | Enumerate recorded worktrees with a git-side cross-check column. |
 | `merge-back` | Replay worktree commits onto the parent branch. |
 | `path-fix` | Rewrite WorktreeRecord.path values from absolute to repo-relative. |
+| `reconcile` | Retire active worktree and session rows whose holder is gone. |

@@ -32,7 +32,7 @@ import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
@@ -44,6 +44,9 @@ from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_paths
 from eawf.kernel.validate.strict import validate_state as validate_payload
 from eawf.surfaces.cli.errors import UserError, ValidationError
+
+if TYPE_CHECKING:
+    from eawf.kernel.state.epoch2.authority import RootAuthority
 
 logger = logging.getLogger(__name__)
 
@@ -76,21 +79,32 @@ def load_state(state_path: Path) -> State:
     return report.state
 
 
-def atomic_write_state(state_path: Path, state: State) -> None:
+def atomic_write_state(
+    state_path: Path, state: State, *, native_authority: RootAuthority | None = None
+) -> None:
     """Persist *state* via the LOCKED, leak-refusing atomic writer.
 
     Caller MUST already hold ``portalock(state_path)``. Use this only inside
     a :func:`eawf.surfaces.cli._mutation.state_transaction` (or an equivalent
     explicit ``with portalock.acquire(state_path):`` block).
 
+    Args:
+        state_path: The ``state.json`` to persist.
+        state: The state to write.
+        native_authority: The epoch-2 answer a native handler writes the
+            v1 document beside its generation under; ``None`` for every
+            epoch-1 caller, which a marked tree refuses.
+
     Raises:
         StateValidationError: When a string *state* adds or changes relative
-            to the on-disk payload at *state_path* carries a leak shape.
+            to the on-disk payload at *state_path* carries a leak shape, or
+            (``legacy_operation_removed``) the tree carries the epoch
+            marker and no matching epoch-2 answer was presented.
     """
     from eawf.kernel.state.io import write_state_unlocked
 
     payload = json.loads(state.model_dump_json())
-    write_state_unlocked(state_path, payload)
+    write_state_unlocked(state_path, payload, native_authority=native_authority)
 
 
 def args_hash(args: dict[str, Any]) -> str:

@@ -24,6 +24,7 @@ from eawf.platform.backup.store import (
     BackupStore,
     Snapshot,
     repo_sha,
+    snapshot_digest,
 )
 
 __all__ = [
@@ -36,4 +37,5 @@ __all__ = [
     "prune_backups",
     "repo_sha",
     "restore_backup",
+    "snapshot_digest",
 ]

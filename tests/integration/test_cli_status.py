@@ -298,6 +298,7 @@ def test_status_payload_keys_documented_set(
         "open_backlog_count",
         "git",
         "drift",
+        "authority",
         "blockers",
         "research_campaign",
     }

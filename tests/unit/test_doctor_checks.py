@@ -346,7 +346,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 21
+    assert len(results) == 22
     assert {r.name for r in results} == {
         "branch_currency",
         "tools_available",
@@ -356,6 +356,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
+        "authority_epoch",
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",

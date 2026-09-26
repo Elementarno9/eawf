@@ -633,7 +633,7 @@ def _submit_evidence(inputs: HandlerInputs) -> SemanticToolOutput:
             # after it returns, so a refused leak or a failed write leaves no
             # orphan event behind it.
             try:
-                atomic_write_state(state_path, state)
+                atomic_write_state(state_path, state, native_authority=inputs.session.authority)
             except (StateValidationError, OSError) as error:
                 return _state_write_refusal(error)
             paths = store_paths(state_path)

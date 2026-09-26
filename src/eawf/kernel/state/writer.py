@@ -25,13 +25,22 @@ from typing import Any
 import orjson
 
 from eawf.kernel.fsync import fsync_parent_dir
+from eawf.kernel.state.io import refuse_legacy_write
 from eawf.runtime.lock import portalock
 
 logger = logging.getLogger(__name__)
 
 
 def _write_payload(target: Path, payload: bytes) -> None:
-    """Tempfile + ``os.replace`` + parent-dir fsync. Lock-agnostic."""
+    """Tempfile + ``os.replace`` + parent-dir fsync. Lock-agnostic.
+
+    Raises:
+        LegacyOperationRemovedError: *target* is a ``state.json`` on a tree
+            that carries the epoch marker; the writers that persist it
+            with this primitive rather than the state chokepoint are
+            fenced here too.
+    """
+    refuse_legacy_write(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     suffix = secrets.token_hex(4)
     tmp = target.with_name(f"{target.name}.tmp.{suffix}")

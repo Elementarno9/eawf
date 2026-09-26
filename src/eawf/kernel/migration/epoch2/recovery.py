@@ -21,14 +21,18 @@ against the new generation yet.
 
 **After the first native mutation.** The marker pins what the published
 generation digested to at activation, so a generation whose bytes have
-moved has accepted a write natively. Restoring epoch 1 would discard work
-recorded nowhere else, which is an incident and an operator decision
-rather than an automated repair: ``rollback`` refuses with
+moved has accepted a write natively; and the daemon seals an activation
+record into the journal when it sees that first write commit, so the
+answer survives even a generation whose bytes were later put back.
+Restoring epoch 1 would discard work recorded nowhere else, which is an
+incident and an operator decision rather than an automated repair: ``rollback`` refuses with
 ``rollback_boundary_crossed`` and writes nothing at all -- not even the
 journal row that would say it refused. ``recover`` has nothing to do and
 says so.
 
-The boundary is read from the **tree**, never from the journal. The
+The boundary is read from the **tree**, never from the journal's stage
+rows -- the activation seal is the one exception, because it is written
+*after* the act it records rather than ahead of it. The
 journal is flushed ahead of each durable act precisely so it never
 under-reports, which means it routinely claims one stage more than the
 tree has: a crash between the flushed ``generation_selected`` row and the
@@ -70,10 +74,12 @@ from eawf.kernel.migration.epoch2.generation import (
     write_marker,
 )
 from eawf.kernel.migration.epoch2.journal import (
+    ActivationRecord,
     CutoverJournal,
     CutoverStage,
     read_journal,
     require_chain_intact,
+    sealed_activation,
 )
 from eawf.kernel.migration.epoch2.manifest import RollbackBoundary
 from eawf.kernel.migration.epoch2.quiescence import quiescence_findings, require_quiescent
@@ -132,9 +138,9 @@ class Epoch2RecoverRequest(StrictMigrationModel):
     """One request to recover or roll back an interrupted cutover.
 
     Attributes:
-        target_root: The tree to recover. It must still declare itself a
-            disposable canary: a recovery writes the same files an apply
-            does, so it clears the same fence.
+        target_root: The tree to recover. It must still carry the
+            declaration that admitted it: a recovery writes the same files
+            an apply does, so it clears the same fence.
         action: Which direction to take the tree in.
         manifest_path: The restore manifest to write back. Omitted means
             the one the apply left inside the tree, which is the normal
@@ -251,7 +257,9 @@ def assess_recovery(target: DisposableTarget) -> RecoveryAssessment:
     marker = read_marker(target)
     built = generation_ids(target)
     _require_consistent_pair(selection=selection, marker=marker, built=built)
-    boundary, refusal_code = _tree_boundary(target, selection=selection, marker=marker, built=built)
+    boundary, refusal_code = _tree_boundary(
+        target, marker=marker, selection=selection, built=built, sealed=sealed_activation(rows)
+    )
     journal_boundary = max(
         (row.boundary for row in rows), key=BOUNDARY_ORDER.index, default=RollbackBoundary.PLAN_ONLY
     )
@@ -278,6 +286,7 @@ def _tree_boundary(
     selection: GenerationSelection | None,
     marker: EpochMarker | None,
     built: tuple[str, ...],
+    sealed: ActivationRecord | None,
 ) -> tuple[RollbackBoundary, str | None]:
     """Return the boundary the tree is at, and any code that forbids rollback.
 
@@ -286,6 +295,7 @@ def _tree_boundary(
         selection: The selection pointer, when there is one.
         marker: The epoch marker, when there is one.
         built: Every generation on disk.
+        sealed: The activation seal the journal carries, when there is one.
 
     Returns:
         ``(boundary, refusal_code)``.
@@ -296,6 +306,8 @@ def _tree_boundary(
         OSError: A generation file could not be read.
     """
     if marker is not None:
+        if sealed is not None and sealed.generation_id == marker.generation_id:
+            return RollbackBoundary.CROSSED, MigrationRollbackBoundaryCrossedError.code
         published = generation_digest(target, generation_id=marker.generation_id)
         if published != marker.generation_digest:
             return RollbackBoundary.CROSSED, MigrationRollbackBoundaryCrossedError.code

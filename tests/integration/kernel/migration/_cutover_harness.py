@@ -27,9 +27,14 @@ from pathlib import Path
 from typing import Any
 
 from eawf.kernel.migration.epoch2.apply import CutoverResult, Epoch2ApplyRequest, apply_cutover
-from eawf.kernel.migration.epoch2.canary import CANARY_DECLARATION_FILENAME
+from eawf.kernel.migration.epoch2.canary import (
+    CANARY_DECLARATION_FILENAME,
+    OPT_IN_DECLARATION_FILENAME,
+)
 from eawf.kernel.migration.epoch2.generation import generation_id_for
 from eawf.kernel.migration.epoch2.plan_mode import Epoch2PlanRequest, MigrationPlan, plan_cutover
+from eawf.platform.backup import Snapshot, create_backup, snapshot_digest
+from tests.integration.kernel.migration._corpus_shapes import DEFAULT_TRACK_KEY
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "migration"
 FULL_SNAPSHOT = FIXTURES / "epoch1-full" / "snapshot"
@@ -48,6 +53,7 @@ SEALED_BY = "rollback-test"
 APPLIED_AT = datetime(2026, 3, 3, tzinfo=UTC)
 RECOVERED_AT = datetime(2026, 4, 4, tzinfo=UTC)
 REAPPLIED_AT = datetime(2026, 5, 5, tzinfo=UTC)
+BACKED_UP_AT = datetime(2026, 2, 2, tzinfo=UTC)
 
 #: The exit status the crash child reports when it was killed at the seam.
 CRASH_EXIT = 7
@@ -88,6 +94,7 @@ def plan_request_for(corpus: Path) -> Epoch2PlanRequest:
         project_key=PROJECT_KEY,
         repository_key=REPOSITORY_KEY,
         sealed_by=SEALED_BY,
+        default_track_key=DEFAULT_TRACK_KEY,
     )
 
 
@@ -120,6 +127,48 @@ def declared_canary(root: Path) -> Path:
     (root / "store").mkdir(exist_ok=True)
     (root / "store" / "audit.jsonl").write_text(_SEEDED_LEDGER, encoding="utf-8")
     return root
+
+
+def opted_in_canary(root: Path, *, home: Path) -> tuple[Path, Snapshot]:
+    """Seed ``root`` like a canary, back it up, and opt it in against that backup.
+
+    The backup is taken through the production backup service into
+    ``home``, and the declaration pins the digest that service reports, so
+    the apply verifies exactly what an operator would have run.
+
+    Args:
+        root: The target tree's root. It must be named ``.ea`` so the
+            backup service keys it by its repository.
+        home: The user-scope home the backup lands under; the apply finds
+            it through ``EAWF_HOME``, which the caller points here.
+
+    Returns:
+        The root, carrying the opt-in declaration and no disposable one,
+        and the snapshot it was opted in against.
+    """
+    declared_canary(root)
+    (root / CANARY_DECLARATION_FILENAME).unlink()
+    snapshot = create_backup(root / "state.json", home=home, when=BACKED_UP_AT)
+    write_opt_in(root, backup_ts=snapshot.ts, backup_digest=snapshot_digest(snapshot))
+    return root, snapshot
+
+
+def write_opt_in(root: Path, *, backup_ts: str, backup_digest: str) -> Path:
+    """Write the opt-in declaration naming one backup into ``root``."""
+    path = root / OPT_IN_DECLARATION_FILENAME
+    path.write_text(
+        json.dumps(
+            {
+                "opt_in": True,
+                "declared_by": "rollback-test",
+                "purpose": "rehearse the live opt-in against a pinned backup",
+                "backup_ts": backup_ts,
+                "backup_digest": backup_digest,
+            }
+        ),
+        encoding="utf-8",
+    )
+    return path
 
 
 def apply_request_for(
@@ -222,6 +271,7 @@ def crash_the_apply(*, root: Path, point: dict[str, Any]) -> CutoverTree:
         "project_key": PROJECT_KEY,
         "repository_key": REPOSITORY_KEY,
         "sealed_by": SEALED_BY,
+        "default_track_key": DEFAULT_TRACK_KEY,
         "target_root": str(target_root),
         "registry_path": str(REGISTRY),
         "applied_at": APPLIED_AT.isoformat(),

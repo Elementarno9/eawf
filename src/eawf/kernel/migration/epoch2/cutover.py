@@ -42,6 +42,7 @@ from eawf.kernel.migration.epoch2.lifecycle import ImportedLifecycleRecord, Life
 from eawf.kernel.migration.epoch2.manifest import MANIFEST_SCHEMA_VERSION, MigrationManifest
 from eawf.kernel.migration.epoch2.manifest_rows import BackupRecord, TierPlacement
 from eawf.kernel.migration.epoch2.measurements import ImportedMeasurement, MeasurementKind
+from eawf.kernel.migration.epoch2.native_records import ImportedNativeRecord
 from eawf.kernel.migration.epoch2.plan import CorpusImportPlan
 from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
@@ -110,7 +111,9 @@ COMPACTING_STATUSES: Final[Mapping[Epoch2Collection, frozenset[str]]] = {
 #: Run the source recorded is a finished episode, never a live lease, and
 #: every legacy, measurement and ledger row is immutable by the
 #: disposition that produced it -- so none of them has an in-flight form
-#: the document could hold.
+#: the document could hold. A Decision and an Incident were append-only
+#: records in epoch 1 already; a supersession is a new Decision, never an
+#: edit of the old one.
 HISTORY_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
     {
         Epoch2Collection.RUN,
@@ -120,7 +123,24 @@ HISTORY_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
         Epoch2Collection.ARTIFACT,
         Epoch2Collection.MEMORY,
         Epoch2Collection.AUDIT,
+        Epoch2Collection.DECISION,
+        Epoch2Collection.INCIDENT,
     }
+)
+
+#: The document-tier collections the importer writes. Neither ever
+#: terminates -- a tree has one Project for its whole life, and a sandbox
+#: policy is consulted before every dispatch -- so every record of them
+#: stays in the document and none has a ledger form to compact into.
+DOCUMENT_RESIDENT_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
+    {Epoch2Collection.PROJECT, Epoch2Collection.SANDBOX_POLICY}
+)
+
+#: Every collection whose document rows count as imported records, in a
+#: fixed order so the writer and every reader sum the same keys.
+DOCUMENT_COUNTED_COLLECTIONS: Final[tuple[Epoch2Collection, ...]] = (
+    *LEDGER_COLLECTIONS,
+    *sorted(DOCUMENT_RESIDENT_COLLECTIONS, key=lambda item: item.value),
 )
 
 #: Which epoch-2 collection each measurement kind's rows are written to.
@@ -162,13 +182,16 @@ class StagedRecord(StrictMigrationModel):
 
         Returns:
             ``True`` for a record of a history-only collection, and for a
-            split collection's record whose status nothing can leave.
+            split collection's record whose status nothing can leave;
+            ``False`` for a record of a document-resident collection.
 
         Raises:
             MigrationTierUndeclaredError: The collection is at the ledger
                 tier but neither table says how its records split, so
                 there is no rule to apply.
         """
+        if self.collection in DOCUMENT_RESIDENT_COLLECTIONS:
+            return False
         if self.collection in HISTORY_COLLECTIONS:
             return True
         statuses = COMPACTING_STATUSES.get(self.collection)
@@ -223,7 +246,8 @@ def staged_records(plan: CorpusImportPlan) -> tuple[StagedRecord, ...]:
 
     The order is the import order the staged reduction already publishes --
     lifecycle records, Runs, measurements, legacy envelopes, ledger rows --
-    so two runs over one corpus write the same bytes in the same sequence.
+    followed by the natively keyed records, so two runs over one corpus
+    write the same bytes in the same sequence.
 
     Args:
         plan: The corpus import plan.
@@ -269,6 +293,8 @@ def _iter_staged(plan: CorpusImportPlan) -> Iterator[StagedRecord]:
         yield _envelope_record(envelope)
     for row in plan.envelopes.ledger_rows:
         yield _ledger_row_record(row)
+    for native in plan.native.records:
+        yield _native_record(native)
 
 
 def _run_record(run: MintedRun) -> StagedRecord:
@@ -312,6 +338,39 @@ def _ledger_row_record(row: ImportedLedgerRow) -> StagedRecord:
         record_key=row.alias,
         status=HISTORY_RECORD_STATUS,
         payload=row.model_dump(mode="json"),
+    )
+
+
+def _native_record(record: ImportedNativeRecord) -> StagedRecord:
+    """Address one natively keyed record under its own source key.
+
+    The key is the source id rather than a legacy alias, because a
+    Decision is cited by its ``D-*`` id and a record re-keyed on the way in
+    would leave every such citation resolving to nothing.
+    """
+    return StagedRecord(
+        collection=record.target,
+        record_key=record.record_key,
+        status=HISTORY_RECORD_STATUS,
+        payload=record.model_dump(mode="json"),
+    )
+
+
+def document_record_count(document: dict[str, Any]) -> int:
+    """Return how many imported records one generation document holds.
+
+    Args:
+        document: The decoded generation document.
+
+    Returns:
+        The rows across every collection in
+        :data:`DOCUMENT_COUNTED_COLLECTIONS`.
+
+    Raises:
+        ValueError: The document holds a non-object under a counted key.
+    """
+    return sum(
+        len(document_rows(document, collection)) for collection in DOCUMENT_COUNTED_COLLECTIONS
     )
 
 
@@ -513,7 +572,7 @@ def _write_document(
         recorded_at: When the import placed them.
 
     Returns:
-        How many rows the document holds across every ledger collection,
+        How many rows the document holds across every counted collection,
         not only the ones this write touched: a row an earlier step left
         behind is part of the residual whether or not the import added to
         its collection.
@@ -529,7 +588,7 @@ def _write_document(
         document[record.collection.value] = rows
     state_path.parent.mkdir(parents=True, exist_ok=True)
     write_document(state_path, document)
-    return sum(len(document_rows(document, collection)) for collection in LEDGER_COLLECTIONS)
+    return document_record_count(document)
 
 
 def stage_cutover(
@@ -616,12 +675,13 @@ def stage_cutover(
 
 
 def _require_ledger_tier_routes(records: tuple[StagedRecord, ...]) -> None:
-    """Refuse a staged record routed outside the ledger tier.
+    """Refuse a staged record routed to a collection with no residency rule.
 
-    Every collection the importer materialises today is a ledger
-    collection: its records either split by terminality or are history
-    outright. The collections the tier table puts in the document --
-    Project, Track, the outcome metrics -- are planned by the manifest and
+    Every collection the importer materialises is either a ledger
+    collection, whose records split by terminality or are history
+    outright, or one of :data:`DOCUMENT_RESIDENT_COLLECTIONS`, whose
+    records never leave the document. The other document-tier collections
+    -- Track and the outcome metrics -- are planned by the manifest and
     written by no importer stage yet, so a record arriving at one of them
     has no residency rule, and guessing one is how a record lands
     somewhere plausible and wrong.
@@ -630,30 +690,35 @@ def _require_ledger_tier_routes(records: tuple[StagedRecord, ...]) -> None:
         records: The staged records.
 
     Raises:
-        MigrationTierUndeclaredError: A record's collection is not declared
-            at the ledger tier.
+        MigrationTierUndeclaredError: A record's collection is neither at
+            the ledger tier nor document-resident.
     """
     stray = sorted(
         {
             f"{record.collection.value} ({tier_for(record.collection).value})"
             for record in records
             if tier_for(record.collection) is not StorageTier.LEDGER
+            and record.collection not in DOCUMENT_RESIDENT_COLLECTIONS
         }
     )
     if stray:
         raise MigrationTierUndeclaredError(
-            f"the cutover places ledger-tier collections only, but {len(stray)} records "
+            f"the cutover places ledger-tier and document-resident collections only, but "
+            f"{len(stray)} records "
             f"route elsewhere: {', '.join(stray)}"
         )
 
 
 __all__ = [
     "COMPACTING_STATUSES",
+    "DOCUMENT_COUNTED_COLLECTIONS",
+    "DOCUMENT_RESIDENT_COLLECTIONS",
     "HISTORY_COLLECTIONS",
     "LIFECYCLE_COLLECTIONS",
     "MEASUREMENT_LEDGERS",
     "DocumentResidencyFinding",
     "StagedRecord",
+    "document_record_count",
     "document_residency_findings",
     "document_row",
     "ledger_record",

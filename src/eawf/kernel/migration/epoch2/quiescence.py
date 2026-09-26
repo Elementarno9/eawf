@@ -8,20 +8,28 @@ a tree whose manifest describes a corpus that no longer exists.
 Four holders are checked, and the refusal names every one it found
 rather than the first. An operator clearing a cutover has to clear all
 of them; a probe that stopped at the first would make that a loop of
-re-runs. The check is deliberately conservative about lock records: any
-lease file present refuses, without asking whether its holder still
-breathes. Reaping a stale lock is a decision about somebody else's work,
-and a one-shot migration is the wrong place to make it.
+re-runs. The check is deliberately conservative about lock records: a
+lease file that still carries a holder record refuses, without asking
+whether that holder still breathes. Reaping a stale lock is a decision
+about somebody else's work, and a one-shot migration is the wrong place
+to make it.
+
+A released lease is not a holder. The lock primitive keeps its inode
+forever and empties it on release, so every tree that has ever taken a
+lock carries zero-byte lease files; refusing those would make the
+cutover unreachable on any repository that was ever written to.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from contextlib import suppress
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Final
 
+import portalocker
 from pydantic import Field
 
 from eawf.kernel.migration.epoch2.canary import DisposableTarget
@@ -146,8 +154,37 @@ def _read_document(root: Path) -> Any:
         return None
 
 
+def _lease_released(path: Path) -> bool:
+    """Whether a lease file is the empty, unlocked inode a release leaves.
+
+    Args:
+        path: The lease file.
+
+    Returns:
+        ``True`` when the file vanished since the directory was listed, or
+        when it carries no holder record and no process holds its advisory
+        lock. A body means a holder wrote one and never
+        cleared it, which is the case this probe refuses rather than reaps;
+        an empty file that is still locked is a holder caught between
+        taking the lock and writing its record.
+    """
+    try:
+        if path.stat().st_size > 0:
+            return False
+    except FileNotFoundError:
+        return True
+    with path.open("a", encoding="utf-8") as handle:
+        try:
+            portalocker.lock(handle, portalocker.LOCK_EX | portalocker.LOCK_NB)
+        except portalocker.LockException:
+            return False
+        with suppress(portalocker.LockException):
+            portalocker.unlock(handle)
+    return True
+
+
 def _lease_findings(root: Path) -> list[QuiescenceFinding]:
-    """Return a finding per lease record under the tree's lock directory."""
+    """Return a finding per lease still held under the tree's lock directory."""
     locks = root / LOCKS_DIRNAME
     if not locks.is_dir():
         return []
@@ -158,7 +195,7 @@ def _lease_findings(root: Path) -> list[QuiescenceFinding]:
             detail="a lease record is present; clear it before the cutover",
         )
         for path in sorted(locks.iterdir())
-        if path.is_file() and path.name.endswith(LOCK_SUFFIX)
+        if path.is_file() and path.name.endswith(LOCK_SUFFIX) and not _lease_released(path)
     ]
 
 

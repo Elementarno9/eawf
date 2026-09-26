@@ -160,9 +160,9 @@ def test_submit_evidence_writes_state_before_appending_any_event(
     real_write = handlers_mod.atomic_write_state
     real_append = handlers_mod.append_jsonl
 
-    def spy_write(path: Path, state: object) -> None:
+    def spy_write(path: Path, state: object, **kwargs: object) -> None:
         order.append("write")
-        real_write(path, state)
+        real_write(path, state, **kwargs)
 
     def spy_append(path: Path, envelope: object) -> None:
         order.append("append")
@@ -219,7 +219,7 @@ def test_a_failed_state_write_is_a_typed_refusal_with_state_unchanged(
         report=spike_report_payload(report_id="RPT-W17-05", contract_id="MCT-99990105"),
     )
 
-    def seeded_failure(path: Path, state: object) -> None:
+    def seeded_failure(path: Path, state: object, **kwargs: object) -> None:
         raise failure
 
     monkeypatch.setattr(handlers_mod, "atomic_write_state", seeded_failure)

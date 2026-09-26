@@ -24,15 +24,22 @@ at all.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
+import os
 import shutil
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+import portalocker
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 from typer.testing import CliRunner
 
+from eawf import __version__
 from eawf.kernel.migration.epoch2.apply import (
     Epoch2ApplyRequest,
     apply_cutover,
@@ -54,7 +61,7 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationWorkspaceNotRegisteredError,
 )
 from eawf.kernel.migration.epoch2.export import Epoch2ExportRequest, export_epoch1, export_text
-from eawf.kernel.migration.epoch2.journal import read_journal
+from eawf.kernel.migration.epoch2.journal import CutoverStage, read_journal
 from eawf.kernel.migration.epoch2.plan_mode import (
     Epoch2PlanRequest,
     MigrationPlan,
@@ -65,8 +72,16 @@ from eawf.kernel.migration.epoch2.quiescence import (
     quiescence_findings,
     require_quiescent,
 )
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.bus import EventBus
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.state_worktree import worktree_reconcile_rpc
 from eawf.runtime.lock import portalock
+from eawf.runtime.worktree.reconcile import RECONCILE_COMMAND
 from eawf.surfaces.cli.app import app
+from tests.integration.kernel.migration._corpus_shapes import DEFAULT_TRACK_KEY
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "migration"
@@ -86,6 +101,11 @@ APPLIED_AT = datetime(2026, 1, 1, tzinfo=UTC)
 #: A digest of the right shape that no plan over this corpus computes.
 STALE_DIGEST = "f" * 64
 
+#: A collection whose conversion no importer rule implements, and the row
+#: seeded into it so the guard corpus has something unplaceable.
+UNCONVERTED_COLLECTION = "hypotheses"
+UNCONVERTED_ROW = "H01-01"
+
 runner = CliRunner()
 
 
@@ -98,6 +118,7 @@ def plan_request_for(corpus: Path) -> Epoch2PlanRequest:
         project_key=PROJECT_KEY,
         repository_key=REPOSITORY_KEY,
         sealed_by=SEALED_BY,
+        default_track_key=DEFAULT_TRACK_KEY,
     )
 
 
@@ -143,9 +164,18 @@ def tree_digests(root: Path) -> dict[str, str]:
 
 @pytest.fixture(scope="module")
 def corpus_plan(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, MigrationPlan]:
-    """One corpus copy and its sealed plan, shared across the guard tests."""
+    """One corpus copy and its sealed plan, shared across the guard tests.
+
+    The copy carries one hypothesis row, a collection whose conversion is
+    declared but not implemented, so the plan names an unresolved row for
+    the waiver guards to refuse over.
+    """
     corpus = tmp_path_factory.mktemp("guards_corpus") / "staged"
     shutil.copytree(FULL_SNAPSHOT, corpus)
+    document_path = corpus / "document.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    document[UNCONVERTED_COLLECTION] = {UNCONVERTED_ROW: {"id": UNCONVERTED_ROW}}
+    document_path.write_text(json.dumps(document, sort_keys=True) + "\n", encoding="utf-8")
     return corpus, plan_cutover(plan_request_for(corpus), sealed_at=APPLIED_AT)
 
 
@@ -340,6 +370,44 @@ def test_quiescence_refuses_a_held_lease(tmp_path: Path) -> None:
         require_quiescent(findings)
 
 
+def test_quiescence_findings_passes_a_lease_the_lock_primitive_released(tmp_path: Path) -> None:
+    """Every locked write leaves an empty lease behind, and that is not a holder.
+
+    The lock primitive keeps the inode and empties it on release, so a
+    tree that was ever written to carries these files; refusing them would
+    make the cutover unreachable on any repository with a history.
+    """
+    target = DisposableTarget.require(seeded_target(tmp_path / ".ea", "quiescent"))
+    with portalock.acquire(target.root / "locks" / "worktrees.lock", timeout=0.2):
+        pass
+    released = target.root / "locks" / "worktrees.lock.lock"
+
+    findings = quiescence_findings(target)
+
+    assert released.is_file()
+    assert released.stat().st_size == 0
+    assert findings == ()
+    require_quiescent(findings)
+
+
+def test_quiescence_findings_refuses_an_empty_lease_that_is_still_locked(tmp_path: Path) -> None:
+    """A holder caught between taking the lock and writing its record still holds."""
+    target = DisposableTarget.require(seeded_target(tmp_path / ".ea", "quiescent"))
+    lease = target.root / "locks" / "worktrees.lock.lock"
+    lease.parent.mkdir(parents=True, exist_ok=True)
+    lease.touch()
+
+    with lease.open("a", encoding="utf-8") as handle:
+        portalocker.lock(handle, portalocker.LOCK_EX | portalocker.LOCK_NB)
+        findings = quiescence_findings(target)
+        portalocker.unlock(handle)
+
+    assert [finding.locator for finding in findings] == ["locks/worktrees.lock.lock"]
+    assert quiescence_findings(target) == ()
+    with pytest.raises(MigrationNotQuiescentError, match=r"worktrees\.lock\.lock"):
+        require_quiescent(findings)
+
+
 def test_quiescence_refuses_a_pending_write_ahead_record(tmp_path: Path) -> None:
     """A mutation mid-flight is a mutation the cutover would lose."""
     target = DisposableTarget.require(seeded_target(tmp_path / ".ea", "pending-wal"))
@@ -449,6 +517,130 @@ def test_an_unreadable_registry_refuses_as_an_unregistered_workspace(
             ),
             applied_at=APPLIED_AT,
         )
+
+
+def machine_home(root: Path, monkeypatch: pytest.MonkeyPatch, *, registry: Path | None) -> Path:
+    """Point ``HOME`` at ``root``, optionally seeding its machine registry.
+
+    The CLI resolves ``~/.eawf/registry.json`` from ``HOME``, so the
+    registration and the apply below both land in the tmp tree and never
+    in the operator's real registry. The daemon is opted out so neither
+    verb reaches a daemon serving somebody else's home.
+    """
+    monkeypatch.setenv("HOME", str(root))
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    if registry is not None:
+        target = root / ".eawf" / "registry.json"
+        target.parent.mkdir(parents=True)
+        shutil.copyfile(registry, target)
+    return root
+
+
+def cli_apply(
+    *, corpus: Path, target_root: Path, plan: MigrationPlan, extra: tuple[str, ...] = ()
+) -> list[str]:
+    """Return the ``migrate epoch2 --apply`` argv, naming no registry file."""
+    accepted: list[str] = []
+    for row in plan.manifest.unresolved_rows:
+        accepted += ["--accept-unresolved", row.address]
+    return [
+        "--json",
+        "migrate",
+        "epoch2",
+        "--apply",
+        "--snapshot-root",
+        str(corpus),
+        "--allowlist",
+        str(ALLOWLIST),
+        "--workspace-key",
+        WORKSPACE_KEY,
+        "--project-key",
+        PROJECT_KEY,
+        "--repository-key",
+        REPOSITORY_KEY,
+        "--sealed-by",
+        SEALED_BY,
+        "--default-track-key",
+        DEFAULT_TRACK_KEY,
+        "--target-root",
+        str(target_root),
+        "--plan-digest",
+        plan.approval_digest,
+        *accepted,
+        *extra,
+    ]
+
+
+def test_epoch2_apply_resolves_the_workspace_registered_through_the_workspace_command(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corpus_plan: tuple[Path, MigrationPlan]
+) -> None:
+    """The cutover input the machine registry lacks today, end to end.
+
+    Against a machine registry whose workspaces are empty the apply
+    refuses before it writes; once ``eawf workspace add`` has filed the
+    record, the same command resolves it and journals ``WORKSPACE_RESOLVED``.
+    """
+    corpus, plan = corpus_plan
+    home = machine_home(tmp_path / "home", monkeypatch, registry=REGISTRY_WITHOUT_WORKSPACE)
+    target_root = declared_canary(tmp_path / ".ea")
+    argv = cli_apply(corpus=corpus, target_root=target_root, plan=plan)
+
+    refused = runner.invoke(app, argv)
+
+    assert refused.exit_code != 0
+    assert "workspace_not_registered" in refused.output
+    assert not target_root.joinpath("generations").exists()
+    assert read_journal(DisposableTarget.require(target_root).journal_path) == ()
+
+    registered = runner.invoke(app, ["workspace", "add", WORKSPACE_KEY, "--home", PROJECT_KEY])
+    assert registered.exit_code == 0, registered.output
+    machine_registry = json.loads((home / ".eawf" / "registry.json").read_text())
+    assert WORKSPACE_KEY in machine_registry["workspaces"]
+
+    applied = runner.invoke(app, argv)
+
+    assert applied.exit_code == 0, applied.output
+    assert json.loads(applied.output)["status"] == "applied"
+    rows = read_journal(DisposableTarget.require(target_root).journal_path)
+    resolved = [row for row in rows if row.stage is CutoverStage.WORKSPACE_RESOLVED]
+    assert len(resolved) == 1
+    assert WORKSPACE_KEY in resolved[0].detail
+
+
+def test_epoch2_apply_refuses_when_the_machine_registry_does_not_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corpus_plan: tuple[Path, MigrationPlan]
+) -> None:
+    """A machine that never registered anything cannot address the corpus."""
+    corpus, plan = corpus_plan
+    machine_home(tmp_path / "home", monkeypatch, registry=None)
+    target_root = declared_canary(tmp_path / ".ea")
+
+    result = runner.invoke(app, cli_apply(corpus=corpus, target_root=target_root, plan=plan))
+
+    assert result.exit_code != 0
+    assert "workspace_not_registered" in result.output
+    assert not target_root.joinpath("generations").exists()
+
+
+def test_epoch2_apply_prefers_an_explicit_registry_over_the_machine_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corpus_plan: tuple[Path, MigrationPlan]
+) -> None:
+    """``--registry-path`` still wins, so a rehearsal can pin its own registry."""
+    corpus, plan = corpus_plan
+    machine_home(tmp_path / "home", monkeypatch, registry=REGISTRY)
+    target_root = declared_canary(tmp_path / ".ea")
+    argv = cli_apply(
+        corpus=corpus,
+        target_root=target_root,
+        plan=plan,
+        extra=("--registry-path", str(REGISTRY_WITHOUT_WORKSPACE)),
+    )
+
+    result = runner.invoke(app, argv)
+
+    assert result.exit_code != 0
+    assert "workspace_not_registered" in result.output
+    assert not target_root.joinpath("generations").exists()
 
 
 def test_a_stale_plan_digest_refuses_and_writes_nothing(
@@ -580,3 +772,210 @@ def test_the_export_verb_needs_no_addressing_slots(
 
     assert result.exit_code == 0, result.output
     assert "epoch1 export:" in result.output
+
+
+# ---- stale holder reconcile ------------------------------------------------
+
+BOOTED_AT = datetime(2026, 6, 1, tzinfo=UTC)
+
+
+def _git(repo: Path, *args: str) -> None:
+    """Run one git command inside ``repo`` with a throwaway identity."""
+    subprocess.run(
+        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _repo_with_document(root: Path, document: dict[str, Any]) -> Path:
+    """Return a git repository whose ``.ea`` holds ``document`` as its state."""
+    repo = root / "repo"
+    repo.mkdir(parents=True)
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "init")
+    (repo / ".ea" / "store").mkdir(parents=True)
+    shutil.copyfile(REPO_ROOT / ".ea" / "config.yaml", repo / ".ea" / "config.yaml")
+    (repo / ".ea" / "state.json").write_text(json.dumps(document), encoding="utf-8")
+    return repo
+
+
+def _daemon_context(
+    repo: Path, tmp_path: Path, *, booted_at: datetime = BOOTED_AT
+) -> MethodContext:
+    """Return a daemon context that booted at ``booted_at``."""
+    return MethodContext(
+        started_at=booted_at.isoformat(),
+        pid=os.getpid(),
+        protocol_version=PROTOCOL_VERSION,
+        version=__version__,
+        bus=EventBus(),
+        state_path=repo / ".ea" / "state.json",
+        wal_dir=tmp_path / "wal",
+    )
+
+
+def _reconcile(ctx: MethodContext, repo: Path, *, dry_run: bool = False) -> dict[str, Any]:
+    """Drive the daemon verb once."""
+    return asyncio.run(worktree_reconcile_rpc(ctx, {"repo_root": str(repo), "dry_run": dry_run}))
+
+
+def _staged_findings(repo: Path, destination: Path) -> tuple[Any, ...]:
+    """Stage ``repo``'s ``.ea`` document as a declared canary target and probe it."""
+    staged = declared_canary(destination)
+    shutil.copyfile(repo / ".ea" / "state.json", staged / "state.json")
+    return quiescence_findings(DisposableTarget.require(staged))
+
+
+def _synthetic_document() -> dict[str, Any]:
+    """Return the live document with hand-built worktree and session rows."""
+    document = json.loads((REPO_ROOT / ".ea" / "state.json").read_text(encoding="utf-8"))
+    template_wt = next(iter(document["worktrees"].values()))
+    template_ses = next(
+        row for row in document["agent_sessions"].values() if row["status"] != "active"
+    )
+
+    def worktree(key: str, path: str, status: str) -> dict[str, Any]:
+        return {**template_wt, "id": key, "path": path, "status": status}
+
+    def session(key: str, started: str, worktree_ids: list[str]) -> dict[str, Any]:
+        return {
+            **template_ses,
+            "id": key,
+            "status": "active",
+            "ended_at": None,
+            "summary": None,
+            "started_at": started,
+            "worktree_ids": worktree_ids,
+        }
+
+    after_boot = "2026-07-01T00:00:00Z"
+    document["worktrees"] = {
+        "WT-KEEP": worktree("WT-KEEP", ".ea/worktrees/keep", "active"),
+        "WT-GONE": worktree("WT-GONE", ".ea/worktrees/gone", "active"),
+        "WT-DONE": worktree("WT-DONE", ".ea/worktrees/done", "merged"),
+    }
+    document["agent_sessions"] = {
+        "SES-ON-GONE": session("SES-ON-GONE", after_boot, ["WT-GONE"]),
+        "SES-ON-KEEP": session("SES-ON-KEEP", after_boot, ["WT-KEEP"]),
+        "SES-OLD": session("SES-OLD", "2026-05-01T00:00:00Z", []),
+        "SES-NEW": session("SES-NEW", after_boot, []),
+    }
+    document["current"]["active_session_ids"] = sorted(document["agent_sessions"])
+    return document
+
+
+def test_worktree_reconcile_rpc_empties_quiescence_over_the_staged_live_corpus(
+    tmp_path: Path,
+) -> None:
+    """Every stale active row in the committed corpus is retired with its reason."""
+    live = json.loads((REPO_ROOT / ".ea" / "state.json").read_text(encoding="utf-8"))
+    repo = _repo_with_document(tmp_path, live)
+    before = _staged_findings(repo, tmp_path / "before")
+    assert before, "the committed corpus should carry stale holders to reconcile"
+
+    # The daemon serving the reconcile booted after the corpus was committed.
+    ctx = _daemon_context(repo, tmp_path, booted_at=datetime.now(UTC))
+    result = _reconcile(ctx, repo)
+
+    assert result["written"] is True
+    retired = {(row["kind"], row["row_id"]) for row in result["retired"]}
+    assert all(row["reason"] for row in result["retired"])
+    expected = {
+        ("worktree", key) for key, row in live["worktrees"].items() if row["status"] == "active"
+    }
+    assert expected <= retired
+    assert len(before) == len(retired)
+    assert _staged_findings(repo, tmp_path / "after") == ()
+
+
+def test_worktree_reconcile_rpc_keeps_a_worktree_git_still_lists(tmp_path: Path) -> None:
+    """Only rows whose holder is gone are retired, each naming why."""
+    repo = _repo_with_document(tmp_path, _synthetic_document())
+    _git(repo, "worktree", "add", "-q", "-b", "keep", str(repo / ".ea" / "worktrees" / "keep"))
+    ctx = _daemon_context(repo, tmp_path)
+    state_file = repo / ".ea" / "state.json"
+    original = state_file.read_bytes()
+
+    dry = _reconcile(ctx, repo, dry_run=True)
+    assert state_file.read_bytes() == original
+    assert dry["dry_run"] is True and dry["written"] is False
+
+    result = _reconcile(ctx, repo)
+
+    assert (
+        result["retired"]
+        == dry["retired"]
+        == [
+            {"kind": "worktree", "row_id": "WT-GONE", "reason": "no_git_worktree"},
+            {"kind": "session", "row_id": "SES-OLD", "reason": "predates_daemon_boot"},
+            {"kind": "session", "row_id": "SES-ON-GONE", "reason": "bound_worktrees_gone"},
+        ]
+    )
+    document = json.loads(state_file.read_text(encoding="utf-8"))
+    assert document["worktrees"]["WT-KEEP"]["status"] == "active"
+    assert document["worktrees"]["WT-GONE"]["status"] == "abandoned"
+    assert document["agent_sessions"]["SES-OLD"]["status"] == "stale"
+    assert document["agent_sessions"]["SES-NEW"]["status"] == "active"
+    assert RECONCILE_COMMAND in store_path(state_file, StoreKind.EVENT).read_text(encoding="utf-8")
+
+
+def test_worktree_reconcile_rpc_second_run_writes_nothing(tmp_path: Path) -> None:
+    """The reconcile is idempotent: a clean document is left byte-identical."""
+    repo = _repo_with_document(tmp_path, _synthetic_document())
+    ctx = _daemon_context(repo, tmp_path)
+    _reconcile(ctx, repo)
+    state_file = repo / ".ea" / "state.json"
+    settled = state_file.read_bytes()
+
+    again = _reconcile(ctx, repo)
+
+    assert again == {"retired": [], "dry_run": False, "written": False}
+    assert state_file.read_bytes() == settled
+
+
+def test_worktree_reconcile_rpc_refuses_when_git_cannot_list(tmp_path: Path) -> None:
+    """A git failure is not "no worktrees"; it refuses and writes nothing."""
+    repo = _repo_with_document(tmp_path, _synthetic_document())
+    shutil.rmtree(repo / ".git")
+    state_file = repo / ".ea" / "state.json"
+    original = state_file.read_bytes()
+
+    with pytest.raises(DaemonValidationError, match="git worktree list failed"):
+        _reconcile(_daemon_context(repo, tmp_path), repo)
+    assert state_file.read_bytes() == original
+
+
+def test_worktree_reconcile_rpc_rejects_unknown_params(tmp_path: Path) -> None:
+    """The wire params are strict."""
+    ctx = _daemon_context(tmp_path, tmp_path)
+    with pytest.raises(PydanticValidationError):
+        asyncio.run(worktree_reconcile_rpc(ctx, {"repo_root": str(tmp_path), "force": True}))
+    with pytest.raises(PydanticValidationError):
+        asyncio.run(worktree_reconcile_rpc(ctx, {"repo_root": ""}))
+
+
+def test_worktree_reconcile_cli_dry_run_reports_and_writes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The CLI dry run itemises the rows and leaves the document untouched."""
+    repo = _repo_with_document(tmp_path, _synthetic_document())
+    state_file = repo / ".ea" / "state.json"
+    original = state_file.read_bytes()
+    monkeypatch.chdir(repo)
+    # A gate runner exports EA_STATE at its sandbox copy, and EA_STATE outranks
+    # the cwd walk this test relies on to reach the synthetic repo.
+    monkeypatch.delenv("EA_STATE", raising=False)
+
+    result = runner.invoke(app, ["--daemonless", "--json", "worktree", "reconcile", "--dry-run"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["dry_run"] is True
+    assert {row["row_id"] for row in payload["retired"]} == {
+        "WT-GONE",
+        "WT-KEEP",
+        "SES-ON-GONE",
+        "SES-ON-KEEP",
+    }
+    assert state_file.read_bytes() == original

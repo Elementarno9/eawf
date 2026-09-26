@@ -1,0 +1,592 @@
+{
+  "addressing": {
+    "allowlist": "tests/fixtures/migration/allowed_legacy_symbols.txt",
+    "default_track_key": "TRK-EAWF-CORE",
+    "project_key": "EAWF",
+    "repository_key": "EAWF",
+    "workspace_key": "EAWF"
+  },
+  "apply": {
+    "generation_count": 1,
+    "generation_id": "gen-d3760c43a9f48918",
+    "generation_tree": {
+      "files": 25,
+      "sha256_of_file_digests": "87e778e03ee59e173c1991225b5ac6c00db5327ec73b7e874c06b4ca076a13e9"
+    },
+    "journal_rows": 12,
+    "journal_stages": [
+      "fence_cleared",
+      "workspace_resolved",
+      "authority_locked",
+      "quiescence_proved",
+      "recensus_matched",
+      "maintenance_entered",
+      "snapshot_taken",
+      "generation_built",
+      "read_smoke_passed",
+      "generation_selected",
+      "marker_written",
+      "maintenance_exited"
+    ],
+    "manifest_digest": "d3760c43a9f489189e8404a13228165ae4a207d6388307b4402593d260f3f900",
+    "rollback_boundary": "marker_written",
+    "status": "applied",
+    "target_rows": 5908
+  },
+  "commands": [
+    {
+      "argv": [
+        "git",
+        "clone",
+        "--no-local",
+        "<repo>",
+        "<clone>"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "git",
+        "-C",
+        "<clone>",
+        "checkout",
+        "e2d6a5df8b599a30aa08d5306335ac5381a3d0c6"
+      ],
+      "exit": 0
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "backup",
+        "create",
+        "--note",
+        "pre epoch-2 cutover"
+      ],
+      "exit": 0,
+      "result": "backup written under the isolated home"
+    },
+    {
+      "argv": [
+        "write",
+        "<clone>/.ea/epoch2-opt-in.json"
+      ],
+      "exit": 0,
+      "result": "opt_in=true pinning the backup ts and digest"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "workspace",
+        "show",
+        "EAWF"
+      ],
+      "exit": 1,
+      "result": "workspace_not_registered (expected before add)"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "workspace",
+        "add",
+        "EAWF",
+        "--home",
+        "EAWF",
+        "--title",
+        "eawf"
+      ],
+      "exit": 0,
+      "result": "daemon auto-spawned in the isolated runtime dir; registry revision 1"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--stage-to",
+        "<tmp>/staged",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF"
+      ],
+      "exit": 0,
+      "result": "20 committed sources at the pinned revision"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--plan",
+        "--snapshot-root",
+        "<tmp>/staged",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 0,
+      "result": "applicable=true"
+    },
+    {
+      "argv": [
+        "eawf",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--apply",
+        "--plan-digest",
+        "952f79afe93e17e311d45aab26a268f02be693ee66999ea499304509dc7645dc",
+        "--target-root",
+        "<clone>/.ea",
+        "--snapshot-root",
+        "<tmp>/staged",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 2,
+      "result": "migration_not_quiescent: 37 managed_worktree holders"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "worktree",
+        "reconcile",
+        "--dry-run"
+      ],
+      "exit": 0,
+      "result": "would retire 37 worktree rows (no_git_worktree)"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "worktree",
+        "reconcile"
+      ],
+      "exit": 0,
+      "result": "retired 37 rows"
+    },
+    {
+      "argv": [
+        "eawf",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--apply",
+        "--plan-digest",
+        "952f79afe93e17e311d45aab26a268f02be693ee66999ea499304509dc7645dc",
+        "--target-root",
+        "<clone>/.ea",
+        "--snapshot-root",
+        "<tmp>/staged",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 2,
+      "result": "migration_not_quiescent: 1 held_lease locks/worktrees.lock.lock (the empty inode the reconcile's released lock left) -- defect D-01, fixed in this wave"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "daemon",
+        "stop"
+      ],
+      "exit": 0,
+      "result": "restarted the clone daemon onto the fixed probe"
+    },
+    {
+      "argv": [
+        "eawf",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--apply",
+        "--plan-digest",
+        "952f79afe93e17e311d45aab26a268f02be693ee66999ea499304509dc7645dc",
+        "--target-root",
+        "<clone>/.ea",
+        "--snapshot-root",
+        "<tmp>/staged",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 0,
+      "result": "applied, 12 journal rows"
+    },
+    {
+      "argv": [
+        "eawf",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--apply",
+        "--plan-digest",
+        "952f79afe93e17e311d45aab26a268f02be693ee66999ea499304509dc7645dc",
+        "--target-root",
+        "<clone>/.ea",
+        "--snapshot-root",
+        "<tmp>/staged",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 0,
+      "result": "already-selected, 0 journal rows, target tree byte-identical"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--rollback-boundary",
+        "--target-root",
+        "<clone>/.ea"
+      ],
+      "exit": 0,
+      "result": "marker_written; simple window open; canary window open"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--rollback",
+        "--target-root",
+        "<clone>/.ea"
+      ],
+      "exit": 0,
+      "result": "surfaces_restored; every restorable surface back at its restore-point digest"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--rollback-boundary",
+        "--target-root",
+        "<clone>/.ea"
+      ],
+      "exit": 0,
+      "result": "plan_only; generation none"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--stage-to",
+        "<tmp>/staged2",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF"
+      ],
+      "exit": 0,
+      "result": "byte-identical to the first staging"
+    },
+    {
+      "argv": [
+        "eawf",
+        "-w",
+        "<clone>",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--plan",
+        "--snapshot-root",
+        "<tmp>/staged2",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 0,
+      "result": "same source, manifest, approval and idempotence digests"
+    },
+    {
+      "argv": [
+        "eawf",
+        "--json",
+        "migrate",
+        "epoch2",
+        "--apply",
+        "--plan-digest",
+        "952f79afe93e17e311d45aab26a268f02be693ee66999ea499304509dc7645dc",
+        "--target-root",
+        "<clone>/.ea",
+        "--snapshot-root",
+        "<tmp>/staged2",
+        "--allowlist",
+        "<clone>/tests/fixtures/migration/allowed_legacy_symbols.txt",
+        "--workspace-key",
+        "EAWF",
+        "--project-key",
+        "EAWF",
+        "--repository-key",
+        "EAWF",
+        "--default-track-key",
+        "TRK-EAWF-CORE",
+        "--sealed-by",
+        "w10-rehearsal"
+      ],
+      "exit": 0,
+      "result": "applied again after the rollback; same generation and manifest digest"
+    }
+  ],
+  "defects": [
+    {
+      "code": "migration_not_quiescent",
+      "fix": "src/eawf/kernel/migration/epoch2/quiescence.py: a zero-byte lease no process holds is released and passes; a lease with a holder record, or an empty one still locked, still refuses",
+      "id": "D-01",
+      "status": "fixed",
+      "summary": "the quiescence probe counted every *.lock file under .ea/locks as a held lease, but the lock primitive keeps its inode and empties it on release, so any tree that ever took the worktree or plugin-sync lock refused the cutover forever"
+    },
+    {
+      "id": "D-02",
+      "status": "open",
+      "summary": "the apply builds the generation from the staged HEAD corpus and re-censuses only that snapshot; nothing compares it with the live document, so state written after the last state commit (here: 37 reconciled worktrees, session sweeps by the daemon) is silently absent from the generation while the restore point still carries it"
+    },
+    {
+      "id": "D-03",
+      "status": "open",
+      "summary": "a migration_not_quiescent refusal suggests 'run eawf validate to inspect schema errors', which does not clear any holder"
+    },
+    {
+      "id": "D-04",
+      "status": "open",
+      "summary": "the refusal names at most 20 holders; clearing 37 managed-worktree rows took the worktree reconcile verb, which the refusal does not name"
+    }
+  ],
+  "environment": {
+    "clone": "git clone --no-local of this repository, detached at the pinned revision",
+    "ea_state": "unset",
+    "eawf_source": "the wave's worktree",
+    "home": "isolated (own ~/.eawf registry and backups)",
+    "runtime_dir": "isolated (own daemon)"
+  },
+  "gate": {
+    "argv": [
+      "uv",
+      "run",
+      "pytest",
+      "tests/integration/kernel/migration/test_v07_rehearsal.py",
+      "-q"
+    ],
+    "exit": 0
+  },
+  "pinned_revision": "e2d6a5df8b599a30aa08d5306335ac5381a3d0c6",
+  "plan": {
+    "applicable": true,
+    "approval_digest": "952f79afe93e17e311d45aab26a268f02be693ee66999ea499304509dc7645dc",
+    "declared_track_assignment_count": 40,
+    "idempotence_digest": "cd53ae583aaf8bf9e18853b1ca67389dca1b804ee2f36cef5afc51c615be3f24",
+    "manifest_digest": "d3760c43a9f489189e8404a13228165ae4a207d6388307b4402593d260f3f900",
+    "replanned_identical": true,
+    "required_operator_assignment_count": 0,
+    "source_collections": 38,
+    "source_digest": "5ac847491638a463eb013c5187557cf201694e27c6b7ae0ba21887da821b0849",
+    "source_rows": 6228,
+    "steps": [
+      {
+        "step": "read_barrier",
+        "summary": "pinned 22 read surfaces"
+      },
+      {
+        "step": "source_census",
+        "summary": "censused 38 declared collections with 13 drop proofs"
+      },
+      {
+        "step": "stage_import",
+        "summary": "staged 5790 records in memory"
+      },
+      {
+        "step": "map_rows",
+        "summary": "mapped 38 collections onto 5908 records in 10 stores"
+      },
+      {
+        "step": "collect_evidence",
+        "summary": "read 2628 git facts, 0 required operator assignments, 40 declared Track assignments and 0 unresolved rows"
+      },
+      {
+        "step": "validate_first_pass",
+        "summary": "first pass clean at digest 8da6bd18bad8"
+      },
+      {
+        "step": "validate_second_pass",
+        "summary": "second pass byte-identical over 3035 bytes"
+      }
+    ],
+    "target_by_collection": {
+      "batch": 87,
+      "decision": 94,
+      "incident": 21,
+      "legacy": 3245,
+      "milestone": 39,
+      "project": 1,
+      "run": 614,
+      "sandbox_policy": 1,
+      "task": 1805,
+      "track_outcome": 1
+    },
+    "target_rows": 5908,
+    "unresolved_row_count": 0
+  },
+  "rehearsed_on": "2026-09-26",
+  "rerun": {
+    "applied": false,
+    "generation_id": "gen-d3760c43a9f48918",
+    "journal_rows": 0,
+    "manifest_digest": "d3760c43a9f489189e8404a13228165ae4a207d6388307b4402593d260f3f900",
+    "manifest_digest_matches_first": true,
+    "status": "already-selected",
+    "target_tree_files": 202,
+    "target_tree_unchanged": true
+  },
+  "rollback": {
+    "authority": {
+      "epoch": 1,
+      "generation_count": 0,
+      "generation_id": null
+    },
+    "boundary_after": "plan_only",
+    "discarded": [
+      "EPOCH2_ACTIVE.json",
+      "selected.json",
+      "gen-d3760c43a9f48918"
+    ],
+    "journal_rows": 2,
+    "manifest_digest": "d3760c43a9f489189e8404a13228165ae4a207d6388307b4402593d260f3f900",
+    "outcome": "surfaces_restored",
+    "restored_locators": [
+      "config.yaml",
+      "state.json",
+      "store/audit.jsonl",
+      "store/event.jsonl"
+    ],
+    "surfaces_match_restore_point": true
+  },
+  "rollback_boundary_before": {
+    "boundary": "marker_written",
+    "canary_reversible_window": "open",
+    "declaration": "opt_in",
+    "simple_rollback_window": "open"
+  },
+  "schema_version": "1",
+  "second_cycle": {
+    "generation_id": "gen-d3760c43a9f48918",
+    "manifest_digest_matches_first": true,
+    "status": "applied"
+  },
+  "stage": {
+    "committed_sources": 20,
+    "sources": [
+      ".ea/state.json",
+      ".ea/config.yaml",
+      ".ea/store/actual.jsonl",
+      ".ea/store/audit.jsonl",
+      ".ea/store/auditor_report.jsonl",
+      ".ea/store/commit_repin.jsonl",
+      ".ea/store/decision.jsonl",
+      ".ea/store/evidence.jsonl",
+      ".ea/store/executor_report.jsonl",
+      ".ea/store/flow.jsonl",
+      ".ea/store/gate_receipt.jsonl",
+      ".ea/store/gate_rereceipt.jsonl",
+      ".ea/store/gold_label.jsonl",
+      ".ea/store/incident.jsonl",
+      ".ea/store/legacy_audit_disposition.jsonl",
+      ".ea/store/release.jsonl",
+      ".ea/store/release_checkpoint_receipt.jsonl",
+      ".ea/store/release_record.jsonl",
+      ".ea/store/release_train_advance.jsonl",
+      ".ea/store/reviewer_report.jsonl"
+    ]
+  },
+  "wave": "P35-I04-W10"
+}

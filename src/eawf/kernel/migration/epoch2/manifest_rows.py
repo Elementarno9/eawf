@@ -41,6 +41,7 @@ from eawf.kernel.migration.epoch2.validation import (
     FabricationFinding,
     ImportValidationReport,
 )
+from eawf.kernel.state.epoch2.base import TrackKey
 from eawf.kernel.store.tiers import Epoch2Collection, StorageTier, tier_for
 
 #: How many validation passes a sealable manifest records. Two, compared
@@ -320,6 +321,32 @@ class OperatorAssignment(StrictMigrationModel):
     target_field: Annotated[str, Field(min_length=1, max_length=64)]
     reason: DeferralReason
     candidates: tuple[Annotated[str, Field(min_length=1)], ...] = ()
+
+
+class DeclaredTrackAssignment(StrictMigrationModel):
+    """One Track ownership the operator declared rather than the source recorded.
+
+    The declaration is kept beside the question it answers, so a reader
+    of the manifest sees both that the source never named a Track and
+    which Track the operator put there instead. Nothing here is inferred:
+    the Track is the one value the plan request carried.
+
+    Attributes:
+        address: The source row, as ``<collection>/<id>``.
+        source_collection: The epoch-1 collection the row came from.
+        target_collection: Where the record lands, spelled as the
+            disposition table spells it.
+        target_field: The epoch-2 field the declaration fills.
+        reason: Why the source could not supply the Track itself.
+        track_key: The Track the operator declared.
+    """
+
+    address: Annotated[str, Field(min_length=1, max_length=256)]
+    source_collection: Annotated[str, Field(min_length=1, max_length=64)]
+    target_collection: Annotated[str, Field(min_length=1, max_length=64)]
+    target_field: Annotated[str, Field(min_length=1, max_length=64)]
+    reason: DeferralReason
+    track_key: TrackKey
 
 
 class UnresolvedRow(StrictMigrationModel):
@@ -867,6 +894,7 @@ __all__ = [
     "GIT_EVIDENCE_FIELDS",
     "VALIDATION_PASS_COUNT",
     "BackupRecord",
+    "DeclaredTrackAssignment",
     "GitEvidence",
     "GitFact",
     "GitFactKind",

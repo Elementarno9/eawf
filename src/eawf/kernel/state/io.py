@@ -36,20 +36,27 @@ import os
 import secrets
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 import orjson
 
 from eawf.kernel.fsync import fsync_parent_dir
+from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
 from eawf.kernel.state.enums import StoreKind
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
+    from eawf.kernel.state.epoch2.authority import RootAuthority
     from eawf.kernel.state.models import State
     from eawf.kernel.store.envelope import Envelope
 
 logger = logging.getLogger(__name__)
+
+#: The stable code an epoch-1 write refused on a cut-over tree carries.
+LEGACY_OPERATION_REMOVED: Final = "legacy_operation_removed"
+
+#: The epoch-1 authority document's file name; only a write to it is fenced.
+STATE_FILENAME: Final = "state.json"
 
 #: Process-level timestamp (wall-clock seconds) of the last opportunistic
 #: fallback-WAL GC sweep, or ``None`` when this process has never swept. The
@@ -71,7 +78,85 @@ class StateValidationError(ValueError):
     """
 
 
-def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
+class LegacyOperationRemovedError(StateValidationError):
+    """An epoch-1 write was aimed at a tree that carries the epoch marker.
+
+    A :class:`StateValidationError`, so every caller that already maps a
+    refused state write onto the validation bucket reports this one too.
+
+    Attributes:
+        code: The stable refusal code.
+    """
+
+    code: ClassVar[str] = LEGACY_OPERATION_REMOVED
+
+    def __init__(self, *, ea_dir: Path) -> None:
+        """Build the refusal for the tree rooted at ``ea_dir``.
+
+        Args:
+            ea_dir: The tree root. Only its directory name reaches the
+                message, so a pasted refusal carries no home directory.
+        """
+        super().__init__(
+            f"{LEGACY_OPERATION_REMOVED}: {ea_dir.name}/{GENERATIONS_DIRNAME}/{MARKER_FILENAME} "
+            f"exists, so {STATE_FILENAME} is frozen and this epoch-1 mutation was refused; "
+            "nothing was written"
+        )
+
+
+def epoch_marker_present(ea_dir: Path) -> bool:
+    """Return whether the tree rooted at ``ea_dir`` carries the epoch marker.
+
+    Only the marker's presence is asked, not whether the tree was granted
+    epoch 2: a marker on an undeclared tree is a half-done cutover, and an
+    epoch-1 writer landing there would still be a second writer. The
+    answer is re-read on every call because a rollback removes the marker
+    and must give the epoch-1 writers their tree back at once; one ``stat``
+    is noise beside the fsynced write it guards.
+
+    Args:
+        ea_dir: The tree root, the directory that holds ``state.json``.
+
+    Returns:
+        ``True`` when ``generations/EPOCH2_ACTIVE.json`` exists under it.
+    """
+    return (ea_dir / GENERATIONS_DIRNAME / MARKER_FILENAME).exists()
+
+
+def refuse_legacy_write(state_path: Path, *, native_authority: RootAuthority | None = None) -> None:
+    """Refuse an epoch-1 write to ``state_path`` on a tree that carries the marker.
+
+    Args:
+        state_path: The file about to be written. A file not named
+            ``state.json`` is never refused, so the generic JSON writer can
+            call this for every target.
+        native_authority: The epoch-2 answer a native handler holds for
+            this very tree. A native handler that keeps the v1 document
+            beside its generation writes under that proof rather than as
+            an epoch-1 writer, so it is let through; an answer for any
+            other tree, or an epoch-1 answer, changes nothing.
+
+    Raises:
+        LegacyOperationRemovedError: ``state_path`` is a ``state.json``
+            whose directory carries the epoch marker and no matching
+            epoch-2 answer was presented.
+    """
+    path = Path(state_path)
+    if path.name != STATE_FILENAME or not epoch_marker_present(path.parent):
+        return
+    if (
+        native_authority is not None
+        and native_authority.epoch == 2
+        and native_authority.root.resolve() == path.parent.resolve()
+    ):
+        return
+    logger.info(f"refuse_legacy_write refused tree={path.parent.name}")
+    raise LegacyOperationRemovedError(ea_dir=path.parent)
+
+
+def write_state_unlocked(
+    path: Path, data: dict[str, Any], *, native_authority: RootAuthority | None = None
+) -> None:
     """Refuse a leaking payload, else write *data* to *path* atomically.
 
     This is the one place every ``state.json`` write -- the daemon-down
@@ -91,14 +176,19 @@ def write_state_unlocked(path: Path, data: dict[str, Any]) -> None:
     Args:
         path: Destination ``state.json`` path (parent dirs are created).
         data: JSON-serialisable payload to persist.
+        native_authority: The epoch-2 answer a native handler writes
+            under; see :func:`refuse_legacy_write`.
 
     Raises:
         StateValidationError: When a string *data* adds or changes relative
             to the on-disk payload at *path* carries a leak shape (home
             path, email, or credential token). Nothing is written.
+        LegacyOperationRemovedError: When *path* is a ``state.json`` whose
+            tree carries the epoch marker. Nothing is read or written.
     """
     from eawf.observability.logging.state_leak import state_leak_refusal
 
+    refuse_legacy_write(path, native_authority=native_authority)
     old = orjson.loads(path.read_bytes()) if path.exists() else {}
     if (leak_refusal := state_leak_refusal(old, data)) is not None:
         raise StateValidationError(leak_refusal)
@@ -406,6 +496,9 @@ def commit_mutation(
         StateValidationError: When the post-apply payload fails strict
             invariant validation, or a string it adds or changes carries a
             leak shape (home path, email, or credential token).
+        LegacyOperationRemovedError: When the tree carries the epoch
+            marker. Raised before the WAL replay, so neither the WAL nor
+            the event log is touched either.
     """
     from eawf.kernel.store.append import append_envelope
     from eawf.kernel.store.paths import store_path
@@ -414,6 +507,7 @@ def commit_mutation(
     from eawf.runtime.daemon.recovery import replay_wal
     from eawf.runtime.daemon.wal import WalRecord
 
+    refuse_legacy_write(state_path)
     payload = candidate.model_dump(mode="json")
     # validate the payload that will actually go to disk
     _validate_or_raise(payload)

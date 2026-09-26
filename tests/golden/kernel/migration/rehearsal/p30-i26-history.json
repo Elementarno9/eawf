@@ -1,8 +1,8 @@
 {
   "apply": {
     "applied": true,
-    "generation_bytes": 1056007,
-    "generation_id": "gen-2805840d0a18b245",
+    "generation_bytes": 1146644,
+    "generation_id": "gen-3db6409567e9e48e",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -17,13 +17,13 @@
       "marker_written",
       "maintenance_exited"
     ],
-    "ledger_files": 9,
-    "ledger_records": 684,
-    "residual_document_bytes": 234566
+    "ledger_files": 11,
+    "ledger_records": 751,
+    "residual_document_bytes": 236691
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "1022265ae5fb0701bf7e40048c8c6405aea4eb8c55a82e9d24207af8e74f907e",
+    "approval_digest": "743485cad7571b56dc260264d20f8d4629bd98572646eb1fad0b5f5b9d5ee90d",
     "collections": {
       "actuals": [
         24,
@@ -67,8 +67,8 @@
       ],
       "decisions": [
         58,
-        0,
-        58
+        58,
+        0
       ],
       "dispatch_paused": [
         0,
@@ -102,8 +102,8 @@
       ],
       "incidents": [
         9,
-        0,
-        9
+        9,
+        0
       ],
       "indexes": [
         0,
@@ -152,13 +152,13 @@
       ],
       "project": [
         10,
-        0,
-        1
+        1,
+        0
       ],
       "sandbox_policies": [
         1,
-        0,
-        1
+        1,
+        0
       ],
       "schema_version": [
         0,
@@ -216,87 +216,17 @@
         0
       ]
     },
-    "manifest_digest": "2805840d0a18b24590f0e65f0b04cc89c6385822e507c7f3db1a161b54cec71b",
+    "manifest_digest": "3db6409567e9e48e591e80fb0fea2e94dab0f134cb0c512fe15fa2597375b5c4",
     "reproducible": true,
     "source_digest": "dc40bc96a3e3137faab4f519f3a2242beec01dec06d3530ebd8f86fb3cc9bc01",
     "source_rows": 874,
-    "target_rows": 814,
-    "unresolved_rows": [
-      "decisions/D-BAND-ENFORCE",
-      "decisions/D-BRANCH-GC",
-      "decisions/D-BRAND-MARK",
-      "decisions/D-EU-CAPTURE",
-      "decisions/D-FIDELITY-SPINE",
-      "decisions/D-HISTORY-ACCEPT",
-      "decisions/D-I21-RATIFY",
-      "decisions/D-I25-EU-EXCLUDE",
-      "decisions/D-I25-ODR-DRAIN",
-      "decisions/D-LOCK-SPLIT",
-      "decisions/D-ODR-ADVISORY",
-      "decisions/D-RESET-PARDON-STRICT",
-      "decisions/D-RPC-TERMINAL",
-      "decisions/D-SUP-01",
-      "decisions/D-SUP-02",
-      "decisions/D-SUP-03",
-      "decisions/D-SUP-04",
-      "decisions/D-SUP-05",
-      "decisions/D-SUP-TUI-01",
-      "decisions/D-TEETH",
-      "decisions/D-TUI-MODES",
-      "decisions/D-W43-CRITERIA-SUPERSEDED",
-      "decisions/D-WINDOWS-DESCOPE",
-      "decisions/D-WINDOWS-REALHOST",
-      "decisions/D-WINDOWS-VALIDATED",
-      "decisions/D-WINPIPE-01",
-      "decisions/D01",
-      "decisions/D02",
-      "decisions/D03",
-      "decisions/D04",
-      "decisions/D05",
-      "decisions/D06",
-      "decisions/D07",
-      "decisions/D08",
-      "decisions/D09",
-      "decisions/D10",
-      "decisions/D11",
-      "decisions/D12",
-      "decisions/D13",
-      "decisions/D14",
-      "decisions/D15",
-      "decisions/D16",
-      "decisions/D17",
-      "decisions/D18",
-      "decisions/D19",
-      "decisions/D20",
-      "decisions/D21",
-      "decisions/D22",
-      "decisions/D23",
-      "decisions/D24",
-      "decisions/D25",
-      "decisions/D26",
-      "decisions/D27",
-      "decisions/D28",
-      "decisions/D29",
-      "decisions/D30",
-      "decisions/D31",
-      "decisions/D32",
-      "incidents/INC-P30-01",
-      "incidents/INC-P30-02",
-      "incidents/INC-P30-03",
-      "incidents/INC-P30-06",
-      "incidents/INC-P30-07",
-      "incidents/INC-P30-08",
-      "incidents/INC-P30-09",
-      "incidents/INC-P30-10",
-      "incidents/INC-P30-11",
-      "project",
-      "sandbox_policies/POL-1"
-    ]
+    "target_rows": 883,
+    "unresolved_rows": []
   },
   "fixture": "p30-i26-history",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-2805840d0a18b245",
+    "generation_id": "gen-3db6409567e9e48e",
     "journal_rows": 0,
     "tree_unchanged": true
   },

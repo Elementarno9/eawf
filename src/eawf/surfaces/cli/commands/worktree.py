@@ -11,6 +11,8 @@ Subcommands:
   branch via cherry-pick (default) or rebase-then-fast-forward.
 - ``worktree cleanup`` — tear down the worktree directory + branch,
   refusing-by-default for dirty/CONFLICTED records.
+- ``worktree reconcile`` — retire active worktree rows git no longer
+  lists and session rows whose holder is gone (``--dry-run`` reports).
 
 This module also wires the wave-centric automation verbs onto the
 ``wave`` noun-group (imported from
@@ -34,10 +36,11 @@ Most mutating handlers run inside
 registry serialisation). The two locks compose without re-entry: the
 state lock guards ``state.json`` and the registry lock guards
 ``.git/worktrees/<name>``; they target disjoint paths.
-``wave land``, ``wave land-batch``, and ``wave autoland`` are
-daemon-owned exceptions: their state writes route through
+``wave land``, ``wave land-batch``, ``wave autoland`` and ``worktree
+reconcile`` are daemon-owned exceptions: their state writes route through
 ``state.wave_land`` / ``state.wave_land_batch`` / ``state.wave_autoland``
-so the daemon remains the canonical state mutator.
+/ ``state.worktree_reconcile`` so the daemon remains the canonical state
+mutator.
 """
 
 from __future__ import annotations
@@ -70,7 +73,7 @@ STRATEGY_REBASE_THEN_FF: str = "rebase_then_ff"
 
 worktree_app = typer.Typer(
     name="worktree",
-    help="Manage per-wave git worktrees (create / list / merge-back / cleanup).",
+    help="Manage per-wave git worktrees (create / list / merge-back / cleanup / reconcile).",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -530,6 +533,70 @@ def worktree_cleanup_cmd(
     )
 
 
+# ---- worktree reconcile -----------------------------------------------------
+
+
+@worktree_app.command(name="reconcile")
+def worktree_reconcile_cmd(
+    ctx: typer.Context,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report the rows that would be retired; write nothing."),
+    ] = False,
+) -> None:
+    """Retire active worktree and session rows whose holder is gone."""
+    flags: GlobalFlags = ctx.obj
+    try:
+        state_path = _resolve_state_path(flags)
+        repo_root = _resolve_repo_root(state_path)
+        result = _call_worktree_daemon(
+            method="state.worktree_reconcile",
+            params={"repo_root": str(repo_root), "dry_run": dry_run},
+            flags=flags,
+            verb="worktree reconcile",
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    verb = "would retire" if dry_run else "retired"
+    lines = [f"worktree reconcile {verb} {len(result['retired'])} rows"]
+    lines.extend(
+        f"  {verb} {row['kind']} {row['row_id']} ({row['reason']})" for row in result["retired"]
+    )
+    emit_json_or_text(result, "\n".join(lines), flags=flags)
+
+
+def _reconcile_daemonless(*, params: dict[str, Any], flags: GlobalFlags) -> dict[str, Any]:
+    """Run the reconcile locally; with no daemon, no session predates a boot."""
+    from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.state.io import StateValidationError
+    from eawf.kernel.store.paths import store_path
+    from eawf.runtime.worktree import worktree_registry_lock
+    from eawf.runtime.worktree.reconcile import reconcile_stale_rows
+
+    state_path = _resolve_state_path(flags)
+    repo_root = Path(str(params["repo_root"]))
+    try:
+        with worktree_registry_lock(repo_root, timeout=5.0):
+            result = reconcile_stale_rows(
+                state_path,
+                store_path(state_path, StoreKind.EVENT),
+                repo_root=repo_root,
+                booted_at=None,
+                dry_run=bool(params["dry_run"]),
+            )
+    except StateValidationError as exc:
+        raise cli_errors.ValidationError(str(exc)) from exc
+    return {
+        "retired": [
+            {"kind": row.kind.value, "row_id": row.row_id, "reason": row.reason.value}
+            for row in result.rows
+        ],
+        "dry_run": result.dry_run,
+        "written": result.written,
+    }
+
+
 # ---- wave land --------------------------------------------------------------
 # These verbs hang off ``wave_app`` (defined in lifecycle.py). We register
 # them here because the implementation depends on the worktree subsystem.
@@ -550,6 +617,8 @@ def _call_worktree_daemon(
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     if _dispatch.daemonless_requested(flags):
+        if method == "state.worktree_reconcile":
+            return _reconcile_daemonless(params=params, flags=flags)
         return _call_worktree_daemonless(method=method, params=params, flags=flags)
 
     try:

@@ -1,8 +1,8 @@
 {
   "apply": {
     "applied": true,
-    "generation_bytes": 12545,
-    "generation_id": "gen-529c7e8afa048264",
+    "generation_bytes": 15661,
+    "generation_id": "gen-4c59e2eb4e94fb8e",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -17,13 +17,13 @@
       "marker_written",
       "maintenance_exited"
     ],
-    "ledger_files": 3,
-    "ledger_records": 4,
-    "residual_document_bytes": 8173
+    "ledger_files": 5,
+    "ledger_records": 6,
+    "residual_document_bytes": 9066
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "e160e96cb88dade81af462567286d096aa5f9d0421b242fc76b3946c3fbc94da",
+    "approval_digest": "e6057ab6907b37b264f4f274ae3124c92f70f361165d86c06c13f63297bf7a16",
     "collections": {
       "actuals": [
         0,
@@ -67,8 +67,8 @@
       ],
       "decisions": [
         1,
-        0,
-        1
+        1,
+        0
       ],
       "dispatch_paused": [
         0,
@@ -102,8 +102,8 @@
       ],
       "incidents": [
         1,
-        0,
-        1
+        1,
+        0
       ],
       "indexes": [
         0,
@@ -152,8 +152,8 @@
       ],
       "project": [
         3,
-        0,
-        1
+        1,
+        0
       ],
       "sandbox_policies": [
         0,
@@ -216,21 +216,17 @@
         0
       ]
     },
-    "manifest_digest": "529c7e8afa048264d41517afba50a24ca091a0281f4415e6aee41b0c7cac134b",
+    "manifest_digest": "4c59e2eb4e94fb8e9463f1ea3c54724e6a143bb5e1fdcbf88833c96d191895d2",
     "reproducible": true,
     "source_digest": "433c936953760e80b24c6665f141794469122708fa12e2e652c04e493f8bdd9f",
     "source_rows": 16,
-    "target_rows": 9,
-    "unresolved_rows": [
-      "decisions/D01",
-      "incidents/INC01",
-      "project"
-    ]
+    "target_rows": 12,
+    "unresolved_rows": []
   },
   "fixture": "open-attention",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-529c7e8afa048264",
+    "generation_id": "gen-4c59e2eb4e94fb8e",
     "journal_rows": 0,
     "tree_unchanged": true
   },

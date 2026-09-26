@@ -14,6 +14,9 @@ through :func:`~eawf.kernel.store.commit_policy.classify_path` rather
 than through a hand-written exclusion list is what keeps the fixture and
 the policy from disagreeing -- a file whose policy changes moves the
 fixture with it, in the same commit, without anyone remembering to.
+The bytes come from git objects at HEAD rather than from the working
+tree, so the staging depends on the revision alone and never races the
+daemon writing the live document.
 
 The firehose is the case that makes this load-bearing.
 ``.ea/store/event.jsonl`` is raw agent stdout: gitignored, unbounded, and
@@ -43,32 +46,40 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
+import os
+import subprocess
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
-from tests.integration.kernel.migration._corpus_builders import (
-    CONFIG_DIRNAME,
-    CONFIG_FILENAME,
-    DOCUMENT_FILENAME,
-    REGISTRY_FILENAME,
-    STORE_DIRNAME,
-    TELEMETRY_BODY,
-    TELEMETRY_FILENAME,
+from eawf.kernel.migration.epoch2.canary import OPT_IN_DECLARATION_FILENAME
+from eawf.kernel.migration.epoch2.snapshot import (
+    LIVE_CONFIG_LOCATOR,
+    LIVE_STATE_LOCATOR,
+    LIVE_STORE_LOCATOR,
+    StagedSource,
+    committed_sources,
+    is_committed,
+    repository_revision,
+    require_committed,
+    stage_committed_corpus,
 )
-from tests.integration.kernel.migration._corpus_shapes import default_registry
+from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.store.paths import store_path
+from eawf.platform.registry import Registry, WorkspaceRecord, create_workspace
+from eawf.runtime.worktree import worktree_registry_lock
+from eawf.runtime.worktree.reconcile import reconcile_stale_rows
+from tests.integration.kernel.migration._corpus_shapes import (
+    DEFAULT_TRACK_KEY,
+    PROJECT_KEY,
+    WORKSPACE_KEY,
+)
 
 logger = logging.getLogger(__name__)
 
-
-#: Where the live corpus is read from, relative to the repository root.
-LIVE_STATE_LOCATOR: Final = ".ea/state.json"
-LIVE_STORE_LOCATOR: Final = ".ea/store"
-LIVE_CONFIG_LOCATOR: Final = ".ea/config.yaml"
 
 #: The pin filename inside the live-cutover fixture directory.
 PIN_FILENAME: Final = "corpus-pin.json"
@@ -186,130 +197,35 @@ class LiveCorpusPin(BaseModel):
         return cls.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
-class StagedSource(BaseModel):
-    """One live file the snapshot is assembled from.
-
-    Attributes:
-        locator: The file's repo-relative path, which is the string the
-            commit policy classifies.
-        destination: Where the file lands inside the staged snapshot,
-            relative to the snapshot root.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    locator: Annotated[str, Field(min_length=1)]
-    destination: Annotated[str, Field(min_length=1)]
-
-
-def is_committed(locator: str) -> bool:
-    """Report whether version control carries one path under ``.ea/``.
-
-    Args:
-        locator: A repo-relative, forward-slash path.
-
-    Returns:
-        ``True`` when the commit policy declares the path committed.
-
-    Raises:
-        UndeclaredPathError: When no policy row matches, which means the
-            tree grew a file family nobody declared.
-    """
-    return classify_path(locator).policy is CommitPolicy.COMMITTED
-
-
-def require_committed(locator: str) -> str:
-    """Return a locator the snapshot layout needs, once the policy admits it.
-
-    Args:
-        locator: A repo-relative path the fixed part of the layout maps.
-
-    Returns:
-        The locator unchanged.
-
-    Raises:
-        ValueError: When the policy declares the path uncommitted. The
-            layout and the policy then disagree about what a
-            repository's reproducible state is, and that is a defect in
-            one of the two rather than something to route around.
-        UndeclaredPathError: When no policy row matches the path.
-    """
-    if not is_committed(locator):
-        raise ValueError(f"{locator} is declared uncommitted, so the snapshot cannot stage it")
-    return locator
-
-
-def committed_sources(repo_root: Path) -> tuple[StagedSource, ...]:
-    """Return every live file the snapshot stages, committed surface only.
-
-    The document and the layered config sit at fixed destinations the
-    snapshot layout requires, so an uncommitted classification for either
-    is raised rather than filtered: a corpus missing its document is not
-    a smaller corpus, it is a broken one. The ledger set is discovered
-    and filtered, because which ledgers exist is a property of the tree.
-
-    Args:
-        repo_root: The repository whose ``.ea`` tree is the corpus.
-
-    Returns:
-        The document, the config, then each committed store ledger sorted
-        by filename.
-
-    Raises:
-        FileNotFoundError: When the repository carries no live store.
-        ValueError: When a locator the layout requires is uncommitted.
-    """
-    store_root = repo_root / LIVE_STORE_LOCATOR
-    if not store_root.is_dir():
-        raise FileNotFoundError(f"{LIVE_STORE_LOCATOR} is absent, so there is no live corpus")
-    ledgers = tuple(
-        StagedSource(locator=locator, destination=f"{STORE_DIRNAME}/{path.name}")
-        for path, locator in (
-            (path, f"{LIVE_STORE_LOCATOR}/{path.name}")
-            for path in sorted(store_root.glob("*.jsonl"))
-        )
-        if is_committed(locator)
-    )
-    return (
-        StagedSource(locator=require_committed(LIVE_STATE_LOCATOR), destination=DOCUMENT_FILENAME),
-        StagedSource(
-            locator=require_committed(LIVE_CONFIG_LOCATOR),
-            destination=f"{CONFIG_DIRNAME}/{CONFIG_FILENAME}",
-        ),
-        *ledgers,
-    )
-
-
 def stage_live_corpus(*, repo_root: Path, destination: Path) -> Path:
-    """Copy the live corpus into a snapshot tree the read barrier can pin.
+    """Stage the committed corpus the way the operator verb does.
 
-    The copy is the whole point. The live tree has a canonical writer, so
-    a read barrier over it could only ever be advisory; a barrier over an
-    assembled copy is enforceable, and nothing here ever opens the live
-    tree for writing.
-
-    The registry and the telemetry surface are synthesised rather than
-    copied. The live ``.ea/telemetry.db`` is declared uncommitted because
-    it embeds this machine's absolute paths, so the snapshot carries the
-    builders' neutral body in its place.
+    A thin call into
+    :func:`~eawf.kernel.migration.epoch2.snapshot.stage_committed_corpus`,
+    which ``eawf migrate epoch2 --stage-to`` also calls, so the rehearsal
+    measures the exact snapshot an operator would stage rather than a
+    test-only copy of it. The registry is sealed under the rehearsal's own
+    addressing slots.
 
     Args:
-        repo_root: The repository whose ``.ea`` tree is the corpus.
-        destination: Where to assemble the snapshot. Created when absent.
+        repo_root: Any directory inside the repository whose committed
+            ``.ea`` tree is the corpus.
+        destination: Where to assemble the snapshot.
 
     Returns:
         ``destination``, now laid out as a snapshot root.
 
     Raises:
-        FileNotFoundError: When the repository carries no live corpus.
-        ValueError: When a locator the layout requires is uncommitted.
+        MigrationSourceUnreadableError: When HEAD tracks no committed
+            corpus, or ``repo_root`` is not in a git repository.
+        MigrationStagingRefusedError: When ``destination`` is not empty.
     """
-    (destination / STORE_DIRNAME).mkdir(parents=True, exist_ok=True)
-    (destination / CONFIG_DIRNAME).mkdir(parents=True, exist_ok=True)
-    for source in committed_sources(repo_root):
-        shutil.copyfile(repo_root / source.locator, destination / source.destination)
-    _write_json(destination / REGISTRY_FILENAME, default_registry().document())
-    _write_json(destination / TELEMETRY_FILENAME, TELEMETRY_BODY)
+    stage_committed_corpus(
+        repo_root=repo_root,
+        destination=destination,
+        workspace_key=WORKSPACE_KEY,
+        project_key=PROJECT_KEY,
+    )
     return destination
 
 
@@ -318,24 +234,160 @@ def corpus_bytes(root: Path) -> int:
     return sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
 
 
-def _write_json(path: Path, payload: object) -> None:
-    """Write ``payload`` as sorted, newline-terminated JSON."""
-    path.write_text(json.dumps(payload, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+# ---------------------------------------------------------------------------
+# The pinned clone.
+#
+# Staging from git objects answers "what does the importer make of this
+# corpus". It does not answer "can this repository be cut over", because a
+# cutover also writes into the repository: it fences the tree, proves nobody
+# holds it, pins a restore point and swaps authority. That half can only be
+# rehearsed on a repository nobody else is using, so it runs on a clone,
+# checked out at one frozen revision, under the addressing the live cut uses.
+# ---------------------------------------------------------------------------
+
+#: The workspace this repository is registered under at the live cut.
+LIVE_WORKSPACE_KEY: Final = "EAWF"
+
+#: The project and repository the live corpus is addressed to -- the
+#: project code the repository's own document already carries.
+LIVE_PROJECT_KEY: Final = "EAWF"
+LIVE_REPOSITORY_KEY: Final = "EAWF"
+
+#: The Track declared as owner of every record whose source names none.
+LIVE_TRACK_KEY: Final = DEFAULT_TRACK_KEY
+
+
+def clone_at_revision(*, repo_root: Path, destination: Path) -> str:
+    """Clone the repository holding ``repo_root`` and pin it at its HEAD.
+
+    The clone is detached at the full commit id rather than left on a
+    branch, so nothing that moves a branch while the rehearsal runs can
+    change which corpus it is rehearsing. User-wide git hooks are disabled
+    for both calls: the clone is a scratch tree, and a hook that ran in it
+    would make the rehearsal depend on the machine it runs on.
+
+    Args:
+        repo_root: Any directory inside the repository to clone.
+        destination: Where the clone lands; it must not exist yet.
+
+    Returns:
+        The revision the clone is checked out at.
+
+    Raises:
+        MigrationSourceUnreadableError: ``repo_root`` is not in a git
+            repository with a commit.
+        subprocess.CalledProcessError: git refused the clone or checkout.
+    """
+    top, revision = repository_revision(repo_root)
+    _git_quiet(["clone", "--quiet", "--no-checkout", str(top), str(destination)])
+    _git_quiet(["-C", str(destination), "checkout", "--quiet", "--detach", revision])
+    return revision
+
+
+def _git_quiet(args: list[str]) -> None:
+    """Run one git command with user-wide hooks disabled."""
+    subprocess.run(
+        ["git", "-c", f"core.hooksPath={os.devnull}", *args],
+        check=True,
+        capture_output=True,
+    )
+
+
+def quiesce_clone(clone: Path, *, booted_at: datetime) -> int:
+    """Retire every holder the clone inherited from the committed document.
+
+    A committed document still names the sessions and worktrees that were
+    live when it was committed, and a fresh clone has none of those
+    checkouts. This runs exactly what the daemon's reconcile verb runs --
+    the worktree registry lock around the stale-row retirement -- with the
+    daemon's boot instant, so a session that predates it retires too.
+
+    Args:
+        clone: The clone's repository root.
+        booted_at: The boot instant the retirement measures sessions
+            against.
+
+    Returns:
+        How many rows were retired.
+    """
+    state = clone / ".ea" / "state.json"
+    with worktree_registry_lock(clone):
+        result = reconcile_stale_rows(
+            state,
+            store_path(state, StoreKind.EVENT),
+            repo_root=clone,
+            booted_at=booted_at,
+            dry_run=False,
+        )
+    return len(result.rows)
+
+
+def write_opt_in(ea_root: Path, *, backup_ts: str, backup_digest: str) -> Path:
+    """Opt ``ea_root`` into the cutover against one verified backup.
+
+    Args:
+        ea_root: The tree to opt in.
+        backup_ts: The snapshot ``eawf backup create`` reported.
+        backup_digest: The digest it reported for that snapshot.
+
+    Returns:
+        The declaration's path.
+    """
+    path = ea_root / OPT_IN_DECLARATION_FILENAME
+    declaration = {
+        "opt_in": True,
+        "declared_by": "rehearsal",
+        "purpose": "rehearse this repository's epoch-2 cutover on a pinned clone",
+        "backup_ts": backup_ts,
+        "backup_digest": backup_digest,
+    }
+    path.write_text(json.dumps(declaration, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def register_live_workspace(path: Path) -> Path:
+    """Write a registry holding the one workspace the live cut resolves.
+
+    Args:
+        path: Where to write the registry.
+
+    Returns:
+        ``path``.
+    """
+    registry = create_workspace(
+        Registry(),
+        record=WorkspaceRecord(
+            key=LIVE_WORKSPACE_KEY,
+            title="eawf",
+            member_project_codes=frozenset({LIVE_PROJECT_KEY}),
+            home_project_code=LIVE_PROJECT_KEY,
+        ),
+    )
+    path.write_text(registry.model_dump_json(indent=2), encoding="utf-8")
+    return path
 
 
 __all__ = [
     "LIVE_CONFIG_LOCATOR",
+    "LIVE_PROJECT_KEY",
+    "LIVE_REPOSITORY_KEY",
     "LIVE_STATE_LOCATOR",
     "LIVE_STORE_LOCATOR",
+    "LIVE_TRACK_KEY",
+    "LIVE_WORKSPACE_KEY",
     "MAGNITUDE_FLOORS",
     "PIN_FILENAME",
     "CorpusMagnitude",
     "LiveCorpusPin",
     "StagedSource",
+    "clone_at_revision",
     "committed_sources",
     "corpus_bytes",
     "is_committed",
     "magnitude_for",
+    "quiesce_clone",
+    "register_live_workspace",
     "require_committed",
     "stage_live_corpus",
+    "write_opt_in",
 ]

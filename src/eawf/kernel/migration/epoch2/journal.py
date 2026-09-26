@@ -14,6 +14,12 @@ nothing has edited. The file itself is written through the same
 append-only guard the epoch-2 ledgers use, which refuses any content
 that is not an extension of what is already committed.
 
+One row carries more than a line of detail: the row that seals the
+activation holds an :class:`ActivationRecord`, the typed statement that
+the first native mutation has landed. Its digest covers the record, so a
+sealed activation cannot be edited out of the chain any more than a stage
+can.
+
 Rows are buffered until the apply commits to durable work. A cutover
 that refuses a precondition, or that finds the generation it would build
 is already selected, has changed nothing -- and a journal row claiming
@@ -33,6 +39,7 @@ from typing import Annotated, Final, Literal
 from pydantic import Field
 
 from eawf.kernel.migration.epoch2.errors import MigrationJournalBrokenError
+from eawf.kernel.migration.epoch2.generation import GENERATION_ID_PATTERN
 from eawf.kernel.migration.epoch2.manifest import RollbackBoundary
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
 from eawf.kernel.store.ledger import guarded_ledger_write
@@ -76,6 +83,35 @@ class CutoverStage(StrEnum):
     ACTIVATION_COMPLETED = "activation_completed"
 
 
+class ActivationRecord(StrictMigrationModel):
+    """The seal a tree's first native mutation puts on its activation.
+
+    Before it, the tree can still be put back byte for byte from the
+    restore point. After it, the published generation holds work recorded
+    nowhere else, so rollback is forward repair and the restore is refused.
+    The record is what makes that answer durable: a later read that finds
+    the generation's bytes back at their activation digest still finds the
+    seal.
+
+    Attributes:
+        generation_id: The generation the tree was activated over.
+        manifest_digest: The manifest that built it.
+        authority_marker_at: When the epoch marker was written.
+        first_native_mutation_at: When the first native mutation was
+            observed committed against the generation.
+        journal_cursor: How many journal rows preceded the seal, so the
+            record names the exact point in the cutover history it closes.
+        effective_epoch: Always ``2``.
+    """
+
+    generation_id: Annotated[str, Field(pattern=GENERATION_ID_PATTERN)]
+    manifest_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    authority_marker_at: datetime
+    first_native_mutation_at: datetime
+    journal_cursor: Annotated[int, Field(ge=0)]
+    effective_epoch: Literal[2]
+
+
 class CutoverJournalRow(StrictMigrationModel):
     """One stage of one apply, chained to the stage before it.
 
@@ -91,6 +127,8 @@ class CutoverJournalRow(StrictMigrationModel):
             :data:`CHAIN_SEED` for the first row.
         digest: The digest over this row's own content and
             ``previous_digest``.
+        activation: The activation seal, carried only by the row that
+            records the first native mutation.
     """
 
     schema_version: Literal["1"]
@@ -101,6 +139,7 @@ class CutoverJournalRow(StrictMigrationModel):
     detail: Annotated[str, Field(min_length=1, max_length=200)]
     previous_digest: Annotated[str, Field(min_length=1, max_length=64)]
     digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    activation: ActivationRecord | None = None
 
 
 def row_digest(
@@ -111,6 +150,7 @@ def row_digest(
     recorded_at: datetime,
     detail: str,
     previous_digest: str,
+    activation: ActivationRecord | None = None,
 ) -> str:
     """Return the chained digest one journal row is identified by.
 
@@ -121,21 +161,25 @@ def row_digest(
         recorded_at: When the stage was reached.
         detail: The row's one-line detail.
         previous_digest: The preceding row's digest.
+        activation: The activation seal the row carries, if any. A row
+            without one digests exactly as rows written before the seal
+            existed, so an older journal still verifies.
 
     Returns:
         A 64-character lowercase hex digest.
     """
-    return rule_digest(
-        [
-            JOURNAL_SCHEMA_VERSION,
-            previous_digest,
-            sequence,
-            stage.value,
-            boundary.value,
-            recorded_at.isoformat(),
-            detail,
-        ]
-    )
+    content: list[object] = [
+        JOURNAL_SCHEMA_VERSION,
+        previous_digest,
+        sequence,
+        stage.value,
+        boundary.value,
+        recorded_at.isoformat(),
+        detail,
+    ]
+    if activation is not None:
+        content.append(activation.model_dump(mode="json"))
+    return rule_digest(content)
 
 
 def read_journal(path: Path) -> tuple[CutoverJournalRow, ...]:
@@ -199,6 +243,7 @@ def require_chain_intact(rows: Iterable[CutoverJournalRow]) -> None:
             recorded_at=row.recorded_at,
             detail=row.detail,
             previous_digest=row.previous_digest,
+            activation=row.activation,
         )
         if row.digest != expected:
             raise MigrationJournalBrokenError(
@@ -251,6 +296,7 @@ class CutoverJournal:
         boundary: RollbackBoundary,
         recorded_at: datetime,
         detail: str,
+        activation: ActivationRecord | None = None,
     ) -> CutoverJournalRow:
         """Buffer one stage, without touching the disk.
 
@@ -259,6 +305,8 @@ class CutoverJournal:
             boundary: The rollback boundary it leaves behind.
             recorded_at: When it was reached.
             detail: One line naming what it found or wrote.
+            activation: The activation seal, only on the row that records
+                the first native mutation.
 
         Returns:
             The buffered row.
@@ -290,7 +338,9 @@ class CutoverJournal:
                 recorded_at=recorded_at,
                 detail=detail,
                 previous_digest=previous,
+                activation=activation,
             ),
+            activation=activation,
         )
         self._buffered.append(row)
         return row
@@ -312,7 +362,8 @@ class CutoverJournal:
             return 0
         current = self.path.read_bytes() if self.path.exists() else b""
         addition = "".join(
-            f"{json.dumps(row.model_dump(mode='json'), sort_keys=True)}\n" for row in self._buffered
+            f"{json.dumps(row.model_dump(mode='json', exclude_none=True), sort_keys=True)}\n"
+            for row in self._buffered
         ).encode("utf-8")
         guarded_ledger_write(self.path, current + addition)
         written = len(self._buffered)
@@ -326,13 +377,30 @@ class CutoverJournal:
         return tuple(row.stage for row in (*self.committed_rows(), *self._buffered))
 
 
+def sealed_activation(rows: Iterable[CutoverJournalRow]) -> ActivationRecord | None:
+    """Return the activation seal a journal carries, if any.
+
+    Args:
+        rows: The journal's rows, in file order.
+
+    Returns:
+        The first activation record the rows carry, or ``None`` when no
+        native mutation has sealed the activation yet. The first rather
+        than the last, because the seal records the *first* mutation and
+        a second one would be a bookkeeping error, not a new fact.
+    """
+    return next((row.activation for row in rows if row.activation is not None), None)
+
+
 __all__ = [
     "CHAIN_SEED",
     "JOURNAL_SCHEMA_VERSION",
+    "ActivationRecord",
     "CutoverJournal",
     "CutoverJournalRow",
     "CutoverStage",
     "read_journal",
     "require_chain_intact",
     "row_digest",
+    "sealed_activation",
 ]

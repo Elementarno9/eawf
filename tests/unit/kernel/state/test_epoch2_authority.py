@@ -31,6 +31,7 @@ from eawf.kernel.state.epoch2.authority import (
     require_native_authority,
     resolve_authority,
 )
+from eawf.observability.doctor.checks_authority import check_authority_epoch
 
 GENERATION_ID = "gen-0123456789abcdef"
 WRITTEN_AT = datetime(2026, 1, 1, tzinfo=UTC)
@@ -246,3 +247,56 @@ def test_canary_repository_ref_round_trips() -> None:
 def test_canary_repository_ref_rejects_invalid_payload(payload: dict[str, str]) -> None:
     with pytest.raises(ValidationError):
         CanaryRepositoryRef.model_validate(payload)
+
+
+# ---- doctor surface -------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("declared", "marked", "status", "detail"),
+    [
+        (False, False, "ok", "epoch 1 (undeclared)"),
+        (False, True, "warn", "epoch 1 (undeclared): generations/EPOCH2_ACTIVE.json exists"),
+        (True, False, "warn", "epoch 1 (marker_absent)"),
+        (True, True, "ok", f"epoch 2 (generation {GENERATION_ID})"),
+    ],
+)
+def test_check_authority_epoch_reports_each_tree(
+    tmp_path: Path, declared: bool, marked: bool, status: str, detail: str
+) -> None:
+    _tree(tmp_path, declared=declared, marked=marked)
+
+    result = check_authority_epoch(workspace=tmp_path)
+
+    assert result.name == "authority_epoch"
+    assert result.status == status
+    assert result.detail is not None
+    assert result.detail.startswith(detail)
+
+
+def test_check_authority_epoch_unreadable_marker_fails(tmp_path: Path) -> None:
+    root = _tree(tmp_path, declared=True, marked=False)
+    (root / "generations").mkdir()
+    (root / "generations" / "EPOCH2_ACTIVE.json").write_text("{", encoding="utf-8")
+
+    result = check_authority_epoch(workspace=tmp_path)
+
+    assert result.status == "fail"
+    assert (
+        result.detail
+        == "epoch 1 (marker_unreadable): generations/EPOCH2_ACTIVE.json does not parse"
+    )
+
+
+def test_check_authority_epoch_no_anchor_is_ok() -> None:
+    result = check_authority_epoch(workspace=None)
+
+    assert result.status == "ok"
+    assert result.detail == "no workspace anchor"
+
+
+def test_check_authority_epoch_anchor_without_ea_is_undeclared(tmp_path: Path) -> None:
+    result = check_authority_epoch(workspace=tmp_path)
+
+    assert result.status == "ok"
+    assert result.detail == "epoch 1 (undeclared)"

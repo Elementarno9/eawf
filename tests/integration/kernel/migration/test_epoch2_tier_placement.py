@@ -34,10 +34,12 @@ import pytest
 
 from eawf.kernel.migration.epoch2.cutover import (
     COMPACTING_STATUSES,
+    DOCUMENT_RESIDENT_COLLECTIONS,
     HISTORY_RECORD_STATUS,
     ROW_PAYLOAD_FIELD,
     ROW_STATUS_FIELD,
     StagedRecord,
+    document_record_count,
     document_residency_findings,
     require_document_holds_only_work_in_flight,
     stage_cutover,
@@ -78,8 +80,8 @@ DOCUMENT_BYTE_CEILING = 1_600_000
 #: What the pinned corpus stages, per tier. Pinned rather than derived so a
 #: rule change that moves a record between tiers reds here instead of
 #: silently agreeing with whatever the writer did.
-EXPECTED_LEDGER_RECORDS = 511
-EXPECTED_DOCUMENT_RECORDS = 3
+EXPECTED_LEDGER_RECORDS = 514
+EXPECTED_DOCUMENT_RECORDS = 5
 
 
 def _staged_tree(tmp_path: Path) -> tuple[Path, Path]:
@@ -181,13 +183,20 @@ def test_the_manifest_reports_per_tier_counts_and_a_bounded_document(
 def test_the_placement_accounts_for_every_addressed_record(
     staged: tuple[Path, MigrationManifest],
 ) -> None:
-    """The two tiers together hold exactly what the plan counted."""
+    """The two tiers together hold exactly what the plan counted.
+
+    The one planned collection no importer stage writes yet is the Track
+    outcome, which waits on an operator's Track; every other planned
+    record -- the natively keyed decisions, incidents, sandbox policies
+    and project -- is on disk.
+    """
     _, manifest = staged
     placement = manifest.tier_placement
     assert placement is not None
     census = manifest.target_census
+    awaiting_a_track = census.by_collection.get(Epoch2Collection.TRACK_OUTCOME.value, 0)
 
-    assert placement.total_records == census.total_rows - census.planned_rows
+    assert placement.total_records == census.total_rows - awaiting_a_track
 
 
 def test_the_ledgers_hold_the_history_the_document_stopped_rewriting(
@@ -308,7 +317,11 @@ def test_every_staged_record_routes_to_a_declared_ledger_collection(
     records = staged_records(corpus_plan)
 
     assert len(records) == EXPECTED_LEDGER_RECORDS + EXPECTED_DOCUMENT_RECORDS
-    assert all(tier_for(record.collection) is StorageTier.LEDGER for record in records)
+    assert all(
+        tier_for(record.collection) is StorageTier.LEDGER
+        or record.collection in DOCUMENT_RESIDENT_COLLECTIONS
+        for record in records
+    )
     assert len({(record.collection, record.record_key) for record in records}) == len(records)
 
 
@@ -347,6 +360,45 @@ def test_a_collection_with_no_residency_rule_refuses_rather_than_guessing() -> N
 
     with pytest.raises(MigrationTierUndeclaredError, match="no residency rule"):
         record.belongs_in_ledger()
+
+
+def test_a_decision_or_incident_record_is_history_and_leaves_the_document() -> None:
+    """Both were append-only in epoch 1, so neither waits in the document."""
+    for collection in (Epoch2Collection.DECISION, Epoch2Collection.INCIDENT):
+        record = StagedRecord(
+            collection=collection, record_key="D01", status=HISTORY_RECORD_STATUS, payload={}
+        )
+        assert record.belongs_in_ledger()
+
+
+def test_a_project_or_sandbox_policy_record_stays_in_the_document() -> None:
+    """Neither ever terminates, so neither has a ledger form."""
+    for collection in DOCUMENT_RESIDENT_COLLECTIONS:
+        record = StagedRecord(
+            collection=collection, record_key="DEMO", status=HISTORY_RECORD_STATUS, payload={}
+        )
+        assert not record.belongs_in_ledger()
+
+
+def test_document_record_count_is_zero_for_an_empty_document() -> None:
+    assert document_record_count({}) == 0
+
+
+def test_document_record_count_counts_document_resident_rows(
+    staged: tuple[Path, MigrationManifest],
+) -> None:
+    """The writer's count includes the project and sandbox-policy rows."""
+    state_path, _ = staged
+    document = json.loads(state_path.read_text("utf-8"))
+
+    assert document_record_count(document) == EXPECTED_DOCUMENT_RECORDS
+    assert len(document[Epoch2Collection.PROJECT.value]) == 1
+    assert len(document[Epoch2Collection.SANDBOX_POLICY.value]) == 1
+
+
+def test_document_record_count_refuses_a_collection_that_is_not_an_object() -> None:
+    with pytest.raises(ValueError, match="project"):
+        document_record_count({Epoch2Collection.PROJECT.value: ["DEMO"]})
 
 
 def test_a_history_record_carries_the_declared_imported_status(

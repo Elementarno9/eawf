@@ -59,6 +59,7 @@ nav:
       - Coverage gates: reference/coverage-gates.md
       - Snapshot-pairing gate: reference/snapshot-gate.md
       - Mutation testing: reference/mutation-testing.md
+      - Epoch-2 cutover: reference/epoch2-cutover.md
       - Auto-generated:
           - Index: reference/autogen/index.md
           - CLI: reference/autogen/cli.md

@@ -42,6 +42,7 @@ from eawf.kernel.migration.epoch2.canary import (
     DisposableTarget,
 )
 from eawf.kernel.migration.epoch2.cutover import (
+    document_record_count,
     require_document_holds_only_work_in_flight,
     stage_cutover,
 )
@@ -54,7 +55,7 @@ from eawf.kernel.migration.epoch2.errors import (
 from eawf.kernel.migration.epoch2.manifest import MigrationManifest
 from eawf.kernel.migration.epoch2.plan_mode import MigrationPlan
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel, rule_digest
-from eawf.kernel.store.compaction import document_rows, read_document
+from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.ledger import LedgerError, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import LEDGER_COLLECTIONS, StorageTier
@@ -505,7 +506,7 @@ def read_smoke(*, target: DisposableTarget, generation_id: str, manifest: Migrat
         )
     state_path = target.generation_path(generation_id) / GENERATION_DOCUMENT
     document = read_document(state_path)
-    in_document = sum(len(document_rows(document, collection)) for collection in LEDGER_COLLECTIONS)
+    in_document = document_record_count(document)
     in_ledgers = sum(
         len(read_ledger_records(ledger_path(state_path, collection)))
         for collection in placement.indexed_collections
@@ -581,9 +582,7 @@ def verify_selected_generation(target: DisposableTarget, *, generation_id: str) 
         )
     try:
         document = read_document(state_path)
-        in_document = sum(
-            len(document_rows(document, collection)) for collection in LEDGER_COLLECTIONS
-        )
+        in_document = document_record_count(document)
         in_ledgers = sum(
             len(read_ledger_records(path))
             for path in (ledger_path(state_path, name) for name in LEDGER_COLLECTIONS)

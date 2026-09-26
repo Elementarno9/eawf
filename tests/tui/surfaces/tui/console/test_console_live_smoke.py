@@ -233,13 +233,10 @@ async def live_console(
 def walk_canary_isolated(tmp_path: Path) -> tuple[CanaryWalk, Path]:
     """Rebuild the accepted canary with its runtime dir redirected under ``tmp_path``.
 
-    ``provision_canary`` (``src/eawf/platform/install/canary.py``) allocates
-    ``CanaryProvision.runtime_dir`` through a bare ``tempfile.mkdtemp(...)``,
-    which lands in the real OS temp dir -- and is never removed on the
-    success path -- unless ``tempfile.tempdir`` is redirected first. This is
-    the same reason ``test_dev3_canary_rehearsal_record.py``'s ``walked``
-    fixture patches it before calling ``walk_canary``; every call here does
-    the same, so this suite leaves nothing behind in the real temp dir.
+    ``provision_canary`` allocates ``CanaryProvision.runtime_dir`` inside the
+    canary's own tree, but ``tempfile.tempdir`` is still redirected so any
+    other temp allocation the walk makes stays under ``tmp_path`` and this
+    suite leaves nothing behind in the real temp dir.
 
     Returns:
         The walk, and the runtime root a caller serves the daemon from

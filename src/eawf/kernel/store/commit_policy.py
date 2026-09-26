@@ -254,6 +254,12 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
         "names who declared this tree throwaway; a clone must declare that for itself",
     ),
     _row(
+        ".ea/epoch2-opt-in.json",
+        _YES,
+        "the repository's opt-in into epoch 2; every clone shares it, and the backup it "
+        "names is verified only on the machine that applies the cutover",
+    ),
+    _row(
         ".ea/rules/views/**",
         _NO,
         "per-runtime rule renders; the authored corpus is the source",

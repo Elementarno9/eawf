@@ -43,6 +43,7 @@ from eawf.kernel.migration.epoch2.lifecycle import (
     map_wave_row,
 )
 from eawf.kernel.migration.epoch2.measurements import MeasurementImportPlan
+from eawf.kernel.migration.epoch2.native_records import NativeRecordImportPlan
 from eawf.kernel.migration.epoch2.rules import MappingRuleVersion, StrictMigrationModel
 from eawf.kernel.migration.epoch2.runs import MintedRun, report_ledger_rows
 from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
@@ -434,11 +435,14 @@ class CorpusImportPlan(StrictMigrationModel):
         measurements: The estimate and actual collections, re-pointed.
         envelopes: The session, worktree, artifact, memory and audit
             collections.
+        native: The decision, incident, sandbox-policy and project rows,
+            each kept under its own source key.
     """
 
     lifecycle: LifecycleImportPlan
     measurements: MeasurementImportPlan
     envelopes: EnvelopeImportPlan
+    native: NativeRecordImportPlan
 
     @classmethod
     def build(cls, *, snapshot: SourceSnapshot, allowlist_path: Path) -> CorpusImportPlan:
@@ -456,7 +460,8 @@ class CorpusImportPlan(StrictMigrationModel):
         Raises:
             FileNotFoundError: When ``allowlist_path`` does not exist.
             MigrationFabricationDetectedError: When a measurement
-                re-points at a Task the import never wrote.
+                re-points at a Task the import never wrote, or when the
+                project block records no project code.
             MigrationSourceUnreadableError: When the snapshot holds no
                 audit ledger.
             MigrationCountMismatchError: When a row carries a status
@@ -476,4 +481,10 @@ class CorpusImportPlan(StrictMigrationModel):
             audit_ledger_rows=snapshot.ledger(AUDIT_LEDGER),
             source_schema_version=lifecycle.source_index.source_schema_version,
         )
-        return cls(lifecycle=lifecycle, measurements=measurements, envelopes=envelopes)
+        native = NativeRecordImportPlan.build(
+            document=snapshot.document,
+            source_schema_version=lifecycle.source_index.source_schema_version,
+        )
+        return cls(
+            lifecycle=lifecycle, measurements=measurements, envelopes=envelopes, native=native
+        )

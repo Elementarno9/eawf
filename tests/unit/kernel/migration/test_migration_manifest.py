@@ -138,7 +138,7 @@ def _row(payload: dict[str, Any], collection: str) -> dict[str, Any]:
 def test_complete_manifest_fixture_loads(complete: MigrationManifest) -> None:
     """The fixture is a valid manifest of exactly the contracted shape."""
     assert complete.schema_version == MANIFEST_SCHEMA_VERSION
-    assert len(MigrationManifest.model_fields) == 21
+    assert len(MigrationManifest.model_fields) == 22
     assert len(complete.row_mappings) == 38
     assert complete.seal_state is SealState.SEALED
     assert complete.rollback_boundary is RollbackBoundary.PLAN_ONLY

@@ -79,6 +79,31 @@ class Snapshot:
     note: str | None
 
 
+def snapshot_digest(snapshot: Snapshot) -> str:
+    """Return one digest over every artifact a snapshot holds.
+
+    The digest is what lets a later reader prove the snapshot is the one
+    somebody inspected: an artifact edited, removed or added since then
+    moves it. The operator note is excluded because it describes the
+    snapshot rather than being part of what a restore writes back.
+
+    Args:
+        snapshot: The snapshot to digest.
+
+    Returns:
+        A 64-character lowercase hex digest over each artifact's name and
+        content digest, in canonical artifact order.
+
+    Raises:
+        OSError: An artifact the snapshot lists could not be read.
+    """
+    lines = "".join(
+        f"{name}\0{hashlib.sha256((snapshot.path / name).read_bytes()).hexdigest()}\n"
+        for name in snapshot.artifacts
+    )
+    return hashlib.sha256(lines.encode("utf-8")).hexdigest()
+
+
 def user_home(*, home: Path | None = None) -> Path:
     """Return the user-scope home root for the backup tree.
 

@@ -29,25 +29,46 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from eawf.kernel.migration.epoch2.lifecycle import MILESTONE_TRACK_FIELD
+from eawf.kernel.migration.epoch2.cutover import stage_cutover
+from eawf.kernel.migration.epoch2.errors import (
+    MigrationPlanNotApplicableError,
+    MigrationTrackUndeclaredError,
+)
+from eawf.kernel.migration.epoch2.lifecycle import MILESTONE_TRACK_FIELD, DeferralReason
 from eawf.kernel.migration.epoch2.manifest import (
     OUTCOME_TRACK_FIELD,
+    MigrationManifest,
+    OperatorAssignment,
     RollbackBoundary,
     SealState,
+    UnresolvedReason,
 )
+from eawf.kernel.migration.epoch2.native_records import (
+    NativeRecordCollection,
+    NativeRecordImportPlan,
+)
+from eawf.kernel.migration.epoch2.plan import CorpusImportPlan
 from eawf.kernel.migration.epoch2.plan_mode import (
+    DEFAULT_TRACK_FLAG,
     EPOCH2_PLAN_METHOD,
     PLAN_STEPS,
     Epoch2PlanRequest,
     MigrationPlan,
     PlanStep,
+    declare_default_track,
     plan_cutover,
     plan_envelope,
+    require_tracks_declared,
 )
+from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot
 from eawf.kernel.migration.epoch2.validation import CorpusIdentity
-from eawf.kernel.store.tiers import tier_for
+from eawf.kernel.state.urn import build as build_urn
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection, tier_for
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, dispatch
 from eawf.surfaces.cli.app import app
 
@@ -253,6 +274,110 @@ def test_row_mappings_are_total_over_the_censused_source(
         assert mapping.proof_form is row.proof_form
 
 
+# ---------------------------------------------------------------------------
+# Natively keyed records: decisions, incidents, sandbox policies, project.
+# ---------------------------------------------------------------------------
+
+#: What the full-shape corpus holds in each natively keyed collection.
+NATIVE_ROWS = {"decisions": 2, "incidents": 1, "sandbox_policies": 1, "project": 1}
+
+
+def test_plan_over_the_full_corpus_leaves_no_row_without_a_converter(
+    full_plan: MigrationPlan,
+) -> None:
+    """Every natively keyed row has a target, so nothing waits on a waiver."""
+    manifest = full_plan.manifest
+
+    assert not [
+        row for row in manifest.unresolved_rows if row.reason is UnresolvedReason.NO_CONVERTER
+    ]
+    assert manifest.unresolved_rows == ()
+    for collection, rows in NATIVE_ROWS.items():
+        mapping = manifest.row_mapping(collection)
+        assert mapping.unresolved_row_count == 0, collection
+        assert mapping.target_row_count == rows, collection
+        assert manifest.target_census.by_collection[mapping.target_collection] == rows
+
+
+def test_plan_names_every_row_a_missing_converter_leaves_behind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A collection whose converter is gone reds as unresolved, row by row."""
+    original = NativeRecordImportPlan.build
+
+    def _without_decisions(**kwargs: Any) -> NativeRecordImportPlan:
+        built = original(**kwargs)
+        return NativeRecordImportPlan(
+            records=tuple(
+                row
+                for row in built.records
+                if row.source_collection is not NativeRecordCollection.DECISIONS
+            )
+        )
+
+    monkeypatch.setattr(
+        "eawf.kernel.migration.epoch2.plan.NativeRecordImportPlan.build", _without_decisions
+    )
+    manifest = _plan(FULL_SNAPSHOT).manifest
+
+    assert [(row.address, row.reason) for row in manifest.unresolved_rows] == [
+        ("decisions/D01", UnresolvedReason.NO_CONVERTER),
+        ("decisions/D02", UnresolvedReason.NO_CONVERTER),
+    ]
+    assert manifest.row_mapping("decisions").target_row_count == 0
+
+
+def test_every_decision_converts_under_its_d_id_urn() -> None:
+    """The converted Decision is cited by the same id and URN as before."""
+    snapshot = SourceSnapshot.read(FULL_SNAPSHOT)
+    corpus = CorpusImportPlan.build(snapshot=snapshot, allowlist_path=ALLOWLIST)
+    source = snapshot.document["decisions"]
+    decisions = [
+        row
+        for row in corpus.native.records
+        if row.source_collection is NativeRecordCollection.DECISIONS
+    ]
+
+    assert [row.record_key for row in decisions] == sorted(source)
+    for row in decisions:
+        assert row.urn == build_urn("decision", owner="DEMO", id=row.record_key)
+        assert row.payload == source[row.record_key]
+        assert row.target is Epoch2Collection.DECISION
+
+
+def test_staged_cutover_writes_each_native_record_under_its_source_key(tmp_path: Path) -> None:
+    """Decisions and incidents reach their ledgers; project and policy stay in the document.
+
+    The ledger line keeps the D-id as its key and the source row verbatim,
+    which carries the status and supersession a decision citation is
+    resolved by.
+    """
+    root = tmp_path / "snapshot"
+    shutil.copytree(FULL_SNAPSHOT, root)
+    state_path = tmp_path / "generation" / "state.json"
+    stage_cutover(
+        plan=_plan(root),
+        snapshot_root=root,
+        allowlist_path=ALLOWLIST,
+        state_path=state_path,
+        recorded_at=SEALED_AT,
+    )
+    source = json.loads((root / "document.json").read_text(encoding="utf-8"))
+
+    decisions = read_ledger_records(ledger_path(state_path, Epoch2Collection.DECISION))
+    assert [record.record_key for record in decisions] == ["D01", "D02"]
+    for record in decisions:
+        assert record.payload["urn"] == f"urn:eawf:v1:decision:DEMO/{record.record_key}"
+        assert record.payload["payload"] == source["decisions"][record.record_key]
+    incidents = read_ledger_records(ledger_path(state_path, Epoch2Collection.INCIDENT))
+    assert [record.record_key for record in incidents] == ["INC01"]
+
+    document = json.loads(state_path.read_text(encoding="utf-8"))
+    project = document[Epoch2Collection.PROJECT.value]["DEMO"]
+    assert project["payload"]["payload"] == source["project"]
+    assert set(document[Epoch2Collection.SANDBOX_POLICY.value]) == {"SP01"}
+
+
 def _dispatch(params: Mapping[str, Any]) -> dict[str, Any]:
     """Call the plan RPC the way the daemon server does."""
     ctx = MethodContext(started_at="now", pid=1, protocol_version="test", version="test")
@@ -401,3 +526,247 @@ def test_chain_verbs_are_untouched_by_the_nested_sub_app() -> None:
     assert result.exit_code == 0
     assert "epoch2" in result.output
     assert "status" in result.output
+
+
+DECLARED_TRACK = "TRK-EAWF-CORE"
+
+
+def _declared_request(snapshot_root: Path, *, track_key: str | None) -> Epoch2PlanRequest:
+    """Return a plan request over ``snapshot_root`` declaring ``track_key``."""
+    return Epoch2PlanRequest(
+        snapshot_root=str(snapshot_root),
+        allowlist_path=str(ALLOWLIST),
+        workspace_key=CUTOVER_IDENTITY.workspace_key,
+        project_key=CUTOVER_IDENTITY.project_key,
+        repository_key=CUTOVER_IDENTITY.repository_key,
+        sealed_by=SEALED_BY,
+        default_track_key=track_key,
+    )
+
+
+@pytest.fixture(scope="module")
+def declared_plan() -> MigrationPlan:
+    """One plan over the full-shape corpus with the default Track declared."""
+    return plan_cutover(
+        _declared_request(FULL_SNAPSHOT, track_key=DECLARED_TRACK), sealed_at=SEALED_AT
+    )
+
+
+def _history_corpus(root: Path, *, phase_count: int) -> Path:
+    """Copy the full-shape corpus and grow its phases to ``phase_count``.
+
+    The added phases are closed and name no Track, the shape every phase
+    of a real epoch-1 history has, so together with the one goal the
+    corpus asks ``phase_count + 1`` Track questions.
+    """
+    shutil.copytree(FULL_SNAPSHOT, root)
+    document_path = root / "document.json"
+    document = json.loads(document_path.read_text())
+    template = document["phases"]["P01"]
+    for number in range(len(document["phases"]) + 1, phase_count + 1):
+        phase_id = f"P{number:02d}"
+        document["phases"][phase_id] = template | {
+            "id": phase_id,
+            "scope_id": phase_id,
+            "title": f"Deliver {phase_id}",
+        }
+    document_path.write_text(json.dumps(document, indent=1, sort_keys=True) + "\n")
+    return root
+
+
+def test_plan_cutover_counts_every_track_question_without_a_declaration(tmp_path: Path) -> None:
+    """38 phases and one goal ask 39 Track questions; nothing answers them."""
+    corpus = _history_corpus(tmp_path / "snapshot", phase_count=38)
+    envelope = plan_envelope(
+        plan_cutover(_declared_request(corpus, track_key=None), sealed_at=SEALED_AT)
+    )
+    assert envelope["required_operator_assignment_count"] == 39
+    assert envelope["declared_track_assignment_count"] == 0
+    assert envelope["applicable"] is False
+
+
+def test_plan_cutover_binds_every_track_question_to_the_declared_track(tmp_path: Path) -> None:
+    """One declaration answers all 39 questions, recorded row by row, inferring nothing."""
+    corpus = _history_corpus(tmp_path / "snapshot", phase_count=38)
+    plan = plan_cutover(_declared_request(corpus, track_key=DECLARED_TRACK), sealed_at=SEALED_AT)
+    envelope = plan_envelope(plan)
+    manifest = plan.manifest
+    assert envelope["required_operator_assignment_count"] == 0
+    assert envelope["declared_track_assignment_count"] == 39
+    assert {row.track_key for row in manifest.declared_track_assignments} == {DECLARED_TRACK}
+    assert all(row.fabrication_findings == () for row in manifest.validation_results)
+    assert all(mapping.operator_assignment_count == 0 for mapping in manifest.row_mappings)
+
+
+def test_plan_cutover_records_the_declaration_in_the_manifest(
+    full_plan: MigrationPlan, declared_plan: MigrationPlan
+) -> None:
+    """Each declared row answers exactly the question the undeclared plan asked."""
+    asked = {
+        (row.address, row.target_field, row.reason) for row in full_plan.manifest.track_assignments
+    }
+    answered = {
+        (row.address, row.target_field, row.reason)
+        for row in declared_plan.manifest.declared_track_assignments
+    }
+    assert answered == asked
+    assert len(answered) == 4
+    assert declared_plan.manifest.track_assignments == ()
+    assert "4 declared Track assignments" in declared_plan.step(PlanStep.COLLECT_EVIDENCE).summary
+
+
+def test_plan_cutover_declaration_moves_the_approval_digest(
+    full_plan: MigrationPlan, declared_plan: MigrationPlan
+) -> None:
+    """Approving an undeclared plan does not approve a declared one, or the reverse."""
+    assert declared_plan.manifest.source_digest == full_plan.manifest.source_digest
+    assert declared_plan.manifest.manifest_digest != full_plan.manifest.manifest_digest
+    assert declared_plan.approval_digest != full_plan.approval_digest
+
+
+def test_plan_cutover_declaration_writes_no_track_onto_a_staged_record(
+    declared_plan: MigrationPlan,
+) -> None:
+    """The declaration is recorded, never inferred: validation stays clean and reference-free."""
+    for row in declared_plan.manifest.validation_results:
+        assert row.fabrication_findings == ()
+        assert row.dangling_references == ()
+
+
+def test_declared_manifest_round_trips_through_its_own_digest(declared_plan: MigrationPlan) -> None:
+    """The content digest covers the declaration, so a tampered Track fails to load."""
+    dumped = declared_plan.manifest.model_dump(mode="json")
+    assert MigrationManifest.model_validate(dumped) == declared_plan.manifest
+    dumped["declared_track_assignments"][0]["track_key"] = "TRK-OTHER"
+    with pytest.raises(ValidationError, match="does not cover its content"):
+        MigrationManifest.model_validate(dumped)
+
+
+def test_require_tracks_declared_refuses_naming_the_flag(full_plan: MigrationPlan) -> None:
+    """A plan that still asks a Track question refuses with the flag that answers it."""
+    with pytest.raises(MigrationTrackUndeclaredError) as excinfo:
+        require_tracks_declared(full_plan.manifest)
+    assert excinfo.value.code == "migration_track_undeclared"
+    assert isinstance(excinfo.value, MigrationPlanNotApplicableError)
+    assert DEFAULT_TRACK_FLAG in str(excinfo.value)
+    assert DEFAULT_TRACK_FLAG == "--default-track-key"
+    assert "4 imported records" in str(excinfo.value)
+    assert "and 1 more" in str(excinfo.value)
+
+
+def test_require_tracks_declared_passes_a_declared_plan(declared_plan: MigrationPlan) -> None:
+    """Nothing left to ask is nothing to refuse."""
+    require_tracks_declared(declared_plan.manifest)
+
+
+def test_require_applicable_refuses_an_undeclared_track_once_rows_resolve(
+    full_plan: MigrationPlan,
+) -> None:
+    """With every row placed, the open Track question is what refuses the apply."""
+    resolved = full_plan.model_copy(
+        update={"manifest": full_plan.manifest.model_copy(update={"unresolved_rows": ()})}
+    )
+    with pytest.raises(MigrationTrackUndeclaredError, match="--default-track-key"):
+        resolved.require_applicable()
+
+
+def _assignment(address: str) -> OperatorAssignment:
+    return OperatorAssignment(
+        address=address,
+        source_collection="phases",
+        target_collection="milestone",
+        target_field=MILESTONE_TRACK_FIELD,
+        reason=DeferralReason.SOURCE_HAS_NO_FIELD,
+    )
+
+
+def test_declare_default_track_without_a_declaration_changes_nothing() -> None:
+    required = (_assignment("phases/P01"),)
+    assert declare_default_track(required, track_key=None) == (required, ())
+
+
+def test_declare_default_track_over_no_questions_declares_nothing() -> None:
+    assert declare_default_track((), track_key=DECLARED_TRACK) == ((), ())
+    assert declare_default_track((), track_key=None) == ((), ())
+
+
+def test_declare_default_track_answers_a_single_question() -> None:
+    required, declared = declare_default_track(
+        (_assignment("phases/P01"),), track_key=DECLARED_TRACK
+    )
+    assert required == ()
+    assert [(row.address, row.track_key) for row in declared] == [("phases/P01", DECLARED_TRACK)]
+
+
+def test_declare_default_track_answers_every_question_in_order() -> None:
+    addresses = [f"phases/P{number:02d}" for number in range(1, 40)]
+    _, declared = declare_default_track(
+        tuple(_assignment(address) for address in addresses), track_key=DECLARED_TRACK
+    )
+    assert [row.address for row in declared] == addresses
+
+
+@pytest.mark.parametrize("bad_key", ["eawf-core", "TRK-", "TRK-x", "", "TRK-" + "A" * 33])
+def test_declare_default_track_rejects_a_non_canonical_key(bad_key: str) -> None:
+    with pytest.raises(ValidationError):
+        declare_default_track((_assignment("phases/P01"),), track_key=bad_key)
+
+
+def test_epoch2_plan_request_rejects_a_non_canonical_track_key() -> None:
+    """The slug an operator thinks of is not a Track key; the request says so."""
+    with pytest.raises(ValidationError, match="default_track_key"):
+        _declared_request(FULL_SNAPSHOT, track_key="eawf-core")
+
+
+def test_epoch2_plan_request_rejects_a_non_string_track_key() -> None:
+    with pytest.raises(ValidationError, match="default_track_key"):
+        Epoch2PlanRequest.model_validate(_request_params(FULL_SNAPSHOT) | {"default_track_key": 7})
+
+
+def test_plan_rpc_carries_the_declared_track(declared_plan: MigrationPlan) -> None:
+    """The daemon computes the same declared plan as the library."""
+    result = _dispatch(_request_params(FULL_SNAPSHOT) | {"default_track_key": DECLARED_TRACK})
+    assert result["approval_digest"] == declared_plan.approval_digest
+    assert result["required_operator_assignment_count"] == 0
+    assert result["declared_track_assignment_count"] == 4
+
+
+def _cli_plan_args(*extra: str) -> list[str]:
+    return [
+        "--json",
+        "migrate",
+        "epoch2",
+        "--plan",
+        "--snapshot-root",
+        str(FULL_SNAPSHOT),
+        "--allowlist",
+        str(ALLOWLIST),
+        "--workspace-key",
+        CUTOVER_IDENTITY.workspace_key,
+        "--project-key",
+        CUTOVER_IDENTITY.project_key,
+        "--repository-key",
+        CUTOVER_IDENTITY.repository_key,
+        *extra,
+    ]
+
+
+def test_cli_plan_verb_records_the_declared_track(
+    declared_plan: MigrationPlan, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--default-track-key`` reaches the plan and moves every question to declared."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    result = runner.invoke(app, _cli_plan_args("--default-track-key", DECLARED_TRACK))
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["manifest_digest"] == declared_plan.manifest.manifest_digest
+    assert payload["required_operator_assignment_count"] == 0
+    assert payload["declared_track_assignment_count"] == 4
+
+
+def test_cli_plan_verb_rejects_a_slug_track_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A slug is refused at the CLI boundary, not silently canonicalised."""
+    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
+    result = runner.invoke(app, _cli_plan_args("--default-track-key", "eawf-core"))
+    assert result.exit_code != 0
+    assert "default_track_key" in result.output

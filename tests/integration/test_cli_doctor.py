@@ -133,6 +133,7 @@ def test_doctor_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
         "manifest_in_sync",
         "mcp_drift",
         "state_scale_ceiling",
+        "authority_epoch",
         "active_phase_without_iter",
         "stale_session_count",
         "recent_actuals",

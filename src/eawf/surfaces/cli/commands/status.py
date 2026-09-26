@@ -21,6 +21,9 @@ Output payload (JSON envelope, all keys always present):
               "branch": "<name>" | null,
               "dirty": true | false | null},
       "drift": {"count": <int>, "tier": "ok"|"warn"},
+      "authority": {"epoch": 1 | 2,
+                    "gap": "undeclared"|"marker_absent"|"marker_unreadable" | null,
+                    "generation_id": "<gen-id>" | null},
       "blockers": ["<short-text>", ...]
     }
 
@@ -497,12 +500,37 @@ def status(
         "open_backlog_count": _open_backlog_count(state),
         "git": _git_info(cwd=_find_git_root(state_path.parent)),
         "drift": _drift_summary(state, repo_root=_find_git_root(state_path.parent)),
+        "authority": _authority_summary(state_path),
         "blockers": _blockers(state),
         "research_campaign": _research_campaign_summary(state, state_path),
     }
 
     text = _format_text(payload)
     emit_json_or_text(payload, text, flags=effective_flags)
+
+
+def _authority_summary(state_path: Path) -> dict[str, Any]:
+    """Return which authority epoch the tree holding *state_path* is in.
+
+    The tree root is the directory holding ``state.json`` -- the same root
+    the daemon's native guard resolves -- so status reports the answer a
+    native mutation would actually get, including why epoch 2 was withheld.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+
+    Returns:
+        ``{"epoch", "gap", "generation_id"}``; ``gap`` is ``None`` at epoch 2
+        and ``generation_id`` is ``None`` at epoch 1.
+    """
+    from eawf.kernel.state.epoch2.authority import resolve_authority
+
+    authority = resolve_authority(state_path.parent)
+    return {
+        "epoch": authority.epoch,
+        "gap": authority.gap.value if authority.gap is not None else None,
+        "generation_id": authority.generation_id,
+    }
 
 
 def _drift_summary(state: State, *, repo_root: Path) -> dict[str, Any]:
@@ -546,6 +574,13 @@ def _format_text(payload: dict[str, Any]) -> str:
     git_line = f"git: head={(git['head'] or '<unknown>')[:12]} branch={branch}"
     drift = payload.get("drift") or {"count": 0, "tier": "ok"}
     drift_line = f"drift: {drift['count']} ({drift['tier']})"
+    authority = payload.get("authority")
+    if authority is None:
+        authority_line = "authority: <unknown>"
+    elif authority["epoch"] == 2:
+        authority_line = f"authority: epoch 2 (generation {authority['generation_id']})"
+    else:
+        authority_line = f"authority: epoch 1 ({authority['gap']})"
     decisions = payload.get("recent_decisions") or []
     decisions_line = (
         f"recent decisions: {', '.join(d['id'] for d in decisions)}"
@@ -566,6 +601,7 @@ def _format_text(payload: dict[str, Any]) -> str:
         cur_line,
         git_line,
         drift_line,
+        authority_line,
         decisions_line,
         backlog_line,
         blockers_line,

@@ -102,6 +102,7 @@ def main(argv: list[str]) -> int:
         project_key=params["project_key"],
         repository_key=params["repository_key"],
         sealed_by=params["sealed_by"],
+        default_track_key=params["default_track_key"],
     )
     plan = plan_cutover(plan_request, sealed_at=applied_at)
     request = Epoch2ApplyRequest(

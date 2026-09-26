@@ -12,11 +12,11 @@ Curated prose plus auto-generated catalogs for the `eawf` framework.
 - [URN namespace](urn-namespace.md) — `urn:eawf:v1:*` format rules and kind catalog.
 - [Coverage gates](coverage-gates.md) — per-package coverage thresholds.
 - [Mutation testing](mutation-testing.md) — rebuild reference; the CI mutation-core job was removed pending a real owner.
+- [Epoch-2 cutover](epoch2-cutover.md) — stage, register, plan and apply the one-shot epoch-2 import.
 
 ## Auto-generated reference
 
-These pages are regenerated from the live source tree by `eawf doc verify
---strict`; a hand edit fails the drift gate.
+These pages are regenerated from the live source tree by `eawf doc verify --strict`; a hand edit fails the drift gate.
 
 - [Auto-generated index](autogen/index.md)
 - [CLI reference](autogen/cli.md)

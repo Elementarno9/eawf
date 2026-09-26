@@ -114,7 +114,8 @@ def test_init_epoch2_canary_provision_allocates_fresh_runtime_dir(
     payload = _payload(_canary("provision", tmp_path / "canary"))
 
     runtime_dir = Path(payload["runtime_dir"])
-    assert runtime_dir.parent == tmp_path / "scratch"
+    assert runtime_dir.parent == (tmp_path / "canary" / ".ea" / "local").resolve()
+    assert list((tmp_path / "scratch").glob(f"{RUNTIME_DIR_PREFIX}*")) == []
     assert runtime_dir.is_dir()
     assert runtime_dir.name.startswith(RUNTIME_DIR_PREFIX)
     assert runtime_dir != tmp_path / "rt"

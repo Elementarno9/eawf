@@ -26,6 +26,7 @@ from collections.abc import Iterable, Mapping
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 from typing import Annotated, Any, Self
 
 from pydantic import Field, model_validator
@@ -37,6 +38,7 @@ from eawf.kernel.migration.epoch2.errors import (
     MigrationFabricationDetectedError,
     MigrationPlanNotApplicableError,
     MigrationSourceChangedError,
+    MigrationTrackUndeclaredError,
     MigrationValidationDivergedError,
 )
 from eawf.kernel.migration.epoch2.lifecycle import (
@@ -51,6 +53,7 @@ from eawf.kernel.migration.epoch2.manifest import (
     MANIFEST_SCHEMA_VERSION,
     OUTCOME_TRACK_FIELD,
     UNADDRESSED_TARGETS,
+    DeclaredTrackAssignment,
     GitEvidence,
     GitFact,
     ManifestSource,
@@ -67,6 +70,7 @@ from eawf.kernel.migration.epoch2.manifest import (
     idempotence_payload,
     manifest_content_payload,
 )
+from eawf.kernel.migration.epoch2.native_records import NATIVE_RECORD_TARGETS
 from eawf.kernel.migration.epoch2.plan import CorpusImportPlan
 from eawf.kernel.migration.epoch2.registry import mapping_rule_index
 from eawf.kernel.migration.epoch2.rows import COLLECTION_ROW_CONTRACT_INDEX, SourceShape
@@ -81,6 +85,7 @@ from eawf.kernel.migration.epoch2.validation import (
     ImportValidationReport,
     StagedImport,
 )
+from eawf.kernel.state.epoch2.base import TrackKey
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, tier_for
 
 logger = logging.getLogger(__name__)
@@ -90,6 +95,21 @@ logger = logging.getLogger(__name__)
 #: of the contract rather than of the transport, so it lives beside the
 #: request model both sides of the wire validate against.
 EPOCH2_PLAN_METHOD = "migration.epoch2.plan"
+
+#: The CLI flag an operator declares the default Track with. A refusal
+#: names it verbatim, because the remedy for an undeclared Track is to
+#: pass exactly this flag.
+DEFAULT_TRACK_FLAG = "--default-track-key"
+
+#: Where the records of every collection planned beside the identity
+#: traversal land: the Track outcomes, which wait on an operator's Track,
+#: and the natively keyed records, which keep their source key.
+_PLANNED_TARGETS: Mapping[str, Epoch2Collection] = MappingProxyType(
+    {
+        **UNADDRESSED_TARGETS,
+        **{collection.value: target for collection, target in NATIVE_RECORD_TARGETS.items()},
+    }
+)
 
 
 class Epoch2PlanRequest(StrictMigrationModel):
@@ -107,6 +127,10 @@ class Epoch2PlanRequest(StrictMigrationModel):
         project_key: The addressing project.
         repository_key: The addressing repository.
         sealed_by: The principal recorded in the manifest's seal.
+        default_track_key: The Track the operator declares as the owner
+            of every imported record whose source names none. ``None``
+            leaves each of those records as a required assignment; the
+            importer never picks a Track on its own.
     """
 
     snapshot_root: Annotated[str, Field(min_length=1)]
@@ -115,6 +139,7 @@ class Epoch2PlanRequest(StrictMigrationModel):
     project_key: Annotated[str, Field(min_length=1)]
     repository_key: Annotated[str, Field(min_length=1)]
     sealed_by: Annotated[str, Field(min_length=1, max_length=64)]
+    default_track_key: TrackKey | None = None
 
 
 class PlanStep(StrEnum):
@@ -201,25 +226,29 @@ class MigrationPlan(StrictMigrationModel):
     def require_applicable(self) -> None:
         """Refuse a plan an apply must not run.
 
-        A required operator assignment does not refuse: the record
-        imports with the field unset and annotated, and an operator fills
-        it afterwards. An unresolved row does refuse: there is no target
-        to write it to, so applying would shrink the corpus silently.
+        An unresolved row refuses: there is no target to write it to, so
+        applying would shrink the corpus silently. A required Track
+        assignment refuses too: the source never named an owner, the
+        importer may not infer one, and the operator answers it by
+        declaring a default Track on the plan request.
 
         Raises:
             MigrationPlanNotApplicableError: When the plan names at least
                 one unresolved row. The message names every one of them,
                 because a row an operator cannot locate is a row they
                 cannot resolve.
+            MigrationTrackUndeclaredError: When the plan still requires
+                a Track assignment. The message names the flag that
+                declares one.
         """
         rows = self.manifest.unresolved_rows
-        if not rows:
-            return
-        named = ", ".join(f"{row.address} ({row.reason.value})" for row in rows)
-        raise MigrationPlanNotApplicableError(
-            f"{len(rows)} source rows have no epoch-2 target, so the cutover cannot "
-            f"account for them: {named}"
-        )
+        if rows:
+            named = ", ".join(f"{row.address} ({row.reason.value})" for row in rows)
+            raise MigrationPlanNotApplicableError(
+                f"{len(rows)} source rows have no epoch-2 target, so the cutover cannot "
+                f"account for them: {named}"
+            )
+        require_tracks_declared(self.manifest)
 
     def require_source_unchanged(self, root: Path) -> None:
         """Refuse a plan whose corpus has moved since the digest was taken.
@@ -261,6 +290,28 @@ class MigrationPlan(StrictMigrationModel):
         raise KeyError(step)
 
 
+def require_tracks_declared(manifest: MigrationManifest) -> None:
+    """Refuse a manifest that still leaves a Track owner to be inferred.
+
+    Args:
+        manifest: The plan's manifest.
+
+    Raises:
+        MigrationTrackUndeclaredError: When at least one record still
+            requires a Track assignment. The message counts them, names
+            the first few, and names the flag that declares a default.
+    """
+    rows = manifest.track_assignments
+    if not rows:
+        return
+    shown = ", ".join(row.address for row in rows[:3])
+    more = f" and {len(rows) - 3} more" if len(rows) > 3 else ""
+    raise MigrationTrackUndeclaredError(
+        f"{len(rows)} imported records need a Track the source never named ({shown}{more}); "
+        f"the importer does not infer one, so declare it with {DEFAULT_TRACK_FLAG} TRK-..."
+    )
+
+
 def approval_digest_of(*, manifest: MigrationManifest, steps: tuple[PlanStepResult, ...]) -> str:
     """Return the digest an operator approves one plan by.
 
@@ -289,6 +340,7 @@ def build_migration_plan(
     identity: CorpusIdentity,
     sealed_at: datetime,
     sealed_by: str,
+    default_track_key: str | None = None,
 ) -> MigrationPlan:
     """Run the seven read-only steps over one corpus and seal the result.
 
@@ -304,6 +356,9 @@ def build_migration_plan(
             are addressed under.
         sealed_at: When the plan's seal is taken.
         sealed_by: The principal the seal records.
+        default_track_key: The Track the operator declared for every
+            record whose source names none, or ``None`` to leave each of
+            them as a required assignment.
 
     Returns:
         The plan, with its manifest sealed and its approval digest taken.
@@ -346,7 +401,13 @@ def build_migration_plan(
     staged = StagedImport.reduce(plan=corpus, snapshot=snapshot)
     _note(steps, PlanStep.STAGE_IMPORT, f"staged {len(staged.rows)} records in memory")
 
-    placement = _Placement.of(snapshot=snapshot, census=census, corpus=corpus, staged=staged)
+    placement = _Placement.of(
+        snapshot=snapshot,
+        census=census,
+        corpus=corpus,
+        staged=staged,
+        default_track_key=default_track_key,
+    )
     _note(
         steps,
         PlanStep.MAP_ROWS,
@@ -355,11 +416,15 @@ def build_migration_plan(
         f"{len(placement.store_mappings)} stores",
     )
 
+    declared = len(placement.declared_track_assignments)
+    # An undeclared plan keeps its historical summary, so its approval
+    # digest does not move just because declarations became possible.
+    declared_note = f", {declared} declared Track assignments" if declared else ""
     _note(
         steps,
         PlanStep.COLLECT_EVIDENCE,
         f"read {len(placement.git_evidence.facts)} git facts, "
-        f"{len(placement.track_assignments)} required operator assignments and "
+        f"{len(placement.track_assignments)} required operator assignments{declared_note} and "
         f"{len(placement.unresolved_rows)} unresolved rows",
     )
 
@@ -431,6 +496,7 @@ def plan_cutover(request: Epoch2PlanRequest, *, sealed_at: datetime) -> Migratio
         ),
         sealed_at=sealed_at,
         sealed_by=request.sealed_by,
+        default_track_key=request.default_track_key,
     )
 
 
@@ -457,7 +523,8 @@ def plan_envelope(plan: MigrationPlan) -> dict[str, Any]:
         "target_rows": manifest.target_census.total_rows,
         "unresolved_row_count": len(manifest.unresolved_rows),
         "required_operator_assignment_count": len(manifest.track_assignments),
-        "applicable": not manifest.unresolved_rows,
+        "declared_track_assignment_count": len(manifest.declared_track_assignments),
+        "applicable": not manifest.unresolved_rows and not manifest.track_assignments,
         "steps": [
             {"order": row.order, "step": row.step.value, "summary": row.summary}
             for row in plan.steps
@@ -474,6 +541,7 @@ class _Placement(StrictMigrationModel):
     target_census: TargetCensus
     git_evidence: GitEvidence
     track_assignments: tuple[OperatorAssignment, ...]
+    declared_track_assignments: tuple[DeclaredTrackAssignment, ...]
     unresolved_rows: tuple[UnresolvedRow, ...]
 
     @classmethod
@@ -484,6 +552,7 @@ class _Placement(StrictMigrationModel):
         census: SourceCensus,
         corpus: CorpusImportPlan,
         staged: StagedImport,
+        default_track_key: str | None,
     ) -> _Placement:
         """Derive the placement of one staged import over one snapshot.
 
@@ -494,6 +563,8 @@ class _Placement(StrictMigrationModel):
                 disagree about what the source holds.
             corpus: The staged import.
             staged: That import reduced to its rows.
+            default_track_key: The Track the operator declared, or
+                ``None``.
 
         Returns:
             The placement.
@@ -507,10 +578,13 @@ class _Placement(StrictMigrationModel):
         """
         document = snapshot.document
         index = corpus.lifecycle.source_index
-        staged_ids = _staged_ids(staged)
-        planned = _planned_rows(document)
-        assignments = _track_assignments(corpus=corpus, document=document, index=index)
-        unresolved = _unresolved_rows(document=document, staged_ids=staged_ids, planned=planned)
+        placed_ids = _placed_ids(staged=staged, corpus=corpus)
+        planned = _planned_rows(document=document, corpus=corpus)
+        assignments, declared = declare_default_track(
+            _track_assignments(corpus=corpus, document=document, index=index),
+            track_key=default_track_key,
+        )
+        unresolved = _unresolved_rows(document=document, placed_ids=placed_ids, planned=planned)
         mappings = _row_mappings(
             census=census,
             staged_counts=_staged_counts(staged),
@@ -529,6 +603,7 @@ class _Placement(StrictMigrationModel):
             ),
             git_evidence=GitEvidence.of(_git_facts(corpus)),
             track_assignments=assignments,
+            declared_track_assignments=declared,
             unresolved_rows=unresolved,
         )
 
@@ -655,6 +730,26 @@ def _staged_ids(staged: StagedImport) -> dict[str, frozenset[str]]:
     return {collection: frozenset(ids) for collection, ids in placed.items()}
 
 
+def _placed_ids(*, staged: StagedImport, corpus: CorpusImportPlan) -> dict[str, frozenset[str]]:
+    """Index every source row id the import placed, minted or natively keyed.
+
+    Args:
+        staged: The reduced import.
+        corpus: The staged import, read for its natively keyed records.
+
+    Returns:
+        One id set per source collection.
+
+    Raises:
+        MigrationFabricationDetectedError: When a staged row cites no
+            source surface.
+    """
+    placed = {collection: set(ids) for collection, ids in _staged_ids(staged).items()}
+    for record in corpus.native.records:
+        placed.setdefault(record.source_collection.value, set()).add(record.record_key)
+    return {collection: frozenset(ids) for collection, ids in placed.items()}
+
+
 def _kind_counts(staged: StagedImport) -> dict[str, int]:
     """Count staged records per epoch-2 entity kind."""
     counts: dict[str, int] = {}
@@ -671,22 +766,30 @@ def _keyed_rows(document: Mapping[str, Any], collection: str) -> dict[str, Mappi
     return {str(key): row for key, row in value.items() if key and isinstance(row, Mapping)}
 
 
-def _planned_rows(document: Mapping[str, Any]) -> dict[str, int]:
+def _planned_rows(*, document: Mapping[str, Any], corpus: CorpusImportPlan) -> dict[str, int]:
     """Count the rows planned outside the identity traversal, per collection.
 
     Args:
         document: The decoded epoch-1 document.
+        corpus: The staged import, read for the natively keyed records it
+            converted.
 
     Returns:
-        One count per collection in :data:`UNADDRESSED_TARGETS` that holds
-        rows. A Track outcome has no key of its own in epoch 2, so its
-        rows are planned here rather than minted.
+        One count per planned collection that holds rows. A Track outcome
+        has no key of its own in epoch 2, and a natively keyed record
+        keeps its source key rather than a minted one, so both are
+        planned here rather than minted. A native collection counts the
+        records the importer converted, never the rows the source holds,
+        so a row no converter reached still surfaces as unresolved.
     """
     counts: dict[str, int] = {}
     for collection in UNADDRESSED_TARGETS:
         rows = len(_keyed_rows(document, collection))
         if rows:
             counts[collection] = rows
+    for record in corpus.native.records:
+        collection = record.source_collection.value
+        counts[collection] = counts.get(collection, 0) + 1
     return counts
 
 
@@ -705,7 +808,7 @@ def _collection_counts(*, staged: StagedImport, planned: Mapping[str, int]) -> d
         collection = ENTITY_COLLECTIONS[row.entity_kind].value
         counts[collection] = counts.get(collection, 0) + 1
     for source_collection, rows in planned.items():
-        collection = UNADDRESSED_TARGETS[source_collection].value
+        collection = _PLANNED_TARGETS[source_collection].value
         counts[collection] = counts.get(collection, 0) + rows
     return counts
 
@@ -754,7 +857,7 @@ def _required_records(*, collection: str, row_count: int | None) -> int:
 def _unresolved_rows(
     *,
     document: Mapping[str, Any],
-    staged_ids: Mapping[str, frozenset[str]],
+    placed_ids: Mapping[str, frozenset[str]],
     planned: Mapping[str, int],
 ) -> tuple[UnresolvedRow, ...]:
     """Name every source row the cutover has no target for.
@@ -762,11 +865,13 @@ def _unresolved_rows(
     Only a collection with a declared conversion can leave a row
     unresolved. An explicit drop, a derived projection and document
     metadata each write nothing by design, and a collection with a drop
-    proof holds nothing to write.
+    proof holds nothing to write. A natively keyed collection is checked
+    row by row against the keys its converter placed, so a row the
+    converter skipped is named rather than waved through.
 
     Args:
         document: The decoded epoch-1 document.
-        staged_ids: The source row ids the import placed, per collection.
+        placed_ids: The source row ids the import placed, per collection.
         planned: Rows planned outside the identity traversal.
 
     Returns:
@@ -780,9 +885,9 @@ def _unresolved_rows(
         declared = COLLECTION_DISPOSITION_INDEX[collection]
         if declared.disposition not in CONVERTING_DISPOSITIONS:
             continue
-        if collection in planned:
+        if collection in planned and collection in UNADDRESSED_TARGETS:
             continue
-        placed = staged_ids.get(collection, frozenset())
+        placed = placed_ids.get(collection, frozenset())
         rows.extend(_unresolved_in(collection=collection, document=document, placed=placed))
     return tuple(rows)
 
@@ -952,6 +1057,44 @@ def _track_assignments(
     return tuple(rows)
 
 
+def declare_default_track(
+    required: tuple[OperatorAssignment, ...], *, track_key: str | None
+) -> tuple[tuple[OperatorAssignment, ...], tuple[DeclaredTrackAssignment, ...]]:
+    """Answer every required Track assignment with the operator's declaration.
+
+    The declaration is all or nothing. It is one explicit answer to one
+    question the source left open, applied to every record that asked it;
+    choosing among records, or among the source's candidate Tracks, would
+    be the inference the importer is forbidden to make.
+
+    Args:
+        required: The Track assignments the source could not decide.
+        track_key: The Track the operator declared, or ``None``.
+
+    Returns:
+        A ``(required, declared)`` pair. With no declaration the required
+        rows come back untouched and nothing is declared; with one, no
+        row is left required and each is recorded as declared.
+
+    Raises:
+        ValidationError: When ``track_key`` is not a canonical Track key.
+    """
+    if track_key is None:
+        return required, ()
+    declared = tuple(
+        DeclaredTrackAssignment(
+            address=row.address,
+            source_collection=row.source_collection,
+            target_collection=row.target_collection,
+            target_field=row.target_field,
+            reason=row.reason,
+            track_key=track_key,
+        )
+        for row in required
+    )
+    return (), declared
+
+
 def _assignment_of(*, record: ImportedLifecycleRecord, deferred_field: str) -> OperatorAssignment:
     """Build the assignment one lifecycle record's deferral asks for.
 
@@ -1077,6 +1220,7 @@ def _assemble_manifest(
         store_mappings=placement.store_mappings,
         git_evidence=placement.git_evidence,
         track_assignments=placement.track_assignments,
+        declared_track_assignments=placement.declared_track_assignments,
         unresolved_rows=placement.unresolved_rows,
         validation_results=passes,
     )
@@ -1090,6 +1234,7 @@ def _assemble_manifest(
         store_mappings=placement.store_mappings,
         git_evidence=placement.git_evidence,
         track_assignments=placement.track_assignments,
+        declared_track_assignments=placement.declared_track_assignments,
         unresolved_rows=placement.unresolved_rows,
         source_digest=snapshot.identity.snapshot_digest,
         manifest_digest=rule_digest(content),
@@ -1112,6 +1257,7 @@ def _assemble_manifest(
 
 
 __all__ = [
+    "DEFAULT_TRACK_FLAG",
     "EPOCH2_PLAN_METHOD",
     "PLAN_STEPS",
     "Epoch2PlanRequest",
@@ -1120,6 +1266,8 @@ __all__ = [
     "PlanStepResult",
     "approval_digest_of",
     "build_migration_plan",
+    "declare_default_track",
     "plan_cutover",
     "plan_envelope",
+    "require_tracks_declared",
 ]

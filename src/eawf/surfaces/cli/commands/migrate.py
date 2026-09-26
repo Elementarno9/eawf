@@ -23,11 +23,16 @@ Verbs:
 - ``eawf migrate epoch2 --plan`` — read-only epoch-2 cutover plan.
 - ``eawf migrate epoch2 --export`` — read-only epoch-1 collection export.
 - ``eawf migrate epoch2 --apply --plan-digest <d>`` — build and select a
-  new generation in a tree that has declared itself disposable.
+  new generation in a tree that has declared itself disposable, or opted
+  in against a verified backup.
 - ``eawf migrate epoch2 --recover [--manifest <p>]`` — finish or undo an
   interrupted cutover, whichever the tree's boundary allows.
 - ``eawf migrate epoch2 --rollback [--manifest <p>]`` — put a tree back to
   the surfaces its restore point pinned.
+- ``eawf migrate epoch2 --stage-to <dir>`` — stage the committed ``.ea``
+  corpus at HEAD into a snapshot root the other modes read.
+- ``eawf migrate epoch2 --rollback-boundary`` — read-only report of the
+  simple rollback window and the canary reversible window, separately.
 
 Exit codes:
 
@@ -51,6 +56,8 @@ from typing import TYPE_CHECKING, Annotated, Any, Final
 import typer
 from pydantic import ValidationError as PydanticValidationError
 
+from eawf.kernel.identity.errors import IdentityError
+from eawf.kernel.identity.keys import validate_symbol_key
 from eawf.kernel.migration.epoch2.errors import MigrationRuleError
 from eawf.kernel.migration.epoch2.export import (
     EPOCH2_EXPORT_METHOD,
@@ -257,13 +264,15 @@ migrate_app.add_typer(epoch2_app)
 
 
 class Epoch2Mode(StrEnum):
-    """The five things ``eawf migrate epoch2`` can be asked to do."""
+    """The six things ``eawf migrate epoch2`` can be asked to do."""
 
     PLAN = "plan"
     APPLY = "apply"
     EXPORT = "export"
     RECOVER = "recover"
     ROLLBACK = "rollback"
+    STAGE = "stage-to"
+    ROLLBACK_BOUNDARY = "rollback-boundary"
 
 
 #: The modes that read a corpus. The two recovery modes do not: they repair
@@ -277,7 +286,14 @@ _CORPUS_MODES: Final[tuple[Epoch2Mode, ...]] = (
 
 
 def _epoch2_mode(
-    *, plan: bool, apply_: bool, export: bool, recover: bool, rollback: bool
+    *,
+    plan: bool,
+    apply_: bool,
+    export: bool,
+    recover: bool,
+    rollback: bool,
+    rollback_boundary: bool,
+    stage: bool,
 ) -> Epoch2Mode:
     """Return the one mode the flags select.
 
@@ -287,6 +303,8 @@ def _epoch2_mode(
         export: Whether ``--export`` was passed.
         recover: Whether ``--recover`` was passed.
         rollback: Whether ``--rollback`` was passed.
+        stage: Whether ``--stage-to`` was passed.
+        rollback_boundary: Whether ``--rollback-boundary`` was passed.
 
     Returns:
         The selected mode.
@@ -304,6 +322,8 @@ def _epoch2_mode(
             (Epoch2Mode.EXPORT, export),
             (Epoch2Mode.RECOVER, recover),
             (Epoch2Mode.ROLLBACK, rollback),
+            (Epoch2Mode.STAGE, stage),
+            (Epoch2Mode.ROLLBACK_BOUNDARY, rollback_boundary),
         )
         if chosen
     ]
@@ -338,6 +358,27 @@ def _required[T](value: T | None, *, option: str, mode: Epoch2Mode) -> T:
     return value
 
 
+def _symbol_key(value: str, *, option: str) -> str:
+    """Return one addressing key, refusing a malformed one as a usage error.
+
+    Args:
+        value: The key the operator passed.
+        option: The option's spelling, for the message.
+
+    Returns:
+        The key unchanged.
+
+    Raises:
+        ValidationError: The key is not a bounded uppercase symbol. It is
+            refused here, before any corpus is read, rather than surfacing
+            as an unhandled model error from inside the importer.
+    """
+    try:
+        return validate_symbol_key(value, slot=option.removeprefix("--").removesuffix("-key"))
+    except IdentityError as exc:
+        raise cli_errors.ValidationError(f"{option}: {exc}", kind="InvalidInput") from exc
+
+
 def _epoch2_request(
     *,
     snapshot_root: Path,
@@ -346,6 +387,7 @@ def _epoch2_request(
     project_key: str,
     repository_key: str,
     sealed_by: str,
+    default_track_key: str | None,
 ) -> Epoch2PlanRequest:
     """Parse the plan request, failing at the CLI boundary on a bad field.
 
@@ -360,10 +402,11 @@ def _epoch2_request(
         return Epoch2PlanRequest(
             snapshot_root=str(snapshot_root),
             allowlist_path=str(allowlist),
-            workspace_key=workspace_key,
-            project_key=project_key,
-            repository_key=repository_key,
+            workspace_key=_symbol_key(workspace_key, option="--workspace-key"),
+            project_key=_symbol_key(project_key, option="--project-key"),
+            repository_key=_symbol_key(repository_key, option="--repository-key"),
             sealed_by=sealed_by,
+            default_track_key=default_track_key,
         )
     except PydanticValidationError as exc:
         raise cli_errors.UserError(
@@ -536,6 +579,13 @@ def epoch2_cmd(
         bool,
         typer.Option("--rollback", help="Put a tree back to its pre-cutover surfaces."),
     ] = False,
+    rollback_boundary: Annotated[
+        bool,
+        typer.Option(
+            "--rollback-boundary",
+            help="Read-only: report the simple rollback and canary reversible windows.",
+        ),
+    ] = False,
     manifest: Annotated[
         Path | None,
         typer.Option(
@@ -552,7 +602,13 @@ def epoch2_cmd(
     ] = None,
     registry_path: Annotated[
         Path | None,
-        typer.Option("--registry-path", help="Workspace registry the addressing key resolves in."),
+        typer.Option(
+            "--registry-path",
+            help=(
+                "Workspace registry the addressing key resolves in; "
+                "defaults to the machine registry ``~/.eawf/registry.json``."
+            ),
+        ),
     ] = None,
     accept_unresolved: Annotated[
         list[str] | None,
@@ -565,26 +621,63 @@ def epoch2_cmd(
         str,
         typer.Option("--sealed-by", help="Principal recorded in the manifest seal."),
     ] = "operator",
+    default_track_key: Annotated[
+        str | None,
+        typer.Option(
+            "--default-track-key",
+            help="Track (TRK-...) declared as owner of every record whose source names none.",
+        ),
+    ] = None,
+    stage_to: Annotated[
+        Path | None,
+        typer.Option(
+            "--stage-to",
+            help="Stage the committed .ea corpus at HEAD into this empty snapshot root.",
+        ),
+    ] = None,
 ) -> None:
     """Plan, apply, recover, roll back or export the epoch-1 to epoch-2 cutover.
 
     ``--plan`` and ``--export`` write nothing: no canonical document, no
     registry, no staging tree. ``--apply`` is the only write that builds,
     and it refuses on any tree that has not declared itself a disposable
-    canary, on any plan digest that is not the one the corpus now plans to,
-    and on any unresolved row the operator has not named.
+    canary or opted in against a verified backup, on any plan digest that
+    is not the one the corpus now plans to, and on any unresolved row the
+    operator has not named.
 
     ``--recover`` and ``--rollback`` repair a tree whose apply stopped part
     way: they read the restore point and the journal inside the tree rather
     than a corpus, so they take ``--target-root`` and no snapshot. A
     rollback asked for after the new generation has accepted a mutation
     refuses with ``rollback_boundary_crossed`` and writes nothing.
+
+    ``--stage-to`` assembles the snapshot root the other modes read, from
+    git objects at HEAD, and writes nothing outside that directory.
+    ``--rollback-boundary`` writes nothing either: it reports, for
+    ``--target-root``, the simple rollback window (restore before the first
+    native mutation, forward repair after it) and the canary reversible
+    window of an opted-in repository, as two separate fields.
     """
     flags: GlobalFlags = ctx.obj
     try:
         mode = _epoch2_mode(
-            plan=plan, apply_=apply_, export=export, recover=recover, rollback=rollback
+            plan=plan,
+            apply_=apply_,
+            export=export,
+            recover=recover,
+            rollback=rollback,
+            stage=stage_to is not None,
+            rollback_boundary=rollback_boundary,
         )
+        if mode is Epoch2Mode.STAGE and stage_to is not None:
+            payload = _epoch2_stage(
+                repo_root=flags.workspace if flags.workspace is not None else Path.cwd(),
+                destination=stage_to,
+                workspace_key=workspace_key,
+                project_key=project_key,
+            )
+            emit_json_or_text(payload, _epoch2_stage_text(payload), flags=flags)
+            return
         payload = _epoch2_dispatch(
             mode=mode,
             snapshot_root=snapshot_root,
@@ -593,6 +686,7 @@ def epoch2_cmd(
             project_key=project_key,
             repository_key=repository_key,
             sealed_by=sealed_by,
+            default_track_key=default_track_key,
             plan_digest=plan_digest,
             target_root=target_root,
             registry_path=registry_path,
@@ -606,6 +700,56 @@ def epoch2_cmd(
     emit_json_or_text(payload, _epoch2_text(mode, payload), flags=flags)
 
 
+def _epoch2_stage(
+    *, repo_root: Path, destination: Path, workspace_key: str | None, project_key: str | None
+) -> dict[str, Any]:
+    """Stage the committed corpus and return its envelope.
+
+    Args:
+        repo_root: Any directory inside the repository to stage.
+        destination: The empty snapshot root to assemble.
+        workspace_key: The workspace the staged registry declares.
+        project_key: The project that workspace is rooted on.
+
+    Returns:
+        The staging envelope.
+
+    Raises:
+        UserError: A required key was omitted.
+        ValidationError: A key is malformed, or the staging refused.
+    """
+    from eawf.kernel.migration.epoch2.snapshot import stage_committed_corpus, staged_envelope
+
+    mode = Epoch2Mode.STAGE
+    workspace = _symbol_key(
+        _required(workspace_key, option="--workspace-key", mode=mode), option="--workspace-key"
+    )
+    project = _symbol_key(
+        _required(project_key, option="--project-key", mode=mode), option="--project-key"
+    )
+    try:
+        corpus = stage_committed_corpus(
+            repo_root=repo_root,
+            destination=destination,
+            workspace_key=workspace,
+            project_key=project,
+        )
+    except MigrationRuleError as exc:
+        raise cli_errors.ValidationError(f"{exc.code}: {exc}") from exc
+    return staged_envelope(corpus)
+
+
+def _epoch2_stage_text(payload: Mapping[str, Any]) -> str:
+    """Render one staging envelope for a terminal."""
+    return "\n".join(
+        [
+            f"epoch2 stage: {len(payload['sources'])} committed file(s) "
+            f"at {payload['revision'][:12]}",
+            f"  staged to: {payload['staged_to']}",
+        ]
+    )
+
+
 def _epoch2_dispatch(
     *,
     mode: Epoch2Mode,
@@ -615,6 +759,7 @@ def _epoch2_dispatch(
     project_key: str | None,
     repository_key: str | None,
     sealed_by: str,
+    default_track_key: str | None,
     plan_digest: str | None,
     target_root: Path | None,
     registry_path: Path | None,
@@ -633,10 +778,15 @@ def _epoch2_dispatch(
         project_key: The addressing project.
         repository_key: The addressing repository.
         sealed_by: The principal recorded in the seal.
+        default_track_key: The Track the operator declares for every
+            record whose source names none, or ``None``.
         plan_digest: The approved plan digest, required by ``--apply``.
         target_root: The tree the generation lands in, required by
             ``--apply`` and by both recovery modes.
-        registry_path: The workspace registry, required by ``--apply``.
+        registry_path: The workspace registry ``--apply`` resolves the
+            addressing key in. ``None`` means the machine registry, the one
+            ``eawf workspace add`` writes, so an operator who registered
+            the workspace does not have to name the file again.
         manifest: The restore manifest the recovery writes back.
         accept_unresolved: Addresses of unresolved rows the apply accepts.
 
@@ -648,6 +798,8 @@ def _epoch2_dispatch(
         ValidationError: An importer rule refused the corpus.
         CliError: The daemon answered with any other failure.
     """
+    if mode is Epoch2Mode.ROLLBACK_BOUNDARY:
+        return _epoch2_boundary_payload(_required(target_root, option="--target-root", mode=mode))
     if mode not in _CORPUS_MODES:
         from eawf.kernel.migration.epoch2.recovery import (
             EPOCH2_RECOVER_METHOD,
@@ -684,6 +836,7 @@ def _epoch2_dispatch(
         project_key=_required(project_key, option="--project-key", mode=mode),
         repository_key=_required(repository_key, option="--repository-key", mode=mode),
         sealed_by=sealed_by,
+        default_track_key=default_track_key,
     )
     if mode is Epoch2Mode.PLAN:
         from eawf.kernel.migration.epoch2.plan_mode import (
@@ -703,11 +856,12 @@ def _epoch2_dispatch(
         apply_cutover,
         apply_envelope,
     )
+    from eawf.platform.registry import default_registry_path
 
     apply_request = _epoch2_apply_request(
         plan_request=plan_request,
         target_root=_required(target_root, option="--target-root", mode=mode),
-        registry_path=_required(registry_path, option="--registry-path", mode=mode),
+        registry_path=registry_path if registry_path is not None else default_registry_path(),
         plan_digest=_required(plan_digest, option="--plan-digest", mode=mode),
         accept_unresolved=accept_unresolved,
     )
@@ -716,6 +870,35 @@ def _epoch2_dispatch(
         params=apply_request.model_dump(mode="json"),
         local=lambda: apply_envelope(apply_cutover(apply_request, applied_at=datetime.now(UTC))),
     )
+
+
+def _epoch2_boundary_payload(target_root: Path) -> dict[str, Any]:
+    """Return the rollback-boundary envelope for the tree at ``target_root``.
+
+    The report is a read, so it runs in process rather than through the
+    daemon: it takes no lock and writes nothing, and the tree answers the
+    same question whichever process asks.
+
+    Args:
+        target_root: The tree to report on.
+
+    Returns:
+        The boundary envelope.
+
+    Raises:
+        ValidationError: The tree carries no declaration, or its journal or
+            select halves do not reconcile.
+    """
+    from eawf.kernel.migration.epoch2.activation import (
+        boundary_envelope,
+        rollback_boundary_report,
+    )
+    from eawf.kernel.migration.epoch2.canary import DisposableTarget
+
+    try:
+        return boundary_envelope(rollback_boundary_report(DisposableTarget.require(target_root)))
+    except MigrationRuleError as exc:
+        raise cli_errors.ValidationError(f"{exc.code}: {exc}") from exc
 
 
 def _epoch2_text(mode: Epoch2Mode, payload: Mapping[str, Any]) -> str:
@@ -734,7 +917,34 @@ def _epoch2_text(mode: Epoch2Mode, payload: Mapping[str, Any]) -> str:
         return _epoch2_plan_text(payload)
     if mode is Epoch2Mode.APPLY:
         return _epoch2_apply_text(payload)
+    if mode is Epoch2Mode.ROLLBACK_BOUNDARY:
+        return _epoch2_boundary_text(payload)
     return _epoch2_recovery_text(payload)
+
+
+def _epoch2_boundary_text(payload: Mapping[str, Any]) -> str:
+    """Render one rollback-boundary envelope for a terminal.
+
+    Args:
+        payload: The boundary envelope.
+
+    Returns:
+        One header line naming the boundary, then one line per window --
+        two lines, because the windows are never reported as one.
+    """
+    simple = payload["simple_rollback_window"]
+    canary = payload["canary_reversible_window"]
+    activation = payload["activation"]
+    sealed = activation["first_native_mutation_at"] if activation else "not sealed"
+    return "\n".join(
+        [
+            f"epoch2 rollback boundary: {payload['boundary'].replace('_', ' ')} "
+            f"({payload['declaration']}, generation {payload['generation_id'] or 'none'})",
+            f"  simple rollback window:   {simple['state']}, remedy {simple['remedy']}",
+            f"  canary reversible window: {canary['state']}, remedy {canary['remedy'] or 'n/a'}",
+            f"  activation:               {sealed}",
+        ]
+    )
 
 
 def _epoch2_plan_text(payload: Mapping[str, Any]) -> str:
@@ -749,6 +959,7 @@ def _epoch2_plan_text(payload: Mapping[str, Any]) -> str:
     lines = [
         f"epoch2 plan: {payload['target_rows']} target rows, "
         f"{payload['required_operator_assignment_count']} operator assignment(s), "
+        f"{payload['declared_track_assignment_count']} declared Track assignment(s), "
         f"{payload['unresolved_row_count']} unresolved row(s)",
         f"  source digest:   {payload['source_digest']}",
         f"  manifest digest: {payload['manifest_digest']}",

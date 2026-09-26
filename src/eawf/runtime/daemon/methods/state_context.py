@@ -20,6 +20,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.enums import (
     StoreKind,
 )
+from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
 from eawf.kernel.state.models import (
     State,
 )
@@ -29,6 +30,7 @@ from eawf.kernel.state.mutations import (
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.strict import validate_state
 from eawf.runtime.daemon.methods import (
+    DaemonValidationError,
     MethodContext,
     note_cross_root_serve,
 )
@@ -146,9 +148,18 @@ def resolve_mutator_paths(
     Raises:
         RuntimeError: When the state path cannot be resolved or
             ``ctx.wal_dir`` is unset.
+        DaemonValidationError: When the resolved tree carries the epoch
+            marker (``legacy_operation_removed``). Every epoch-1 mutator
+            resolves its paths here first, so the refusal lands before
+            any of them reads the state, touches the WAL or appends an
+            event.
     """
     note_cross_root_serve(ctx, repo_root=repo_root, command="state mutation")
     state_path = resolve_state_path(repo_root=repo_root, ctx=ctx)
+    try:
+        refuse_legacy_write(state_path)
+    except LegacyOperationRemovedError as error:
+        raise DaemonValidationError(f"validation_failed: {error}") from error
     if repo_root:
         event_path = store_path(state_path, StoreKind.EVENT)
     else:

@@ -9,6 +9,7 @@ invoked. The status command itself is integration-tested in
 
 from __future__ import annotations
 
+import json
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -17,6 +18,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from eawf.kernel.migration.epoch2.canary import (
+    CanaryDeclaration,
+    DisposableTarget,
+    declaration_path,
+)
+from eawf.kernel.migration.epoch2.generation import atomic_write_json, write_marker
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     AgentSessionStatus,
@@ -42,6 +49,7 @@ from eawf.kernel.state.models import (
 from eawf.surfaces.cli.commands import status as status_mod
 
 _DT = datetime(2026, 5, 8, tzinfo=UTC)
+_GENERATION_ID = "gen-0123456789abcdef"
 
 
 def _state(
@@ -526,3 +534,129 @@ def test_format_text_handles_no_project() -> None:
     # sentinel, never the literal string ``"None"`` from f-string coercion.
     assert "branch=<unknown>" in text
     assert "branch=None" not in text
+
+
+def test_format_text_renders_epoch1_authority_with_gap() -> None:
+    payload: dict[str, Any] = {
+        "project": None,
+        "current": CurrentPointers().model_dump(mode="json"),
+        "git": {"head": None, "branch": None, "dirty": None},
+        "authority": {"epoch": 1, "gap": "marker_absent", "generation_id": None},
+        "blockers": [],
+    }
+    assert "authority: epoch 1 (marker_absent)" in status_mod._format_text(payload)
+
+
+def test_format_text_renders_epoch2_authority_with_generation() -> None:
+    payload: dict[str, Any] = {
+        "project": None,
+        "current": CurrentPointers().model_dump(mode="json"),
+        "git": {"head": None, "branch": None, "dirty": None},
+        "authority": {"epoch": 2, "gap": None, "generation_id": _GENERATION_ID},
+        "blockers": [],
+    }
+    text = status_mod._format_text(payload)
+    assert f"authority: epoch 2 (generation {_GENERATION_ID})" in text
+
+
+def test_format_text_without_authority_renders_unknown() -> None:
+    payload: dict[str, Any] = {
+        "project": None,
+        "current": CurrentPointers().model_dump(mode="json"),
+        "git": {"head": None, "branch": None, "dirty": None},
+        "blockers": [],
+    }
+    assert "authority: <unknown>" in status_mod._format_text(payload)
+
+
+# ---- authority block through the CLI -------------------------------------
+
+
+def _seed_state(tmp_path: Path) -> Path:
+    """Write a minimal valid ``state.json`` under ``tmp_path/.ea``."""
+    root = tmp_path / ".ea"
+    root.mkdir()
+    state_path = root / "state.json"
+    state_path.write_text(_state().model_dump_json(), encoding="utf-8")
+    return state_path
+
+
+def _declare(root: Path) -> None:
+    atomic_write_json(
+        declaration_path(root),
+        CanaryDeclaration(disposable=True, declared_by="status-test", purpose="throwaway"),
+    )
+
+
+def _mark(root: Path) -> None:
+    write_marker(
+        target=DisposableTarget.require(root),
+        generation_id=_GENERATION_ID,
+        manifest_digest="a" * 64,
+        published_digest="b" * 64,
+        written_at=_DT,
+    )
+
+
+def _status_json(state_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    """Run ``eawf --json status`` against *state_path* with git stubbed away."""
+    from typer.testing import CliRunner
+
+    from eawf.surfaces.cli.app import app
+
+    def _no_git(*_args: Any, **_kwargs: Any) -> Any:
+        raise FileNotFoundError("git stubbed away")
+
+    monkeypatch.setenv("EA_STATE", str(state_path))
+    monkeypatch.setattr(subprocess, "run", _no_git)
+    result = CliRunner().invoke(app, ["--json", "status"])
+    assert result.exit_code == 0, result.output
+    payload: dict[str, Any] = json.loads(result.stdout)
+    return payload
+
+
+def test_status_authority_undeclared_tree_is_epoch1(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = _seed_state(tmp_path)
+
+    payload = _status_json(state_path, monkeypatch)
+
+    assert payload["authority"] == {"epoch": 1, "gap": "undeclared", "generation_id": None}
+
+
+def test_status_authority_declared_unmarked_tree_is_marker_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = _seed_state(tmp_path)
+    _declare(state_path.parent)
+
+    payload = _status_json(state_path, monkeypatch)
+
+    assert payload["authority"] == {"epoch": 1, "gap": "marker_absent", "generation_id": None}
+
+
+def test_status_authority_unreadable_marker_is_marker_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = _seed_state(tmp_path)
+    root = state_path.parent
+    _declare(root)
+    (root / "generations").mkdir()
+    (root / "generations" / "EPOCH2_ACTIVE.json").write_text("{", encoding="utf-8")
+
+    payload = _status_json(state_path, monkeypatch)
+
+    assert payload["authority"] == {"epoch": 1, "gap": "marker_unreadable", "generation_id": None}
+
+
+def test_status_authority_canary_tree_is_epoch2_with_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state_path = _seed_state(tmp_path)
+    _declare(state_path.parent)
+    _mark(state_path.parent)
+
+    payload = _status_json(state_path, monkeypatch)
+
+    assert payload["authority"] == {"epoch": 2, "gap": None, "generation_id": _GENERATION_ID}

@@ -32,6 +32,12 @@ native record is never replayed into an epoch-1 state file.
 Every path a context writes is classified under the commit policy before
 it is handed out, so a new file family has to be declared before a
 session can write its first byte.
+
+Every native mutation commits inside a session, so the session's close is
+where the first one is noticed: before its locks are released, a session
+over a cut-over tree seals the activation once the published generation
+has moved off its activation digest, which closes the simple rollback
+window for good.
 """
 
 from __future__ import annotations
@@ -41,18 +47,21 @@ import hashlib
 import logging
 from collections.abc import Iterable, Iterator
 from contextlib import ExitStack, contextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
-from eawf.kernel.migration.epoch2.errors import MigrationDualAuthorityError
+from eawf.kernel.migration.epoch2.activation import seal_first_native_mutation
+from eawf.kernel.migration.epoch2.errors import MigrationDualAuthorityError, MigrationRuleError
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT, read_selection
 from eawf.kernel.state.epoch2.authority import RootAuthority, require_native_authority
 from eawf.kernel.store import paths as store_paths
 from eawf.kernel.store.commit_policy import CENSUS_SURFACE_PREFIX, PathClass, classify_path
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.ledger import LedgerError
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.lock import portalock, sibling
 
@@ -318,6 +327,28 @@ class Epoch2RootContext:
                 yield session
             finally:
                 session.closed = True
+                self._seal_activation(authority)
+
+    def _seal_activation(self, authority: RootAuthority) -> None:
+        """Seal the tree's activation if this session made its first mutation.
+
+        A failure here is logged rather than raised: the mutation it would
+        report on has already committed, so raising would tell the caller a
+        write failed when it landed. The next session retries the seal, and
+        until it lands a rollback still refuses on the moved generation
+        digest alone.
+
+        Args:
+            authority: The epoch-2 answer the session was opened under.
+        """
+        assert authority.target is not None, "an epoch-2 answer always carries its target"
+        try:
+            seal_first_native_mutation(authority.target, observed_at=datetime.now(UTC))
+        except (MigrationRuleError, LedgerError, OSError, ValueError) as error:
+            logger.warning(
+                f"_seal_activation root={self.identity.root_id} deferred=true "
+                f"error={error.__class__.__name__}"
+            )
 
 
 class RootSession:

@@ -22,12 +22,21 @@ the model re-reads the file in its own validator rather than trusting the
 field it was handed. A later stage therefore cannot route around the
 fence by holding a plain :class:`~pathlib.Path`: there is no write helper
 that accepts one.
+
+A tree that is *not* throwaway -- a live repository whose owner chooses to
+move it to epoch 2 -- declares an opt-in instead. Saying "disposable" there
+would be a false statement inside the fence built to prevent exactly that,
+so the opt-in says something else: which verified backup the owner took
+before the cutover. The fence admits either declaration, but a tree may
+carry only one of them, because the two claims disagree about what losing
+the tree would cost.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal, Self
 
@@ -43,6 +52,15 @@ logger = logging.getLogger(__name__)
 #: It is never committed: a clone that inherited it would be disposable
 #: without its new owner saying so, so each checkout declares for itself.
 CANARY_DECLARATION_FILENAME: Final = "epoch2-disposable-canary.json"
+
+#: The file a live repository carries to opt into epoch 2 without calling
+#: itself disposable. Unlike the disposable declaration it is a fact about
+#: the repository rather than about one checkout, so a clone inherits it.
+OPT_IN_DECLARATION_FILENAME: Final = "epoch2-opt-in.json"
+
+#: The shape of a backup snapshot identifier, as the backup store names
+#: its timestamp directories.
+BACKUP_TS_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z$"
 
 #: The directory inside the target that holds every generation, the
 #: selection pointer, the epoch marker and the cutover journal. One
@@ -104,46 +122,128 @@ class CanaryDeclaration(StrictMigrationModel):
     purpose: Annotated[str, Field(min_length=1, max_length=200)]
 
 
+class OptInDeclaration(StrictMigrationModel):
+    """What a live repository says to receive an apply without being throwaway.
+
+    The declaration pins a backup rather than waiving one: the apply
+    re-reads the named snapshot and refuses unless it still digests to the
+    value written here, so the owner's claim "I can get this back" is
+    checked rather than taken on trust.
+
+    Attributes:
+        opt_in: Always ``True``, stated in words for the same reason the
+            disposable declaration states its claim.
+        declared_by: Who opted the repository in.
+        purpose: Why the repository is moving to epoch 2, in one line.
+        backup_ts: The backup snapshot taken before the cutover, as
+            ``eawf backup create`` names it.
+        backup_digest: What that snapshot digested to when it was taken,
+            as ``eawf backup create`` reports it.
+    """
+
+    opt_in: Literal[True]
+    declared_by: Annotated[str, Field(min_length=1, max_length=64)]
+    purpose: Annotated[str, Field(min_length=1, max_length=200)]
+    backup_ts: Annotated[str, Field(pattern=BACKUP_TS_PATTERN)]
+    backup_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class DeclarationKind(StrEnum):
+    """Which of the two declarations admitted a tree to the cutover."""
+
+    DISPOSABLE = "disposable"
+    OPT_IN = "opt_in"
+
+
+#: Either declaration a tree may carry.
+TargetDeclaration = CanaryDeclaration | OptInDeclaration
+
+
 def declaration_path(root: Path) -> Path:
     """Return where a tree rooted at ``root`` declares itself disposable."""
     return root / CANARY_DECLARATION_FILENAME
 
 
-def read_declaration(root: Path) -> CanaryDeclaration:
-    """Return the disposability declaration the tree at ``root`` carries.
+def opt_in_path(root: Path) -> Path:
+    """Return where a tree rooted at ``root`` declares its opt-in."""
+    return root / OPT_IN_DECLARATION_FILENAME
+
+
+def _parse_declaration[M: StrictMigrationModel](
+    root: Path, *, filename: str, model: type[M], claim: str
+) -> M:
+    """Parse one declaration file, refusing anything short of a valid one.
 
     Args:
         root: The target tree's root directory.
+        filename: The declaration's file name inside the tree.
+        model: The contract the file must satisfy.
+        claim: What the declaration claims, for the refusal message.
 
     Returns:
         The parsed declaration.
 
     Raises:
-        MigrationTargetNotDisposableError: The declaration is absent,
-            unreadable, not JSON, or does not satisfy the contract. Every
-            one of those is the same answer -- this tree has not said an
-            apply may write into it -- so they carry one code.
+        MigrationTargetNotDisposableError: The file is absent, unreadable,
+            not JSON, or does not satisfy the contract.
     """
-    path = declaration_path(root)
     try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads((root / filename).read_text(encoding="utf-8"))
     except OSError as error:
         raise MigrationTargetNotDisposableError(
-            f"{root.name}/{CANARY_DECLARATION_FILENAME} is absent or unreadable "
-            f"({error.__class__.__name__}), so this tree has not declared itself a "
-            "disposable canary and the apply refuses to write into it"
+            f"{root.name}/{filename} is absent or unreadable "
+            f"({error.__class__.__name__}), so this tree has not declared itself {claim} "
+            f"(nor carries {OPT_IN_DECLARATION_FILENAME}) and the apply refuses to write "
+            "into it"
         ) from error
     except json.JSONDecodeError as error:
         raise MigrationTargetNotDisposableError(
-            f"{root.name}/{CANARY_DECLARATION_FILENAME} is not valid JSON: {error}"
+            f"{root.name}/{filename} is not valid JSON: {error}"
         ) from error
     try:
-        return CanaryDeclaration.model_validate(payload)
+        return model.model_validate(payload)
     except ValueError as error:
         raise MigrationTargetNotDisposableError(
-            f"{root.name}/{CANARY_DECLARATION_FILENAME} does not declare a disposable "
-            f"canary: {error}"
+            f"{root.name}/{filename} does not declare {claim}: {error}"
         ) from error
+
+
+def read_declaration(root: Path) -> TargetDeclaration:
+    """Return the declaration the tree at ``root`` carries.
+
+    Args:
+        root: The target tree's root directory.
+
+    Returns:
+        The opt-in declaration when the tree carries one, otherwise the
+        disposable-canary declaration.
+
+    Raises:
+        MigrationTargetNotDisposableError: Neither declaration is present
+            and valid, or the tree carries both. Every one of those is the
+            same answer -- this tree has not said, unambiguously, that an
+            apply may write into it -- so they carry one code.
+    """
+    opt_in = opt_in_path(root).is_file()
+    if opt_in and declaration_path(root).exists():
+        raise MigrationTargetNotDisposableError(
+            f"{root.name} carries both {CANARY_DECLARATION_FILENAME} and "
+            f"{OPT_IN_DECLARATION_FILENAME}; a tree is either throwaway or opted in, and "
+            "the apply will not guess which claim is the true one"
+        )
+    if opt_in:
+        return _parse_declaration(
+            root,
+            filename=OPT_IN_DECLARATION_FILENAME,
+            model=OptInDeclaration,
+            claim="an epoch-2 opt-in",
+        )
+    return _parse_declaration(
+        root,
+        filename=CANARY_DECLARATION_FILENAME,
+        model=CanaryDeclaration,
+        claim="a disposable canary",
+    )
 
 
 def _require_declared(locator: str) -> str:
@@ -178,11 +278,12 @@ class DisposableTarget(StrictMigrationModel):
 
     Attributes:
         root: The target tree's root directory.
-        declaration: What the tree declared about itself.
+        declaration: What the tree declared about itself -- disposable,
+            or opted in against a named backup.
     """
 
     root: Path
-    declaration: CanaryDeclaration
+    declaration: TargetDeclaration
 
     @classmethod
     def require(cls, root: Path) -> DisposableTarget:
@@ -196,7 +297,7 @@ class DisposableTarget(StrictMigrationModel):
 
         Raises:
             MigrationTargetNotDisposableError: The tree carries no valid
-                declaration.
+                declaration, or carries both kinds.
         """
         resolved = Path(root)
         target = cls(root=resolved, declaration=read_declaration(resolved))
@@ -218,10 +319,16 @@ class DisposableTarget(StrictMigrationModel):
         """
         if read_declaration(self.root) != self.declaration:
             raise MigrationTargetNotDisposableError(
-                f"{self.root.name}/{CANARY_DECLARATION_FILENAME} does not match the "
-                "declaration this target was built with"
+                f"{self.root.name} does not carry the declaration this target was built with"
             )
         return self
+
+    @property
+    def kind(self) -> DeclarationKind:
+        """Return which declaration admitted the tree."""
+        if isinstance(self.declaration, OptInDeclaration):
+            return DeclarationKind.OPT_IN
+        return DeclarationKind.DISPOSABLE
 
     @property
     def generations_dir(self) -> Path:
@@ -324,16 +431,22 @@ class DisposableTarget(StrictMigrationModel):
 
 
 __all__ = [
+    "BACKUP_TS_PATTERN",
     "CANARY_DECLARATION_FILENAME",
     "GENERATIONS_DIRNAME",
     "MAINTENANCE_LOCATOR",
     "MARKER_FILENAME",
+    "OPT_IN_DECLARATION_FILENAME",
     "RESTORE_DIRNAME",
     "RESTORE_MANIFEST_FILENAME",
     "SELECTION_FILENAME",
     "TARGET_AUTHORITY_LOCATORS",
     "CanaryDeclaration",
+    "DeclarationKind",
     "DisposableTarget",
+    "OptInDeclaration",
+    "TargetDeclaration",
     "declaration_path",
+    "opt_in_path",
     "read_declaration",
 ]

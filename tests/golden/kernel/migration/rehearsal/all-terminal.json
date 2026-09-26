@@ -1,8 +1,8 @@
 {
   "apply": {
     "applied": true,
-    "generation_bytes": 15412,
-    "generation_id": "gen-3bff248276964230",
+    "generation_bytes": 16305,
+    "generation_id": "gen-c548dacaad1985c3",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -19,11 +19,11 @@
     ],
     "ledger_files": 6,
     "ledger_records": 10,
-    "residual_document_bytes": 2082
+    "residual_document_bytes": 2975
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "e2be0648ff51ba28380def8ec53af03e524e2db8c4eaa074c923c8eb262a163b",
+    "approval_digest": "8c51c43a7dacdfc04dc30755985a9476b10b3a6b52424d745ed5e515e9ee33b1",
     "collections": {
       "actuals": [
         1,
@@ -152,8 +152,8 @@
       ],
       "project": [
         3,
-        0,
-        1
+        1,
+        0
       ],
       "sandbox_policies": [
         0,
@@ -216,19 +216,17 @@
         0
       ]
     },
-    "manifest_digest": "3bff2482769642304e15bfb9035be351d4e724ec263a78d80b739b8f7a851237",
+    "manifest_digest": "c548dacaad1985c363e4aa30baeb741cfc4524a8f418164f78a7a146036adbcf",
     "reproducible": true,
     "source_digest": "168ebf030453b8ee40cc9ac6bd983fa8441de966c6bca7bde996fbab06bca505",
     "source_rows": 19,
-    "target_rows": 11,
-    "unresolved_rows": [
-      "project"
-    ]
+    "target_rows": 12,
+    "unresolved_rows": []
   },
   "fixture": "all-terminal",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-3bff248276964230",
+    "generation_id": "gen-c548dacaad1985c3",
     "journal_rows": 0,
     "tree_unchanged": true
   },

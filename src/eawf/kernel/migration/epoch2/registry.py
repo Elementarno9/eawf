@@ -31,6 +31,7 @@ from eawf.kernel.migration.epoch2.measurements import (
     MeasurementKind,
     measurement_rule_payload,
 )
+from eawf.kernel.migration.epoch2.native_records import native_record_rule_payload
 from eawf.kernel.migration.epoch2.rows import row_contract_payload
 from eawf.kernel.migration.epoch2.rules import (
     MappingRuleVersion,
@@ -61,6 +62,7 @@ def totality_rule_payload() -> dict[str, Any]:
         "lifecycle": lifecycle_rule_payload(),
         "envelopes": envelope_rule_payload(),
         "measurements": measurement_rule_payload(),
+        "native_records": native_record_rule_payload(),
         "validation": validation_rule_payload(),
     }
 
