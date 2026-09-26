@@ -692,10 +692,10 @@ async def _control_count(canary: CanaryProvision, factory: Any) -> int:
         ("lost-before-cursor", ReconnectDisposition.CURRENT),
         ("lost-before-cursor", ReconnectDisposition.REPLAY),
         ("lost-before-cursor", ReconnectDisposition.SNAPSHOT_REQUIRED),
-        # The control fact is itself in the gap. Its ledger row names no record a patch
-        # could move, so the daemon will not replay across it and asks for a snapshot.
-        ("lost-inside-gap", ReconnectDisposition.SNAPSHOT_REQUIRED),
-        ("lost-after-gap", ReconnectDisposition.SNAPSHOT_REQUIRED),
+        # The control fact is itself in the gap. Its ledger row is committed as a patch
+        # of the Run it speaks for, so the daemon replays across it like any other row.
+        ("lost-inside-gap", ReconnectDisposition.REPLAY),
+        ("lost-after-gap", ReconnectDisposition.REPLAY),
     ],
 )
 def test_reconnect_reconciles_outstanding_operation(

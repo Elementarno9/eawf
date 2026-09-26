@@ -19,7 +19,11 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
+from eawf.kernel.projection.compute import (
+    ROUTE_COLLECTIONS,
+    RouteProjection,
+    build_route_projection,
+)
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, negotiate_reconnect
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
@@ -103,8 +107,21 @@ def _fixture() -> Fixture:
     return load_fixture(FIXTURE_DIR)
 
 
+def _held_attention() -> RouteProjection:
+    """Return the Attention projection a linked console holds: one open action."""
+    return RouteProjection.model_validate(_projection("attention"))
+
+
 def _ctx(session: Session, fixture: Fixture, link: _Link | None) -> Ctx:
-    return Ctx(session=session, fixture=fixture, host=_Host(), w=120, h=30, send=link)
+    return Ctx(
+        session=session,
+        fixture=fixture,
+        host=_Host(),
+        w=120,
+        h=30,
+        send=link,
+        attention=_held_attention(),
+    )
 
 
 def _press(session: Session, fixture: Fixture, link: _Link | None, *keys: str) -> None:
@@ -206,7 +223,8 @@ def test_confirm_on_an_empty_register_sends_nothing() -> None:
         fixture.settings,
     )
     session = _session("run.detail", overlay="consequence")
-    dispatch(_ctx(session, empty, link), "Enter", False)
+    ctx = Ctx(session=session, fixture=empty, host=_Host(), w=120, h=30, send=link)
+    dispatch(ctx, "Enter", False)
     assert link.sent == []
     assert session.trace is not None
     assert "nothing was sent" in session.trace

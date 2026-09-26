@@ -565,7 +565,12 @@ def _persist(
     return receipt
 
 
-def commit_ledger_append(session: RootSession, record: LedgerRecord) -> Envelope:
+def commit_ledger_append(
+    session: RootSession,
+    record: LedgerRecord,
+    *,
+    patch_fields: Mapping[str, Any] | None = None,
+) -> Envelope:
     """Commit one ledger line through the seven steps, inside *session*.
 
     The caller passes the session it decided the line under, because it
@@ -583,6 +588,12 @@ def commit_ledger_append(session: RootSession, record: LedgerRecord) -> Envelope
         session: The open session the line was decided under. Its first
             locked entity is the subject the event is scoped to.
         record: The already-validated line to commit.
+        patch_fields: The record the line speaks for, spelled the way a
+            transition row states it (``entity_ref``, ``to_status``,
+            ``revision_after``) plus any mark a patch carries. Written into
+            the firehose row, so the ordinal the append allocates produces a
+            keyed patch and a reconnect can replay across it; ``None`` leaves
+            the row unpatchable, which retention then cannot supply.
 
     Returns:
         The firehose row the commit appended, for a caller that publishes
@@ -630,7 +641,12 @@ def commit_ledger_append(session: RootSession, record: LedgerRecord) -> Envelope
         sequence = sequences.allocate()
         new_document = {**document, CANONICAL_SEQUENCE_KEY: sequence}
         envelope = _ledger_envelope(
-            session, subject=subject, record=record, line=line, sequence=sequence
+            session,
+            subject=subject,
+            record=record,
+            line=line,
+            sequence=sequence,
+            patch_fields=patch_fields or {},
         )
         wal_record = WalRecord(
             record_id=uuid.uuid4().hex,
@@ -660,12 +676,14 @@ def _ledger_envelope(
     record: LedgerRecord,
     line: str,
     sequence: int,
+    patch_fields: Mapping[str, Any],
 ) -> Envelope:
     """Return the one firehose row a ledger append writes.
 
     The row carries the exact line, so the replay can finish an append the
     crash interrupted and a reader can rebuild the ledger's view from the
-    firehose alone.
+    firehose alone. The patch fields go first, so none of them can restate
+    the ordinal or the line the row is keyed by.
     """
     event_id = f"evt-{uuid.uuid4().hex}"
     name = f"{LEDGER_EVENT_NAMESPACE}.{record.collection.value}.appended"
@@ -676,6 +694,7 @@ def _ledger_envelope(
         created_at=record.recorded_at,
         summary=f"{name} {record.record_key} {record.status}",
         payload={
+            **patch_fields,
             "schema_version": LEDGER_EVENT_SCHEMA_VERSION,
             "name": name,
             "event_id": event_id,

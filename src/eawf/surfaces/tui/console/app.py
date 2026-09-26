@@ -64,7 +64,12 @@ from eawf.surfaces.tui.console.frame import View, thin, unheld
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
 from eawf.surfaces.tui.console.navigation import Ctx
-from eawf.surfaces.tui.console.operations import OperationResult, OperationStatus, VerbRequest
+from eawf.surfaces.tui.console.operations import (
+    NO_PRINCIPAL_REASON,
+    OperationResult,
+    OperationStatus,
+    VerbRequest,
+)
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route, unknown_frame
@@ -527,7 +532,19 @@ class ConsoleApp(App[None]):
             register=register,
             attention=self.attention_view(),
             settings=self.settings_view(),
+            linked=self.seam is not None,
+            principal_refusal=self.principal_refusal(),
         )
+
+    def principal_refusal(self) -> str:
+        """Return why every bound write is refused before it is chosen, or nothing.
+
+        A linked console acting as nobody could attribute no write, so each bound verb
+        is shown refused ahead of time rather than refused once confirmed. A console
+        with no link sends nothing anyway and says so when a verb is confirmed.
+        """
+        seam = self.seam
+        return NO_PRINCIPAL_REASON if seam is not None and seam.operator is None else ""
 
     def reset(self, setup: SessionSetup | None) -> None:
         """Restore the session from ``setup``; the one canonical reset."""
@@ -572,6 +589,8 @@ class ConsoleApp(App[None]):
             projection=view.projection,
             unheld=unheld(view),
             send=self.send,
+            attention=self.seam.projection_for(ATTENTION_ROUTE) if self.seam else None,
+            principal_refusal=view.principal_refusal,
         )
         dispatch(ctx, key, shift)
         self._follow_route()

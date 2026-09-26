@@ -9,8 +9,11 @@ dispatch: the compiled-spec and authority-capsule digests plus the route
 revision they were resolved under. Nothing else writes them, so the
 contract cannot drift from what the provider was actually handed.
 
-The three control verbs append one fact each. ``request`` records that a
-principal asked and moves nothing. ``acknowledge`` decides the Run's one
+The three control verbs append one fact each, each at the canonical
+sequence its commit allocates, and publish the line as a patch of the Run
+it speaks for: a console that went away while the answer was in flight
+reads it back from the reconnect replay instead of asking again. ``request``
+records that a principal asked and moves nothing. ``acknowledge`` decides the Run's one
 control lease under the root's entity lock, so two principals racing the
 same Run produce one holder and one ``superseded`` row -- and the losing
 row carries no receipt, because it was neither applied nor refused.
@@ -94,6 +97,7 @@ from eawf.runtime.control.reducer import (
 from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
+    CANONICAL_SEQUENCE_KEY,
     TransactionRefusedError,
     TransitionRequest,
     commit_ledger_append,
@@ -355,6 +359,9 @@ class RunControlAnswer(BaseModel):
         disposition: That fact's rendered outcome.
         run_status: The status the Run's confirmed effects support.
         control_cursor: The last applied control-ledger sequence.
+        canonical_sequence: The workspace-global ordinal this call's line
+            was committed at, which its published patch carries; ``None``
+            when a retry was answered by a line already standing.
         receipt: The canonical mutation receipt, present only where a
             confirmed effect terminalized the Run and the transition
             committed.
@@ -367,16 +374,17 @@ class RunControlAnswer(BaseModel):
     disposition: ControlDisposition
     run_status: RunStatus
     control_cursor: StrictNonNegativeInt
+    canonical_sequence: StrictPositiveInt | None = None
     receipt: dict[str, Any] | None = None
     warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class _EffectOutcome:
-    """The effect verb's answer beside the envelope waiting to publish."""
+class _ControlOutcome:
+    """A control verb's answer beside the envelopes waiting to publish, in commit order."""
 
     answer: RunControlAnswer
-    envelope: Envelope | None
+    envelopes: tuple[Envelope, ...] = ()
 
 
 def _params[ParamsT: BaseModel](model: type[ParamsT], params: dict[str, Any]) -> ParamsT:
@@ -435,9 +443,28 @@ _binding_of = run_binding_of
 _stored_run = stored_run
 
 
-def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> None:
-    """Append one control fact as a line of the run ledger."""
-    commit_ledger_append(
+def _append_fact(
+    session: RootSession,
+    fact: ControlFact,
+    *,
+    run: Run,
+    facts: tuple[ControlFact, ...],
+    now: datetime,
+) -> Envelope:
+    """Append one control fact as a line of the run ledger, patchable as the Run it moves.
+
+    Args:
+        session: The session the fact was decided under.
+        fact: The fact to append.
+        run: The stored Run the fact speaks for.
+        facts: The Run's control facts with *fact* among them.
+        now: When the fact was recorded.
+
+    Returns:
+        The firehose row the commit appended, carrying its canonical sequence.
+    """
+    status = reduce_run_control(status=run.status, facts=facts).status
+    return commit_ledger_append(
         session,
         LedgerRecord(
             collection=Epoch2Collection.RUN,
@@ -446,20 +473,33 @@ def _append_fact(session: RootSession, fact: ControlFact, *, now: datetime) -> N
             recorded_at=now,
             payload=fact.model_dump(mode="json"),
         ),
+        patch_fields={
+            "entity_ref": str(fact.run_ref),
+            "to_status": str(status),
+            "revision_after": run.revision,
+            "control_request_ref": fact.control_request_ref,
+            "control_disposition": fact.disposition.value,
+        },
     )
 
 
 def _answer(
-    fact: ControlFact, facts: tuple[ControlFact, ...], status: RunStatus
-) -> RunControlAnswer:
-    """Build the answer one control verb returns."""
+    fact: ControlFact,
+    facts: tuple[ControlFact, ...],
+    status: RunStatus,
+    *,
+    envelope: Envelope | None = None,
+) -> _ControlOutcome:
+    """Build what one control verb returns, and the row it committed if it committed one."""
     state = reduce_run_control(status=status, facts=facts)
-    return RunControlAnswer(
+    answer = RunControlAnswer(
         fact=fact.model_dump(mode="json"),
         disposition=fact.disposition,
         run_status=state.status,
         control_cursor=state.control_cursor,
+        canonical_sequence=None if envelope is None else envelope.payload[CANONICAL_SEQUENCE_KEY],
     )
+    return _ControlOutcome(answer=answer, envelopes=() if envelope is None else (envelope,))
 
 
 def _existing_fact(
@@ -519,9 +559,7 @@ def _bind(context: Epoch2RootContext, args: _BindParams, *, now: datetime) -> di
         return binding.model_dump(mode="json")
 
 
-def _request(
-    context: Epoch2RootContext, args: _RequestParams, *, now: datetime
-) -> RunControlAnswer:
+def _request(context: Epoch2RootContext, args: _RequestParams, *, now: datetime) -> _ControlOutcome:
     """Record that a principal asked, and move the Run not at all."""
     with context.session([args.urn]) as session:
         records = read_ledger_records(_ledger(session))
@@ -540,13 +578,14 @@ def _request(
             recorded_at=now,
             sequence=len(facts) + 1,
         )
-        _append_fact(session, fact, now=now)
-        return _answer(fact, (*facts, fact), run.status)
+        extended = (*facts, fact)
+        envelope = _append_fact(session, fact, run=run, facts=extended, now=now)
+        return _answer(fact, extended, run.status, envelope=envelope)
 
 
 def _acknowledge(
     context: Epoch2RootContext, args: _AcknowledgeParams, *, now: datetime
-) -> RunControlAnswer:
+) -> _ControlOutcome:
     """Decide the Run's one control lease and record what was decided.
 
     Raises:
@@ -574,8 +613,9 @@ def _acknowledge(
             recorded_at=now,
             sequence=len(facts) + 1,
         )
-        _append_fact(session, fact, now=now)
-        return _answer(fact, (*facts, fact), run.status)
+        extended = (*facts, fact)
+        envelope = _append_fact(session, fact, run=run, facts=extended, now=now)
+        return _answer(fact, extended, run.status, envelope=envelope)
 
 
 def _acknowledged_disposition(
@@ -602,7 +642,7 @@ def _acknowledged_disposition(
     return decision.disposition
 
 
-def _effect(context: Epoch2RootContext, args: _EffectParams, *, now: datetime) -> _EffectOutcome:
+def _effect(context: Epoch2RootContext, args: _EffectParams, *, now: datetime) -> _ControlOutcome:
     """Record what was observed, then move the record the observation ends.
 
     Raises:
@@ -616,10 +656,11 @@ def _effect(context: Epoch2RootContext, args: _EffectParams, *, now: datetime) -
         run = _stored_run(session, records, args.urn)
         standing = _existing_fact(facts, ref=args.control_request_ref, phase=ControlPhase.EFFECTED)
         fact = standing if standing is not None else _effect_fact(args, facts=facts, now=now)
+        line: Envelope | None = None
         if standing is None:
-            _append_fact(session, fact, now=now)
             facts = (*facts, fact)
-    return _terminalize(context, args, run=run, fact=fact, facts=facts, now=now)
+            line = _append_fact(session, fact, run=run, facts=facts, now=now)
+    return _terminalize(context, args, run=run, fact=fact, facts=facts, line=line, now=now)
 
 
 def _effect_fact(
@@ -669,23 +710,29 @@ def _terminalize(
     run: Run,
     fact: ControlFact,
     facts: tuple[ControlFact, ...],
+    line: Envelope | None,
     now: datetime,
-) -> _EffectOutcome:
+) -> _ControlOutcome:
     """Commit the transition a confirmed effect makes a fact, if any.
 
     The reducer decides, not the caller: an undetermined effect leaves the
     record where it is, and a confirmed effect of a control that ends no
     Run does the same.
+
+    Args:
+        context: The root the effect was recorded on.
+        args: The effect request.
+        run: The stored Run before the transition.
+        fact: The effected fact, appended now or already standing.
+        facts: The Run's control facts, *fact* among them.
+        line: The row the effected fact was committed as, or ``None``
+            for a retry answered by a fact already standing.
+        now: When the effect was recorded.
     """
+    outcome = _answer(fact, facts, run.status, envelope=line)
     state = reduce_run_control(status=run.status, facts=facts)
-    answer = RunControlAnswer(
-        fact=fact.model_dump(mode="json"),
-        disposition=fact.disposition,
-        run_status=state.status,
-        control_cursor=state.control_cursor,
-    )
     if state.status is run.status:
-        return _EffectOutcome(answer=answer, envelope=None)
+        return outcome
     committed = run_transaction(
         context=context,
         request=TransitionRequest.model_validate(
@@ -702,9 +749,14 @@ def _terminalize(
         ),
         now=now,
     )
-    return _EffectOutcome(
-        answer=answer.model_copy(update={"receipt": committed.receipt.model_dump(mode="json")}),
-        envelope=committed.envelope,
+    envelopes = outcome.envelopes
+    if committed.envelope is not None:
+        envelopes = (*envelopes, committed.envelope)
+    return _ControlOutcome(
+        answer=outcome.answer.model_copy(
+            update={"receipt": committed.receipt.model_dump(mode="json")}
+        ),
+        envelopes=envelopes,
     )
 
 
@@ -957,8 +1009,8 @@ async def _request_control(
     """Append the requested fact of one control; the Run status is untouched."""
     args = _params(_RequestParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(_request, context, args, now=datetime.now(UTC))
-    return answer.model_dump(mode="json")
+    outcome = await asyncio.to_thread(_request, context, args, now=datetime.now(UTC))
+    return _published(ctx, outcome)
 
 
 @native_mutator(RUN_CONTROL_ACKNOWLEDGE_METHOD)
@@ -968,8 +1020,8 @@ async def _acknowledge_control(
     """Append the acknowledged fact, granting or superseding the control lease."""
     args = _params(_AcknowledgeParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(_acknowledge, context, args, now=datetime.now(UTC))
-    return answer.model_dump(mode="json")
+    outcome = await asyncio.to_thread(_acknowledge, context, args, now=datetime.now(UTC))
+    return _published(ctx, outcome)
 
 
 @native_mutator(RUN_CONTROL_EFFECT_METHOD)
@@ -992,8 +1044,18 @@ async def _effect_control(
         raise DaemonValidationError(
             f"validation_failed: {refusal.code.value}: {refusal.detail}"
         ) from refusal
+    return _published(ctx, outcome)
+
+
+def _published(ctx: MethodContext, outcome: _ControlOutcome) -> dict[str, Any]:
+    """Publish a control verb's committed rows in order, then return its answer.
+
+    A row the fan-out refused leaves the commit standing, so the answer is
+    flagged degraded rather than turned into a failure.
+    """
     answer = outcome.answer
-    if outcome.envelope is not None and not publish_projection(ctx.bus, outcome.envelope):
+    delivered = [publish_projection(ctx.bus, envelope) for envelope in outcome.envelopes]
+    if not all(delivered):
         answer = answer.model_copy(update={"warnings": (PROJECTION_DEGRADED,)})
     return answer.model_dump(mode="json")
 

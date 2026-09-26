@@ -71,6 +71,11 @@ _UNBOUND_REASONS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
+#: Why every bound verb is refused on a console linked to a daemon but acting as nobody. The
+#: menu shows it before a verb is chosen, so a write that could never be attributed is not
+#: offered as though it could.
+NO_PRINCIPAL_REASON: Final = "no operator principal to act as · relaunch with --actor"
+
 #: How many random bytes an operation id carries.
 _ID_BYTES: Final = 8
 
@@ -142,7 +147,8 @@ class Operator:
             in this person's name, so it is typed human on the wire.
         receipt_ref: The evidence row an answer is recorded under. The daemon seals only
             an answer that cites a held evidence row, so a console with none refuses to
-            answer rather than inventing one.
+            answer rather than inventing one; and a row records one answer, so it is
+            spent on the first pending action it answers.
     """
 
     principal: str
@@ -365,6 +371,7 @@ class OperationLedger:
 __all__ = [
     "ANSWER_OPTIONS",
     "CONTROL_METHOD",
+    "NO_PRINCIPAL_REASON",
     "QUESTION_OPTIONS",
     "RUN_CONTROLS",
     "RUN_KINDS",

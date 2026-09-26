@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from eawf.kernel.projection.compute import RouteProjection
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.clock import Clock, notify
@@ -60,6 +61,10 @@ class Ctx:
         send: Hands a confirmed verb to the daemon link, answering whether a link took
             it; the answer arrives later, on the link's own time. ``None`` when the
             console has no daemon link, where a confirmed verb is sent nowhere.
+        attention: The Attention projection the link holds. An answer is addressed only
+            to a row of it; with none held there is nothing to answer.
+        principal_refusal: Why every bound write is refused because the link acts as
+            nobody; empty when it acts as someone or there is no link.
     """
 
     session: Session
@@ -71,6 +76,8 @@ class Ctx:
     projection: SpineView | RouteReadModel | None = None
     unheld: bool = False
     send: Callable[[VerbRequest], bool] | None = None
+    attention: RouteProjection | None = None
+    principal_refusal: str = ""
 
     @property
     def s(self) -> Session:

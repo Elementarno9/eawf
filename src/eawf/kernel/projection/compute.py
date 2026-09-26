@@ -235,6 +235,19 @@ class RouteProjection(_ProjectionViewModel):
     rows: tuple[ProjectionRow, ...]
 
 
+class ControlMark(_ProjectionViewModel):
+    """Where one Run control stands, as the ledger line that moved it states.
+
+    Attributes:
+        control_request_ref: The request the line belongs to, which is also the
+            operation id a console sent it under.
+        disposition: That request's rendered outcome after the line.
+    """
+
+    control_request_ref: NonEmptyStr
+    disposition: NonEmptyStr
+
+
 class PatchEntry(_ProjectionViewModel):
     """One record a keyed patch updates.
 
@@ -247,6 +260,9 @@ class PatchEntry(_ProjectionViewModel):
         collection: The document collection the record lives in.
         revision: The record's compare-and-swap token after the move.
         status: The record's lifecycle status after the move.
+        control: The Run control the move records, for a control-ledger line; a
+            reconnecting console reads an answer it lost from this rather than
+            asking again.
     """
 
     key: NonEmptyStr
@@ -254,6 +270,7 @@ class PatchEntry(_ProjectionViewModel):
     collection: Epoch2Collection
     revision: StrictPositiveInt
     status: NonEmptyStr
+    control: ControlMark | None = None
 
 
 class KeyedPatch(_ProjectionViewModel):
@@ -393,6 +410,7 @@ def patches_for_event(envelope: Envelope) -> tuple[KeyedPatch, ...]:
         collection=collection,
         revision=revision,
         status=status,
+        control=_control_mark(payload),
     )
     by_read_model: dict[ReadModelKind, list[str]] = {}
     for route in routes:
@@ -408,6 +426,14 @@ def patches_for_event(envelope: Envelope) -> tuple[KeyedPatch, ...]:
         )
         for kind, kind_routes in sorted(by_read_model.items())
     )
+
+
+def _control_mark(payload: Mapping[str, Any]) -> ControlMark | None:
+    """Return the Run control a control-ledger row records, or ``None`` for any other row."""
+    ref = payload.get("control_request_ref")
+    if ref is None:
+        return None
+    return ControlMark(control_request_ref=ref, disposition=payload.get("control_disposition"))
 
 
 def _moved_record(envelope: Envelope) -> tuple[QualifiedUrn, str, int]:
@@ -537,6 +563,7 @@ __all__ = [
     "PROJECTION_SCHEMA_VERSION",
     "ROUTE_COLLECTIONS",
     "ROUTE_READ_MODELS",
+    "ControlMark",
     "KeyedPatch",
     "PatchEntry",
     "ProjectionRow",

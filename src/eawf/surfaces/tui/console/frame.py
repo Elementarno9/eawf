@@ -61,6 +61,10 @@ class View:
             ``register`` while the session sits on the Attention route.
         settings: The daemon-served effective-settings view, held on the settings
             routes under the same rule: ``None`` draws the prototype catalog.
+        linked: Whether the console holds a daemon link. A linked console states only
+            what the link has read, so its prototype registers are never counted.
+        principal_refusal: Why every bound write is refused because the link acts as
+            nobody; empty when it acts as someone or there is no link.
     """
 
     session: Session
@@ -73,6 +77,8 @@ class View:
     register: RegisterView | None = None
     attention: RegisterView | None = None
     settings: SettingsView | None = None
+    linked: bool = False
+    principal_refusal: str = ""
 
 
 def unheld(view: View) -> bool:
@@ -115,16 +121,19 @@ def snap_caret(row: str) -> str:
 
 
 def needs_count(view: View) -> int:
-    """Return the header's attention count: the Attention register's, when one is held.
+    """Return the header's attention count: the held Attention register's, and only that.
 
     The count has one producer whatever route is drawn, so the header's ``!N`` and the
     Attention frame's ``mine`` row cannot disagree. A register nobody writes states no
     count, and the header shows no badge for it -- the badge is absent, which is what it
-    already is at zero, rather than a zero standing in for a number nobody has.
+    already is at zero, rather than a zero standing in for a number nobody has. A linked
+    console that has read no register yet shows none either, whatever prototype rows it
+    carries; only a console with no link at all holds its prototype register as the
+    register, which is the mode the tracked golden contract replays.
     """
     held = view.attention
     if held is None:
-        return open_count(view.fixture) if view.fixture.proto.attention else 0
+        return 0 if view.linked else open_count(view.fixture)
     mine = attention_mine(held)
     return int(mine.value) if mine.state is TruthState.KNOWN and mine.value else 0
 

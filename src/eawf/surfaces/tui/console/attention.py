@@ -168,8 +168,19 @@ def _attention_refusal(session: Session, fixture: Fixture, key: str) -> str:
     return ""
 
 
-def verb_available(session: Session, fixture: Fixture, verb: MenuVerb | None) -> Availability:
-    """Return whether ``verb`` can act now; the menu and the key path share this judgement."""
+def verb_available(
+    session: Session, fixture: Fixture, verb: MenuVerb | None, *, principal_refusal: str = ""
+) -> Availability:
+    """Return whether ``verb`` can act now; the menu and the key path share this judgement.
+
+    Args:
+        session: The session whose route, selection and connection state are judged.
+        fixture: The registers the refusal reasons are read from.
+        verb: The verb listed or pressed; ``None`` for a letter that binds none.
+        principal_refusal: Why every bound write is refused whatever it is, because the
+            console's daemon link acts as nobody; empty when it acts as someone, or has
+            no link to attribute a write through.
+    """
     if verb is None:
         return Availability(False, "no verb")
     if session.route == "backlog" and verb.key == "m" and session.promote:
@@ -185,22 +196,37 @@ def verb_available(session: Session, fixture: Fixture, verb: MenuVerb | None) ->
         refusal = _attention_refusal(session, fixture, verb.key)
         if refusal:
             return Availability(False, refusal)
-    refusal = _write_refusal(session, fixture, verb) if is_mutation(session, verb) else ""
+    refusal = (
+        _write_refusal(session, fixture, verb, principal_refusal=principal_refusal)
+        if is_mutation(session, verb)
+        else ""
+    )
     return Availability(False, refusal) if refusal else Availability(True)
 
 
-def _write_refusal(session: Session, fixture: Fixture, verb: MenuVerb) -> str:
-    """Return why a writing verb cannot act: the link refuses writes, or no daemon verb exists.
+def _write_refusal(
+    session: Session, fixture: Fixture, verb: MenuVerb, *, principal_refusal: str
+) -> str:
+    """Return why a writing verb cannot act: the link, the missing mutator or the principal.
 
     The connection state is judged first, so an offline console names the state that
-    stops every write rather than one verb's missing mutator.
+    stops every write rather than one verb's missing mutator; a verb no mutator carries
+    names that before the principal, because no principal would make it work.
     """
     if not can_mutate(session):
         return mut_reason(session, fixture)
-    return binding_refusal(session.route, verb.verb)
+    return binding_refusal(session.route, verb.verb) or principal_refusal
 
 
-def gated(session: Session, fixture: Fixture, *, key: str, verb: str, row: Action | None) -> bool:
+def gated(
+    session: Session,
+    fixture: Fixture,
+    *,
+    key: str,
+    verb: str,
+    row: Action | None,
+    principal_refusal: str,
+) -> bool:
     """Return whether a verb must refuse, logging the live reason when it does.
 
     Args:
@@ -209,6 +235,8 @@ def gated(session: Session, fixture: Fixture, *, key: str, verb: str, row: Actio
         key: The key that asked for the verb.
         verb: The verb's name, as the refusal names it.
         row: The action the verb would act on, when it acts on one.
+        principal_refusal: Why every bound write is refused because the daemon link
+            acts as nobody; empty when it acts as someone or there is no link.
     """
     if row is not None and key in VERB and key not in verbs_for(row):
         session.log_key(
@@ -229,6 +257,9 @@ def gated(session: Session, fixture: Fixture, *, key: str, verb: str, row: Actio
     unbound = binding_refusal(ATTENTION_ROUTE, VERB[key].name) if key in VERB else ""
     if unbound:
         session.log_key(key, f"{verb} is unavailable — {unbound}")
+        return True
+    if principal_refusal:
+        session.log_key(key, f"{verb} is unavailable — {principal_refusal}")
         return True
     return False
 
