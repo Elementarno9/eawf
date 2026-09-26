@@ -16,16 +16,22 @@ daemon named (3); it applies the gap and lands on the daemon's cursor, or holds 
 refusal until an operator accepts the repair and a whole projection is fetched (4);
 and it restores the selection by stable id, reporting a selection that is gone rather
 than sliding onto a neighbour (5). It reconciles every operation it sent and never heard
-back about by sending it again under its own operation id (6): the daemon files a write
-under that id, so the second send answers with what the first one did rather than
-writing twice, and an operation whose answer is lost again simply stays outstanding.
+back about (6): a Run control whose line the replay carries is settled from that patch,
+because the daemon commits each control line at an ordinal of its own and names the
+request it belongs to, so nothing is asked twice; any other operation is sent again
+under its own operation id, which the daemon files the write under, so the second send
+answers with what the first one did rather than writing twice, and an operation whose
+answer is lost again simply stays outstanding.
 Step 7 -- a clean load and a replayed projection at one cursor digest alike -- holds
 because the replay rebuilds through the daemon's own projection builder rather than
 digesting rows here.
 
 The seam is also the one way a console verb reaches the daemon. A verb is addressed from
 the projection rows the seam holds, so a write names the revision the operator was shown,
-and is sent through the same binding every read uses.
+and is sent through the same binding every read uses. An answer cites the operator's
+evidence receipt, and a receipt records one answer: once it has been sent for one pending
+action, an answer to any other is refused unsent rather than filed under a receipt that
+already speaks for something else.
 
 A count is the other thing the seam answers, because only the seam knows what the link
 can vouch for: outside a live and complete projection a count is labelled rather than
@@ -77,6 +83,8 @@ from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_MET
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
 from eawf.surfaces.tui.console.operations import (
+    NO_PRINCIPAL_REASON,
+    AnswerRequest,
     ConsoleOperation,
     OperationLedger,
     OperationResult,
@@ -230,6 +238,7 @@ class ProjectionSeam:
         self._backstop_ticks = 0
         self._operator = operator
         self._operations = OperationLedger()
+        self._answered_under: dict[str, str] = {}
         self._binding = StateBinding(
             state_path,
             StateBindingCallbacks(
@@ -250,6 +259,11 @@ class ProjectionSeam:
     def route(self) -> str:
         """Return the console route key on screen."""
         return self._route
+
+    @property
+    def operator(self) -> Operator | None:
+        """Return who the console's writes are attributed to; ``None`` when nobody."""
+        return self._operator
 
     @property
     def connection(self) -> ConnectionValue:
@@ -490,6 +504,7 @@ class ProjectionSeam:
         gap = negotiation.gap
         assert gap is not None, "a replay always states the range it closes"
         self._refuse_patches_outside(patches, negotiation=negotiation)
+        read_back = self._settle_from_patches(patches)
         self._adopt(
             apply_patches(
                 held,
@@ -500,7 +515,8 @@ class ProjectionSeam:
             )
         )
         self._drop_hidden()
-        return self._outcome(negotiation, applied=len(patches), reconciled=await self._reconcile())
+        reconciled = read_back + await self._reconcile()
+        return self._outcome(negotiation, applied=len(patches), reconciled=reconciled)
 
     @property
     def outstanding(self) -> tuple[ConsoleOperation, ...]:
@@ -528,10 +544,7 @@ class ProjectionSeam:
                 operation_id=None,
                 target=request.target,
                 status=OperationStatus.REFUSED,
-                detail=(
-                    "the console has no operator principal to act as — nothing was sent; "
-                    "relaunch with --actor (and --receipt-ref to answer)"
-                ),
+                detail=f"{NO_PRINCIPAL_REASON} (and --receipt-ref to answer) — nothing was sent",
             )
         row = self._row(request.target)
         if row is None:
@@ -541,13 +554,46 @@ class ProjectionSeam:
                 status=OperationStatus.REFUSED,
                 detail=f"{request.target} is in no projection the console holds — nothing was sent",
             )
+        spent = self._spent_receipt(request)
+        if spent is not None:
+            return spent
         addressed = address(
             request, urn=row.urn, revision=int(row.revision), operator=self._operator
         )
         if isinstance(addressed, OperationResult):
             return addressed
+        receipt = self._operator.receipt_ref
+        if isinstance(request, AnswerRequest) and receipt is not None:
+            self._answered_under[receipt] = request.target
         self._operations.open(addressed)
-        return await self._send(addressed)
+        result = await self._send(addressed)
+        if result.status is OperationStatus.REFUSED and receipt is not None:
+            # a refusal wrote nothing, so the receipt still records no answer
+            self._answered_under.pop(receipt, None)
+        return result
+
+    def _spent_receipt(self, request: VerbRequest) -> OperationResult | None:
+        """Refuse an answer whose receipt already records the answer to another action.
+
+        Returns:
+            The refusal, or ``None`` when the request is not an answer or its receipt is
+            unspent or was spent on this same action, which a retry answers again.
+        """
+        receipt = self._operator.receipt_ref if self._operator is not None else None
+        if not isinstance(request, AnswerRequest) or receipt is None:
+            return None
+        answered = self._answered_under.get(receipt)
+        if answered is None or answered == request.target:
+            return None
+        return OperationResult(
+            operation_id=None,
+            target=request.target,
+            status=OperationStatus.REFUSED,
+            detail=(
+                f"receipt {receipt} already records the answer to {answered} — each answer "
+                "needs an evidence receipt of its own; nothing was sent"
+            ),
+        )
 
     async def _send(self, operation: ConsoleOperation) -> OperationResult:
         """Send *operation* under its own id and settle the ledger with the answer.
@@ -580,6 +626,30 @@ class ProjectionSeam:
     async def _reconcile(self) -> tuple[OperationResult, ...]:
         """Ask the daemon again for every outstanding operation, by its own id."""
         return tuple([await self._send(op) for op in self._operations.outstanding()])
+
+    def _settle_from_patches(self, patches: tuple[KeyedPatch, ...]) -> tuple[OperationResult, ...]:
+        """Settle each outstanding Run control whose line the replay carries, from that line.
+
+        A control is sent under its request id, and the daemon marks each line it commits
+        for that request with the id and the disposition it reached, so the latest such
+        line is the answer the console lost. Nothing is sent for it.
+        """
+        reached: dict[str, str] = {}
+        for patch in patches:
+            for entry in patch.entries:
+                if entry.control is not None:
+                    reached[entry.control.control_request_ref] = entry.control.disposition
+        results: list[OperationResult] = []
+        for operation in self._operations.outstanding():
+            disposition = reached.get(operation.operation_id)
+            if disposition is None:
+                continue
+            result = settled(operation, {"disposition": disposition})
+            self._operations.settle(result)
+            results.append(result)
+        if results:
+            logger.info(f"reconnect settled from the replay operations={len(results)}")
+        return tuple(results)
 
     def _row(self, key: str) -> ProjectionRow | None:
         """Return the held row keyed *key*, the visible route's first."""

@@ -35,8 +35,12 @@ def go_rows(view: View) -> list[str]:
 
 def action_rows(view: View) -> list[str]:
     """Return the action drawer: the route's verbs, refused ones with their live reasons."""
-    s, fx = view.session, view.fixture
-    return menu_rows(menu_verbs(s, fx), guard=lambda v: verb_available(s, fx, v), w=view.w)
+    s, fx, refusal = view.session, view.fixture, view.principal_refusal
+    return menu_rows(
+        menu_verbs(s, fx),
+        guard=lambda v: verb_available(s, fx, v, principal_refusal=refusal),
+        w=view.w,
+    )
 
 
 def _inspected(session: Session, fixture: Fixture) -> str:

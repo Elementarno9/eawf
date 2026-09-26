@@ -14,6 +14,7 @@ import re
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
@@ -276,14 +277,18 @@ def _question_key(ctx: Ctx, k: str) -> None:
     s, fx = ctx.s, ctx.fixture
     q = att.question_row(s, fx)
     if k in ("1", "2", "3"):
-        if att.gated(s, fx, key=k, verb="answering", row=q):
+        if att.gated(
+            s, fx, key=k, verb="answering", row=q, principal_refusal=ctx.principal_refusal
+        ):
             return
         s.overlay = None
         choice = int(k) - 1
         answer = AnswerRequest(target=q.id, option_id=QUESTION_OPTIONS[choice])
         _send_verb(ctx, k, answer, f"answer · {ANSWERS[choice]} ·")
     elif k == "x":
-        if att.gated(s, fx, key="x", verb="decline", row=q):
+        if att.gated(
+            s, fx, key="x", verb="decline", row=q, principal_refusal=ctx.principal_refusal
+        ):
             return
         s.verb = "x"
         s.sel_id = q.id
@@ -301,7 +306,9 @@ def _pause_key(ctx: Ctx, k: str) -> None:
     s, fx = ctx.s, ctx.fixture
     target = _PAUSE_TARGETS.get(k)
     if target is not None:
-        if att.gated(s, fx, key=k, verb=target["verb"], row=None):
+        if att.gated(
+            s, fx, key=k, verb=target["verb"], row=None, principal_refusal=ctx.principal_refusal
+        ):
             return
         s.c_target = dict(target)
         s.overlay = "consequence"
@@ -386,7 +393,7 @@ def _menu_key(ctx: Ctx, k: str) -> bool:
     if att.is_light(verb):
         fire_light(ctx, verb, k)
         return True
-    check = att.verb_available(s, fx, verb)
+    check = att.verb_available(s, fx, verb, principal_refusal=ctx.principal_refusal)
     if not check.ok:
         ctx.log(k, f"refused: {check.why}")
         return True
@@ -539,27 +546,45 @@ def _send_verb(ctx: Ctx, k: str, request: VerbRequest, verb: str) -> None:
 
 
 def _confirm(ctx: Ctx) -> None:
-    """Confirm the consequence card: its verb is sent to the daemon, or refused with why."""
-    s, fx = ctx.s, ctx.fixture
+    """Confirm the consequence card: its verb is sent to the daemon, or refused with why.
+
+    An answer is addressed only to the selected row of the Attention projection the
+    link holds. The prototype registers are never read here: a console holding them and
+    no projection has nothing it could answer, so it sends nothing.
+    """
+    s = ctx.s
     s.overlay = None
     target = s.c_target
     if target:
         s.c_target = None
         _confirm_target(ctx, target)
         return
-    rows = att.attn_list(s, fx) if s.route == att.ATTENTION_ROUTE else []
-    register = fx.proto.attention
-    action = rows[s.sel] if s.sel < len(rows) else (register[0] if register else None)
-    if action is None:
-        ctx.log("Enter", "no action is held here — nothing was sent")
+    held = ctx.attention
+    row = _selected_row(s, held.rows) if held is not None else None
+    if row is None:
+        ctx.log("Enter", "no attention row is held here — nothing was sent")
         return
+    action_id = row.key
     verb = att.VERB[s.verb or "a"]
     option = ANSWER_OPTIONS.get(verb.name)
     if option is None:
         refusal = binding_refusal(att.ATTENTION_ROUTE, verb.name)
-        ctx.log("Enter", f"{verb.name} {action.id} refused — {refusal}")
+        ctx.log("Enter", f"{verb.name} {action_id} refused — {refusal}")
         return
-    _send_verb(ctx, "Enter", AnswerRequest(target=action.id, option_id=option), verb.name)
+    _send_verb(ctx, "Enter", AnswerRequest(target=action_id, option_id=option), verb.name)
+
+
+def _selected_row(s: Session, rows: tuple[ProjectionRow, ...]) -> ProjectionRow | None:
+    """Return the held row the cursor selects: by stable id, else by offset.
+
+    A selection whose id the rows no longer hold selects nothing, rather than sliding
+    onto whichever row now sits at its offset.
+    """
+    if not rows:
+        return None
+    if s.sel_id is not None:
+        return next((row for row in rows if row.key == s.sel_id), None)
+    return rows[min(max(s.sel, 0), len(rows) - 1)]
 
 
 def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
@@ -1088,7 +1113,7 @@ def _attention_verb(ctx: Ctx, k: str, pane: bool) -> None:
     rows = att.attn_list(s, fx)
     row = rows[s.sel] if s.sel < len(rows) else None
     name = att.VERB[k].name
-    if att.gated(s, fx, key=k, verb=name, row=row):
+    if att.gated(s, fx, key=k, verb=name, row=row, principal_refusal=ctx.principal_refusal):
         return
     s.verb = k
     s.c_target = None

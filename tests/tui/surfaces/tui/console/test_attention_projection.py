@@ -212,9 +212,13 @@ def test_a_pause_transition_produces_a_keyed_patch_for_the_attention_route() -> 
 
 
 def test_the_patch_carries_only_the_three_columns_the_entry_shape_states() -> None:
-    """The entry shape is untouched: urn, revision and status, and nothing per route."""
+    """The entry shape is untouched: urn, revision and status, and nothing per route.
+
+    The control mark is the one optional column, and only a Run control line fills it.
+    """
     entry = patches_for_event(_pause_envelope())[0].entries[0]
-    assert set(entry.model_dump()) == {"key", "urn", "collection", "revision", "status"}
+    assert set(entry.model_dump()) == {"key", "urn", "collection", "revision", "status", "control"}
+    assert entry.control is None
 
 
 def test_applying_the_pause_patch_opens_no_overlay_and_moves_no_focus() -> None:
