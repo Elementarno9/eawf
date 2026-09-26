@@ -9,8 +9,6 @@ Covers the typed criteria CR-1..CR-3 of the FS02 spec:
   JUDGED routes to T6_APPROVAL (HUMAN locus) or T7_JURY (JURY locus).
 * CR-2 (raises, contract): a ``forall`` quantifier with a non-hypothesis
   locus raises ``ValueError`` (substring "hypothesis").
-* CR-3 (raises, contract): a JUDGED response with an empty ``jury_reason``
-  raises ``ValueError`` (substring "jury_reason").
 * error-path: a clause carrying a ``gate_ref`` that names an unknown gate
   kind routes to ``_tier_for_gate_kind``, which raises ``ValueError``
   (substring "gate kind"). A ``gate_ref`` naming a recognised kind instead
@@ -96,13 +94,6 @@ def test_assign_oracle_tier_forall_hypothesis_locus_returns_tier() -> None:
     """A forall quantifier with the hypothesis locus returns its table tier."""
     clause = _clause(ObserveVerb.HOLDS_FOR_ALL, locus=ProofLocus.HYPOTHESIS, quantifier="forall")
     assert assign_oracle_tier(clause) is OracleTier.T4_CONTRACT
-
-
-def test_assign_oracle_tier_judged_empty_jury_reason_raises() -> None:
-    """JUDGED with an empty jury_reason raises ValueError."""
-    clause = _clause(ObserveVerb.JUDGED, locus=ProofLocus.JURY, jury_reason=None)
-    with pytest.raises(ValueError, match="jury_reason"):
-        assign_oracle_tier(clause)
 
 
 def test_assign_oracle_tier_gate_ref_unknown_kind_raises() -> None:

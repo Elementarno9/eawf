@@ -17,7 +17,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-__all__ = ["ManagedBlockError", "render_managed_block", "splice_managed_block"]
+__all__ = [
+    "ManagedBlockError",
+    "managed_block_lines",
+    "render_managed_block",
+    "splice_managed_block",
+]
 
 
 class ManagedBlockError(ValueError):
@@ -122,3 +127,26 @@ def splice_managed_block(existing: bytes, *, begin: str, end: str, block: bytes)
         return existing + _append_separator(existing) + block
     start, stop = span
     return existing[:start] + block + existing[stop:]
+
+
+def managed_block_lines(existing: bytes, *, begin: str, end: str) -> tuple[str, ...] | None:
+    """Return the body lines of the one managed block, or ``None`` when absent.
+
+    Args:
+        existing: The current file bytes.
+        begin: The begin marker line.
+        end: The end marker line.
+
+    Returns:
+        The lines between the markers, without terminators.
+
+    Raises:
+        ManagedBlockError: When the markers in *existing* are not exactly one
+            ordered pair.
+    """
+    span = _block_span(existing, begin=begin, end=end)
+    if span is None:
+        return None
+    start, stop = span
+    lines = existing[start:stop].decode("utf-8").splitlines()
+    return tuple(lines[1:-1])

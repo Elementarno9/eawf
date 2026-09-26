@@ -70,12 +70,15 @@ from eawf.platform.rules.compile import (
 from eawf.platform.rules.compose import BuiltinRuleProvider
 from eawf.platform.rules.conduct import load_conduct_rules
 from eawf.platform.rules.host_facts import (
+    CapScope,
     HostFactRegistry,
     ProjectionKind,
     StaleHostFact,
+    UnmeasuredDeliveryFact,
     load_host_facts,
     smallest_certified_cap,
     stale_host_facts,
+    unmeasured_delivery_facts,
 )
 from eawf.platform.rules.loader import RULE_SOURCE_PATH, load_rule_source
 from eawf.platform.rules.modules import (
@@ -205,10 +208,15 @@ class ProjectionRecord(RuleModel):
             only for projections rendering equivalent rule sets.
         output_digest: Digest of the rendered bytes.
         byte_count: Rendered size in UTF-8 bytes.
+        token_count: Rendered size in the budget gate's approximate
+            tokens; no runtime tokenizer is certified, so this is the one
+            token measure every runtime is declared against.
         line_count: Rendered line count.
         cap_bytes: The byte cap the projection was held to: the smallest
             certified default among the runtimes that read it.
         cap_runtime: The runtime that certified ``cap_bytes``.
+        cap_scope: Whether ``cap_runtime`` applies the cap per file or as a
+            combined budget across its document chain.
         uncertified_readers: Runtimes that read the projection with no
             certified cap of their own; ``cap_bytes`` does not certify
             delivery to them.
@@ -222,9 +230,11 @@ class ProjectionRecord(RuleModel):
     selection_digest: Sha256DigestStr
     output_digest: Sha256DigestStr
     byte_count: PositiveInt
+    token_count: PositiveInt
     line_count: PositiveInt
     cap_bytes: PositiveInt
     cap_runtime: RuntimeName
+    cap_scope: CapScope
     uncertified_readers: tuple[RuntimeName, ...] = ()
     headroom_bytes: NonNegativeInt
     rule_spans: tuple[RuleSpan, ...]
@@ -243,6 +253,9 @@ class ProjectionManifest(RuleModel):
             module views and the role carriers the same render wrote.
         stale_host_facts: Certified host facts past their re-measure age on
             the day of the render.
+        unmeasured_delivery_facts: The delivery facts no runtime has
+            measured, so a reader of the manifest sees which parts of
+            delivery the render could not check.
     """
 
     schema_version: Literal[1] = 1
@@ -251,6 +264,7 @@ class ProjectionManifest(RuleModel):
     projections: tuple[ProjectionRecord, ...]
     generated: tuple[str, ...] = ()
     stale_host_facts: tuple[StaleHostFact, ...] = ()
+    unmeasured_delivery_facts: tuple[UnmeasuredDeliveryFact, ...] = ()
 
     @property
     def host_fact_warnings(self) -> tuple[str, ...]:
@@ -441,6 +455,8 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
             has a certified cap.
         RuleProjectionError: When a brief source is unreadable.
         HostFactError: When the shipped host-fact record is untrustworthy.
+        RuleViewStartupImportError: When a runtime's shim would import a
+            module view.
     """
     # The shim renderer lives with the runtime adapters; importing it lazily
     # keeps that module free to import this package's view refusal.
@@ -459,10 +475,15 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
             kind="policy", graph=policy_graph, brief=brief, index=index, host_facts=host_facts
         ),
     )
-    shim = render_import_shim((POLICY_TARGET,))
+    # A shim imports exactly the projections its runtime reads, so the view
+    # refusal judges the list the shim will hold rather than a constant.
+    targets = {projection.record.kind: projection.record.target for projection in projections}
     generated = (
         *(
-            GeneratedFile(target=record.import_shim, text=shim)
+            GeneratedFile(
+                target=record.import_shim,
+                text=render_import_shim(tuple(targets[kind] for kind in record.reads)),
+            )
             for record in host_facts.records
             if record.import_shim is not None
         ),
@@ -489,6 +510,7 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         projections=tuple(p.record for p in projections),
         generated=tuple(g.target for g in generated),
         stale_host_facts=stale_host_facts(host_facts, today=datetime.now(UTC).date()),
+        unmeasured_delivery_facts=unmeasured_delivery_facts(host_facts),
     )
     return ProjectionPlan(projections=projections, generated=generated, manifest=manifest)
 
@@ -703,6 +725,10 @@ def _render_projection(
         RuleProjectionBudgetError: When the projection exceeds the smallest
             certified cap among its readers, or no reader has one.
     """
+    # The budget gate imports this module's targets, so its counter is
+    # imported here rather than at module load.
+    from eawf.platform.lint.tools.agents_md_budget import count_tokens
+
     target = CARD_TARGET if kind == "card" else POLICY_TARGET
     builder = _TextBuilder()
     builder.add(_brief_text(brief, kind=kind))
@@ -746,9 +772,11 @@ def _render_projection(
         selection_digest=_sha256_text(json.dumps(sorted(builder.rendered), separators=(",", ":"))),
         output_digest=_sha256_text(text),
         byte_count=size,
+        token_count=count_tokens(text),
         line_count=text.count("\n"),
         cap_bytes=cap.cap_bytes,
         cap_runtime=cap.runtime,
+        cap_scope=cap.scope,
         uncertified_readers=cap.uncertified,
         headroom_bytes=cap.cap_bytes - size,
         rule_spans=tuple(

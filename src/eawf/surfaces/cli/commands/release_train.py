@@ -98,6 +98,12 @@ def release_receipts(
             help="JSON object with an 'acknowledgements' list accepting the waivers.",
         ),
     ] = None,
+    proof_path: Annotated[
+        str | None,
+        typer.Option(
+            "--proof-path", help="PATH the proof commands run with (default: the daemon's)."
+        ),
+    ] = None,
 ) -> None:
     """Prove every required gate of one checkpoint on its pinned source.
 
@@ -117,6 +123,8 @@ def release_receipts(
         params: dict[str, Any] = {"version": version, "waiver_count": waiver_count}
         if ttl_seconds is not None:
             params["ttl_seconds"] = ttl_seconds
+        if proof_path is not None:
+            params["proof_path"] = proof_path
         if waivers_file is not None:
             params["waivers"] = _read_json_document(waivers_file, label="waiver rows")["waivers"]
         if acknowledgements_file is not None:

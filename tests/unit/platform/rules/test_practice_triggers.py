@@ -18,6 +18,7 @@ from eawf.platform.rules.triggers import (
     PRACTICE_TRIGGER_EVENT_TYPE,
     PRACTICE_TRIGGERS,
     PracticeTrigger,
+    PracticeTriggerError,
     evaluate_practice_triggers,
     fire_practice_triggers,
     resolve_trigger_runtime,
@@ -180,17 +181,34 @@ def test_run_skill_no_decision_point_writes_nothing(state_path: Path) -> None:
     assert envelope.footer.persisted_store_records == []
 
 
-def test_run_skill_trigger_failure_keeps_the_envelope(
+def test_run_skill_trigger_failure_raises_a_typed_error(
     state_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """A fired trigger that cannot be recorded raises instead of only logging."""
+
     def _raise(**_: object) -> None:
-        raise RuntimeError("store unavailable")
+        raise OSError("store unavailable")
 
-    monkeypatch.setattr("eawf.platform.rules.triggers.fire_practice_triggers", _raise)
-    envelope = run_skill(_StubSkill("needs_user", _question("a", None)), _ctx())
+    monkeypatch.setattr("eawf.workflow.skills._common.emit_event", _raise)
+    with pytest.raises(PracticeTriggerError, match="practice_trigger_unrecorded") as caught:
+        run_skill(_StubSkill("needs_user", _question("a", None)), _ctx())
 
-    assert envelope.header.status == "needs_user"
-    assert not [w for w in envelope.footer.warnings if w.code == PRACTICE_MISS_CODE]
+    assert isinstance(caught.value.__cause__, OSError)
+    assert read_conduct_deviations(state_path) == ()
+
+
+def test_run_skill_trigger_failure_without_a_fired_trigger_is_silent(
+    state_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A broken store costs nothing when no trigger fires, since nothing is recorded."""
+
+    def _raise(**_: object) -> None:
+        raise OSError("store unavailable")
+
+    monkeypatch.setattr("eawf.workflow.skills._common.emit_event", _raise)
+    envelope = run_skill(_StubSkill("ok", "plain markdown"), _ctx())
+
+    assert envelope.header.status == "ok"
 
 
 # Declaration invariants.
@@ -309,7 +327,8 @@ def test_fire_practice_triggers_unknown_obligation_raises(
         "eawf.platform.rules.triggers.evaluate_practice_triggers.__kwdefaults__",
         {"triggers": (bogus,)},
     )
-    with pytest.raises(ValidationError, match="not a compiled conduct obligation"):
+    with pytest.raises(PracticeTriggerError, match="not a compiled conduct obligation") as caught:
         fire_practice_triggers(
             status="needs_user", body="", scope_id=_SCOPE, run_id=_SESSION, state_path=state_path
         )
+    assert isinstance(caught.value.__cause__, ValidationError)

@@ -15,9 +15,9 @@ What each lens catches, given what :class:`PlanBody` and
   two Tasks in different Batches that both touch the same path are
   caught the same way two Tasks in one Batch are.
 - criterion fidelity: a criterion whose response clause cannot resolve an
-  oracle tier -- a ``JUDGED`` clause with no ``jury_reason``, a
-  ``forall`` claim proved somewhere other than the hypothesis locus, or a
-  ``gate_ref`` naming a gate kind nothing recognises.
+  oracle tier -- a ``forall`` claim proved somewhere other than the
+  hypothesis locus, or a ``gate_ref`` naming a gate kind nothing
+  recognises.
 - role authority: a Task whose declared ``run_purpose`` mutates a
   repository (:data:`~eawf.kernel.state.epoch2.run.MUTATING_PURPOSES`)
   but names no ``write_claims``. A task-scoped Run is the only
@@ -160,8 +160,8 @@ def _criterion_fidelity_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
                             f"assignment: {exc}"
                         ),
                         remediation=(
-                            "Give the response clause a jury_reason, a recognised gate "
-                            "kind, or a matching quantifier and locus."
+                            "Give the response clause a recognised gate kind, or a "
+                            "matching quantifier and locus."
                         ),
                     )
                 )

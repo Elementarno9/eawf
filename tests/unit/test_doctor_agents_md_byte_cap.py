@@ -271,7 +271,9 @@ def test_policy_check_over_cap_fails_naming_dropped_blocks(
 
     spans = block_byte_spans(doc)
     cut_start = next(s.start_byte for s in spans if s.id == "cut_one")
-    cap = CertifiedCap(runtime="codex", cap_bytes=cut_start, readers=("codex",), uncertified=())
+    cap = CertifiedCap(
+        runtime="codex", cap_bytes=cut_start, scope="combined", readers=("codex",), uncertified=()
+    )
     monkeypatch.setattr(checks_steering_cap, "smallest_certified_cap", lambda *_a, **_k: cap)
 
     result = checks.check_agents_override_byte_cap(workspace=tmp_path)
@@ -320,7 +322,9 @@ def test_policy_check_malformed_markers_over_cap_still_fails(
     """A broken marker cannot name blocks, but the over-cap verdict stands."""
     broken = "<!-- BEGIN EAWF:managed id=x version=1.0 hash=0123456789abcdef -->\nbody\n"
     (tmp_path / "AGENTS.override.md").write_text(broken, encoding="utf-8")
-    cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    cap = CertifiedCap(
+        runtime="codex", cap_bytes=10, scope="combined", readers=("codex",), uncertified=()
+    )
     monkeypatch.setattr(checks_steering_cap, "smallest_certified_cap", lambda *_a, **_k: cap)
 
     result = checks.check_agents_override_byte_cap(workspace=tmp_path)

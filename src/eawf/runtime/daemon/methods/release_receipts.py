@@ -89,6 +89,8 @@ class ProduceReceiptsParams(BaseModel):
         waiver_count: Gate waivers recorded against the checkpoint.
         waivers: The counted waiver rows the waiver-block gate reads.
         acknowledgements: The operator acceptances of those waivers.
+        proof_path: The ``PATH`` the proof commands run with; ``None``
+            inherits the daemon's.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -97,6 +99,7 @@ class ProduceReceiptsParams(BaseModel):
     waiver_count: Annotated[int, Field(ge=0)] = 0
     waivers: tuple[ReleaseWaiver, ...] = ()
     acknowledgements: tuple[WaiverAcknowledgement, ...] = ()
+    proof_path: str | None = None
 
 
 class AdvanceTrainParams(BaseModel):
@@ -218,7 +221,9 @@ def _produce(
         waivers=args.waivers,
         acknowledgements=args.acknowledgements,
     )
-    with pinned_worktree(state_path.parent.parent, source_sha) as run_proof:
+    with pinned_worktree(
+        state_path.parent.parent, source_sha, proof_path=args.proof_path
+    ) as run_proof:
         return produce_checkpoint_receipts(
             release,
             required=config.gates.required,

@@ -11,6 +11,7 @@ import yaml
 
 from eawf.kernel.config.providers import ProviderRegistry, load_provider_configuration
 from eawf.kernel.runtime.compiled import canonical_digest
+from eawf.kernel.runtime.host_facts import DELIVERY_FACT_NAMES, HOST_RUNTIMES
 from eawf.platform.rules import (
     CONDUCT_MODULE_REF,
     RuleModuleEntry,
@@ -42,6 +43,7 @@ from eawf.platform.rules.render import (
     render_rule_projections,
     rule_source_present,
 )
+from eawf.surfaces.cli.commands import sync
 from eawf.surfaces.render import regions
 
 _CONSTITUTION = "Keep the release notes in the changelog under the version heading."
@@ -519,3 +521,58 @@ def test_refresh_rule_projections_with_rule_source_renders(repo: Path) -> None:
         ".ea/rules/views/eawf.craft.python.md",
         *_builtin_carriers(),
     )
+
+
+# ---- token size, cap scope and delivery facts in the manifest ---------------
+
+
+def test_render_rule_projections_manifest_records_tokens_cap_scope_and_delivery_facts(
+    repo: Path,
+) -> None:
+    manifest = render_rule_projections(repo).manifest
+    for record in manifest.projections:
+        text = (repo / record.target).read_text(encoding="utf-8")
+        assert record.token_count == len(text.split())
+        assert record.cap_runtime == "codex"
+        assert record.cap_scope == "combined"
+    rows = [(row.runtime, row.fact) for row in manifest.unmeasured_delivery_facts]
+    assert rows == [(runtime, fact) for runtime in HOST_RUNTIMES for fact in DELIVERY_FACT_NAMES]
+    assert all(row.reason for row in manifest.unmeasured_delivery_facts)
+
+
+# ---- sync ignores the policy file in a repository initialised earlier ------
+
+
+_OLD_BLOCK = (
+    "node_modules/\n# BEGIN EAWF:gitignore\nCLAUDE.md\n/custom/state.lock\n# END EAWF:gitignore\n"
+)
+
+
+def test_sync_adds_the_policy_ignore_to_a_block_written_before_it_shipped(repo: Path) -> None:
+    gitignore = repo / ".gitignore"
+    gitignore.write_text(_OLD_BLOCK, encoding="utf-8")
+
+    added = sync._ignore_rule_projections(repo, rules=True)
+
+    lines = gitignore.read_text(encoding="utf-8").splitlines()
+    assert POLICY_TARGET in added
+    assert POLICY_TARGET in lines
+    assert lines[0] == "node_modules/"
+    assert "/custom/state.lock" in lines
+    assert lines.count("CLAUDE.md") == 1
+    assert sync._ignore_rule_projections(repo, rules=True) == []
+
+
+def test_sync_leaves_the_gitignore_alone_without_a_rule_source(tmp_path: Path) -> None:
+    gitignore = tmp_path / ".gitignore"
+    gitignore.write_text(_OLD_BLOCK, encoding="utf-8")
+
+    assert sync._ignore_rule_projections(tmp_path, rules=False) == []
+    assert gitignore.read_text(encoding="utf-8") == _OLD_BLOCK
+
+
+def test_sync_refuses_a_gitignore_with_unpaired_markers(repo: Path) -> None:
+    gitignore = repo / ".gitignore"
+    gitignore.write_text("# BEGIN EAWF:gitignore\nCLAUDE.md\n", encoding="utf-8")
+    with pytest.raises(sync.cli_errors.ValidationError, match=r"\.gitignore not updated"):
+        sync._ignore_rule_projections(repo, rules=True)

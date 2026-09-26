@@ -31,7 +31,12 @@ from pydantic import ValidationError
 
 from eawf import __version__
 from eawf.kernel.spec.campaign_driver import RoundFindings
-from eawf.kernel.state.enums import ClaimStatus, OpenQuestionStatus, StoreKind
+from eawf.kernel.state.enums import (
+    ClaimStatus,
+    OpenQuestionDropReason,
+    OpenQuestionStatus,
+    StoreKind,
+)
 from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
@@ -260,6 +265,76 @@ def test_resolve_question_drop_marks_dropped_and_clears_blocking(tmp_path: Path)
         assert row.blocking is False
 
     _run(body)
+
+
+def test_resolve_question_drop_writes_the_chosen_reason(tmp_path: Path) -> None:
+    """A drop records the caller's reason; an unreasoned drop reads out of scope."""
+    ctx, state_path = _build_ctx(tmp_path)
+
+    async def body() -> None:
+        moot = (await add_question(ctx, {"title": "moot"}))["question_id"]
+        plain = (await add_question(ctx, {"title": "plain"}))["question_id"]
+        await resolve_question(ctx, {"question_id": moot, "drop": True, "drop_reason": "moot"})
+        await resolve_question(ctx, {"question_id": plain, "drop": True})
+        state = load_state(state_path)
+        assert state.open_questions is not None
+        assert state.open_questions[moot].drop_reason is OpenQuestionDropReason.MOOT
+        assert state.open_questions[plain].drop_reason is OpenQuestionDropReason.OUT_OF_SCOPE
+        assert state.open_questions[moot].superseded_by_question_ref is None
+
+    _run(body)
+
+
+def test_resolve_question_drop_writes_the_successor_ref(tmp_path: Path) -> None:
+    """Naming a successor writes the ref and reads the drop as superseded."""
+    ctx, state_path = _build_ctx(tmp_path)
+
+    async def body() -> None:
+        old = (await add_question(ctx, {"title": "old framing"}))["question_id"]
+        new = (await add_question(ctx, {"title": "new framing"}))["question_id"]
+        await resolve_question(
+            ctx, {"question_id": old, "drop": True, "superseded_by_question_ref": new}
+        )
+        state = load_state(state_path)
+        assert state.open_questions is not None
+        row = state.open_questions[old]
+        assert row.status is OpenQuestionStatus.DROPPED
+        assert row.drop_reason is OpenQuestionDropReason.SUPERSEDED
+        assert row.superseded_by_question_ref == new
+
+    _run(body)
+
+
+@pytest.mark.parametrize(
+    ("update", "match"),
+    [
+        ({"superseded_by_question_ref": "OQ-missing"}, "unknown successor"),
+        ({"superseded_by_question_ref": "OQ-a"}, "unknown successor"),
+        ({"superseded_by_question_ref": "OQ-b", "drop_reason": "moot"}, "superseded_by"),
+        ({"drop_reason": "superseded"}, "superseded_by"),
+    ],
+)
+def test_resolve_question_refuses_a_mismatched_successor(
+    tmp_path: Path, update: dict[str, str], match: str
+) -> None:
+    """A missing, self or reason-mismatched successor is refused before any write."""
+    ctx, state_path = _build_ctx(tmp_path)
+
+    async def body() -> None:
+        await add_question(ctx, {"title": "a", "question_id": "OQ-a"})
+        await add_question(ctx, {"title": "b", "question_id": "OQ-b"})
+
+    _run(body)
+    state = load_state(state_path)
+    params = ResolveQuestionParams.model_validate({"question_id": "OQ-a", "drop": True, **update})
+    with pytest.raises(ValueError, match=match):
+        _apply_resolve_question(state, params)
+
+
+def test_resolve_question_refuses_drop_fields_without_drop() -> None:
+    """A reason or successor on an answer is refused at the params boundary."""
+    with pytest.raises(ValidationError, match="require drop"):
+        ResolveQuestionParams.model_validate({"question_id": "OQ-a", "drop_reason": "moot"})
 
 
 def test_resolve_question_unknown_id_raises(tmp_path: Path) -> None:

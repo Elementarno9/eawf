@@ -7,6 +7,11 @@
 # one machine has configured, and it names the evidence of the boundary, the
 # day it was measured and how many days that measurement is trusted before a
 # render reports it stale.
+#
+# A certified project-document cap states its scope: per_file when the runtime
+# applies it to each file on its own, combined when it is one budget across the
+# global document and every project document in the chain. The four delivery
+# facts have no measured form yet, so each is recorded as uncertified.
 schema_version: 1
 claude:
   runtime: claude
@@ -16,6 +21,7 @@ claude:
     status: uncertified
     measured_on: claude
     reason: no truncation boundary of the project document has been measured on this runtime
+  project_document_cap_scope: null
   context_window_tokens:
     status: uncertified
     measured_on: claude
@@ -28,10 +34,27 @@ claude:
     status: uncertified
     measured_on: claude
     reason: no tool-output cap measurement has been recorded for this runtime
+  skill_listing_budget:
+    status: uncertified
+    measured_on: claude
+    reason: no skill-listing budget, per-entry cap or drop order has been measured on this runtime
+  compaction_survival:
+    status: uncertified
+    measured_on: claude
+    reason: no re-read of a projection after compaction has been measured on this runtime
+  subagent_instruction_inheritance:
+    status: uncertified
+    measured_on: claude
+    reason: no projection delivery to a dispatched subagent has been measured on this runtime
+  subagent_tool_availability:
+    status: uncertified
+    measured_on: claude
+    reason: no dispatched subagent's received tools have been measured on this runtime
 codex:
   runtime: codex
-  # The policy projection replaces the card when present; a checkout that has
-  # not been synced yet delivers the card instead, so both are held to the cap.
+  # Codex loads exactly one of these: the policy projection replaces the card
+  # when present, and a checkout that has not been synced yet delivers the card
+  # instead. Each is held to the cap on its own; the two are never summed.
   reads: [card, policy]
   import_shim: null
   project_document_cap_bytes:
@@ -44,6 +67,7 @@ codex:
       the cap received the complete final rule
     measured_at: 2026-08-12
     remeasure_after_days: 90
+  project_document_cap_scope: combined
   context_window_tokens:
     status: uncertified
     measured_on: codex
@@ -56,6 +80,22 @@ codex:
     status: uncertified
     measured_on: codex
     reason: no tool-output cap measurement has been recorded for this runtime
+  skill_listing_budget:
+    status: uncertified
+    measured_on: codex
+    reason: no skill-listing budget, per-entry cap or drop order has been measured on this runtime
+  compaction_survival:
+    status: uncertified
+    measured_on: codex
+    reason: no re-read of a projection after compaction has been measured on this runtime
+  subagent_instruction_inheritance:
+    status: uncertified
+    measured_on: codex
+    reason: no projection delivery to a dispatched subagent has been measured on this runtime
+  subagent_tool_availability:
+    status: uncertified
+    measured_on: codex
+    reason: no dispatched subagent's received tools have been measured on this runtime
 opencode:
   runtime: opencode
   reads: [card]
@@ -64,6 +104,7 @@ opencode:
     status: uncertified
     measured_on: opencode
     reason: no truncation boundary of the project document has been measured on this runtime
+  project_document_cap_scope: null
   context_window_tokens:
     status: uncertified
     measured_on: opencode
@@ -76,3 +117,19 @@ opencode:
     status: uncertified
     measured_on: opencode
     reason: no tool-output cap measurement has been recorded for this runtime
+  skill_listing_budget:
+    status: uncertified
+    measured_on: opencode
+    reason: no skill-listing budget, per-entry cap or drop order has been measured on this runtime
+  compaction_survival:
+    status: uncertified
+    measured_on: opencode
+    reason: no re-read of a projection after compaction has been measured on this runtime
+  subagent_instruction_inheritance:
+    status: uncertified
+    measured_on: opencode
+    reason: no projection delivery to a dispatched subagent has been measured on this runtime
+  subagent_tool_availability:
+    status: uncertified
+    measured_on: opencode
+    reason: no dispatched subagent's received tools have been measured on this runtime

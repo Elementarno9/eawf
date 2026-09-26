@@ -199,14 +199,7 @@ def certify_tuple(
                     "expires_at": FAR_FUTURE.isoformat(),
                 }
             ],
-            "runtime_facts": {
-                "context_window_tokens": 200_000,
-                "auto_compaction_threshold_tokens": 150_000,
-                "project_document_cap_bytes": 32_768,
-                "tool_output_cap_tokens": 25_000,
-                "measured_at": NOW.isoformat(),
-                "measurement_method": "observed",
-            },
+            "runtime": "codex",
             "install_trust": "managed",
             "evidence_bundle_ref": BUNDLE_REF,
             "expires_at": FAR_FUTURE.isoformat(),

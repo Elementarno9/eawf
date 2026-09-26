@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated
 import orjson
 import typer
 
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import OpenQuestionDropReason, StoreKind
 from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.commands.draft import install_promote_command
 from eawf.surfaces.cli.flags import GlobalFlags
@@ -488,6 +488,14 @@ def question_resolve(
         bool,
         typer.Option("--drop", help="Mark the question DROPPED (out of scope), not ANSWERED."),
     ] = False,
+    reason: Annotated[
+        OpenQuestionDropReason | None,
+        typer.Option("--reason", help="Why the question is dropped; requires --drop."),
+    ] = None,
+    superseded_by: Annotated[
+        str | None,
+        typer.Option("--superseded-by", help="The successor question id; requires --drop."),
+    ] = None,
 ) -> None:
     """Resolve a blocking / open research-campaign question for the active scope.
 
@@ -496,7 +504,8 @@ def question_resolve(
     write when the daemon is unavailable (CI / one-shot). Resolving flips the
     question to a terminal status (ANSWERED, or DROPPED with ``--drop``) and
     clears its ``blocking`` bit, so a campaign halted on the balanced-autonomy
-    interrupt (a blocking question, D-2) resumes.
+    interrupt (a blocking question, D-2) resumes. A drop records ``--reason``
+    and ``--superseded-by`` when given.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -504,13 +513,16 @@ def question_resolve(
     except errors.CliError as exc:
         errors.emit_error(exc, flags=flags)
         return
-    result = _resolve_question_via_daemon_or_fallback(
-        state_path, question_id=question_id, drop=drop
-    )
+    params: dict[str, object] = {"question_id": question_id, "drop": drop}
+    if reason is not None:
+        params["drop_reason"] = reason.value
+    if superseded_by is not None:
+        params["superseded_by_question_ref"] = superseded_by
+    result = _resolve_question_via_daemon_or_fallback(state_path, params=params)
     if result is None:
         errors.emit_error(
             errors.UserError(
-                f"could not resolve question {question_id!r} (unknown id?)",
+                f"could not resolve question {question_id!r} (unknown id or successor?)",
                 kind="InvalidInput",
             ),
             flags=flags,
@@ -521,35 +533,33 @@ def question_resolve(
 
 
 def _resolve_question_via_daemon_or_fallback(
-    state_path: Path, *, question_id: str, drop: bool
+    state_path: Path, *, params: dict[str, object]
 ) -> dict[str, str] | None:
     """Resolve an open question through the daemon RPC, else a direct state write.
 
     Tries the daemon ``research.resolve_question`` RPC (the canonical writer per
     AGENTS rule 4). On ANY daemon failure -- a connection error or a typed
     rejection -- falls back to a direct ``state_transaction`` write so the verb
-    works offline / in CI. Returns ``None`` when the id names no open question.
+    works offline / in CI; the fallback applies the daemon's own resolve so
+    both paths record the same disposition. Returns ``None`` when the resolve
+    is refused (an unknown id or successor, or a drop field without a drop).
 
     Args:
         state_path: Path to the scope's ``state.json``.
-        question_id: The id of the question to resolve.
-        drop: Mark DROPPED when ``True``, else ANSWERED. Either clears the
-            ``blocking`` bit.
+        params: The ``research.resolve_question`` params without ``repo_root``.
 
     Returns:
         A result dict (``question_id`` / ``status`` / ``scope_id``), or ``None``
-        when the id is unknown.
+        when the resolve is refused.
     """
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
-    params = {
-        "question_id": question_id,
-        "drop": drop,
-        "repo_root": str(state_path.parent.parent),
-    }
     try:
         with DaemonClient() as client:
-            result = client.call("research.resolve_question", params)
+            result = client.call(
+                "research.resolve_question",
+                {**params, "repo_root": str(state_path.parent.parent)},
+            )
         return {
             "question_id": str(result["question_id"]),
             "status": str(result["status"]),
@@ -562,29 +572,22 @@ def _resolve_question_via_daemon_or_fallback(
         logger.debug(f"_resolve_question daemon_fallback cause={exc!r}")
 
     # Offline fallback: write the row directly under portalock.
-    from datetime import UTC, datetime
+    from pydantic import ValidationError
 
-    from eawf.kernel.state.enums import OpenQuestionDropReason, OpenQuestionStatus
+    from eawf.runtime.daemon.methods.research import (
+        ResolveQuestionParams,
+        _apply_resolve_question,
+    )
     from eawf.surfaces.cli._mutation import state_transaction
 
-    status = OpenQuestionStatus.DROPPED if drop else OpenQuestionStatus.ANSWERED
-    drop_reason = OpenQuestionDropReason.OUT_OF_SCOPE if drop else None
-    with state_transaction(state_path) as state:
-        questions = dict(state.open_questions or {})
-        question = questions.get(question_id)
-        if question is None:
-            return None
-        scope_id = question.scope_id
-        questions[question_id] = question.model_copy(
-            update={
-                "status": status,
-                "blocking": False,
-                "drop_reason": drop_reason,
-                "resolved_at": datetime.now(UTC),
-            }
-        )
-        state.open_questions = questions
-    return {"question_id": question_id, "status": status.value, "scope_id": scope_id}
+    try:
+        args = ResolveQuestionParams.model_validate(params)
+        with state_transaction(state_path) as state:
+            result = _apply_resolve_question(state, args)
+    except (ValidationError, ValueError) as exc:
+        logger.debug(f"_resolve_question fallback_refused cause={exc!r}")
+        return None
+    return {key: str(result[key]) for key in ("question_id", "status", "scope_id")}
 
 
 @question_app.command("list")

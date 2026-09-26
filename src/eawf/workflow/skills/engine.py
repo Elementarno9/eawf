@@ -515,8 +515,8 @@ def _practice_triggers(
 ) -> tuple[list[str], list[EnvelopeWarning]]:
     """Evaluate the practice triggers at the decision point *result* reaches.
 
-    Fails open like the prose chokepoint: a trigger that cannot be recorded
-    must not cost the run its envelope.
+    Unlike the prose chokepoint this does not fail open: a trigger that
+    fired but cannot be recorded is a miss nothing would count.
 
     Args:
         skill_name: The canonical skill name (logged for attribution only).
@@ -525,24 +525,25 @@ def _practice_triggers(
 
     Returns:
         The trigger event ids and the miss warnings; both empty when no
-        trigger fired or recording raised.
+        trigger fired.
+
+    Raises:
+        PracticeTriggerError: A fired trigger could not be recorded.
     """
     from eawf.platform.rules.triggers import fire_practice_triggers
 
-    try:
-        outcome = fire_practice_triggers(
-            status=result.status, body=result.body, scope_id=ctx.scope, run_id=ctx.session
-        )
-    except Exception:
-        logger.exception(f"_practice_triggers trigger-raised skill={skill_name}")
-        return [], []
+    outcome = fire_practice_triggers(
+        status=result.status, body=result.body, scope_id=ctx.scope, run_id=ctx.session
+    )
+    logger.debug(f"_practice_triggers skill={skill_name} recorded={len(outcome.records)}")
     return list(outcome.records), list(outcome.warnings)
 
 
 def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     """Execute *skill* against *ctx* and return a fully-populated envelope.
 
-    Lifecycle (always returns; never raises):
+    Lifecycle (returns an envelope unless a drifted body or an unrecorded
+    practice trigger raises in step 4):
 
     1. Capture ``started_at``.
     2. Run :meth:`Skill.probe`. If ``not outcome.ok`` → return
@@ -558,10 +559,10 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
        ``prose_clarity`` footer warning but never flips the status),
        evaluate the practice triggers at the decision point the result
        reaches (see :func:`_practice_triggers`), and return an envelope
-       built from the action result. A drifted dict body
-       raises before the envelope is built; the probe-fail and action-raised
-       paths above are ungated because their bodies are engine-authored
-       strings.
+       built from the action result. A drifted dict body or a fired
+       trigger that cannot be recorded raises before the envelope is
+       built; the probe-fail and action-raised paths above are ungated
+       because their bodies are engine-authored strings.
 
     Args:
         skill: The :class:`Skill` to execute.
@@ -576,6 +577,8 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
         pydantic.ValidationError: the action returned a dict body that is
             registered to a body model but does not conform to it. String
             bodies and unregistered skill names bypass this gate.
+        PracticeTriggerError: a practice trigger fired on the result but
+            its event or deviation could not be recorded.
     """
     started_at = datetime.now(UTC)
     skill_name: SkillName = skill.name

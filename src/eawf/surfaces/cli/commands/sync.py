@@ -276,6 +276,34 @@ def _rule_projections(target_dir: Path, *, write: bool, rules: bool) -> tuple[li
         raise cli_errors.ValidationError(f"rule projection render refused: {exc}") from exc
 
 
+def _ignore_rule_projections(target_dir: Path, *, rules: bool) -> list[str]:
+    """Add the shipped ignore patterns a pre-existing managed block lacks.
+
+    Args:
+        target_dir: Repository root.
+        rules: Whether the repository authors a rule source; ``False``
+            touches nothing, since no generated projection is written.
+
+    Returns:
+        The patterns added to the managed ``.gitignore`` block.
+
+    Raises:
+        ValidationError: The ``.gitignore`` markers cannot be spliced safely.
+    """
+    from eawf.platform.install.gitignore_writer import add_missing_gitignore_patterns
+    from eawf.platform.install.managed_block import ManagedBlockError
+
+    if not rules:
+        return []
+    try:
+        added = add_missing_gitignore_patterns(target_dir)
+    except ManagedBlockError as exc:
+        raise cli_errors.ValidationError(f".gitignore not updated: {exc}") from exc
+    if added:
+        logger.info(f"sync_cmd gitignore_patterns_added patterns={list(added)!r}")
+    return list(added)
+
+
 def _card_changed(*, rules: bool, projections: list[str], legacy: bool) -> bool:
     """Report whether ``AGENTS.md`` changed under whichever renderer owns it.
 
@@ -424,6 +452,7 @@ def _build_payload(
         "memory_views_changed": report.get("memory_views_changed", []),
         "projections_changed": report.get("projections_changed", []),
         "host_fact_warnings": report.get("host_fact_warnings", []),
+        "gitignore_patterns_added": report.get("gitignore_patterns_added", []),
     }
 
 
@@ -624,6 +653,7 @@ def sync_cmd(
             rules=rules,
         )
         projections, host_fact_warnings = _rule_projections(target_dir, write=True, rules=rules)
+        gitignore_added = _ignore_rule_projections(target_dir, rules=rules)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
@@ -648,6 +678,7 @@ def sync_cmd(
         "memory_views_changed": [],
         "projections_changed": projections,
         "host_fact_warnings": host_fact_warnings,
+        "gitignore_patterns_added": gitignore_added,
     }
     payload = _build_payload(
         target=target_dir,

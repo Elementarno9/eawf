@@ -18000,6 +18000,21 @@
       "status": "done",
       "updated_at": "2026-09-26T18:54:42.089009Z"
     },
+    "P36-I01-W11": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P36-I01-W11",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P36-I01-W11",
+      "model": null,
+      "scope_id": "P36-I01-W11",
+      "status": "done",
+      "updated_at": "2026-09-26T20:15:01.197898Z"
+    },
     "P36-I01-W12": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -24977,13 +24992,30 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-26T20:14:05.112277Z",
       "id": "SES-20260926T194506.177056Z-operator-claude-0f9bbfa5-7258-496c-9421-7bae773e94f9",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P36-I01",
       "started_at": "2026-09-26T19:45:06.177056Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P36-I01-W14"
+      ],
+      "ended_at": null,
+      "id": "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P36-I01",
+      "started_at": "2026-09-26T20:14:08.165791Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -35354,6 +35386,61 @@
       "waiver_decision_ids": [],
       "wave_id": "P33-I01-W98",
       "wave_revision_digest": "12a7dea82c9e4253ee17c1fdecffc2fdd941ac2fb90b7e9b3888f6685712d8ea"
+    },
+    "close-609786578557bc99e9ad6b8d": {
+      "apply_event_id": "EV-e8adb201a191",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "791ff74394774363216e507603d92de527a57e37",
+      "commit_identity_digest": "sha256:0278c8840df5401ba2699435b5677279296f644af3f7c591200286f30a55193d",
+      "criteria_digest": "913062cdefe299f0f7b59ace099997a84bc78109f6ff9d4b2c647b4ca6aa8c92",
+      "dependency_binding_digest": "f3c37cff781f2ec85744f3bb2ec3357400ef5642a4f54fa45c9772809f551333",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "d42bcde0bf2c055e215921d4c50d01d1819c7b1e6347ffa804d981338a9a9239",
+      "gate_receipt_ids": [
+        "GR-18d05651acdb94daf93597d2b2f47f54",
+        "GR-708ad4eb9a5d7128d18f0638881f875b",
+        "GR-1bfaa760ec55393055950e7b8c4cf05a",
+        "GR-332d1bbd855bc7808daf8d4331ed8296",
+        "GR-3c10beaf784e02ed4ab63cca0a932b2f"
+      ],
+      "generation": 1,
+      "id": "close-609786578557bc99e9ad6b8d",
+      "idempotency_key": "9bde066d2ff345067930f018bfba200d68bd7d6843fe0bb8a64aeab5dedd18c5",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "791ff74394774363216e507603d92de527a57e37",
+      "integration_id": "integration-30398c6190d8dca6b2141f41",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "P34 prune/CI/admission edges pinned; question drop writes reason and successor, foreign-home refused, gate proof reuses its daemon, submit lists every finding; view imports and trigger errors fire; host facts certified",
+      "policy_digest": "eef14812c50231202be16b85d5928b3e396ffb0452265a8053b6460486645b0b",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-26T20:14:10.523811Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03",
+        "G-04",
+        "G-UI"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "f82f5eede57c9efb2d0513e84999e29618b404128efc7fa629e10b95a9fb43ba",
+      "spec_digest": "add06b5ecb5eab08260bbd7bb3efaefcc64c886fd49c32b220e4da4c3a4f6e20",
+      "started_at": "2026-09-26T20:14:11.019758Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-26T20:15:02.662181Z",
+      "tokens_consumed": null,
+      "tree_sha": "bf57da6625575f14e9cb7f98e4207d40c8686da8",
+      "updated_at": "2026-09-26T20:15:02.662179Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P36-I01-W11",
+      "wave_revision_digest": "a32885cc432ab945eb8797eaff986a6dc36f312c70f577a069941353c5edd00a"
     },
     "close-6132b7619d35892994a2a4e7": {
       "apply_event_id": "EV-57a328973b18",
@@ -46695,11 +46782,11 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260926T194506.177056Z-operator-claude-0f9bbfa5-7258-496c-9421-7bae773e94f9"
+      "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c"
     ],
     "active_wave_ids": [
       "P36-I01-W01",
-      "P36-I01-W11"
+      "P36-I01-W14"
     ],
     "iter_id": "P36-I01",
     "phase_id": "P36",
@@ -64670,7 +64757,8 @@
         "P36-I01-W10",
         "P36-I01-W11",
         "P36-I01-W12",
-        "P36-I01-W13"
+        "P36-I01-W13",
+        "P36-I01-W14"
       ]
     },
     "P37-I01": {
@@ -66153,7 +66241,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T19:45:57.163075Z",
+  "updated_at": "2026-09-26T20:54:29.368928Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -70440,6 +70528,22 @@
       "supersedes_id": null,
       "tree_sha": "7e9210d71396e12158bd1ff9ea1b0834555f3313",
       "wave_id": "P31-I01-W33"
+    },
+    "integration-30398c6190d8dca6b2141f41": {
+      "base_sha": "2e48e764aaf7c2b92842a959867487f032ad07ea",
+      "candidate_sha": "791ff74394774363216e507603d92de527a57e37",
+      "created_at": "2026-09-26T20:14:09.259109Z",
+      "diff_digest": "515e0e6dfe9e86713adf82c8ba729c77cc7c67b808d7d3b5e7561508e0da5c9a",
+      "generation": 1,
+      "id": "integration-30398c6190d8dca6b2141f41",
+      "integrated_sha": "791ff74394774363216e507603d92de527a57e37",
+      "kind": "adopt",
+      "reason": "cherry-picked from wave worktree branch",
+      "spec_digest": "add06b5ecb5eab08260bbd7bb3efaefcc64c886fd49c32b220e4da4c3a4f6e20",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "bf57da6625575f14e9cb7f98e4207d40c8686da8",
+      "wave_id": "P36-I01-W11"
     },
     "integration-309374c72f55417386012354": {
       "base_sha": "be1aeebef5932baa857a6e8fdb1762c6b9af7465",
@@ -253421,9 +253525,9 @@
       ],
       "claim_session_id": "SES-20260926T191911.882878Z-operator-claude-1201c629-271a-439a-b05a-5f39c3996e24",
       "claimed_at": "2026-09-26T19:44:01.980652Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-26T20:15:01.197898Z",
+      "commit": "791ff74394774363216e507603d92de527a57e37",
+      "commit_identity_digest": "sha256:0278c8840df5401ba2699435b5677279296f644af3f7c591200286f30a55193d",
       "criteria_floor_waiver": null,
       "deps": [
         "P36-I01-W07",
@@ -253563,13 +253667,13 @@
       },
       "iter_id": "P36-I01",
       "opened_at": "2026-09-26T18:21:47.235066Z",
-      "outcome": null,
+      "outcome": "P34 prune/CI/admission edges pinned; question drop writes reason and successor, foreign-home refused, gate proof reuses its daemon, submit lists every finding; view imports and trigger errors fire; host facts certified",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -254135,6 +254239,100 @@
         }
       ],
       "title": "Give imported records a gated legacy-continuation and bookkeeping route",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W14": {
+      "agent_role": "executor",
+      "blocks": [],
+      "claim_session_id": "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c",
+      "claimed_at": "2026-09-26T20:54:29.368524Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "Repair from the W01 audit: the epoch-2 trace cited only record.intent, which for a brief-shaped epoch-1 intent holds just the desired outcome. Cite legacy_refs intent when present so the owned set matches the epoch-1 reader over this repository's corpus.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tools/requirement_trace.py",
+        "tests/unit/test_requirement_trace_epoch2.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_requirement_trace_epoch2.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W14",
+      "intent": {
+        "desired_outcome": "The epoch-2 trace returns the same owners as the epoch-1 reader over the live corpus",
+        "evidence_refs": [],
+        "planned_steps": [
+          "Cite the legacy intent brief when present",
+          "Add a brief-shaped fixture wave and a live corpus parity test"
+        ],
+        "priority_rationale": null,
+        "problem": "Imported waves with a brief intent lose citations so two requirement ids become unowned after the cutover",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T20:54:22.852461Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/test_requirement_trace_epoch2.py -q exits zero with corpus parity",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the requirement trace epoch-2 reader suite with corpus parity",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: on a marked root the requirement trace cites an imported wave's whole intent brief from legacy_refs when present, so the owned set it returns over this repository's committed corpus matches the epoch-1 reader for every requirement id; reverting to the outcome line alone reds the corpus parity test; pytest exits 0 over tests/unit/test_requirement_trace_epoch2.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Cite the whole intent brief of an imported wave in the trace",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null

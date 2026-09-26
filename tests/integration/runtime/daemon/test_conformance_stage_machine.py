@@ -30,7 +30,6 @@ from eawf.kernel.runtime.certification import (
     STAGE_ORDER,
     CapabilityCertification,
     CertificationFailureCode,
-    CertifiedRuntimeFacts,
     DriverCertification,
 )
 from eawf.kernel.runtime.compiled import (
@@ -182,18 +181,6 @@ def capability(**overrides: Any) -> CapabilityCertification:
     return CapabilityCertification.model_validate(document)
 
 
-def runtime_facts() -> CertifiedRuntimeFacts:
-    """Return measured caps of the certified runtime."""
-    return CertifiedRuntimeFacts(
-        context_window_tokens=200_000,
-        auto_compaction_threshold_tokens=150_000,
-        project_document_cap_bytes=32_768,
-        tool_output_cap_tokens=25_000,
-        measured_at=NOW,
-        measurement_method="observed",
-    )
-
-
 def probe_request(**overrides: Any) -> ProbeRequest:
     """Return a probe request whose live facts clear the matrix."""
     document: dict[str, Any] = {
@@ -232,7 +219,7 @@ def certification_request(**overrides: Any) -> CertificationRequest:
         ),
         "certification_id": "claude-sdk-2026-09",
         "capabilities": (capability(),),
-        "runtime_facts": runtime_facts(),
+        "runtime": "codex",
         "install_trust": "managed",
         "evidence_bundle_ref": BUNDLE_REF,
         "expires_at": NOW + timedelta(days=3650),
