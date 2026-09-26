@@ -112,6 +112,7 @@ from tests.integration.kernel.migration._cutover_harness import (
     crash_points,
     crash_the_apply,
     declared_canary,
+    live_opted_in_tree,
     opted_in_canary,
     plan_over,
     staged_corpus,
@@ -623,8 +624,7 @@ def backup_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 def opted_in_applied(tmp_path: Path, *, home: Path) -> DisposableTarget:
     """Return an opted-in tree whose cutover ran to completion."""
-    corpus = staged_corpus(tmp_path)
-    root, _snapshot = opted_in_canary(tmp_path / ".ea", home=home)
+    corpus, root = live_opted_in_tree(tmp_path, home=home)
     result = apply_once(corpus=corpus, target_root=root, applied_at=APPLIED_AT)
     assert result.applied is True
     return DisposableTarget.require(root)

@@ -153,6 +153,42 @@ def opted_in_canary(root: Path, *, home: Path) -> tuple[Path, Snapshot]:
     return root, snapshot
 
 
+def live_opted_in_tree(root: Path, *, home: Path) -> tuple[Path, Path]:
+    """Build a live repository's tree and the corpus staged from its own HEAD.
+
+    An opted-in tree is cut over from its own committed corpus, and the
+    apply refuses one whose live surfaces moved away from the staged
+    copy. So the target here is seeded from the corpus rather than from
+    the canary fixtures: the document, the base config and every store
+    ledger are the corpus's bytes. The corpus holders are retired first,
+    as the live runbook commits a reconcile before it stages.
+
+    Args:
+        root: A directory to build the corpus and the ``.ea`` target under.
+        home: The user-scope home the backup lands under.
+
+    Returns:
+        The corpus and the opted-in target root.
+    """
+    corpus = staged_corpus(root)
+    document_path = corpus / "document.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    for collection, retired in (("agent_sessions", "closed"), ("worktrees", "abandoned")):
+        for row in document.get(collection, {}).values():
+            if row.get("status") == "active":
+                row["status"] = retired
+    document_path.write_text(json.dumps(document, indent=1, sort_keys=True), encoding="utf-8")
+    target = root / ".ea"
+    (target / "store").mkdir(parents=True)
+    shutil.copyfile(document_path, target / "state.json")
+    shutil.copyfile(corpus / "config" / "base.yaml", target / "config.yaml")
+    for ledger in sorted((corpus / "store").glob("*.jsonl")):
+        shutil.copyfile(ledger, target / "store" / ledger.name)
+    snapshot = create_backup(target / "state.json", home=home, when=BACKED_UP_AT)
+    write_opt_in(target, backup_ts=snapshot.ts, backup_digest=snapshot_digest(snapshot))
+    return corpus, target
+
+
 def write_opt_in(root: Path, *, backup_ts: str, backup_digest: str) -> Path:
     """Write the opt-in declaration naming one backup into ``root``."""
     path = root / OPT_IN_DECLARATION_FILENAME

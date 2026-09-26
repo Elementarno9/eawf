@@ -58,7 +58,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from eawf.kernel.identity.errors import IdentityError
 from eawf.kernel.identity.keys import validate_symbol_key
-from eawf.kernel.migration.epoch2.errors import MigrationRuleError
+from eawf.kernel.migration.epoch2.errors import MigrationNotQuiescentError, MigrationRuleError
 from eawf.kernel.migrations import (
     DEFAULT_REGISTRY,
     MigrationError,
@@ -80,6 +80,10 @@ if TYPE_CHECKING:
     from eawf.kernel.migration.epoch2.recovery import Epoch2RecoverRequest
 
 logger = logging.getLogger(__name__)
+
+#: The error-envelope kind a quiescence refusal carries, so the hint names
+#: the commands that clear holders instead of the generic validation hint.
+_NOT_QUIESCENT_KIND = "MigrationNotQuiescent"
 
 
 migrate_app = typer.Typer(
@@ -501,7 +505,10 @@ def _epoch2_payload(
                 return client.call(method, dict(params))
         except DaemonRpcError as exc:
             if exc.code in (-32602, cli_errors.RPC_VALIDATION_FAILED):
-                raise cli_errors.ValidationError(exc.message) from exc
+                kind = (
+                    _NOT_QUIESCENT_KIND if MigrationNotQuiescentError.code in exc.message else None
+                )
+                raise cli_errors.ValidationError(exc.message, kind=kind) from exc
             if exc.code != -32601:
                 raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
             logger.debug(f"_epoch2_payload daemon-rpc method-not-found method={method}; fallback")
@@ -511,7 +518,8 @@ def _epoch2_payload(
     try:
         return local()
     except MigrationRuleError as exc:
-        raise cli_errors.ValidationError(f"{exc.code}: {exc}") from exc
+        kind = _NOT_QUIESCENT_KIND if isinstance(exc, MigrationNotQuiescentError) else None
+        raise cli_errors.ValidationError(f"{exc.code}: {exc}", kind=kind) from exc
 
 
 def _epoch2_daemon_enabled() -> bool:

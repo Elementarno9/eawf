@@ -244,6 +244,19 @@ class MigrationNotQuiescentError(MigrationRuleError):
     code: ClassVar[str] = "migration_not_quiescent"
 
 
+class MigrationLiveStateDivergedError(MigrationRuleError):
+    """A live repository's authority surfaces moved away from the staged corpus.
+
+    An opted-in tree is cut over from its own committed corpus, staged
+    from HEAD. A write that landed after the last state commit -- a
+    daemon boot sweep, a reconcile nobody committed -- is in the live
+    document but not in the corpus, so the generation would silently
+    drop it. The apply refuses and names every surface that differs.
+    """
+
+    code: ClassVar[str] = "migration_live_state_diverged"
+
+
 class MigrationWorkspaceNotRegisteredError(MigrationRuleError):
     """The addressing workspace the apply was given is not registered.
 

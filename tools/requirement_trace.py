@@ -44,12 +44,25 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.store.compaction import read_document
+from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
+
 CATALOG_PATH: Final = Path(".ea/requirements.json")
 STATE_PATH: Final = Path(".ea/state.json")
 SCHEMA_VERSION: Final = 1
 
-#: A wave in one of these states no longer carries the work it cited.
-DEAD_WAVE_STATUSES: Final = frozenset({"abandoned", "failed"})
+#: A wave, or after the epoch-2 cutover a Task, in one of these states no
+#: longer carries the work it cited.
+DEAD_WAVE_STATUSES: Final = frozenset({"abandoned", "failed", "CANCELLED", "FAILED", "DROPPED"})
+
+#: The imported lifecycle a Task row came from when it was an epoch-1 wave.
+#: Imported backlog rows are Tasks too, but the epoch-1 trace never read the
+#: backlog, so they stay out of the owner set.
+_IMPORTED_WAVE_LIFECYCLE: Final = "wave"
 
 #: Where test citations and production citations are read from.
 TEST_ROOTS: Final[tuple[str, ...]] = ("tests",)
@@ -306,6 +319,104 @@ def load_state(path: Path) -> StateView:
         raise TraceInputError(f"cannot read state {path.name}: {exc}") from exc
 
 
+def _ledger_bodies(
+    state_path: Path, collection: Epoch2Collection
+) -> dict[str, tuple[str, dict[str, Any]]]:
+    """Return ``(status, payload)`` per record key, the last ledger line winning."""
+    return {
+        record.record_key: (record.status, record.payload)
+        for record in read_ledger_records(ledger_path(state_path, collection))
+    }
+
+
+def _is_imported(body: dict[str, Any]) -> bool:
+    origin = body.get("origin")
+    return isinstance(origin, dict) and origin.get("kind") == "legacy"
+
+
+def _imported_wave(key: str, status: str, body: dict[str, Any]) -> _WaveView | None:
+    """Rebuild an imported wave's cited fields from where the importer put them."""
+    if body.get("lifecycle") != _IMPORTED_WAVE_LIFECYCLE:
+        return None
+    record = body.get("record") or {}
+    legacy = body.get("legacy_refs") or {}
+    return _WaveView(
+        id=key,
+        status=status,
+        title=legacy.get("title") or "",
+        description=legacy.get("description"),
+        intent=record.get("intent"),
+        success_criteria=[{"text": row.get("text")} for row in body.get("criteria") or []],
+        outcome=legacy.get("outcome"),
+    )
+
+
+def _native_task(key: str, status: str, body: dict[str, Any]) -> _WaveView:
+    """Project a native Task onto the fields the trace cites."""
+    return _WaveView(
+        id=key,
+        status=status,
+        intent=body.get("intent"),
+        success_criteria=[{"text": row.get("text")} for row in body.get("criteria") or []],
+    )
+
+
+def _generation_view(state_path: Path) -> StateView:
+    """Build the trace's state slice from one epoch-2 generation.
+
+    Args:
+        state_path: The generation's document.
+
+    Returns:
+        Every imported wave and native Task, and every decision in the
+        decision ledger with its epoch-1 status.
+    """
+    tasks = _ledger_bodies(state_path, Epoch2Collection.TASK)
+    for key, row in (read_document(state_path).get(Epoch2Collection.TASK.value) or {}).items():
+        # An imported in-flight row wraps its record; a native row is the record.
+        payload = row.get("payload")
+        body = payload if isinstance(payload, dict) and _is_imported(payload) else row
+        tasks[key] = (str(row.get("status", "")), body)
+    waves: dict[str, _WaveView] = {}
+    for key, (status, body) in tasks.items():
+        wave = (
+            _imported_wave(key, status, body)
+            if _is_imported(body)
+            else _native_task(key, status, body)
+        )
+        if wave is not None:
+            waves[key] = wave
+    decisions: dict[str, _DecisionView] = {}
+    for key, (_status, body) in _ledger_bodies(state_path, Epoch2Collection.DECISION).items():
+        # An imported decision carries its epoch-1 record verbatim, status included.
+        source = body.get("payload") if _is_imported(body) else body
+        decisions[key] = _DecisionView.model_validate({"id": key, **(source or {})})
+    return StateView(waves=waves, decisions=decisions)
+
+
+def load_state_view(repo_root: Path) -> StateView:
+    """Read the trace's state slice from whichever epoch the repository is in.
+
+    Args:
+        repo_root: The repository root.
+
+    Returns:
+        The slice read from the selected generation when ``.ea`` is in epoch
+        2, where ``state.json`` is frozen; from ``state.json`` otherwise.
+
+    Raises:
+        TraceInputError: When the state cannot be read or validated.
+    """
+    authority = resolve_authority(repo_root / STATE_PATH.parent)
+    if authority.target is None or authority.generation_id is None:
+        return load_state(repo_root / STATE_PATH)
+    document = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT
+    try:
+        return _generation_view(document)
+    except (OSError, ValueError) as exc:
+        raise TraceInputError(f"cannot read generation {authority.generation_id}: {exc}") from exc
+
+
 def load_catalog(path: Path) -> Catalog:
     """Read and validate the committed catalog.
 
@@ -502,7 +613,7 @@ def _recompute(repo_root: Path, stored: Catalog) -> Catalog:
     return build_trace(
         titles={row.id: row.title for row in stored.requirements},
         deferrals=stored.deferrals,
-        state=load_state(repo_root / STATE_PATH),
+        state=load_state_view(repo_root),
         repo_root=repo_root,
     )
 
@@ -540,7 +651,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             fresh = build_trace(
                 titles=extract_catalog(args.packet),
                 deferrals=deferrals,
-                state=load_state(repo_root / STATE_PATH),
+                state=load_state_view(repo_root),
                 repo_root=repo_root,
             )
         else:

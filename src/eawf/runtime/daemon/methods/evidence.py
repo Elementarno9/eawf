@@ -23,6 +23,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
@@ -79,7 +80,11 @@ async def append(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         Dict matching :class:`AppendResult`.
 
     Raises:
-        DaemonValidationError: When disabled policy rejects a gate waiver.
+        DaemonValidationError: When disabled policy rejects a gate waiver,
+            or when the tree carries the epoch marker
+            (``legacy_operation_removed``): the evidence store is an
+            epoch-1 surface, so an append there after the cut would be a
+            second writer beside the generation. Nothing is appended.
         ValueError: When ``params.record`` does not validate against
             :class:`EvidenceRecord`. The server maps this to
             ``-32602 invalid params``.
@@ -91,6 +96,10 @@ async def append(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     if ctx.state_path is None:
         raise RuntimeError("state_path not configured on daemon context")
     state_path = Path(ctx.state_path)
+    try:
+        refuse_legacy_write(state_path)
+    except LegacyOperationRemovedError as error:
+        raise DaemonValidationError(f"validation_failed: {error}") from error
     runtime_only_waiver = record.refs == [RUNTIME_ZERO_WAIVER_REF]
     if record.status == "waived" and not runtime_only_waiver:
         # Defense in depth: direct RPC callers cannot bypass the CLI's

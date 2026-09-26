@@ -54,6 +54,7 @@ from eawf.kernel.migration.epoch2.canary import (
 )
 from eawf.kernel.migration.epoch2.dispositions import COLLECTION_DISPOSITION_INDEX
 from eawf.kernel.migration.epoch2.errors import (
+    MigrationLiveStateDivergedError,
     MigrationNotQuiescentError,
     MigrationPlanDigestStaleError,
     MigrationPlanNotApplicableError,
@@ -82,6 +83,14 @@ from eawf.runtime.lock import portalock
 from eawf.runtime.worktree.reconcile import RECONCILE_COMMAND
 from eawf.surfaces.cli.app import app
 from tests.integration.kernel.migration._corpus_shapes import DEFAULT_TRACK_KEY
+from tests.integration.kernel.migration._cutover_harness import (
+    applied_tree,
+    content_digests,
+    live_opted_in_tree,
+)
+from tests.integration.kernel.migration._cutover_harness import (
+    apply_once as harness_apply_once,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "migration"
@@ -979,3 +988,183 @@ def test_worktree_reconcile_cli_dry_run_reports_and_writes_nothing(
         "SES-ON-KEEP",
     }
     assert state_file.read_bytes() == original
+
+
+# --- a live tree that moved after its state commit ---------------------------
+# An opted-in tree is cut over from the corpus staged from its own HEAD. A
+# write that landed after that commit is in the live document only, so the
+# apply has to refuse rather than build a generation that silently drops it.
+
+
+@pytest.fixture
+def backup_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point the backup service's user home at this test's tmp dir."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("EAWF_HOME", str(home))
+    return home
+
+
+def test_apply_admits_an_opted_in_tree_whose_live_surfaces_match_the_corpus(
+    tmp_path: Path, backup_home: Path
+) -> None:
+    corpus, target = live_opted_in_tree(tmp_path, home=backup_home)
+
+    result = harness_apply_once(corpus=corpus, target_root=target, applied_at=APPLIED_AT)
+
+    assert result.applied is True
+
+
+def test_apply_refuses_a_live_document_edited_after_the_state_commit(
+    tmp_path: Path, backup_home: Path
+) -> None:
+    """Gate-fire: the planted post-commit write reds the apply and writes nothing."""
+    corpus, target = live_opted_in_tree(tmp_path, home=backup_home)
+    document = json.loads((target / "state.json").read_text(encoding="utf-8"))
+    document["worktrees"]["WT-AFTER-COMMIT"] = {"id": "WT-AFTER-COMMIT", "status": "merged"}
+    (target / "state.json").write_text(json.dumps(document), encoding="utf-8")
+    before = content_digests(target)
+
+    with pytest.raises(MigrationLiveStateDivergedError) as caught:
+        harness_apply_once(corpus=corpus, target_root=target, applied_at=APPLIED_AT)
+
+    assert caught.value.code == "migration_live_state_diverged"
+    assert "1 live surfaces differ" in str(caught.value)
+    assert "state.json" in str(caught.value)
+    assert content_digests(target) == before
+    assert not (target / "generations").exists()
+
+
+def test_apply_names_every_diverged_locator(tmp_path: Path, backup_home: Path) -> None:
+    corpus, target = live_opted_in_tree(tmp_path, home=backup_home)
+    (target / "config.yaml").write_text("epoch: 1\nedited: after-commit\n", encoding="utf-8")
+    with (target / "store" / "audit.jsonl").open("a", encoding="utf-8") as ledger:
+        ledger.write('{"id": "AUD-LATE"}\n')
+    (target / "store" / "decision.jsonl").unlink()
+    (target / "store" / "evidence.jsonl").write_text('{"id": "EV-LATE"}\n', encoding="utf-8")
+
+    with pytest.raises(MigrationLiveStateDivergedError) as caught:
+        harness_apply_once(corpus=corpus, target_root=target, applied_at=APPLIED_AT)
+
+    message = str(caught.value)
+    assert "4 live surfaces differ" in message
+    for locator in (
+        "config.yaml",
+        "store/audit.jsonl",
+        "store/decision.jsonl (absent)",
+        "store/evidence.jsonl (not staged)",
+    ):
+        assert locator in message
+    assert "state.json" not in message
+
+
+def test_apply_ignores_an_uncommitted_ledger_on_a_live_tree(
+    tmp_path: Path, backup_home: Path
+) -> None:
+    """The event firehose is never committed, so it never reaches the corpus."""
+    corpus, target = live_opted_in_tree(tmp_path, home=backup_home)
+    (target / "store" / "event.jsonl").write_text('{"id": "EVT-LATE"}\n', encoding="utf-8")
+
+    result = harness_apply_once(corpus=corpus, target_root=target, applied_at=APPLIED_AT)
+
+    assert result.applied is True
+
+
+def test_apply_does_not_compare_a_disposable_canary_with_its_corpus(tmp_path: Path) -> None:
+    """A canary is seeded from whatever corpus its rehearsal pins."""
+    tree = applied_tree(tmp_path)
+
+    assert (tree.target_root / "generations").is_dir()
+
+
+# --- the quiescence refusal an operator can act on ----------------------------
+
+
+def _live_worktrees(count: int) -> dict[str, dict[str, str]]:
+    return {
+        f"WT-{index:03d}": {"id": f"WT-{index:03d}", "status": "active"} for index in range(count)
+    }
+
+
+def test_quiescence_refusal_groups_counts_and_names_the_clearing_commands(
+    tmp_path: Path,
+) -> None:
+    root = seeded_target(tmp_path / ".ea", "active-session")
+    document = json.loads((root / "state.json").read_text(encoding="utf-8"))
+    document["worktrees"] = _live_worktrees(37)
+    (root / "state.json").write_text(json.dumps(document), encoding="utf-8")
+
+    with pytest.raises(MigrationNotQuiescentError) as caught:
+        require_quiescent(quiescence_findings(DisposableTarget.require(root)))
+
+    message = str(caught.value)
+    assert "38 holders are still live (active_session=1, managed_worktree=37)" in message
+    assert "... and 18 more" in message
+    assert "eawf worktree reconcile" in message
+    assert "eawf session close" in message
+    assert "eawf validate" not in message
+
+
+def test_quiescence_remediation_names_only_the_kinds_present(tmp_path: Path) -> None:
+    target = DisposableTarget.require(seeded_target(tmp_path / ".ea", "managed-worktree"))
+
+    with pytest.raises(MigrationNotQuiescentError) as caught:
+        require_quiescent(quiescence_findings(target))
+
+    assert "eawf worktree reconcile" in str(caught.value)
+    assert "eawf session close" not in str(caught.value)
+    assert "... and" not in str(caught.value)
+
+
+def _not_quiescent(root: Path) -> dict[str, Any]:
+    require_quiescent(quiescence_findings(DisposableTarget.require(root)))
+    return {}
+
+
+def test_cli_hint_for_a_not_quiescent_apply_names_reconcile_not_validate(
+    tmp_path: Path,
+) -> None:
+    from eawf.surfaces.cli import errors as cli_errors
+    from eawf.surfaces.cli.commands.migrate import _epoch2_payload
+
+    root = seeded_target(tmp_path / ".ea", "active-session")
+    with pytest.raises(cli_errors.ValidationError) as caught:
+        _epoch2_payload(
+            method="migration.epoch2.apply", params={}, local=lambda: _not_quiescent(root)
+        )
+
+    hint = cli_errors.build_envelope(caught.value).suggested_next_step or ""
+    assert caught.value.exit_code == 2
+    assert "eawf worktree reconcile" in hint
+    assert "eawf session close" in hint
+    assert "eawf validate" not in hint
+
+
+def test_cli_hint_for_a_daemon_not_quiescent_refusal_names_reconcile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from eawf.surfaces.cli import _daemon_client
+    from eawf.surfaces.cli import errors as cli_errors
+    from eawf.surfaces.cli.commands import migrate
+
+    class _Refusing:
+        def __enter__(self) -> _Refusing:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+        def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+            raise _daemon_client.DaemonRpcError(
+                -32002, "validation_failed: migration_not_quiescent: 1 holders are still live"
+            )
+
+    monkeypatch.setattr(migrate, "_epoch2_daemon_enabled", lambda: True)
+    monkeypatch.setattr(_daemon_client, "DaemonClient", _Refusing)
+    with pytest.raises(cli_errors.ValidationError) as caught:
+        migrate._epoch2_payload(method="migration.epoch2.apply", params={}, local=dict)
+
+    assert (
+        "eawf worktree reconcile" in cli_errors.build_envelope(caught.value).suggested_next_step
+        or ""
+    )

@@ -27,7 +27,10 @@ is the mechanism.
 under the locks** recomputes plan mode and compares its approval digest
 with the one the operator approved. That single comparison covers both
 halves of the precondition: a corpus that moved, and an approval that is
-stale.
+stale. An opted-in tree is a live repository cut over from its own
+committed corpus, so its **live surfaces** are then compared with the
+staged ones: a write after the last state commit would otherwise be
+dropped from the generation without a word.
 
 Everything above writes nothing but lock holder records. An apply that
 refuses a precondition, or that finds its generation already selected,
@@ -53,9 +56,10 @@ from typing import Annotated, Any, Final
 
 from pydantic import Field
 
-from eawf.kernel.migration.epoch2.canary import DisposableTarget
+from eawf.kernel.migration.epoch2.canary import DeclarationKind, DisposableTarget
 from eawf.kernel.migration.epoch2.census import SourceCensus
 from eawf.kernel.migration.epoch2.errors import (
+    MigrationLiveStateDivergedError,
     MigrationPlanDigestStaleError,
     MigrationPlanNotApplicableError,
     MigrationSourceChangedError,
@@ -88,7 +92,17 @@ from eawf.kernel.migration.epoch2.restore import (
     capture_restore_point,
 )
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
-from eawf.kernel.migration.epoch2.snapshot import SourceSnapshot, digest_bytes
+from eawf.kernel.migration.epoch2.snapshot import (
+    CONFIG_DIRECTORY,
+    DOCUMENT_LOCATOR,
+    LEDGER_SUFFIX,
+    LIVE_TREE_DIRNAME,
+    STAGED_CONFIG_FILENAME,
+    STORE_DIRECTORY,
+    SourceSnapshot,
+    digest_bytes,
+    is_committed,
+)
 from eawf.platform.registry.models import Registry, RegistryReadError, read_registry
 from eawf.platform.registry.workspace import WorkspaceMutationError, get_workspace
 from eawf.runtime.lock import portalock
@@ -322,6 +336,74 @@ def _recensus(plan: MigrationPlan, *, snapshot_root: Path) -> SourceCensus:
             f"plan was built from (source digest {plan.manifest.source_digest[:12]})"
         )
     return census
+
+
+def _live_locator(snapshot_locator: str) -> str | None:
+    """Return the target-relative file a staged locator was copied from.
+
+    Args:
+        snapshot_locator: A locator of the staged corpus.
+
+    Returns:
+        The live counterpart, or ``None`` for a staged file with none
+        (a config overlay the staging never copies from the tree).
+    """
+    if snapshot_locator == DOCUMENT_LOCATOR:
+        return "state.json"
+    if snapshot_locator == f"{CONFIG_DIRECTORY}/{STAGED_CONFIG_FILENAME}":
+        return "config.yaml"
+    if snapshot_locator.startswith(f"{STORE_DIRECTORY}/"):
+        return snapshot_locator
+    return None
+
+
+def _require_live_matches_snapshot(target: DisposableTarget, census: SourceCensus) -> None:
+    """Refuse an opted-in tree whose live surfaces differ from the staged corpus.
+
+    Only an opted-in tree is compared: a disposable canary is seeded from
+    whatever corpus its rehearsal pins, so its own files are not the
+    corpus's origin.
+
+    Args:
+        target: The fence-cleared target tree.
+        census: The census taken under the locks, carrying the digest of
+            every staged surface.
+
+    Raises:
+        MigrationLiveStateDivergedError: The live document, the config or
+            a committed store ledger digests differently from its staged
+            copy, is missing, or is a committed ledger the corpus lacks.
+            Each such locator is named.
+    """
+    if target.kind is not DeclarationKind.OPT_IN:
+        return
+    identity = census.identity
+    diverged: list[str] = []
+    staged_live: set[str] = set()
+    for surface in identity.surfaces:
+        live = _live_locator(surface.locator)
+        if live is None:
+            continue
+        staged_live.add(live)
+        path = target.root / live
+        if not path.is_file():
+            diverged.append(f"{live} (absent)")
+        elif digest_bytes(path.read_bytes()) != surface.digest:
+            diverged.append(live)
+    store = target.root / STORE_DIRECTORY
+    if store.is_dir():
+        diverged.extend(
+            f"{live} (not staged)"
+            for path in sorted(store.glob(f"*{LEDGER_SUFFIX}"))
+            if (live := f"{STORE_DIRECTORY}/{path.name}") not in staged_live
+            and is_committed(f"{LIVE_TREE_DIRNAME}/{live}")
+        )
+    if diverged:
+        raise MigrationLiveStateDivergedError(
+            f"{len(diverged)} live surfaces differ from the staged corpus "
+            f"{identity.snapshot_digest[:12]}: {', '.join(diverged)}; commit the live state "
+            "and stage the corpus again, so the generation carries every write"
+        )
 
 
 def _require_plan_digest(plan: MigrationPlan, *, expected: str) -> None:
@@ -597,6 +679,8 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
         MigrationNotQuiescentError: Something is still holding the tree.
         MigrationPlanDigestStaleError: The approved digest is not the one
             this corpus now plans to.
+        MigrationLiveStateDivergedError: An opted-in tree's live surfaces
+            differ from the staged corpus.
         MigrationPlanNotApplicableError: The plan names unresolved rows
             the apply does not accept.
         MigrationRuleError: Any other importer rule refused the corpus.
@@ -644,6 +728,7 @@ def apply_cutover(request: Epoch2ApplyRequest, *, applied_at: datetime) -> Cutov
             detail=f"re-censused {len(census.collections)} collections under the locks",
         )
         require_unresolved_rows_accepted(plan, accepted=request.accepted_unresolved_rows)
+        _require_live_matches_snapshot(target, census)
 
         selected = _completed_cutover(target, manifest_digest=plan.manifest.manifest_digest)
         if selected is not None:

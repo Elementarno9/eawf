@@ -296,14 +296,23 @@ def _append_direct(record: EvidenceRecord, *, state_path: Path) -> str:
     Returns:
         ISO-8601 timestamp of the local append (the JSONL row carries
         ``record.created_at``; this value is the wall-clock of the write).
+
+    Raises:
+        cli_errors.ValidationError: The tree carries the epoch marker
+            (``legacy_operation_removed``); nothing was appended.
     """
     from datetime import UTC, datetime
 
     from eawf.kernel.state.enums import StoreKind
+    from eawf.kernel.state.io import LegacyOperationRemovedError, refuse_legacy_write
     from eawf.kernel.store.append import append_envelope
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.paths import store_path
 
+    try:
+        refuse_legacy_write(state_path)
+    except LegacyOperationRemovedError as exc:
+        raise cli_errors.ValidationError(str(exc), kind="LegacyOperationRemoved") from exc
     evidence_path = store_path(state_path, StoreKind.EVIDENCE)
     envelope = Envelope(
         id=record.id,
@@ -407,13 +416,15 @@ def evidence_attest(
             )
         appended_at = str(result.get("appended_at", ""))
     except DaemonRpcError as exc:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"daemon rejected evidence.append: code={exc.code} {exc.message}",
-                kind="DaemonError",
-            ),
-            flags=flags,
+        message = f"daemon rejected evidence.append: code={exc.code} {exc.message}"
+        # A validation refusal (the epoch-2 fence among them) keeps its exit
+        # class, so a script can tell a refused append from a broken daemon.
+        rejection: cli_errors.CliError = (
+            cli_errors.ValidationError(message)
+            if exc.code == cli_errors.RPC_VALIDATION_FAILED
+            else cli_errors.UserError(message, kind="DaemonError")
         )
+        cli_errors.emit_error(rejection, flags=flags)
         return
     except (OSError, RuntimeError) as exc:
         if not _direct_write_enabled():

@@ -322,6 +322,41 @@ def quiesce_clone(clone: Path, *, booted_at: datetime) -> int:
     return len(result.rows)
 
 
+def commit_live_state(clone: Path) -> str:
+    """Commit every tracked file the quiesce changed, as the live runbook does.
+
+    The apply refuses an opted-in tree whose live surfaces differ from the
+    corpus staged from HEAD, so the retirement the quiesce wrote has to be
+    committed before the corpus is staged.
+
+    Args:
+        clone: The clone's repository root.
+
+    Returns:
+        The commit the clone now sits at.
+    """
+    _git_quiet(
+        [
+            "-C",
+            str(clone),
+            "-c",
+            "user.name=rehearsal",
+            "-c",
+            "user.email=rehearsal@example.invalid",
+            "commit",
+            "--quiet",
+            "--all",
+            "--allow-empty",
+            "--message",
+            "state: retire the holders the clone inherited",
+        ]
+    )
+    head = subprocess.run(
+        ["git", "-C", str(clone), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    )
+    return head.stdout.strip()
+
+
 def write_opt_in(ea_root: Path, *, backup_ts: str, backup_digest: str) -> Path:
     """Opt ``ea_root`` into the cutover against one verified backup.
 
@@ -381,6 +416,7 @@ __all__ = [
     "LiveCorpusPin",
     "StagedSource",
     "clone_at_revision",
+    "commit_live_state",
     "committed_sources",
     "corpus_bytes",
     "is_committed",
