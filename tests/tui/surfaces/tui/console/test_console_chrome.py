@@ -199,13 +199,20 @@ def test_console_app_constructs_with_nothing_from_the_tests_tree(tmp_path: Path)
     assert any(CHROME_RESOURCE in line for line in done.stdout.splitlines())
 
 
-@pytest.mark.parametrize("route", REGISTRY.ids)
+@pytest.mark.parametrize("route", [route for route in REGISTRY.ids if route != "entry"])
 def test_unheld_route_draws_the_unknown_frame(
     route: str, prototype_literals: frozenset[str]
 ) -> None:
     rows = _frame(ConsoleApp(clock=FakeClock()), route)
     assert rows[1].strip() == f"NOT HELD · {route} · no read model is held for this route"
     assert any(f" ROWS      {UNKNOWN} " in row for row in rows)
+    assert _leaks(rows, prototype_literals) == []
+
+
+def test_unheld_entry_layer_draws_its_chrome_state(prototype_literals: frozenset[str]) -> None:
+    """The entry layer precedes any read model, so it draws the chrome, never NOT HELD."""
+    rows = _frame(ConsoleApp(clock=FakeClock()), "entry")
+    assert not any("NOT HELD" in row for row in rows)
     assert _leaks(rows, prototype_literals) == []
 
 

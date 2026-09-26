@@ -64,6 +64,7 @@ from eawf.surfaces.tui.console.frame import View, thin, unheld
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
 from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.operations import OperationResult, OperationStatus, VerbRequest
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route, unknown_frame
@@ -82,6 +83,19 @@ TICK_SECONDS = 0.25
 GO_DRAWER = "go"
 # The worker group the seam's route reads run in.
 SEAM_WORKERS = "seam"
+# The worker group the console's writes run in, apart from the reads so neither waits.
+WRITE_WORKERS = "writes"
+# The key-log key a daemon answer to a sent verb is recorded under.
+DAEMON_KEY = "daemon"
+# How each settled write is announced: toast title and severity.
+_WRITE_TOASTS: Mapping[OperationStatus, tuple[str, Severity]] = MappingProxyType(
+    {
+        OperationStatus.APPLIED: ("recorded", Severity.OK),
+        OperationStatus.SUPERSEDED: ("superseded", Severity.WARN),
+        OperationStatus.REFUSED: ("refused", Severity.ERR),
+        OperationStatus.OUTSTANDING: ("unknown", Severity.WARN),
+    }
+)
 # The overlays that draw chrome alone: the keymap and the palette's route list.
 CHROME_OVERLAYS: frozenset[str] = frozenset({"help", "palette"})
 # The toolkit's key names that differ from the dispatcher's.
@@ -557,10 +571,36 @@ class ConsoleApp(App[None]):
             verbose=self.verbose,
             projection=view.projection,
             unheld=unheld(view),
+            send=self.send,
         )
         dispatch(ctx, key, shift)
         self._follow_route()
         self.render_frame()
+
+    def send(self, request: VerbRequest) -> bool:
+        """Send a confirmed verb through the seam, off the key path.
+
+        Returns:
+            Whether a daemon link took the verb: ``False`` for a console with no seam, or
+            one not yet running, where nothing is sent.
+        """
+        seam = self.seam
+        if seam is None or not self.is_running:
+            return False
+        self.run_worker(self._deliver(seam, request), group=WRITE_WORKERS)
+        return True
+
+    async def _deliver(self, seam: ProjectionSeam, request: VerbRequest) -> None:
+        """Wait for the daemon's answer to one verb, then say what became of it."""
+        self.announce(await seam.request(request))
+
+    def announce(self, result: OperationResult) -> None:
+        """Say what became of a sent verb, in the rack and the key log, and repaint."""
+        title, sev = _WRITE_TOASTS[result.status]
+        self.raise_toast(result.detail, title=title, sev=sev)
+        self.session.log_key(DAEMON_KEY, f"{result.status.value} · {result.detail}")
+        if self.is_running:
+            self.render_frame()
 
     def on_key(self, event: Key) -> None:
         """Take every key from the toolkit and dispatch it.

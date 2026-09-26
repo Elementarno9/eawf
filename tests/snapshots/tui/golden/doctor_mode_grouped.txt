@@ -4,11 +4,9 @@
 
   ╭─ INSTALL ─────────────────────────────────────────────╮ ╭─ STATE ───────────────────────────────────────────────╮
   │   ● tools_available             3 probes ok           │ │   ● state_present               state.json found      │
-  │   ● config_resolves             2 profile(s) enabled  │ │   △ state_scale_ceiling         approaching 5k-wave   │
-  │   ● render_output_roundtrip     round-trips clean     │ │ ceiling                                               │
-  ╰───────────────────────────────────────────────────────╯ │   ● recent_events               12 recent event(s); 1 │
-                                                            │ error(s) in window                                    │
-                                                            ╰───────────────────────────────────────────────────────╯
+  │   ● config_resolves             2 profile(s) enabled  │ │   △ state_scale_ceiling         approaching 5k-wave … │
+  │   ● render_output_roundtrip     round-trips clean     │ │   ● recent_events               12 recent event(s); … │
+  ╰───────────────────────────────────────────────────────╯ ╰───────────────────────────────────────────────────────╯
 
   ╭─ DRIFT ─────────────────────────────────────────────────────────────────────────────────────────────────────────╮
   │   △ manifest_in_sync            drift: AGENTS.md::core=hand-edited                                              │
@@ -18,6 +16,8 @@
   │ drift:  2 wave(s)                                                                                               │
   │ kinds:  closed_no_pin, pinned_mismatch                                                                          │
   ╰─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+
 
 
 

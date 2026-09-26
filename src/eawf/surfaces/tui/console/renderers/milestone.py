@@ -25,6 +25,7 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
+    needs_count,
     route_keys_bar,
     thin,
 )
@@ -177,7 +178,9 @@ def native_frame(view: View, model: AcceptanceBundleView) -> list[str]:
     session, w = view.session, view.w
     cursor = restore(session, model)
     rows: list[str] = [
-        header_row(session, crumb=crumb(view, model), scope=model.scope_id, needs=0, w=w),
+        header_row(
+            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+        ),
         " " + counts(model),
         bar(w),
         _lrow("BUNDLE", _bundle_text(model)),

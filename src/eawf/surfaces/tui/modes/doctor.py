@@ -140,6 +140,7 @@ _SECTION_OF: dict[str, str] = {
     "stale_session_count": "state",
     "recent_actuals": "state",
     "iter_audit_links": "state",
+    "authority_epoch": "state",
     "recent_events": "state",
     # drift -- the manifest / MCP / git-state reconciler signals
     "manifest_in_sync": "drift",
@@ -634,6 +635,9 @@ class DoctorModeScreen(ScopeScreen):
         Binding("f", "repair", "fix", show=False),
     ]
 
+    # Card rows truncate with an ellipsis instead of wrapping: a wrapped path
+    # detail doubles a row's height, and the install card alone then pushes
+    # the drift card off a 120x40 frame. `eawf doctor` carries full details.
     DEFAULT_CSS: ClassVar[str] = """
     DoctorModeScreen #doctor-health {
         height: 1fr;
@@ -654,6 +658,8 @@ class DoctorModeScreen(ScopeScreen):
         width: 1fr;
         margin-right: 1;
         margin-bottom: 1;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
     }
     """
 

@@ -120,10 +120,11 @@ LEDGER_MERGE_ROW_LIMIT: Final = 20
 
 #: The collections a route projection also reads through their ledger, so a
 #: record does not vanish from a route that lists it the instant it compacts
-#: out of the document. Milestone is the one a route needs today -- acceptance
-#: moves it out of the document on the same commit that closes it; a collection
-#: joins here once a route that lists it needs the same read.
-LEDGER_MERGED_COLLECTIONS: Final = (Epoch2Collection.MILESTONE,)
+#: out of the document. Milestone and Batch both leave the document on the
+#: commit that moves them to a terminal status, and the Milestone and roadmap
+#: routes list both; a collection joins here once a route that lists it needs
+#: the same read.
+LEDGER_MERGED_COLLECTIONS: Final = (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH)
 
 
 class ReconnectParams(BaseModel):

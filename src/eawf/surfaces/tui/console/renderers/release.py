@@ -23,6 +23,7 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
+    needs_count,
     route_keys_bar,
     thin,
 )
@@ -83,7 +84,9 @@ def native_frame(view: View, model: ReleaseReadinessView) -> list[str]:
     session.rel_sel = max(0, min(len(model.signals) - 1, session.rel_sel))
     table = TABLES["MB"]
     rows: list[str] = [
-        header_row(session, crumb=crumb(view, model), scope=model.scope_id, needs=0, w=w),
+        header_row(
+            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+        ),
         " " + counts(model),
         bar(w),
         table.head([MEMBERSHIP, "KIND", "STATUS"]),

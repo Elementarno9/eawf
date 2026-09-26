@@ -153,6 +153,7 @@ def test_tui_epoch1_tree_keeps_epoch1_app(
 def test_tui_migration_required_exits_4_off_tty(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
     *,
     break_marker: bool,
     expected_gap: AuthorityGap,
@@ -180,6 +181,7 @@ def test_tui_migration_required_exits_4_off_tty(
     assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
     assert rc == 4
     assert called["n"] == 0
+    assert f"eawf migrate epoch2 --recover --target-root {tmp_path}" in capsys.readouterr().err
 
 
 def test_tui_migration_required_builds_entry_session_on_a_held_tty(
@@ -210,6 +212,8 @@ def test_tui_migration_required_builds_entry_session_on_a_held_tty(
 
     assert app.session.route == "entry"
     assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
+    tail = app.fixture.proto.entry[app.session.entry_sel].tail
+    assert f"  eawf migrate epoch2 --recover --target-root {tmp_path}" in tail
 
 
 # --------------------------------------------------------------------------
@@ -259,4 +263,5 @@ def test_dispatch_tui_delegates_to_launch_tui(
         "no_input": True,
         "plain": True,
         "verbose": True,
+        "operator": None,
     }

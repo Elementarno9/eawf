@@ -21,6 +21,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin, unheld
 from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.keymap import ENTRY_ROUTE
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import (
@@ -165,8 +166,12 @@ def unknown_frame(view: View) -> list[str]:
 
 
 def render_route(view: View) -> list[str]:
-    """Return the frame of the session's route, the unknown frame when nothing is held."""
-    if unheld(view):
+    """Return the frame of the session's route, the unknown frame when nothing is held.
+
+    The entry layer is drawn before any session exists, so it never waits on a read
+    model: it draws from the chrome's pre-session states alone.
+    """
+    if unheld(view) and view.session.route != ENTRY_ROUTE:
         return unknown_frame(view)
     module = ROUTE_MODULES.get(view.session.route)
     return module.render(view) if module else placeholder(view)

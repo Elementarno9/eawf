@@ -1,11 +1,9 @@
-"""The attention reducer derives every count at render time and resolves an action once.
+"""The attention reducer derives every count at render time.
 
-Two properties are asserted. Nothing about attention is stored: the header's ``!N`` and
-the Attention route's bucket strip are read out of the action register while the frame is
-composing, so resolving an action moves both on the very next render with no cache to
-invalidate. And a resolution is final: the first confirmed verb writes the action's
-terminal state and its confirmed ledger, and a second answer is reported as superseded
-and leaves both exactly as the first one wrote them.
+Nothing about attention is stored: the header's ``!N`` and the Attention route's bucket
+strip are read out of the action register while the frame is composing, so an action the
+register states as resolved moves both on the very next render with no cache to
+invalidate. Writing that state is the daemon's, never the console's.
 """
 
 from __future__ import annotations
@@ -20,7 +18,6 @@ from eawf.surfaces.tui.console.attention import (
     NEEDS,
     OPEN,
     VERB,
-    Resolution,
     attn_list,
     attn_row,
     bucket_count,
@@ -31,7 +28,6 @@ from eawf.surfaces.tui.console.attention import (
     open_count,
     ordered_actions,
     question_row,
-    resolve_action,
     top_bucket,
     verbs_for,
 )
@@ -41,7 +37,6 @@ from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
 
 GOLDEN_ROOT = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden"
 FIXTURE_DIR = GOLDEN_ROOT / "fixture"
-STAMP = "2026-08-25 11:04"
 ATTENTION_ROUTE = "attention"
 
 
@@ -88,7 +83,7 @@ def _first_open(fixture: Fixture) -> Action:
 def test_open_count_is_derived_from_the_register_at_render_time(fixture: Fixture) -> None:
     before = open_count(fixture)
     assert _needs_in_header(_render(fixture, "scope.home")) == before
-    resolve_action(_first_open(fixture), state=VERB["a"].state, stamp=STAMP)
+    _first_open(fixture).state = VERB["a"].state
     assert open_count(fixture) == before - 1
     assert _needs_in_header(_render(fixture, "scope.home")) == before - 1
 
@@ -98,7 +93,7 @@ def test_bucket_count_is_derived_from_the_register_at_render_time(fixture: Fixtu
     key = action.bucket
     before = bucket_count(fixture, key)
     assert f"{before}" in "".join(_render(fixture, ATTENTION_ROUTE))
-    resolve_action(action, state=VERB["x"].state, stamp=STAMP)
+    action.state = VERB["x"].state
     assert bucket_count(fixture, key) == before - 1
 
 
@@ -140,26 +135,6 @@ def test_verbs_for_a_notice_offer_no_answer_and_no_deny(fixture: Fixture) -> Non
     assert verbs_for(notice) == ["z", "v"]
     assert verbs_for(_first_open(fixture)) == ["a", "x", "z", "v"]
     assert verbs_for(None) == ["a", "x", "z", "v"]
-
-
-def test_resolve_action_applies_once_then_supersedes(fixture: Fixture) -> None:
-    action = _first_open(fixture)
-    assert resolve_action(action, state=VERB["a"].state, stamp=STAMP) is Resolution.APPLIED
-    sealed_state, sealed_ledger = action.state, list(action.ledger)
-    assert sealed_state == "ANSWERED"
-    assert sealed_ledger == [("requested", STAMP), ("accepted", STAMP), ("confirmed", STAMP)]
-    later = resolve_action(action, state=VERB["x"].state, stamp="2026-08-26 09:00")
-    assert later is Resolution.SUPERSEDED
-    assert action.state == sealed_state
-    assert list(action.ledger) == sealed_ledger
-
-
-def test_resolve_action_supersedes_every_later_verb(fixture: Fixture) -> None:
-    action = _first_open(fixture)
-    resolve_action(action, state=VERB["v"].state, stamp=STAMP)
-    for key in VERB:
-        assert resolve_action(action, state=VERB[key].state, stamp="later") is Resolution.SUPERSEDED
-    assert action.state == "SEALED"
 
 
 def test_top_bucket_of_a_missing_key_is_empty() -> None:

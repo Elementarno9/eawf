@@ -46,6 +46,7 @@ from eawf.surfaces.tui.console.frame import (
     View,
     bar,
     build,
+    needs_count,
     route_keys_bar,
     thin,
     window_rows,
@@ -272,7 +273,9 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     cursor = restore(session, model)
     regions = REGISTRY.focus_regions.get(session.route, ())
     rows: list[str] = [
-        header_row(session, crumb=crumb(view, model), scope=model.scope_id, needs=0, w=w),
+        header_row(
+            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+        ),
         " " + counts(model),
         bar(w),
     ]

@@ -38,6 +38,7 @@ from eawf.kernel.projection.connection import (
     negotiate_reconnect,
 )
 from eawf.kernel.projection.truth import ConnectionState
+from eawf.kernel.runtime.provider import ControlKind
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.paths import store_path
@@ -45,6 +46,12 @@ from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon.epoch2_transaction import TransitionRequest, run_transaction
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.server import handle_connection
+from eawf.surfaces.tui.console.operations import (
+    CONTROL_METHOD,
+    ControlRequest,
+    OperationStatus,
+    Operator,
+)
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     AT,
@@ -618,3 +625,152 @@ def test_the_replaying_state_is_the_one_the_header_vocabulary_names() -> None:
     """The seam's nine values and the header's states are one vocabulary, not two."""
     assert ConnectionValue.REPLAYING.value == ConnectionState.REPLAYING.value
     assert ConnectionValue.SNAPSHOT_REQUIRED.value == ConnectionState.SNAPSHOT_REQUIRED.value
+
+
+#: The Run the reconciliation suite controls, seeded running beside the Milestones.
+RUN_KEY = "RUN-00000010"
+
+
+class _LosingClient:
+    """A client whose next control request reaches the daemon and loses its answer.
+
+    The daemon commits the request and answers it; the answer never gets back. That is
+    the one break reconciliation exists for: the write happened, and the console cannot
+    tell.
+    """
+
+    lose_next = False
+
+    def __init__(self, inner: _LoopbackClient) -> None:
+        self._inner = inner
+
+    def __enter__(self) -> _LosingClient:
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._inner.__exit__(*exc)
+
+    def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Forward the call, then drop the answer if a loss is armed.
+
+        Raises:
+            ConnectionError: The armed control request's answer was lost.
+        """
+        answer = self._inner.call(method, params)
+        if method == CONTROL_METHOD and _LosingClient.lose_next:
+            _LosingClient.lose_next = False
+            raise ConnectionError("the answer to the control request was lost")
+        return answer
+
+
+async def _control_count(canary: CanaryProvision, factory: Any) -> int:
+    """Return how many control requests the Run's ledger holds, by filing one more."""
+
+    def _blocking() -> dict[str, Any]:
+        with factory() as client:
+            filed: dict[str, Any] = client.call(
+                CONTROL_METHOD,
+                {
+                    "repo_root": str(canary.root),
+                    "urn": f"{MILESTONE_URN.rsplit('/', 2)[0]}/run/{RUN_KEY}",
+                    "control_request_ref": "CTL-00000000ffff",
+                    "control": "steer",
+                    "actor": ACTOR,
+                },
+            )
+        return filed
+
+    answer = await asyncio.to_thread(_blocking)
+    return int(answer["fact"]["sequence"]) - 1
+
+
+@pytest.mark.parametrize(
+    ("order", "disposition"),
+    [
+        # The loss lands before the console's cursor: the gap is Milestone rows alone.
+        ("lost-before-cursor", ReconnectDisposition.CURRENT),
+        ("lost-before-cursor", ReconnectDisposition.REPLAY),
+        ("lost-before-cursor", ReconnectDisposition.SNAPSHOT_REQUIRED),
+        # The control fact is itself in the gap. Its ledger row names no record a patch
+        # could move, so the daemon will not replay across it and asks for a snapshot.
+        ("lost-inside-gap", ReconnectDisposition.SNAPSHOT_REQUIRED),
+        ("lost-after-gap", ReconnectDisposition.SNAPSHOT_REQUIRED),
+    ],
+)
+def test_reconnect_reconciles_outstanding_operation(
+    canary: CanaryProvision, tmp_path: Path, order: str, disposition: ReconnectDisposition
+) -> None:
+    """Step six: an operation whose answer was lost is reconciled by its id, written once."""
+    seed(canary, {"run": {RUN_KEY: seed_row("run", "RUNNING")}})
+    ctx = method_context(tmp_path / "runtime")
+    runtime = tmp_path / "runtime"
+    snapshot = disposition is ReconnectDisposition.SNAPSHOT_REQUIRED
+
+    async def body() -> tuple[Any, ...]:
+        async with _served(ctx) as (factory, _calls):
+
+            def losing() -> _LosingClient:
+                return _LosingClient(factory())
+
+            seam = ProjectionSeam(
+                route=ROUTE,
+                scope_id="EAWF",
+                state_path=None,
+                repo_root=canary.root,
+                daemon_client_factory=losing,
+                operator=Operator(principal=ACTOR),
+            )
+            await _commit(canary, runtime, KEYS[0])
+            # The Run's row is what the control is addressed from.
+            await seam.load("activity")
+
+            async def lose_one() -> Any:
+                _LosingClient.lose_next = True
+                return await seam.request(
+                    ControlRequest(target=RUN_KEY, control=ControlKind.CANCEL)
+                )
+
+            async def commit(key: str) -> None:
+                envelope = await _commit(canary, runtime, key)
+                if snapshot and key == KEYS[1] and order == "lost-before-cursor":
+                    _drop_from_retention(
+                        canary, sequence=int(envelope.payload["canonical_sequence"])
+                    )
+
+            if order == "lost-before-cursor":
+                lost = await lose_one()
+                await seam.load()
+                if disposition is not ReconnectDisposition.CURRENT:
+                    await commit(KEYS[1])
+                    await commit(KEYS[2])
+            elif order == "lost-inside-gap":
+                await seam.load()
+                await commit(KEYS[1])
+                lost = await lose_one()
+                await commit(KEYS[2])
+            else:
+                await seam.load()
+                await commit(KEYS[1])
+                await commit(KEYS[2])
+                lost = await lose_one()
+            outstanding = seam.outstanding
+            outcome = await seam.reconnect()
+            return (
+                lost,
+                outstanding,
+                outcome,
+                seam.outstanding,
+                await _control_count(canary, factory),
+            )
+
+    lost, outstanding, outcome, after, written = asyncio.run(body())
+    assert lost.status is OperationStatus.OUTSTANDING
+    assert [op.operation_id for op in outstanding] == [lost.operation_id]
+    assert outcome.negotiation.disposition is disposition
+    assert [(r.operation_id, r.status) for r in outcome.reconciled] == [
+        (lost.operation_id, OperationStatus.APPLIED)
+    ]
+    assert after == ()
+    # Reconciling asked again under the same id; the daemon answered, it did not re-file.
+    assert written == 1

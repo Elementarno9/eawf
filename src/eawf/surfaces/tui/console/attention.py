@@ -4,19 +4,20 @@ One ordering, one label table and one bucket match feed the header's ``!N``, sco
 the Attention route, the verbs and the consequence card, so none of them can disagree.
 Every count is derived from the register when a frame renders; nothing is stored. A
 notice is left out of the open count because it never blocks and never needs the operator.
-A verb resolves an open action once: the action's terminal state and ledger are then
-immutable, and a later answer is superseded rather than applied.
+A verb never writes the register here: an answer is sent to the daemon, which seals an open
+action once and reports a later answer as superseded, and a verb no daemon mutator carries
+is refused with its reason.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 from types import MappingProxyType
 
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, VerbWeight
 from eawf.surfaces.tui.console.fixture import Action, Fixture
+from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.reads import can_mutate, mut_reason
 from eawf.surfaces.tui.console.session import Session
 
@@ -24,8 +25,6 @@ OPEN = "OPEN"
 ATTENTION_ROUTE = "attention"
 # The bucket whose sub-buckets a parent filter also matches.
 NEEDS = "needs"
-# The ledger a confirmed control records, each stage stamped with the confirm time.
-LEDGER_STAGES: tuple[str, ...] = ("requested", "accepted", "confirmed")
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,13 +43,6 @@ VERB: Mapping[str, Verb] = MappingProxyType(
         "v": Verb("resolve", "SEALED"),
     }
 )
-
-
-class Resolution(StrEnum):
-    """What a verb did to the action it was confirmed on."""
-
-    APPLIED = "applied"
-    SUPERSEDED = "superseded"
 
 
 def bucket_keys(fixture: Fixture) -> list[str]:
@@ -193,9 +185,19 @@ def verb_available(session: Session, fixture: Fixture, verb: MenuVerb | None) ->
         refusal = _attention_refusal(session, fixture, verb.key)
         if refusal:
             return Availability(False, refusal)
-    if is_mutation(session, verb) and not can_mutate(session):
-        return Availability(False, mut_reason(session, fixture))
-    return Availability(True)
+    refusal = _write_refusal(session, fixture, verb) if is_mutation(session, verb) else ""
+    return Availability(False, refusal) if refusal else Availability(True)
+
+
+def _write_refusal(session: Session, fixture: Fixture, verb: MenuVerb) -> str:
+    """Return why a writing verb cannot act: the link refuses writes, or no daemon verb exists.
+
+    The connection state is judged first, so an offline console names the state that
+    stops every write rather than one verb's missing mutator.
+    """
+    if not can_mutate(session):
+        return mut_reason(session, fixture)
+    return binding_refusal(session.route, verb.verb)
 
 
 def gated(session: Session, fixture: Fixture, *, key: str, verb: str, row: Action | None) -> bool:
@@ -221,26 +223,14 @@ def gated(session: Session, fixture: Fixture, *, key: str, verb: str, row: Actio
             key, f"{row.id} is already {row.state.lower()} — a resolved action is immutable"
         )
         return True
-    if can_mutate(session):
-        return False
-    session.log_key(key, f"{verb} is unavailable — {mut_reason(session, fixture)}")
-    return True
-
-
-def resolve_action(action: Action, *, state: str, stamp: str) -> Resolution:
-    """Resolve an open action to ``state`` with a confirmed ledger stamped ``stamp``.
-
-    A resolved action keeps the state and ledger its first resolution wrote, so a second
-    answer is superseded rather than applied.
-
-    Returns:
-        ``APPLIED`` when the action was open, ``SUPERSEDED`` when it was already resolved.
-    """
-    if action.state != OPEN:
-        return Resolution.SUPERSEDED
-    action.ledger = [(stage, stamp) for stage in LEDGER_STAGES]
-    action.state = state
-    return Resolution.APPLIED
+    if not can_mutate(session):
+        session.log_key(key, f"{verb} is unavailable — {mut_reason(session, fixture)}")
+        return True
+    unbound = binding_refusal(ATTENTION_ROUTE, VERB[key].name) if key in VERB else ""
+    if unbound:
+        session.log_key(key, f"{verb} is unavailable — {unbound}")
+        return True
+    return False
 
 
 def menu_verbs(session: Session, fixture: Fixture) -> tuple[MenuVerb, ...]:

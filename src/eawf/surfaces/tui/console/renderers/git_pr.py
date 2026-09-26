@@ -22,6 +22,7 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     g_frame,
+    needs_count,
     route_keys_bar,
     thin,
 )
@@ -98,7 +99,9 @@ def native_frame(view: View, model: GitPrReadModel) -> list[str]:
     """
     session, w = view.session, view.w
     rows: list[str] = [
-        header_row(session, crumb=crumb(view, model), scope=model.scope_id, needs=0, w=w),
+        header_row(
+            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+        ),
         " " + counts(model),
         bar(w),
     ]

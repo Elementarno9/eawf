@@ -20,6 +20,7 @@ nothing handles is a frame promising an action it does not have.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import re
 from datetime import UTC, datetime
@@ -42,8 +43,14 @@ from eawf.kernel.projection.registers import (
     attention_mine,
     build_register_view,
 )
+from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.truth import TruthState
+from eawf.kernel.store.compaction import compact_terminal_record, document_rows, read_document
+from eawf.kernel.store.ledger import LedgerRecord
+from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS
+from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
@@ -51,8 +58,18 @@ from eawf.surfaces.tui.console.frame import View, needs_count
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import route_keys
 from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.overlays import render_overlay
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.launch import repair_lines, with_repair_lines
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import AT as TXN_AT
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
+    document_path,
+    method_context,
+    provision,
+    seed,
+    seed_row,
+)
 
 #: When the probe projections are stamped. The digest does not cover the stamp; a fixed
 #: clock only keeps this suite's output reproducible.
@@ -328,3 +345,151 @@ def test_an_unadvertised_key_on_a_register_route_reads_as_unclaimed() -> None:
     dispatch(Ctx(session=session, fixture=fixture, host=_Host(), w=120, h=30), "Q", False)
     assert session.trace is not None
     assert session.trace.endswith("unclaimed")
+
+
+# ---------- native frames print the live count, not a hard-coded zero ----------
+
+
+def _chrome_fixture() -> Fixture:
+    """Return the fixture a live console holds: the packaged chrome and no prototype row."""
+    return Fixture.from_chrome(load_chrome())
+
+
+def _native_view(route: str, *, attention: RegisterView | None) -> View:
+    """Return a live-console view on native ``route`` holding ``attention``."""
+    session = Session()
+    session.route = route
+    return View(
+        session=session,
+        fixture=_chrome_fixture(),
+        w=120,
+        h=24,
+        projection=build_spine_view(_projection(route, document={})),
+        attention=attention,
+    )
+
+
+@pytest.mark.parametrize("route", ["track", "roadmap"])
+def test_native_frame_header_prints_two_open_attention_items(route: str) -> None:
+    """A native frame reads the same register the prototype frames read."""
+    rows = render_route(_native_view(route, attention=_written_attention(2)))
+    assert "!2 NEEDS YOU" in rows[0]
+
+
+def test_native_frame_header_prints_a_single_open_item() -> None:
+    """The off-by-one boundary: one open action is a badge, not an absent one."""
+    rows = render_route(_native_view("track", attention=_written_attention(1)))
+    assert "!1 NEEDS YOU" in rows[0]
+
+
+def test_native_frame_header_prints_no_badge_when_no_register_is_held() -> None:
+    """The empty boundary: a live console holding no Attention register shows no count."""
+    rows = render_route(_native_view("track", attention=None))
+    assert "NEEDS YOU" not in rows[0]
+
+
+# ---------- the help overlay lists the paging keys a native frame advertises ----------
+
+
+def test_help_overlay_on_a_native_frame_lists_the_paging_keys() -> None:
+    """A native keybar pages, so its help names the keys in full, as the bar does."""
+    view = _native_view("track", attention=None)
+    rows = render_overlay("help", view)
+    assert any("PageUp PageDown" in row and "page" in row for row in rows)
+    assert any("Home End" in row and "ends" in row for row in rows)
+
+
+def test_help_overlay_on_a_prototype_frame_keeps_the_prototype_table() -> None:
+    """Without a held read model the help lists the route's own table, unchanged."""
+    session = Session()
+    session.route = "track"
+    rows = render_overlay("help", View(session=session, fixture=_fixture(), w=120, h=30))
+    table = {entry.token for entry in route_keys(session, _fixture())}
+    assert ("PageUp PageDown" in table) == any("PageUp PageDown" in row for row in rows)
+
+
+def test_help_overlay_for_an_unknown_overlay_name_raises() -> None:
+    """The overlay table is closed: a name it does not bind is refused."""
+    with pytest.raises(KeyError):
+        render_overlay("not-an-overlay", _native_view("track", attention=None))
+
+
+# ---------- a Batch compacted at a terminal status still reaches its route ----------
+
+
+def test_native_route_rows_keep_a_batch_compacted_at_a_terminal_status(tmp_path: Path) -> None:
+    """The daemon's read verb merges the Batch ledger's terminal rows back in."""
+    provisioned = provision(tmp_path / "repo")
+    row = seed_row("batch", "COMPLETED")
+    key = str(row["key"])
+    seed(provisioned, {Epoch2Collection.BATCH.value: {key: row}})
+    compact_terminal_record(
+        document_path(provisioned),
+        record=LedgerRecord(
+            collection=Epoch2Collection.BATCH,
+            record_key=key,
+            status="COMPLETED",
+            recorded_at=TXN_AT,
+            payload=row,
+        ),
+    )
+    document = read_document(document_path(provisioned))
+    assert key not in document_rows(document, Epoch2Collection.BATCH)
+
+    answer = asyncio.run(
+        methods.dispatch(
+            "projection.git.pr.read",
+            method_context(tmp_path / "runtime"),
+            {"repo_root": str(provisioned.root)},
+        )
+    )
+
+    batches = {r["key"]: r for r in answer["rows"] if r["collection"] == "batch"}
+    assert key in batches
+    assert batches[key]["status"]["value"] == "COMPLETED"
+
+
+def test_native_route_rows_hold_no_batch_when_the_ledger_is_empty(tmp_path: Path) -> None:
+    """The empty boundary: a tree whose Batch ledger was never written reads no Batch."""
+    provisioned = provision(tmp_path / "repo")
+    answer = asyncio.run(
+        methods.dispatch(
+            "projection.git.pr.read",
+            method_context(tmp_path / "runtime"),
+            {"repo_root": str(provisioned.root)},
+        )
+    )
+    assert [r for r in answer["rows"] if r["collection"] == "batch"] == []
+
+
+# ---------- the stuck-migration entry layer shows the repair command ----------
+
+
+@pytest.mark.parametrize("state_id", ["migration", "interrupted"])
+def test_stuck_migration_entry_shows_the_repair_command(tmp_path: Path, state_id: str) -> None:
+    """The entry layer draws from the chrome, so a live console shows the command."""
+    chrome = with_repair_lines(load_chrome(), state_id, repair_lines(tmp_path))
+    session = Session()
+    session.route = "entry"
+    session.entry_sel = next(i for i, s in enumerate(chrome.entry) if s.id == state_id)
+    view = View(session=session, fixture=Fixture.from_chrome(chrome), w=240, h=30)
+
+    rows = render_route(view)
+
+    assert not any("NOT HELD" in row for row in rows)
+    assert any(f"eawf migrate epoch2 --recover --target-root {tmp_path}" in r for r in rows)
+    assert "MIGRATION REQUIRED" in rows[0]
+
+
+def test_repair_lines_quote_a_target_root_holding_a_space(tmp_path: Path) -> None:
+    """A path the shell would split is quoted, so the shown command runs as printed."""
+    root = tmp_path / "a tree"
+    lines = repair_lines(root)
+    assert lines[1].endswith(f"--target-root '{root}'")
+    assert lines[-1].endswith(f"--rollback --target-root '{root}'")
+
+
+def test_with_repair_lines_refuses_an_unknown_entry_state() -> None:
+    """Replacing the tail of a state the chrome does not carry is refused."""
+    with pytest.raises(ValueError, match="no entry state"):
+        with_repair_lines(load_chrome(), "not-a-state", ("x",))

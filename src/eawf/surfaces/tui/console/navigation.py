@@ -10,6 +10,7 @@ second answer of its own.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -17,6 +18,7 @@ from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.clock import Clock, notify
 from eawf.surfaces.tui.console.fixture import Fixture
+from eawf.surfaces.tui.console.operations import VerbRequest
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import Severity
@@ -55,6 +57,9 @@ class Ctx:
         unheld: Whether the frame is the unknown frame: the console holds no prototype
             rows and no read model for the route. A route's own keys act on rows the
             frame drew, so they claim nothing while it drew none.
+        send: Hands a confirmed verb to the daemon link, answering whether a link took
+            it; the answer arrives later, on the link's own time. ``None`` when the
+            console has no daemon link, where a confirmed verb is sent nowhere.
     """
 
     session: Session
@@ -65,6 +70,7 @@ class Ctx:
     verbose: bool = False
     projection: SpineView | RouteReadModel | None = None
     unheld: bool = False
+    send: Callable[[VerbRequest], bool] | None = None
 
     @property
     def s(self) -> Session:
@@ -87,6 +93,10 @@ class Ctx:
     def noop(self, key: str) -> None:
         """Record an unclaimed key."""
         self.session.noop(key, verbose=self.verbose)
+
+    def dispatch_write(self, request: VerbRequest) -> bool:
+        """Hand ``request`` to the daemon link; ``False`` when there is no link to take it."""
+        return self.send is not None and self.send(request)
 
 
 def busy(session: Session) -> bool:

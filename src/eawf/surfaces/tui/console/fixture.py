@@ -4,9 +4,9 @@ The registers are the prototype's data files (``proto.json``, ``detail.json``,
 ``g.json`` and ``settings.json``). Every model forbids unknown keys, so a field the
 extractor starts emitting cannot pass silently, and field names are the console's own
 with the files' spellings kept as aliases. Counts are never stored: every renderer
-derives them from these registers at render time. Two registers stay mutable because a
-confirmed verb writes them: an attention action's state and ledger, and the settings
-values a lens edit stores.
+derives them from these registers at render time. Two registers stay mutable: an
+attention action's state and ledger, which stand for what the daemon last stated about
+the action (a console verb never writes them), and the settings values a lens edit stores.
 
 The files carry the chrome tables too (buckets, menus, connection states, entry states
 and the settings catalog). A fixture keeps its own copy of them, so the golden contract
@@ -78,7 +78,7 @@ class FleetRow(_Frozen):
 
 
 class Action(BaseModel):
-    """One attention action; a confirmed verb writes its state and ledger."""
+    """One attention action; its state and ledger are what the daemon last stated."""
 
     model_config = ConfigDict(extra="forbid", validate_by_name=True)
 

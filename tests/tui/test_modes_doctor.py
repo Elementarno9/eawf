@@ -86,6 +86,9 @@ def _isolate_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(tmp_path / "instrument-probe.json"))
+    # A gate runner exports EA_STATE at its sandbox copy of the live state,
+    # which outranks the fixture tree and fills the frame with live rows.
+    monkeypatch.delenv("EA_STATE", raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -575,6 +578,13 @@ def test_doctor_mode_renders_honest_empty_clean_case() -> None:
             frame = normalize_snapshot(capture_screen_text(app))
             assert "git_state_drift" in frame
             assert "recent_events" in frame
+            assert "authority_epoch" in frame
+            # Every gathered row must fit the frame, not only the pinned three.
+            state_path = app._state_path
+            workspace = state_path.parent.parent if state_path is not None else None
+            health = gather_doctor_health(workspace=workspace, state_path=state_path)
+            missing = [row.name for row in health.rows if row.name not in frame]
+            assert missing == []
             # No closed waves -> no DRIFT count block.
             assert "wave(s)" not in frame
 

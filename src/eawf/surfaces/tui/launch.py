@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,6 +28,7 @@ from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 
 if TYPE_CHECKING:
     from eawf.surfaces.tui.console.app import ConsoleApp
+    from eawf.surfaces.tui.console.operations import Operator
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
 #: SURF-085: the exit code a terminal entry-layer state returns off a TTY. Nothing
@@ -75,6 +77,43 @@ def entry_state_id_for(authority: RootAuthority) -> str | None:
     return _GAP_ENTRY_STATE.get(authority.gap)
 
 
+def repair_lines(root: Path) -> tuple[str, ...]:
+    """Return the lines naming the exact commands that repair a stuck migration at ``root``.
+
+    Both stuck states are repaired by the same pair: ``--recover`` finishes or undoes the
+    stopped cutover, whichever the tree's boundary allows, and ``--rollback`` restores the
+    surfaces the restore point pinned.
+
+    Args:
+        root: The declared tree, the one ``--target-root`` names.
+
+    Returns:
+        The repair lines, the recommended command first.
+    """
+    target = shlex.quote(str(root))
+    # Each command sits on a line of its own, so a long root never shares the width.
+    return (
+        "REPAIR    finishes or undoes the stopped cutover, whichever the tree allows",
+        f"  eawf migrate epoch2 --recover --target-root {target}",
+        "UNDO      restores the surfaces the restore point pinned",
+        f"  eawf migrate epoch2 --rollback --target-root {target}",
+    )
+
+
+def with_repair_lines(
+    chrome: ConsoleChrome, state_id: str, lines: tuple[str, ...]
+) -> ConsoleChrome:
+    """Return ``chrome`` with entry state ``state_id``'s tail replaced by ``lines``.
+
+    Raises:
+        ValueError: no entry state in ``chrome`` carries this id.
+    """
+    at = _entry_sel(chrome, state_id)
+    entry = list(chrome.entry)
+    entry[at] = entry[at].model_copy(update={"tail": lines})
+    return chrome.model_copy(update={"entry": tuple(entry)})
+
+
 def _entry_sel(chrome: ConsoleChrome, state_id: str) -> int:
     """Return the packaged chrome's entry-state index named ``state_id``.
 
@@ -92,12 +131,58 @@ def _is_terminal(chrome: ConsoleChrome, state_id: str) -> bool:
     return chrome.entry[_entry_sel(chrome, state_id)].exit == _TERMINAL_EXIT
 
 
+def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator | None:
+    """Return who the console acts as, from the principal and receipt the operator named.
+
+    The daemon keeps no operator session a client could look a principal up from:
+    every native writer names its principal key itself, and the approval seal checks
+    only that the resolver is that same actor and that the cited receipt is an evidence
+    row the tree holds. So the console takes both from the operator at launch, as the
+    ``domain`` seal command does, and checks their shape here so a typo fails before
+    the console opens rather than on the first answer.
+
+    Args:
+        actor: The principal key the console's writes are attributed to; ``None`` for
+            a console that acts as nobody, whose writing verbs then refuse with why.
+        receipt_ref: The qualified evidence URN answers are recorded under; ``None``
+            leaves Run controls bound and answers refused for want of a receipt.
+
+    Returns:
+        The operator, or ``None`` when no principal was named.
+
+    Raises:
+        ValueError: A receipt was named without a principal, or either value is
+            malformed.
+    """
+    from pydantic import TypeAdapter, ValidationError
+
+    from eawf.kernel.state.epoch2.base import PrincipalKey
+    from eawf.kernel.state.epoch2.urns import EvidenceUrn
+    from eawf.surfaces.tui.console.operations import Operator
+
+    if actor is None:
+        if receipt_ref is not None:
+            raise ValueError("a receipt needs a principal to record the answer under: name --actor")
+        return None
+    try:
+        TypeAdapter(PrincipalKey).validate_python(actor)
+    except ValidationError as error:
+        raise ValueError(f"principal {actor!r} is not a principal key (e.g. OP-0001)") from error
+    if receipt_ref is not None:
+        try:
+            TypeAdapter(EvidenceUrn).validate_python(receipt_ref)
+        except ValidationError as error:
+            raise ValueError(f"receipt {receipt_ref!r} is not a qualified evidence URN") from error
+    return Operator(principal=actor, receipt_ref=receipt_ref)
+
+
 def launch_tui(
     *,
     workspace: Path | None,
     no_input: bool,
     plain: bool,
     verbose: bool = False,
+    operator: Operator | None = None,
 ) -> int:
     """Resolve the tree's authority and open the matching app, or fall back off a TTY.
 
@@ -107,6 +192,9 @@ def launch_tui(
         plain: Plain-output flag -- forces the deterministic status fallback.
         verbose: Whether the native console's ``--verbose`` key-trace row is shown
             (SURF-173). Has no effect on the epoch-1 app, which carries no such row.
+        operator: Who the native console's writes are attributed to, from
+            :func:`resolve_operator`; ``None`` leaves every writing verb refused with
+            that reason. Has no effect on the epoch-1 app.
 
     Returns:
         Process exit code (``0`` on a clean quit).
@@ -134,6 +222,7 @@ def launch_tui(
     state_id = entry_state_id_for(authority)
 
     if state_id is not None and _is_terminal(chrome, state_id) and not tty:
+        print("\n".join(repair_lines(authority.root)), file=sys.stderr)
         return TERMINAL_ENTRY_EXIT_CODE
 
     if no_input or plain or not tty:
@@ -143,18 +232,28 @@ def launch_tui(
 
     if authority.epoch == 2:
         return _launch_native(
-            authority=authority, state_path=state_path, chrome=chrome, verbose=verbose
+            authority=authority,
+            state_path=state_path,
+            chrome=chrome,
+            verbose=verbose,
+            operator=operator,
         )
 
     if state_id is not None:
-        return _launch_entry(chrome=chrome, state_id=state_id, verbose=verbose)
+        repaired = with_repair_lines(chrome, state_id, repair_lines(authority.root))
+        return _launch_entry(chrome=repaired, state_id=state_id, verbose=verbose)
 
     print(EPOCH1_NOTICE, file=sys.stderr)
     return _launch_epoch1(state_path=state_path)
 
 
 def _launch_native(
-    *, authority: RootAuthority, state_path: Path, chrome: ConsoleChrome, verbose: bool
+    *,
+    authority: RootAuthority,
+    state_path: Path,
+    chrome: ConsoleChrome,
+    verbose: bool,
+    operator: Operator | None,
 ) -> int:
     """Open the console over a live seam bound to the tree's epoch-2 authority."""
     from eawf.runtime.daemon.epoch2_root import RootIdentity
@@ -164,7 +263,11 @@ def _launch_native(
 
     scope_id = RootIdentity.of(authority.root).root_id
     seam = ProjectionSeam(
-        route=_HOME_ROUTE, scope_id=scope_id, state_path=state_path, repo_root=authority.root
+        route=_HOME_ROUTE,
+        scope_id=scope_id,
+        state_path=state_path,
+        repo_root=authority.root,
+        operator=operator,
     )
     app = ConsoleApp(chrome=chrome, seam=seam, clock=Clock(), verbose=verbose)
     return _run_console(app, seam)
@@ -233,4 +336,7 @@ __all__ = [
     "TERMINAL_ENTRY_EXIT_CODE",
     "entry_state_id_for",
     "launch_tui",
+    "repair_lines",
+    "resolve_operator",
+    "with_repair_lines",
 ]

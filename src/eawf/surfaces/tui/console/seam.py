@@ -15,13 +15,17 @@ a refusal, or nothing to do (2); it refuses any patch outside the exact range th
 daemon named (3); it applies the gap and lands on the daemon's cursor, or holds the
 refusal until an operator accepts the repair and a whole projection is fetched (4);
 and it restores the selection by stable id, reporting a selection that is gone rather
-than sliding onto a neighbour (5). Step 7 -- a clean load and a replayed projection at
-one cursor digest alike -- holds because the replay rebuilds through the daemon's own
-projection builder rather than digesting rows here.
+than sliding onto a neighbour (5). It reconciles every operation it sent and never heard
+back about by sending it again under its own operation id (6): the daemon files a write
+under that id, so the second send answers with what the first one did rather than
+writing twice, and an operation whose answer is lost again simply stays outstanding.
+Step 7 -- a clean load and a replayed projection at one cursor digest alike -- holds
+because the replay rebuilds through the daemon's own projection builder rather than
+digesting rows here.
 
-Step 6, reconciling outstanding action operations by operation id before retry, has no
-producer yet: nothing in epoch 2 issues an operation id the console could hold. It is
-a declared hole rather than a step this seam pretends to run.
+The seam is also the one way a console verb reaches the daemon. A verb is addressed from
+the projection rows the seam holds, so a write names the revision the operator was shown,
+and is sent through the same binding every read uses.
 
 A count is the other thing the seam answers, because only the seam knows what the link
 can vouch for: outside a live and complete projection a count is labelled rather than
@@ -47,7 +51,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, KeyedPatch, RouteProjection
+from eawf.kernel.projection.compute import (
+    ROUTE_COLLECTIONS,
+    KeyedPatch,
+    ProjectionRow,
+    RouteProjection,
+)
 from eawf.kernel.projection.connection import (
     READ_METHOD_TEMPLATE,
     RECONNECT_METHOD_TEMPLATE,
@@ -65,7 +74,20 @@ from eawf.kernel.projection.connection import (
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, SettingsView
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
+from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.console.operations import (
+    ConsoleOperation,
+    OperationLedger,
+    OperationResult,
+    OperationStatus,
+    Operator,
+    VerbRequest,
+    address,
+    refused,
+    settled,
+    unanswered,
+)
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -125,12 +147,15 @@ class ReconnectOutcome:
         selection_missing: Whether the restored selection names a row the projection
             no longer holds. The selection is kept rather than moved, so the console
             opens a resolution card instead of silently selecting a neighbour.
+        reconciled: What each operation outstanding at the break turned out to be, in
+            the order it was sent; one still unanswered is reported as outstanding.
     """
 
     negotiation: ReconnectNegotiation
     connection: ConnectionValue
     applied: int
     selection_missing: bool
+    reconciled: tuple[OperationResult, ...] = ()
 
 
 class ProjectionSeam:
@@ -154,6 +179,7 @@ class ProjectionSeam:
         on_degraded: Callable[[bool], Awaitable[None]] | None = None,
         clock: Callable[[], datetime] | None = None,
         capacity: int = DEFAULT_ROUTE_CAPACITY,
+        operator: Operator | None = None,
         **binding_options: Any,
     ) -> None:
         """Build the seam and the one binding that carries it.
@@ -173,6 +199,8 @@ class ProjectionSeam:
             clock: When a rebuilt projection is stamped; defaults to the wall clock.
             capacity: How many route projections are held at once, pinned ones
                 included.
+            operator: Who the console's writes are attributed to. A seam given none
+                refuses every write with that reason and sends nothing.
             **binding_options: Passed through to the binding, for the poll and probe
                 cadences and the client factory a test drives it with.
 
@@ -200,6 +228,8 @@ class ProjectionSeam:
         self._filters: dict[str, str] = {}
         self._connection = ConnectionValue.DISCONNECTED
         self._backstop_ticks = 0
+        self._operator = operator
+        self._operations = OperationLedger()
         self._binding = StateBinding(
             state_path,
             StateBindingCallbacks(
@@ -453,10 +483,10 @@ class ProjectionSeam:
                 f"gap={negotiation.gap} first_missing={negotiation.first_missing}"
             )
             self._drop_hidden()
-            return self._outcome(negotiation, applied=0)
+            return self._outcome(negotiation, applied=0, reconciled=await self._reconcile())
         if negotiation.disposition is ReconnectDisposition.CURRENT:
             self._adopt(held)
-            return self._outcome(negotiation, applied=0)
+            return self._outcome(negotiation, applied=0, reconciled=await self._reconcile())
         gap = negotiation.gap
         assert gap is not None, "a replay always states the range it closes"
         self._refuse_patches_outside(patches, negotiation=negotiation)
@@ -470,7 +500,95 @@ class ProjectionSeam:
             )
         )
         self._drop_hidden()
-        return self._outcome(negotiation, applied=len(patches))
+        return self._outcome(negotiation, applied=len(patches), reconciled=await self._reconcile())
+
+    @property
+    def outstanding(self) -> tuple[ConsoleOperation, ...]:
+        """Return the operations sent and not yet answered, oldest first."""
+        return self._operations.outstanding()
+
+    async def request(self, request: VerbRequest) -> OperationResult:
+        """Send one console verb to the daemon, addressed from the rows the seam holds.
+
+        The target is addressed by the URN and revision of the row the operator was
+        shown, so a write never names a revision the console did not draw. Nothing the
+        console holds changes here; the daemon's commit arrives as a patch like any
+        other.
+
+        Args:
+            request: What the operator asked for.
+
+        Returns:
+            What became of it: applied, superseded, refused with the daemon's reason,
+            or outstanding when the answer never arrived. A request that cannot be
+            addressed is refused without being sent.
+        """
+        if self._operator is None:
+            return OperationResult(
+                operation_id=None,
+                target=request.target,
+                status=OperationStatus.REFUSED,
+                detail=(
+                    "the console has no operator principal to act as — nothing was sent; "
+                    "relaunch with --actor (and --receipt-ref to answer)"
+                ),
+            )
+        row = self._row(request.target)
+        if row is None:
+            return OperationResult(
+                operation_id=None,
+                target=request.target,
+                status=OperationStatus.REFUSED,
+                detail=f"{request.target} is in no projection the console holds — nothing was sent",
+            )
+        addressed = address(
+            request, urn=row.urn, revision=int(row.revision), operator=self._operator
+        )
+        if isinstance(addressed, OperationResult):
+            return addressed
+        self._operations.open(addressed)
+        return await self._send(addressed)
+
+    async def _send(self, operation: ConsoleOperation) -> OperationResult:
+        """Send *operation* under its own id and settle the ledger with the answer.
+
+        A refusal the daemon answered with wrote nothing, so it closes the operation.
+        Any other failure leaves the outcome unknown, so the operation stays
+        outstanding for the reconnect to reconcile.
+        """
+        try:
+            answer = await self._binding.call(
+                operation.method, {**operation.params, **self._params()}
+            )
+        except DaemonRpcError as error:
+            result = refused(operation, error.message)
+        except Exception as exc:
+            logger.warning(
+                f"operation unanswered id={operation.operation_id} "
+                f"method={operation.method} cause={exc!r}"
+            )
+            result = unanswered(operation)
+        else:
+            result = settled(operation, answer)
+        self._operations.settle(result)
+        logger.info(
+            f"operation id={operation.operation_id} method={operation.method} "
+            f"status={result.status.value}"
+        )
+        return result
+
+    async def _reconcile(self) -> tuple[OperationResult, ...]:
+        """Ask the daemon again for every outstanding operation, by its own id."""
+        return tuple([await self._send(op) for op in self._operations.outstanding()])
+
+    def _row(self, key: str) -> ProjectionRow | None:
+        """Return the held row keyed *key*, the visible route's first."""
+        for route in (self._route, *reversed(self._held)):
+            held = self._held.get(route)
+            found = next((row for row in held.rows if row.key == key), None) if held else None
+            if found is not None:
+                return found
+        return None
 
     async def load_snapshot(self) -> RouteProjection:
         """Carry out the repair a ``snapshot_required`` refusal demands.
@@ -618,13 +736,20 @@ class ProjectionSeam:
         assert held is not None, "only called with a projection held"
         return int(held.header.source_cursor)
 
-    def _outcome(self, negotiation: ReconnectNegotiation, *, applied: int) -> ReconnectOutcome:
+    def _outcome(
+        self,
+        negotiation: ReconnectNegotiation,
+        *,
+        applied: int,
+        reconciled: tuple[OperationResult, ...],
+    ) -> ReconnectOutcome:
         """Return the outcome, with the selection restored by stable id."""
         return ReconnectOutcome(
             negotiation=negotiation,
             connection=self._connection,
             applied=applied,
             selection_missing=self._selection_missing(),
+            reconciled=reconciled,
         )
 
     def _selection_missing(self) -> bool:

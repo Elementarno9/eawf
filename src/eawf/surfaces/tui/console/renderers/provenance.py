@@ -19,7 +19,16 @@ from __future__ import annotations
 from eawf.kernel.projection.settings import SettingsLeaf, SettingsView
 from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console.format import group
-from eawf.surfaces.tui.console.frame import Fixed, Table, View, bar, build, route_keys_bar, thin
+from eawf.surfaces.tui.console.frame import (
+    Fixed,
+    Table,
+    View,
+    bar,
+    build,
+    needs_count,
+    route_keys_bar,
+    thin,
+)
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.session import Session
@@ -125,7 +134,7 @@ def list_frame(view: View, settings: SettingsView) -> list[str]:
     take = max(1, view.h - _LIST_CHROME)
     start = window(total, cursor=cursor or 0, take=take)
     rows: list[str] = [
-        header_row(session, crumb=_crumb(scope), scope=scope, needs=0, w=w),
+        header_row(session, crumb=_crumb(scope), scope=scope, needs=needs_count(view), w=w),
         _counts(settings),
         bar(w),
         _LEAVES.head(["LEAF", "EFFECTIVE", "LAYER", "OVERRODE"]),
@@ -160,7 +169,7 @@ def stack_frame(view: View, settings: SettingsView) -> list[str]:
         return list_frame(view, settings)
     leaf = settings.leaves[cursor]
     rows: list[str] = [
-        header_row(session, crumb=_crumb(scope), scope=scope, needs=0, w=w),
+        header_row(session, crumb=_crumb(scope), scope=scope, needs=needs_count(view), w=w),
         f" {leaf.key} · in force from {leaf.winning_layer}",
         bar(w),
         _STACK.head(["LAYER", "VALUE", "STANDING"]),

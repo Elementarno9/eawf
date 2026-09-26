@@ -23,17 +23,28 @@ from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keybar import KEY
 from eawf.surfaces.tui.console.keymap import ENTRY_ALLOW, ENTRY_ROUTE, OVERLAY_KEYS, can
 from eawf.surfaces.tui.console.navigation import NAV_KEY, Ctx, go, has_renderer
+from eawf.surfaces.tui.console.operations import (
+    ANSWER_OPTIONS,
+    QUESTION_OPTIONS,
+    RUN_CONTROLS,
+    RUN_KINDS,
+    AnswerRequest,
+    ControlRequest,
+    VerbRequest,
+    binding_refusal,
+)
 from eawf.surfaces.tui.console.overlays.palette import palette_hits
 from eawf.surfaces.tui.console.overlays.question import ANSWERS
 from eawf.surfaces.tui.console.overlays.states import OV_MODEL, step_state
+from eawf.surfaces.tui.console.reads import can_mutate, mut_reason
 from eawf.surfaces.tui.console.registry import OVERLAY_ARROWS, REGISTRY, SECTIONS, route_for_id
 from eawf.surfaces.tui.console.renderers import copy_target, cost_ceiling, seam_for, track
 from eawf.surfaces.tui.console.renderers import timeline as tl
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import Severity
 
-# The time a confirmed control is stamped with while the console clock is the fixture's.
-CONFIRM_STAMP = "14:02:41"
+# Why a confirmed verb went nowhere: the console was started without a daemon link.
+NO_LINK = "the console holds no daemon link · nothing was written"
 REPLY_LIMIT = 2000
 HOME = "scope.home"
 _MODIFIERS = frozenset({"Shift", "Control", "Alt", "Meta", "CapsLock"})
@@ -267,9 +278,10 @@ def _question_key(ctx: Ctx, k: str) -> None:
     if k in ("1", "2", "3"):
         if att.gated(s, fx, key=k, verb="answering", row=q):
             return
-        att.resolve_action(q, state=att.VERB["a"].state, stamp=CONFIRM_STAMP)
         s.overlay = None
-        ctx.log(k, f"{q.id} answered · {ANSWERS[int(k) - 1]}")
+        choice = int(k) - 1
+        answer = AnswerRequest(target=q.id, option_id=QUESTION_OPTIONS[choice])
+        _send_verb(ctx, k, answer, f"answer · {ANSWERS[choice]} ·")
     elif k == "x":
         if att.gated(s, fx, key="x", verb="decline", row=q):
             return
@@ -509,29 +521,56 @@ def _move_entry(ctx: Ctx, k: str, down: bool) -> None:
         ctx.log(k, "this state has no rows")
 
 
+def _send_verb(ctx: Ctx, k: str, request: VerbRequest, verb: str) -> None:
+    """Hand a confirmed verb to the daemon link; nothing the console holds changes here.
+
+    The daemon's answer, and the patch its commit pushes, are the only things that move
+    the frame afterwards, so a verb the daemon never heard of cannot look done.
+    """
+    s = ctx.s
+    if not can_mutate(s):
+        ctx.log(k, f"{verb} {request.target} refused — {mut_reason(s, ctx.fixture)}")
+        return
+    if ctx.dispatch_write(request):
+        ctx.log(k, f"{verb} {request.target} sent to the daemon · waiting for its answer")
+        return
+    ctx.notify(NO_LINK, "not sent", Severity.WARN)
+    ctx.log(k, f"{verb} {request.target} not sent — {NO_LINK}")
+
+
 def _confirm(ctx: Ctx) -> None:
-    """Confirm the consequence card: a drawer verb is requested, an attention verb resolves."""
+    """Confirm the consequence card: its verb is sent to the daemon, or refused with why."""
     s, fx = ctx.s, ctx.fixture
     s.overlay = None
     target = s.c_target
     if target:
         s.c_target = None
-        ctx.log(
-            "Enter",
-            f"{target['verb']} requested on {target['id']} — accepted · the ledger is modelled "
-            "for attention only here",
-        )
+        _confirm_target(ctx, target)
         return
     rows = att.attn_list(s, fx) if s.route == att.ATTENTION_ROUTE else []
-    action = rows[s.sel] if s.sel < len(rows) else fx.proto.attention[0]
+    register = fx.proto.attention
+    action = rows[s.sel] if s.sel < len(rows) else (register[0] if register else None)
+    if action is None:
+        ctx.log("Enter", "no action is held here — nothing was sent")
+        return
     verb = att.VERB[s.verb or "a"]
-    outcome = att.resolve_action(action, state=verb.state, stamp=CONFIRM_STAMP)
-    if outcome is att.Resolution.SUPERSEDED:
-        ctx.log(
-            "Enter", f"{action.id} is already {action.state.lower()} · this answer is superseded"
-        )
-    else:
-        ctx.log("Enter", f"{action.id} → {action.state} · ledger confirmed")
+    option = ANSWER_OPTIONS.get(verb.name)
+    if option is None:
+        refusal = binding_refusal(att.ATTENTION_ROUTE, verb.name)
+        ctx.log("Enter", f"{verb.name} {action.id} refused — {refusal}")
+        return
+    _send_verb(ctx, "Enter", AnswerRequest(target=action.id, option_id=option), verb.name)
+
+
+def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
+    """Send a Run control the card previewed, or say why its verb reaches no daemon."""
+    verb, kind, target_id = target["verb"], target["kind"], target["id"]
+    control = RUN_CONTROLS.get(verb) if kind in RUN_KINDS else None
+    if control is None:
+        refusal = binding_refusal(kind, verb)
+        ctx.log("Enter", f"{verb} on {target_id} — nothing was written · {refusal}")
+        return
+    _send_verb(ctx, "Enter", ControlRequest(target=target_id, control=control), verb)
 
 
 def _enter_overlay(ctx: Ctx) -> bool:

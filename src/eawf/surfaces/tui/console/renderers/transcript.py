@@ -35,6 +35,7 @@ from eawf.surfaces.tui.console.frame import (
     build,
     g_frame,
     g_pad,
+    needs_count,
     route_keys_bar,
     snap_caret,
     strip_chips,
@@ -365,7 +366,9 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     session, w, h = view.session, view.w, view.h
     sel = cursor(session, len(model.blocks))
     opening: list[str] = [
-        header_row(session, crumb=crumb(view, model), scope=model.scope_id, needs=0, w=w),
+        header_row(
+            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+        ),
         " " + counts(model),
         bar(w),
         _state_row(model),

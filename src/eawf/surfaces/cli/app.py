@@ -17,7 +17,7 @@ from __future__ import annotations
 import contextlib
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -26,6 +26,9 @@ from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.help_panels import RegistryOrderedTyperGroup, panel_for
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.registry import register_commands
+
+if TYPE_CHECKING:
+    from eawf.surfaces.tui.console.operations import Operator
 
 app = typer.Typer(
     name="eawf",
@@ -120,6 +123,7 @@ def _dispatch_tui(
     no_input: bool,
     plain: bool,
     verbose: bool = False,
+    operator: Operator | None = None,
 ) -> int:
     """Resolve the launch scope and open the TUI.
 
@@ -146,13 +150,17 @@ def _dispatch_tui(
         plain: Plain-output flag — forces the deterministic fallback.
         verbose: Whether the native console's key-trace row is shown (SURF-173).
             Has no effect on the epoch-1 app, which carries no such row.
+        operator: Who the native console's writes are attributed to; ``None``
+            leaves every writing verb refused with that reason.
 
     Returns:
         Process exit code (``0`` on a clean quit).
     """
     from eawf.surfaces.tui.launch import launch_tui
 
-    return launch_tui(workspace=workspace, no_input=no_input, plain=plain, verbose=verbose)
+    return launch_tui(
+        workspace=workspace, no_input=no_input, plain=plain, verbose=verbose, operator=operator
+    )
 
 
 @app.command(name="version", rich_help_panel=panel_for("version"))
@@ -197,13 +205,38 @@ def _tui_cmd(
             help="Show the native console's key-trace row (SURF-173). No effect on epoch-1.",
         ),
     ] = False,
+    actor: Annotated[
+        str | None,
+        typer.Option(
+            "--actor",
+            envvar="EAWF_ACTOR",
+            help="Principal key the native console's writes are attributed to. "
+            "Without it every writing verb is refused.",
+        ),
+    ] = None,
+    receipt_ref: Annotated[
+        str | None,
+        typer.Option(
+            "--receipt-ref",
+            envvar="EAWF_RECEIPT_REF",
+            help="Qualified evidence URN the console's answers are recorded under. "
+            "Without it answers are refused; Run controls still reach the daemon.",
+        ),
+    ] = None,
 ) -> None:
+    from eawf.surfaces.tui.launch import resolve_operator
+
     flags: GlobalFlags = ctx.obj
+    try:
+        operator = resolve_operator(actor=actor, receipt_ref=receipt_ref)
+    except ValueError as error:
+        raise typer.BadParameter(str(error)) from error
     rc = _dispatch_tui(
         workspace=flags.workspace,
         no_input=flags.no_input,
         plain=flags.plain_output,
         verbose=verbose,
+        operator=operator,
     )
     raise typer.Exit(code=rc)
 
