@@ -1,4 +1,4 @@
-Commands: jury, why
+Commands: jury, record, repository, why
 audit: audit, backfill, backup, doc, doctor, evidence, migrate, schema, snapshot, validate, vfl
 estimation: actual, bench, calibrate, estimate, impact, metrics, telemetry
 planning: agent-report, artifact, backlog, batch, close, decision, draft, goal, hypothesis, incident, iter, memory, milestone, operator, outcome, phase, plan, project, research, roadmap, session, spec, task, track, wave

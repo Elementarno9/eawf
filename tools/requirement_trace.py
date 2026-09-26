@@ -119,8 +119,10 @@ class Satisfaction(BaseModel):
     """Ids a closed phase built although no wave text cites them.
 
     The disposition is evidence, not a promise: the commit must resolve in
-    the repository and the phase must be closed, so an id cannot be marked
-    satisfied by work that is still open or by a sha nobody can inspect.
+    the repository and name no phase but the cited one, the phase must be
+    closed and every listed test must exist, so an id cannot be marked
+    satisfied by work that is still open, by a sha nobody can inspect or by
+    another phase's commit.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -538,17 +540,37 @@ def _deferred_ids(
     return deferred
 
 
-def _commit_resolves(repo_root: Path, sha: str) -> bool:
+#: The phase a commit names, by its wave trailers or its bracketed subject.
+_TRAILER_PHASE_RE: Final = re.compile(r"^Eawf-Wave:\s+(P\d{2,})-", re.MULTILINE)
+_SUBJECT_PHASE_RE: Final = re.compile(r"^\[(P\d{2,})[\]-]")
+
+
+def _commit_message(repo_root: Path, sha: str) -> str | None:
+    """Return the message of commit *sha*, or ``None`` when it does not resolve.
+
+    A sha naming a blob or tree is refused by the ``^{commit}`` peel, so it
+    reads as unresolvable rather than as a commit with an empty message.
+    """
     try:
         result = subprocess.run(
-            ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+            ["git", "log", "-1", "--format=%B", f"{sha}^{{commit}}", "--"],
             cwd=repo_root,
             capture_output=True,
+            text=True,
             check=False,
         )
     except OSError:
-        return False
-    return result.returncode == 0
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _named_phases(message: str) -> set[str]:
+    """Return every phase *message* names by trailer or bracketed subject."""
+    phases = set(_TRAILER_PHASE_RE.findall(message))
+    subject = _SUBJECT_PHASE_RE.match(message)
+    if subject is not None:
+        phases.add(subject.group(1))
+    return phases
 
 
 def _satisfied_ids(
@@ -569,8 +591,9 @@ def _satisfied_ids(
     Raises:
         TraceInputError: When a satisfaction names a decision the state
             lacks, an id the catalog lacks or already defers, a phase that
-            is missing or not closed, or a commit the repository cannot
-            resolve.
+            is missing or not closed, a commit the repository cannot
+            resolve or that names a different phase, or a test path that
+            does not exist.
     """
     satisfied: dict[str, str] = {}
     for satisfaction in satisfactions:
@@ -589,8 +612,17 @@ def _satisfied_ids(
             raise TraceInputError(
                 f"{label} cites {satisfaction.phase}, which is not a closed phase"
             )
-        if not _commit_resolves(repo_root, satisfaction.commit):
+        message = _commit_message(repo_root, satisfaction.commit)
+        if message is None:
             raise TraceInputError(f"{label} cites a commit the repository cannot resolve")
+        foreign = sorted(_named_phases(message) - {satisfaction.phase})
+        if foreign:
+            raise TraceInputError(
+                f"{label} cites {satisfaction.phase}, but the commit names {', '.join(foreign)}"
+            )
+        missing = [test for test in satisfaction.tests if not (repo_root / test).is_file()]
+        if missing:
+            raise TraceInputError(f"{label} lists tests that do not exist: {', '.join(missing)}")
         if decision.in_force:
             satisfied.update(dict.fromkeys(satisfaction.ids, satisfaction.commit))
     return satisfied

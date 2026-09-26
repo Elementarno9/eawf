@@ -125,11 +125,18 @@ Enforces:
    exists to carry only exist once the wave is closed. Adding
    deliverable bytes under a CLOSED wave stays rejected.
 
-7. A rewrite keeps every wave trailer. ``--check-rewrite OLD NEW`` and the
+7. Native Task trailer. On an epoch-2 root a commit may instead carry
+   ``Task: <KEY>`` naming a native Task (``EAWF-0137``), which
+   satisfies the open-phase trailer rule. The Task must be CLAIMED or
+   RUNNING in the canonical main worktree's selected generation, and it is
+   capped at one commit like a wave, amend included. An unmarked root
+   refuses the trailer, since no native Task exists there.
+
+8. A rewrite keeps every wave and Task trailer. ``--check-rewrite OLD NEW`` and the
    ``--pre-push`` hook refuse replacing a tip with history that no longer
    names a wave the old side named; see ``wave_trailer_guard.py``.
 
-Checks 1-6 run as a ``commit-msg``-stage pre-commit hook. The first
+Checks 1-7 run as a ``commit-msg``-stage pre-commit hook. The first
 argument is the commit-message file path (pre-commit passes it). The
 linter consults ``git diff --cached --name-only`` for staged paths.
 
@@ -157,7 +164,12 @@ from coauthor_policy import (
     has_any_coauthor_trailer,
     has_supported_trailer,
 )
-from epoch2_lifecycle_view import epoch2_generation, generation_lifecycle_view
+from epoch2_lifecycle_view import (
+    NATIVE_TASK_KEY_RE,
+    epoch2_generation,
+    generation_lifecycle_view,
+    native_task_status,
+)
 
 _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 
@@ -198,6 +210,14 @@ _WAVE_TRAILER_RE = re.compile(
     r"(?P<wave>P\d{2,}(?:-I(?!00)\d{2,})?-W(?!00)\d{2,})\s*$",
     re.MULTILINE,
 )
+# Mirrors ``TASK_TRAILER_KEY`` in src/eawf/runtime/integration/commit_policy.py,
+# the trailer integration names each Task under; the hook cannot import the
+# package, so tests/unit/test_commit_prefix_lint_epoch2.py pins the copy.
+_TASK_TRAILER_NAME = "Task"
+_TASK_TRAILER_RE = re.compile(rf"^{_TASK_TRAILER_NAME}:\s+(?P<key>\S+)\s*$", re.MULTILINE)
+# A native Task proves a commit only while its work is live, in the
+# generation's own spelling: a native row has no epoch-1 status to map to.
+_LIVE_TASK_STATUSES = frozenset({"CLAIMED", "RUNNING"})
 _BRACKET_SCOPE_RE = re.compile(
     r"^\[(?P<phase>P\d{2,})"
     r"(?:-(?P<iter>I(?!00)\d{2,}))?"
@@ -1074,22 +1094,30 @@ def _is_managed_golden(path: str) -> bool:
     return not path.endswith(".py") and path.startswith(_MANAGED_GOLDEN_DIRS)
 
 
-def _check_wave_commit_cap(
+def _check_commit_cap(
     *,
-    ref: _ScopeRef | None,
+    unit: str,
+    terms: list[str],
     commit_type: str,
     staged: list[str],
     repo_root: Path | None,
     env: Mapping[str, str],
 ) -> tuple[int, str] | None:
-    """Cap a wave at one commit, outside the fold amend and the amend proper.
+    """Cap a wave or Task at one commit, outside the fold amend and the amend proper.
 
-    Returns a ``(1, diagnostic)`` rejection when the named wave already has a
-    commit on ``HEAD`` and this one appends deliverable bytes to it, else
-    ``None``.
+    Args:
+        unit: What is capped, as the diagnostic names it (``wave P##-I##-W##``
+            or ``task <KEY>``).
+        terms: Fixed strings that identify the unit in a commit message.
+        commit_type: Conventional-commit type of this commit.
+        staged: Paths the commit stages.
+        repo_root: Directory the git probes run in; ``None`` uses the cwd.
+        env: Environment the hook was invoked with.
+
+    Returns:
+        A ``(1, diagnostic)`` rejection when the unit already has a commit on
+        ``HEAD`` and this one appends deliverable bytes to it, else ``None``.
     """
-    if ref is None or ref.wave_id is None:
-        return None
     if commit_type == "state":
         # Bookkeeping, already confined by the state path whitelist.
         return None
@@ -1102,7 +1130,7 @@ def _check_wave_commit_cap(
         # deliverable bytes: it folds close bookkeeping into the commit that
         # already carries the wave.
         return None
-    prior = _prior_wave_commits(_wave_grep_terms(ref), repo_root=repo_root)
+    prior = _prior_wave_commits(terms, repo_root=repo_root)
     if not prior:
         return None
     if _amends_head(prior=prior, repo_root=repo_root, env=env):
@@ -1118,10 +1146,10 @@ def _check_wave_commit_cap(
         else ""
     )
     return 1, (
-        f"second commit for wave {ref.wave_id}: {prior[0][:12]} already carries it\n"
-        "one commit per wave: fold this change into the wave commit with "
+        f"second commit for {unit}: {prior[0][:12]} already carries it\n"
+        f"one commit per {unit.split()[0]}: fold this change into its commit with "
         "'git commit --amend', or — when it is genuinely new work — append a "
-        f"reactive wave and commit it under that wave's own W## id.{golden_note}"
+        f"reactive wave or Task and commit it under its own id.{golden_note}"
     )
 
 
@@ -1176,7 +1204,8 @@ def _match_subject(
                     f"trailer-style commit missing {_WAVE_TRAILER_NAME} trailer: {subject!r}\n"
                     f"a PLANNED or ACTIVE phase exists ({in_flight}), so the commit "
                     f"must name the wave it advances: set '{_WAVE_TRAILER_NAME}: "
-                    "P##-I##-W##' in the commit body, or switch "
+                    f"P##-I##-W##' (or, for a native Task, '{_TASK_TRAILER_NAME}: <KEY>') "
+                    "in the commit body, or switch "
                     "vcs.conventions.subject_style back to 'bracket'"
                 ),
             )
@@ -1363,13 +1392,75 @@ def _check_wave_scope(
     )
     if scope_error is not None:
         return 1, scope_error
-    return _check_wave_commit_cap(
-        ref=subject_ref if subject_ref is not None and subject_ref.wave_id else trailer_ref,
+    ref = subject_ref if subject_ref is not None and subject_ref.wave_id else trailer_ref
+    if ref is None or ref.wave_id is None:
+        return None
+    return _check_commit_cap(
+        unit=f"wave {ref.wave_id}",
+        terms=_wave_grep_terms(ref),
         commit_type=commit_type,
         staged=staged,
         repo_root=repo_root,
         env=env,
     )
+
+
+def _check_task_scope(
+    *,
+    text: str,
+    commit_type: str,
+    staged: list[str],
+    state_path: Path | None,
+    repo_root: Path | None,
+    canonical_state_path: Path | None,
+    env: Mapping[str, str],
+) -> tuple[int, str] | None:
+    """Validate every native Task an ``Task`` trailer names.
+
+    The proof reads the canonical main worktree's selected generation, as
+    the wave proof reads its canonical state, so a worktree cannot prove a
+    Task against its own stale copy.
+
+    Returns:
+        A ``(1, diagnostic)`` rejection for an unmarked root, a malformed
+        key, a Task the canonical generation lacks or holds in any status
+        but CLAIMED or RUNNING, or a second commit for the Task; ``None``
+        when every trailer holds or there is none.
+    """
+    for trailer in _TASK_TRAILER_RE.finditer(text):
+        key = trailer.group("key")
+        label = f"{_TASK_TRAILER_NAME} trailer rejected: {key!r}"
+        if state_path is None or epoch2_generation(state_path.parent) is None:
+            return 1, f"{label} names a native Task, and this root is not marked epoch 2"
+        if not NATIVE_TASK_KEY_RE.match(key):
+            return 1, f"{label} is not a native Task key (<PROJECT>-####)"
+        canonical = canonical_state_path or _canonical_state_path(
+            repo_root or _find_repo_root(state_path.parent)
+        )
+        generation = None if canonical is None else epoch2_generation(canonical.parent)
+        if generation is None:
+            return 1, f"{label}: the canonical main-worktree root is not marked epoch 2"
+        try:
+            status = native_task_status(generation, key)
+        except (OSError, ValueError) as exc:
+            return 1, f"managed state decode failed at {generation.name}: {exc}"
+        if status not in _LIVE_TASK_STATUSES:
+            found = "no such Task" if status is None else f"status {status!r}"
+            return 1, (
+                f"{label}: the canonical generation has {found}; "
+                "a Task proves a commit only while it is CLAIMED or RUNNING"
+            )
+        capped = _check_commit_cap(
+            unit=f"task {key}",
+            terms=[f"{_TASK_TRAILER_NAME}: {key}"],
+            commit_type=commit_type,
+            staged=staged,
+            repo_root=repo_root,
+            env=env,
+        )
+        if capped is not None:
+            return capped
+    return None
 
 
 def lint(
@@ -1406,7 +1497,7 @@ def lint(
         subject,
         state_path,
         subject_style=configured_style,
-        has_wave_trailer=_has_wave_trailer(text),
+        has_wave_trailer=_has_wave_trailer(text) or _TASK_TRAILER_RE.search(text) is not None,
     )
     if match is None:
         return 1, err
@@ -1422,7 +1513,9 @@ def lint(
     close_fold = _single_wave_close_rejection(subject, commit_type=commit_type)
     if close_fold is not None:
         return close_fold
-    wave_scope = _check_wave_scope(
+    # A commit may carry both carriers; the Task is checked only once the
+    # wave holds, so the first failing carrier names the rejection.
+    scope = _check_wave_scope(
         subject=subject,
         text=text,
         commit_type=commit_type,
@@ -1432,9 +1525,17 @@ def lint(
         repo_root=repo_root,
         canonical_state_path=canonical_state_path,
         env=resolved_env,
+    ) or _check_task_scope(
+        text=text,
+        commit_type=commit_type,
+        staged=staged,
+        state_path=state_path,
+        repo_root=repo_root,
+        canonical_state_path=canonical_state_path,
+        env=resolved_env,
     )
-    if wave_scope is not None:
-        return wave_scope
+    if scope is not None:
+        return scope
     # Bare conventional-commits (no bracket prefix) has no path whitelist;
     # bracketed forms (wave + bare state/docs) route through the
     # scoped-path check, which internally gates on commit_type / is_bare

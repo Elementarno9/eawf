@@ -19,6 +19,9 @@ override, and the SkillName/timestamp invariants on the returned envelope.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
 
 from eawf.surfaces.render.envelope import EnvelopeWarning
 from eawf.workflow.skills.engine import (
@@ -222,13 +225,20 @@ def test_run_skill_combines_probe_and_action_warnings() -> None:
     assert [w.code for w in env.footer.warnings] == ["probe_warn", "action_warn"]
 
 
-def test_run_skill_needs_user_status_passes_through_user_question_body() -> None:
+def test_run_skill_needs_user_status_passes_through_user_question_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``status=needs_user`` with a user_question body survives the engine.
 
     The body must conform to ``ResearchBody`` (``brief_id`` is required)
     because the engine now binds per-skill body validation on the emit
     path; the ``user_question`` fragment rides alongside the brief id.
+    A question fires the typed-choice practice trigger, which records into
+    the resolved tree, so the run is pointed at a tmp tree of its own.
     """
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir()
+    monkeypatch.setenv("EA_STATE", str(state_path))
     user_question_body: dict[str, object] = {
         "brief_id": "BR-needs-user",
         "user_question": {
