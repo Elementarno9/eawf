@@ -46,7 +46,7 @@ from eawf.platform.rules.records import RuleModel, RuleRecord, SelectorToken
 logger = logging.getLogger(__name__)
 
 #: Where carriers are written, relative to the repository root: the project
-#: skill directory the runtime that preloads skills into subagents reads.
+#: skill directory a Claude session loads skills from by name.
 CARRIER_DIRECTORY: Final[str] = ".claude/skills"
 
 #: The prefix of every carrier name, which keeps carriers out of the

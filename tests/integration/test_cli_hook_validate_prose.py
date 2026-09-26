@@ -11,6 +11,9 @@ Pins the CLI dispatcher around the ``validate_prose`` Layer-2 chokepoint (see
 - the Vale leg fails open: with ``vale`` monkeypatched absent, ``--strict``
   still blocks on a deterministic EAWF013/014/017 finding;
 - a non-``.md`` arg is a clean no-op; the subcommand registers on ``eawf hook``.
+- a byte-pinned fixture under ``tests/golden/`` is skipped even with a manual
+  wrap, while the same wrap in authored Markdown outside that tree still
+  blocks ``--strict``.
 """
 
 from __future__ import annotations
@@ -37,6 +40,10 @@ _CLEAN_MD = (
     "\n"
     "[a] `src/eawf/observability/perf.py:142`\n"
 )
+
+# A manually wrapped paragraph: trips EAWF014, the leg the golden-fixture
+# exemption is meant to silence.
+_WRAPPED_MD = "A paragraph was manually wrapped\nacross two physical lines.\n"
 
 
 def _absent_vale(monkeypatch) -> None:
@@ -121,6 +128,34 @@ def test_validate_prose_clean_passes_strict(tmp_path, monkeypatch) -> None:
     result = runner.invoke(app, ["hook", "validate-prose", "--strict", str(good)])
     assert result.exit_code == 0, result.stdout
     assert "clean" in result.stdout.lower()
+
+
+# --- generated golden-fixture exemption --------------------------------------
+
+
+def test_validate_prose_strict_skips_generated_golden_fixture(tmp_path, monkeypatch) -> None:
+    """A byte-pinned fixture under ``tests/golden/`` is exempt even when wrapped."""
+    _absent_vale(monkeypatch)
+    rel = "tests/golden/subagent_spec/full_wave.md"
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_WRAPPED_MD, encoding="utf-8")
+    result = runner.invoke(app, ["-w", str(tmp_path), "hook", "validate-prose", "--strict", rel])
+    assert result.exit_code == 0, result.stdout
+
+
+def test_validate_prose_strict_still_blocks_authored_md_outside_golden(
+    tmp_path, monkeypatch
+) -> None:
+    """The falsifier: the same wrap outside ``tests/golden/`` still reds."""
+    _absent_vale(monkeypatch)
+    rel = "docs/note.md"
+    target = tmp_path / rel
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_WRAPPED_MD, encoding="utf-8")
+    result = runner.invoke(app, ["-w", str(tmp_path), "hook", "validate-prose", "--strict", rel])
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF014" in result.stdout
 
 
 # --- surface scoping + registration ------------------------------------------

@@ -9,6 +9,8 @@ Scope is the branch delta, not the whole corpus: the repo carries ~1,250
 deterministic findings in Markdown written long before these lints existed, and
 the CI job never reads those files. Scanning everything here would red for
 reasons the branch did not cause, so this test scans exactly what the job would.
+Byte-pinned golden fixtures under ``tests/golden/`` are excluded the same way
+the CLI gate excludes them: their prose is renderer output, not authored text.
 
 The Vale leg is deliberately excluded. Vale is a subprocess that fails open when
 its binary is absent or its ``StylesPath`` is unsynced, so asserting on it would
@@ -27,6 +29,7 @@ from typer.testing import CliRunner
 
 from eawf.platform.lint.validate_prose import ProseFinding, validate_prose
 from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands.hook import _is_generated_markdown_fixture_path
 
 pytestmark = pytest.mark.integration
 
@@ -70,7 +73,11 @@ def _changed_markdown() -> list[str] | None:
         if proc.returncode != 0:
             continue
         return [
-            rel for rel in proc.stdout.splitlines() if rel.strip() and (_REPO_ROOT / rel).is_file()
+            rel
+            for rel in proc.stdout.splitlines()
+            if rel.strip()
+            and (_REPO_ROOT / rel).is_file()
+            and not _is_generated_markdown_fixture_path(rel)
         ]
     return None
 

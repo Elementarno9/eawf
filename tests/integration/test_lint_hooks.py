@@ -460,6 +460,29 @@ def test_eawf014_staged_scope_skips_agents_md_goldens(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
+def test_eawf014_staged_scope_skips_any_golden_render_fixture(tmp_path: Path) -> None:
+    """The generated-fixture exemption covers all of ``tests/golden/``, not just agents_md."""
+    repo = _init_repo_with_staged(
+        tmp_path,
+        rel="tests/golden/subagent_spec/full_wave.md",
+        body="Generated wrapped\nfixture debt.\n",
+    )
+
+    result = runner.invoke(app, ["-w", str(repo), "hook", "eawf014-no-manual-wrap"])
+    assert result.exit_code == 0, result.stdout
+
+
+def test_is_generated_markdown_fixture_path_matches_prefix_only() -> None:
+    """The predicate anchors on the real ``tests/golden/`` segment, not a substring."""
+    from eawf.surfaces.cli.commands.hook import _is_generated_markdown_fixture_path
+
+    assert _is_generated_markdown_fixture_path("tests/golden/agents_md/core_only.md")
+    assert _is_generated_markdown_fixture_path("tests/golden/subagent_spec/full_wave.md")
+    assert not _is_generated_markdown_fixture_path("tests/golden_extra/note.md")
+    assert not _is_generated_markdown_fixture_path("docs/tests/golden/note.md")
+    assert not _is_generated_markdown_fixture_path("")
+
+
 def _init_repo_with_committed_file(tmp_path: Path, *, rel: str, body: str) -> Path:
     """Init a repo and commit `rel` with `body` so it can later be relocated."""
     repo = tmp_path / "repo"

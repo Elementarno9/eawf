@@ -730,8 +730,16 @@ def _is_state_bookkeeping_path(rel: str) -> bool:
 
 
 def _is_generated_markdown_fixture_path(rel: str) -> bool:
-    """Return ``True`` for generated markdown fixtures checked by golden tests."""
-    return rel.replace("\\", "/").startswith("tests/golden/agents_md/")
+    """Return ``True`` for generated markdown fixtures checked by golden tests.
+
+    Every ``.md`` under ``tests/golden/`` is byte-pinned renderer output
+    (agents.md variants, agent reports, plugin-install trees, subagent
+    specs, plan-view fixtures, wave narrative bodies) compared verbatim
+    by its golden test — never prose an operator authored by hand. Both
+    the strict prose gate and the branch-delta test that mirrors it skip
+    this whole subtree rather than the narrower ``agents_md/`` prefix.
+    """
+    return rel.replace("\\", "/").startswith("tests/golden/")
 
 
 def _emit_leak_result(
@@ -2050,7 +2058,13 @@ def validate_prose_gate(
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
     paths = _resolve_scan_paths(files, hook_name="validate-prose", base=base, cwd=cwd)
-    md_paths = [rel for rel in paths if rel.endswith(".md") and (cwd / rel).exists()]
+    md_paths = [
+        rel
+        for rel in paths
+        if rel.endswith(".md")
+        and (cwd / rel).exists()
+        and not _is_generated_markdown_fixture_path(rel)
+    ]
     targets = [cwd / rel for rel in md_paths]
     rel_for = {str(cwd / rel): rel for rel in md_paths}
     vale_rows = _collect_vale_rows(targets, cwd=cwd, rel_for=rel_for)

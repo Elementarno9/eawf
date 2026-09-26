@@ -78,6 +78,9 @@ def check_agents_md_byte_cap(*, workspace: Path | None) -> CheckResult:
     Args:
         workspace: Workspace anchor holding the rendered AGENTS.md; ``None``
             defers to the pwd-upward ``.ea/`` walk.
+
+    Returns:
+        The ``agents_md_byte_cap`` check result.
     """
     name = "agents_md_byte_cap"
     anchor = _resolve_anchor(workspace)
@@ -150,6 +153,9 @@ def check_agents_override_byte_cap(*, workspace: Path | None) -> CheckResult:
     Args:
         workspace: Workspace anchor holding the rendered policy file;
             ``None`` defers to the pwd-upward ``.ea/`` walk.
+
+    Returns:
+        The ``agents_override_byte_cap`` check result.
     """
     name = "agents_override_byte_cap"
     anchor = _resolve_anchor(workspace)

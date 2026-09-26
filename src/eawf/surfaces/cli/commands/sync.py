@@ -15,10 +15,10 @@ A repository that authors its rules in ``.ea/rules.yaml`` has switched its
 steering files to the rule graph: ``AGENTS.md`` (the project card) and
 ``AGENTS.override.md`` (the policy projection) render together through
 :func:`eawf.platform.rules.render.render_rule_projections`, and the profile
-renderer no longer writes ``AGENTS.md``. ``--check`` compares the planned
+renderer does not write ``AGENTS.md``. ``--check`` compares the planned
 projections against disk, so a hand edit to either counts as drift.
 
-W03 also regenerates Markdown projections of ``memory.jsonl`` under
+The command also regenerates Markdown projections of ``memory.jsonl`` under
 ``.ea/artifacts/rendered/memory/<scope>.md`` (plus ``_all.md`` union view).
 The whole projection lives inside one managed region per file so re-running
 sync overwrites curated bytes — memory content is curated in

@@ -109,7 +109,7 @@ def test_managed_block_reds_when_the_views_pattern_is_dropped(tmp_path: Path) ->
     """Revert-check: dropping ``.ea/rules/views/`` un-ignores a rendered view.
 
     Nothing else in the managed block covers this directory, so removing
-    the pattern is the regression the CR-01 gate must catch.
+    the pattern is the regression this gate must catch.
     """
     target = tmp_path / "repo"
     _seed_rule_source_repo(target)
