@@ -181,7 +181,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 2,
+  "canonical_sequence": 4,
   "milestone": {
     "P36": {
       "payload": {
@@ -12869,6 +12869,17 @@
       "status": "DROPPED"
     },
     "P36-I01-W03": {
+      "continuation": [
+        {
+          "actor": "OPERATOR",
+          "at": "2026-09-26T21:20:48.453864Z",
+          "evidence_refs": [],
+          "from_status": "PLANNED",
+          "gate_receipts": [],
+          "reason": "Dispatch after the epoch-2 cutover",
+          "to_status": "CLAIMED"
+        }
+      ],
       "payload": {
         "annotations": [
           "priority_default_p2"
@@ -13044,10 +13055,21 @@
         "target": "task",
         "target_status": "PLANNED"
       },
-      "recorded_at": "2026-09-26T21:14:53.351831+00:00",
-      "status": "PLANNED"
+      "recorded_at": "2026-09-26T21:20:48.453864+00:00",
+      "status": "CLAIMED"
     },
     "P36-I01-W04": {
+      "continuation": [
+        {
+          "actor": "OPERATOR",
+          "at": "2026-09-26T21:20:49.233791Z",
+          "evidence_refs": [],
+          "from_status": "PLANNED",
+          "gate_receipts": [],
+          "reason": "Dispatch after the epoch-2 cutover",
+          "to_status": "CLAIMED"
+        }
+      ],
       "payload": {
         "annotations": [
           "priority_default_p2"
@@ -13470,8 +13492,8 @@
         "target": "task",
         "target_status": "PLANNED"
       },
-      "recorded_at": "2026-09-26T21:14:53.351831+00:00",
-      "status": "PLANNED"
+      "recorded_at": "2026-09-26T21:20:49.233791+00:00",
+      "status": "CLAIMED"
     },
     "P36-I01-W05": {
       "payload": {
