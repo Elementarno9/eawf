@@ -241,14 +241,15 @@ def committed_membership_refs(repo_root: Path, release_key: str) -> tuple[str, .
 
     Returns:
         The Milestone references, in export order; empty when no export
-        is committed, the committed export names a different release
-        key, or it records no COMPLETED Milestone in a declared canary.
+        is committed for *release_key* or it records no COMPLETED
+        Milestone in a declared canary.
 
     Raises:
-        ValueError: When an export is committed but does not load.
+        ValueError: When an export is committed but does not load, or is
+            filed for *release_key* while naming another release.
     """
-    evidence = load_canary_evidence(repo_root)
-    if evidence is None or evidence.release_key != release_key:
+    evidence = load_canary_evidence(repo_root, release_key)
+    if evidence is None:
         return ()
     return tuple(
         record.reference

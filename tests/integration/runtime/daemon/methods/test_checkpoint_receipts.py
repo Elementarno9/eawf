@@ -376,8 +376,8 @@ def test_produce_receipts_refuses_a_version_off_the_train(ctx: MethodContext) ->
 
 
 def test_produce_receipts_refuses_a_rung_with_no_configuration(ctx: MethodContext) -> None:
-    """dev4 has no authored configuration yet, so it has no gates to prove."""
-    assert "no release configuration" in refused(ctx, version="0.7.0.dev4")
+    """dev5 has no authored configuration yet, so it has no gates to prove."""
+    assert "no release configuration" in refused(ctx, version="0.7.0.dev5")
 
 
 def test_produce_receipts_refuses_without_a_state_root() -> None:

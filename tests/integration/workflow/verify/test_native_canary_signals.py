@@ -77,6 +77,9 @@ pytestmark = pytest.mark.integration
 #: This checkout, whose committed export is the real evidence.
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
+#: The release whose committed canary export this module reads.
+DEV3_RELEASE_KEY = "REL-0.7.0.dev3"
+
 #: The profile under test.
 PROFILE = ReleaseGateProfile.NATIVE_CANARY
 
@@ -108,14 +111,14 @@ DEV3_CONTRACT_IDS = ("MCT-26081302", "MCT-26081303")
 def committed() -> dict[str, Any]:
     """Return a mutable copy of this checkout's committed export."""
     document: dict[str, Any] = json.loads(
-        canary_evidence_path(REPO_ROOT).read_text(encoding="utf-8")
+        canary_evidence_path(REPO_ROOT, DEV3_RELEASE_KEY).read_text(encoding="utf-8")
     )
     return copy.deepcopy(document)
 
 
 def staged(tmp_path: Path, document: dict[str, Any]) -> Path:
     """Write *document* as the export of a checkout at *tmp_path*."""
-    path = canary_evidence_path(tmp_path)
+    path = canary_evidence_path(tmp_path, DEV3_RELEASE_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(document, indent=2), encoding="utf-8")
     return tmp_path
@@ -259,7 +262,7 @@ def test_membership_is_unavailable_when_the_checkpoint_declares_no_bundle() -> N
 
 
 def test_membership_fails_on_an_export_that_does_not_read_back(tmp_path: Path) -> None:
-    path = canary_evidence_path(tmp_path)
+    path = canary_evidence_path(tmp_path, DEV3_RELEASE_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{", encoding="utf-8")
 
@@ -296,7 +299,7 @@ def test_this_checkout_records_one_accepted_canary_milestone() -> None:
     A ref the export does not hold still resolves to nothing, so the
     membership signal cannot pass on a name it was never shown.
     """
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
 
     assert len(evidence.milestones) == 1
@@ -308,7 +311,7 @@ def test_this_checkout_records_one_accepted_canary_milestone() -> None:
 
 
 def test_membership_findings_of_no_declared_ref_is_empty() -> None:
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
 
     assert membership_findings(evidence, ()) == ()
@@ -318,7 +321,7 @@ def test_membership_findings_of_no_declared_ref_is_empty() -> None:
 
 
 def test_the_committed_export_records_an_equal_production_root_pair() -> None:
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
     record = evidence.isolation
     assert record is not None
@@ -331,7 +334,7 @@ def test_the_committed_export_records_an_equal_production_root_pair() -> None:
 def test_an_unequal_recorded_pair_is_a_touched_production_root(tmp_path: Path) -> None:
     document = committed()
     document["isolation"]["after_digest"] = f"sha256:{'d' * 64}"
-    evidence = load_canary_evidence(staged(tmp_path, document))
+    evidence = load_canary_evidence(staged(tmp_path, document), DEV3_RELEASE_KEY)
     assert evidence is not None
 
     findings = evidence.isolation_findings()
@@ -345,7 +348,7 @@ def test_an_unequal_recorded_pair_is_a_touched_production_root(tmp_path: Path) -
 def test_an_unrecorded_pair_is_an_absence_rather_than_a_pass(tmp_path: Path) -> None:
     document = committed()
     document["isolation"] = None
-    evidence = load_canary_evidence(staged(tmp_path, document))
+    evidence = load_canary_evidence(staged(tmp_path, document), DEV3_RELEASE_KEY)
     assert evidence is not None
 
     findings = evidence.isolation_findings()
@@ -356,7 +359,7 @@ def test_an_unrecorded_pair_is_an_absence_rather_than_a_pass(tmp_path: Path) -> 
 
 def test_the_isolation_record_names_the_depth_it_was_taken_at() -> None:
     """A narrower observation must not read as the full Milestone rehearsal."""
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
     assert evidence.isolation is not None
 

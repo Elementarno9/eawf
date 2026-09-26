@@ -114,6 +114,7 @@ class PipelineRefusalCode(StrEnum):
     OBSERVATION_INCONCLUSIVE = "observation_inconclusive"
     TRAILER_REPIN_UNDECIDED = "trailer_repin_undecided"
     TRAILER_REPIN_PENDING = "trailer_repin_pending"
+    PHASE_PINS_MISSING = "phase_pins_missing"
     EVIDENCE_BASELINE_FAILED = "evidence_baseline_failed"
 
 
@@ -1111,6 +1112,15 @@ class _PipelineRun:
 
     def _repin(self, step: PipelineStep) -> dict[str, str]:
         pins = self.host.phase_wave_pins(self.options.phase_id)
+        # A well-formed but mistyped phase id reads no pins, and verifying
+        # zero pins would pass without checking the merged phase at all.
+        if not pins:
+            raise PipelineRefusal(
+                step,
+                PipelineRefusalCode.PHASE_PINS_MISSING,
+                detail=f"phase {self.options.phase_id} has no closed waves with a pinned commit",
+                remedy="rerun with the merged phase's id in --phase",
+            )
         target_ref = f"refs/remotes/{self.options.remote}/main"
         try:
             rows = resolve_trailer_repins(

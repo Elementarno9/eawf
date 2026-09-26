@@ -820,6 +820,9 @@ def seal_acceptance_approval(
                     event_name=APPROVAL_ANSWER_RECORDED_EVENT,
                     now=now,
                 )
+                assert committed.envelope is not None, (
+                    "a fresh commit always carries its firehose row"
+                )
                 envelopes = (committed.envelope,)
             return ApprovalCommit(
                 answer=_answer(

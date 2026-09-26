@@ -63,7 +63,7 @@ from eawf.kernel.release.signals import (
 )
 from eawf.kernel.spec.release_config import ReleasePlatformClaim
 from eawf.workflow.evidence.provider_certification import (
-    CANARY_EVIDENCE_DIR,
+    CANARY_EVIDENCE_DIRS,
     CANARY_EVIDENCE_FILENAME,
     CanaryEvidence,
     load_canary_evidence,
@@ -282,16 +282,41 @@ def artifacts_probe(
     )
 
 
-def _export_location() -> str:
-    """Return the repo-relative location the canary evidence export is read from."""
-    return "/".join((*CANARY_EVIDENCE_DIR, CANARY_EVIDENCE_FILENAME))
+def _export_location(release_key: str) -> str:
+    """Return the repo-relative location *release_key*'s canary evidence export is read from.
+
+    Args:
+        release_key: The checkpoint whose export is read.
+
+    Returns:
+        The export's path.
+
+    Raises:
+        KeyError: When no export directory is mapped for *release_key*;
+            the probes remediate that case before asking for a location.
+    """
+    return "/".join((*CANARY_EVIDENCE_DIRS[release_key], CANARY_EVIDENCE_FILENAME))
 
 
-def _unreadable_export(exc: ValueError) -> ReleaseSignalOutcome:
+def _unmapped_export(release_key: str) -> str:
+    """Return the remediation clause for a checkpoint with no export directory.
+
+    Args:
+        release_key: The checkpoint no export directory is mapped for.
+
+    Returns:
+        A clause naming the missing map entry, because there is no path
+        at which an export could be committed until one is mapped.
+    """
+    return f"no canary evidence directory is mapped for {release_key} in CANARY_EVIDENCE_DIRS"
+
+
+def _unreadable_export(exc: ValueError, release_key: str) -> ReleaseSignalOutcome:
     """Return the outcome for an export that is present and does not parse.
 
     Args:
         exc: What the loader refused the document with.
+        release_key: The checkpoint whose export was read.
 
     Returns:
         A ``fail`` outcome. An unreadable export is not an absent one:
@@ -301,17 +326,21 @@ def _unreadable_export(exc: ValueError) -> ReleaseSignalOutcome:
     return ReleaseSignalOutcome(
         status=ReleaseSignalStatus.FAIL,
         remediation=(
-            f"the canary evidence export at {_export_location()} does not read back: {exc}; "
+            f"the canary evidence export at {_export_location(release_key)} does not read "
+            f"back: {exc}; "
             f"re-export the conformance records rather than editing the document by hand"
         ),
     )
 
 
-def _read_export(repo_root: Path) -> tuple[CanaryEvidence | None, ReleaseSignalOutcome | None]:
-    """Return the committed export of *repo_root*, or the outcome that replaces it.
+def _read_export(
+    repo_root: Path, release_key: str
+) -> tuple[CanaryEvidence | None, ReleaseSignalOutcome | None]:
+    """Return the committed export of *release_key*, or the outcome that replaces it.
 
     Args:
         repo_root: Checkout the export was committed in.
+        release_key: The checkpoint whose export is read.
 
     Returns:
         ``(evidence, None)`` when an export loads, ``(None, outcome)``
@@ -319,9 +348,9 @@ def _read_export(repo_root: Path) -> tuple[CanaryEvidence | None, ReleaseSignalO
         export is committed -- which the two rows read differently.
     """
     try:
-        return load_canary_evidence(repo_root), None
+        return load_canary_evidence(repo_root, release_key), None
     except ValueError as exc:
-        return None, _unreadable_export(exc)
+        return None, _unreadable_export(exc, release_key)
 
 
 def provider_probe(
@@ -349,15 +378,25 @@ def provider_probe(
         tuple, ``fail`` naming every gap otherwise, and ``pass`` citing
         each certification's URN when nothing is outstanding.
     """
-    evidence, refused = _read_export(repo_root)
+    evidence, refused = _read_export(repo_root, context.config.release_key)
     if refused is not None:
         return refused
+    if evidence is None and context.config.release_key not in CANARY_EVIDENCE_DIRS:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.UNAVAILABLE,
+            remediation=(
+                f"{_unmapped_export(context.config.release_key)}, so no runtime tuple is "
+                f"advertised; map the checkpoint's export directory there and export its "
+                f"conformance records, or drop the provider gate"
+            ),
+        )
     if evidence is None:
         return ReleaseSignalOutcome(
             status=ReleaseSignalStatus.UNAVAILABLE,
             remediation=(
-                f"no conformance certification export is committed at {_export_location()}, "
-                f"so no runtime tuple is advertised; run the conformance probe, canary and "
+                f"no conformance certification export is committed at "
+                f"{_export_location(context.config.release_key)}, so no runtime tuple is "
+                f"advertised; run the conformance probe, canary and "
                 f"certify stages and export their records, or drop the provider gate"
             ),
         )
@@ -365,9 +404,9 @@ def provider_probe(
         return ReleaseSignalOutcome(
             status=ReleaseSignalStatus.UNAVAILABLE,
             remediation=(
-                f"the export at {_export_location()} advertises no runtime tuple, so the "
-                f"provider claim is empty; advertise the tuples this checkpoint ships or "
-                f"drop the provider gate"
+                f"the export at {_export_location(context.config.release_key)} advertises no "
+                f"runtime tuple, so the provider claim is empty; advertise the tuples this "
+                f"checkpoint ships or drop the provider gate"
             ),
         )
     findings = provider_findings(evidence)
@@ -422,16 +461,27 @@ def membership_probe(
                 "accepts, or drop the membership gate from the profile"
             ),
         )
-    evidence, refused = _read_export(repo_root)
+    evidence, refused = _read_export(repo_root, context.config.release_key)
     if refused is not None:
         return refused
+    if evidence is None and context.config.release_key not in CANARY_EVIDENCE_DIRS:
+        return ReleaseSignalOutcome(
+            status=ReleaseSignalStatus.FAIL,
+            remediation=(
+                f"the checkpoint declares {len(declared)} acceptance bundle(s) and "
+                f"{_unmapped_export(context.config.release_key)}; map the checkpoint's "
+                f"export directory there and export the accepted Milestones, or withdraw "
+                f"the references"
+            ),
+        )
     if evidence is None:
         return ReleaseSignalOutcome(
             status=ReleaseSignalStatus.FAIL,
             remediation=(
                 f"the checkpoint declares {len(declared)} acceptance bundle(s) and no canary "
-                f"evidence is committed at {_export_location()}; accept the Milestones in a "
-                f"declared canary and export the records, or withdraw the references"
+                f"evidence is committed at {_export_location(context.config.release_key)}; "
+                f"accept the Milestones in a declared canary and export the records, or "
+                f"withdraw the references"
             ),
         )
     findings = membership_findings(evidence, declared)

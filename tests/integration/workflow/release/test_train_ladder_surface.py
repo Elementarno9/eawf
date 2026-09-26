@@ -153,7 +153,7 @@ def test_train_show_json_emits_the_ladder_index_and_statuses(
     payload = json.loads(result.stdout)
     assert payload["train_id"] == "TRAIN-0.7.0"
     assert payload["current_checkpoint_index"] == 0
-    assert [row["status"] for row in payload["checkpoints"]] == ["open", *["pending"] * 6]
+    assert [row["status"] for row in payload["checkpoints"]] == ["open", *["pending"] * 7]
 
 
 def test_train_show_honours_the_global_json_flag(
@@ -212,7 +212,7 @@ def test_train_show_derives_the_open_rung_from_release_records(
     assert payload["current_checkpoint_index"] == 1
     assert payload["current_checkpoint"] == "REL-0.7.0.dev2"
     statuses = [row["status"] for row in payload["checkpoints"]]
-    assert statuses == ["passed", "open", *["pending"] * 5]
+    assert statuses == ["passed", "open", *["pending"] * 6]
 
 
 def test_train_without_a_subcommand_lists_show() -> None:

@@ -356,9 +356,9 @@ def test_release_train_checkpoint_lookup_raises_on_an_unknown_key() -> None:
         train.checkpoint_for_version("nope")
 
 
-def test_v07_train_declares_the_seven_planned_checkpoints() -> None:
+def test_v07_train_declares_the_eight_planned_checkpoints() -> None:
     assert V07_TRAIN.train_id == "TRAIN-0.7.0"
-    assert len(V07_TRAIN.checkpoints) == 7
+    assert len(V07_TRAIN.checkpoints) == 8
     assert V07_TRAIN.current_checkpoint.release_key == "REL-0.7.0.dev1"
     dev1 = V07_TRAIN.checkpoint_for_version("0.7.0.dev1")
     assert dev1.authority_epoch == 1

@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Final, Literal
@@ -65,18 +65,28 @@ from eawf.kernel.state.types import UtcDatetime
 
 logger = logging.getLogger(__name__)
 
-#: Where the native-canary evidence export is committed, relative to the
-#: repo root. A dated directory rather than a stable filename, because a
-#: later rung re-runs the conformance and its export is a second record
-#: rather than an edit of this one.
-CANARY_EVIDENCE_DIR: Final[tuple[str, ...]] = (
-    ".ea",
-    "artifacts",
-    "evidence",
-    "2026-09-18-dev3-conformance",
-)
+#: Where each release's native-canary evidence export is committed,
+#: relative to the repo root, by release key. One dated directory per
+#: rung rather than a stable filename, because a later rung re-runs the
+#: conformance and its export is a second record rather than an edit of
+#: the earlier one -- which also keeps an earlier rung's readiness
+#: reading the evidence it was cut on.
+CANARY_EVIDENCE_DIRS: Final[Mapping[str, tuple[str, ...]]] = {
+    "REL-0.7.0.dev3": (
+        ".ea",
+        "artifacts",
+        "evidence",
+        "2026-09-18-dev3-conformance",
+    ),
+    "REL-0.7.0.dev4": (
+        ".ea",
+        "artifacts",
+        "evidence",
+        "2026-09-26-dev4-conformance",
+    ),
+}
 
-#: The export document inside :data:`CANARY_EVIDENCE_DIR`.
+#: The export document inside each :data:`CANARY_EVIDENCE_DIRS` entry.
 CANARY_EVIDENCE_FILENAME: Final[str] = "native-canary-evidence.json"
 
 #: The stage sequence a certification's history has to end in. The
@@ -537,39 +547,48 @@ def _passed_certifying_tail(tail: tuple[ConformanceStageRecord, ...]) -> bool:
     return all(row.outcome == "passed" for row in tail)
 
 
-def canary_evidence_path(repo_root: Path) -> Path:
-    """Return the export path of the checkout at *repo_root*.
+def canary_evidence_path(repo_root: Path, release_key: str) -> Path:
+    """Return the export path of *release_key* in the checkout at *repo_root*.
 
     Args:
         repo_root: Checkout the export was committed in.
+        release_key: The checkpoint whose export is wanted.
 
     Returns:
         The export document's path, whether or not it exists.
 
     Raises:
         TypeError: When *repo_root* is not a :class:`~pathlib.Path`.
+        KeyError: When no export directory is mapped for *release_key*.
     """
     if not isinstance(repo_root, Path):
         raise TypeError(f"repo_root must be Path; got {type(repo_root).__name__}")
-    return repo_root.joinpath(*CANARY_EVIDENCE_DIR, CANARY_EVIDENCE_FILENAME)
+    return repo_root.joinpath(*CANARY_EVIDENCE_DIRS[release_key], CANARY_EVIDENCE_FILENAME)
 
 
-def load_canary_evidence(repo_root: Path) -> CanaryEvidence | None:
-    """Return the committed export of *repo_root*, or ``None`` when absent.
+def load_canary_evidence(repo_root: Path, release_key: str) -> CanaryEvidence | None:
+    """Return the committed export of *release_key*, or ``None`` when absent.
 
     Args:
         repo_root: Checkout the export was committed in.
+        release_key: The checkpoint whose export is wanted.
 
     Returns:
-        The validated export, or ``None`` when no export is committed.
+        The validated export, or ``None`` when no export is committed --
+        including when no export directory is mapped for *release_key*,
+        which is the same absence seen one step earlier.
 
     Raises:
         TypeError: When *repo_root* is not a :class:`~pathlib.Path`.
-        ValueError: When an export is present but is not valid JSON or
-            does not validate. An unreadable export is not an absent one,
-            so it must never read as clean.
+        ValueError: When an export is present but is not valid JSON, does
+            not validate, or names a release other than *release_key*. An
+            unreadable export is not an absent one, so it must never read
+            as clean; and one filed under the wrong rung would lend that
+            rung evidence recorded for another.
     """
-    path = canary_evidence_path(repo_root)
+    if release_key not in CANARY_EVIDENCE_DIRS:
+        return None
+    path = canary_evidence_path(repo_root, release_key)
     if not path.is_file():
         return None
     try:
@@ -583,6 +602,11 @@ def load_canary_evidence(repo_root: Path) -> CanaryEvidence | None:
             f"canary evidence {path.name!r} does not validate: "
             f"{exc.error_count()} error(s); first: {exc.errors()[0]['msg']}"
         ) from exc
+    if evidence.release_key != release_key:
+        raise ValueError(
+            f"canary evidence {path.name!r} names release {evidence.release_key!r} "
+            f"but is filed for {release_key!r}"
+        )
     logger.info(
         f"load_canary_evidence release_key={evidence.release_key!r} "
         f"advertised={len(evidence.advertised)} certifications={len(evidence.certifications)} "
@@ -787,7 +811,7 @@ def summarise_findings(findings: Sequence[CanaryFinding]) -> str:
 
 __all__ = [
     "ABSENCE_GAPS",
-    "CANARY_EVIDENCE_DIR",
+    "CANARY_EVIDENCE_DIRS",
     "CANARY_EVIDENCE_FILENAME",
     "CERTIFYING_STAGES",
     "CanaryEvidence",

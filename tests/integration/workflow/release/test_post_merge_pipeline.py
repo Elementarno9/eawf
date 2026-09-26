@@ -22,12 +22,15 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import importlib.util
 import json
 import subprocess
+import sys
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 import pytest
@@ -524,6 +527,42 @@ def test_run_post_merge_pipeline_lands_evidence_and_baselines_only_it(world: Wor
     assert approval == "repo:.ea/artifacts/evidence/2026-09-25-dev4-publication/receipts.json"
 
 
+def _load_commit_prefix_lint() -> ModuleType:
+    """Load ``tools/commit_prefix_lint.py``, which is a script, not a package module."""
+    lint_path = Path(__file__).resolve().parents[4] / "tools" / "commit_prefix_lint.py"
+    if str(lint_path.parent) not in sys.path:
+        sys.path.insert(0, str(lint_path.parent))
+    spec = importlib.util.spec_from_file_location("commit_prefix_lint", lint_path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["commit_prefix_lint"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_commit_lint_accepts_the_evidence_step_as_one_state_commit(
+    world: World, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    # The CLI tells the operator to land the evidence step's output in one
+    # bare state commit; the commit lint must accept exactly that path set.
+    world.run()
+    evidence = world.root / ".ea/artifacts/evidence/2026-09-25-dev4-publication"
+    staged = [
+        ".ea/store/release_record.jsonl",
+        *(path.relative_to(world.root).as_posix() for path in sorted(evidence.iterdir())),
+        SECRETS_BASELINE,
+        PRE_COMMIT_CONFIG,
+    ]
+    message = tmp_path_factory.mktemp("commit") / "COMMIT_EDITMSG"
+    message.write_text(
+        "[P35] state: land dev4 publication evidence\n\n"
+        "Co-Authored-By: Claude <noreply@anthropic.com>\n",
+        encoding="utf-8",
+    )
+    code, diagnostic = _load_commit_prefix_lint().lint(message, staged)
+    assert code == 0, diagnostic
+
+
 def test_run_post_merge_pipeline_waits_out_a_lagging_registry(world: World) -> None:
     world.daemon.lagging_reads = 2
     world.run()
@@ -623,6 +662,19 @@ def test_run_post_merge_pipeline_refuses_unsettled_wave_pins(
         world.run()
     assert (refused.value.step, refused.value.code) == (PipelineStep.REPIN, code)
     assert "P35-I01-W01" in refused.value.detail
+
+
+def test_run_post_merge_pipeline_refuses_a_phase_with_no_wave_pins(world: World) -> None:
+    """A well-formed but mistyped phase id reads no pins; verifying zero pins is no check."""
+    world.host.pins = {}
+    with pytest.raises(PipelineRefusal) as refused:
+        world.run()
+    assert (refused.value.step, refused.value.code) == (
+        PipelineStep.REPIN,
+        PipelineRefusalCode.PHASE_PINS_MISSING,
+    )
+    assert "P35" in refused.value.detail
+    assert "resolve_trailer_repins" not in world.calls
 
 
 def test_run_post_merge_pipeline_refuses_a_daemon_refusal_by_name(world: World) -> None:

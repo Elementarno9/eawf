@@ -1,6 +1,6 @@
 """The v0.7.0 release train and its ``dev1`` checkpoint configuration.
 
-This module is *data*, not schema. The seven checkpoints below are this
+This module is *data*, not schema. The eight checkpoints below are this
 project's plan for one target version; they bind no other release, no
 other project and no other repository. A different train is a different
 :class:`~eawf.kernel.spec.release.ReleaseTrain` value built the same
@@ -45,12 +45,15 @@ logger = logging.getLogger(__name__)
 #: Stable version the v0.7.0 train walks toward.
 V07_TARGET_VERSION: Final[str] = "0.7.0"
 
-#: The seven rungs of the v0.7.0 train, in order. Epochs and profiles
+#: The eight rungs of the v0.7.0 train, in order. Epochs and profiles
 #: come from the train table: ``dev1``/``dev2`` stabilize and migrate on
-#: epoch-1 authority, ``dev3``/``dev4`` run epoch 2 in canary
-#: repositories, and the two release candidates plus stable run epoch 2
-#: only. Membership bundles start at ``dev3`` because an epoch-2
-#: Milestone acceptance bundle cannot exist before then.
+#: epoch-1 authority, ``dev3``/``dev4`` run epoch 2 in disposable canary
+#: repositories, ``dev5`` is the opted-in product canary, and the two
+#: release candidates plus stable run epoch 2 only. Membership bundles
+#: start at ``dev3`` because an epoch-2 Milestone acceptance bundle
+#: cannot exist before then. ``dev4`` repeats the native-canary profile
+#: because this repository's own cutover lands after it, so the product
+#: surface cannot be canaried until ``dev5``.
 V07_CHECKPOINTS: Final[tuple[ReleaseCheckpoint, ...]] = (
     ReleaseCheckpoint(
         release_key=release_key("0.7.0.dev1"),
@@ -72,6 +75,12 @@ V07_CHECKPOINTS: Final[tuple[ReleaseCheckpoint, ...]] = (
     ),
     ReleaseCheckpoint(
         release_key=release_key("0.7.0.dev4"),
+        authority_epoch=2,
+        gate_profile=ReleaseGateProfile.NATIVE_CANARY,
+        requires_membership=True,
+    ),
+    ReleaseCheckpoint(
+        release_key=release_key("0.7.0.dev5"),
         authority_epoch=2,
         gate_profile=ReleaseGateProfile.PRODUCT_CANARY,
         requires_membership=True,
@@ -263,6 +272,14 @@ DEV3_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The ``0.7.0.dev4`` checkpoint configuration: the same fifteen
+#: ``native_canary`` gates and four targets as ``dev3``, rendered for its
+#: own version so its record resolves its own membership refs.
+DEV4_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0.dev4"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -271,6 +288,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0.dev1": DEV1_RELEASE_CONFIG_YAML,
     "0.7.0.dev2": DEV2_RELEASE_CONFIG_YAML,
     "0.7.0.dev3": DEV3_RELEASE_CONFIG_YAML,
+    "0.7.0.dev4": DEV4_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -488,6 +506,7 @@ __all__ = [
     "DEV2_GATE_BINDINGS_YAML",
     "DEV2_RELEASE_CONFIG_YAML",
     "DEV3_RELEASE_CONFIG_YAML",
+    "DEV4_RELEASE_CONFIG_YAML",
     "NATIVE_CANARY_GATE_BINDINGS_YAML",
     "PROFILE_GATE_BINDINGS",
     "V07_CHECKPOINTS",

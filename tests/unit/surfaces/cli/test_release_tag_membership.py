@@ -53,8 +53,8 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 DEV3_VERSION = "0.7.0.dev3"
 DEV3_RELEASE_KEY = "REL-0.7.0.dev3"
 
-#: The next rung, whose configuration is not authored (error-path fixture).
-DEV4_VERSION = "0.7.0.dev4"
+#: A rung whose configuration is not authored (error-path fixture).
+DEV5_VERSION = "0.7.0.dev5"
 
 #: The real, committed W37CANARY acceptance bundle. Resolves against
 #: ``.ea/artifacts/evidence/2026-09-18-dev3-conformance/native-canary-evidence.json``.
@@ -106,7 +106,7 @@ def test_checkpoint_config_still_resolves_dev2_with_no_matching_export() -> None
 def test_checkpoint_config_refuses_an_unauthored_version(tmp_path: Path) -> None:
     """Error path: an unauthored version reports NotFound, not cardinality."""
     with pytest.raises(cli_errors.UserError) as excinfo:
-        release_tag._checkpoint_config(DEV4_VERSION, repo_root=tmp_path)
+        release_tag._checkpoint_config(DEV5_VERSION, repo_root=tmp_path)
     assert excinfo.value.kind == "NotFound"
 
 

@@ -59,8 +59,8 @@ from tests._release_helpers import release_record
 #: The checkpoint under test.
 DEV3_VERSION = "0.7.0.dev3"
 
-#: The next rung, whose profile is still unauthored.
-DEV4_VERSION = "0.7.0.dev4"
+#: The product-canary rung, whose profile is still unauthored.
+DEV5_VERSION = "0.7.0.dev5"
 
 #: The acceptance bundle a ``dev3`` record names.
 MEMBERSHIP_REF = "milestone://epoch2/native-canary"
@@ -177,7 +177,7 @@ def test_resolve_config_refuses_dev2_carrying_membership_refs() -> None:
 
 def test_resolve_config_refuses_a_rung_with_no_authored_configuration() -> None:
     with pytest.raises(DaemonValidationError) as excinfo:
-        resolve_config(DEV4_VERSION, membership_refs=(MEMBERSHIP_REF,))
+        resolve_config(DEV5_VERSION, membership_refs=(MEMBERSHIP_REF,))
     assert "no release configuration" in str(excinfo.value)
 
 

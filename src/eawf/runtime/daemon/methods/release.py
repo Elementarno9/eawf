@@ -116,6 +116,7 @@ from eawf.kernel.spec.release import (
     ReleaseCheckpoint,
     ReleaseTargetStatus,
     ReleaseTrain,
+    release_key,
     semver_equivalent,
 )
 from eawf.kernel.spec.release_config import ReleaseConfig
@@ -1169,7 +1170,9 @@ def _require_state(ctx: MethodContext) -> State:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
-def _membership_evidence(state_path: Path, membership_refs: list[str]) -> CanaryEvidence | None:
+def _membership_evidence(
+    state_path: Path, version: str, membership_refs: list[str]
+) -> CanaryEvidence | None:
     """Return the canary export *membership_refs* resolve against.
 
     Read only when references are declared, so an unreadable export
@@ -1177,6 +1180,8 @@ def _membership_evidence(state_path: Path, membership_refs: list[str]) -> Canary
 
     Args:
         state_path: Bound ``state.json``; the export sits in its checkout.
+        version: The checkpoint being opened; its release key picks the
+            export.
         membership_refs: The references the create declares.
 
     Returns:
@@ -1191,7 +1196,7 @@ def _membership_evidence(state_path: Path, membership_refs: list[str]) -> Canary
     if not membership_refs:
         return None
     try:
-        return load_canary_evidence(state_path.parent.parent)
+        return load_canary_evidence(state_path.parent.parent, release_key(version))
     except ValueError as exc:
         raise DaemonValidationError(f"validation_failed: membership_unresolved: {exc}") from exc
 
@@ -1318,7 +1323,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             version=args.version,
             uid=uuid4(),
             membership_refs=tuple(args.membership_refs),
-            canary_evidence=_membership_evidence(state_path, args.membership_refs),
+            canary_evidence=_membership_evidence(state_path, args.version, args.membership_refs),
         )
     except UserError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc

@@ -63,8 +63,12 @@ Enforces:
    State-scoped commits MUST touch only state-bookkeeping paths
    (``.ea/state.json``, ``.ea/store/event.jsonl``,
    ``.ea/store/audit.jsonl``, ``.secrets.baseline``, and per-wave
-   spec files under ``.ea/specs/``). Touching anything else is
-   rejected.
+   spec files under ``.ea/specs/``). Two release companions may ride
+   along: publication evidence under a
+   ``.ea/artifacts/evidence/<date>-<label>-publication/`` directory, and
+   ``.pre-commit-config.yaml`` only beside a staged ``.secrets.baseline``
+   (its ``# Baseline-hash:`` comment follows the baseline refresh).
+   Touching anything else is rejected.
 
    Bare ``[P##(-I##)?] docs:`` commits are similarly path-gated:
    they MUST touch only ``.ea/artifacts/**`` (promoted documentation
@@ -263,6 +267,17 @@ _DOCS_BARE_PREFIXES = (".ea/artifacts/",)
 # the detect-secrets baseline follows state.json line numbers, so both ride a
 # bare docs commit - but only beside an artifact whose digest they refresh.
 _DOCS_DIGEST_COMPANIONS = (".ea/state.json", ".secrets.baseline")
+# The post-merge release pipeline ends in one state commit that lands its
+# publication evidence beside the release store, and refreshing the
+# detect-secrets baseline bumps the baseline-hash comment in the pre-commit
+# config. These stay out of ``_is_state_only_path``: that predicate also
+# decides fold detection and the wave-cap exemption, which evidence and
+# config edits must not trigger. Only the pipeline's own
+# ``<date>-<label>-publication/`` directory qualifies, so other evidence
+# cannot slip into a state commit under the release carve-out.
+_STATE_EVIDENCE_PREFIX = ".ea/artifacts/evidence/"
+_STATE_EVIDENCE_DIR_SUFFIX = "-publication"
+_STATE_BASELINE_HASH_COMPANION = ".pre-commit-config.yaml"
 # CLOSED and ARCHIVED are the terminal phase statuses. Any other status,
 # PLANNED included, means lifecycle work is still in flight; an unrecognised
 # status reads as in flight too, so a malformed row never waves a commit through.
@@ -707,6 +722,22 @@ def _is_state_only_path(path: str) -> bool:
     return any(path.startswith(p) for p in _STATE_ONLY_PREFIXES)
 
 
+def _is_publication_evidence_path(path: str) -> bool:
+    """Return whether *path* sits in a release publication evidence directory.
+
+    Args:
+        path: A staged repo-relative path.
+
+    Returns:
+        True when the first component under ``.ea/artifacts/evidence/`` is a
+        directory whose name ends with ``-publication``.
+    """
+    if not path.startswith(_STATE_EVIDENCE_PREFIX):
+        return False
+    dirname, sep, _ = path.removeprefix(_STATE_EVIDENCE_PREFIX).partition("/")
+    return bool(sep) and dirname.endswith(_STATE_EVIDENCE_DIR_SUFFIX)
+
+
 def _is_docs_bare_path(path: str) -> bool:
     return any(path.startswith(p) for p in _DOCS_BARE_PREFIXES)
 
@@ -730,14 +761,37 @@ def _docs_bare_strays(staged: list[str]) -> list[str]:
     ]
 
 
+def _state_strays(staged: list[str]) -> list[str]:
+    """Return the staged paths a state commit may not carry.
+
+    Args:
+        staged: Paths staged for the commit.
+
+    Returns:
+        Every path off the state-bookkeeping whitelist, except publication
+        evidence under ``.ea/artifacts/evidence/<date>-<label>-publication/``
+        and the pre-commit config
+        when ``.secrets.baseline`` is staged beside it.
+    """
+    refreshes_baseline = ".secrets.baseline" in staged
+    return [
+        path
+        for path in staged
+        if not _is_state_only_path(path)
+        and not _is_publication_evidence_path(path)
+        and not (refreshes_baseline and path == _STATE_BASELINE_HASH_COMPANION)
+    ]
+
+
 def _check_scoped_paths(
     *, commit_type: str, staged: list[str], is_bare: bool
 ) -> tuple[int, str] | None:
     """Enforce the per-scope path whitelist for state- and bare-docs commits.
 
     State-scoped commits (``type == 'state'``) must touch only
-    state-bookkeeping paths. Bare ``[P##(-I##)?] docs:`` commits must touch
-    only ``.ea/artifacts/**``, plus ``.ea/state.json`` and
+    state-bookkeeping paths, plus release publication evidence and the
+    baseline-hash companion of a staged baseline refresh. Bare
+    ``[P##(-I##)?] docs:`` commits must touch only ``.ea/artifacts/**``, plus ``.ea/state.json`` and
     ``.secrets.baseline`` when an artifact path is staged too. Wave-form
     ``[P##-W##] docs:`` commits are unrestricted (hence the *is_bare* gate on
     the docs branch).
@@ -746,12 +800,15 @@ def _check_scoped_paths(
     outside its whitelist, else ``None``.
     """
     if commit_type == "state":
-        bad = [p for p in staged if not _is_state_only_path(p)]
+        bad = _state_strays(staged)
         if bad:
             return 1, (
                 f"state-type commit touches non-state paths: {bad}\n"
                 "state-scoped commits must mutate only .ea/state.json, "
-                ".ea/store/**, .secrets.baseline, or .ea/specs/**"
+                ".ea/store/**, .secrets.baseline, .ea/specs/** or "
+                ".ea/artifacts/evidence/<date>-<label>-publication/**; "
+                ".pre-commit-config.yaml may ride "
+                "along solely beside a staged .secrets.baseline"
             )
     elif is_bare and commit_type == "docs":
         bad = _docs_bare_strays(staged)

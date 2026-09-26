@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from packaging.version import Version
 
 from eawf import __version__
 from eawf.surfaces.cli.errors import UserError
@@ -51,8 +52,9 @@ def dev3_section() -> str:
     return text[start : text.index("## [0.7.0.dev2]")]
 
 
-def test_the_package_version_is_dev3() -> None:
-    assert __version__ == DEV3_VERSION
+def test_the_package_version_is_at_or_past_dev3() -> None:
+    """The package carries this rung's version or a later rung's."""
+    assert Version(__version__) >= Version(DEV3_VERSION)
 
 
 def test_the_changelog_section_states_its_migration_and_limitations() -> None:
@@ -73,7 +75,7 @@ def test_dev3_is_the_membership_rung_on_epoch2_authority() -> None:
 
 def test_the_membership_ref_resolves_the_way_release_create_resolves_it() -> None:
     """The committed export records the bundle as a COMPLETED Milestone."""
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_KEY)
     assert evidence is not None, "no canary evidence export is committed"
 
     assert_membership_resolves(evidence, [MEMBERSHIP_REF])
@@ -85,7 +87,7 @@ def test_the_membership_ref_resolves_the_way_release_create_resolves_it() -> Non
 
 def test_a_ref_the_canary_never_accepted_is_refused_by_the_same_resolver() -> None:
     """Gate-fire: the resolver the cut runs reds on an invented bundle."""
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_KEY)
     invented = MEMBERSHIP_REF.replace("MLS-0001", "MLS-9999")
 
     with pytest.raises(UserError) as caught:

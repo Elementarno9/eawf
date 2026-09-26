@@ -1,0 +1,148 @@
+{
+  "advertised": [
+    {
+      "manifest_digest": "sha256:9f3a95bc436f59196f38b82fbd4f49809da9bcf91a2b114a6c0ff538f5f2e0e7",
+      "manifest_ref": "driver://claude-code/2.1.274",
+      "required_capabilities": [
+        "tool_use",
+        "streaming"
+      ],
+      "runtime_id": "claude-code"
+    }
+  ],
+  "canaries": [
+    {
+      "project_code": "W63CANARY",
+      "repository": "eawf://WSP-W63CANARY/PRJ-W63CANARY/REP-W63CANARY/repository/REP-W63CANARY"
+    },
+    {
+      "project_code": "W37CANARY",
+      "repository": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/repository/REP-W37CANARY"
+    }
+  ],
+  "certifications": [
+    {
+      "certification": {
+        "architecture": "aarch64",
+        "auth_kind": "subscription",
+        "capabilities": [
+          {
+            "basis": "native",
+            "capability_id": "tool_use",
+            "degradation_workflow_ref": null,
+            "evidence_ref": "artifact://dev3-conformance/2026-09-18/claude-code-probe",
+            "expires_at": "2026-12-17T00:00:00Z",
+            "failure_code": null,
+            "failure_detail_ref": null,
+            "level": true,
+            "status": "verified",
+            "verified_at": "2026-09-18T00:00:00Z"
+          },
+          {
+            "basis": "native",
+            "capability_id": "streaming",
+            "degradation_workflow_ref": null,
+            "evidence_ref": "artifact://dev3-conformance/2026-09-18/claude-code-probe",
+            "expires_at": "2026-12-17T00:00:00Z",
+            "failure_code": null,
+            "failure_detail_ref": null,
+            "level": "stream-json",
+            "status": "verified",
+            "verified_at": "2026-09-18T00:00:00Z"
+          },
+          {
+            "basis": "native",
+            "capability_id": "session_resume",
+            "degradation_workflow_ref": null,
+            "evidence_ref": "artifact://dev3-conformance/2026-09-18/claude-code-probe",
+            "expires_at": "2026-12-17T00:00:00Z",
+            "failure_code": null,
+            "failure_detail_ref": null,
+            "level": false,
+            "status": "unsupported",
+            "verified_at": "2026-09-18T00:00:00Z"
+          }
+        ],
+        "certification_id": "claude-code-dev3",
+        "conformance_suite_version": "1.0.0",
+        "distribution_version": "2.1.274",
+        "event_codec_version": "1.0.0",
+        "evidence_bundle_ref": "artifact://dev3-conformance/2026-09-18/claude-code-bundle",
+        "expires_at": "2026-12-17T00:00:00Z",
+        "install_trust": "observed",
+        "managed_profile_digest": "sha256:009595c1e4d4bca9ba47fe8b02b463f852fb902b01af67e12e237c6a15c2c03b",
+        "manifest_digest": "sha256:9f3a95bc436f59196f38b82fbd4f49809da9bcf91a2b114a6c0ff538f5f2e0e7",
+        "manifest_ref": "driver://claude-code/2.1.274",
+        "model_family": "claude",
+        "os_class": "macos",
+        "overall_status": "verified",
+        "quarantine_trigger": null,
+        "revocation_reason": null,
+        "revoked_at": null,
+        "runtime_facts": {
+          "auto_compaction_threshold_tokens": null,
+          "context_window_tokens": 1000000,
+          "measured_at": "2026-09-18T00:00:00Z",
+          "measurement_method": "observed",
+          "project_document_cap_bytes": 32768,
+          "tool_output_cap_tokens": 25000
+        },
+        "schema_version": "driver-certification/v1",
+        "sdk_or_server_version": "2.1.274",
+        "semantic_protocol_version": "1.0.0",
+        "stage_history": [
+          {
+            "completed_at": "2026-09-18T00:00:00Z",
+            "evidence_ref": "artifact://dev3-conformance/2026-09-18/claude-code-probe",
+            "outcome": "passed",
+            "reason_code": null,
+            "stage": "probe",
+            "started_at": "2026-09-18T00:00:00Z"
+          },
+          {
+            "completed_at": "2026-09-18T00:00:00Z",
+            "evidence_ref": "artifact://dev3-conformance/2026-09-18/claude-code-canary",
+            "outcome": "passed",
+            "reason_code": null,
+            "stage": "canary",
+            "started_at": "2026-09-18T00:00:00Z"
+          },
+          {
+            "completed_at": "2026-09-18T00:00:00Z",
+            "evidence_ref": "artifact://dev3-conformance/2026-09-18/claude-code-bundle",
+            "outcome": "passed",
+            "reason_code": null,
+            "stage": "certify",
+            "started_at": "2026-09-18T00:00:00Z"
+          }
+        ],
+        "verified_at": "2026-09-18T00:00:00Z",
+        "worker_protocol_version": "1.0.0"
+      },
+      "certification_urn": "certification://claude-code/2026-09-18",
+      "runtime_id": "claude-code",
+      "tuple_digest": "sha256:5f501a7931982278fd6b636351f64e6d67adae0e0b84e7c93f761d3169d85eab"
+    }
+  ],
+  "isolation": {
+    "after_digest": "sha256:b82836bec5bb8dc7e46cc136150739acef491a7606d7f5df7cffc3ae1e9c2d44",
+    "before_digest": "sha256:b82836bec5bb8dc7e46cc136150739acef491a7606d7f5df7cffc3ae1e9c2d44",
+    "evidence_ref": "artifact://dev3-conformance/2026-09-18/production-root-pair",
+    "observed_at": "2026-09-18T00:00:00+00:00",
+    "production_root_label": "staged production root at HEAD (.ea tree)",
+    "rehearsal_scope": "canary provisioning and the native-authority fence"
+  },
+  "milestones": [
+    {
+      "bundle_digest": "sha256:5ce927ea65c91d21b4d4838375b85668ea936fcebee511136f63c06ef92b4f07",
+      "milestone_id": "MLS-0001",
+      "project_code": "W37CANARY",
+      "recorded_at": "2026-09-26T02:36:21.321031Z",
+      "reference": "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001",
+      "status": "COMPLETED"
+    }
+  ],
+  "release_key": "REL-0.7.0.dev4",
+  "run_logs": [],
+  "schema_version": "native-canary-evidence/v1"
+}

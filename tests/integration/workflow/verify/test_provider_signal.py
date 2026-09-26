@@ -46,7 +46,7 @@ from eawf.kernel.release.signals import (
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
 from eawf.runtime.release.chokepoint import sweep_for_tag
 from eawf.workflow.evidence.provider_certification import (
-    CANARY_EVIDENCE_DIR,
+    CANARY_EVIDENCE_DIRS,
     CANARY_EVIDENCE_FILENAME,
     CanaryEvidenceGap,
     canary_evidence_path,
@@ -67,6 +67,9 @@ pytestmark = pytest.mark.integration
 #: This checkout, whose committed export is the real evidence.
 REPO_ROOT = Path(__file__).resolve().parents[4]
 
+#: The release whose committed canary export this module reads.
+DEV3_RELEASE_KEY = "REL-0.7.0.dev3"
+
 #: Instant every sweep in this module is computed at.
 NOW = datetime(2026, 9, 18, 12, 0, tzinfo=UTC)
 
@@ -85,7 +88,7 @@ OTHER_DIGEST = f"sha256:{'b' * 64}"
 
 def committed() -> dict[str, Any]:
     """Return a mutable copy of this checkout's committed export."""
-    path = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIR, CANARY_EVIDENCE_FILENAME)
+    path = REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[DEV3_RELEASE_KEY], CANARY_EVIDENCE_FILENAME)
     document: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     return copy.deepcopy(document)
 
@@ -101,7 +104,7 @@ def staged(tmp_path: Path, document: dict[str, Any] | str) -> Path:
     Returns:
         The staged checkout root.
     """
-    path = canary_evidence_path(tmp_path)
+    path = canary_evidence_path(tmp_path, DEV3_RELEASE_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
     text = document if isinstance(document, str) else json.dumps(document, indent=2)
     path.write_text(text, encoding="utf-8")
@@ -141,7 +144,7 @@ def certification(document: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_the_committed_export_loads_as_a_validated_record() -> None:
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
 
     assert evidence is not None
     assert evidence.release_key == "REL-0.7.0.dev3"
@@ -150,7 +153,7 @@ def test_the_committed_export_loads_as_a_validated_record() -> None:
 
 def test_the_committed_certification_carries_contiguous_probe_canary_certify() -> None:
     """The runner's promise, re-checked off the committed record."""
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
     record = evidence.certifications[0]
 
@@ -160,7 +163,7 @@ def test_the_committed_certification_carries_contiguous_probe_canary_certify() -
 
 
 def test_the_committed_export_advertises_a_tuple_it_certifies() -> None:
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
 
     assert [claim.manifest_ref for claim in evidence.advertised] == [MANIFEST_REF]
@@ -298,7 +301,7 @@ def test_a_revoked_record_reports_both_axes_separately(tmp_path: Path) -> None:
     record["quarantine_trigger"] = "protocol_drift"
     record["revoked_at"] = "2026-09-18T01:00:00+00:00"
     record["revocation_reason"] = "quarantined on protocol_drift"
-    evidence = load_canary_evidence(staged(tmp_path, document))
+    evidence = load_canary_evidence(staged(tmp_path, document), DEV3_RELEASE_KEY)
     assert evidence is not None
 
     findings = provider_findings(evidence)
@@ -425,27 +428,29 @@ def test_a_second_uncertified_claim_is_named_and_the_certified_one_is_not(
 
 def test_canary_evidence_path_refuses_a_root_that_is_not_a_path() -> None:
     with pytest.raises(TypeError, match="repo_root must be Path"):
-        canary_evidence_path("/tmp")  # type: ignore[arg-type]
+        canary_evidence_path("/tmp", DEV3_RELEASE_KEY)  # type: ignore[arg-type]
 
 
 def test_load_canary_evidence_returns_none_for_an_absent_export(tmp_path: Path) -> None:
-    assert load_canary_evidence(tmp_path) is None
+    assert load_canary_evidence(tmp_path, DEV3_RELEASE_KEY) is None
 
 
 def test_load_canary_evidence_refuses_text_that_is_not_json(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="not valid JSON"):
-        load_canary_evidence(staged(tmp_path, "{"))
+        load_canary_evidence(staged(tmp_path, "{"), DEV3_RELEASE_KEY)
 
 
 def test_load_canary_evidence_refuses_a_document_that_does_not_validate(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="does not validate"):
-        load_canary_evidence(staged(tmp_path, {"schema_version": "native-canary-evidence/v1"}))
+        load_canary_evidence(
+            staged(tmp_path, {"schema_version": "native-canary-evidence/v1"}), DEV3_RELEASE_KEY
+        )
 
 
 def test_provider_evidence_refs_is_empty_without_a_certification(tmp_path: Path) -> None:
     document = committed()
     document["certifications"] = []
-    evidence = load_canary_evidence(staged(tmp_path, document))
+    evidence = load_canary_evidence(staged(tmp_path, document), DEV3_RELEASE_KEY)
     assert evidence is not None
 
     assert provider_evidence_refs(evidence) == ()
@@ -454,7 +459,7 @@ def test_provider_evidence_refs_is_empty_without_a_certification(tmp_path: Path)
 def test_provider_findings_is_empty_when_nothing_is_advertised(tmp_path: Path) -> None:
     document = committed()
     document["advertised"] = []
-    evidence = load_canary_evidence(staged(tmp_path, document))
+    evidence = load_canary_evidence(staged(tmp_path, document), DEV3_RELEASE_KEY)
     assert evidence is not None
 
     assert provider_findings(evidence) == ()
@@ -465,7 +470,7 @@ def test_summarise_findings_of_nothing_is_empty() -> None:
 
 
 def test_certification_for_returns_none_for_a_manifest_nobody_certified() -> None:
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_RELEASE_KEY)
     assert evidence is not None
 
     assert evidence.certification_for("driver://nobody/0.0.1") is None

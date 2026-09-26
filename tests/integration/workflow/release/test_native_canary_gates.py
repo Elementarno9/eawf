@@ -287,7 +287,7 @@ DEV3_KEY = f"REL-{DEV3_VERSION}"
 
 def membership_ref() -> str:
     """Return the acceptance bundle the committed canary export records."""
-    evidence = load_canary_evidence(REPO_ROOT)
+    evidence = load_canary_evidence(REPO_ROOT, DEV3_KEY)
     assert evidence is not None, "no canary evidence export is committed"
     reference: str = evidence.milestones[0].reference
     return reference

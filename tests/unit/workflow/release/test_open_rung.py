@@ -189,7 +189,7 @@ def test_derive_train_marks_the_rungs_below_the_open_one_passed() -> None:
     train = derive_train(V07_TRAIN, recorded_keys=(DEV1_KEY, DEV2_KEY), advances=(dev2_advance(),))
 
     statuses = [row["status"] for row in render_train_ladder(train)["checkpoints"]]
-    assert statuses == ["passed", "passed", "open", *["pending"] * 4]
+    assert statuses == ["passed", "passed", "open", *["pending"] * 5]
 
 
 def test_derive_train_leaves_the_source_declaration_untouched() -> None:

@@ -475,6 +475,9 @@ def stage_passing_receipts(repo_root: Path, *, version: str, source_sha: str) ->
 #: The acceptance bundle a dev3 open names.
 DEV3_MEMBERSHIP_REF = "milestone://epoch2/native-canary"
 
+#: The release whose committed canary export these helpers read and stage.
+DEV3_RELEASE_KEY = "REL-0.7.0.dev3"
+
 
 def accepted_canary_export(*records: Mapping[str, Any]) -> dict[str, Any]:
     """Return this checkout's committed canary export with Milestones accepted.
@@ -493,7 +496,7 @@ def accepted_canary_export(*records: Mapping[str, Any]) -> dict[str, Any]:
     """
     repo_root = Path(__file__).resolve().parents[1]
     document: dict[str, Any] = json.loads(
-        canary_evidence_path(repo_root).read_text(encoding="utf-8")
+        canary_evidence_path(repo_root, DEV3_RELEASE_KEY).read_text(encoding="utf-8")
     )
     base: dict[str, Any] = {
         "reference": DEV3_MEMBERSHIP_REF,
@@ -515,7 +518,7 @@ def stage_canary_export(repo_root: Path, document: Mapping[str, Any] | str) -> N
         document: The export, as a mapping written as JSON or as text
             written verbatim.
     """
-    path = canary_evidence_path(repo_root)
+    path = canary_evidence_path(repo_root, DEV3_RELEASE_KEY)
     path.parent.mkdir(parents=True, exist_ok=True)
     text = document if isinstance(document, str) else json.dumps(document)
     path.write_text(text, encoding="utf-8")

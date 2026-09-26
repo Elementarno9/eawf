@@ -292,6 +292,76 @@ def test_accepts_state_touching_secrets_baseline(tmp_path: Path, mod) -> None:
     assert code == 0, diag
 
 
+def test_accepts_state_carrying_release_publication_evidence(tmp_path: Path, mod) -> None:
+    """The release pipeline's evidence step lands in one bare state commit.
+
+    It stages the release store, the publication evidence directory, the
+    refreshed baseline and the baseline-hash bump in the pre-commit config.
+    """
+    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
+    code, diag = mod.lint(
+        msg,
+        [
+            ".ea/store/release_record.jsonl",
+            ".ea/artifacts/evidence/2026-09-26-dev4-publication/dev4-baked.json",
+            ".secrets.baseline",
+            ".pre-commit-config.yaml",
+        ],
+    )
+    assert code == 0, diag
+
+
+def test_rejects_state_touching_precommit_config_without_baseline(tmp_path: Path, mod) -> None:
+    """The pre-commit config rides a state commit only beside a baseline refresh."""
+    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
+    code, diag = mod.lint(msg, [".ea/store/release_record.jsonl", ".pre-commit-config.yaml"])
+    assert code == 1
+    assert "non-state paths" in diag
+    assert ".pre-commit-config.yaml" in diag
+
+
+def test_rejects_state_touching_non_evidence_artifact(tmp_path: Path, mod) -> None:
+    """Only the evidence subtree of ``.ea/artifacts/`` rides a state commit."""
+    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
+    code, diag = mod.lint(msg, [".ea/state.json", ".ea/artifacts/audits/x.md"])
+    assert code == 1
+    assert "non-state paths" in diag
+    assert ".ea/artifacts/audits/x.md" in diag
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".ea/artifacts/evidence/2026-09-26-dev4-conformance/x.json",
+        ".ea/artifacts/evidence/loose.json",
+        ".ea/artifacts/evidence/2026-09-26-dev4-publication-notes/x.json",
+    ],
+)
+def test_rejects_state_touching_non_publication_evidence(tmp_path: Path, mod, path: str) -> None:
+    """Only a pipeline ``<date>-<label>-publication/`` directory rides a state commit."""
+    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
+    code, diag = mod.lint(msg, [".ea/store/release_record.jsonl", path])
+    assert code == 1
+    assert "non-state paths" in diag
+    assert path in diag
+
+
+def test_rejects_state_touching_source_beside_evidence(tmp_path: Path, mod) -> None:
+    """Staging evidence does not open a state commit to source paths."""
+    msg = _write_msg(tmp_path, "[P35] state: land dev4 publication evidence\n")
+    code, diag = mod.lint(
+        msg,
+        [
+            ".ea/artifacts/evidence/2026-09-26-dev4-publication/dev4-baked.json",
+            ".secrets.baseline",
+            "src/eawf/foo.py",
+        ],
+    )
+    assert code == 1
+    assert "non-state paths" in diag
+    assert "src/eawf/foo.py" in diag
+
+
 def test_accepts_wave_commit_with_iter_component(tmp_path: Path, mod) -> None:
     """Iter component is mandatory for I02+ (single-iter phases stay short)."""
     msg = _write_msg(tmp_path, "[P14-I02-W01] feat: native plugin layout\n")

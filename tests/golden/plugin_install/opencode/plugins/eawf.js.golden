@@ -55,7 +55,7 @@ function withSessionContext(result) {
 
 module.exports = {
   name: 'eawf',
-  version: '0.7.0.dev3',
+  version: '0.7.0.dev4',
   hooks: {
     onSessionStart: (ctx) => withSessionContext(dispatchHook('session_start', ctx)),
     onSessionEnd: (ctx) => dispatchHook('session_end', ctx),

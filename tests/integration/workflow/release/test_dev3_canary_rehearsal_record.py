@@ -35,8 +35,11 @@ acceptance taken on a sealed approval, and the canary evidence export records
 the accepted bundle. The walk is driven again here on a fresh canary: its steps
 must be the recorded ones, the recorded digest must be the digest of the
 recorded bundle, and the export must resolve the recorded reference the way
-``release create`` does. Setting ``EAWF_RECORD_CANARY_WALK=1`` rewrites both
-files from the walk just taken, which is the only way either is written.
+``release create`` does. Each release that carries canary evidence keeps its own
+export and walk record, and every one is checked. Setting
+``EAWF_RECORD_CANARY_WALK`` to a release key rewrites that release's two files
+from the walk just taken, which is the only way either is written; the other
+releases' files are left exactly as they were recorded.
 """
 
 from __future__ import annotations
@@ -70,6 +73,8 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.methods import ensure_all_methods_registered, registered_methods
 from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence.provider_certification import (
+    CANARY_EVIDENCE_DIRS,
+    CANARY_EVIDENCE_FILENAME,
     CanaryEvidence,
     CanaryEvidenceGap,
     membership_findings,
@@ -919,13 +924,28 @@ def test_a_record_that_is_not_a_mapping_is_refused() -> None:
 
 # ---------- the walk that reached acceptance ----------
 
-#: Where the canary evidence export and the walk behind its Milestone live.
-EVIDENCE_DIR: Final = _REPO_ROOT / ".ea/artifacts/evidence/2026-09-18-dev3-conformance"
-EVIDENCE: Final = EVIDENCE_DIR / "native-canary-evidence.json"
-WALK: Final = EVIDENCE_DIR / "canary-acceptance-walk.json"
+#: Every release whose canary export and walk record are committed, in the
+#: order they were cut. Read from the loader's own map so a release it can
+#: find evidence for is one this suite checks.
+RECORDED_RELEASES: Final[tuple[str, ...]] = tuple(CANARY_EVIDENCE_DIRS)
 
-#: Set to ``1`` to rewrite the export and the walk record from a fresh walk.
+#: The walk record's name beside each release's export.
+WALK_FILENAME: Final = "canary-acceptance-walk.json"
+
+#: Set to a release key to rewrite that release's export and walk record
+#: from a fresh walk.
 RECORD_ENV: Final = "EAWF_RECORD_CANARY_WALK"
+
+
+def evidence_path(release: str) -> Path:
+    """Return the committed canary evidence export of *release*."""
+    return _REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[release], CANARY_EVIDENCE_FILENAME)
+
+
+def walk_path(release: str) -> Path:
+    """Return the committed walk record of *release*."""
+    return _REPO_ROOT.joinpath(*CANARY_EVIDENCE_DIRS[release], WALK_FILENAME)
+
 
 #: The three skills the criterion names, each of which must have taken a step.
 LIFECYCLE_SKILLS: Final[tuple[str, ...]] = ("/dispatch", "/integrate", "/verify")
@@ -1059,21 +1079,19 @@ class WalkRecord(BaseModel):
         return self
 
 
-def load_walk(document: Any = None) -> WalkRecord:
-    """Return the validated walk record, from *document* or from the committed file."""
-    if document is None:
-        document = json.loads(WALK.read_text(encoding="utf-8"))
+def load_walk(document: Any) -> WalkRecord:
+    """Return *document* validated as a walk record."""
     return WalkRecord.model_validate(document)
 
 
-def load_evidence() -> CanaryEvidence:
-    """Return the committed canary evidence export, validated."""
-    return CanaryEvidence.model_validate_json(EVIDENCE.read_text(encoding="utf-8"))
+def load_evidence(release: str) -> CanaryEvidence:
+    """Return the committed canary evidence export of *release*, validated."""
+    return CanaryEvidence.model_validate_json(evidence_path(release).read_text(encoding="utf-8"))
 
 
-def _walked_document() -> dict[str, Any]:
-    """Return the committed walk record, decoded and mutable."""
-    parsed: dict[str, Any] = json.loads(WALK.read_text(encoding="utf-8"))
+def _walked_document(release: str) -> dict[str, Any]:
+    """Return the committed walk record of *release*, decoded and mutable."""
+    parsed: dict[str, Any] = json.loads(walk_path(release).read_text(encoding="utf-8"))
     return parsed
 
 
@@ -1091,8 +1109,13 @@ def _shape(rows: Any) -> list[tuple[str, str, str, str]]:
 def walked(tmp_path_factory: pytest.TempPathFactory) -> Iterator[CanaryWalk]:
     """Walk one canary Milestone to acceptance, once for the whole module.
 
-    When :data:`RECORD_ENV` is set the committed export and walk record
-    are rewritten from this walk before any test reads them.
+    When :data:`RECORD_ENV` names a release, that release's committed
+    export and walk record are rewritten from this walk before any test
+    reads them; the export's certifications are kept as committed.
+
+    Raises:
+        KeyError: When :data:`RECORD_ENV` names a release with no mapped
+            evidence directory, so a typo never records nowhere.
     """
     ensure_all_methods_registered()
     base = tmp_path_factory.mktemp("canary-walk")
@@ -1100,11 +1123,22 @@ def walked(tmp_path_factory: pytest.TempPathFactory) -> Iterator[CanaryWalk]:
     scratch.mkdir()
     with mock.patch.object(tempfile, "tempdir", str(scratch)):
         walk = walk_canary(base / "repo", base / "runtime")
-    if os.environ.get(RECORD_ENV) == "1":
-        evidence = json.loads(EVIDENCE.read_text(encoding="utf-8"))
-        EVIDENCE.write_text(_dump(evidence_with(evidence, walk)), encoding="utf-8")
-        WALK.write_text(_dump(walk_record(walk)), encoding="utf-8")
+    recording = os.environ.get(RECORD_ENV)
+    if recording:
+        if recording not in CANARY_EVIDENCE_DIRS:
+            raise KeyError(f"{RECORD_ENV}={recording!r} names no release in {RECORDED_RELEASES}")
+        export = evidence_path(recording)
+        evidence = json.loads(export.read_text(encoding="utf-8"))
+        export.write_text(_dump(evidence_with(evidence, walk)), encoding="utf-8")
+        walk_path(recording).write_text(_dump(walk_record(walk)), encoding="utf-8")
     yield walk
+
+
+@pytest.fixture(params=RECORDED_RELEASES)
+def release(request: pytest.FixtureRequest) -> str:
+    """Return each release whose export and walk record are committed."""
+    key: str = request.param
+    return key
 
 
 def test_the_walk_accepts_the_canary_milestone_through_the_three_skills(
@@ -1122,10 +1156,12 @@ def test_the_walk_accepts_the_canary_milestone_through_the_three_skills(
     ]
 
 
-def test_the_recorded_walk_takes_the_steps_a_fresh_walk_takes(walked: CanaryWalk) -> None:
+def test_the_recorded_walk_takes_the_steps_a_fresh_walk_takes(
+    walked: CanaryWalk, release: str
+) -> None:
     """The committed steps are the ones the code takes today, in the same order."""
     fresh = walk_record(walked)
-    recorded = _walked_document()
+    recorded = _walked_document(release)
     assert _shape(recorded["steps"]) == _shape(fresh["steps"])
     assert recorded["milestone"]["urn"] == fresh["milestone"]["urn"]
     assert recorded["milestone"]["reference"] == fresh["milestone"]["reference"]
@@ -1133,19 +1169,19 @@ def test_the_recorded_walk_takes_the_steps_a_fresh_walk_takes(walked: CanaryWalk
     assert recorded["canary"] == fresh["canary"]
 
 
-def test_the_recorded_walk_validates_and_accepted_its_milestone() -> None:
+def test_the_recorded_walk_validates_and_accepted_its_milestone(release: str) -> None:
     """The committed record is a walk record, and its Milestone is COMPLETED."""
-    record = load_walk()
+    record = load_walk(_walked_document(release))
     assert record.schema_version == WALK_SCHEMA_VERSION
     assert record.milestone.status == "COMPLETED"
     assert record.canary.project_code in record.milestone.urn
     assert record.acceptance_bundle.revision == 1
 
 
-def test_the_evidence_records_the_walked_milestone_as_accepted() -> None:
+def test_the_evidence_records_the_walked_milestone_as_accepted(release: str) -> None:
     """The export lists the Milestone with the digest the walk's approval covered."""
-    evidence = load_evidence()
-    record = load_walk()
+    evidence = load_evidence(release)
+    record = load_walk(_walked_document(release))
     accepted = evidence.milestone_for(record.milestone.reference)
     assert accepted is not None
     assert accepted.status.value == "COMPLETED"
@@ -1155,47 +1191,47 @@ def test_the_evidence_records_the_walked_milestone_as_accepted() -> None:
     assert accepted.project_code == record.canary.project_code
 
 
-def test_the_recorded_reference_resolves_the_way_release_create_resolves_it() -> None:
-    """The membership reference a dev3 cut would name clears the admission check."""
-    evidence = load_evidence()
-    reference = load_walk().milestone.reference
+def test_the_recorded_reference_resolves_the_way_release_create_resolves_it(release: str) -> None:
+    """The membership reference the release's cut would name clears the admission check."""
+    evidence = load_evidence(release)
+    reference = load_walk(_walked_document(release)).milestone.reference
     assert membership_findings(evidence, [reference]) == ()
     assert_membership_resolves(evidence, [reference])
 
 
-def test_a_reference_the_canary_never_accepted_is_refused_at_admission() -> None:
+def test_a_reference_the_canary_never_accepted_is_refused_at_admission(release: str) -> None:
     """Gate-fire: the same resolver refuses an invented reference by its code."""
     with pytest.raises(UserError) as caught:
-        assert_membership_resolves(load_evidence(), ["milestone://invented/MLS-9999"])
+        assert_membership_resolves(load_evidence(release), ["milestone://invented/MLS-9999"])
     assert caught.value.kind == "membership_unresolved"
 
 
-def test_a_milestone_recorded_outside_a_declared_canary_is_refused() -> None:
+def test_a_milestone_recorded_outside_a_declared_canary_is_refused(release: str) -> None:
     """Dropping the walk's canary declaration leaves its Milestone resolving to nothing."""
-    evidence = load_evidence()
-    reference = load_walk().milestone.reference
+    evidence = load_evidence(release)
+    reference = load_walk(_walked_document(release)).milestone.reference
     undeclared = evidence.model_copy(update={"canaries": ()})
     gaps = [finding.gap for finding in membership_findings(undeclared, [reference])]
     assert gaps == [CanaryEvidenceGap.UNDECLARED_CANARY]
 
 
-def test_the_walk_record_names_no_absolute_path() -> None:
+def test_the_walk_record_names_no_absolute_path(release: str) -> None:
     """The walk ran in scratch directories, and its record says nothing about them."""
-    assert absolute_path_hits(WALK.read_text(encoding="utf-8")) == ()
-    assert absolute_path_hits(EVIDENCE.read_text(encoding="utf-8")) == ()
+    assert absolute_path_hits(walk_path(release).read_text(encoding="utf-8")) == ()
+    assert absolute_path_hits(evidence_path(release).read_text(encoding="utf-8")) == ()
 
 
-def test_a_digest_that_is_not_the_bundle_s_is_refused() -> None:
+def test_a_digest_that_is_not_the_bundle_s_is_refused(release: str) -> None:
     """A hand-typed digest is exactly what the record's own check exists to catch."""
-    document = _walked_document()
+    document = _walked_document(release)
     document["bundle_digest"] = "sha256:" + "0" * 64
     with pytest.raises(ValidationError, match="not the digest of the recorded bundle"):
         load_walk(document)
 
 
-def test_a_walk_whose_integration_took_no_skill_is_refused() -> None:
+def test_a_walk_whose_integration_took_no_skill_is_refused(release: str) -> None:
     """A step moved off its skill is the one shape the criterion forbids."""
-    document = _walked_document()
+    document = _walked_document(release)
     for row in document["steps"]:
         if row["surface"].startswith("/integrate"):
             row["surface"] = "runtime.delivery.integrate"
@@ -1204,25 +1240,25 @@ def test_a_walk_whose_integration_took_no_skill_is_refused() -> None:
         load_walk(document)
 
 
-def test_a_skill_step_naming_a_verb_is_refused() -> None:
+def test_a_skill_step_naming_a_verb_is_refused(release: str) -> None:
     """A step cannot claim a skill took it while naming a daemon verb."""
-    document = _walked_document()
+    document = _walked_document(release)
     document["steps"][0]["through"] = "skill"
     with pytest.raises(ValidationError, match="which is no skill"):
         load_walk(document)
 
 
-def test_a_milestone_left_short_of_acceptance_is_refused() -> None:
+def test_a_milestone_left_short_of_acceptance_is_refused(release: str) -> None:
     """A walk that stopped in review does not record an accepted Milestone."""
-    document = _walked_document()
+    document = _walked_document(release)
     document["milestone"]["status"] = "ACCEPTANCE_REVIEW"
     with pytest.raises(ValidationError):
         load_walk(document)
 
 
-def test_a_walk_that_started_a_provider_is_refused() -> None:
+def test_a_walk_that_started_a_provider_is_refused(release: str) -> None:
     """The off-by-one boundary: one provider process is not the zero recorded."""
-    document = _walked_document()
+    document = _walked_document(release)
     document["provider_processes_started"] = 1
     with pytest.raises(ValidationError):
         load_walk(document)

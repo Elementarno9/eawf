@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0.dev4]
+
+This is the fourth development checkpoint of the v0.7.0 release train. It ships the planning, rule, skill and measurement surfaces built on epoch-2 authority since dev3, and the tooling that rehearses this repository's own epoch-2 cutover. It runs under the same fifteen-gate native-canary profile as dev3, with its own evidence export: the canary acceptance walk is re-recorded for this release, and the runtime certification is carried forward from dev3 rather than re-probed. The opted-in product canary, which needs this repository cut over first, moves to the new `0.7.0.dev5` rung. It is still a development checkpoint, not a stable release.
+
+### Added
+
+- **Native planning verbs.** `eawf track`, `milestone`, `batch` and `task create`, `eawf milestone seal-approval`, `eawf task submit`, and `eawf plan submit`, `approve` and `apply`; a conflicting answer supersedes the earlier one instead of being rejected; aggregated workspace rows are qualified and cross-workspace mutations are refused.
+- **Plan lenses at submit.** A submitted plan runs the ownership, criterion-fidelity, role, integration, policy, duplicate, idle-contract and semantic-diff lenses; criterion grounding is graded and an assumed criterion is refused; measured contracts are submitted through a general evidence path.
+- **A budgeted research campaign.** The campaign evidence budget is typed and spent live, the contradiction stop rule is split from the saturation gate and scoped to the running campaign, and refuted claims and the question lifecycle have their own surfaces.
+- **The repository rule graph.** Rules load from `.ea/rules.yaml` into strict records and compose with the builtin and workspace layers into one effective graph with one owner per obligation; conduct obligations compile, deviations are recorded, and practice triggers are evaluated at declared decision points.
+- **Steering projections rendered from the rule graph.** The project card, policy projection, import shim, on-demand views and role carriers render in one transaction; host facts are certified per runtime and a render over a runtime's measured cap fails instead of shipping truncated.
+- **A closed skill catalog.** Every skill is declared with a typed grammar and outputs and renders through the six-slot chassis; the jury is calibrated, the telemetry contracts are pinned, and one prompt-budget ceiling applies at claim and on every consume path.
+- **Measurement and test evidence.** Five token classes with a price source on every Run; the test taxonomy is bound to the gate tier ladder; a per-id requirement trace is generated as a value-fresh census; typed red-to-green test evidence is checked at wave close.
+- **Notices, sessions and MCP isolation.** Budget notices upsert with escalation and no lifecycle effect; local session history is swept into the observed collection; MCP is granted by intersection and every managed Claude child runs in its own config home.
+- **Epoch-2 cutover preparation.** Status and doctor show the authority epoch and its gap; the cutover requires the registered workspace, binds imported phases to a declared default Track, reconciles stale worktree and session rows, converts epoch-1 decisions, incidents, project and sandbox rows, stages the committed corpus through `eawf migrate epoch2`, and admits a backup-verified opt-in canary; epoch-1 mutations are refused on a root that carries the epoch marker.
+- **Console verbs.** The native console binds its attention and run-control verbs to the daemon mutators under an operator principal.
+- **A post-merge release pipeline.** `eawf release pipeline` runs the post-merge release steps as one resumable pipeline, and a candidate resolves its configuration with the draft's membership refs.
+
+### Changed
+
+- **The v0.7.0 train has eight rungs.** `0.7.0.dev4` runs the native-canary profile and `0.7.0.dev5` is inserted before `0.7.0rc1` as the product-canary rung.
+- **Canary evidence is keyed by release,** so each native-canary checkpoint reads its own evidence export rather than the dev3 one.
+
+### Fixed
+
+- **Doctor keeps every row visible** in the clean-case frame, and the console read gaps found in live use are closed.
+- **The budget ceiling, actuals and vendor spawn parity** hold on every close and spawn path, and retired skills are refused in flow.
+- **The prune, release and CI edges from P34 are hardened,** and two gates that were red at their landed commits are repaired.
+
+### Migration
+
+- **No migration step and no cutover in this release.** No state schema edge is added: the latest epoch-1 schema is still 1.20, as at dev3, so a tree written by dev3 loads as it is. The epoch-2 cutover verbs ship, but this repository is not cut over by this checkpoint.
+
+### Limitations
+
+- **The product canary is not run.** Running this repository itself on epoch 2 is the `0.7.0.dev5` rung.
+- **The canary is still one Milestone in one disposable repository,** as at dev3, and its runtime certification is the dev3 record (`claude-code` 2.1.274, expiring 2026-12-17), not a fresh probe.
+- **Commit state before a cutover apply.** `eawf migrate epoch2` builds the epoch-2 generation from the committed state corpus and does not yet compare it with the live `state.json`, so state written after the last state commit is left out. Commit `.ea/state.json` and `.ea/store/` before applying; the guard lands before this repository's own cutover.
+
 ## [0.7.0.dev3]
 
 This is the third development checkpoint of the v0.7.0 release train, and the first that runs on epoch-2 authority. It is the native-canary rung: the epoch-2 lifecycle is driven end to end inside a disposable canary repository, one Milestone is accepted there through the lifecycle skills, and the checkpoint is gated on fifteen gates rather than dev2's twelve. It is still a development checkpoint, not a stable release: the limitations below name what remains unproven.
