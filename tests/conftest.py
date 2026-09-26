@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import os
 import shutil
+import socket
 import sys
 import tempfile
 import uuid
@@ -179,6 +180,12 @@ def runtime_dir_isolation() -> Iterator[RuntimeDirIsolation]:
             runtime_dir=isolated,
             home_snapshot_before=home_snapshot_before,
         )
+        if _daemon_reachable(isolated):
+            leakers = ", ".join(_DAEMON_LEAKERS) or "no single test (reachable before any test ran)"
+            raise DaemonLeakError(
+                f"a daemon is still reachable on the worker runtime dir at session end; "
+                f"left reachable by: {leakers}"
+            )
     finally:
         if previous is None:
             os.environ.pop("EAWF_RUNTIME_DIR", None)
@@ -189,6 +196,52 @@ def runtime_dir_isolation() -> Iterator[RuntimeDirIsolation]:
         else:
             os.environ[SUITE_SESSION_ENV] = previous_session
         shutil.rmtree(isolated, ignore_errors=True)
+
+
+# --- daemon leak witness -------------------------------------
+#
+# Every test in a worker shares the worker's runtime dir, so a daemon one
+# test boots and never stops is reachable by every later test: a probe
+# that expects "no daemon" then flips on test order alone. Each test is
+# probed after it runs, and the first one that turns the socket reachable
+# is named when the session ends with a daemon still up.
+
+
+class DaemonLeakError(RuntimeError):
+    """Raised at session end when a daemon is still reachable on the worker runtime dir."""
+
+
+#: Node ids of tests after which the worker socket turned reachable.
+_DAEMON_LEAKERS: list[str] = []
+
+
+def _daemon_reachable(rt_dir: Path) -> bool:
+    """Return whether a daemon accepts connections on *rt_dir*'s socket."""
+    sock_path = rt_dir / "eawfd.sock"
+    if os.name == "nt" or not sock_path.exists():
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+            probe.settimeout(0.25)
+            probe.connect(str(sock_path))
+    except OSError:
+        return False
+    return True
+
+
+@pytest.fixture(autouse=True)
+def daemon_leak_witness(
+    request: pytest.FixtureRequest, runtime_dir_isolation: RuntimeDirIsolation
+) -> Iterator[None]:
+    """Record this test when it leaves a daemon reachable that was not before it.
+
+    Probes the worker runtime dir, not the live ``EAWF_RUNTIME_DIR``: a
+    test that pins its own dir owns its own teardown.
+    """
+    reachable_before = _daemon_reachable(runtime_dir_isolation.runtime_dir)
+    yield
+    if not reachable_before and _daemon_reachable(runtime_dir_isolation.runtime_dir):
+        _DAEMON_LEAKERS.append(request.node.nodeid)
 
 
 # --- repository .ea resolution guard -------------------------

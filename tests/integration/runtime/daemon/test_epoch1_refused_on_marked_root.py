@@ -40,6 +40,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import main as daemon_main
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.churn import CHURN_LEDGER_NAME, ChurnOp, ChurnRecord
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.run_budget import RUN_BUDGET_METER_METHOD
 from eawf.surfaces.cli import exit_codes
@@ -158,8 +159,18 @@ def _mutate(ctx: MethodContext, repo: Path) -> dict[str, Any]:
 
 
 def _boot(tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run the daemon's synchronous boot prologue without binding a socket."""
+    """Run the daemon's synchronous boot prologue without binding a socket.
+
+    The runtime dir carries an earlier boot record, so the boot is a restart
+    of the lineage that opened the seeded session and the orphan sweep
+    applies to it.
+    """
     rt_dir = tmp_path / "runtime"
+    rt_dir.mkdir(parents=True, exist_ok=True)
+    earlier_boot = ChurnRecord(
+        pid=1, op=ChurnOp.BOOT, at_ns=0, suite_session=None, touched=("eawfd.pid",)
+    )
+    (rt_dir / CHURN_LEDGER_NAME).write_text(f"{earlier_boot.model_dump_json()}\n", encoding="utf-8")
     monkeypatch.setenv("EA_STATE", str(_ea(repo) / "state.json"))
     monkeypatch.setattr(daemon_main, "ensure_runtime_dir", lambda: rt_dir)
     monkeypatch.setattr(daemon_main, "pid_path", lambda: rt_dir / "eawfd.pid")

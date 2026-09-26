@@ -38,6 +38,21 @@ _RULE = {
 }
 
 
+@pytest.fixture(autouse=True)
+def _no_daemon_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Refuse the cold daemon spawn the Codex lifecycle capture attempts.
+
+    The capture is fail-soft, so refusing leaves the report under test
+    unchanged; spawning would leave a real daemon on the worker runtime dir
+    that answers every later test in the worker.
+    """
+
+    def refuse(_runtime_dir: Path) -> int:
+        raise ConnectionRefusedError("no daemon in this test")
+
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.auto_spawn_daemon", refuse)
+
+
 @pytest.fixture
 def stale_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
