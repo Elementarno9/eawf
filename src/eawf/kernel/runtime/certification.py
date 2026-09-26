@@ -117,6 +117,7 @@ class CertificationFailureCode(StrEnum):
     CANARY_IN_PROGRESS = "canary_in_progress"
     NO_LAST_KNOWN_GOOD_PIN = "no_last_known_good_pin"
     TUPLE_NOT_INSTALLABLE = "tuple_not_installable"
+    RUNTIME_FACTS_UNCERTIFIED = "runtime_facts_uncertified"
 
 
 class QuarantineTrigger(StrEnum):

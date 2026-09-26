@@ -32,7 +32,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.config.layered import resolve_runtime_tier_models
 from eawf.kernel.spec.campaign_driver import (
@@ -724,10 +724,15 @@ class ResolveQuestionParams(BaseModel):
     Attributes:
         question_id: Id of the :class:`OpenQuestion` to resolve; the lookup key
             into ``state.open_questions``.
-        drop: When ``True`` mark the question ``DROPPED`` (decided out of scope);
-            when ``False`` (default) mark it ``ANSWERED``. Either terminal status
-            clears the ``blocking`` bit so a campaign halted on the question
-            resumes.
+        drop: When ``True`` mark the question ``DROPPED``; when ``False``
+            (default) mark it ``ANSWERED``. Either terminal status clears the
+            ``blocking`` bit so a campaign halted on the question resumes.
+        drop_reason: The disposition a drop records; ``None`` reads as
+            ``SUPERSEDED`` when *superseded_by_question_ref* names a successor
+            and ``OUT_OF_SCOPE`` otherwise. Only valid with *drop*.
+        superseded_by_question_ref: The successor question that replaces this
+            one; only valid with *drop*, and it must name another question in
+            the ledger.
         scope_id: Explicit scope threaded to the canonical writer (mirrors
             :class:`AddQuestionParams`); the resolve itself keys off
             *question_id*, so this only anchors the write's scope tag.
@@ -738,8 +743,19 @@ class ResolveQuestionParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
     question_id: str = Field(min_length=1)
     drop: bool = False
+    drop_reason: OpenQuestionDropReason | None = None
+    superseded_by_question_ref: str | None = None
     scope_id: str | None = None
     repo_root: str | None = None
+
+    @model_validator(mode="after")
+    def _refuse_drop_fields_on_an_answer(self) -> ResolveQuestionParams:
+        """Refuse a drop disposition on a resolve that does not drop."""
+        if not self.drop and (
+            self.drop_reason is not None or self.superseded_by_question_ref is not None
+        ):
+            raise ValueError("drop_reason and superseded_by_question_ref require drop")
+        return self
 
 
 class ResolveQuestionResult(BaseModel):
@@ -768,12 +784,10 @@ def _apply_resolve_question(state: State, args: ResolveQuestionParams) -> dict[s
     ``blocking`` bool, not the status, so a resolve that left the bit set would
     never drop the count and the run would stay halted. ``answered_by_claim_id``
     stays ``None`` (an operator resolve has no answering claim, unlike the
-    round-reconcile path). A ``DROPPED`` row always carries
-    :attr:`~eawf.kernel.state.enums.OpenQuestionDropReason.OUT_OF_SCOPE`: this
-    verb has no successor question to name (that is the separate supersede
-    path, :attr:`~eawf.kernel.state.enums.OpenQuestionDropReason.SUPERSEDED`),
-    so every drop through it is the operator deciding the question no longer
-    matters -- an unreasoned drop is never left silent.
+    round-reconcile path). A ``DROPPED`` row always carries a reason, so an
+    unreasoned drop is never left silent: the caller's choice, else
+    ``SUPERSEDED`` when a successor is named, else ``OUT_OF_SCOPE``. The row
+    is re-validated so a reason and successor that disagree are refused.
 
     Args:
         state: Loaded :class:`State`. ``state.open_questions`` is mutated in
@@ -785,20 +799,34 @@ def _apply_resolve_question(state: State, args: ResolveQuestionParams) -> dict[s
 
     Raises:
         ValueError: When *args.question_id* names no row in
-            ``state.open_questions``. Mapped to ``-32002 validation_failed`` by
-            the canonical writer.
+            ``state.open_questions``, the successor names no other row, or the
+            reason and successor disagree. Mapped to ``-32002
+            validation_failed`` by the canonical writer.
     """
+    from eawf.kernel.state.models import OpenQuestion
+
     questions = dict(state.open_questions or {})
     question = questions.get(args.question_id)
     if question is None:
         raise ValueError(f"unknown question: {args.question_id!r}")
+    successor = args.superseded_by_question_ref
+    if successor is not None and (successor == args.question_id or successor not in questions):
+        raise ValueError(f"unknown successor question: {successor!r}")
     status = OpenQuestionStatus.DROPPED if args.drop else OpenQuestionStatus.ANSWERED
-    drop_reason = OpenQuestionDropReason.OUT_OF_SCOPE if args.drop else None
-    questions[args.question_id] = question.model_copy(
-        update={
+    drop_reason = None
+    if args.drop:
+        drop_reason = args.drop_reason or (
+            OpenQuestionDropReason.SUPERSEDED
+            if successor is not None
+            else OpenQuestionDropReason.OUT_OF_SCOPE
+        )
+    questions[args.question_id] = OpenQuestion.model_validate(
+        {
+            **question.model_dump(),
             "status": status,
             "blocking": False,
             "drop_reason": drop_reason,
+            "superseded_by_question_ref": successor,
             "resolved_at": datetime.now(UTC),
         }
     )

@@ -6,17 +6,17 @@ and ``gh`` from the checkout and nothing else; every decision about what
 the answers mean stays in :mod:`eawf.workflow.release.pipeline`.
 
 The gate proofs are the one step that runs in a separate runtime. The
-daemon runs each proof command with its own environment, so the proofs
-see whatever PATH the daemon was started with. They must not find other
+daemon runs each proof command with its own environment, so unless the
+caller names a PATH the proofs see the daemon's. They must not find other
 agent CLIs, whose presence changes what the canary gates observe, but
 they do need ``git``, ``uv`` and ``uvx`` -- and on a typical machine all
 of them share one package-manager ``bin`` directory, so dropping that
 directory drops the toolchain too. :func:`isolated_proof_path` hides the
 agent CLIs by dropping their directories and keeps the toolchain by
 linking it into a private directory placed first on the PATH. The proofs
-then run through a fresh ``eawf release receipts`` process whose daemon
-is spawned in a throwaway runtime directory with that PATH, and the
-daemon is stopped afterwards.
+then run through ``eawf release receipts --proof-path``, which hands that
+PATH to the daemon already serving the repository: a second daemon on the
+same store would be a second writer.
 """
 
 from __future__ import annotations
@@ -303,19 +303,14 @@ class GitHubReleaseHost:
             logger.info(f"wait_publication tag={tag!r} workflow={workflow!r} run_id={run_id}")
 
     def prove_gates(self, version: str) -> dict[str, Any]:
-        """Run ``release receipts`` against a fresh daemon on the isolated PATH."""
+        """Run ``release receipts`` on the serving daemon with the isolated proof PATH."""
         scratch = Path(tempfile.mkdtemp(prefix="eawfp-"))
-        env = {
-            **os.environ,
-            "EAWF_RUNTIME_DIR": str(scratch / "rt"),
-            "PATH": isolated_proof_path(os.environ.get("PATH", ""), shim_dir=scratch / "bin"),
-        }
-        eawf = [sys.executable, "-m", "eawf"]
+        proof_path = isolated_proof_path(os.environ.get("PATH", ""), shim_dir=scratch / "bin")
+        argv = [sys.executable, "-m", "eawf", "--json", "release", "receipts", version]
         try:
             result = subprocess.run(
-                [*eawf, "--json", "release", "receipts", version],
+                [*argv, "--proof-path", proof_path],
                 cwd=self._repo_root,
-                env=env,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -324,14 +319,6 @@ class GitHubReleaseHost:
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise PipelineHostError(f"release receipts failed: {exc}") from exc
         finally:
-            subprocess.run(
-                [*eawf, "daemon", "stop"],
-                cwd=self._repo_root,
-                env=env,
-                capture_output=True,
-                check=False,
-                timeout=COMMAND_TIMEOUT_SECONDS,
-            )
             shutil.rmtree(scratch, ignore_errors=True)
         try:
             reply = json.loads(result.stdout)

@@ -348,7 +348,10 @@ def create_workspace(registry: Registry, *, record: WorkspaceRecord) -> Registry
         WorkspaceMutationError: With
             :data:`WORKSPACE_ALREADY_REGISTERED` when the key is taken.
             Overwriting is refused rather than merged so a re-run with
-            a different member set cannot silently drop members.
+            a different member set cannot silently drop members. With
+            :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN` when a member
+            anchors a different workspace, the same refusal a later
+            membership edit meets.
     """
     if record.key in registry.workspaces:
         raise WorkspaceMutationError(
@@ -358,13 +361,14 @@ def create_workspace(registry: Registry, *, record: WorkspaceRecord) -> Registry
                 f"edit it with `eawf workspace member add/remove`"
             ),
         )
+    _refuse_foreign_homes(registry, key=record.key, codes=sorted(record.member_project_codes))
     workspaces = dict(registry.workspaces)
     workspaces[record.key] = record
     return _with_workspaces(registry, workspaces)
 
 
-def _foreign_home_workspace(registry: Registry, code: str, *, excluding: str) -> str | None:
-    """Return the key of the workspace *code* anchors, other than *excluding*.
+def _refuse_foreign_homes(registry: Registry, *, key: str, codes: Iterable[str]) -> None:
+    """Refuse when any of *codes* anchors a workspace other than *key*.
 
     A workspace's ``home_project_code`` is the root a mutation against
     that workspace ultimately reaches. Two workspaces sharing a plain
@@ -372,11 +376,27 @@ def _foreign_home_workspace(registry: Registry, code: str, *, excluding: str) ->
     but letting a second workspace claim another workspace's home would
     let a mutation issued against the second workspace reach a root it
     does not own.
+
+    Raises:
+        WorkspaceMutationError: :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`
+            naming the first foreign home and the workspace it anchors.
     """
-    for other_key, other in registry.workspaces.items():
-        if other_key != excluding and other.home_project_code == code:
-            return other_key
-    return None
+    homes = {
+        other.home_project_code: other_key
+        for other_key, other in registry.workspaces.items()
+        if other_key != key
+    }
+    for code in codes:
+        foreign = homes.get(code)
+        if foreign is not None:
+            raise WorkspaceMutationError(
+                code=CROSS_WORKSPACE_MUTATION_FORBIDDEN,
+                message=(
+                    f"repository {code!r} anchors workspace {foreign!r}; "
+                    f"adding it to {key!r} would let a mutation against {key!r} "
+                    f"reach a root outside its workspace"
+                ),
+            )
 
 
 def update_membership(
@@ -412,17 +432,7 @@ def update_membership(
             empty or no longer contains the home repo.
     """
     current = get_workspace(registry, key)
-    for code in add:
-        foreign = _foreign_home_workspace(registry, code, excluding=key)
-        if foreign is not None:
-            raise WorkspaceMutationError(
-                code=CROSS_WORKSPACE_MUTATION_FORBIDDEN,
-                message=(
-                    f"repository {code!r} anchors workspace {foreign!r}; "
-                    f"adding it to {key!r} would let a mutation against {key!r} "
-                    f"reach a root outside its workspace"
-                ),
-            )
+    _refuse_foreign_homes(registry, key=key, codes=add)
     if expected_revision is not None and expected_revision != current.revision:
         raise WorkspaceMutationError(
             code=WORKSPACE_REVISION_CONFLICT,

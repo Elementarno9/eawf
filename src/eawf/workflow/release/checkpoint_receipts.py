@@ -27,6 +27,7 @@ the hour-long suite beside it.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import tempfile
 import time
@@ -388,12 +389,16 @@ def _output_tail(completed: subprocess.CompletedProcess[str]) -> str:
     return " | ".join(tails) or "no output"
 
 
-def _run_in_tree(tree: Path, source_sha: str, command: ResolvedProofCommand) -> ProofOutcome:
+def _run_in_tree(
+    tree: Path, source_sha: str, env: dict[str, str] | None, command: ResolvedProofCommand
+) -> ProofOutcome:
     """Run *command* with *tree* as its working directory.
 
     Args:
         tree: A worktree checked out at *source_sha*.
         source_sha: The commit *tree* holds.
+        env: The environment the command runs with; ``None`` inherits
+            this process's.
         command: The pinned proof command.
 
     Returns:
@@ -416,6 +421,7 @@ def _run_in_tree(tree: Path, source_sha: str, command: ResolvedProofCommand) -> 
         completed = subprocess.run(
             list(command.argv),
             cwd=tree,
+            env=env,
             capture_output=True,
             text=True,
             check=False,
@@ -441,7 +447,9 @@ def _run_in_tree(tree: Path, source_sha: str, command: ResolvedProofCommand) -> 
 
 
 @contextmanager
-def pinned_worktree(repo_root: Path, source_sha: str) -> Iterator[ProofRunner]:
+def pinned_worktree(
+    repo_root: Path, source_sha: str, *, proof_path: str | None = None
+) -> Iterator[ProofRunner]:
     """Yield a runner whose proof commands run in a worktree at *source_sha*.
 
     The worktree lives in a scratch directory outside the checkout and is
@@ -450,6 +458,9 @@ def pinned_worktree(repo_root: Path, source_sha: str) -> Iterator[ProofRunner]:
     Args:
         repo_root: The checkout whose repository holds *source_sha*.
         source_sha: The commit to check out.
+        proof_path: The ``PATH`` the proof commands run with, so a caller
+            can hide programs from them without starting another process
+            to own the stores; ``None`` inherits this process's.
 
     Yields:
         A :data:`ProofRunner` bound to the worktree.
@@ -466,7 +477,8 @@ def pinned_worktree(repo_root: Path, source_sha: str) -> Iterator[ProofRunner]:
             )
         logger.info(f"pinned_worktree_added source_sha={source_sha!r}")
         try:
-            yield partial(_run_in_tree, tree, source_sha)
+            env = None if proof_path is None else {**os.environ, "PATH": proof_path}
+            yield partial(_run_in_tree, tree, source_sha, env)
         finally:
             removed = _git(repo_root, "worktree", "remove", "--force", str(tree))
             if removed.returncode != 0:

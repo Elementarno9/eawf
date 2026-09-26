@@ -7,19 +7,15 @@ validation so a synced criterion's tier is no longer a vaporware ``None``:
   criterion run through the validator gets ``oracle_tier == T7_JURY``, and a
   ``command_exit_zero`` ``gate_ref`` criterion gets ``T4_CONTRACT`` per the
   gate-kind tier map;
-* negative-path (raises) -- a ``JUDGED`` response with an empty ``jury_reason``
-  raises ``ValueError`` at the validation binding point, and an input criterion
-  carrying a non-``None`` author-set ``oracle_tier`` is rejected with
-  ``ValueError`` (the author never owns the tier);
+* negative-path (raises) -- an input criterion carrying a non-``None``
+  author-set ``oracle_tier`` is rejected with ``ValueError`` (the author never
+  owns the tier);
 * quantifier smuggling (raises) -- a ``HOLDS_FOR_ALL`` criterion carrying a
   ``gate_ref`` is rejected when authored ``quantifier="single"``, and rejected
   again when quantified ``forall`` away from the hypothesis locus.
 
-A malformed ``JUDGED`` clause is planted via :meth:`CriterionSpec.model_construct`
-so it bypasses the ``_judged_requires_reason`` model validator and reaches the
-``validate_criterion_gate_refs`` binding point under test -- the same
-build-the-dict-directly tactic the close-gate oracle suite uses to plant a
-forbidden tier on the wire.
+A ``JUDGED`` clause without a ``jury_reason`` is refused by
+:class:`CriterionSpec` itself, so it never reaches the binding point.
 """
 
 from __future__ import annotations
@@ -87,35 +83,6 @@ def test_validate_criterion_gate_refs_command_exit_zero_computes_t4() -> None:
     validate_criterion_gate_refs([criterion], [])
 
     assert criterion.oracle_tier is OracleTier.T4_CONTRACT
-
-
-def test_validate_criterion_gate_refs_judged_empty_jury_reason_raises() -> None:
-    """A JUDGED response with an empty jury_reason raises at the binding point."""
-    response = ResponseClause(
-        observe=ObserveVerb.JUDGED,
-        object="the jury affirms",
-        locus=ProofLocus.JURY,
-        jury_reason=None,
-    )
-    # model_construct bypasses _judged_requires_reason so the malformed clause
-    # reaches the validator binding under test rather than failing at build.
-    criterion = CriterionSpec.model_construct(
-        id="CR-01",
-        text="judged criterion missing its jury reason",
-        kind="contract",
-        acceptance_style="binary",
-        evidence_kind="attested",
-        gate_ids=[],
-        required=True,
-        waiver_reason=None,
-        quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
-        measurable_signal="the validator rejects a reasonless judged clause",
-        response=response,
-        oracle_tier=None,
-    )
-
-    with pytest.raises(ValueError, match="jury_reason"):
-        validate_criterion_gate_refs([criterion], [])
 
 
 def test_validate_criterion_gate_refs_author_set_oracle_tier_rejected() -> None:

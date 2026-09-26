@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -12,6 +12,12 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
+from eawf.kernel.runtime.certification import (
+    CapabilityCertification,
+    CertificationFailureCode,
+    CertifiedRuntimeFacts,
+    ConformanceStageRecord,
+)
 from eawf.platform.rules import render
 from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
 from eawf.platform.rules.host_facts import (
@@ -37,7 +43,13 @@ from eawf.platform.rules.render import (
     plan_rule_projections,
     render_rule_projections,
 )
+from eawf.runtime.runtimes.conformance import (
+    CertificationRequest,
+    ConformanceRunner,
+    RuntimeTuple,
+)
 from eawf.surfaces.cli.commands import sync
+from tests import _provider_helpers as fx
 
 _CONSTITUTION = "Keep the release notes in the changelog under the version heading."
 
@@ -73,6 +85,7 @@ def _with_doc_caps(**caps: int | None) -> HostFactRegistry:
             if cap is not None
             else {"status": "uncertified", "measured_on": runtime, "reason": "not measured"}
         )
+        document[runtime]["project_document_cap_scope"] = "per_file" if cap is not None else None
     return parse_host_facts(document)
 
 
@@ -523,3 +536,150 @@ def test_read_codex_document_cap(tmp_path: Path, content: str | None, expected: 
     if content is not None:
         (tmp_path / "config.toml").write_text(content, encoding="utf-8")
     assert read_codex_document_cap(tmp_path) == expected
+
+
+# ---- conformance reads runtime facts from the host-fact store -------------
+
+
+_NOW = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
+_EVIDENCE = "artifact://conformance/host-facts-2026-09-17"
+
+
+class _Journal:
+    def __init__(self) -> None:
+        self.rows: dict[str, list[ConformanceStageRecord]] = {}
+
+    def append(self, *, tuple_digest: str, record: ConformanceStageRecord) -> None:
+        self.rows.setdefault(tuple_digest, []).append(record)
+
+    def records(self, *, tuple_digest: str) -> tuple[ConformanceStageRecord, ...]:
+        return tuple(self.rows.get(tuple_digest, ()))
+
+
+def _tuple() -> RuntimeTuple:
+    return RuntimeTuple.model_validate(
+        {
+            "manifest_ref": "driver://codex-cli/v1",
+            "manifest_digest": fx.digest("a"),
+            "distribution_version": "0.44.0",
+            "sdk_or_server_version": "1.9.0",
+            "auth_kind": "subscription",
+            "model_family": "gpt",
+            "os_class": "macos",
+            "architecture": "aarch64",
+            "managed_profile_digest": fx.digest("e"),
+            "conformance_suite_version": "1.0.0",
+        }
+    )
+
+
+def _certify_request(**overrides: Any) -> dict[str, Any]:
+    document: dict[str, Any] = {
+        "runtime_tuple": _tuple(),
+        "protocol": {
+            "worker_protocol_version": "2.1.0",
+            "semantic_protocol_version": "1.0.0",
+            "event_codec_version": "1.0.0",
+        },
+        "certification_id": "codex-cli-2026-09",
+        "capabilities": [
+            CapabilityCertification(
+                capability_id="tool_use",
+                level=True,
+                status="verified",
+                basis="native",
+                evidence_ref=_EVIDENCE,
+                verified_at=_NOW,
+                expires_at=_NOW + timedelta(days=3650),
+            )
+        ],
+        "runtime": "codex",
+        "install_trust": "managed",
+        "evidence_bundle_ref": _EVIDENCE,
+        "expires_at": _NOW + timedelta(days=3650),
+    }
+    document.update(overrides)
+    return document
+
+
+def _runner_past_canary() -> ConformanceRunner:
+    journal = _Journal()
+    for stage in ("probe", "canary"):
+        journal.append(
+            tuple_digest=_tuple().tuple_digest,
+            record=ConformanceStageRecord(
+                stage=stage,
+                outcome="passed",
+                evidence_ref=_EVIDENCE,
+                started_at=_NOW,
+                completed_at=_NOW,
+            ),
+        )
+    return ConformanceRunner(journal=journal, now=lambda: _NOW)
+
+
+def test_certify_carries_the_runtime_facts_of_the_host_fact_record() -> None:
+    request = CertificationRequest.model_validate(_certify_request())
+    result = _runner_past_canary().certify(request)
+    assert result.certification is not None
+    assert result.certification.runtime_facts == CertifiedRuntimeFacts.from_host_facts(
+        load_host_facts().codex
+    )
+    assert result.certification.runtime_facts.project_document_cap_bytes == 32768
+
+
+def test_certify_refuses_a_runtime_whose_record_certifies_nothing() -> None:
+    request = CertificationRequest.model_validate(_certify_request(runtime="claude"))
+    result = _runner_past_canary().certify(request)
+    assert result.certification is None
+    assert result.record.reason_code is CertificationFailureCode.RUNTIME_FACTS_UNCERTIFIED
+
+
+def test_certification_request_refuses_caller_supplied_runtime_facts() -> None:
+    facts = CertifiedRuntimeFacts.from_host_facts(load_host_facts().codex)
+    assert facts is not None
+    with pytest.raises(ValidationError, match="runtime_facts"):
+        CertificationRequest.model_validate(
+            _certify_request(runtime_facts=facts.model_dump(mode="json"))
+        )
+
+
+# ---- cap scope and the delivery facts --------------------------------------
+
+
+def test_host_fact_certified_cap_without_its_scope_is_refused() -> None:
+    document = _document()
+    document["codex"]["project_document_cap_scope"] = None
+    with pytest.raises(HostFactEvidenceError, match="project_document_cap_scope"):
+        parse_host_facts(document)
+
+
+def test_smallest_certified_cap_carries_the_cap_scope() -> None:
+    cap = smallest_certified_cap(load_host_facts(), "policy")
+    assert cap is not None
+    assert (cap.runtime, cap.scope) == ("codex", "combined")
+
+
+def test_host_fact_delivery_fact_cannot_claim_a_certification() -> None:
+    document = _document()
+    document["codex"]["compaction_survival"]["status"] = "certified"
+    with pytest.raises(ValidationError, match="compaction_survival"):
+        parse_host_facts(document)
+
+
+def test_host_fact_delivery_fact_measured_on_another_runtime_is_refused() -> None:
+    document = _document()
+    document["codex"]["subagent_tool_availability"]["measured_on"] = "claude"
+    with pytest.raises(HostFactInheritanceError, match="subagent_tool_availability"):
+        parse_host_facts(document)
+
+
+def test_host_fact_reads_holds_each_projection_to_the_cap_on_its_own(repo: Path) -> None:
+    """Codex loads one of card or policy, which is only safe while policy covers the card."""
+    reads = load_host_facts().codex.reads
+    assert reads == ("card", "policy")
+    projections = {p.record.kind: p.record for p in plan_rule_projections(repo).projections}
+    card_rules = {span.rule_id for span in projections["card"].rule_spans}
+    policy_rules = {span.rule_id for span in projections["policy"].rule_spans}
+    assert card_rules <= policy_rules
+    assert all(p.byte_count <= p.cap_bytes for p in projections.values())

@@ -10,8 +10,11 @@ another runtime: a record whose fact was measured on a different runtime, or
 that cites another runtime's evidence, is refused.
 
 The record also carries how each runtime discovers policy: which projections
-it reads, and the file it owns when it discovers policy only through that file
-and so needs an import shim.
+it may read, and the file it owns when it discovers policy only through that
+file and so needs an import shim. Beside the caps it records the scope of the
+project-document cap and four delivery facts -- the skill-listing budget,
+compaction survival, subagent instruction inheritance and subagent tool
+availability -- each unmeasured until a measurement of its own shape exists.
 
 The rule render budget and runtime certification both read this record, so a
 certified value changes in one place. The module performs no I/O; the shipped
@@ -49,6 +52,28 @@ HOST_FACT_NAMES: Final[tuple[HostFactName, ...]] = (
 
 #: Every supported runtime, in record order.
 HOST_RUNTIMES: Final[tuple[RuntimeName, ...]] = ("claude", "codex", "opencode")
+
+#: How a runtime applies its project-document cap: to each file on its own,
+#: or as one budget across the global document and every project document
+#: in the chain.
+CapScope = Literal["per_file", "combined"]
+
+#: The facts that decide whether a delivered projection keeps governing a
+#: session, addressable by name.
+DeliveryFactName = Literal[
+    "skill_listing_budget",
+    "compaction_survival",
+    "subagent_instruction_inheritance",
+    "subagent_tool_availability",
+]
+
+#: Every delivery fact, in record order.
+DELIVERY_FACT_NAMES: Final[tuple[DeliveryFactName, ...]] = (
+    "skill_listing_budget",
+    "compaction_survival",
+    "subagent_instruction_inheritance",
+    "subagent_tool_availability",
+)
 
 
 class HostFactError(Exception):
@@ -140,28 +165,66 @@ class HostFact(RuntimeRecord):
         return self.measured_at + timedelta(days=self.remeasure_after_days)
 
 
+class DeliveryFact(RuntimeRecord):
+    """One delivery fact of one runtime, recorded as unmeasured.
+
+    The facts' measured shapes (a budget fraction with a drop order, a
+    re-read rule, a set of tools) are not ints, so no certified form is
+    accepted until a measurement defines one.
+
+    Attributes:
+        status: Always ``uncertified``.
+        measured_on: The runtime the fact belongs to.
+        reason: Why the fact is unmeasured.
+    """
+
+    status: Literal["uncertified"]
+    measured_on: RuntimeName
+    reason: str = Field(min_length=1)
+
+
 class RuntimeHostFacts(RuntimeRecord):
     """The certified facts and policy discovery of one runtime.
 
     Attributes:
         runtime: The runtime the record describes.
-        reads: The projections the runtime loads at session start.
+        reads: The projections the runtime may load at session start. A
+            runtime listing several loads the one its discovery finds
+            first, not all of them (Codex takes the policy file in place
+            of the card), so each is held to the runtime's cap on its own
+            and never summed with the others.
         import_shim: The file the runtime discovers policy through when it
             reads policy only through a file it owns; ``None`` when it reads
             a projection directly.
         project_document_cap_bytes: Bytes of project document delivered.
+        project_document_cap_scope: Whether that cap applies per file or as
+            a combined budget; required when the cap is certified, since a
+            cap without its scope certifies nothing.
         context_window_tokens: The context window.
         auto_compaction_threshold_tokens: Where auto-compaction triggers.
         tool_output_cap_tokens: The largest tool output delivered.
+        skill_listing_budget: The share of the context window the skill
+            listing may take, its per-entry cap and its drop order.
+        compaction_survival: Whether each projection is re-read after
+            compaction and the budget loaded content survives under.
+        subagent_instruction_inheritance: Which projections reach a
+            dispatched subagent.
+        subagent_tool_availability: Which declared tools a dispatched
+            subagent actually receives.
     """
 
     runtime: RuntimeName
     reads: tuple[ProjectionKind, ...] = Field(min_length=1)
     import_shim: str | None = Field(min_length=1)
     project_document_cap_bytes: HostFact
+    project_document_cap_scope: CapScope | None
     context_window_tokens: HostFact
     auto_compaction_threshold_tokens: HostFact
     tool_output_cap_tokens: HostFact
+    skill_listing_budget: DeliveryFact
+    compaction_survival: DeliveryFact
+    subagent_instruction_inheritance: DeliveryFact
+    subagent_tool_availability: DeliveryFact
 
     @model_validator(mode="after")
     def _facts_are_this_runtimes_own(self) -> Self:
@@ -170,16 +233,28 @@ class RuntimeHostFacts(RuntimeRecord):
         Raises:
             HostFactInheritanceError: A fact names another runtime as the
                 one it was measured on.
-            HostFactEvidenceError: ``reads`` repeats a projection, or the
-                certified compaction threshold exceeds the certified window.
+            HostFactEvidenceError: ``reads`` repeats a projection, the
+                certified compaction threshold exceeds the certified window,
+                or a certified project-document cap states no scope.
         """
-        for name in HOST_FACT_NAMES:
-            fact = self.fact(name)
-            if fact.measured_on != self.runtime:
+        measured_on = (
+            *((name, self.fact(name).measured_on) for name in HOST_FACT_NAMES),
+            *((name, self.delivery_fact(name).measured_on) for name in DELIVERY_FACT_NAMES),
+        )
+        for name, runtime in measured_on:
+            if runtime != self.runtime:
                 raise HostFactInheritanceError(
-                    f"{self.runtime} {name} was measured on {fact.measured_on}; a host fact "
+                    f"{self.runtime} {name} was measured on {runtime}; a host fact "
                     f"is certified per runtime and never inherited from another"
                 )
+        if (
+            self.project_document_cap_bytes.status == "certified"
+            and self.project_document_cap_scope is None
+        ):
+            raise HostFactEvidenceError(
+                f"{self.runtime} certifies project_document_cap_bytes with no "
+                f"project_document_cap_scope; a cap without its scope certifies nothing"
+            )
         if len(set(self.reads)) != len(self.reads):
             raise HostFactEvidenceError(f"{self.runtime} reads repeats a projection: {self.reads}")
         window = self.context_window_tokens.default_value
@@ -206,6 +281,23 @@ class RuntimeHostFacts(RuntimeRecord):
         if name not in HOST_FACT_NAMES:
             raise KeyError(name)
         fact: HostFact = getattr(self, name)
+        return fact
+
+    def delivery_fact(self, name: DeliveryFactName) -> DeliveryFact:
+        """Return the delivery fact called ``name``.
+
+        Args:
+            name: The delivery fact name.
+
+        Returns:
+            The fact.
+
+        Raises:
+            KeyError: ``name`` is not a delivery fact.
+        """
+        if name not in DELIVERY_FACT_NAMES:
+            raise KeyError(name)
+        fact: DeliveryFact = getattr(self, name)
         return fact
 
 
@@ -305,6 +397,20 @@ class StaleHostFact(RuntimeRecord):
         )
 
 
+class UnmeasuredDeliveryFact(RuntimeRecord):
+    """A delivery fact a runtime has no measurement of.
+
+    Attributes:
+        runtime: The runtime the fact belongs to.
+        fact: The unmeasured fact.
+        reason: Why it is unmeasured.
+    """
+
+    runtime: RuntimeName
+    fact: DeliveryFactName
+    reason: str
+
+
 def parse_host_facts(raw: object) -> HostFactRegistry:
     """Validate a host-fact document into the registry.
 
@@ -353,9 +459,31 @@ def stale_host_facts(registry: HostFactRegistry, *, today: date) -> tuple[StaleH
     return tuple(stale)
 
 
+def unmeasured_delivery_facts(registry: HostFactRegistry) -> tuple[UnmeasuredDeliveryFact, ...]:
+    """Name every delivery fact no runtime has measured.
+
+    Args:
+        registry: The host facts.
+
+    Returns:
+        One row per runtime and delivery fact, in runtime then fact order.
+    """
+    return tuple(
+        UnmeasuredDeliveryFact(
+            runtime=record.runtime, fact=name, reason=record.delivery_fact(name).reason
+        )
+        for record in registry.records
+        for name in DELIVERY_FACT_NAMES
+    )
+
+
 __all__ = [
+    "DELIVERY_FACT_NAMES",
     "HOST_FACT_NAMES",
     "HOST_RUNTIMES",
+    "CapScope",
+    "DeliveryFact",
+    "DeliveryFactName",
     "HostFact",
     "HostFactError",
     "HostFactEvidenceError",
@@ -365,6 +493,8 @@ __all__ = [
     "ProjectionKind",
     "RuntimeHostFacts",
     "StaleHostFact",
+    "UnmeasuredDeliveryFact",
     "parse_host_facts",
     "stale_host_facts",
+    "unmeasured_delivery_facts",
 ]

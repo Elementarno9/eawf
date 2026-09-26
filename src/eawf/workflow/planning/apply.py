@@ -264,7 +264,8 @@ def validate_plan_proposal(
 
     Returns:
         The validated revision beside the event it emits, or the typed
-        refusal. A refusal names the exact guard that produced it. The
+        refusal. A refusal names the exact guard that produced it, and a
+        lens refusal's detail names every blocking finding. The
         recorded body is the proposal's graded by
         :func:`grade_plan_grounding`.
     """
@@ -312,12 +313,13 @@ def validate_plan_proposal(
         parent_body = parent_record.body
     blocking = blocking_findings(run_plan_lenses(body, parent=parent_body))
     if blocking:
-        finding = blocking[0]
+        # Every blocking finding is named at once so one resubmission can
+        # repair them all; the guard stays the first lens that refused.
         return PlanRefusal(
             code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
-            guard=f"plan_lens_{finding.lens.value}",
-            detail=finding.message,
-            remediation=finding.remediation,
+            guard=f"plan_lens_{blocking[0].lens.value}",
+            detail="; ".join(finding.message for finding in blocking),
+            remediation=" ".join(dict.fromkeys(finding.remediation for finding in blocking)),
         )
     draft = PlanRevision.model_validate(
         {

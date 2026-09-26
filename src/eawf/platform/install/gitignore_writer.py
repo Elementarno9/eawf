@@ -14,7 +14,11 @@ from pathlib import Path
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import fallback_wal_dir
 from eawf.kernel.store.paths import store_path
-from eawf.platform.install.managed_block import render_managed_block, splice_managed_block
+from eawf.platform.install.managed_block import (
+    managed_block_lines,
+    render_managed_block,
+    splice_managed_block,
+)
 from eawf.runtime.lock import sibling
 
 _BEGIN = "# BEGIN EAWF:gitignore"
@@ -179,4 +183,42 @@ def write_gitignore(
     return GitignoreWriteResult(path=path, patterns=patterns)
 
 
-__all__ = ["GITIGNORE_PATTERNS", "GitignoreWriteResult", "write_gitignore"]
+def add_missing_gitignore_patterns(target_dir: Path) -> tuple[str, ...]:
+    """Add each shipped pattern the managed block lacks, keeping every line it has.
+
+    A repository initialised before a pattern shipped keeps its old block
+    until something rewrites it; ``eawf sync`` calls this so a generated
+    projection it is about to write is never left committable. Lines already
+    in the block, including the state-layout ignores ``eawf init`` derived,
+    stay in place.
+
+    Args:
+        target_dir: Repository root.
+
+    Returns:
+        The patterns added, in shipped order; empty when none was missing,
+        in which case nothing is written.
+
+    Raises:
+        ManagedBlockError: When the existing file's markers are not exactly
+            one ordered pair; the file is left untouched.
+    """
+    path = (target_dir.resolve() / ".gitignore").resolve()
+    existing = path.read_bytes() if path.exists() else b""
+    current = managed_block_lines(existing, begin=_BEGIN, end=_END) or ()
+    missing = tuple(
+        pattern for pattern in dict.fromkeys(GITIGNORE_PATTERNS) if pattern not in current
+    )
+    if not missing:
+        return ()
+    block = render_managed_block(begin=_BEGIN, end=_END, body_lines=(*current, *missing))
+    path.write_bytes(splice_managed_block(existing, begin=_BEGIN, end=_END, block=block))
+    return missing
+
+
+__all__ = [
+    "GITIGNORE_PATTERNS",
+    "GitignoreWriteResult",
+    "add_missing_gitignore_patterns",
+    "write_gitignore",
+]

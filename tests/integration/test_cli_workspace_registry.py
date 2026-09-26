@@ -257,16 +257,23 @@ def test_workspace_show_resolves_from_an_exact_repo_root(
 
 
 def test_workspace_show_refuses_an_ambiguous_root(registry_path: Path, tmp_path: Path) -> None:
-    root = tmp_path / "eawf-repo"
+    root = tmp_path / "demo-repo"
     root.mkdir()
-    _seed_repo(registry_path, "EAWF", root)
-    assert _add(registry_path, "MONO", home="EAWF").exit_code == 0
-    assert _add(registry_path, "ALT", home="EAWF").exit_code == 0
+    _seed_repo(registry_path, "DEMO", root)
+    assert _add(registry_path, "MONO", home="EAWF", members=("DEMO",)).exit_code == 0
+    assert _add(registry_path, "ALT", home="SOLO", members=("DEMO",)).exit_code == 0
     result = _invoke("show", "--repo-root", str(root), "--registry-path", str(registry_path))
     assert result.exit_code == 1
     body = _payload(result)
     assert body["data"]["code"] == "workspace_ambiguous"
     assert body["data"]["candidates"] == ["ALT", "MONO"]
+
+
+def test_workspace_add_refuses_a_home_another_workspace_anchors(registry_path: Path) -> None:
+    assert _add(registry_path, "MONO", home="EAWF").exit_code == 0
+    result = _add(registry_path, "ALT", home="EAWF")
+    assert result.exit_code == 1
+    assert _payload(result)["data"]["code"] == "cross_workspace_mutation_forbidden"
 
 
 def test_workspace_show_refuses_an_unregistered_root(registry_path: Path, tmp_path: Path) -> None:
@@ -292,7 +299,7 @@ def test_workspace_list_is_empty_without_a_registry(registry_path: Path) -> None
 
 def test_workspace_list_is_ordered_by_key(registry_path: Path) -> None:
     for key in ("ZED", "ABC", "MID"):
-        assert _add(registry_path, key, home="EAWF").exit_code == 0
+        assert _add(registry_path, key, home=f"H{key}").exit_code == 0
     body = _payload(_invoke("list", "--registry-path", str(registry_path)))
     assert [row["key"] for row in body["workspaces"]] == ["ABC", "MID", "ZED"]
 
@@ -324,11 +331,11 @@ def test_workspace_select_writes_no_registry_or_state_row(
 def test_workspace_select_feeds_the_session_rung_of_show(
     registry_path: Path, tmp_path: Path
 ) -> None:
-    root = tmp_path / "eawf-repo"
+    root = tmp_path / "demo-repo"
     root.mkdir()
-    _seed_repo(registry_path, "EAWF", root)
-    assert _add(registry_path, "MONO", home="EAWF").exit_code == 0
-    assert _add(registry_path, "ALT", home="EAWF").exit_code == 0
+    _seed_repo(registry_path, "DEMO", root)
+    assert _add(registry_path, "MONO", home="EAWF", members=("DEMO",)).exit_code == 0
+    assert _add(registry_path, "ALT", home="SOLO", members=("DEMO",)).exit_code == 0
     assert _invoke("select", "ALT", "--registry-path", str(registry_path)).exit_code == 0
     body = _payload(
         _invoke("show", "--repo-root", str(root), "--registry-path", str(registry_path))

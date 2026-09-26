@@ -60,6 +60,8 @@ from eawf.kernel.runtime.provider import (
     reject_repeats,
 )
 from eawf.kernel.state.types import UtcDatetime
+from eawf.observability.telemetry.models import RuntimeName
+from eawf.platform.rules.host_facts import load_host_facts
 from eawf.runtime.runtimes.capabilities import CapabilityMatrix, ProbeResult, detect_drift
 from eawf.runtime.runtimes.containment import (
     ContainmentCallOutcome,
@@ -184,13 +186,16 @@ class CertificationRequest(RuntimeRecord):
     ``profile_ids`` names the profiles this certification becomes the
     last-known-good of. A certification nobody runs on pins nothing, so
     the field is empty by default rather than defaulting to every profile.
+    ``runtime`` names the host whose certified facts the record carries;
+    the facts themselves are read from the shipped host-fact record at
+    certify time, never taken from the caller.
     """
 
     runtime_tuple: RuntimeTuple
     protocol: ProtocolFacts
     certification_id: CertificationId
     capabilities: Annotated[tuple[CapabilityCertification, ...], Field(min_length=1)]
-    runtime_facts: CertifiedRuntimeFacts
+    runtime: RuntimeName
     install_trust: InstallTrust
     evidence_bundle_ref: ArtifactUrn
     expires_at: UtcDatetime
@@ -589,7 +594,9 @@ class ConformanceRunner:
 
         Returns:
             The appended stage record and the certification, or a refusal
-            naming the reason code and no certification.
+            naming the reason code and no certification. A runtime whose
+            host-fact record certifies nothing is refused, because the
+            certification would carry facts nobody measured.
 
         Raises:
             ConformanceSequenceError: The tuple's history does not end in
@@ -617,6 +624,15 @@ class ConformanceRunner:
                 started_at=started_at,
                 expired=expired,
             )
+        runtime_facts = CertifiedRuntimeFacts.from_host_facts(
+            load_host_facts().runtime(request.runtime)
+        )
+        if runtime_facts is None:
+            return self._refused_certify(
+                request,
+                reason=CertificationFailureCode.RUNTIME_FACTS_UNCERTIFIED,
+                started_at=started_at,
+            )
         record = self._append(
             tuple_digest=request.runtime_tuple.tuple_digest,
             stage="certify",
@@ -626,7 +642,10 @@ class ConformanceRunner:
             started_at=started_at,
         )
         certification = _build_certification(
-            request, stage_history=(*history, record), verified_at=started_at
+            request,
+            runtime_facts=runtime_facts,
+            stage_history=(*history, record),
+            verified_at=started_at,
         )
         self._pin_last_known_good(request, certification=certification, pinned_at=started_at)
         logger.info(
@@ -843,6 +862,7 @@ def _probe_reason(
 def _build_certification(
     request: CertificationRequest,
     *,
+    runtime_facts: CertifiedRuntimeFacts,
     stage_history: tuple[ConformanceStageRecord, ...],
     verified_at: datetime,
 ) -> DriverCertification:
@@ -867,7 +887,7 @@ def _build_certification(
         capabilities=request.capabilities,
         overall_status="verified",
         install_trust=request.install_trust,
-        runtime_facts=request.runtime_facts,
+        runtime_facts=runtime_facts,
         stage_history=stage_history,
         evidence_bundle_ref=request.evidence_bundle_ref,
         verified_at=verified_at,

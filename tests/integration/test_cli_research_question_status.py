@@ -195,6 +195,21 @@ def test_question_resolve_daemon_proxy_forwards_id(
     assert "resolved question OQ-abc" in result.stdout
 
 
+def test_question_resolve_forwards_the_drop_reason_and_successor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--reason`` and ``--superseded-by`` reach the daemon params."""
+    workspace = _make_workspace(tmp_path)
+    _FakeOkClient.captured = {}
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
+    argv = ["-w", str(workspace), "research", "question", "resolve", "OQ-abc", "--drop"]
+    result = runner.invoke(app, [*argv, "--reason", "superseded", "--superseded-by", "OQ-new"])
+    assert result.exit_code == 0, result.output
+    params = _FakeOkClient.captured["params"]
+    assert params["drop_reason"] == "superseded"
+    assert params["superseded_by_question_ref"] == "OQ-new"
+
+
 def test_question_resolve_offline_fallback_clears_blocking(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

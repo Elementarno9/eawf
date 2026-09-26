@@ -297,7 +297,7 @@ class PipelineHost(Protocol):
         ...
 
     def prove_gates(self, version: str) -> dict[str, Any]:
-        """Run ``release receipts`` in an isolated runtime; return its reply."""
+        """Run ``release receipts`` with the proof PATH isolated; return its reply."""
         ...
 
     def phase_wave_pins(self, phase_id: str) -> dict[str, str]:

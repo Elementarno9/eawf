@@ -29,6 +29,7 @@ from eawf.kernel.runtime.certification import CertifiedRuntimeFacts
 from eawf.kernel.runtime.host_facts import (
     HOST_FACT_NAMES,
     HOST_RUNTIMES,
+    CapScope,
     HostFact,
     HostFactError,
     HostFactEvidenceError,
@@ -38,8 +39,10 @@ from eawf.kernel.runtime.host_facts import (
     ProjectionKind,
     RuntimeHostFacts,
     StaleHostFact,
+    UnmeasuredDeliveryFact,
     parse_host_facts,
     stale_host_facts,
+    unmeasured_delivery_facts,
 )
 from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.rules.records import RuleModel
@@ -59,6 +62,8 @@ class CertifiedCap(RuleModel):
     Attributes:
         runtime: The runtime whose certified cap is smallest.
         cap_bytes: That cap.
+        scope: Whether that runtime applies the cap per file or as a
+            combined budget across its document chain.
         readers: Every runtime that reads the projection.
         uncertified: Readers with no certified cap, which the cap does not
             cover.
@@ -66,6 +71,7 @@ class CertifiedCap(RuleModel):
 
     runtime: RuntimeName
     cap_bytes: PositiveInt
+    scope: CapScope
     readers: tuple[RuntimeName, ...]
     uncertified: tuple[RuntimeName, ...]
 
@@ -140,9 +146,13 @@ def smallest_certified_cap(registry: HostFactRegistry, kind: ProjectionKind) -> 
     if not certified:
         return None
     cap_bytes, runtime = min(certified)
+    scope = next(r.project_document_cap_scope for r in readers if r.runtime == runtime)
+    if scope is None:
+        raise HostFactEvidenceError(f"{runtime} certifies a document cap with no scope")
     return CertifiedCap(
         runtime=runtime,
         cap_bytes=cap_bytes,
+        scope=scope,
         readers=tuple(runtime for runtime, _cap in caps),
         uncertified=tuple(runtime for runtime, cap in caps if cap is None),
     )
@@ -283,6 +293,7 @@ __all__ = [
     "ProjectionKind",
     "RuntimeHostFacts",
     "StaleHostFact",
+    "UnmeasuredDeliveryFact",
     "certified_document_cap",
     "label_measurement",
     "load_host_facts",
@@ -291,4 +302,5 @@ __all__ = [
     "read_codex_document_cap",
     "smallest_certified_cap",
     "stale_host_facts",
+    "unmeasured_delivery_facts",
 ]

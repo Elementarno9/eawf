@@ -433,10 +433,13 @@ def assign_oracle_tier(r: ResponseClause) -> OracleTier:
     neither a ``gate_ref`` (a single gate run cannot witness all inputs) nor a
     ``JUDGED`` escalation (a jury cannot enumerate them either).
 
+    A ``JUDGED`` clause's ``jury_reason`` is not re-checked here: every
+    clause reaching this function belongs to a :class:`CriterionSpec`,
+    whose validator already refuses a JUDGED clause without one.
+
     Raises:
         ValueError: quantifier==forall with locus != HYPOTHESIS; or
-            observe==JUDGED with empty jury_reason; or gate_ref names
-            an unknown gate kind.
+            gate_ref names an unknown gate kind.
     """
     if r.quantifier == "forall" and r.locus is not ProofLocus.HYPOTHESIS:
         raise ValueError(f"forall response must use hypothesis locus: object={r.object!r}")
@@ -445,8 +448,6 @@ def assign_oracle_tier(r: ResponseClause) -> OracleTier:
     if r.observe in _VERB_TIER:
         return _VERB_TIER[r.observe]
     if r.observe is ObserveVerb.JUDGED:
-        if not r.jury_reason:
-            raise ValueError("judged response requires jury_reason (auditable fallthrough)")
         return OracleTier.T6_APPROVAL if r.locus is ProofLocus.HUMAN else OracleTier.T7_JURY
     raise ValueError(f"unhandled observe verb: {r.observe!r}")
 
@@ -1315,8 +1316,7 @@ def validate_criterion_gate_refs(
             author-set ``oracle_tier`` (a non-``None`` tier that is not an
             accepted recompute match), a gated ``HOLDS_FOR_ALL`` clause is
             quantified ``single``, or a criterion's response clause
-            is malformed (e.g. a ``JUDGED`` clause with an empty
-            ``jury_reason`` or a ``gate_ref`` naming an unknown gate kind).
+            is malformed (e.g. a ``gate_ref`` naming an unknown gate kind).
     """
     # Local import keeps the module-level layer thin and avoids a cycle:
     # the compile layer imports CriterionSpec / GateSpec from this module.

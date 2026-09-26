@@ -141,6 +141,36 @@ def test_render_rule_projections_writes_the_shim_importing_the_policy(repo: Path
         assert record.instruction in policy
 
 
+def _claude_reading_card_and_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the Claude host fact read both projections for this render."""
+    facts = load_host_facts()
+    claude = facts.claude.model_copy(update={"reads": ("card", "policy")})
+    monkeypatch.setattr(
+        render, "load_host_facts", lambda: facts.model_copy(update={"claude": claude})
+    )
+
+
+def test_plan_rule_projections_shim_imports_every_projection_its_runtime_reads(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shim's imports follow the host fact, so a fixed import list reds this."""
+    _claude_reading_card_and_policy(monkeypatch)
+    plan = plan_rule_projections(repo)
+    (shim,) = (g for g in plan.generated if g.target == CLAUDE_SHIM_TARGET)
+    assert shim.text == f"@{CARD_TARGET}\n@{POLICY_TARGET}\n"
+
+
+def test_plan_rule_projections_refuses_a_planted_view_import(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A projection the shim would import from the view directory is refused at render."""
+    _claude_reading_card_and_policy(monkeypatch)
+    monkeypatch.setattr(render, "CARD_TARGET", view_target(_PYTHON))
+    with pytest.raises(RuleViewStartupImportError, match="startup import may not load"):
+        plan_rule_projections(repo)
+    assert not (repo / view_target(_PYTHON)).exists()
+
+
 def test_render_rule_projections_replaces_the_legacy_card_shim(repo: Path) -> None:
     (repo / CLAUDE_SHIM_TARGET).write_text("@AGENTS.md\n", encoding="utf-8")
     assert classify_projection(repo / CLAUDE_SHIM_TARGET) == "generated"

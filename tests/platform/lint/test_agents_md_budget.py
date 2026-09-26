@@ -244,7 +244,9 @@ def test_check_rendered_projection_budget_flags_an_oversized_card(
 
     _seed_rule_source(tmp_path)
     (tmp_path / "AGENTS.md").write_text("x" * 100, encoding="utf-8")
-    small_cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    small_cap = CertifiedCap(
+        runtime="codex", cap_bytes=10, scope="combined", readers=("codex",), uncertified=()
+    )
     monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: small_cap)
 
     report = agents_md_budget.check_rendered_projection_budget(tmp_path)
@@ -264,7 +266,9 @@ def test_check_rendered_projection_budget_boundary_at_cap_is_not_over(
 
     _seed_rule_source(tmp_path)
     (tmp_path / "AGENTS.md").write_text("x" * 10, encoding="utf-8")
-    cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    cap = CertifiedCap(
+        runtime="codex", cap_bytes=10, scope="combined", readers=("codex",), uncertified=()
+    )
     monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: cap)
 
     at_cap = agents_md_budget.check_rendered_projection_budget(tmp_path)
@@ -312,7 +316,9 @@ def test_main_exits_one_when_rendered_projection_exceeds_cap(
 
     _seed_rule_source(tmp_path)
     (tmp_path / "AGENTS.md").write_text("x" * 100, encoding="utf-8")
-    small_cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    small_cap = CertifiedCap(
+        runtime="codex", cap_bytes=10, scope="combined", readers=("codex",), uncertified=()
+    )
     monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: small_cap)
 
     code = agents_md_budget.main(["--repo-root", str(tmp_path)])

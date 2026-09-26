@@ -49,6 +49,19 @@ PRACTICE_MISS_CODE: Final = "practice_miss"
 _DEFAULT_RUNTIME: Final[RuntimeTriple] = "claude"
 
 
+class PracticeTriggerError(RuntimeError):
+    """A fired trigger could not be recorded.
+
+    Raised instead of logged: a miss that is not recorded is a miss the
+    per-rule miss rate never counts.
+
+    Attributes:
+        code: The stable refusal code a caller branches on.
+    """
+
+    code: Final = "practice_trigger_unrecorded"
+
+
 @dataclass(frozen=True)
 class PracticeTrigger:
     """One conduct obligation bound to the moment it applies.
@@ -251,13 +264,33 @@ def fire_practice_triggers(
         The evaluations, the trigger event ids and the miss warnings.
 
     Raises:
-        pydantic.ValidationError: When a trigger names an obligation the
-            conduct module does not define.
-        StateConflict: When a store's append lock cannot be acquired.
+        PracticeTriggerError: When a fired trigger's event or deviation
+            cannot be recorded (an unresolvable tree, a store that cannot be
+            appended, an obligation the conduct module does not define); the
+            cause is chained.
     """
     evaluations = evaluate_practice_triggers(status, body)
     if not evaluations:
         return DecisionPointOutcome()
+    try:
+        return _record_evaluations(
+            evaluations, scope_id=scope_id, run_id=run_id, state_path=state_path
+        )
+    except Exception as exc:
+        raise PracticeTriggerError(
+            f"{PracticeTriggerError.code}: practice trigger for scope {scope_id} run "
+            f"{run_id} could not be recorded: {exc}"
+        ) from exc
+
+
+def _record_evaluations(
+    evaluations: tuple[TriggerEvaluation, ...],
+    *,
+    scope_id: str,
+    run_id: str,
+    state_path: Path | None,
+) -> DecisionPointOutcome:
+    """Record one event per fired trigger and one deviation per miss."""
     from eawf.workflow.skills._common import emit_event, resolve_active_state_path
 
     path = state_path if state_path is not None else resolve_active_state_path()
@@ -317,6 +350,7 @@ __all__ = [
     "DecisionPoint",
     "DecisionPointOutcome",
     "PracticeTrigger",
+    "PracticeTriggerError",
     "TriggerEvaluation",
     "evaluate_practice_triggers",
     "fire_practice_triggers",
