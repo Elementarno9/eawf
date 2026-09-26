@@ -29,6 +29,14 @@ one that adopted an uncontrolled publication may not, because the
 ``DRAFT -> PARTIALLY_RELEASED`` is where such a record stops: the burn,
 reached with no publication operation to exhaust because none was ever
 opened.
+
+CANDIDATE carries the same burn for the same reason, one step later: a
+version can be pinned and then published by a run that never opened an
+operation, leaving a record that can neither approve (the proof gates
+read a source the publication moved past) nor cancel (the registries
+already hold it). ``CANDIDATE -> PARTIALLY_RELEASED`` is guarded by
+``publication_adopted``, so only a record whose adoption read back every
+configured target takes it.
 """
 
 from __future__ import annotations
@@ -69,6 +77,8 @@ class ReleaseGuardName(StrEnum):
         RECOVERY_EXHAUSTED: The recovery budget is spent -- or never
             existed, for a publication that ran outside the machinery --
             and the operator acknowledges the burned version.
+        PUBLICATION_ADOPTED: The record carries an adoption whose
+            read-backs cover every configured target.
     """
 
     NONE = "none"
@@ -81,6 +91,7 @@ class ReleaseGuardName(StrEnum):
     OBSERVED_STABLE = "observed_stable"
     IDEMPOTENT_RETRY = "idempotent_retry"
     RECOVERY_EXHAUSTED = "recovery_exhausted"
+    PUBLICATION_ADOPTED = "publication_adopted"
 
 
 class ReleaseDenialCode(StrEnum):
@@ -144,7 +155,7 @@ class ReleaseGuardContext:
     the receipts and the ledger) and passes booleans here, so the
     validator stays a pure status-machine evaluator. Every field
     defaults to the permissive value so a test or a caller that only
-    exercises one guard does not have to spell the other nine.
+    exercises one guard does not have to spell the other ten.
 
     Attributes:
         manifest_complete: Backs :attr:`ReleaseGuardName.MANIFEST_COMPLETE`.
@@ -160,6 +171,8 @@ class ReleaseGuardContext:
         idempotent_retry: Backs :attr:`ReleaseGuardName.IDEMPOTENT_RETRY`.
         recovery_exhausted: Backs
             :attr:`ReleaseGuardName.RECOVERY_EXHAUSTED`.
+        publication_adopted: Backs
+            :attr:`ReleaseGuardName.PUBLICATION_ADOPTED`.
     """
 
     manifest_complete: bool = True
@@ -171,6 +184,7 @@ class ReleaseGuardContext:
     observed_stable: bool = True
     idempotent_retry: bool = True
     recovery_exhausted: bool = True
+    publication_adopted: bool = True
 
 
 #: Guarded release status machine. Each edge is a
@@ -195,6 +209,7 @@ RELEASE_TRANSITIONS: Final[
             (ReleaseStatus.DRAFT, ReleaseGuardName.NO_EXTERNAL_EFFECT),
             (ReleaseStatus.CANCELLED, ReleaseGuardName.NO_EXTERNAL_EFFECT),
             (ReleaseStatus.APPROVED, ReleaseGuardName.GATES_GREEN),
+            (ReleaseStatus.PARTIALLY_RELEASED, ReleaseGuardName.PUBLICATION_ADOPTED),
         }
     ),
     ReleaseStatus.PREFLIGHT_FAILED: frozenset(
@@ -264,6 +279,9 @@ RELEASE_DENIALS: Final[Mapping[tuple[ReleaseStatus, ReleaseStatus], ReleaseDenia
     (ReleaseStatus.CANDIDATE, ReleaseStatus.CANCELLED): (
         ReleaseDenialCode.RELEASE_EFFECT_ALREADY_STARTED
     ),
+    (ReleaseStatus.CANDIDATE, ReleaseStatus.PARTIALLY_RELEASED): (
+        ReleaseDenialCode.PUBLICATION_NOT_OBSERVED
+    ),
     (ReleaseStatus.PREFLIGHT_FAILED, ReleaseStatus.DRAFT): (
         ReleaseDenialCode.RELEASE_EFFECT_ALREADY_STARTED
     ),
@@ -322,6 +340,7 @@ def _guard_satisfied(guard: ReleaseGuardName, ctx: ReleaseGuardContext) -> bool:
         ReleaseGuardName.OBSERVED_STABLE: ctx.observed_stable,
         ReleaseGuardName.IDEMPOTENT_RETRY: ctx.idempotent_retry,
         ReleaseGuardName.RECOVERY_EXHAUSTED: ctx.recovery_exhausted,
+        ReleaseGuardName.PUBLICATION_ADOPTED: ctx.publication_adopted,
     }[guard]
 
 

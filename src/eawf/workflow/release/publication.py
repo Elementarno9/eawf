@@ -89,6 +89,12 @@ RECONCILABLE_TARGET_STATUSES: Final[frozenset[ReleaseTargetStatus]] = frozenset(
     }
 )
 
+#: Statuses whose burn can only be the adopted one: neither has been
+#: approved, so neither can hold a publication operation of its own.
+_ADOPTED_BURN_STATUSES: Final[frozenset[ReleaseStatus]] = frozenset(
+    {ReleaseStatus.DRAFT, ReleaseStatus.CANDIDATE}
+)
+
 
 class ObserverOnlyStatusError(ValueError):
     """A non-observation path tried to write an ``observed_*`` status.
@@ -430,7 +436,8 @@ def burn_release(
     correction is a new version pointing back through
     ``supersedes_release_ref``.
 
-    The burn out of ``DRAFT``, and any burn offered no *operation*, is
+    The burn out of ``DRAFT`` or ``CANDIDATE``, and any burn offered no
+    *operation*, is
     the one case that has no episode to abandon: a record whose
     publication ran outside this machinery and was adopted into it
     (:mod:`eawf.workflow.release.adoption`). There the recovery budget is
@@ -440,7 +447,9 @@ def burn_release(
     re-derived from a ledger that does not exist. An adoption is
     required in that case, which is what keeps the draft burn the
     adoption route and not a way past pinning and approval: without one
-    the burn would be a terminal claim resting on nothing.
+    the burn would be a terminal claim resting on nothing. A candidate's
+    burn edge is further guarded on that adoption reading back every
+    target *config* declares.
 
     Args:
         release: The recovering record, or the adopted draft.
@@ -455,12 +464,14 @@ def burn_release(
     Raises:
         ReleaseTransitionError: With
             :attr:`~eawf.workflow.release.lifecycle.ReleaseDenialCode.RECOVERY_BUDGET_AVAILABLE`
-            when a leg still has a retry left.
-        ValueError: When *operation* is ``None`` and *release* carries
-            no adoption.
+            when a leg still has a retry left, or
+            :attr:`~eawf.workflow.release.lifecycle.ReleaseDenialCode.PUBLICATION_NOT_OBSERVED`
+            when an adopted candidate leaves a configured target unobserved.
+        ValueError: When *operation* is ``None``, or *release* stands at
+            DRAFT or CANDIDATE, and *release* carries no adoption.
     """
-    if operation is None or release.status is ReleaseStatus.DRAFT:
-        return _burn_adopted(release), None
+    if operation is None or release.status in _ADOPTED_BURN_STATUSES:
+        return _burn_adopted(release, config), None
     burned = advance_release(
         release,
         ReleaseStatus.PARTIALLY_RELEASED,
@@ -481,11 +492,13 @@ def burn_release(
 
 
 @durable_boundary(PublicationBoundary.TRANSITION_APPLY)
-def _burn_adopted(release: Release) -> Release:
+def _burn_adopted(release: Release, config: ReleaseConfig) -> Release:
     """Return the burned successor of an adopted, operationless record.
 
     Args:
         release: The adopted record.
+        config: Loaded checkpoint configuration; every target it declares
+            must carry an adopted read-back for a candidate to burn.
 
     Returns:
         The record at PARTIALLY_RELEASED, its adopted per-target
@@ -495,14 +508,21 @@ def _burn_adopted(release: Release) -> Release:
         ValueError: When the record carries no adoption, which is the
             only thing that makes an operationless burn truthful.
         ReleaseTransitionError: When the record's status has no burn
-            edge.
+            edge, or a configured target has no adopted read-back.
     """
     if release.adoption is None:
         raise ValueError(
             f"release {release.key!r} has no publication operation and no adoption; "
             f"only an adopted record may be burned without an episode to abandon"
         )
-    burned = advance_release(release, ReleaseStatus.PARTIALLY_RELEASED)
+    observed = release.adoption.observed_target_statuses
+    burned = advance_release(
+        release,
+        ReleaseStatus.PARTIALLY_RELEASED,
+        ReleaseGuardContext(
+            publication_adopted=all(target.target_id in observed for target in config.targets)
+        ),
+    )
     logger.info(
         f"burn_release key={release.key!r} operation_id=none "
         f"adopted_targets={sorted(release.adoption.observed_target_statuses)}"

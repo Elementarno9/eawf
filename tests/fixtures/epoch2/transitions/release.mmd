@@ -19,6 +19,7 @@ stateDiagram-v2
     candidate --> draft: invalidated [no_external_effect]
     candidate --> cancelled: cancelled [no_external_effect]
     candidate --> approved: approved [gates_green]
+    candidate --> partially_released: burned [publication_adopted]
     preflight_failed --> draft: invalidated [no_external_effect]
     preflight_failed --> cancelled: cancelled [no_external_effect]
     approved --> draft: invalidated [no_external_effect]

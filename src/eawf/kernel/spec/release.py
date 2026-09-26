@@ -808,13 +808,14 @@ _PINNED_STATUSES: Final[frozenset[ReleaseStatus]] = frozenset(
     }
 )
 
-#: Statuses that may carry a :class:`ReleaseAdoption`. DRAFT is where an
-#: uncontrolled publication is written into the record, and
-#: PARTIALLY_RELEASED is where that record stops; nothing in between
-#: applies, because an adopted publication never passed through pinning,
-#: approval or dispatch.
+#: Statuses that may carry a :class:`ReleaseAdoption`. DRAFT and
+#: CANDIDATE are where an uncontrolled publication is written into the
+#: record -- a pinned candidate can be published by a run that never
+#: opened an operation -- and PARTIALLY_RELEASED is where that record
+#: stops. Nothing past CANDIDATE applies, because an adopted publication
+#: never passed through approval or dispatch.
 _ADOPTION_STATUSES: Final[frozenset[ReleaseStatus]] = frozenset(
-    {ReleaseStatus.DRAFT, ReleaseStatus.PARTIALLY_RELEASED}
+    {ReleaseStatus.DRAFT, ReleaseStatus.CANDIDATE, ReleaseStatus.PARTIALLY_RELEASED}
 )
 
 #: Statuses that require a bound approval receipt.

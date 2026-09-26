@@ -188,7 +188,8 @@ async def adopt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     publication can reach somewhere the configuration does not know
     about.
 
-    The adopted record stays at DRAFT. Disposing of it is a separate
+    The adopted record stays at the DRAFT or CANDIDATE it was found at.
+    Disposing of it is a separate
     decision taken by a separate verb: ``release.burn`` ends it,
     ``release.cancel`` is refused on it.
 
@@ -204,7 +205,7 @@ async def adopt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     Raises:
         DaemonValidationError: On a stale revision, a record that is not
-            a draft or already carries an adoption, an observation that
+            a draft or a candidate or already carries an adoption, an observation that
             is not an independent read-back, or a configured target with
             no observation at all.
     """
