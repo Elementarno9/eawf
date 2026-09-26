@@ -181,7 +181,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 6,
+  "canonical_sequence": 7,
   "milestone": {
     "P36": {
       "payload": {
@@ -13306,6 +13306,17 @@
       "status": "CLAIMED"
     },
     "P36-I01-W05": {
+      "continuation": [
+        {
+          "actor": "OPERATOR",
+          "at": "2026-09-26T22:02:00.649754Z",
+          "evidence_refs": [],
+          "from_status": "PLANNED",
+          "gate_receipts": [],
+          "reason": "Dispatch the dev5 release-readiness wave",
+          "to_status": "CLAIMED"
+        }
+      ],
       "payload": {
         "annotations": [
           "priority_default_p2"
@@ -13647,8 +13658,8 @@
         "target": "task",
         "target_status": "PLANNED"
       },
-      "recorded_at": "2026-09-26T21:14:53.351831+00:00",
-      "status": "PLANNED"
+      "recorded_at": "2026-09-26T22:02:00.649754+00:00",
+      "status": "CLAIMED"
     }
   }
 }
