@@ -1,0 +1,48 @@
+{
+  "key": "TRK-EAWF-CORE",
+  "title": "Build and release the eawf core framework",
+  "charter": "Own the eawf core framework's delivery across releases, starting with the v0.7 train from the 0.7.0.dev5 canary through 0.7.0rc1 and 0.7.0rc2 to 0.7.0.",
+  "scope": {
+    "scope_kind": "repository",
+    "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+  },
+  "in_scope": [
+    "the v0.7 release train",
+    "the core framework, workflow and tooling"
+  ],
+  "out_of_scope": [
+    "the requirement ids decision D64 defers to 0.7.1"
+  ],
+  "owner": {
+    "principal_kind": "operator",
+    "principal_id": "OP-0001"
+  },
+  "policy": {
+    "revision": 1,
+    "wip": {
+      "active_milestones": 1,
+      "active_batches_per_repo": 1
+    },
+    "ownership_principal": {
+      "principal_kind": "operator",
+      "principal_id": "OP-0001"
+    },
+    "permitted_milestone_kinds": [
+      "product"
+    ],
+    "campaign_templates": [],
+    "outcome_metrics": [
+      {
+        "metric_id": "MET-PUBLISHED",
+        "unit": "boolean",
+        "measurement_locus": "milestone_acceptance"
+      }
+    ],
+    "promotion_rules": [],
+    "integration_priority": 50,
+    "presentation": {
+      "default_view": "roadmap",
+      "color_token": "accent_blue"
+    }
+  }
+}

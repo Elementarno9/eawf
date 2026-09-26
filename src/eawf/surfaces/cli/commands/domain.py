@@ -66,7 +66,13 @@ from pydantic import ValidationError as PydanticValidationError
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app, track_app
+from eawf.surfaces.cli.commands.lifecycle import (
+    batch_app,
+    milestone_app,
+    repository_app,
+    task_app,
+    track_app,
+)
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
@@ -110,6 +116,9 @@ TRACK_CREATE: Final = "domain.track.create"
 MILESTONE_CREATE: Final = "domain.milestone.create"
 BATCH_CREATE: Final = "domain.batch.create"
 TASK_CREATE: Final = "domain.task.create"
+#: A repository row is not a lifecycle record, but a plan cannot be
+#: submitted until one records the head it binds, so it is created here too.
+REPOSITORY_CREATE: Final = "domain.repository.create"
 
 #: Every create verb this module exposes, in registration order.
 DOMAIN_CREATE_CLI_METHODS: Final[tuple[str, ...]] = (
@@ -117,6 +126,7 @@ DOMAIN_CREATE_CLI_METHODS: Final[tuple[str, ...]] = (
     MILESTONE_CREATE,
     BATCH_CREATE,
     TASK_CREATE,
+    REPOSITORY_CREATE,
 )
 
 #: The two verbs answered outside the :class:`DomainEnvelope` shape --
@@ -889,6 +899,33 @@ def track_create_cmd(
     )
 
 
+@repository_app.command("create")
+def repository_create_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
+    expected_revision: Annotated[
+        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+    ],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
+    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    from_spec: Annotated[Path, typer.Option("--from-spec", help=_CREATE_SPEC_HELP)],
+    correlation_id: Annotated[
+        str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
+    ] = None,
+) -> None:
+    """Admit a repository row at the head its git history holds now."""
+    _run_create_verb(
+        ctx,
+        method=REPOSITORY_CREATE,
+        urn=urn,
+        expected_revision=expected_revision,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        from_spec=from_spec,
+        correlation_id=correlation_id,
+    )
+
+
 # ---- Milestone --------------------------------------------------------------
 
 
@@ -1304,6 +1341,7 @@ __all__ = [
     "milestone_create_cmd",
     "milestone_open_review_cmd",
     "milestone_seal_approval_cmd",
+    "repository_create_cmd",
     "task_create_cmd",
     "task_promote_cmd",
     "task_start_cmd",

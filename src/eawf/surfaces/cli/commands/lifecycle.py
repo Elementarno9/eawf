@@ -161,6 +161,11 @@ task_app = typer.Typer(
     help="Task lifecycle (promote, start).",
     no_args_is_help=True,
 )
+repository_app = typer.Typer(
+    name="repository",
+    help="Repository rows a plan binds its head to (create).",
+    no_args_is_help=True,
+)
 
 
 # ---- Internal helpers -------------------------------------------------------

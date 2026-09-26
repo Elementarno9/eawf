@@ -3,8 +3,11 @@
 The requirement catalog ``.ea/requirements.json`` carries each packet id with
 a short title and, beside it, a generated trace row: the waves whose text cites
 the id, the test modules and the production modules that name it, and the
-decision that defers it when one does. A row with neither an owning wave nor a
-deferral is ``unowned``, the state a census exists to make visible.
+decision that defers it when one does. An id a closed phase already built
+without any wave text citing it carries a typed satisfied disposition instead:
+the decision that admits it, the closed phase, and the commit that built it. A
+row with no owning wave, deferral or satisfaction is ``unowned``, the state a
+census exists to make visible.
 
 The trace is a census, so it is generated and never hand-edited (LINT-038).
 Freshness is value equality: ``check`` recomputes the trace from the committed
@@ -24,7 +27,7 @@ Usage::
     uv run python tools/requirement_trace.py extract --packet <dir>
 
 Exit codes: ``0`` when the stored census is fresh (and, with
-``--require-owned``, every id is owned or deferred), ``1`` otherwise, ``2``
+``--require-owned``, every id is owned, deferred or satisfied), ``1`` otherwise, ``2``
 when an input cannot be read or validated.
 """
 
@@ -58,6 +61,10 @@ SCHEMA_VERSION: Final = 1
 #: A wave, or after the epoch-2 cutover a Task, in one of these states no
 #: longer carries the work it cited.
 DEAD_WAVE_STATUSES: Final = frozenset({"abandoned", "failed", "CANCELLED", "FAILED", "DROPPED"})
+
+#: A phase in epoch 1, or the Milestone it was imported as, in one of these
+#: states has finished its work.
+CLOSED_PHASE_STATUSES: Final = frozenset({"closed", "COMPLETED"})
 
 #: The imported lifecycle a Task row came from when it was an epoch-1 wave.
 #: Imported backlog rows are Tasks too, but the epoch-1 trace never read the
@@ -94,6 +101,7 @@ class TraceStatus(StrEnum):
 
     OWNED = "owned"
     DEFERRED = "deferred"
+    SATISFIED = "satisfied"
     UNOWNED = "unowned"
 
 
@@ -105,6 +113,23 @@ class Deferral(BaseModel):
     decision: str = Field(pattern=r"^D\d+$")
     release: str = Field(min_length=1)
     ids: tuple[str, ...] = Field(min_length=1)
+
+
+class Satisfaction(BaseModel):
+    """Ids a closed phase built although no wave text cites them.
+
+    The disposition is evidence, not a promise: the commit must resolve in
+    the repository and the phase must be closed, so an id cannot be marked
+    satisfied by work that is still open or by a sha nobody can inspect.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    decision: str = Field(pattern=r"^D\d+$")
+    ids: tuple[str, ...] = Field(min_length=1)
+    phase: str = Field(pattern=r"^P\d{2,}$")
+    commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    tests: tuple[str, ...] = ()
 
 
 class RequirementRow(BaseModel):
@@ -119,6 +144,7 @@ class RequirementRow(BaseModel):
     tests: tuple[str, ...] = ()
     producers: tuple[str, ...] = ()
     deferral: str | None = None
+    satisfied_by: str | None = None
 
 
 class TraceSummary(BaseModel):
@@ -129,6 +155,7 @@ class TraceSummary(BaseModel):
     total: int = Field(ge=0)
     owned: int = Field(ge=0)
     deferred: int = Field(ge=0)
+    satisfied: int = Field(ge=0)
     unowned: int = Field(ge=0)
 
 
@@ -141,6 +168,7 @@ class Catalog(BaseModel):
     revision: str | None = None
     summary: TraceSummary
     deferrals: tuple[Deferral, ...] = ()
+    satisfactions: tuple[Satisfaction, ...] = ()
     requirements: tuple[RequirementRow, ...] = Field(min_length=1)
 
 
@@ -182,6 +210,18 @@ class _DecisionView(BaseModel):
         return self.status == "active" and self.superseded_by is None
 
 
+class _PhaseView(BaseModel):
+    # Projection of a phase, or after the cutover of the Milestone it became.
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    status: str
+
+    @property
+    def closed(self) -> bool:
+        """Whether the phase finished its work."""
+        return self.status in CLOSED_PHASE_STATUSES
+
+
 class StateView(BaseModel):
     """The slice of ``.ea/state.json`` the trace reads."""
 
@@ -189,6 +229,7 @@ class StateView(BaseModel):
 
     waves: dict[str, _WaveView] = Field(default_factory=dict)
     decisions: dict[str, _DecisionView] = Field(default_factory=dict)
+    phases: dict[str, _PhaseView] = Field(default_factory=dict)
 
 
 class TraceInputError(ValueError):
@@ -394,7 +435,14 @@ def _generation_view(state_path: Path) -> StateView:
         # An imported decision carries its epoch-1 record verbatim, status included.
         source = body.get("payload") if _is_imported(body) else body
         decisions[key] = _DecisionView.model_validate({"id": key, **(source or {})})
-    return StateView(waves=waves, decisions=decisions)
+    milestones = {
+        key: status
+        for key, (status, _body) in _ledger_bodies(state_path, Epoch2Collection.MILESTONE).items()
+    }
+    for key, row in (read_document(state_path).get(Epoch2Collection.MILESTONE.value) or {}).items():
+        milestones[key] = str(row.get("status", ""))
+    phases = {key: _PhaseView(status=status) for key, status in milestones.items()}
+    return StateView(waves=waves, decisions=decisions, phases=phases)
 
 
 def load_state_view(repo_root: Path) -> StateView:
@@ -490,30 +538,92 @@ def _deferred_ids(
     return deferred
 
 
+def _commit_resolves(repo_root: Path, sha: str) -> bool:
+    try:
+        result = subprocess.run(
+            ["git", "cat-file", "-e", f"{sha}^{{commit}}"],
+            cwd=repo_root,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return result.returncode == 0
+
+
+def _satisfied_ids(
+    satisfactions: Sequence[Satisfaction],
+    state: StateView,
+    known: set[str],
+    deferred: Mapping[str, str],
+    repo_root: Path,
+) -> dict[str, str]:
+    """Resolve each satisfaction against its decision, phase and commit.
+
+    Like a deferral, a satisfaction whose decision is no longer in force
+    satisfies nothing, so its ids fall back to their owners.
+
+    Returns:
+        Id to the commit that built it.
+
+    Raises:
+        TraceInputError: When a satisfaction names a decision the state
+            lacks, an id the catalog lacks or already defers, a phase that
+            is missing or not closed, or a commit the repository cannot
+            resolve.
+    """
+    satisfied: dict[str, str] = {}
+    for satisfaction in satisfactions:
+        label = f"{satisfaction.decision} satisfaction by {satisfaction.commit[:12]}"
+        decision = state.decisions.get(satisfaction.decision)
+        if decision is None:
+            raise TraceInputError(f"{label} names a decision state does not carry")
+        unknown = sorted(set(satisfaction.ids) - known)
+        if unknown:
+            raise TraceInputError(f"{label} satisfies ids the catalog lacks: {', '.join(unknown)}")
+        both = sorted(set(satisfaction.ids) & deferred.keys())
+        if both:
+            raise TraceInputError(f"{label} satisfies ids a deferral moves out: {', '.join(both)}")
+        phase = state.phases.get(satisfaction.phase)
+        if phase is None or not phase.closed:
+            raise TraceInputError(
+                f"{label} cites {satisfaction.phase}, which is not a closed phase"
+            )
+        if not _commit_resolves(repo_root, satisfaction.commit):
+            raise TraceInputError(f"{label} cites a commit the repository cannot resolve")
+        if decision.in_force:
+            satisfied.update(dict.fromkeys(satisfaction.ids, satisfaction.commit))
+    return satisfied
+
+
 def build_trace(
     *,
     titles: Mapping[str, str],
     deferrals: Sequence[Deferral],
     state: StateView,
     repo_root: Path,
+    satisfactions: Sequence[Satisfaction] = (),
 ) -> Catalog:
     """Recompute the census from state and source.
 
     Args:
         titles: Id to title, the catalog's authored half.
         deferrals: The deferral bindings the catalog declares.
+        satisfactions: The satisfied dispositions the catalog declares.
         state: The committed state slice.
-        repo_root: Where tests and producers are read from.
+        repo_root: Where tests and producers are read from, and where a
+            satisfaction's commit must resolve.
 
     Returns:
         The catalog with every row traced and the summary derived.
 
     Raises:
-        TraceInputError: When a deferral cannot be resolved.
+        TraceInputError: When a deferral or a satisfaction cannot be resolved.
     """
     known = set(titles)
     families = frozenset(req_id.rsplit("-", 1)[0] for req_id in known)
     deferred = _deferred_ids(deferrals, state, known)
+    satisfied = _satisfied_ids(satisfactions, state, known, deferred, repo_root)
     owners: dict[str, set[str]] = defaultdict(set)
     for wave in state.waves.values():
         if wave.status in DEAD_WAVE_STATUSES:
@@ -526,6 +636,8 @@ def build_trace(
     for req_id in sorted(titles):
         if req_id in deferred:
             status = TraceStatus.DEFERRED
+        elif req_id in satisfied:
+            status = TraceStatus.SATISFIED
         elif owners.get(req_id):
             status = TraceStatus.OWNED
         else:
@@ -539,6 +651,7 @@ def build_trace(
                 tests=tuple(sorted(tests.get(req_id, ()))),
                 producers=tuple(sorted(producers.get(req_id, ()))),
                 deferral=deferred.get(req_id),
+                satisfied_by=satisfied.get(req_id),
             )
         )
     counts = {status: sum(row.status is status for row in rows) for status in TraceStatus}
@@ -549,9 +662,11 @@ def build_trace(
             total=len(rows),
             owned=counts[TraceStatus.OWNED],
             deferred=counts[TraceStatus.DEFERRED],
+            satisfied=counts[TraceStatus.SATISFIED],
             unowned=counts[TraceStatus.UNOWNED],
         ),
         deferrals=tuple(deferrals),
+        satisfactions=tuple(satisfactions),
         requirements=tuple(rows),
     )
 
@@ -576,14 +691,16 @@ def stale_ids(stored: Catalog, fresh: Catalog) -> list[str]:
     """Return the ids whose stored trace differs from the recomputed one.
 
     The revision is provenance and never compared. A changed summary or
-    deferral table with no changed row reports ``summary`` or ``deferrals``.
+    deferral or satisfaction table with no changed row reports ``summary``,
+    ``deferrals`` or ``satisfactions``.
 
     Args:
         stored: The committed catalog.
         fresh: The catalog recomputed from the current tree.
 
     Returns:
-        The sorted changed requirement ids, plus ``summary`` / ``deferrals``.
+        The sorted changed requirement ids, plus ``summary``, ``deferrals``
+        and ``satisfactions``.
     """
     before = {row.id: row for row in stored.requirements}
     after = {row.id: row for row in fresh.requirements}
@@ -592,6 +709,8 @@ def stale_ids(stored: Catalog, fresh: Catalog) -> list[str]:
         changed.append("summary")
     if stored.deferrals != fresh.deferrals:
         changed.append("deferrals")
+    if stored.satisfactions != fresh.satisfactions:
+        changed.append("satisfactions")
     return changed
 
 
@@ -616,6 +735,7 @@ def _recompute(repo_root: Path, stored: Catalog) -> Catalog:
     return build_trace(
         titles={row.id: row.title for row in stored.requirements},
         deferrals=stored.deferrals,
+        satisfactions=stored.satisfactions,
         state=load_state_view(repo_root),
         repo_root=repo_root,
     )
@@ -623,7 +743,10 @@ def _recompute(repo_root: Path, stored: Catalog) -> Catalog:
 
 def _report(catalog: Catalog) -> str:
     s = catalog.summary
-    return f"{s.total} ids: {s.owned} owned, {s.deferred} deferred, {s.unowned} unowned"
+    return (
+        f"{s.total} ids: {s.owned} owned, {s.deferred} deferred, "
+        f"{s.satisfied} satisfied, {s.unowned} unowned"
+    )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -649,11 +772,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if args.verb == "extract":
             # The first extract runs before any catalog exists; a later one
-            # keeps the authored deferral table.
-            deferrals = load_catalog(catalog_path).deferrals if catalog_path.exists() else ()
+            # keeps the authored deferral and satisfaction tables.
+            authored = load_catalog(catalog_path) if catalog_path.exists() else None
             fresh = build_trace(
                 titles=extract_catalog(args.packet),
-                deferrals=deferrals,
+                deferrals=authored.deferrals if authored else (),
+                satisfactions=authored.satisfactions if authored else (),
                 state=load_state_view(repo_root),
                 repo_root=repo_root,
             )

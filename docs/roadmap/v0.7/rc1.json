@@ -1,0 +1,4426 @@
+{
+  "key": "PRV-0101",
+  "author": {
+    "principal_kind": "service",
+    "principal_id": "EAWF-PLANNER"
+  },
+  "body": {
+    "milestone_urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0101",
+    "milestone": {
+      "key": "MLS-0101",
+      "primary_track_ref": "eawf://EAWF/EAWF/EAWF/track/TRK-EAWF-CORE",
+      "title": "Cut 0.7.0rc1 with the epoch-1 TUI retired",
+      "outcome": "The flag day lands: eawf tui opens only the epoch-2 console, drawn to the packet layouts with token paint, settings edit, register-root and bulk select; the epoch-1 TUI and its tests are deleted; flag-day commands refuse epoch-1 state mutation; every shipped lint rule carries its disposition and rendered artifacts are gated; and 0.7.0rc1 is published (decisions D63, D64 and D71).",
+      "appetite": "XL",
+      "exclusions": [
+        "cross-provider, platform and recovery evidence, which rc2 gathers",
+        "the perfect-realization gate, which stable runs"
+      ],
+      "acceptance_journey": [
+        {
+          "step_id": "AS-01",
+          "actor": "operator",
+          "action": "open eawf tui on this repository's epoch-2 tree",
+          "expected_observation": "the console opens and no epoch-1 screen is reachable",
+          "evidence_kinds": [
+            "artifact"
+          ]
+        },
+        {
+          "step_id": "AS-02",
+          "actor": "operator",
+          "action": "run the rc1 release pre-flight",
+          "expected_observation": "the pre-flight passes and 0.7.0rc1 is tagged and observed",
+          "evidence_kinds": [
+            "artifact"
+          ]
+        }
+      ],
+      "required_batch_refs": [
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0105"
+      ]
+    },
+    "batches": [
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      }
+    ],
+    "tasks": [
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0101",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Close the console route registry and its pane and rail composition, so every native frame is drawn from one declared route table rather than per-route code.",
+        "criteria": [
+          {
+            "id": "CR-001",
+            "text": "Each of UI-004, UI-011, UI-033, UI-034, UI-039, UI-040, UI-058, UI-059 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0102",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Paint the truth tokens and quality markers through every console renderer, so failed, purged, invalidated, zero and unavailable values each render distinctly.",
+        "criteria": [
+          {
+            "id": "CR-002",
+            "text": "Each of CON-063, CON-064, CON-065, CON-066, CON-067, CON-068, CON-069, CON-070, CON-071, CON-072, CON-073, CON-074, CON-075, CON-076 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-003",
+            "text": "Each of CON-077, CON-078, CON-081 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0103",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Enforce the console frame grammar and glyph classes, including crumb links and truncation, with the sweep tests the packet names.",
+        "criteria": [
+          {
+            "id": "CR-004",
+            "text": "Each of CON-086, CON-109, CON-115, CON-154, CON-155, CON-156, CON-157, CON-158, CON-162, CON-165, CON-166, CON-167, CON-168 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0102"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0104",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Draw the native route frames to the packet layouts, replacing the generic table the native frame draws today.",
+        "criteria": [
+          {
+            "id": "CR-005",
+            "text": "Each of UI-020, UI-021, UI-022, UI-023, UI-045, UI-046, UI-047, UI-048, UI-049, UI-063, UI-064, UI-065, UI-066, UI-067 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-006",
+            "text": "Each of UI-073 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0102"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0105",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Draw the native route bodies to the packet layouts with principal eligibility, replacing the generic table bodies.",
+        "criteria": [
+          {
+            "id": "CR-007",
+            "text": "Each of CON-082, CON-084, CON-085, CON-088, CON-089, CON-100, CON-108, CON-123, CON-124, CON-125, CON-126, CON-127, CON-148, CON-149 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-008",
+            "text": "Each of CON-151, CON-152, CON-169, CON-170, CON-171, CON-172 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0104"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0106",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Bind the design pack's palette oracle and single-file render contract into the shipped console theme.",
+        "criteria": [
+          {
+            "id": "CR-009",
+            "text": "Each of AUTH-035, AUTH-058 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0102"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0107",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Draw the eight process-layer entry frames from the real console attach path instead of harness fixtures.",
+        "criteria": [
+          {
+            "id": "CR-010",
+            "text": "Each of CON-001, CON-002, CON-003, CON-004, CON-005, CON-006, CON-007, CON-008, CON-009, CON-010, CON-011, CON-012 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0108",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Draw the settings and sub-surface frames from a typed effective-settings view, and port settings edit.",
+        "criteria": [
+          {
+            "id": "CR-011",
+            "text": "Each of UI-050, UI-051, UI-052, UI-053, UI-054, UI-055, UI-056, UI-057, UI-070, UI-071 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0109",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Render the per-family entity state galleries and full-detail state frames.",
+        "criteria": [
+          {
+            "id": "CR-012",
+            "text": "Each of CON-103, CON-104, CON-105, CON-106, CON-107, CON-128 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0105"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0110",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Port the overlay and drawer chassis with its gates, so native overlays hold the frame instead of drawing NOT HELD.",
+        "criteria": [
+          {
+            "id": "CR-013",
+            "text": "Each of CON-091, CON-092, CON-095, CON-096, CON-097, CON-098, CON-099, CON-101, CON-102, CON-129, CON-141, CON-143 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0111",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Draw the decision overlays and cards from the projection rather than prototype registers.",
+        "criteria": [
+          {
+            "id": "CR-014",
+            "text": "Each of CON-130, CON-131, CON-132, CON-133, CON-134, CON-135, CON-136, CON-137, CON-138, CON-139, CON-140, CON-142 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0110"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0112",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Build the consequence preview card for every canonical mutation, with register-root and bulk select and per-item bulk results.",
+        "criteria": [
+          {
+            "id": "CR-015",
+            "text": "Each of CON-051, CON-052, CON-053, CON-054, CON-055, CON-056, CON-057, CON-058, CON-059, CON-060, CON-061, CON-062 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0110"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0113",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Port the focus and navigation grammar: declared regions, region boundaries, selection by id and depth keys.",
+        "criteria": [
+          {
+            "id": "CR-016",
+            "text": "Each of CON-013, CON-014, CON-015, CON-016, CON-017, CON-018, CON-019, CON-020, CON-021, CON-022, CON-025, CON-026, CON-027, CON-028 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0114",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Enforce the console key table contracts from one source, with global drop order and the idle auto-open assertion.",
+        "criteria": [
+          {
+            "id": "CR-017",
+            "text": "Each of CON-023, CON-024, CON-031, CON-032, CON-033, CON-034, CON-035, CON-036, CON-037, CON-038, CON-040, CON-042, CON-043, CON-044 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-018",
+            "text": "Each of CON-045, CON-047, CON-048 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0113"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0115",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Render connection and control truth: the chrome rules and the nine control outcomes over the real connection state.",
+        "criteria": [
+          {
+            "id": "CR-019",
+            "text": "Each of UI-010, UI-014, UI-024, UI-025, UI-026, UI-027, UI-032, UI-036, UI-037, UI-038, UI-060, UI-061 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0104"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0116",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Project attention and notices truthfully, with notification classes and per-principal delivery.",
+        "criteria": [
+          {
+            "id": "CR-020",
+            "text": "Each of UI-009, UI-015, UI-016, UI-017, UI-018, UI-019, UI-028, UI-029, UI-030, UI-031, UI-062, UI-068 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0104"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0117",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0101",
+        "priority": "P1",
+        "intent": "Drive the console journey assertions over the golden journeys through the driven harness.",
+        "criteria": [
+          {
+            "id": "CR-021",
+            "text": "Each of PRX-043, PRX-053, PRX-054, PRX-055, PRX-056, PRX-057, PRX-058, PRX-059, PRX-060, PRX-061, PRX-062, PRX-065, PRX-066 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0105",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0111",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0112",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0114",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0115",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0116",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0108",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0107",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0109"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0118",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "priority": "P1",
+        "intent": "Port the 47 epoch-1 TUI surfaces the UI packet carries over into console routes, so retiring the epoch-1 app loses no function.",
+        "criteria": [
+          {
+            "id": "CR-022",
+            "text": "Each of the 47 carry-over surfaces in the UI packet's epoch-1 disposition has a console route that renders its function, listed in a committed carry-over table",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-023",
+            "text": "A test walks the carry-over table and fails when a listed surface has no registered console route",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0105"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0119",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "priority": "P1",
+        "intent": "Fold the 27 epoch-1 chassis surfaces into the console chassis and delete the 8 surfaces the packet marks for deletion.",
+        "criteria": [
+          {
+            "id": "CR-024",
+            "text": "The 27 fold-into-chassis surfaces are served by the console chassis and the 8 delete-verdict surfaces are removed, each named in the committed disposition table",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0110",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0108"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0120",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "priority": "P1",
+        "intent": "Open eawf tui on the epoch-2 console only, including the plain, no-input and non-tty paths that still reach the epoch-1 offline emitter.",
+        "criteria": [
+          {
+            "id": "CR-025",
+            "text": "eawf tui on an epoch-2 tree never constructs the epoch-1 application on any path, including --plain, --no-input and a non-tty stdout, proven by a test per path",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0118",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0119"
+        ],
+        "write_claims": [
+          "src/eawf/surfaces/tui/launch.py"
+        ]
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0121",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "priority": "P1",
+        "intent": "Delete the epoch-1 TUI application, about 51,000 lines, and its roughly 197 test files once nothing reaches it.",
+        "criteria": [
+          {
+            "id": "CR-026",
+            "text": "No module under src/eawf imports the epoch-1 TUI application or its screens, and the retired source and test files are removed",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-027",
+            "text": "The idle-surface and coverage gates report no dangling reference to a deleted epoch-1 TUI symbol",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0120"
+        ],
+        "write_claims": [
+          "src/eawf/surfaces/tui/app.py",
+          "tests/tui"
+        ]
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0122",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0102",
+        "priority": "P1",
+        "intent": "Refuse epoch-1 state mutation after the flag day: every flag-day command answers an epoch-1 mutation with typed migration guidance.",
+        "criteria": [
+          {
+            "id": "CR-028",
+            "text": "Each of REL-021 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0123",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Govern Run admission and budgets: context allocation within the usable window, admission before provider start, and spend caps that bind spend.",
+        "criteria": [
+          {
+            "id": "CR-029",
+            "text": "Each of ECON-001, ECON-002, ECON-003, ECON-004, ECON-005, ECON-010, ECON-011, ECON-012, ECON-013, ECON-014, RUN-013, RUN-022, RUN-023, RUN-024 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          },
+          {
+            "id": "CR-030",
+            "text": "Each of RUN-025, RUN-026, RUN-027, RUN-028, RUN-050 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0124",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Prove the budget notice semantics: sub-unity bands refused at load and the notice kinds driven through the harness.",
+        "criteria": [
+          {
+            "id": "CR-031",
+            "text": "Each of PRX-032, PRX-033, PRX-034, PRX-035, PRX-036, PRX-037, PRX-038, PRX-039, PRX-040, PRX-042 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0123"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0125",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Capture Run counters through the vendor session reference, with per-Run start and terminal snapshots and a stamped measurement source.",
+        "criteria": [
+          {
+            "id": "CR-032",
+            "text": "Each of MEAS-000, MEAS-001, MEAS-002, MEAS-003, MEAS-004, MEAS-005, MEAS-006, MEAS-008, MEAS-009, MEAS-010, MEAS-046, MEAS-050, MEAS-053 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0126",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Render the statusline from epoch-2 truth fields with producer, freshness and measurement quality.",
+        "criteria": [
+          {
+            "id": "CR-033",
+            "text": "Each of MEAS-028, MEAS-029, MEAS-030, MEAS-043 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0125"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0127",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Migrate the measurement collections to epoch 2, re-pointing subjects and keeping quality and exclusion markers verbatim.",
+        "criteria": [
+          {
+            "id": "CR-034",
+            "text": "Each of MEAS-012, MEAS-035, MEAS-036, MEAS-037, MEAS-042 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0125"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0128",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Type the runtime stall, timeout and provider permission records, so a stall is an event and a timeout is never a cancellation.",
+        "criteria": [
+          {
+            "id": "CR-035",
+            "text": "Each of DEL-005, RUN-029, RUN-030, RUN-051, RUN-052 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0129",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Adopt host subagents as Runs through the hook events, with the transcript bridge and handler permissions.",
+        "criteria": [
+          {
+            "id": "CR-036",
+            "text": "Each of SURF-054, SURF-055, SURF-075, SURF-076, SURF-097, SURF-102, SURF-104 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0130",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Type the planning and evidence records: campaign findings, delivery regimes, evidence rungs, verdicts and the decision chain.",
+        "criteria": [
+          {
+            "id": "CR-037",
+            "text": "Each of DOM-034, PLAN-006, PLAN-007, PLAN-014, PLAN-015, PLAN-019, PLAN-040, PLAN-044, PLAN-045, PLAN-046, PLAN-047, PLAN-048, PLAN-050 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0131",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Bind operator questions to PendingAction on every host question surface.",
+        "criteria": [
+          {
+            "id": "CR-038",
+            "text": "Each of SURF-030, SURF-031, SURF-032, SURF-033, SURF-034, SURF-035, SURF-036, SURF-037, SURF-038, SURF-039, SURF-073, SURF-091, SURF-111 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0132",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Derive orchestration from the Task graph: concurrency plan, exclusivity, scope narrowing and fan-out.",
+        "criteria": [
+          {
+            "id": "CR-039",
+            "text": "Each of SURF-090, SURF-092, SURF-093, SURF-094, SURF-095, SURF-096, SURF-110, SURF-150 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0133",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Authorize bulk operations per item, with first-class partial outcomes and idempotent replay.",
+        "criteria": [
+          {
+            "id": "CR-040",
+            "text": "Each of DEL-021, DEL-022, DEL-023, DEL-024, DEL-025 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0134",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Enforce the epoch-2 authority boundaries: batch activation, Task promotion and demotion through plan apply, and bulk authorization.",
+        "criteria": [
+          {
+            "id": "CR-041",
+            "text": "Each of AUTH-019, AUTH-021, AUTH-022, AUTH-028, AUTH-039, AUTH-049, AUTH-052 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0133"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0135",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Harden the delivery and release contracts: frozen approval membership, coherent history projections and minted gate conventions.",
+        "criteria": [
+          {
+            "id": "CR-042",
+            "text": "Each of DEL-017, DEL-019, DEL-035, DEL-036, REL-014 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0136",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Delete the dead leaves and predictions the decisions retired: session-shape preferences, the approaching band and the legacy effort ladder.",
+        "criteria": [
+          {
+            "id": "CR-043",
+            "text": "Each of AUTH-023, AUTH-036, AUTH-041, AUTH-056, AUTH-057 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0137",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Unify the CLI verb contract across entity groups: one envelope, operation references and consistent verbs.",
+        "criteria": [
+          {
+            "id": "CR-044",
+            "text": "Each of SURF-080, SURF-081, SURF-082, SURF-083, SURF-084, SURF-085, SURF-086 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0138",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Build the reflect verb group with its serve guards and run report verb.",
+        "criteria": [
+          {
+            "id": "CR-045",
+            "text": "Each of SURF-165, SURF-166, SURF-170, SURF-171, SURF-172 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0137"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0139",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Generate the skills from the verb catalog, with digests and the catalog join.",
+        "criteria": [
+          {
+            "id": "CR-046",
+            "text": "Each of SURF-021, SURF-079, SURF-087, SURF-100, SURF-101, SURF-105, SURF-108, SURF-109, SURF-112, SURF-113, SURF-114, SURF-117 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0137"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0140",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Fix profile layer resolution: the repository layer and the certified-managed gate.",
+        "criteria": [
+          {
+            "id": "CR-047",
+            "text": "Each of SURF-011, SURF-012, SURF-013, SURF-070 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0141",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Enforce the zone-1 prompt budget through a prompt-budget policy ceiling, not only the host cap.",
+        "criteria": [
+          {
+            "id": "CR-048",
+            "text": "Each of SURF-001, SURF-003, SURF-004, SURF-006, SURF-023, SURF-071, SURF-106, SURF-151, SURF-164 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0142",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Harden the managed render outputs: host re-probe and refusal of unenumerated paths.",
+        "criteria": [
+          {
+            "id": "CR-049",
+            "text": "Each of SURF-009, SURF-168, SURF-169, SURF-174 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0143",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0103",
+        "priority": "P1",
+        "intent": "Migrate and harden the rule projections: legacy dispositions, shadow generations and a policy digest stable under prose edits.",
+        "criteria": [
+          {
+            "id": "CR-050",
+            "text": "Each of RULE-072, RULE-073, RULE-080, RULE-081, RULE-090, RULE-091, RULE-092, RULE-093, RULE-094 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0144",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
+        "priority": "P1",
+        "intent": "Rewrite the lint suite for epoch 2: a disposition per shipped rule, the task-trailer commit grammar and the test-tier protocol.",
+        "criteria": [
+          {
+            "id": "CR-051",
+            "text": "Each of LINT-001, LINT-002, LINT-006, LINT-008, LINT-009, LINT-010, LINT-030, LINT-031, LINT-032, LINT-033, LINT-034 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0145",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0104",
+        "priority": "P1",
+        "intent": "Gate rendered artifacts and specs: one artifact-placement map, an emitted-page execution harness and the citation-scope lint.",
+        "criteria": [
+          {
+            "id": "CR-052",
+            "text": "Each of LINT-004, LINT-035, LINT-036, LINT-037, LINT-041, LINT-042, LINT-043, REL-036 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0146",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0105",
+        "priority": "P1",
+        "intent": "Cut and publish 0.7.0rc1 once every rc1 Task is complete.",
+        "criteria": [
+          {
+            "id": "CR-053",
+            "text": "The rc1 release pre-flight passes with its changelog section, version bump and migration note, and 0.7.0rc1 is tagged and observed on every target",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0101",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0102",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0103",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0104",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0105",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0106",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0107",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0108",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0109",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0110",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0111",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0112",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0113",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0114",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0115",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0116",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0117",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0118",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0119",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0120",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0121",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0122",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0123",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0124",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0125",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0126",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0127",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0128",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0129",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0130",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0131",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0132",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0133",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0134",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0135",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0136",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0137",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0138",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0139",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0140",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0141",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0142",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0143",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0144",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0145"
+        ],
+        "write_claims": []
+      }
+    ],
+    "source_atoms": [
+      {
+        "atom_id": "UI-004",
+        "text": "Every internal link resolves or renders honest missing/stale detail",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-011",
+        "text": "Keyboard-only and plain-text/CLI journeys cover every critical read and mutation path; no essential...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-033",
+        "text": "Every route composes as a stack of panes with at most one right rail beside it, and a rail renders...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-034",
+        "text": "For one route at one projection revision the 80x24, 120x30, and 160x40 renders agree on selection,...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-039",
+        "text": "Design coverage is declared per renderer in the route registry",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-040",
+        "text": "This file constrains no glyph, key binding, overlay, focus region, or frame composition",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-058",
+        "text": "The route registry carries a route group per route - entry, spine, live, acceptance, planning,...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "UI-059",
+        "text": "The route registry in this file is the closed route set of the console: the entry states, the...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "CON-063",
+        "text": "Allocation A is the ratified allocation",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-064",
+        "text": "Measurement quality renders as a prefix immediately before the numeral with no separating space:...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-065",
+        "text": "Where a value is absent, the value slot renders exactly one truth token in place of the value: ?...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-066",
+        "text": "A genuine measured zero renders as 0 and is distinct from all five absent states",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-067",
+        "text": "ASCII mode substitutes twins one for one from the glyph table: every non-ASCII entry - the truth...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-068",
+        "text": "Identifiers, ordinals, positions, timestamps and counts of visible rows carry no quality marker,...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-069",
+        "text": "Every rendered measurement carries its quality marker; a rendered measurement without one is a...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-070",
+        "text": "Never-acted renders as an empty cell in both character modes and takes no token at all",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-071",
+        "text": "Every marked value renders a bounded reason phrase in the adjacent column, shaped as the state word...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-072",
+        "text": "The rendering vocabulary is exactly the four measurement qualities V07-UI owns",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-073",
+        "text": "Colour carries severity, or on the transcript's kind cell the kind, and never carries a fact on its...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-074",
+        "text": "ASCII mode is exercised on the densest screen of each family, because alignment fails there first,...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-075",
+        "text": "Column alignment is asserted between the two character modes over value columns and keyed tables:...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-076",
+        "text": "An event row renders a token plus the full word and never an abbreviation, and a repeated...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "CON-077",
+        "text": "A budget renders as spent, limit and an estimated remainder carrying the estimated marker for the...",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "CON-078",
+        "text": "Progress renders a named numerator with its quality marker and never a bare percentage",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "CON-081",
+        "text": "A terminal entity suppresses the connection chip and states that nothing is wrong",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "CON-086",
+        "text": "The breadcrumb renders the brand Eä outside-left with no leading glyph and never repeated, the...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-109",
+        "text": "A value in a keyed-table column longer than its column is shortened at a word boundary with a...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-115",
+        "text": "Implementation front-loads the five chassis steps in the order above before any route is built",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-154",
+        "text": "The keybar is the only place a key is promised",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-155",
+        "text": "A frame states facts and never instructions: no row narrates what a key, a click or the interface...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-156",
+        "text": "The caret is drawn in the cell immediately left of the text it marks, applied once per renderer...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-157",
+        "text": "A group title (DRAFTS, DEFERRED, LOST 1, NEEDS OPERATOR 3) sits flush at column 1, bold, with no...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-158",
+        "text": "A rendered value is either an identifier or enumeration left exactly as it is, or a sentence with a...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-162",
+        "text": "Every windowable region has a minimum height of three rows, spends its indicators from its own row...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-165",
+        "text": "The settings route marks each key's provenance with one of four glyphs in the column before the...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-166",
+        "text": "– (en dash, U+2013) is the declared no-value glyph: it marks a cell whose value does not exist by...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-167",
+        "text": "A glyph's meaning is fixed per column class - state slot, kind column, value column, provenance...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "CON-168",
+        "text": "A glyph legend may share the keybar row, right-aligned, at any width that holds both, and takes the...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "UI-020",
+        "text": "The jury and reputation console is the trust route, bound to TrustView, rendering verdicts,...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-021",
+        "text": "The evidence browser is the evidence route, bound to EvidenceView, rendering the claim graph over...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-022",
+        "text": "The health view and the sandbox log are the health and sandbox.log routes, bound to HealthView and...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-023",
+        "text": "Unattended execution is the unattended route, bound to UnattendedView and held by its goldens, and...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-045",
+        "text": "The git.pr route renders the repository facts of one Delivery Batch - branch with ahead and behind...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-046",
+        "text": "The cost.ceiling route renders the governor ceiling V07-ECON owns as spent, limit and estimated...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-047",
+        "text": "When the console loses its projection it renders the crash.recovery route from a CrashRecoveryView:...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-048",
+        "text": "The search route renders every hit of one palette query over the entity registers from a...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-049",
+        "text": "The history.diff route renders one entity at exactly two of its own revisions from a...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-063",
+        "text": "TrustView is scoped to one Milestone and carries three truth-field groups, each with its producer...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-064",
+        "text": "EvidenceView renders one Claim: its key and title, IN WORDS from the description, IT PROVES from...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-065",
+        "text": "HealthView lists every declared check with a four-value outcome passed \\| warn \\| failed \\|...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-066",
+        "text": "SandboxLogPage renders the authorisation decisions for every agent in the scope as a cursor-paged...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-067",
+        "text": "UnattendedView renders the dispatch queue under RUN, TASK, STATE, PROGRESS with the QUEUE line...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "UI-073",
+        "text": "Under REPLAYING the Campaign route renders the claim ledger and the findings exactly as of the...",
+        "mapped_criterion_ids": [
+          "CR-006"
+        ]
+      },
+      {
+        "atom_id": "CON-082",
+        "text": "Each connection state renders its reads and mutations contract as visible text in the frame body,...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-084",
+        "text": "The frozen phrase nothing needs you belongs to the empty Attention route and to scope home's...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-085",
+        "text": "Every count on every surface is labelled as this principal's own (mine) or as all principals...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-088",
+        "text": "Connection state, run lifecycle state and task lifecycle state render as three separate...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-089",
+        "text": "Wider sizes add disclosure only",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-100",
+        "text": "Diagnostics are two drawers one keypress away: i inspect opens the provenance of the focused field...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-108",
+        "text": "An empty Attention route, an empty backlog and an empty activity route are three distinct frames...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-123",
+        "text": "The settings.stack sub-surface renders the settings field tuple V07-UI owns in two tiers so the...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-124",
+        "text": "The eighth process state is onboarding: a first run with no registered workspace renders the four...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-125",
+        "text": "An attention row binds a answer, x deny, z snooze, v resolve and Enter open; a notice row binds z...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-126",
+        "text": "The Attention route lists this principal's items under MINE and, so that the all-principals count...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-127",
+        "text": "The header renders this principal's attention count as !N NEEDS YOU immediately left of the...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-148",
+        "text": "Bulk control - the one preview naming the count and every identifier (CON-056), the UNKNOWN pane...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-149",
+        "text": "Three global keys the packet binds are exercised by no golden and no journey of the rev H pack - u...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "CON-151",
+        "text": "A readout pane reports on the row under the focused list's cursor by stable identifier, names its...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "CON-152",
+        "text": "Every cursor a frame draws - the row cursor and any second cursor such as the roadmap marker - is...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "CON-169",
+        "text": "The transcript route renders one block per NormalizedRunEvent record from TranscriptView (UI-072):...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "CON-170",
+        "text": "The transcript route renders blocks in run order - message, tool with its output, file with its...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "CON-171",
+        "text": "The transcript's first column is the clock and the second the kind; a thinking block renders its...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "CON-172",
+        "text": "The transcript advances in wall time under f: a block that lands while the operator follows takes...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "AUTH-035",
+        "text": "The render and interaction contract is owned by exactly one file",
+        "mapped_criterion_ids": [
+          "CR-009"
+        ]
+      },
+      {
+        "atom_id": "AUTH-058",
+        "text": "The design pack's stylesheet chrome and semantic variables are the colour oracle, bound into the...",
+        "mapped_criterion_ids": [
+          "CR-009"
+        ]
+      },
+      {
+        "atom_id": "CON-001",
+        "text": "The process layer is a closed set of eight pre-session states: resolving, resolution ambiguous,...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-002",
+        "text": "Before a projection exists the header state slot carries a process value, never a connection value,...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-003",
+        "text": "The resolving frame enumerates the resolution steps with a per-step result and a derived elapsed...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-004",
+        "text": "No frame in the layer progresses by guessing",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-005",
+        "text": "Ambiguous resolution offers exactly two exits, select a candidate or cancel",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-006",
+        "text": "Every terminal entry state hands over a runnable command rather than an exit code",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-007",
+        "text": "Migration never auto-applies",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-008",
+        "text": "Interrupted migration renders which generation is authoritative now as a mandatory line, and...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-009",
+        "text": "Schema unsupported refuses to read, names the console version that wrote the workspace, and offers...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-010",
+        "text": "Offline snapshot renders the ordinary scope-home shape under the offline connection value, carrying...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-011",
+        "text": "No frame in the process layer claims a count is complete, and none offers a control that would...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "CON-012",
+        "text": "Until a projection exists the console renders no route, no route keybar verb and no header...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "UI-050",
+        "text": "An entity sub-surface is a route whose subject is one record of a parent entity and whose read...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-051",
+        "text": "Entering a rung on the Evidence route opens evidence.digest, the rung's own record: the check in...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-052",
+        "text": "EffectiveSettingsView.source_layer, override_chain[] and editable_at[] are typed against the...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-053",
+        "text": "Entering a settings key opens settings.stack, which renders the settings field tuple for that key...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-054",
+        "text": "The export sub-surface renders the plan for a plain-text report of one Run - timeline, usage and...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-055",
+        "text": "Every receipt reference a record renders is a cursor stop that opens the receipt sub-surface over...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-056",
+        "text": "CampaignView carries steps[] and artifacts[], and campaign.step and campaign.artifact are the...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-057",
+        "text": "Settings is one route",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-070",
+        "text": "ArtifactCardView is the read model of the campaign.artifact sub-surface: {artifact_ref:...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-071",
+        "text": "NoticeDetailView is the typed read model of the notice detail, which is not a route: it is the...",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "CON-103",
+        "text": "Each entity family ships one gallery: a keyed table of every state in the family with its name, a...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "CON-104",
+        "text": "The states that change layout rather than only their chip get a full detail render in addition to...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "CON-105",
+        "text": "Every lifecycle state renders through exactly one of four severity classes with fixed meanings: a...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "CON-106",
+        "text": "The two states most easily rendered dishonestly - a delivery batch merging with an unacknowledged...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "CON-107",
+        "text": "Recovery on those two states is explicit and retry is suppressed",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "CON-128",
+        "text": "The control-ledger gallery renders all nine outcomes as two-line cells - a state chip, the control...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "CON-091",
+        "text": "The overlay set is closed at the eleven named above and the drawer set at the four named above; a...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-092",
+        "text": "An overlay or a drawer sits above a route and always returns to it; neither becomes a route and...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-095",
+        "text": "Every overlay has an 80-column form and renders the same facts at 80, 120 and 160; a wider frame...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-096",
+        "text": "No overlay is opened by an arriving event",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-097",
+        "text": "The command palette is one overlay over two result kinds and no separate search key exists: one...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-098",
+        "text": "The help overlay prints the keymap for the current route and the current prefix state, drawn from...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-099",
+        "text": "The resolution card renders one of five endings for a target that no longer resolves - missing,...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-101",
+        "text": "An overlay inherits the connection gate: a verb refused on the route is refused in the overlay,...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-102",
+        "text": "Dismissing an overlay is never a resolution",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-129",
+        "text": "An overlay is a full-frame surface: its header names the overlay and its subject in the breadcrumb...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-141",
+        "text": "The rack-clear key - is console-owned and acts under every overlay and drawer without passing their...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-143",
+        "text": "A surface that holds no authority on purpose - the notifications route, the merge.conflict...",
+        "mapped_criterion_ids": [
+          "CR-013"
+        ]
+      },
+      {
+        "atom_id": "CON-130",
+        "text": "A decision overlay - question detail, pause detail, evidence viewer, readiness matrix - renders...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-131",
+        "text": "The question detail overlay is bound to one OpenQuestion keyed QST-#### and renders the projection...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-132",
+        "text": "The pause detail overlay renders one OpenPause under the projection V07-PLAN binds under PLAN-047:...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-133",
+        "text": "The evidence viewer overlay is bound to one Claim keyed CLM-#### and renders: header evidence ·...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-134",
+        "text": "The acceptance evidence overlay is bound to one MilestoneAcceptanceBundle at its exact digest and...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-135",
+        "text": "The readiness matrix overlay is bound to one Release and renders ReleaseReadinessView: header...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-136",
+        "text": "The draft card is an overlay bound to one DRAFT or DEFERRED Task captured at open and renders...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-137",
+        "text": "The marker card is an overlay about the roadmap marker under the cursor at open time, read from...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-138",
+        "text": "The artifact card is the render form of the campaign.artifact sub-surface over ArtifactCardView:...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-139",
+        "text": "The rung record card is the render form of the evidence.digest sub-surface over one...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-140",
+        "text": "The campaign step card is the render form of the campaign.step sub-surface over one...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-142",
+        "text": "An Enter-opened card - the draft and marker overlays and the artifact, rung record and step...",
+        "mapped_criterion_ids": [
+          "CR-014"
+        ]
+      },
+      {
+        "atom_id": "CON-051",
+        "text": "The consequence preview is mandatory for every canonical mutation, not only for destructive or...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-052",
+        "text": "The preview renders exactly six panes in the fixed order above",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-053",
+        "text": "The NOT pane is mandatory and names the non-effects explicitly",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-054",
+        "text": "The IF STALE pane states before confirmation that if the bound revision moves, the card reloads at...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-055",
+        "text": "Repeat confirmation is suppressed only by the same operation identifier at an unchanged revision,...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-056",
+        "text": "A bulk operation gets exactly one preview, which names the item count in the action line and...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-057",
+        "text": "The bulk preview carries an UNKNOWN pane declaring in advance which targets will not be able to...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-058",
+        "text": "A bulk operation never collapses to one verdict: one row in, one row out",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-059",
+        "text": "Under a transport-loss connection state the mutation affordance is removed, because no request can...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-060",
+        "text": "The plain-text and CLI mutation path obeys the same ordering: the command prints the consequence...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-061",
+        "text": "A losing principal's answer renders as superseded: neither applied nor refused, no ledger entry...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-062",
+        "text": "An action answerable by more than one principal renders an eligible pane - principal, authority...",
+        "mapped_criterion_ids": [
+          "CR-015"
+        ]
+      },
+      {
+        "atom_id": "CON-013",
+        "text": "Every route composes from at most three focus regions: rail, window, detail",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-014",
+        "text": "Arrow keys move only inside the focused region",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-015",
+        "text": "Selection is a stable typed identifier, never a row offset, per the selection-key rule V07-UI owns",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-016",
+        "text": "Depth is four keys: Enter drills into the selection, Escape returns, u jumps to the containment...",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-017",
+        "text": "Breadth is the go-prefix and nothing else",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-018",
+        "text": "The drilled detail is always its own route",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-019",
+        "text": "The breadcrumb is the back stack",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-020",
+        "text": "A target that no longer resolves opens the resolution card rather than a dead route or an empty...",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-021",
+        "text": "A revision repair never moves the cursor within the back stack",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-022",
+        "text": "Bucket navigation is uniform on Activity and Attention: the bucket rail is not a focus region and...",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-025",
+        "text": "Pointer parity is asserted in one direction only, and the mouse has exactly three bindings, each...",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-026",
+        "text": "Pane geometry is fixed",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-027",
+        "text": "After an overlay dismissal, a refusal or a completed mutation, focus returns to a predictable named...",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-028",
+        "text": "Each route declares its region set in the route registry, and the Tab destination is that...",
+        "mapped_criterion_ids": [
+          "CR-016"
+        ]
+      },
+      {
+        "atom_id": "CON-023",
+        "text": "No projection event may open an overlay, take focus, or change route",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-024",
+        "text": "Every single-key verb is suppressed while a text input owns focus, and Escape leaves the input and...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-031",
+        "text": "One key table is the single source for the keybar, the refusal gate and the help overlay",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-032",
+        "text": "The keybar advertises every route verb the route binds and every advertised key is bound; a route...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-033",
+        "text": "Every mutation and lifecycle verb is lowercase and never shifted, because no case convention may...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-034",
+        "text": "A letter is never the sole binding for a verb",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-035",
+        "text": "/ opens the command palette and \\ filters the current list, with Ctrl-F as the filter alias; the...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-036",
+        "text": "The action menu is the capability-disclosure surface for the selection and renders as a drawer over...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-037",
+        "text": "A refused verb's reason names the evidence rather than a category - the shape is checks incomplete,...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-038",
+        "text": "The action menu is sourced from the verb registry rather than assembled per route, so a verb...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-040",
+        "text": "Quit is a guarded double Escape, accepted only at scope home, only with no overlay or drawer open,...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-042",
+        "text": "No letter carries two meanings inside one route, proven by a per-route collision audit table rather...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-043",
+        "text": "Each route binds at most one primary mutation key, and pressing it opens the consequence preview...",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-044",
+        "text": "The answer verbs resolve a question or a delivery disposition and mutate no lifecycle",
+        "mapped_criterion_ids": [
+          "CR-017"
+        ]
+      },
+      {
+        "atom_id": "CON-045",
+        "text": "The frequent safe verbs are local and reversible and take no preview: follow, pause display, sort,...",
+        "mapped_criterion_ids": [
+          "CR-018"
+        ]
+      },
+      {
+        "atom_id": "CON-047",
+        "text": "Help is the printed keymap for the current route and the current prefix state, not a global cheat...",
+        "mapped_criterion_ids": [
+          "CR-018"
+        ]
+      },
+      {
+        "atom_id": "CON-048",
+        "text": "The reads contract has one helper and the writes contract has one gate, and both refuse from the...",
+        "mapped_criterion_ids": [
+          "CR-018"
+        ]
+      },
+      {
+        "atom_id": "UI-010",
+        "text": "A mutating control renders in exactly one of eight outcomes - idle, requesting, accepted,...",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-014",
+        "text": "Unsupported/uncertified capabilities render reason and certification provenance and cannot dispatch",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-024",
+        "text": "The statusline is a projection under the same truth contract as every other surface",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-025",
+        "text": "An executing Run or verification leg renders its identity, elapsed time, resolved timeout budget,...",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-026",
+        "text": "Progress is a TruthField like any other measured value and carries its freshness",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-027",
+        "text": "Progress never implies completeness",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-032",
+        "text": "superseded is a terminal control outcome distinct from rejected and invalidated: the losing...",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-036",
+        "text": "DEGRADED names exactly one concept - the transport and producer connection state",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-037",
+        "text": "SNAPSHOT LOADING and SNAPSHOT REQUIRED are distinct connection values and never collapse into one",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-038",
+        "text": "TERMINAL is a property of the entity and never a connection value, and a terminal entity suppresses...",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-060",
+        "text": "DISCONNECTED is the ninth connection value: transport lost during a live session with no snapshot...",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-061",
+        "text": "Under any connection state that cannot vouch for completeness - every value other than LIVE /...",
+        "mapped_criterion_ids": [
+          "CR-019"
+        ]
+      },
+      {
+        "atom_id": "UI-009",
+        "text": "Attention preserves source ledgers and exact action revisions; stale CAS reloads rather than...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-015",
+        "text": "Budget notices project to the watchlist and attention without a modal, an automatic open, a focus...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-016",
+        "text": "Per-principal delivery, acknowledgement, snooze, and source resolution survive daemon and client...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-017",
+        "text": "Counts and delivery use the exact authenticated audience",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-018",
+        "text": "Clean load, replay, reconnect, and an equivalent snapshot produce identical notice and audience...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-019",
+        "text": "Legacy stale-advisory bands collapse into one highest-band notice with no fabricated...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-028",
+        "text": "Attention is reachable from every route in one gesture - g n for the route, ! for the top item -...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-029",
+        "text": "No budget fraction other than the notify threshold with its grace condition, and the escalation to...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-030",
+        "text": "Exception buckets partition the queried population totally and disjointly over the eight top-level...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-031",
+        "text": "On the Activity route needs operator carries one sub-bucket per SuspensionReason value, typed...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-062",
+        "text": "The Attention route's eight exception buckets, with the AttentionNeedKind sub-buckets under needs...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "UI-068",
+        "text": "NotificationClass is a closed enum of five values - needs_permission, needs_answer,...",
+        "mapped_criterion_ids": [
+          "CR-020"
+        ]
+      },
+      {
+        "atom_id": "PRX-043",
+        "text": "The statusline renders every segment from an epoch-2 source with a producer and a freshness value,...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-053",
+        "text": "The nine control outcomes - idle, requesting, accepted, confirmed, rejected, invalidated, unknown,...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-054",
+        "text": "The eight top-level activity exception buckets, with their typed suspension sub-buckets under needs...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-055",
+        "text": "Position survives drill and back",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-056",
+        "text": "The go-prefix substate is visible while armed and cancellable while visible: the go drawer renders,...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-057",
+        "text": "Every advertised key and every menu verb acts or refuses with a live reason that names the...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-058",
+        "text": "No canonical mutation commits before its consequence preview names target, exact revision, effects,...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-059",
+        "text": "The header attention count appears once per frame and reconciles: on every route, overlay and...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-060",
+        "text": "The Attention route's eight exception buckets with their AttentionNeedKind sub-buckets sum to...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-061",
+        "text": "Acceptance question carried into the build, to be answered before the first release candidate and...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-062",
+        "text": "Every decision overlay and every Enter-opened card in the V07-CON inventory has at least one driven...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-065",
+        "text": "From a fixture with one reasoning span in progress, one subagent child Run and one background...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "PRX-066",
+        "text": "Under REPLAYING the Campaign route shows no finding as promoted whose promoting event lies beyond...",
+        "mapped_criterion_ids": [
+          "CR-021"
+        ]
+      },
+      {
+        "atom_id": "REL-021",
+        "text": "Flag-day commands refuse epoch-1 mutation with typed migration guidance",
+        "mapped_criterion_ids": [
+          "CR-028"
+        ]
+      },
+      {
+        "atom_id": "ECON-001",
+        "text": "Allocations sum to at most the usable window",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-002",
+        "text": "The authority capsule, decision receipts, criteria, and the exact base are never droppable, at any...",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-003",
+        "text": "Every consumer reports its measured rendered size, not an estimate",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-004",
+        "text": "Exhaustion is an operator-visible outcome with a named class, never a silent truncation",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-005",
+        "text": "The compiled Run spec carries policy_digest; a policy change after compilation invalidates the spec...",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-010",
+        "text": "Admission is evaluated before provider start",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-011",
+        "text": "A null cost ceiling means the priced ceiling is unavailable",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-012",
+        "text": "Reservations are released on any terminal Run state, including LOST, and reconciliation cannot leak...",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-013",
+        "text": "The governor never mutates lifecycle state",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "ECON-014",
+        "text": "Spend caps bind spend, not merely claims",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "RUN-013",
+        "text": "Context compaction cannot change authority, exact base, criteria, or decision receipts",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "RUN-022",
+        "text": "Child count never exceeds the resolved child_runs ceiling, counted across the whole delegation...",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "RUN-023",
+        "text": "A child Run inherits no parent transcript",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "RUN-024",
+        "text": "The budget_warning and budget_exhausted kinds bind to a typed budget payload carrying axis, basis,...",
+        "mapped_criterion_ids": [
+          "CR-029"
+        ]
+      },
+      {
+        "atom_id": "RUN-025",
+        "text": "The daemon upserts exactly one BudgetNotice per root, Run, compiled contract, and axis inside one...",
+        "mapped_criterion_ids": [
+          "CR-030"
+        ]
+      },
+      {
+        "atom_id": "RUN-026",
+        "text": "Hard exhaustion affects only the subject Run named by the compiled contract, or the explicitly...",
+        "mapped_criterion_ids": [
+          "CR-030"
+        ]
+      },
+      {
+        "atom_id": "RUN-027",
+        "text": "The daemon snapshots runtime counters at Run start and at Run terminal, reading the provider...",
+        "mapped_criterion_ids": [
+          "CR-030"
+        ]
+      },
+      {
+        "atom_id": "RUN-028",
+        "text": "The start-time baseline records the concurrently active Run count, so a shared interval carries its...",
+        "mapped_criterion_ids": [
+          "CR-030"
+        ]
+      },
+      {
+        "atom_id": "RUN-050",
+        "text": "Every UsagePayload declares usage_source and is_cumulative",
+        "mapped_criterion_ids": [
+          "CR-030"
+        ]
+      },
+      {
+        "atom_id": "PRX-032",
+        "text": "An estimate driven to the former progress fraction, eighty percent of estimated duration, produces...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-033",
+        "text": "The same run at the same point still renders the observed fraction in the usage gauge, so removing...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-034",
+        "text": "An estimate at the notify fraction with no progress past the grace period opens exactly one notice",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-035",
+        "text": "Escalation from approaching to the limit band is asserted over the legacy-import path, which is the...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-036",
+        "text": "A recipient opens, acknowledges, snoozes, and resolves; each disposition survives restart with the...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-037",
+        "text": "An unresolved notice routed to one principal cannot suspend, queue, deny, interrupt, focus, count...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-038",
+        "text": "Exact hard exhaustion stops only the subject Run; unrelated Runs continue unless independently...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-039",
+        "text": "Two concurrent producers plus a delayed lower band yield one monotonic notice and one delivery per...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-040",
+        "text": "Legacy advisory bands collapse deterministically with no duplicate projection and no fabricated...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "PRX-042",
+        "text": "Every estimate and actual row imports with a re-pointed subject, reconciling counts, and preserved...",
+        "mapped_criterion_ids": [
+          "CR-031"
+        ]
+      },
+      {
+        "atom_id": "MEAS-000",
+        "text": "A Run carries a typed vendor runtime session reference, distinct from its internal Run and session...",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-001",
+        "text": "Counters are snapshotted at run start and again at run terminal",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-002",
+        "text": "Capture reads the agent transcript when one is available and the sidecar counter file otherwise,...",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-003",
+        "text": "A run with neither source records no captured runtime",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-004",
+        "text": "Every counter row names its harness and its model",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-005",
+        "text": "The baseline record carries a dedicated field for the concurrent-run count, and that field is...",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-006",
+        "text": "A run claimed part-way through a host turn does not bank the portion of the turn that preceded it",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-008",
+        "text": "Capture records the divisor at the moment an interval is shared, and stamps the row's measurement...",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-009",
+        "text": "An excluded row records why it was excluded",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-010",
+        "text": "Every measured row carries the measurement version under which it was produced, so a consumer can...",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-046",
+        "text": "Both halves of the capture path have production callers, proven by a census rather than by the...",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-050",
+        "text": "Every measured span attributes to a named producer",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-053",
+        "text": "Absence and zero are distinct at capture, not only at render",
+        "mapped_criterion_ids": [
+          "CR-032"
+        ]
+      },
+      {
+        "atom_id": "MEAS-028",
+        "text": "Every statusline segment is a truth field carrying a producer, a freshness value, and a measurement...",
+        "mapped_criterion_ids": [
+          "CR-033"
+        ]
+      },
+      {
+        "atom_id": "MEAS-029",
+        "text": "Context and cost segments read the host payload directly",
+        "mapped_criterion_ids": [
+          "CR-033"
+        ]
+      },
+      {
+        "atom_id": "MEAS-030",
+        "text": "The scope segment resolves through the epoch-2 delivery spine",
+        "mapped_criterion_ids": [
+          "CR-033"
+        ]
+      },
+      {
+        "atom_id": "MEAS-043",
+        "text": "The statusline renders every segment from an epoch-2 source with a producer and a freshness value,...",
+        "mapped_criterion_ids": [
+          "CR-033"
+        ]
+      },
+      {
+        "atom_id": "MEAS-012",
+        "text": "Every actuals row resolves to an existing subject",
+        "mapped_criterion_ids": [
+          "CR-034"
+        ]
+      },
+      {
+        "atom_id": "MEAS-035",
+        "text": "The importer is given a total, deterministic re-pointing function from an epoch-1 subject to its...",
+        "mapped_criterion_ids": [
+          "CR-034"
+        ]
+      },
+      {
+        "atom_id": "MEAS-036",
+        "text": "Measurement quality, exclusion flags, and exclusion reasons are preserved verbatim",
+        "mapped_criterion_ids": [
+          "CR-034"
+        ]
+      },
+      {
+        "atom_id": "MEAS-037",
+        "text": "The statusline session cache and the counter sidecar are derived projections",
+        "mapped_criterion_ids": [
+          "CR-034"
+        ]
+      },
+      {
+        "atom_id": "MEAS-042",
+        "text": "All estimate and actual rows migrate with reconciling counts and preserved quality markers",
+        "mapped_criterion_ids": [
+          "CR-034"
+        ]
+      },
+      {
+        "atom_id": "DEL-005",
+        "text": "Timeout never masquerades as operator cancellation",
+        "mapped_criterion_ids": [
+          "CR-035"
+        ]
+      },
+      {
+        "atom_id": "RUN-029",
+        "text": "A Run producing no tool call, no output, and no state transition for its stall interval raises a...",
+        "mapped_criterion_ids": [
+          "CR-035"
+        ]
+      },
+      {
+        "atom_id": "RUN-030",
+        "text": "A stall event never itself terminates the Run",
+        "mapped_criterion_ids": [
+          "CR-035"
+        ]
+      },
+      {
+        "atom_id": "RUN-051",
+        "text": "A provider permission is a typed daemon-owned record with its own URN family, its own deadline...",
+        "mapped_criterion_ids": [
+          "CR-035"
+        ]
+      },
+      {
+        "atom_id": "RUN-052",
+        "text": "The hold refusal is enforced by the daemon on the target kind, never by the surface",
+        "mapped_criterion_ids": [
+          "CR-035"
+        ]
+      },
+      {
+        "atom_id": "SURF-054",
+        "text": "Host subagent spawns are adopted as Eawf Runs through subagent start and stop hooks, with a...",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "SURF-055",
+        "text": "Hook handlers are registered and observable",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "SURF-075",
+        "text": "Host subagent spawns appear as Runs in Activity with their transcript reachable through the...",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "SURF-076",
+        "text": "Every declared hook event has a registered handler or is removed",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "SURF-097",
+        "text": "Where the host harness offers its own team or subagent mechanism, it is adopted through SURF-054 so...",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "SURF-102",
+        "text": "Every hook event the plugin declares has a registered handler, and the handler writes a durable row...",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "SURF-104",
+        "text": "Host subagent spawns adopt as Runs under a typed non-Task scope per SURF-054, so harness-side...",
+        "mapped_criterion_ids": [
+          "CR-036"
+        ]
+      },
+      {
+        "atom_id": "DOM-034",
+        "text": "A promoted Campaign finding is its own record, CampaignFinding, keyed CFN-#### and addressed by...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-006",
+        "text": "Fast usage is bounded and debt consumed before stable Release approval",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-007",
+        "text": "Source refs resolve and entailing claims retain evidence",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-014",
+        "text": "Hypothesis verdict is audit-grounded and immutable",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-015",
+        "text": "Decisions preserve alternatives, evidence, resolved questions, and supersession chain",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-019",
+        "text": "DeliveryRegime has exactly three values and cannot weaken always-required gates",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-040",
+        "text": "Measured evidence does not cross a publication boundary",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-044",
+        "text": "A Claim carries two optional prose fields beside description: falsifier (at most 300 characters,...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-045",
+        "text": "An OpenQuestion renders in exactly one of the ten situations of the projection table above, each...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-046",
+        "text": "An operator may answer an OpenQuestion in their own words through a typed QuestionReply...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-047",
+        "text": "An OpenPause renders in exactly one of the seven situations of the projection table above, derived...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-048",
+        "text": "Each rung of each claim writes one EvidenceRungRecord with the fields of the table above, and the...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "PLAN-050",
+        "text": "Every ArtifactRevisionUrn a Campaign lists in artifact_revision_refs or a step lists in produced...",
+        "mapped_criterion_ids": [
+          "CR-037"
+        ]
+      },
+      {
+        "atom_id": "SURF-030",
+        "text": "An operator choice is presented as a typed multiple-choice question in the host harness, bound...",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-031",
+        "text": "The presented options are exactly the persisted options",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-032",
+        "text": "A protected action never carries a timeout default",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-033",
+        "text": "Losing the presentation surface never loses the action",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-034",
+        "text": "Show, do not only tell",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-035",
+        "text": "Expand every term on first use",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-036",
+        "text": "Plain prose",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-037",
+        "text": "The recommendation is the long-term-correct option",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-038",
+        "text": "Configuration outranks the default recommendation",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-039",
+        "text": "A question that is purely a preference with no consequence is not asked",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-073",
+        "text": "Every operator approval is a typed option set bound to a durable PendingAction; free text is never...",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-091",
+        "text": "A skill that asks the operator to choose renders typed options bound to a PendingAction (see...",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-111",
+        "text": "Every operator question renders comparable visuals, expands its terms, recommends the...",
+        "mapped_criterion_ids": [
+          "CR-038"
+        ]
+      },
+      {
+        "atom_id": "SURF-090",
+        "text": "Every rule that is re-typed by the operator more than a configured threshold within a release is...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-092",
+        "text": "A completeness-shaped instruction has a machine answer: every sweep reports what it covered and...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-093",
+        "text": "Scope narrowing is expressible once, on the Task, and is carried into the dispatch contract; it is...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-094",
+        "text": "Every dispatching surface states the orchestration contract as a resolved default, not as prose the...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-095",
+        "text": "The concurrency plan is derived from the Task dependency graph and the ownership claims, and is...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-096",
+        "text": "Exclusivity is declarable on a Task — \"this runs alone\" — and is enforced by the scheduler through...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-110",
+        "text": "The orchestration contract ships as a dispatch default and the concurrency plan is derived from the...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "SURF-150",
+        "text": "Where a runtime exposes fan-out configuration - maximum concurrent threads per session, maximum...",
+        "mapped_criterion_ids": [
+          "CR-039"
+        ]
+      },
+      {
+        "atom_id": "DEL-021",
+        "text": "A bulk verb is authorized per item",
+        "mapped_criterion_ids": [
+          "CR-040"
+        ]
+      },
+      {
+        "atom_id": "DEL-022",
+        "text": "Partial outcome is first-class",
+        "mapped_criterion_ids": [
+          "CR-040"
+        ]
+      },
+      {
+        "atom_id": "DEL-023",
+        "text": "An unknown item stays unknown until reconciled",
+        "mapped_criterion_ids": [
+          "CR-040"
+        ]
+      },
+      {
+        "atom_id": "DEL-024",
+        "text": "Confirmation names the target count, the effects, the non-effects, and the invalidation rule before...",
+        "mapped_criterion_ids": [
+          "CR-040"
+        ]
+      },
+      {
+        "atom_id": "DEL-025",
+        "text": "Replay with the same idempotency key returns the original per-item results; the same key with a...",
+        "mapped_criterion_ids": [
+          "CR-040"
+        ]
+      },
+      {
+        "atom_id": "AUTH-019",
+        "text": "WIP ceilings are split by whether a mechanism enforces them",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "AUTH-021",
+        "text": "The backlog is a draft head on the Task lifecycle, not a separate entity",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "AUTH-022",
+        "text": "Mass operations are selection-based with per-item results",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "AUTH-028",
+        "text": "Task identity in version control is a trailer by default, configurable to a subject prefix",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "AUTH-039",
+        "text": "A gate whose truth is this project's own command line gets an interim epoch-1 argv widening, never...",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "AUTH-049",
+        "text": "The workspace registry ships before the importer's apply mode, as a hard dependency",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "AUTH-052",
+        "text": "The zero-or-explained waiver reading of AUTH-044 governs dev1 through dev4 only",
+        "mapped_criterion_ids": [
+          "CR-041"
+        ]
+      },
+      {
+        "atom_id": "DEL-017",
+        "text": "Release approval freezes exact accepted membership, source/tag, artifacts, claims, targets, policy,...",
+        "mapped_criterion_ids": [
+          "CR-042"
+        ]
+      },
+      {
+        "atom_id": "DEL-019",
+        "text": "Git history contains coherent delivery/release projections and no per-Run, per-Task-status, or...",
+        "mapped_criterion_ids": [
+          "CR-042"
+        ]
+      },
+      {
+        "atom_id": "DEL-035",
+        "text": "The epoch-1 gate argv allowlist admits eawf and just beside its existing heads, and the widening is...",
+        "mapped_criterion_ids": [
+          "CR-042"
+        ]
+      },
+      {
+        "atom_id": "DEL-036",
+        "text": "Minted gates carry declared conventions rather than defaults",
+        "mapped_criterion_ids": [
+          "CR-042"
+        ]
+      },
+      {
+        "atom_id": "REL-014",
+        "text": "Any approved-input change invalidates approval before external effect, returns the release to...",
+        "mapped_criterion_ids": [
+          "CR-042"
+        ]
+      },
+      {
+        "atom_id": "AUTH-023",
+        "text": "No session-shape or session-regime field is added, and the two behaviourally dead preference leaves...",
+        "mapped_criterion_ids": [
+          "CR-043"
+        ]
+      },
+      {
+        "atom_id": "AUTH-036",
+        "text": "A budget notice fires on an observed event, never on a prediction",
+        "mapped_criterion_ids": [
+          "CR-043"
+        ]
+      },
+      {
+        "atom_id": "AUTH-041",
+        "text": "The five-point effort ladder is retired for one constant",
+        "mapped_criterion_ids": [
+          "CR-043"
+        ]
+      },
+      {
+        "atom_id": "AUTH-056",
+        "text": "The legacy TrackStatus members PLANNED and DEFERRED are dropped at dev2 under the deletion rule,...",
+        "mapped_criterion_ids": [
+          "CR-043"
+        ]
+      },
+      {
+        "atom_id": "AUTH-057",
+        "text": "A behaviourally dead configuration leaf is deleted under the deletion rule, never wired to make it...",
+        "mapped_criterion_ids": [
+          "CR-043"
+        ]
+      },
+      {
+        "atom_id": "SURF-080",
+        "text": "Verbs are grouped by entity — track, milestone, batch, task, run, release, campaign, question,...",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-081",
+        "text": "Every mutating verb accepts --expected-revision and --idempotency-key and refuses to mutate without...",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-082",
+        "text": "Every create verb accepts --from-spec <path> or - for stdin, parsed through the same strict model...",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-083",
+        "text": "Every verb has a machine mode returning the strict envelope {schema_version, status, operation,...",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-084",
+        "text": "Long-running verbs submit and return an operation reference immediately",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-085",
+        "text": "Exit codes are typed and stable, including a distinct code for the needs-operator envelope, so a...",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-086",
+        "text": "Read verbs never mutate",
+        "mapped_criterion_ids": [
+          "CR-044"
+        ]
+      },
+      {
+        "atom_id": "SURF-165",
+        "text": "The reflect group carries run, show, serve, export, and prune",
+        "mapped_criterion_ids": [
+          "CR-045"
+        ]
+      },
+      {
+        "atom_id": "SURF-166",
+        "text": "Any browser-facing rendering of a report is served locally and read-only: bound to the loopback...",
+        "mapped_criterion_ids": [
+          "CR-045"
+        ]
+      },
+      {
+        "atom_id": "SURF-170",
+        "text": "The reflect verb group exists under SURF-080, mutates no canonical state, and any local viewer it...",
+        "mapped_criterion_ids": [
+          "CR-045"
+        ]
+      },
+      {
+        "atom_id": "SURF-171",
+        "text": "eawf reflect run fills session titles by default, after the sweep and before the render",
+        "mapped_criterion_ids": [
+          "CR-045"
+        ]
+      },
+      {
+        "atom_id": "SURF-172",
+        "text": "eawf run report <RUN> [--parts <part>,...] is the CLI twin of the export sub-surface and writes the...",
+        "mapped_criterion_ids": [
+          "CR-045"
+        ]
+      },
+      {
+        "atom_id": "SURF-021",
+        "text": "A skill whose frontmatter forbids model invocation is either invocable by the operator alone by...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-079",
+        "text": "The verb catalog is introspectable; plugin manifests and help are generated from V07-SKILL, with...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-087",
+        "text": "The verb catalog is introspectable: one command emits every verb, its entity, parameters, typed...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-100",
+        "text": "Every shipped skill names the epoch-2 entity and route it operates on",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-101",
+        "text": "Plugin manifests and generated help are rendered from the V07-SKILL catalog",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-105",
+        "text": "Bundles are versioned release artifacts with prerelease channel discipline per SURF-041, and an...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-108",
+        "text": "No shipped skill, manifest, or hook references an epoch-1 noun after cutover, proven by a symbol...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-109",
+        "text": "An installed bundle whose target epoch differs from the repository refuses to operate and renders...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-112",
+        "text": "Each shipped skill's strict argument schema generates identical host help, machine schema,...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-113",
+        "text": "Catalog, prompt, argument, RPC allowlist, output-schema, and generated-bundle digests are checked...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-114",
+        "text": "Generated user help, agent callable catalogs, completion metadata, and host menus filter from the...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-117",
+        "text": "The statusline renders every segment from an epoch-2 source, has zero idle render helpers, has...",
+        "mapped_criterion_ids": [
+          "CR-046"
+        ]
+      },
+      {
+        "atom_id": "SURF-011",
+        "text": "Profile resolution order is built-in, then global, then workspace overlay, then repository",
+        "mapped_criterion_ids": [
+          "CR-047"
+        ]
+      },
+      {
+        "atom_id": "SURF-012",
+        "text": "An enriched profile is interactive-only until it is compiled and certified as managed",
+        "mapped_criterion_ids": [
+          "CR-047"
+        ]
+      },
+      {
+        "atom_id": "SURF-013",
+        "text": "Custom-profile discovery uses declared roots only",
+        "mapped_criterion_ids": [
+          "CR-047"
+        ]
+      },
+      {
+        "atom_id": "SURF-070",
+        "text": "Profile overlays resolve identically for enable and render, proven by a paired contract test",
+        "mapped_criterion_ids": [
+          "CR-047"
+        ]
+      },
+      {
+        "atom_id": "SURF-001",
+        "text": "Rendered zone-1 size is measured per render and reported against the ceiling resolved from...",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-003",
+        "text": "A direct host-harness session receives the smallest certified steering projection applicable to its...",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-004",
+        "text": "Measurement is of the actual loaded chain, not a labelled subset",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-006",
+        "text": "The root's contents are enumerated by RULE-010 in V07-RULE, which owns projection content",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-023",
+        "text": "Skills load into zone 2, never zone 1, and count against the resolved prompt budget",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-071",
+        "text": "Zone-1 rendered size is measured per render and enforced against the V07-ECON ceiling",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-106",
+        "text": "Every skill declares its prompt-budget class and counts against the ceiling resolved from V07-ECON;...",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-151",
+        "text": "Tool-result bytes and host advertising bytes are declared context contributors and are measured in...",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-164",
+        "text": "No rendered instruction surface names a model or recommends model selection",
+        "mapped_criterion_ids": [
+          "CR-048"
+        ]
+      },
+      {
+        "atom_id": "SURF-009",
+        "text": "Removal is verified against the host, not only against the manifest",
+        "mapped_criterion_ids": [
+          "CR-049"
+        ]
+      },
+      {
+        "atom_id": "SURF-168",
+        "text": "No host configuration key is written without an observed probe effect and a named source...",
+        "mapped_criterion_ids": [
+          "CR-049"
+        ]
+      },
+      {
+        "atom_id": "SURF-169",
+        "text": "Exactly one active render of a bundle exists per runtime per repository",
+        "mapped_criterion_ids": [
+          "CR-049"
+        ]
+      },
+      {
+        "atom_id": "SURF-174",
+        "text": "The installer maintains a delimited managed block in the repository's committed ignore file...",
+        "mapped_criterion_ids": [
+          "CR-049"
+        ]
+      },
+      {
+        "atom_id": "RULE-072",
+        "text": "Obsolete generated targets absent from the desired set are removed",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-073",
+        "text": "A failed budget or validation leaves the selected output and manifest unchanged",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-080",
+        "text": "The rule graph has exactly one audience: a direct interactive harness session",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-081",
+        "text": "Changing a rule's prose, rationale, or projection cannot change the run-policy digest",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-090",
+        "text": "Every legacy block and every legacy profile field receives exactly one typed disposition",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-091",
+        "text": "Arbitrary prose is never heuristically split into fabricated structured fields",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-092",
+        "text": "Duplicates are removed by obligation identifier",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-093",
+        "text": "A shadow generation validates semantic coverage, trust, budgets, commands, paths, host loading, and...",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "RULE-094",
+        "text": "After the migration switch, legacy render blocks are import-only and a new operator edit to a...",
+        "mapped_criterion_ids": [
+          "CR-050"
+        ]
+      },
+      {
+        "atom_id": "LINT-001",
+        "text": "Every shipped rule carries exactly one disposition in the table above",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-002",
+        "text": "A rule bound to epoch-1 vocabulary is rewritten against epoch-2 identifiers",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-006",
+        "text": "The task trailer is always the last trailer before the agent co-author trailer",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-008",
+        "text": "A commit naming a task that does not exist in state is rejected",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-009",
+        "text": "Bookkeeping commits are recognised by their conventional type rather than by a positional suffix,...",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-010",
+        "text": "History written under the epoch-1 grammar stays lintable",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-030",
+        "text": "Every shipped rule has a disposition, and no rule references an epoch-1 identifier after the cutover",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-031",
+        "text": "Both commit grammars validate, the default is configurable, the trailer position is enforced, and a...",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-032",
+        "text": "Every test file resolves to exactly one kind directory, and every kind marker is auto-applied...",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-033",
+        "text": "A required-tier task cannot complete without a failing-then-passing evidence pair for its named gate",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-034",
+        "text": "The budget gate detects an injected duration regression, and the quarantine lane reports without...",
+        "mapped_criterion_ids": [
+          "CR-051"
+        ]
+      },
+      {
+        "atom_id": "LINT-004",
+        "text": "The artifact-placement rule reads one canonical kind-to-subdirectory map",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "LINT-035",
+        "text": "The artifact-placement map has exactly one declaration, proven by a test that adds a kind and...",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "LINT-036",
+        "text": "A change to an emitted page is gated by a harness that executes the page's controllers against real...",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "LINT-037",
+        "text": "Where the question is what a reader actually sees, the rendered artifact is the instrument",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "LINT-041",
+        "text": "The citation-scope lint reads every committed artifact, rendered document, rule projection and...",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "LINT-042",
+        "text": "The settings category assignment is a lint over the configuration catalog, not a document",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "LINT-043",
+        "text": "The packet's own census lint runs the specification scanner over the proposal directory in CI on...",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      },
+      {
+        "atom_id": "REL-036",
+        "text": "The machine-checkable coverage grid V07-CON owns (CON-110 to CON-114) is complete and total over...",
+        "mapped_criterion_ids": [
+          "CR-052"
+        ]
+      }
+    ]
+  }
+}

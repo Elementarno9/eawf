@@ -24,6 +24,11 @@ live document row, since a record placed under nothing cannot be reached;
 and free text carrying a leak shape, refused by the scrub the commit shares
 with every other writer.
 
+A repository is admitted through the same steps without a machine: it has
+no status and never terminates, and its one fact -- the head a plan binds --
+is read from the repository's git history at admission rather than taken
+from the caller.
+
 A retry is answered exactly as a transition's is: a key that already
 committed these parameters returns its original receipt and no envelope,
 having written nothing, and a key that committed different parameters is
@@ -34,19 +39,22 @@ from __future__ import annotations
 
 import copy
 import logging
+import subprocess
 import uuid
 from collections.abc import Mapping
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any, Final
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
 
-from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import Epoch2Model, PrincipalKey, StrictNonNegativeInt
 from eawf.kernel.state.epoch2.batch import BatchCreateSpec, BatchStatus
 from eawf.kernel.state.epoch2.milestone import MilestoneCreateSpec, MilestoneStatus
+from eawf.kernel.state.epoch2.repository import Repository, RepositoryCreateSpec
 from eawf.kernel.state.epoch2.run import RunCreateSpec, RunStatus
 from eawf.kernel.state.epoch2.task import TaskCreateSpec, TaskStatus
 from eawf.kernel.state.epoch2.track import TrackCreateSpec, TrackStatus
@@ -118,7 +126,7 @@ _FIRST_CONTRACT_REVISION: Final = 1
 #: Every legal create event name: one per collection a machine governs.
 CREATE_EVENT_NAMES: Final[frozenset[str]] = frozenset(
     f"{CREATE_EVENT_NAMESPACE}.{ENTITY_COLLECTIONS[kind].value}.created"
-    for kind in LIFECYCLE_ENTITIES
+    for kind in (*LIFECYCLE_ENTITIES, EntityKind.REPOSITORY)
 )
 
 
@@ -222,7 +230,8 @@ def run_create(
                 new_document=new_document,
                 envelope=_create_envelope(
                     request=request,
-                    record=record,
+                    status=str(record.status),
+                    revision=record.revision,
                     event_name=event_name,
                     sequence=sequence,
                     now=now,
@@ -420,7 +429,8 @@ def _require_live_parents(
 def _create_envelope(
     *,
     request: CreateRequest,
-    record: LifecycleRecord,
+    status: str | None,
+    revision: int,
     event_name: str,
     sequence: int,
     now: datetime,
@@ -438,7 +448,7 @@ def _create_envelope(
         kind=StoreKind.EVENT,
         scope_id=str(urn),
         created_at=now,
-        summary=f"{event_name} {urn.entity_key} {record.status!s}",
+        summary=f"{event_name} {urn.entity_key} {status or 'admitted'}",
         payload={
             "schema_version": CREATE_EVENT_SCHEMA_VERSION,
             "name": event_name,
@@ -448,15 +458,151 @@ def _create_envelope(
             "project_ref": urn.project_key,
             "entity_ref": str(urn),
             "from_status": None,
-            "to_status": str(record.status),
+            "to_status": status,
             "revision_before": None,
-            "revision_after": record.revision,
+            "revision_after": revision,
             "actor_ref": request.actor,
             "idempotency_key": request.idempotency_key,
             "correlation_id": request.correlation_id,
             "canonical_sequence": sequence,
         },
     )
+
+
+def _repository_head(repo_root: Path) -> str | None:
+    """Return the commit ``HEAD`` resolves to in *repo_root*, or ``None``."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD^{commit}"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return None
+    head = result.stdout.strip()
+    return head if result.returncode == 0 and head else None
+
+
+def run_repository_create(
+    *,
+    context: Epoch2RootContext,
+    request: CreateRequest,
+    now: datetime,
+) -> CommittedTransaction:
+    """Admit one repository row at the head its git history holds now.
+
+    The row is what a plan's head binding is read from, so the head is
+    resolved here from the repository the tree belongs to and never taken
+    from the request. The cursor, the free key, the receipt and the event
+    are those of every other create.
+
+    Args:
+        context: The native context of the tree the row is admitted to.
+        request: The already-validated request; its spec is a
+            :class:`RepositoryCreateSpec`.
+        now: When the row was admitted.
+
+    Returns:
+        The committed create, or the original receipt of a replayed one.
+
+    Raises:
+        TransactionRefusedError: The URN is not a repository, the create
+            document does not validate or names another key, the
+            repository has no readable ``HEAD``, the cursor moved, or the
+            key is taken. Nothing was written.
+        NativeAuthorityRequiredError: The tree left epoch 2.
+        MigrationDualAuthorityError: The tree's select is not whole.
+        LockTimeout: A lock stayed held past the lock timeout.
+    """
+    urn = request.urn
+    if urn.kind is not EntityKind.REPOSITORY:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.IDENTITY_KIND_MISMATCH,
+            detail=f"a repository create names a {urn.kind.value}",
+            entity_ref=str(urn),
+            remediation="Name a repository URN.",
+        )
+    try:
+        spec = RepositoryCreateSpec.model_validate(request.spec)
+    except ValidationError as error:
+        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=f"the repository create document does not validate; check {', '.join(fields)}",
+            entity_ref=str(urn),
+            remediation="Correct the named create-document fields and retry.",
+        ) from error
+    if spec.key != urn.entity_key:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=f"the create document is keyed {spec.key!r} but the URN addresses "
+            f"{urn.entity_key!r}",
+            entity_ref=str(urn),
+            remediation="Key the create document by the URN's own entity key.",
+        )
+    head = _repository_head(context.identity.tree_root.parent)
+    if head is None:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.IDENTITY_NOT_FOUND,
+            detail="the repository this tree belongs to has no readable HEAD commit",
+            entity_ref=str(urn),
+            guard="repository_head_readable",
+            remediation="Commit to the repository before admitting it.",
+        )
+    record = Repository(
+        key=spec.key,
+        urn=urn,
+        revision=1,
+        head_sha=head,
+        created_at=now,
+        updated_at=now,
+    )
+    collection = ENTITY_COLLECTIONS[EntityKind.REPOSITORY]
+    with context.session([urn]) as session:
+        replayed = _replayed_receipt(context, request=request)
+        if replayed is not None:
+            return CommittedTransaction(receipt=replayed, envelope=None, replayed=True)
+        document = session.read_document()
+        _require_cursor(document, request=request)
+        _require_key_free(session, document=document, collection=collection, request=request)
+        allocator = CanonicalSequenceAllocator.recover(
+            workspace_key=urn.workspace_key, high_water_mark=_high_water_mark(document)
+        )
+        with allocator.transaction() as sequences:
+            sequence = sequences.allocate()
+            new_document = copy.deepcopy(document)
+            new_document.setdefault(collection.value, {})[record.key] = record.model_dump(
+                mode="json"
+            )
+            new_document[CANONICAL_SEQUENCE_KEY] = sequence
+            event_name = f"{CREATE_EVENT_NAMESPACE}.{collection.value}.created"
+            plan = _CommitPlan(
+                record=None,
+                successor=record,
+                event_name=event_name,
+                sequence=sequence,
+                document=document,
+                new_document=new_document,
+                envelope=_create_envelope(
+                    request=request,
+                    status=None,
+                    revision=record.revision,
+                    event_name=event_name,
+                    sequence=sequence,
+                    now=now,
+                ),
+                compaction=None,
+            )
+            receipt = _persist(
+                context=context, session=session, plan=plan, request=request, now=now
+            )
+            logger.info(
+                f"epoch2 repository create committed root={context.identity.root_id} "
+                f"sequence={receipt.canonical_sequence}"
+            )
+            return CommittedTransaction(receipt=receipt, envelope=plan.envelope)
 
 
 __all__ = [
@@ -467,4 +613,5 @@ __all__ = [
     "CREATE_STATUSES",
     "CreateRequest",
     "run_create",
+    "run_repository_create",
 ]

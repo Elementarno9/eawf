@@ -235,14 +235,18 @@ jobs:
   requirement-trace:
     name: Requirement trace census (value-fresh)
     # Recomputes the per-id requirement trace from the committed catalog,
-    # state and source, and fails when the stored census differs in value.
-    # The proposal packet the ids come from is not committed, so this job
-    # never re-extracts; the catalog is its input.
+    # state and source, and fails when the stored census differs in value
+    # or when any id is neither owned, deferred nor satisfied. The proposal
+    # packet the ids come from is not committed, so this job never
+    # re-extracts; the catalog is its input. A satisfied disposition cites
+    # the commit that built its ids, so the checkout carries full history.
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v8.1.0
@@ -254,7 +258,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Requirement trace check
-        run: uv run python tools/requirement_trace.py check
+        run: uv run python tools/requirement_trace.py check --require-owned
 
   skill-eval:
     name: Skill envelope evals

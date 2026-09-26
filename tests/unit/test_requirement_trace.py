@@ -262,7 +262,13 @@ def test_stale_ids_summary_only_difference() -> None:
         json.dumps(
             {
                 "schema_version": 1,
-                "summary": {"total": 1, "owned": 0, "deferred": 0, "unowned": 1},
+                "summary": {
+                    "total": 1,
+                    "owned": 0,
+                    "deferred": 0,
+                    "satisfied": 0,
+                    "unowned": 1,
+                },
                 "requirements": [{"id": "ABC-001", "title": "t"}],
             }
         )

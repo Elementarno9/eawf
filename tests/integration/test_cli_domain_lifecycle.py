@@ -704,11 +704,15 @@ def test_create_cli_methods_are_a_subset_of_the_registered_create_rpcs() -> None
 
     Run is the one lifecycle kind with no create command here: it is
     admitted by its own lease flow, so the daemon's own registry names
-    one more create verb than this CLI exposes.
+    one more create verb than this CLI exposes. A repository row has no
+    lifecycle machine and its create verb is registered beside the others.
     """
-    from eawf.runtime.daemon.methods.domain_create import DOMAIN_CREATE_METHODS
+    from eawf.runtime.daemon.methods.domain_create import (
+        DOMAIN_CREATE_METHODS,
+        REPOSITORY_CREATE_METHOD,
+    )
 
-    registered = set(DOMAIN_CREATE_METHODS.values())
+    registered = {*DOMAIN_CREATE_METHODS.values(), REPOSITORY_CREATE_METHOD}
     assert set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) < registered
     assert registered - set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) == {"domain.run.create"}
 

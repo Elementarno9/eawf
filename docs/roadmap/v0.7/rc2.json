@@ -1,0 +1,773 @@
+{
+  "key": "PRV-0201",
+  "author": {
+    "principal_kind": "service",
+    "principal_id": "EAWF-PLANNER"
+  },
+  "body": {
+    "milestone_urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0102",
+    "milestone": {
+      "key": "MLS-0102",
+      "primary_track_ref": "eawf://EAWF/EAWF/EAWF/track/TRK-EAWF-CORE",
+      "title": "Cut 0.7.0rc2 on cross-provider, platform and recovery evidence",
+      "outcome": "Release-candidate evidence is complete: capability evidence is total over the declared set, cross-provider conformance holds on the two certified runtimes, platforms are certified on real hosts, upgrade from 0.6.x and rollback are rehearsed, partial publication recovers, headless operation and the first-user journey pass, and the 25 console journeys replay live on a migrated tree; 0.7.0rc2 is published.",
+      "appetite": "XL",
+      "exclusions": [
+        "new product behaviour, which rc1 ships",
+        "the perfect-realization gate, which stable runs"
+      ],
+      "acceptance_journey": [
+        {
+          "step_id": "AS-01",
+          "actor": "operator",
+          "action": "review the committed release-candidate evidence set",
+          "expected_observation": "every rc2 evidence row is present and bound to its certification record",
+          "evidence_kinds": [
+            "artifact"
+          ]
+        },
+        {
+          "step_id": "AS-02",
+          "actor": "operator",
+          "action": "run the rc2 release pre-flight",
+          "expected_observation": "the pre-flight passes and 0.7.0rc2 is tagged and observed",
+          "evidence_kinds": [
+            "artifact"
+          ]
+        }
+      ],
+      "required_batch_refs": [
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0203",
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0204"
+      ]
+    },
+    "batches": [
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0203",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0204",
+        "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+      }
+    ],
+    "tasks": [
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0201",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "priority": "P1",
+        "intent": "Make capability evidence total over the declared set: every declared capability carries release-candidate evidence.",
+        "criteria": [
+          {
+            "id": "CR-001",
+            "text": "Each of AUTH-016, AUTH-017, AUTH-030, AUTH-053, AUTH-055 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0202",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "priority": "P1",
+        "intent": "Prove cross-provider conformance on the two certified runtimes, bound to certification records.",
+        "criteria": [
+          {
+            "id": "CR-002",
+            "text": "Each of REL-040, RUN-001 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0203",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "priority": "P1",
+        "intent": "Prove the provider claims on real runtimes rather than fixtures.",
+        "criteria": [
+          {
+            "id": "CR-003",
+            "text": "Each of PRX-005, PRX-011, PRX-015, PRX-018, PRX-041, PRX-044 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0202"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0204",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "priority": "P1",
+        "intent": "Certify host loading and host facts on each supported runtime.",
+        "criteria": [
+          {
+            "id": "CR-004",
+            "text": "Each of SURF-005, SURF-007, SURF-008, SURF-115, SURF-116, SURF-146, SURF-148, SURF-149, SURF-152, SURF-167 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0205",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0201",
+        "priority": "P1",
+        "intent": "Enforce the deny families across every certified host.",
+        "criteria": [
+          {
+            "id": "CR-005",
+            "text": "Each of SURF-050, SURF-051, SURF-052, SURF-053, SURF-074, SURF-077, SURF-103, SURF-153, SURF-154 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0204"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0206",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "priority": "P1",
+        "intent": "Certify the supported platforms on real hosts against the exact published artifacts.",
+        "criteria": [
+          {
+            "id": "CR-006",
+            "text": "Each of REL-041 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0207",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "priority": "P1",
+        "intent": "Rehearse the upgrade from the latest 0.6.x with rollback in the same rehearsal.",
+        "criteria": [
+          {
+            "id": "CR-007",
+            "text": "Each of REL-042 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0208",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "priority": "P1",
+        "intent": "Rehearse partial-publication recovery against real targets through the durable release record.",
+        "criteria": [
+          {
+            "id": "CR-008",
+            "text": "Each of REL-043 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0209",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "priority": "P1",
+        "intent": "Prove headless operation end to end: a Milestone planned, dispatched, integrated and accepted with no interactive session.",
+        "criteria": [
+          {
+            "id": "CR-009",
+            "text": "A headless run on a migrated tree plans, dispatches, integrates and accepts one Milestone with no interactive session, and its receipts are committed as evidence",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0210",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0202",
+        "priority": "P1",
+        "intent": "Pass the first-user journey from a clean environment through the documented commands.",
+        "criteria": [
+          {
+            "id": "CR-010",
+            "text": "Each of REL-044 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0211",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0203",
+        "priority": "P1",
+        "intent": "Replay the 25 console journeys live on a migrated tree.",
+        "criteria": [
+          {
+            "id": "CR-011",
+            "text": "Each of UI-001, UI-003, UI-005, UI-006, UI-008 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0212",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0203",
+        "priority": "P1",
+        "intent": "Replay the console contract at the release candidate, red fixture leg and green live leg.",
+        "criteria": [
+          {
+            "id": "CR-012",
+            "text": "Each of PRX-016, PRX-063, PRX-064 holds as its packet row states, and a test module that names the id proves it",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0211"
+        ],
+        "write_claims": []
+      },
+      {
+        "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0213",
+        "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0204",
+        "priority": "P1",
+        "intent": "Cut and publish 0.7.0rc2 once every rc2 Task is complete.",
+        "criteria": [
+          {
+            "id": "CR-013",
+            "text": "The rc2 release pre-flight passes with its changelog section and version bump, and 0.7.0rc2 is tagged and observed on every target",
+            "kind": "behavioral",
+            "acceptance_style": "binary",
+            "evidence_kind": "deterministic",
+            "quality_dimension": "functional_suitability",
+            "measurable_signal": "uv run pytest over the tests this Task names exits zero",
+            "gate_ids": [
+              "G-01"
+            ],
+            "response": {
+              "observe": "exits",
+              "object": "zero from the tests this Task names",
+              "locus": "pytest",
+              "quantifier": "single",
+              "gate_ref": "command_exit_zero"
+            }
+          }
+        ],
+        "depends_on": [
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0201",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0202",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0203",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0204",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0205",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0206",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0207",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0208",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0209",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0210",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0211",
+          "eawf://EAWF/EAWF/EAWF/task/EAWF-0212"
+        ],
+        "write_claims": []
+      }
+    ],
+    "source_atoms": [
+      {
+        "atom_id": "AUTH-016",
+        "text": "Cross-repository identifiers remain stable across clone paths and workspace navigation",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "AUTH-017",
+        "text": "Every retry, resume, reconciliation, and recovery preserves prior observations",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "AUTH-030",
+        "text": "Net verification cost per completed unit of work is measured at the first development checkpoint...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "AUTH-053",
+        "text": "Cross-provider conformance at rc2 covers exactly the two certified runtimes and is bound to...",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "AUTH-055",
+        "text": "The cutover rehearsal runs on a pinned full clone first and only then live",
+        "mapped_criterion_ids": [
+          "CR-001"
+        ]
+      },
+      {
+        "atom_id": "REL-040",
+        "text": "Cross-provider conformance at rc2 is bound to certification records rather than to a passing test...",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "RUN-001",
+        "text": "Same fixture yields equivalent canonical records on every certified runtime",
+        "mapped_criterion_ids": [
+          "CR-002"
+        ]
+      },
+      {
+        "atom_id": "PRX-005",
+        "text": "Provider loss preserves durable submission and failed Run identity; retry is linked and idempotent",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "PRX-011",
+        "text": "Partial publication enters recovery and never rewrites source/tag",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "PRX-015",
+        "text": "Same normalized fixture passes on each required certified runtime",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "PRX-018",
+        "text": "All twenty-two Run identities and terminal runtime statuses match the canonical register",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "PRX-041",
+        "text": "The runtime-counter capture produces a non-zero actuals row for the worked journey, and its cost,...",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "PRX-044",
+        "text": "A gate-bearing close initiated with no interactive session runs the same gate runner and produces...",
+        "mapped_criterion_ids": [
+          "CR-003"
+        ]
+      },
+      {
+        "atom_id": "SURF-005",
+        "text": "No managed-Run adapter reads a rendered instruction file",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-007",
+        "text": "Each supported host has a certified loading profile: which instruction sources it discovers, in...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-008",
+        "text": "A reference tier is physically separate and conditionally selected",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-115",
+        "text": "The root projection is delivered whole on every supported host, proven by a loading probe rather...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-116",
+        "text": "Every unattended runtime proves instruction suppression against hostile sentinels in all six...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-146",
+        "text": "Each supported runtime carries a certified host-fact record beside its certified loading profile of...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-148",
+        "text": "The record carries, per model, the context window, the effective-context percentage at which the...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-149",
+        "text": "The record carries the runtime's tool-output cap key and its default, and both interactive and...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-152",
+        "text": "Any host configuration this project writes is accepted only after its effect is observed on a probe",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-167",
+        "text": "Every supported runtime carries a certified host-fact record whose values were measured against a...",
+        "mapped_criterion_ids": [
+          "CR-004"
+        ]
+      },
+      {
+        "atom_id": "SURF-050",
+        "text": "Worktrees are Eawf-owned only, under the managed worktree root",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-051",
+        "text": "Fail-closed per-call denial is limited to the four data-loss patterns: mutation of an Eawf-owned...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-052",
+        "text": "Everything outside that set is advisory or post-hoc",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-053",
+        "text": "The deny-emission path is verified against both host harnesses before any deny rule is enabled",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-074",
+        "text": "Denial has two families and both are proven",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-077",
+        "text": "Repository configuration cannot bind an executable, credential, or unregistered MCP server at any...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-103",
+        "text": "The plugin surfaces the four fail-closed per-call deny patterns of SURF-051 and no fifth per-call...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-153",
+        "text": "Reads of credential-bearing paths are denied at the host permission layer on every supported runtime",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "SURF-154",
+        "text": "A protection enabled on one supported runtime is enabled on every supported runtime, or the...",
+        "mapped_criterion_ids": [
+          "CR-005"
+        ]
+      },
+      {
+        "atom_id": "REL-041",
+        "text": "Supported-platform evidence at rc2 is produced on real hosts against the exact published artifacts,...",
+        "mapped_criterion_ids": [
+          "CR-006"
+        ]
+      },
+      {
+        "atom_id": "REL-042",
+        "text": "Upgrade from the latest supported 0.6.x is exercised at rc2 with rollback rehearsed in the same...",
+        "mapped_criterion_ids": [
+          "CR-007"
+        ]
+      },
+      {
+        "atom_id": "REL-043",
+        "text": "Partial-publication recovery is rehearsed at rc2 against real targets through the durable...",
+        "mapped_criterion_ids": [
+          "CR-008"
+        ]
+      },
+      {
+        "atom_id": "REL-044",
+        "text": "A first-user journey from a clean environment through documented commands passes at rc2 against the...",
+        "mapped_criterion_ids": [
+          "CR-010"
+        ]
+      },
+      {
+        "atom_id": "UI-001",
+        "text": "Pilot/snapshot and real-terminal tests pass at 160×40, 120×30, and 80×24",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-003",
+        "text": "Disconnect, control, and replay journeys preserve truth",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-005",
+        "text": "Settings and Console show the identical effective capability revision",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-006",
+        "text": "Supported-platform matrix binds real artifacts and real-host results",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "UI-008",
+        "text": "Activity grouping is deterministic by Run sequence;",
+        "mapped_criterion_ids": [
+          "CR-011"
+        ]
+      },
+      {
+        "atom_id": "PRX-016",
+        "text": "Fresh and migrated repository variants converge on equivalent native terminal truth without...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "PRX-063",
+        "text": "The console golden contract replays with zero failures as a release-candidate gate: every journey...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      },
+      {
+        "atom_id": "PRX-064",
+        "text": "Release-candidate acceptance fails while any frame or cell hole is open in the console coverage...",
+        "mapped_criterion_ids": [
+          "CR-012"
+        ]
+      }
+    ]
+  }
+}
