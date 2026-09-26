@@ -22,7 +22,7 @@ repos:
       - id: debug-statements
 
   - repo: https://github.com/Yelp/detect-secrets
-    # Baseline-hash: 78191b30c14463c7 (.secrets.baseline; recompute and bump
+    # Baseline-hash: 475812349f2e2d4e (.secrets.baseline; recompute and bump
     # this comment when the baseline is edited so the change is re-acknowledged).
     rev: v1.5.0
     hooks:
