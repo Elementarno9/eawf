@@ -147,6 +147,7 @@ from eawf.workflow.release.admission import (
     required_contract_ids,
 )
 from eawf.workflow.release.advance import TrainAdvanceError, derive_train
+from eawf.workflow.release.canary_receipts import CanaryReceiptSet, load_canary_receipts
 from eawf.workflow.release.ledger import record_operation
 from eawf.workflow.release.lifecycle import ReleaseTransitionError
 from eawf.workflow.release.observation import (
@@ -1170,6 +1171,26 @@ def _require_state(ctx: MethodContext) -> State:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
+def _canary_receipts(state_path: Path, version: str) -> CanaryReceiptSet | None:
+    """Return the canary-window receipts committed for *version*.
+
+    Args:
+        state_path: Bound ``state.json``; the receipts sit in its checkout.
+        version: The checkpoint being opened.
+
+    Returns:
+        The committed receipt set, or ``None`` when none is committed.
+
+    Raises:
+        DaemonValidationError: When a receipt file is committed but does
+            not load, since an unreadable record binds nothing.
+    """
+    try:
+        return load_canary_receipts(state_path.parent.parent, release_key(version))
+    except ValueError as exc:
+        raise DaemonValidationError(f"validation_failed: canary_receipts_unbound: {exc}") from exc
+
+
 def _membership_evidence(
     state_path: Path, version: str, membership_refs: list[str]
 ) -> CanaryEvidence | None:
@@ -1308,7 +1329,8 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             required contract is not promoted, with
             ``membership_unresolved`` when a membership reference names
             no COMPLETED Milestone bundle in the committed canary export,
-            with
+            with ``canary_receipts_unbound`` when a product-canary rung
+            lacks a pre-merge receipt, with
             ``predecessor_unrecorded`` / ``predecessor_live`` /
             ``predecessor_not_advanced`` when the rung below has not
             finished, or when the train declares no such rung.
@@ -1324,6 +1346,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             uid=uuid4(),
             membership_refs=tuple(args.membership_refs),
             canary_evidence=_membership_evidence(state_path, args.version, args.membership_refs),
+            canary_receipts=_canary_receipts(state_path, args.version),
         )
     except UserError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.kind}: {exc}") from exc

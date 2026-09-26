@@ -185,8 +185,34 @@ NATIVE_CANARY_ADDED_GATES: Final[tuple[ReleaseGateName, ...]] = (
     ReleaseGateName.CANARY_ISOLATION,
 )
 
-#: The gate names each profile admits. Only ``dev1``, ``dev2`` and
-#: ``native_canary`` are authored: the later profiles add their gates
+#: The six canary-window receipts ``product_canary`` adds that can be
+#: settled before the phase merges. The product canary is the first rung
+#: that runs the native path on this repository rather than on a
+#: disposable canary, so it is the first that can be asked whether a
+#: plan revision was approved, Tasks were dispatched into worktrees of
+#: their own, a candidate was integrated on its exact head, the review
+#: read the real diff, a Milestone was accepted and the live cutover
+#: re-ran to the same manifest.
+PRODUCT_CANARY_PRE_MERGE_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    ReleaseGateName.PLAN_REVISION_APPROVED,
+    ReleaseGateName.PARALLEL_DISPATCH,
+    ReleaseGateName.EXACT_HEAD_INTEGRATION,
+    ReleaseGateName.REAL_DIFF_REVIEW,
+    ReleaseGateName.MILESTONE_ACCEPTED,
+    ReleaseGateName.MIGRATION_RERUN_IDENTICAL,
+)
+
+#: The one canary-window receipt that only exists once the tag is pushed.
+#: Named apart from the other six so a readiness verdict taken at merge
+#: can say "ready pending observation" instead of either rounding the
+#: missing observation up to ready or reporting a merge-time checkpoint
+#: as not ready for lacking a fact no merge can produce.
+PRODUCT_CANARY_POST_MERGE_GATES: Final[tuple[ReleaseGateName, ...]] = (
+    ReleaseGateName.RELEASE_TAGGED_OBSERVED,
+)
+
+#: The gate names each profile admits. ``dev1`` through
+#: ``product_canary`` are authored: the later profiles add their gates
 #: with the waves that build their producers, and an unauthored profile
 #: is a loud :attr:`GateBindingRejection.UNDECLARED_PROFILE` rather than
 #: a silently empty gate set.
@@ -197,6 +223,13 @@ PROFILE_GATES: Final[Mapping[ReleaseGateProfile, tuple[ReleaseGateName, ...]]] =
         *DEV1_GATES,
         *DEV2_ADDED_GATES,
         *NATIVE_CANARY_ADDED_GATES,
+    ),
+    ReleaseGateProfile.PRODUCT_CANARY: (
+        *DEV1_GATES,
+        *DEV2_ADDED_GATES,
+        *NATIVE_CANARY_ADDED_GATES,
+        *PRODUCT_CANARY_PRE_MERGE_GATES,
+        *PRODUCT_CANARY_POST_MERGE_GATES,
     ),
 }
 
@@ -652,6 +685,8 @@ __all__ = [
     "DEV1_GATES",
     "DEV2_ADDED_GATES",
     "NATIVE_CANARY_ADDED_GATES",
+    "PRODUCT_CANARY_POST_MERGE_GATES",
+    "PRODUCT_CANARY_PRE_MERGE_GATES",
     "PROFILE_GATES",
     "PROOF_ARGV_ALLOWLIST",
     "WAIVER_BLOCK_REF",

@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog [1], and this project adheres to Semantic Versioning [2].
 
+## [0.7.0.dev5]
+
+This is the fifth development checkpoint of the v0.7.0 release train, and the product-canary rung: this repository itself now runs on epoch-2 authority. It is gated on twenty-two gates, the fifteen native-canary gates plus seven canary-window receipts, and it cannot be opened until `0.7.0.dev4` has been burned. It is still a development checkpoint, not a stable release.
+
+### Added
+
+- **The product-canary gate profile, twenty-two gates.** It is the fifteen native-canary gates plus `plan_revision_approved`, `parallel_dispatch`, `exact_head_integration`, `real_diff_review`, `milestone_accepted`, `migration_rerun_identical` and `release_tagged_observed`. Each new gate is a proof command run at the pinned source; `release_tagged_observed` reads the package index for the tagged version, so it can only pass after the tag is pushed.
+- **Canary-window receipts.** The checkpoint's evidence directory carries a receipt file that binds each pre-merge gate to the evidence of a run on this repository, and `release create` refuses a product-canary rung with `canary_receipts_unbound` until all six pre-merge receipts are filed. The verdict at merge is "release-ready pending post-merge observation"; references from live runs, such as the plan approvals, are added to the file as data.
+- **A guarded burn route for a published CANDIDATE.** A publication can be adopted at CANDIDATE and burned to `partially_released`, so a successor rung may open over a candidate whose gates can no longer pass.
+- **Native rc1, rc2 and stable plans.** The remaining rungs of the train are planned as native plan revisions under `docs/roadmap/v0.7/`.
+
+### Changed
+
+- **This repository is cut over to epoch 2.** The live cutover is recorded in `.ea/artifacts/evidence/2026-09-dev5-live-cutover/live-cutover.json`; the re-run selected the same generation and wrote nothing.
+- **Imported records continue after cutover.** Waves imported from epoch 1 are finished through a legacy continuation route, and ledger rows are appended after the cutover rather than rewritten.
+- **Commit lint and the requirement trace read the epoch-2 generation,** and an imported wave cites its whole intent brief in the trace.
+- **The native console runs on this repository's tree,** with run controls committed as patches and a live smoke recorded against it.
+
+### Fixed
+
+- **Audit leftovers from P34 and P35 are cleared** in comments, skills, the budget path and the seal, and the autopilot daemon probe is isolated from earlier tests.
+
+### Migration
+
+- **This repository's state moves to epoch 2.** The cutover is one-way past its first native mutation; the rollback marker and the generation it selected are in the committed cutover record. A tree still on epoch 1 loads as before and is cut over only through `eawf migrate epoch2`.
+
+### Limitations
+
+- **Most canary-window receipts bind proving suites and committed records rather than live runs.** Only the plan receipt carries live references, the operator's approvals of the rc1, rc2 and stable revisions; the accepted Milestone the membership row reads is still the disposable canary's, re-recorded for this release.
+- **The runtime certification is carried forward from dev3** (`claude-code` 2.1.274, expiring 2026-12-17), not re-probed.
+
 ## [0.7.0.dev4]
 
 This is the fourth development checkpoint of the v0.7.0 release train. It ships the planning, rule, skill and measurement surfaces built on epoch-2 authority since dev3, and the tooling that rehearses this repository's own epoch-2 cutover. It runs under the same fifteen-gate native-canary profile as dev3, with its own evidence export: the canary acceptance walk is re-recorded for this release, and the runtime certification is carried forward from dev3 rather than re-probed. The opted-in product canary, which needs this repository cut over first, moves to the new `0.7.0.dev5` rung. It is still a development checkpoint, not a stable release.

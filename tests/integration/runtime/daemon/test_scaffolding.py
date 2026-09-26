@@ -42,6 +42,7 @@ from eawf.runtime.daemon.runtime_dir import (
 from eawf.runtime.daemon.server import (
     INVALID_PARAMS,
     INVALID_REQUEST,
+    MAX_FRAME_BYTES,
     METHOD_NOT_FOUND,
     PARSE_ERROR,
     SOCKET_FILE_MODE,
@@ -402,3 +403,19 @@ def test_gitignore_matches_any_db_glob() -> None:
     """The bare ``*.db`` glob covers db artifacts written anywhere."""
     assert _check_ignored("telemetry.db")
     assert _check_ignored("scratch/probe.db")
+
+
+def test_a_frame_larger_than_the_asyncio_default_gets_an_answer() -> None:
+    """A request past 64 KiB is read whole, as a real plan revision's is."""
+    sock = _short_sock_path()
+    pad = "x" * (200 * 1024)
+    frame = orjson.dumps(
+        {"jsonrpc": "2.0", "id": "big", "method": "daemon.ping", "params": {"pad": pad}}
+    )
+    assert 64 * 1024 < len(frame) < MAX_FRAME_BYTES
+
+    async def body(_ctx: MethodContext) -> None:
+        response = await _round_trip(sock, "daemon.ping", raw_line=frame + b"\n")
+        assert response["id"] == "big"
+
+    _with_server(sock, body)

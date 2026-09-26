@@ -223,6 +223,11 @@ def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
 #: What the one streamer writes for each subscribe verb. The verbs share the
 #: connection, the bus and the subscriber; only the frame differs, which is what
 #: keeps the projection feed on the socket ``state.subscribe`` already rides.
+#: The largest newline-framed request one connection reads. asyncio caps a
+#: line at 64 KiB by default, which refuses a real plan revision carrying
+#: hundreds of source atoms; the cap still bounds what one frame buffers.
+MAX_FRAME_BYTES: Final = 16 * 1024 * 1024
+
 _SUBSCRIBE_FRAMES: Final[Mapping[str, Callable[[Envelope], tuple[bytes, ...]]]] = {
     name: (_projection_frames if name == PROJECTION_SUBSCRIBE_METHOD else _event_frames)
     for name in SUBSCRIBE_METHODS
@@ -699,7 +704,7 @@ async def serve_unix(
     async def _on_connect(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         await handle_connection(reader, writer, ctx, expected_uid=expected_uid)
 
-    server = await asyncio.start_unix_server(_on_connect, path=socket_path)
+    server = await asyncio.start_unix_server(_on_connect, path=socket_path, limit=MAX_FRAME_BYTES)
     # ``start_unix_server`` creates the socket node under the prevailing
     # umask, which may leave it group/world-accessible. Tighten it to
     # owner-only before any peer connects so the filesystem node is

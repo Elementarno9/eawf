@@ -84,6 +84,12 @@ CANARY_EVIDENCE_DIRS: Final[Mapping[str, tuple[str, ...]]] = {
         "evidence",
         "2026-09-26-dev4-conformance",
     ),
+    "REL-0.7.0.dev5": (
+        ".ea",
+        "artifacts",
+        "evidence",
+        "2026-09-27-dev5-product-canary",
+    ),
 }
 
 #: The export document inside each :data:`CANARY_EVIDENCE_DIRS` entry.

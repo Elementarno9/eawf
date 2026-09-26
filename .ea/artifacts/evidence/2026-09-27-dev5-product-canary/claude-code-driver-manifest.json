@@ -1,0 +1,17 @@
+{
+  "architecture": "aarch64",
+  "distribution": "claude-code",
+  "distribution_version": "2.1.274",
+  "observed_at": "2026-09-18T00:00:00+00:00",
+  "observed_flags": [
+    "--allowedTools",
+    "--allowed-tools",
+    "--output-format",
+    "--continue",
+    "--session-id",
+    "--resume"
+  ],
+  "os_class": "macos",
+  "runtime_id": "claude-code",
+  "schema_version": "driver-manifest-observation/v1"
+}
