@@ -95,7 +95,14 @@ class Ctx:
         self.session.noop(key, verbose=self.verbose)
 
     def dispatch_write(self, request: VerbRequest) -> bool:
-        """Hand ``request`` to the daemon link; ``False`` when there is no link to take it."""
+        """Hand ``request`` to the daemon link.
+
+        Args:
+            request: The confirmed verb to send.
+
+        Returns:
+            Whether a link took the verb; ``False`` when there is no link to take it.
+        """
         return self.send is not None and self.send(request)
 
 

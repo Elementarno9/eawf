@@ -580,6 +580,9 @@ class ConsoleApp(App[None]):
     def send(self, request: VerbRequest) -> bool:
         """Send a confirmed verb through the seam, off the key path.
 
+        Args:
+            request: The confirmed verb to send.
+
         Returns:
             Whether a daemon link took the verb: ``False`` for a console with no seam, or
             one not yet running, where nothing is sent.
@@ -595,7 +598,11 @@ class ConsoleApp(App[None]):
         self.announce(await seam.request(request))
 
     def announce(self, result: OperationResult) -> None:
-        """Say what became of a sent verb, in the rack and the key log, and repaint."""
+        """Say what became of a sent verb, in the rack and the key log, and repaint.
+
+        Args:
+            result: What the daemon, or the seam on its behalf, answered.
+        """
         title, sev = _WRITE_TOASTS[result.status]
         self.raise_toast(result.detail, title=title, sev=sev)
         self.session.log_key(DAEMON_KEY, f"{result.status.value} · {result.detail}")

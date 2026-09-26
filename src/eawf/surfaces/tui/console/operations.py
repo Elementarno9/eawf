@@ -260,6 +260,13 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
 
     An answer the seal reports as ``superseded`` lost to one already given: it is a
     result, not a refusal, and the console says so rather than claiming it applied.
+
+    Args:
+        operation: The sent operation the answer is for.
+        answer: The daemon's answer payload.
+
+    Returns:
+        A superseded result when the seal says so, otherwise an applied one.
     """
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
         return OperationResult(
@@ -278,7 +285,15 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
 
 
 def refused(operation: ConsoleOperation, message: str) -> OperationResult:
-    """Return the result of a write the daemon answered with a refusal; nothing was written."""
+    """Return the result of a write the daemon answered with a refusal; nothing was written.
+
+    Args:
+        operation: The sent operation that was refused.
+        message: The daemon's refusal message.
+
+    Returns:
+        A refused result carrying the message.
+    """
     return OperationResult(
         operation_id=operation.operation_id,
         target=operation.target,
@@ -288,7 +303,14 @@ def refused(operation: ConsoleOperation, message: str) -> OperationResult:
 
 
 def unanswered(operation: ConsoleOperation) -> OperationResult:
-    """Return the result of a write whose answer never arrived; its outcome is unknown."""
+    """Return the result of a write whose answer never arrived; its outcome is unknown.
+
+    Args:
+        operation: The sent operation still waiting for an answer.
+
+    Returns:
+        An outstanding result a reconnect later reconciles by the operation's id.
+    """
     return OperationResult(
         operation_id=operation.operation_id,
         target=operation.target,
@@ -311,6 +333,9 @@ class OperationLedger:
     def open(self, operation: ConsoleOperation) -> None:
         """Hold ``operation`` as sent and not yet answered.
 
+        Args:
+            operation: The operation just sent.
+
         Raises:
             ValueError: An operation with the same id is already outstanding.
         """
@@ -320,6 +345,9 @@ class OperationLedger:
 
     def settle(self, result: OperationResult) -> None:
         """Close the operation ``result`` answers; an outstanding result keeps it open.
+
+        Args:
+            result: The answer for one outstanding operation.
 
         Raises:
             KeyError: No outstanding operation carries the result's id.

@@ -105,6 +105,14 @@ def with_repair_lines(
 ) -> ConsoleChrome:
     """Return ``chrome`` with entry state ``state_id``'s tail replaced by ``lines``.
 
+    Args:
+        chrome: The packaged console chrome.
+        state_id: The entry state whose tail is replaced.
+        lines: The replacement tail lines.
+
+    Returns:
+        A copy of ``chrome`` with that entry state's tail replaced.
+
     Raises:
         ValueError: no entry state in ``chrome`` carries this id.
     """

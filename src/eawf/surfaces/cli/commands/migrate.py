@@ -59,12 +59,6 @@ from pydantic import ValidationError as PydanticValidationError
 from eawf.kernel.identity.errors import IdentityError
 from eawf.kernel.identity.keys import validate_symbol_key
 from eawf.kernel.migration.epoch2.errors import MigrationRuleError
-from eawf.kernel.migration.epoch2.export import (
-    EPOCH2_EXPORT_METHOD,
-    Epoch2ExportRequest,
-    export_epoch1,
-    export_text,
-)
 from eawf.kernel.migrations import (
     DEFAULT_REGISTRY,
     MigrationError,
@@ -822,6 +816,12 @@ def _epoch2_dispatch(
 
     corpus = _required(snapshot_root, option="--snapshot-root", mode=mode)
     if mode is Epoch2Mode.EXPORT:
+        from eawf.kernel.migration.epoch2.export import (
+            EPOCH2_EXPORT_METHOD,
+            Epoch2ExportRequest,
+            export_epoch1,
+        )
+
         export_request = Epoch2ExportRequest(snapshot_root=str(corpus))
         return _epoch2_payload(
             method=EPOCH2_EXPORT_METHOD,
@@ -912,6 +912,8 @@ def _epoch2_text(mode: Epoch2Mode, payload: Mapping[str, Any]) -> str:
         The rendered text.
     """
     if mode is Epoch2Mode.EXPORT:
+        from eawf.kernel.migration.epoch2.export import export_text
+
         return export_text(dict(payload))
     if mode is Epoch2Mode.PLAN:
         return _epoch2_plan_text(payload)

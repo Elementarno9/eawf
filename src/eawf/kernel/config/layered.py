@@ -324,6 +324,8 @@ _RESERVED_ENV_VARS: frozenset[str] = frozenset(
         "EAWF_COAUTHOR_MODE",
         "EAWF_COAUTHOR_HARNESS",
         "EAWF_COAUTHOR_RUNTIME",
+        "EAWF_ACTOR",
+        "EAWF_RECEIPT_REF",
         # Spelled out rather than imported: its owner,
         # ``eawf.runtime.daemon.churn.SUITE_SESSION_ENV``, sits above the kernel.
         "EAWF_SUITE_SESSION",

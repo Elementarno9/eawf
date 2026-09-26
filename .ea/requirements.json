@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": "adb438d3dc146b86851a4716755751f639229a80",
+  "revision": "f01c4e683f33ee7ee31d8d714ca8f39b4494bc09",
   "summary": {
     "total": 1170,
     "owned": 553,
@@ -784,7 +784,7 @@
     {"id": "REL-008", "title": "Wire checkpoint cadence at coherent scope close without claiming nonexistent per-wave proof", "status": "owned", "owners": ["P31-I01-W07"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-009", "title": "Enable real telemetry ingestion and stamp session end at exit", "status": "owned", "owners": ["P31-I01-W08", "P33-I01-W21"], "tests": ["tests/integration/test_metrics_cli.py", "tests/lint/test_gate_sunset_review.py", "tests/unit/kernel/state/test_session_models.py", "tests/unit/observability/telemetry/test_metrics_projection.py", "tests/unit/runtime/session/test_session_ended_at_stamp.py"], "producers": [], "deferral": null},
     {"id": "REL-010", "title": "Repair README/install/quick-start/docs front door and classify actual Python/platform support", "status": "owned", "owners": ["P31-I01-W09", "P31-I01-W29"], "tests": [], "producers": [], "deferral": null},
-    {"id": "REL-011", "title": "Checkpoint order and prerequisite receipts are explicit and machine-validated", "status": "owned", "owners": ["P31-I01-W19", "P31-I01-W31", "P35-I04-W16"], "tests": ["tests/unit/workflow/release/test_train_advance.py"], "producers": ["src/eawf/workflow/release/advance.py"], "deferral": null},
+    {"id": "REL-011", "title": "Checkpoint order and prerequisite receipts are explicit and machine-validated", "status": "owned", "owners": ["P31-I01-W19", "P31-I01-W31", "P35-I04-W19", "P36-I01-W05"], "tests": ["tests/unit/workflow/release/test_train_advance.py"], "producers": ["src/eawf/workflow/release/advance.py"], "deferral": null},
     {"id": "REL-012", "title": "Canary epoch-2 authority is repository-isolated and never a supported dual-write mode", "status": "owned", "owners": ["P33-I01-W40"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-013", "title": "ReleaseManifest freezes membership, source, artifacts, claims, limitations, targets, and gate...", "status": "owned", "owners": ["P31-I01-W19"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-014", "title": "Any approved-input change invalidates approval before external effect, returns the release to...", "status": "unowned", "owners": [], "tests": [], "producers": [], "deferral": null},
@@ -804,8 +804,8 @@
     {"id": "REL-028", "title": "The daemon hosts gate execution out of process", "status": "owned", "owners": ["P31-I01-W10", "P32-I01-W19"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-029", "title": "The daemonless bypass is removed at rc1, and removal is gated on REL-028 being delivered and proven", "status": "owned", "owners": ["P32-I01-W19"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-030", "title": "Headless background operation is a named supported mode", "status": "owned", "owners": ["P32-I01-W19", "P33-I01-W84"], "tests": [], "producers": [], "deferral": null},
-    {"id": "REL-031", "title": "This repository is the dev4 opted-in canary", "status": "owned", "owners": ["P35-I04-W08", "P35-I04-W13", "P35-I04-W16"], "tests": [], "producers": [], "deferral": null},
-    {"id": "REL-032", "title": "The canary window closes only after one complete milestone executes on epoch-2 authority: plan...", "status": "owned", "owners": ["P35-I01-W13", "P35-I04-W15", "P35-I04-W16"], "tests": [], "producers": [], "deferral": null},
+    {"id": "REL-031", "title": "This repository is the dev4 opted-in canary", "status": "owned", "owners": ["P35-I04-W08", "P35-I04-W19", "P36-I01-W02", "P36-I01-W05"], "tests": [], "producers": [], "deferral": null},
+    {"id": "REL-032", "title": "The canary window closes only after one complete milestone executes on epoch-2 authority: plan...", "status": "owned", "owners": ["P35-I01-W13", "P35-I04-W19", "P36-I01-W04", "P36-I01-W05"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-033", "title": "Net verification cost is measured at dev1 and again before rc1 as median and ninetieth-percentile...", "status": "owned", "owners": ["P31-I01-W08", "P31-I01-W17", "P31-I01-W18", "P31-I01-W34"], "tests": [], "producers": [], "deferral": null},
     {"id": "REL-034", "title": "Linux is a real-host gated platform from dev1", "status": "owned", "owners": ["P31-I01-W16"], "tests": ["tests/integration/runtime/sandbox/test_jail.py", "tests/unit/runtime/sandbox/test_env_scrub.py", "tests/unit/runtime/sandbox/test_jail_expiry.py"], "producers": [], "deferral": null},
     {"id": "REL-035", "title": "The daemon-owned conformance runner specified in V07-RUN (RUN-040 to RUN-047) is delivered and...", "status": "owned", "owners": ["P33-I01-W63"], "tests": ["tests/integration/workflow/verify/test_provider_signal.py"], "producers": [], "deferral": null},

@@ -2,7 +2,7 @@
 
 ## Summary
 
-This repository was cut over to epoch 2 on a throwaway clone pinned at `e2d6a5df8b599a30aa08d5306335ac5381a3d0c6`, through the operator verbs the live cut (W13) runs, with a separate home, registry, backup directory and daemon. The plan is applicable, the apply selects, a second apply writes nothing and reports the same manifest, and the rollback puts every restorable surface back at its restore-point digest.
+This repository was cut over to epoch 2 on a throwaway clone pinned at `e2d6a5df8b599a30aa08d5306335ac5381a3d0c6`, through the operator verbs the live cut (P36-I01-W02) runs, with a separate home, registry, backup directory and daemon. The plan is applicable, the apply selects, a second apply writes nothing and reports the same manifest, and the rollback puts every restorable surface back at its restore-point digest.
 
 The digest the live cut has to match at this revision:
 
@@ -14,7 +14,7 @@ The digest the live cut has to match at this revision:
 | idempotence | `cd53ae583aaf8bf9e18853b1ca67389dca1b804ee2f36cef5afc51c615be3f24` |
 | generation | `gen-d3760c43a9f48918` |
 
-These values belong to this revision's committed corpus. Any later state commit changes the source, so W13 re-runs the rehearsal at its own frozen revision and matches that run's manifest digest, not this one. `cutover-rehearsal.json` is the machine record: every command with its exit code, every envelope field quoted here, and the defects.
+These values belong to this revision's committed corpus. Any later state commit changes the source, so the live cut (P36-I01-W02) re-runs the rehearsal at its own frozen revision and matches that run's manifest digest, not this one. `cutover-rehearsal.json` is the machine record: every command with its exit code, every envelope field quoted here, and the defects.
 
 ## What the rehearsal did
 
@@ -41,7 +41,7 @@ On the clone, the reconcile retired 37 worktree rows and the daemon's boot sweep
 
 **D-04, open: the refusal never names the fix.** It lists at most 20 holders and never mentions `eawf worktree reconcile`, the verb that clears the 37 managed-worktree rows the committed document still carries.
 
-## Runbook for W13 (corrected)
+## Runbook for the live cut, P36-I01-W02 (corrected)
 
 On the live repository, in this order:
 
