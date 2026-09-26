@@ -24771,15 +24771,15 @@
         "P35-I05-W08",
         "P35-I05-W09"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-26T08:02:30.045067Z",
       "id": "SES-20260926T025530.053090Z-operator-claude-7d1d1f63-f508-49d1-8873-2014ad8199dd",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P35-I05",
       "started_at": "2026-09-26T02:55:30.053090Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -29818,6 +29818,45 @@
       "scope_id": "P35",
       "status": "open",
       "title": "Isolate the autopilot claim-batch test from a leaked daemon"
+    },
+    "B192": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-26T17:18:29.153063Z",
+      "description": "tests/tui/test_modes_autopilot.py::test_autopilot_multi_select_commit_stages_batch_and_tears_down assumes its worker's shared session EAWF_RUNTIME_DIR has no daemon; an earlier test leaves one, so the serial epoch1_stabilization proof (uv run pytest tests -q) fails deterministically. Blocked REL-0.7.0.dev4 at 14/15 receipts and will block dev5. Fix the test isolation and find the leaking test.",
+      "id": "B192",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P36",
+      "status": "open",
+      "title": "Isolate the autopilot batch test from a leaked suite daemon"
+    },
+    "B193": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-26T17:18:30.261772Z",
+      "description": "release pipeline prove_gates starts a daemon on the release checkout; its startup reconcile marks committed active sessions orphaned and dirties .ea/state.json, so the next step refuses dirty_release_tree. Seen on the dev4 cut; worked around by parking the derived diff.",
+      "id": "B193",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P36",
+      "status": "open",
+      "title": "Keep the gate-proof daemon off the release checkout's sessions"
+    },
+    "B194": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-26T17:18:31.280803Z",
+      "description": "REL-0.7.0.dev4 was tagged and published to all four targets, but its record stopped at CANDIDATE: a proof gate can never be receipted at its pinned source, burn needs an open publication operation and cancel refuses a registry-touching checkpoint. Decide and build the route (burn from CANDIDATE, or adopt-style settlement) before dev5.",
+      "id": "B194",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P36",
+      "status": "open",
+      "title": "Give a published CANDIDATE record a route to a terminal status"
     },
     "B70": {
       "closed_at": "2026-09-24T16:49:34.428192Z",
@@ -46092,9 +46131,7 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260926T025530.053090Z-operator-claude-7d1d1f63-f508-49d1-8873-2014ad8199dd"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [],
     "iter_id": null,
     "phase_id": null,
@@ -65494,7 +65531,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T06:15:11.221618Z",
+  "updated_at": "2026-09-26T17:18:31.280803Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
