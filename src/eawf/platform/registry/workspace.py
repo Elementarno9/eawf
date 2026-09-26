@@ -60,6 +60,10 @@ WORKSPACE_NOT_REGISTERED: Final[str] = "workspace_not_registered"
 #: caller made no selection.
 WORKSPACE_AMBIGUOUS: Final[str] = "workspace_ambiguous"
 
+#: Stable error code: a named workspace exists but the caller's repository
+#: root is not one of its declared members.
+WORKSPACE_NOT_A_MEMBER: Final[str] = "workspace_not_a_member"
+
 #: Stable error code: ``create`` targeted a key that already exists.
 WORKSPACE_ALREADY_REGISTERED: Final[str] = "workspace_already_registered"
 
@@ -266,6 +270,38 @@ def resolve_workspace(
     )
 
 
+def resolve_member_workspace(registry: Registry, *, key: str, repo_root: Path) -> WorkspaceRecord:
+    """Resolve a workspace a repository names, requiring declared membership.
+
+    A repository naming a workspace is not enough to inherit from it: the
+    registry must also list the repository as a member, so a repository
+    cannot pull in the content of a workspace it was never added to.
+
+    Args:
+        registry: Already-validated registry document.
+        key: The workspace key the repository names.
+        repo_root: The naming repository's root, matched exactly.
+
+    Returns:
+        The registered workspace record.
+
+    Raises:
+        WorkspaceResolutionError: :data:`WORKSPACE_NOT_REGISTERED` when
+            *key* is absent; :data:`WORKSPACE_NOT_A_MEMBER` when no project
+            code registered at *repo_root* is a declared member.
+    """
+    record = _resolve_declared(registry, key=key, source=WorkspaceSource.EXPLICIT).record
+    if not record.member_project_codes & project_codes_at_root(registry, repo_root):
+        raise WorkspaceResolutionError(
+            code=WORKSPACE_NOT_A_MEMBER,
+            message=(
+                f"this repository is not a declared member of workspace {key!r}; "
+                f"add it with `eawf workspace member add {key} <CODE>`"
+            ),
+        )
+    return record
+
+
 def get_workspace(registry: Registry, key: str) -> WorkspaceRecord:
     """Return the record filed under *key*.
 
@@ -413,6 +449,7 @@ __all__ = [
     "CROSS_WORKSPACE_MUTATION_FORBIDDEN",
     "WORKSPACE_ALREADY_REGISTERED",
     "WORKSPACE_AMBIGUOUS",
+    "WORKSPACE_NOT_A_MEMBER",
     "WORKSPACE_NOT_REGISTERED",
     "WORKSPACE_REVISION_CONFLICT",
     "WorkspaceMutationError",
@@ -423,6 +460,7 @@ __all__ = [
     "get_workspace",
     "list_workspaces",
     "project_codes_at_root",
+    "resolve_member_workspace",
     "resolve_workspace",
     "update_membership",
 ]

@@ -1,0 +1,115 @@
+schema_version: 1
+module_id: eawf.core.lifecycle
+version: 1
+kind: core
+topic: lifecycle
+title: Phase, iter and wave lifecycle
+when_to_use: proposing, activating, closing, shipping or releasing a phase, or writing wave criteria and dispatching waves
+rules:
+  - rule_id: eawf.core.lifecycle.flow
+    obligation_id: lifecycle.flow
+    revision: 1
+    title: Follow the research, plan, execute, cherry-pick, ship flow
+    zone: steering
+    force: information
+    effectiveness: informational
+    instruction: >-
+      Work moves through research, plan, execute waves, cherry-pick and ship phase; independent waves run in isolated worktrees and sequential waves run inline.
+    verification:
+      method: review
+    procedure_ref: docs/rules/workflow-lifecycle.md
+  - rule_id: eawf.core.lifecycle.roadmap-procedure
+    obligation_id: lifecycle.roadmap-procedure
+    revision: 1
+    title: Change the roadmap one phase at a time
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Change the roadmap one phase at a time: research, propose the phase, revise its waves and dependencies until the DAG fits, apply it, then activate it with /prep.
+    rationale: >-
+      Each step leaves the phase in a reviewable PLANNED state, so nothing reaches execution before the operator has seen its shape.
+    verification:
+      method: review
+  - rule_id: eawf.core.lifecycle.spike
+    obligation_id: lifecycle.spike
+    revision: 1
+    title: Keep spikes read-only and local until they ratify a verdict
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Run a spike as a time-boxed read-only investigation whose brief lands under .ea/local/ as <date>-<slug>.md; promote the brief to .ea/artifacts/ only in the commit that lands the decision it ratifies.
+    rationale: >-
+      A spike exists to make the next wave's criteria writable; keeping briefs local until they back a decision keeps the committed record to evidence that was acted on.
+    verification:
+      method: review
+    procedure_ref: docs/rules/spike-workflow.md
+  - rule_id: eawf.core.lifecycle.prep-plan-mode
+    obligation_id: lifecycle.prep-plan-mode
+    revision: 1
+    title: Show the rendered wave DAG in plan mode before approval
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      In /prep, render the phase's wave DAG and present it in plan mode before asking the operator to approve, edit or cancel through a structured question; a free-text reply is not an approval.
+    rationale: >-
+      The operator approves the plan that will actually run, not the planner's raw commands, and a structured answer leaves a record of which option was chosen.
+    verification:
+      method: review
+  - rule_id: eawf.core.lifecycle.close-timing
+    obligation_id: lifecycle.close-timing
+    revision: 1
+    title: Close iters and phases only after review and CI pass
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Close an iter only after its audit, polish, ship CI and pull request review pass; append follow-up waves to the current iter instead of opening another; close the phase in the last commit before merge, once CI is green on the pushed branch.
+    rationale: >-
+      Closing before review lets state claim work that reviewers have not approved, and a pre-merge close keeps state in step with what was approved.
+    verification:
+      method: review
+  - rule_id: eawf.core.lifecycle.release-process
+    obligation_id: lifecycle.release-process
+    revision: 1
+    title: Release on the cadence the repository configures
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Follow the repository's configured release cadence; under the per-phase cadence, close a phase only with a passing release pre-flight covering the changelog section, the version bump, any migration note and the release annotation.
+    rationale: >-
+      A release gate that runs at phase close catches a missing changelog or version bump while the phase is still open to fix it.
+    verification:
+      method: review
+    procedure_ref: docs/rules/release-process.md
+  - rule_id: eawf.core.lifecycle.ship-process
+    obligation_id: lifecycle.ship-process
+    revision: 1
+    title: Ship a phase from its co-closing iter
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Ship in the phase's final iter: open one phase pull request, pass its CI gates, address review by appending waves to that iter, then close and land by fast-forward so every wave commit survives; never squash.
+    rationale: >-
+      Squashing or re-creating commits on land discards the per-wave history and stales every wave pin.
+    verification:
+      method: review
+    procedure_ref: docs/rules/ship-process.md
+  - rule_id: eawf.core.lifecycle.wave-verification-scope
+    obligation_id: lifecycle.wave-verification-scope
+    revision: 1
+    title: Verify waves with targeted tests and iters with the full suite
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Name only targeted tests that finish inside 60 seconds in wave criteria, and run the full suite plus one fresh-context audit once per iter at close; schema-migration and security-scoped waves keep the full run.
+    rationale: >-
+      A full suite and audit on every wave serialises the iter for little extra assurance; the iter close is where the whole change is judged once.
+    verification:
+      method: review
+    procedure_ref: docs/rules/lean-wave-verification.md

@@ -1,0 +1,101 @@
+schema_version: 1
+module_id: eawf.core.integrity
+version: 1
+kind: core
+topic: integrity
+title: Honest and safe agent work
+when_to_use: stating a result, deleting content, staging a commit, dispatching a subagent, ending a session or facing a consequential choice
+rules:
+  - rule_id: eawf.core.integrity.deletion
+    obligation_id: integrity.deletion
+    revision: 1
+    title: Delete content only when it is recoverable and justified
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Delete code, config or docs only when the content is committed on this branch's history, a verdict recorded in state.json motivates it, and the commit or PR body lists each removed path with its reason. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
+    rationale: >-
+      Committed content stays recoverable, a recorded verdict makes the reason auditable, and a listed removal gives the reviewer a chance to object before merge.
+    verification:
+      method: review
+  - rule_id: eawf.core.integrity.verify-before-claim
+    obligation_id: integrity.verify-before-claim
+    revision: 1
+    title: Verify a behavioural claim against the code before stating it
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Check every claim about command output, schema fields, exit codes or rendered output against the code path before stating it: resolve the symbol, read the source, find the call sites, inspect the fixtures. When design docs and source disagree, quote the source.
+    rationale: >-
+      Design documents and memories describe intent and drift from the implementation; a claim quoted from them is a hypothesis until the source confirms it.
+    verification:
+      method: review
+  - rule_id: eawf.core.integrity.secrets-hygiene
+    obligation_id: integrity.secrets-hygiene
+    revision: 1
+    title: Keep secrets, machine paths and personal data out of commits
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Never stage credentials, keys, tokens, .env contents, machine-specific paths, hostnames, IP addresses, internal URLs, employer or customer names, emails other than the canonical author block, or other personal data; keep document references repo-relative.
+    rationale: >-
+      A leak in a published commit can only be removed by rewriting history, whose blast radius is far larger than scrubbing before staging.
+    verification:
+      method: review
+  - rule_id: eawf.core.integrity.agent-report
+    obligation_id: integrity.agent-report
+    revision: 1
+    title: End every handoff with a typed, append-only agent report
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      End every session that reaches a handoff with a typed agent_end report whose verdict is exactly pass, pass-with-followups, fail or blocked; retry by appending a new attempt, never by rewriting an earlier one.
+    rationale: >-
+      The parent closes scope from the typed report, so an untyped or rewritten report loses the evidence trail it closes on.
+    verification:
+      method: review
+  - rule_id: eawf.core.integrity.decision-surface
+    obligation_id: integrity.decision-surface
+    revision: 1
+    title: Surface consequential choices to the operator as options
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      When two paths would produce materially different work, stop and ask the operator with one option per path, each showing a preview, its cost and what it gives up, and one marked recommended. Settle a choice that changes nothing and state the assumption.
+    rationale: >-
+      A silent pick spends the operator's budget on a decision they never saw, and prose-only options are answered on impressions rather than trade-offs.
+    verification:
+      method: review
+    procedure_ref: docs/rules/orchestrator-decision-surface.md
+  - rule_id: eawf.core.integrity.gate-fire-proof
+    obligation_id: integrity.gate-fire-proof
+    revision: 1
+    title: Prove each new gate on a real defect and retire idle gates
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Ship a new lint, doctor check or CI gate with a test that reds on a real defect from the repository, and at phase close retire each gate added in the phase that never fired.
+    rationale: >-
+      A gate that never fires reads as protection while proving nothing and costs time on every run.
+    verification:
+      method: review
+    procedure_ref: docs/rules/gate-fire-proof-sunset.md
+  - rule_id: eawf.core.integrity.agent-tool-discipline
+    obligation_id: integrity.agent-tool-discipline
+    revision: 1
+    title: Write self-contained dispatch prompts and avoid wasted reads
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Give a dispatched subagent a self-contained prompt with paths, line numbers and success criteria; do not re-read a file just written to verify it, and prefer the dedicated read and edit tools over shell commands where one fits.
+    rationale: >-
+      A subagent does not see the parent conversation, so synthesis left to it is guessed; a re-read after a write only repeats what the edit already confirmed.
+    verification:
+      method: review

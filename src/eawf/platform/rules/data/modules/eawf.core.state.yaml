@@ -1,0 +1,75 @@
+schema_version: 1
+module_id: eawf.core.state
+version: 1
+kind: core
+topic: state
+title: Lifecycle state authority
+when_to_use: reading or changing phase, iter, wave or decision records, or any file under the .ea directory
+rules:
+  - rule_id: eawf.core.state.ea-directory-committed
+    obligation_id: state.ea-directory-commit-policy
+    revision: 1
+    title: Commit the project state and profile files
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Commit .ea/state.json and .ea/profile.yaml with the change that produced them, and keep .ea/locks/ and .ea/local/ out of version control.
+    rationale: >-
+      The state and profile files are the source of truth for where the project stands, so a clone without them has no history; locks and local drafts are machine-specific and would only churn.
+    verification:
+      method: review
+  - rule_id: eawf.core.state.daemon-mutator
+    obligation_id: state.canonical-mutator
+    revision: 1
+    title: Mutate project state only through the daemon
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Change state.json, the layered config, the registry, the event and audit stores and the telemetry database only through the daemon, reached by the eawf state commands; the locked direct write is only for when no daemon runs. Reading needs no daemon.
+    rationale: >-
+      One writer serialises every mutation, so two sessions cannot interleave partial writes or silently drop each other's changes.
+    verification:
+      method: review
+  - rule_id: eawf.core.state.state-over-specs
+    obligation_id: state.state-vs-specs
+    revision: 1
+    title: Treat state as reality and specs as intent
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      When a spec and state.json disagree, drive the state mutation through its command and let the spec follow; never hand-edit state.json to match a spec.
+    rationale: >-
+      Specs describe what was intended while state records what happened; editing state to agree with a spec erases the evidence that the two diverged.
+    verification:
+      method: review
+  - rule_id: eawf.core.state.scope-revisability
+    obligation_id: state.scope-revisability
+    revision: 1
+    title: Change scope only as far as its status allows
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Edit PLANNED scope freely; under an ACTIVE phase only append waves or edit PENDING ones; change CLOSED scope only after reopening it.
+    rationale: >-
+      Work already claimed or closed carries evidence and commits, so rewriting it would detach that evidence from the plan it answered.
+    verification:
+      method: review
+    procedure_ref: docs/rules/planned-scope-revisability.md
+  - rule_id: eawf.core.state.memory-hygiene
+    obligation_id: state.memory-hygiene
+    revision: 1
+    title: Remember durable facts and query status
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Store in memory only facts that stay true across sessions, and query current status with eawf status or eawf memory digest instead of memorising it.
+    rationale: >-
+      Status changes every time a wave closes, so a remembered copy is stale the moment the real state moves.
+    verification:
+      method: review
+    procedure_ref: docs/rules/memory-hygiene.md

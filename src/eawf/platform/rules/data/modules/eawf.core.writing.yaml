@@ -1,0 +1,107 @@
+schema_version: 1
+module_id: eawf.core.writing
+version: 1
+kind: core
+topic: writing
+title: Identifiers, titles and authored prose
+when_to_use: naming an entity, writing a commit or pull request body, a durable artifact, rendered markdown, or a source comment
+rules:
+  - rule_id: eawf.core.writing.symbol-conventions
+    obligation_id: writing.symbol-conventions
+    revision: 1
+    title: Spell lifecycle and hypothesis identifiers in the canonical form
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Write phase, iter and wave ids as P<NN>, I<NN> and W<NN> with at least two zero-padded digits, hypothesis ids as H<NN>-<NN>, and project codes as one capital letter followed by 1 to 15 capitals, digits, underscores or hyphens.
+    rationale: >-
+      One spelling lets the commit lint, the renderers and a text search find every reference to a scope.
+    verification:
+      method: review
+  - rule_id: eawf.core.writing.artifact-chassis
+    obligation_id: writing.artifact-chassis
+    revision: 1
+    title: Write durable artifacts on the renderer-owned chassis
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Write durable research, audit, decision and incident markdown on the renderer-owned Summary, References, Provenance and Scrub sections, with dense [N] citations backed by typed rows and only repo-relative, URL or URN references.
+    rationale: >-
+      A fixed chassis lets promotion validate citations and scrub machine-local paths before an artifact is committed.
+    verification:
+      method: review
+    procedure_ref: docs/rules/artifact-chassis.md
+  - rule_id: eawf.core.writing.source-provenance
+    obligation_id: writing.source-provenance
+    revision: 1
+    title: Keep decision provenance out of committed source
+    zone: constitution
+    force: must
+    effectiveness: guarded
+    instruction: >-
+      Keep decision, audit, reviewer and tool provenance out of committed source comments and docstrings; record it in the commit body and the typed decision in state.json.
+    rationale: >-
+      Source comments serve every future reader irrespective of how the code came to be; provenance ages in place, while the commit and the decision record keep it searchable.
+    verification:
+      method: registered_check
+      check_refs: [lint.eawf012]
+  - rule_id: eawf.core.writing.markdown-no-manual-wrap
+    obligation_id: writing.markdown-no-manual-wrap
+    revision: 1
+    title: Write rendered markdown one line per paragraph
+    zone: constitution
+    force: must
+    effectiveness: guarded
+    instruction: >-
+      Write rendered markdown one line per paragraph and let the viewer wrap it; keep the 72-column wrap for commit messages and leave fenced code as authored.
+    rationale: >-
+      Hard-wrapped prose reflows a whole block on a one-word edit, breaks tables and list continuations, and corrupts copy and paste.
+    verification:
+      method: registered_check
+      check_refs: [lint.eawf014]
+  - rule_id: eawf.core.writing.comment-economy
+    obligation_id: writing.comment-economy
+    revision: 1
+    title: Comment the why and document the API surface
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Write comments that carry why, not what; document every parameter, return value and raised exception, and leave out restated signatures, change narration and lifecycle ids.
+    rationale: >-
+      A comment restating the code is a second copy that drifts, while the reason behind a shape is the one thing the source cannot tell a reader.
+    verification:
+      method: review
+    procedure_ref: docs/rules/comment-economy.md
+  - rule_id: eawf.core.writing.entity-title
+    obligation_id: writing.entity-title
+    revision: 1
+    title: Title entities with short imperative noun phrases
+    zone: steering
+    force: should
+    effectiveness: guarded
+    instruction: >-
+      Write each entity title as an imperative noun phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description.
+    rationale: >-
+      Titles render in fixed-width rows of the roadmap and dispatch views, where a sentence truncates or breaks the column.
+    verification:
+      method: registered_check
+      check_refs: [lint.eawf016]
+    procedure_ref: docs/rules/entity-title-naming.md
+  - rule_id: eawf.core.writing.newcomer-clarity
+    obligation_id: writing.newcomer-clarity
+    revision: 1
+    title: Write artifacts a newcomer understands without the state file
+    zone: steering
+    force: should
+    effectiveness: guarded
+    instruction: >-
+      Write every newcomer-facing artifact so a reader who joined today understands it without opening state.json: gloss internal codes on first use, state the motivation, keep it scannable, and move references into a numbered table.
+    rationale: >-
+      Commit bodies, briefs and titles outlive the session that wrote them and are read by people who never saw its context.
+    verification:
+      method: registered_check
+      check_refs: [lint.eawf017]
+    procedure_ref: docs/rules/clarity-contract.md

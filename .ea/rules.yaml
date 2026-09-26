@@ -1,0 +1,95 @@
+schema_version: 1
+modules:
+  - eawf.core.state
+  - eawf.core.vcs
+  - eawf.core.lifecycle
+  - eawf.core.integrity
+  - eawf.core.writing
+  - eawf.core.engineering
+  - eawf.craft.code
+  - eawf.craft.python
+  - eawf.craft.test
+  - eawf.craft.markdown
+rules:
+  - rule_id: repo.cli-dispatch
+    obligation_id: architecture.cli-dispatch
+    revision: 1
+    title: Keep the CLI a dispatch layer over the library
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Keep CLI handlers to argument parsing, dispatch and output formatting, put every piece of domain logic in the library, and pass handlers typed config and state objects, never raw dicts.
+    rationale: >-
+      Logic in the library is reachable from the daemon, the TUI and tests alike; logic in a handler is reachable only through a subprocess.
+    verification:
+      method: review
+  - rule_id: repo.strict-config-validation
+    obligation_id: config.strict-validation
+    revision: 1
+    title: Validate every YAML and JSON input with a closed model
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Parse every YAML or JSON input through a Pydantic v2 model configured with extra="forbid" inside its loader, and hand downstream code only the validated typed object.
+    rationale: >-
+      An open model lets a misspelt key pass silently and the setting it meant to change never takes effect.
+    verification:
+      method: review
+  - rule_id: repo.naming-conventions
+    obligation_id: naming.canonical-names
+    revision: 1
+    title: Use one canonical name per cross-cutting concept
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Give each cross-cutting concept one canonical field, parameter and log-key name, such as agent_role, effort_bucket, evidence_kind, scope_id and output_dir, and rename an outlier to the dominant form before merging instead of adding an adapter.
+    rationale: >-
+      Parallel names for one concept drift across state models, envelopes and logs until a search for one misses the others.
+    verification:
+      method: review
+    procedure_ref: docs/rules/naming-conventions.md
+  - rule_id: repo.phase-equals-release
+    obligation_id: release.phase-cadence
+    revision: 1
+    title: Ship every closed phase as at least a minor release
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Close every phase as at least a minor release: the phase-close commit bumps src/eawf/_version.py while pyproject.toml stays dynamically versioned, and the merge of the phase pull request tags that release.
+    rationale: >-
+      A phase is this repository's unit of shipped value, so a tag per phase keeps the published version honest about what landed.
+    verification:
+      method: review
+    procedure_ref: docs/rules/agent-driven-phase-equals-release.md
+  - rule_id: repo.large-phase-pr
+    obligation_id: delivery.phase-pr-size
+    revision: 1
+    title: Keep one pull request per phase regardless of size
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Deliver each phase as one pull request however large it grows, and keep every wave commit individually buildable so bisect stays sharp inside it; do not split a phase to chase a line count.
+    rationale: >-
+      The review bottleneck here is coherent deliveries rather than line count, and per-wave commits already give per-change history inside the pull request.
+    verification:
+      method: review
+    procedure_ref: docs/rules/agent-driven-large-phase-pr.md
+  - rule_id: repo.cadence-decisions
+    obligation_id: delivery.cadence-provenance
+    revision: 1
+    title: Cite the ratifying decisions when the cadence is questioned
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      When a review questions the release-per-phase or one-pull-request-per-phase cadence, cite decisions D10 and D07 in state.json, and reverse the cadence only by superseding D10 with a new decision.
+    rationale: >-
+      The cadence departs from small-change practice on purpose; without the decision trail it reads as an oversight and gets reverted.
+    verification:
+      method: review
+    procedure_ref: docs/rules/agent-driven-cadence-adr-pointer.md

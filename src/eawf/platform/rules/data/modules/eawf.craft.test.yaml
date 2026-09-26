@@ -1,0 +1,60 @@
+schema_version: 1
+module_id: eawf.craft.test
+version: 1
+kind: catalog
+topic: test
+title: Test craft
+when_to_use: writing, changing or reviewing automated tests, or choosing which test command to run
+rules:
+  - rule_id: eawf.craft.test.approx-floats
+    obligation_id: craft.test.float-comparison
+    revision: 1
+    title: Compare floats and arrays with tolerance helpers
+    zone: retrievable
+    force: must
+    effectiveness: behavioral
+    instruction: Compare floats with pytest.approx and arrays with numpy.testing.assert_allclose, never with exact equality.
+    rationale: Exact float equality fails on harmless rounding differences across platforms and library versions.
+    scope:
+      activities: [test, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.test.boundary-and-error
+    obligation_id: craft.test.boundary-and-error-paths
+    revision: 1
+    title: Cover boundary and error paths of every public function
+    zone: retrievable
+    force: must
+    effectiveness: behavioral
+    instruction: Give every public function boundary-case tests (empty, single, off-by-one, max-length) and error-path tests for invalid type, out-of-range value, missing key and schema mismatch.
+    rationale: Defects cluster at boundaries and in error handling, which happy-path tests never reach.
+    scope:
+      activities: [test, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.test.naming
+    obligation_id: craft.test.naming
+    revision: 1
+    title: Name tests after the function and the scenario
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: Name each test test_<function>_<scenario> and assert error paths with pytest.raises, matching the message when the message is part of the contract.
+    rationale: A name that states the scenario tells a reader what broke without opening the test.
+    scope:
+      activities: [test, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.test.run-scope
+    obligation_id: craft.test.run-scope
+    revision: 1
+    title: Run targeted tests while iterating and the full suite once
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: While iterating, run the single affected test file through the project runner; run the full parallel suite once before the work is closed.
+    rationale: Targeted runs keep feedback fast, and one full run still catches cross-module regressions.
+    scope:
+      activities: [test]
+    verification:
+      method: review

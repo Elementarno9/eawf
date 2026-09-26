@@ -1,0 +1,60 @@
+schema_version: 1
+module_id: eawf.craft.plotting
+version: 1
+kind: catalog
+topic: plotting
+title: Readable charts and figures
+when_to_use: producing or reviewing any chart, figure or plot
+rules:
+  - rule_id: eawf.craft.plotting.axis-range
+    obligation_id: craft.plotting.axis-range
+    revision: 1
+    title: Fit and centre the axis range on the data
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: Set each axis range so the data fills the plot area, and centre a symmetric quantity on zero.
+    rationale: A range fitted to the data shows its variation; a default range often hides it in a corner.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.plotting.scale
+    obligation_id: craft.plotting.scale
+    revision: 1
+    title: Declare linear or log scale per metric
+    zone: retrievable
+    force: must
+    effectiveness: behavioral
+    instruction: Choose linear or log scale for each metric deliberately, and label a log axis as log.
+    rationale: A quantity spanning orders of magnitude is unreadable on a linear axis, and an unlabelled log axis misleads.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.plotting.units
+    obligation_id: craft.plotting.units
+    revision: 1
+    title: Put the unit in every axis label
+    zone: retrievable
+    force: must
+    effectiveness: behavioral
+    instruction: Label every axis with the quantity and its unit, such as "latency (ms)".
+    rationale: A number without a unit cannot be compared or checked.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.plotting.density
+    obligation_id: craft.plotting.density
+    revision: 1
+    title: Keep ticks, grid and legend from crowding the data
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: Keep tick and grid density sparse enough to read, place the legend where it covers no data, and thin or aggregate a dense series.
+    rationale: Crowded ticks, a legend over the data or an overplotted series hide the signal the figure exists to show.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review

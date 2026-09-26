@@ -1,0 +1,72 @@
+schema_version: 1
+module_id: eawf.craft.code
+version: 1
+kind: catalog
+topic: code
+title: Code structure craft
+when_to_use: writing or reviewing functions, classes, their inputs and their call sites in any language
+rules:
+  - rule_id: eawf.craft.code.duplication
+    obligation_id: craft.code.duplication
+    revision: 1
+    title: Extract shared logic at the third use site
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Extract repeated logic into one named function or constant once a third use site appears and route every caller through it; until then tolerate the duplication.
+    rationale: >-
+      Repeated logic drifts as fixes land in one copy, but two similar lines are cheaper to read than a half-fitted helper.
+    scope:
+      activities: [implement, review]
+    verification:
+      method: review
+    procedure_ref: docs/rules/code-craft-dry.md
+  - rule_id: eawf.craft.code.fail-fast
+    obligation_id: craft.code.fail-fast
+    revision: 1
+    title: Validate at the boundary and raise there
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Validate input where it enters, at the loader, the CLI parse or the public entry point, and raise there; downstream functions take already-validated typed objects and do not re-check.
+    rationale: >-
+      An error raised deep in a call stack points at the symptom rather than the bad input.
+    scope:
+      activities: [implement, review]
+    verification:
+      method: review
+    procedure_ref: docs/rules/code-craft-fail-fast.md
+  - rule_id: eawf.craft.code.single-responsibility
+    obligation_id: craft.code.single-responsibility
+    revision: 1
+    title: Give each unit exactly one reason to change
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Give each function and class one reason to change, with parsing, validation and execution in separate units; split a class that outgrows one concern along its lowest-coupling seam first.
+    rationale: >-
+      A unit with one concern is testable in isolation and safe to edit without risking the others.
+    scope:
+      activities: [implement, review]
+    verification:
+      method: review
+    procedure_ref: docs/rules/code-craft-single-responsibility.md
+  - rule_id: eawf.craft.code.explicit-over-implicit
+    obligation_id: craft.code.explicit-over-implicit
+    revision: 1
+    title: Pass wide arguments by keyword and return explicit values
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Pass arguments by keyword when a function takes three or more, and return an explicit value rather than None as the success signal.
+    rationale: >-
+      Positional arguments at high arity transpose silently, and None as success hides the real outcome from the caller.
+    scope:
+      activities: [implement, review]
+    verification:
+      method: review
+    procedure_ref: docs/rules/code-craft-explicit-over-implicit.md

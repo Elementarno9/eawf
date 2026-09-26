@@ -1,0 +1,36 @@
+schema_version: 1
+module_id: eawf.core.engineering
+version: 1
+kind: core
+topic: engineering
+title: Design discipline for code changes
+when_to_use: designing or reviewing any change that adds a helper, a parameter, a configuration knob or a new code path
+rules:
+  - rule_id: eawf.core.engineering.simplicity
+    obligation_id: engineering.simplicity
+    revision: 1
+    title: Build the simplest design that meets the present need
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Choose the simplest design that meets the present need: add no helper, parameter or configuration knob without a caller today, and no handling for states the real call paths cannot reach.
+    rationale: >-
+      Speculative flexibility is the main source of accidental complexity; an abstraction waiting for a caller costs reading effort on every later edit and pays back nothing.
+    verification:
+      method: review
+    procedure_ref: docs/rules/engineering-principles.md
+  - rule_id: eawf.core.engineering.least-surprise
+    obligation_id: engineering.least-surprise
+    revision: 1
+    title: Keep behaviour where the name and call site say it is
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Make a unit's behaviour match its name, keep concerns in separate units, and prefer pure functions without hidden state, so a reader can trust a call site without opening the definition.
+    rationale: >-
+      Code that fails far from its cause or hides state behind a misleading name is expensive to debug and easy to break.
+    verification:
+      method: review
+    procedure_ref: docs/rules/engineering-practice.md

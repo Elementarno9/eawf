@@ -1,0 +1,60 @@
+schema_version: 1
+module_id: eawf.craft.markdown
+version: 1
+kind: catalog
+topic: markdown
+title: Rendered markdown authoring
+when_to_use: authoring rendered markdown that contains tables, formulas, reference lists or nested lists
+rules:
+  - rule_id: eawf.craft.markdown.table-shape
+    obligation_id: craft.markdown.table-shape
+    revision: 1
+    title: Keep every table row the same shape as its header
+    zone: retrievable
+    force: must
+    effectiveness: behavioral
+    instruction: Give every table a header row and a separator row, and give every body row exactly as many cells as the header.
+    rationale: A row with a missing or extra cell renders as broken text or silently drops content.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.markdown.formulas
+    obligation_id: craft.markdown.formulas
+    revision: 1
+    title: Write formulas in math delimiters
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: Write a formula inside $...$ or a $$ block rather than as plain text with asterisks or carets.
+    rationale: Plain-text formulas collide with emphasis markup and render as garbled prose.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.markdown.reference-tables
+    obligation_id: craft.markdown.reference-tables
+    revision: 1
+    title: Collect references in a table rather than inline links
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: When a document cites more than a few sources, list them in a references table and point to rows from the prose.
+    rationale: A reference table keeps prose readable and makes every source checkable in one place.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review
+  - rule_id: eawf.craft.markdown.list-continuation
+    obligation_id: craft.markdown.list-continuation
+    revision: 1
+    title: Indent list continuations under their item
+    zone: retrievable
+    force: should
+    effectiveness: behavioral
+    instruction: Indent a paragraph, code block or nested list that belongs to a list item to the item's content column.
+    rationale: An unindented continuation ends the list and restarts numbering in the rendered page.
+    scope:
+      activities: [design, implement, review]
+    verification:
+      method: review

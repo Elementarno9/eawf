@@ -1,0 +1,99 @@
+schema_version: 1
+module_id: eawf.core.vcs
+version: 1
+kind: core
+topic: vcs
+title: Branches, worktrees and commits
+when_to_use: creating a branch or worktree, committing, cherry-picking, opening a pull request or preparing a push
+rules:
+  - rule_id: eawf.core.vcs.worktree-discipline
+    obligation_id: vcs.worktree-discipline
+    revision: 1
+    title: Branch worktrees from the feature branch and cherry-pick back
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Branch every worktree from the current feature branch HEAD, never from main, and bring its commits back by cherry-pick in order, never by merge; tear the worktree down only after the cherry-pick lands.
+    rationale: >-
+      A worktree cut from main misses the phase's earlier waves, and a merge buries per-wave commits under a merge node that bisect and wave pins cannot follow.
+    verification:
+      method: review
+  - rule_id: eawf.core.vcs.branch-currency
+    obligation_id: vcs.branch-currency
+    revision: 1
+    title: Confirm the branch is current before opening or resuming scope
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Before opening or resuming a phase, iter or wave, fetch and confirm the branch is based on its intended source; after preserving any dirty work, rebase or fast-forward a stale branch, or record why it stays behind.
+    rationale: >-
+      Work started on a stale base collides with changes already landed and turns into conflict repair at cherry-pick or merge time.
+    verification:
+      method: review
+  - rule_id: eawf.core.vcs.pre-commit
+    obligation_id: vcs.pre-commit
+    revision: 1
+    title: Run the pre-commit hooks before every commit
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Run the pre-commit hooks over the change before every commit and root-cause each failure; never skip them with --no-verify.
+    rationale: >-
+      A skipped hook moves the failure to CI or to the next person, where it costs more to diagnose than it did to fix locally.
+    verification:
+      method: review
+  - rule_id: eawf.core.vcs.commit-scope-carrier
+    obligation_id: vcs.commit-scope-carrier
+    revision: 1
+    title: Name the advanced wave in every commit
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Write a wave commit subject as "<type>: <summary>" and name its wave in an "Eawf-Wave: P<NN>-I<NN>-W<NN>" trailer; keep the bracketed [P<NN>] subject prefix for state and phase-scoped docs bookkeeping only.
+    rationale: >-
+      The trailer ties every commit to the wave it advances, which is how wave pins, drift checks and the commit lint find it.
+    verification:
+      method: review
+    procedure_ref: docs/rules/commit-prefix.md
+  - rule_id: eawf.core.vcs.branch-naming
+    obligation_id: vcs.branch-naming
+    revision: 1
+    title: Name phase and wave branches by the release symbol
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Name the long-running phase branch feature/<symbol>-v<X.Y> and each wave worktree branch feature/<symbol>-v<X.Y>-pNN-wMM, and delete a wave branch once its commits are cherry-picked.
+    rationale: >-
+      A predictable name lets tooling and reviewers map a branch to its release and wave without opening state.
+    verification:
+      method: review
+  - rule_id: eawf.core.vcs.commit-granularity
+    obligation_id: vcs.commit-granularity
+    revision: 1
+    title: Land one commit per wave and per deliverable
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Land one commit per wave and per deliverable, carrying the code with its tests; fold follow-ups and wave-close bookkeeping into it by amend, and put a golden refresh in a test commit named for its cause.
+    rationale: >-
+      A deliverable split across commits cannot be reviewed or reverted as a unit, and bisect lands on trees that never worked.
+    verification:
+      method: review
+    procedure_ref: docs/rules/commit-granularity.md
+  - rule_id: eawf.core.vcs.pr-body
+    obligation_id: vcs.pr-body
+    revision: 1
+    title: Shape every pull request body the same way
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Write a pull request body with a Summary of three to six bullets and a Test plan checklist; a phase pull request adds a Phase deliverables section linking the phase plan.
+    verification:
+      method: review
