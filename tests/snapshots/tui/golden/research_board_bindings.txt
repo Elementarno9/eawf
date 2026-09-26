@@ -6,12 +6,12 @@
   │       ◌ domain: market-structure                              ││ 2 staged topic(s) · depth medium                              ││ ACTIVE 1 claim(s)                                              │
   │       ◌ domain: pricing-models                                ││                                                               ││ WAITING 1 open question(s)                                     │
   │   ◆ scope questions -- running                                ││ ROUNDS 0 run · running                                        ││ PAUSED 0 checkpoint(s)                                         │
-  │     ◌ Which curve model fits the short tenor                  ││ QUESTIONS 1 open · 0 answered · 0 blocking                    ││ BUDGET 2 staged topic(s), 0 answered, 0 pruned                 │
-  │                                                               ││ CLAIMS 1 claim(s) · 0 conflict(s)                             ││ RISKS none                                                     │
-  │                                                               ││ BUDGET 2 staged topic(s) · 0 answered · 0 pruned              ││                                                                │
+  │     ◌ Which curve model fits the short tenor                  ││ QUESTIONS 1 open · 0 answered · 0 auto-resolved · 0 blocking  ││ BUDGET 2 staged topic(s), 0 answered, 0 auto-resolved, 0       │
+  │                                                               ││ CLAIMS 1 claim(s) · 0 conflict(s)                             ││ pruned                                                         │
+  │                                                               ││ BUDGET 2 staged topic(s) · 0 answered · 0 auto-resolved · 0   ││ RISKS none                                                     │
+  │                                                               ││ pruned                                                        ││                                                                │
   │                                                               ││ CHECKPOINT 0 open                                             ││                                                                │
   │                                                               ││ LAST ROUND 0 finding(s)                                       ││                                                                │
-  │                                                               ││                                                               ││                                                                │
   │                                                               ││                                                               ││                                                                │
   │                                                               ││                                                               ││                                                                │
   │                                                               ││                                                               ││                                                                │

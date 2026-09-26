@@ -349,13 +349,17 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
         assert rounds[1].checkpoint is True
 
         # -- The seeded OpenQuestion is reconstructible off the canonical state
-        # and W17 resolved it: the run's answering claim marked it ANSWERED and
-        # linked both sides (no phantom OPEN question after a productive run).
+        # and W17 resolved it: round 1's pairing claim marked it AUTO_RESOLVED
+        # (a policy pairing, not an operator answer) and linked both sides (no
+        # phantom OPEN question after a productive run). Round 2's reconcile
+        # then SEALS it (W19): PLAN-036's override window is exactly one round
+        # wide, so a pairing that survives to the next round's reconcile has
+        # stood unchallenged and locks in.
         state = load_state(state_path)
         assert state.open_questions is not None
         assert "OQ-tenor" in state.open_questions
         resolved_q = state.open_questions["OQ-tenor"]
-        assert resolved_q.status is OpenQuestionStatus.ANSWERED
+        assert resolved_q.status is OpenQuestionStatus.SEALED
         assert resolved_q.answered_by_claim_id is not None
         assert state.claims[resolved_q.answered_by_claim_id].answers_question_id == "OQ-tenor"
 
@@ -416,35 +420,35 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
 def test_campaign_acceptance_saturation_halt_records_checkpoint(tmp_path: Path) -> None:
     """A dry round halts the run early on saturation -- still a recorded checkpoint.
 
-    The companion stop-condition to the budget halt above: when a round returns no
-    findings the saturation reducer declares the campaign dry and the loop halts
-    on saturation (round 1), recording the ON_HALT checkpoint on the terminal
+    The companion stop-condition to the budget halt above: when a round only
+    re-surfaces findings the ledger already holds, novelty has decayed and the
+    four-gate reducer declares the campaign dry, so the loop halts on
+    saturation (round 2) and records the ON_HALT checkpoint on the terminal
     round. Proves the run stops on a checkpoint via the saturation gate too.
     """
     ctx, state_path = _build_ctx(tmp_path)
     campaign_id = "campaign-dry"
 
-    def _produce_empty(dispatch: StagedDispatch) -> Mapping[str, object]:
-        body = _agent_end_body(dispatch.domain, evidence_ref="evidence/x.md")
-        body["findings"] = []  # no findings -> the round saturates
-        return body
+    def _produce_repeat(dispatch: StagedDispatch) -> Mapping[str, object]:
+        # The same finding every round, so round 2 adds no new claim.
+        return _agent_end_body(dispatch.domain, evidence_ref="evidence/x.md")
 
     async def body() -> None:
         await create_campaign(ctx, _stage_params(campaign_id))
         result = run_campaign(
             ctx,
             RunCampaignParams(campaign_id=campaign_id, round_budget=5),
-            produce_agent_end=_produce_empty,
+            produce_agent_end=_produce_repeat,
             checkpoint_policy=CheckpointPolicy(tier=CheckpointTier.ON_HALT),
         )
-        assert result["rounds_run"] == 1
+        assert result["rounds_run"] == 2
         assert result["halt_reason"] == "saturated"
         assert result["saturated"] is True
         assert result["checkpoints"] >= 1
         rounds = read_campaign_rounds(state_path, campaign_id)
-        assert len(rounds) == 1
-        assert rounds[0].saturated is True
-        assert rounds[0].checkpoint is True
+        assert len(rounds) == 2
+        assert rounds[-1].saturated is True
+        assert rounds[-1].checkpoint is True
 
     _run(body)
 

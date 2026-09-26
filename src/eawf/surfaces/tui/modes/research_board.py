@@ -366,13 +366,19 @@ _CLAIM_SIGIL: dict[ClaimStatus, Sigil | None] = {
 #: :class:`~eawf.surfaces.tui.chassis.sigils.Sigil` whose SHAPE an open-question
 #: marker renders, or ``None`` for a status with no live lifecycle shape (a
 #: muted dot). ``OPEN`` is pending (hollow circle), ``ANSWERED`` reads as
-#: closed-resolved (filled circle), and ``DROPPED`` is inert (no shape).
-#: ``BLOCKED`` is absent on purpose: a blocking question short-circuits to the
-#: literal ``blocking`` ``$warn`` marker (the autonomy-interrupt signal) before
-#: this map is consulted, so it never reaches the shape path.
+#: closed-resolved (filled circle), ``AUTO_RESOLVED`` reads as claimed
+#: (half-filled circle -- a policy pairing, still reversible while its
+#: override window is open, never the ANSWERED filled circle per PLAN-036),
+#: ``SEALED`` shares ``DROPPED``'s withheld shape (terminal, but not an
+#: operator answer), and ``DROPPED`` is inert (no shape). ``BLOCKED`` is
+#: absent on purpose: a blocking question short-circuits to the literal
+#: ``blocking`` ``$warn`` marker (the autonomy-interrupt signal) before this
+#: map is consulted, so it never reaches the shape path.
 _QUESTION_SIGIL: dict[OpenQuestionStatus, Sigil | None] = {
     OpenQuestionStatus.OPEN: Sigil.PENDING,
     OpenQuestionStatus.ANSWERED: Sigil.CLOSED,
+    OpenQuestionStatus.AUTO_RESOLVED: Sigil.CLAIMED,
+    OpenQuestionStatus.SEALED: Sigil.ABANDONED,
     OpenQuestionStatus.DROPPED: None,
 }
 
@@ -435,7 +441,15 @@ class RoundProgress:
     Attributes:
         state: The classified :class:`RoundState` of the round.
         open_count: Open (still-running) questions.
-        answered_count: Answered (saturating) questions.
+        answered_count: Answered (saturating) questions -- an operator or
+            claim-evidence answer only; never an :attr:`~eawf.kernel.state
+            .enums.OpenQuestionStatus.AUTO_RESOLVED` /
+            :attr:`~eawf.kernel.state.enums.OpenQuestionStatus.SEALED`
+            policy pairing (PLAN-036).
+        auto_resolved_count: Auto-resolved or sealed (saturating) questions
+            -- a policy pairing with no human answer, counted apart from
+            :attr:`answered_count` so a defaulted question never inflates
+            the answered tally.
         pruned_count: Pruned candidates -- dropped questions + refuted /
             superseded claims that were set aside this round.
         spent_topics: Staged topics fanned out across the campaigns (the
@@ -445,6 +459,7 @@ class RoundProgress:
     state: RoundState
     open_count: int
     answered_count: int
+    auto_resolved_count: int
     pruned_count: int
     spent_topics: int
 
@@ -454,9 +469,11 @@ def classify_round_state(questions: tuple[OpenQuestion, ...]) -> RoundState:
 
     Derives the round grammar honestly from the open-question statuses: any
     OPEN question means the round is still :attr:`RoundState.RUNNING`; with no
-    open question, an ANSWERED one means the round :attr:`RoundState.SATURATED`
-    and only DROPPED ones means it was :attr:`RoundState.PRUNED`; an empty
-    ledger is :attr:`RoundState.IDLE` (the pre-auto-run round).
+    open question, an ANSWERED, AUTO_RESOLVED, or SEALED one means the round
+    reached :attr:`RoundState.SATURATED` (a resolution landed, whether an
+    operator answer or a policy pairing) and only DROPPED ones means it was
+    :attr:`RoundState.PRUNED`; an empty ledger is :attr:`RoundState.IDLE`
+    (the pre-auto-run round).
 
     Args:
         questions: The state-resident open-question rows for the scope.
@@ -468,7 +485,12 @@ def classify_round_state(questions: tuple[OpenQuestion, ...]) -> RoundState:
         return RoundState.IDLE
     if any(question.status is OpenQuestionStatus.OPEN for question in questions):
         return RoundState.RUNNING
-    if any(question.status is OpenQuestionStatus.ANSWERED for question in questions):
+    saturating = (
+        OpenQuestionStatus.ANSWERED,
+        OpenQuestionStatus.AUTO_RESOLVED,
+        OpenQuestionStatus.SEALED,
+    )
+    if any(question.status in saturating for question in questions):
         return RoundState.SATURATED
     return RoundState.PRUNED
 
@@ -515,10 +537,15 @@ def compute_round_progress(
 ) -> RoundProgress:
     """Project the campaign ledgers + run records onto the auto-run round progress.
 
-    Counts the open / answered questions, the pruned candidates (dropped
-    questions + refuted / superseded claims set aside this round), and the
-    staged-topic budget figure, then classifies the round state. When real run
-    records are present the state derives from them
+    Counts the open / answered / auto-resolved questions, the pruned
+    candidates (dropped questions + refuted / superseded claims set aside
+    this round), and the staged-topic budget figure, then classifies the
+    round state. ``answered_count`` is an operator or claim-evidence answer
+    only; an :attr:`~eawf.kernel.state.enums.OpenQuestionStatus.AUTO_RESOLVED`
+    / :attr:`~eawf.kernel.state.enums.OpenQuestionStatus.SEALED` policy
+    pairing counts under :attr:`RoundProgress.auto_resolved_count` instead,
+    never folded into the answered tally (PLAN-036). When real run records
+    are present the state derives from them
     (:func:`classify_round_state_from_records`, the W08 live-wire); otherwise it
     falls back to the question-ledger classification. A pure function of the
     rows on hand.
@@ -537,6 +564,11 @@ def compute_round_progress(
     answered_count = sum(
         1 for question in questions if question.status is OpenQuestionStatus.ANSWERED
     )
+    auto_resolved_count = sum(
+        1
+        for question in questions
+        if question.status in (OpenQuestionStatus.AUTO_RESOLVED, OpenQuestionStatus.SEALED)
+    )
     dropped_questions = sum(
         1 for question in questions if question.status is OpenQuestionStatus.DROPPED
     )
@@ -548,6 +580,7 @@ def compute_round_progress(
         state=classify_round_state_from_records(rounds, questions),
         open_count=open_count,
         answered_count=answered_count,
+        auto_resolved_count=auto_resolved_count,
         pruned_count=dropped_questions + pruned_claims,
         spent_topics=spent_topics,
     )
@@ -724,7 +757,8 @@ def question_sigil_markup(status: OpenQuestionStatus, *, mode: RenderMode) -> st
     and renders the tinted shape via :func:`_sigil_markup`. ``BLOCKED`` is not
     in the map -- a blocking question short-circuits to the literal
     ``blocking`` marker before this path -- so the lookup covers only the
-    shape-bearing statuses (``OPEN`` / ``ANSWERED`` / ``DROPPED``).
+    shape-bearing statuses (``OPEN`` / ``ANSWERED`` / ``AUTO_RESOLVED`` /
+    ``SEALED`` / ``DROPPED``).
 
     Args:
         status: The question's
@@ -1474,6 +1508,7 @@ def build_tree_nodes(
                 depth=0,
                 detail=(
                     f"{progress.open_count} open / {progress.answered_count} answered / "
+                    f"{progress.auto_resolved_count} auto-resolved / "
                     f"{progress.pruned_count} pruned"
                 ),
                 round_state=progress.state,
@@ -2082,7 +2117,8 @@ def render_progress(
         f"[$accent]PAUSED[/] [$muted]{checkpoints} checkpoint(s)[/]",
         (
             f"[$accent]BUDGET[/] [$muted]{progress.spent_topics} staged topic(s), "
-            f"{progress.answered_count} answered, {progress.pruned_count} pruned[/]"
+            f"{progress.answered_count} answered, {progress.auto_resolved_count} auto-resolved, "
+            f"{progress.pruned_count} pruned[/]"
         ),
     ]
     if blocking:
@@ -2253,12 +2289,14 @@ def render_campaign_stats(
         f"[$accent]ROUNDS[/] [$muted]{rounds_run} run · {round_phrase}[/]",
         (
             f"[$accent]QUESTIONS[/] [$muted]{progress.open_count} open · "
-            f"{progress.answered_count} answered · {blocking} blocking[/]"
+            f"{progress.answered_count} answered · "
+            f"{progress.auto_resolved_count} auto-resolved · {blocking} blocking[/]"
         ),
         f"[$accent]CLAIMS[/] [$muted]{len(claims)} claim(s) · {len(contradicting)} conflict(s)[/]",
         (
             f"[$accent]BUDGET[/] [$muted]{progress.spent_topics} staged topic(s) · "
-            f"{progress.answered_count} answered · {progress.pruned_count} pruned[/]"
+            f"{progress.answered_count} answered · {progress.auto_resolved_count} auto-resolved · "
+            f"{progress.pruned_count} pruned[/]"
         ),
         f"[$accent]CHECKPOINT[/] [$muted]{checkpoints} open[/]",
         f"[$accent]LAST ROUND[/] [$muted]{last_findings} finding(s)[/]",

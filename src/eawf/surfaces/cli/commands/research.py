@@ -86,6 +86,20 @@ def campaign_new(
             help="Resolve + count domains without persisting a campaign (a resolve-check).",
         ),
     ] = False,
+    budget_rounds: Annotated[
+        float | None,
+        typer.Option(
+            "--budget-rounds",
+            help="Evidence-budget limit on rounds; a run halts before exceeding it.",
+        ),
+    ] = None,
+    budget_usd: Annotated[
+        float | None,
+        typer.Option(
+            "--budget-usd",
+            help="Evidence-budget limit on researcher USD spend; a run halts before exceeding it.",
+        ),
+    ] = None,
 ) -> None:
     """Stage a research campaign for the active scope and persist it.
 
@@ -100,11 +114,18 @@ def campaign_new(
     ``--dry-run`` resolves the block and reports the domain count WITHOUT
     persisting a campaign, so a sanity resolve-check never leaks a durable
     active campaign into the store.
+
+    ``--budget-rounds`` / ``--budget-usd`` set the campaign's evidence-budget
+    limits; ``campaign run`` charges every round against them and halts
+    before a round would exceed one.
     """
     from pydantic import ValidationError
 
     from eawf.kernel.spec.research_campaign import stage_campaign
-    from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+    from eawf.kernel.store.kinds.research_campaign import (
+        ResearchCampaignPayload,
+        open_evidence_budget,
+    )
 
     flags: GlobalFlags = ctx.obj
     try:
@@ -116,7 +137,17 @@ def campaign_new(
             )
         campaign = stage_campaign(topic, block)
         campaign_id = f"campaign-{uuid.uuid4().hex}"
-        payload = ResearchCampaignPayload(campaign_id=campaign_id, config=block, campaign=campaign)
+        limits = {
+            axis: limit
+            for axis, limit in (("rounds", budget_rounds), ("usd", budget_usd))
+            if limit is not None
+        }
+        payload = ResearchCampaignPayload(
+            campaign_id=campaign_id,
+            config=block,
+            campaign=campaign,
+            evidence_budget=open_evidence_budget(limits),
+        )
     except ValueError as exc:
         # ``stage_campaign`` rejects an empty topic; the payload validator
         # rejects an over-bound dispatch count. Both surface as InvalidInput.
@@ -277,7 +308,12 @@ def _persist_campaign_via_daemon_or_fallback(
     from eawf.runtime.daemon.methods.research import persist_campaign
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
-    params = payload.model_dump(mode="json")
+    params = {
+        "campaign_id": payload.campaign_id,
+        "config": payload.config.model_dump(mode="json"),
+        "campaign": payload.campaign.model_dump(mode="json"),
+        "budget_limits": {axis: pair.limit for axis, pair in payload.evidence_budget.items()},
+    }
     try:
         with DaemonClient() as client:
             result = client.call("research.create_campaign", params)
@@ -528,10 +564,11 @@ def _resolve_question_via_daemon_or_fallback(
     # Offline fallback: write the row directly under portalock.
     from datetime import UTC, datetime
 
-    from eawf.kernel.state.enums import OpenQuestionStatus
+    from eawf.kernel.state.enums import OpenQuestionDropReason, OpenQuestionStatus
     from eawf.surfaces.cli._mutation import state_transaction
 
     status = OpenQuestionStatus.DROPPED if drop else OpenQuestionStatus.ANSWERED
+    drop_reason = OpenQuestionDropReason.OUT_OF_SCOPE if drop else None
     with state_transaction(state_path) as state:
         questions = dict(state.open_questions or {})
         question = questions.get(question_id)
@@ -542,6 +579,7 @@ def _resolve_question_via_daemon_or_fallback(
             update={
                 "status": status,
                 "blocking": False,
+                "drop_reason": drop_reason,
                 "resolved_at": datetime.now(UTC),
             }
         )

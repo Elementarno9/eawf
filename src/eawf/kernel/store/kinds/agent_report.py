@@ -150,13 +150,23 @@ class PolishChange(_StrictModel):
 
 
 class ResearcherReportBody(AgentReportCommonBody):
-    """Report body emitted by a researcher."""
+    """Report body emitted by a researcher.
+
+    ``refuted_claim_ids`` is the researcher's own refutation signal: a claim
+    id it names is asserted dead, not merely superseded by a fresher finding.
+    The round-end reconcile (:func:`~eawf.runtime.daemon.methods.research.reconcile_round_claims`)
+    folds each named id into a :attr:`~eawf.kernel.state.enums.ClaimStatus.REFUTED`
+    status on the live claim it points at -- never inferred from finding text,
+    since the researcher is the only party that knows which prior claim its
+    survey contradicts.
+    """
 
     role: Literal["researcher"] = "researcher"
     question: Annotated[str, Field(min_length=1, max_length=500)]
     findings: list[str] = Field(default_factory=list)
     alternatives: list[str] = Field(default_factory=list)
     recommendation: Annotated[str, Field(min_length=1, max_length=1000)]
+    refuted_claim_ids: list[str] = Field(default_factory=list)
 
 
 class PlannerReportBody(AgentReportCommonBody):

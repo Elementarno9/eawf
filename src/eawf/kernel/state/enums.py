@@ -303,12 +303,39 @@ class OpenQuestionStatus(StrEnum):
     ``BLOCKED`` marks a question whose answer gates further work — the only
     status the balanced-autonomy interrupt surface raises to the operator, so
     an advisory question never interrupts while a blocking one always does.
+
+    ``AUTO_RESOLVED`` and ``SEALED`` are deliberately distinct from
+    ``ANSWERED``: a nonblocking question can default past its override
+    window on a policy-selected default, and that is a machine decision, not
+    a person answering it. ``AUTO_RESOLVED`` marks the default while the
+    override window is still open (an operator can still answer it inside
+    that window); ``SEALED`` marks the window closed with the default
+    standing. Neither is a claim-evidence answer, so a count or a render of
+    ``ANSWERED`` questions must never fold either of them in.
     """
 
     OPEN = "open"
     ANSWERED = "answered"
     BLOCKED = "blocked"
+    AUTO_RESOLVED = "auto_resolved"
+    SEALED = "sealed"
     DROPPED = "dropped"
+
+
+class OpenQuestionDropReason(StrEnum):
+    """Why an :class:`~eawf.kernel.state.models.OpenQuestion` was dropped.
+
+    ``SUPERSEDED`` names a question replaced by a later one (the replacement
+    carries ``superseded_by_question_ref``); ``MOOT`` and ``OUT_OF_SCOPE``
+    name a drop with no successor. The three are never merged and neither is
+    inferred from the presence or absence of the reference: a moot drop and
+    an out-of-scope drop are distinct dispositions worth telling apart on
+    their own, and a superseded drop is worth telling apart from both.
+    """
+
+    MOOT = "moot"
+    OUT_OF_SCOPE = "out_of_scope"
+    SUPERSEDED = "superseded"
 
 
 class CampaignStatus(StrEnum):

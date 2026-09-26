@@ -7,15 +7,15 @@
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 2 open question(s)          │
   │       ◌ domain: pricing-models     ││ 2 staged topic(s) · depth medium    ││ PAUSED 0 checkpoint(s)              │
   │   ◆ scope questions -- running     ││                                     ││ BUDGET 2 staged topic(s), 1         │
-  │     ◌ Which curve model fits the   ││ ROUNDS 0 run · running              ││ answered, 0 pruned                  │
-  │       short tenor                  ││ QUESTIONS 2 open · 1 answered · 1   ││ RISKS 1 blocking question(s)        │
-  │     ● Does the smile invert past   ││ blocking                            ││                                     │
+  │     ◌ Which curve model fits the   ││ ROUNDS 0 run · running              ││ answered, 0 auto-resolved, 0 pruned │
+  │       short tenor                  ││ QUESTIONS 2 open · 1 answered · 0   ││ RISKS 1 blocking question(s)        │
+  │     ● Does the smile invert past   ││ auto-resolved · 1 blocking          ││                                     │
   │       the 90 delta wing            ││ CLAIMS 0 claim(s) · 0 conflict(s)   ││                                     │
   │     ◌ Is the term-structure        ││ BUDGET 2 staged topic(s) · 1        ││                                     │
-  │       arbitrage real               ││ answered · 0 pruned                 ││                                     │
+  │       arbitrage real               ││ answered · 0 auto-resolved · 0      ││                                     │
+  │                                    ││ pruned                              ││                                     │
   │                                    ││ CHECKPOINT 0 open                   ││                                     │
   │                                    ││ LAST ROUND 0 finding(s)             ││                                     │
-  │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │

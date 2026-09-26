@@ -244,7 +244,8 @@ def test_command_bearing_gotchas_absent_from_executor_body() -> None:
 #: measures only injected profile blocks — so growth past these pins must
 #: be deliberate: re-pin in the same commit that grows the body.
 _BODY_TOKEN_BUDGETS = {
-    "_RESEARCHER_BODY": 320,
+    # Headroom for W19's "Refuting a prior claim" clause.
+    "_RESEARCHER_BODY": 385,
     "_PLANNER_BODY": 430,
     # Headroom for W49's evidence_refs DoD bullet.
     "_EXECUTOR_BODY": 500,

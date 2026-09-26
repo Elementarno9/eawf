@@ -42,7 +42,8 @@ Auto-generated from `eawf.kernel.state.enums`. Every `StrEnum` defined in that m
 | `MeasurementStatus` | `usage_observed`, `model_work_observed`, `no_token_evidence`, `usage_unavailable` |
 | `MemoryStatus` | `active`, `stale`, `superseded`, `pruned` |
 | `MemoryTier` | `working`, `archival`, `retrieval` |
-| `OpenQuestionStatus` | `open`, `answered`, `blocked`, `dropped` |
+| `OpenQuestionDropReason` | `moot`, `out_of_scope`, `superseded` |
+| `OpenQuestionStatus` | `open`, `answered`, `blocked`, `auto_resolved`, `sealed`, `dropped` |
 | `OutcomeDirection` | `min`, `max`, `equal`, `range` |
 | `OutcomeStatus` | `pending`, `met`, `missed`, `waived` |
 | `PhaseStatus` | `planned`, `active`, `closed`, `archived` |

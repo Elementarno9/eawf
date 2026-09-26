@@ -14,7 +14,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.store.envelope import Envelope
-from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 from eawf.workflow.skills.needs_user import (
     OpenPause,
@@ -22,6 +22,24 @@ from eawf.workflow.skills.needs_user import (
     record_pause,
     resolve_pause,
 )
+
+#: Field names that only the daemon writer may populate on a pause row: the
+#: daemon mints ``pause_urn`` at record time, dates the row from the append
+#: itself, and (for a wave-advisory pause) stamps the subject wave. A caller
+#: that supplies one of these through ``needs_user.raise`` is not asking the
+#: daemon to observe a fresh pause -- it is handing in provenance the daemon
+#: never itself observed.
+_DAEMON_OWNED_PAUSE_FIELDS = frozenset({"pause_urn", "occurred_at", "wave_id"})
+
+
+class PauseFabricationError(DaemonValidationError):
+    """Raised when ``needs_user.raise`` params carry daemon-owned pause fields.
+
+    ``OpenPause`` is daemon-observed: its urn, occurrence time, and wave
+    binding are minted by the daemon's own write path, never handed in by
+    the raiser. Refusing here keeps a caller from planting a pre-fabricated
+    pause fact instead of asking the daemon to record a fresh one.
+    """
 
 
 class RaiseParams(BaseModel):
@@ -108,6 +126,11 @@ def _parked_pause(pause: OpenPause) -> ParkedPause:
 @register("needs_user.raise")
 async def raise_needs_user(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Persist a needs_user pause via the daemon writer."""
+    fabricated = sorted(_DAEMON_OWNED_PAUSE_FIELDS & params.keys())
+    if fabricated:
+        raise PauseFabricationError(
+            f"needs_user.raise refuses caller-supplied daemon-owned fields: {fabricated}"
+        )
     args = RaiseParams.model_validate(params)
     pause_urn = record_pause(
         _state_path(ctx),
@@ -150,6 +173,7 @@ __all__ = [
     "ParkParams",
     "ParkResult",
     "ParkedPause",
+    "PauseFabricationError",
     "RaiseParams",
     "RaiseResult",
     "ResolveParams",

@@ -52,7 +52,11 @@ from eawf.kernel.spec.round_loop import (
     RoundHaltReason,
     RoundOutcome,
 )
-from eawf.kernel.spec.saturation import SaturationGateResult, SaturationReport
+from eawf.kernel.spec.saturation import (
+    ContradictionStopRule,
+    SaturationGateResult,
+    SaturationReport,
+)
 
 
 def _report(*, saturated: bool) -> SaturationReport:
@@ -292,6 +296,11 @@ def _saturate_reducer(findings: RoundFindings) -> SaturationReport:
     return _report(saturated=True)
 
 
+def _never_contradicts_reducer(findings: RoundFindings) -> ContradictionStopRule:
+    """A reducer that never fires the contradiction stop rule."""
+    return ContradictionStopRule(fired=False, offenders=())
+
+
 class _FailingSpawner:
     """Spawner stub that raises for the named domains, answers the rest."""
 
@@ -308,7 +317,9 @@ def test_build_round_runner_isolates_single_dispatch_failure() -> None:
     """One raising spawn folds the surviving domains and records the failure."""
     staged = stage_campaign("failure isolation", _block(("alpha", "beta", "gamma")))
     spawner = _FailingSpawner(frozenset({"beta"}))
-    runner, rounds = build_round_runner(staged, spawner, _saturate_reducer)
+    runner, rounds = build_round_runner(
+        staged, spawner, _saturate_reducer, _never_contradicts_reducer
+    )
 
     outcome = runner(1)
 
@@ -328,7 +339,9 @@ def test_build_round_runner_all_dispatch_failures_raise() -> None:
     """A round where EVERY dispatch fails raises rather than an empty round."""
     staged = stage_campaign("total failure", _block(("alpha", "beta")))
     spawner = _FailingSpawner(frozenset({"alpha", "beta"}))
-    runner, rounds = build_round_runner(staged, spawner, _saturate_reducer)
+    runner, rounds = build_round_runner(
+        staged, spawner, _saturate_reducer, _never_contradicts_reducer
+    )
 
     with pytest.raises(ResearcherDispatchError, match="every researcher dispatch failed"):
         runner(1)

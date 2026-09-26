@@ -7,15 +7,15 @@
   │       ◌ domain: market-structure   ││ landscape                           ││ WAITING 0 open question(s)          │
   │       ◌ domain: pricing-models     ││ 2 staged topic(s) · depth medium    ││ PAUSED 0 checkpoint(s)              │
   │                                    ││                                     ││ BUDGET 2 staged topic(s), 0         │
-  │                                    ││ ROUNDS 0 run · staged               ││ answered, 1 pruned                  │
+  │                                    ││ ROUNDS 0 run · staged               ││ answered, 0 auto-resolved, 1 pruned │
   │                                    ││ QUESTIONS 0 open · 0 answered · 0   ││ RISKS none                          │
-  │                                    ││ blocking                            ││                                     │
+  │                                    ││ auto-resolved · 0 blocking          ││                                     │
   │                                    ││ CLAIMS 4 claim(s) · 1 conflict(s)   ││                                     │
   │                                    ││ BUDGET 2 staged topic(s) · 0        ││                                     │
-  │                                    ││ answered · 1 pruned                 ││                                     │
+  │                                    ││ answered · 0 auto-resolved · 1      ││                                     │
+  │                                    ││ pruned                              ││                                     │
   │                                    ││ CHECKPOINT 0 open                   ││                                     │
   │                                    ││ LAST ROUND 0 finding(s)             ││                                     │
-  │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │
   │                                    ││                                     ││                                     │

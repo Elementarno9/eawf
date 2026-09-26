@@ -21,18 +21,34 @@ is unit-testable without a runtime.
 
 Halt precedence
 ---------------
-The loop evaluates two stop conditions per round and records exactly one
+The loop evaluates three stop conditions per round and records exactly one
 :class:`RoundHaltReason` on the result:
 
-(a) **saturation** — the round's :class:`SaturationReport.saturated` bit
-    is ``True``. The campaign is dry; stop. Checked first so a round that
+(a) **contradiction stop** — the round's
+    :class:`~eawf.kernel.spec.saturation.ContradictionStopRule.fired` bit is
+    ``True``. A live claim stands refuted; halt collection immediately and
+    report :attr:`RoundHaltReason.CONTRADICTION`. Checked first: firing this
+    rule never resolves the contradiction, so the loop must not paper over it
+    by reporting a saturation or budget halt instead.
+(b) **saturation** — the round's :class:`SaturationReport.saturated` bit
+    is ``True``. The campaign is dry; stop. Checked second so a round that
     saturates *and* exhausts the budget on the same turn reports
     :attr:`RoundHaltReason.SATURATED` (the campaign converged — the more
     informative reason).
-(b) **round budget** — the loop has run ``round_budget`` rounds without
+(c) **round budget** — the loop has run ``round_budget`` rounds without
     saturating. The budget is a hard ceiling that guarantees termination
     even if the campaign never converges; stop and report
     :attr:`RoundHaltReason.ROUND_BUDGET`.
+
+Between rounds the caller may also stop the loop before the next round
+spawns: a cancelled campaign (:attr:`RoundHaltReason.CANCELLED`), an evidence
+budget the next round would exceed (:attr:`RoundHaltReason.EVIDENCE_BUDGET`),
+or a blocking operator input (:attr:`RoundHaltReason.PAUSED`).
+
+The contradiction stop rule and the saturation report are evaluated
+independently -- the loop reads both bits off the same :class:`RoundOutcome`
+but neither is derived from, or mutates, the other (see
+:mod:`eawf.kernel.spec.saturation`).
 
 Checkpoint tiers
 ----------------
@@ -55,7 +71,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.spec.saturation import SaturationReport
+from eawf.kernel.spec.saturation import ContradictionStopRule, SaturationReport
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +79,13 @@ logger = logging.getLogger(__name__)
 #: halts on budget. A campaign that has not converged in this many rounds
 #: stops regardless so the loop always terminates.
 DEFAULT_ROUND_BUDGET: int = 12
+
+#: The rule's own unfired verdict, used as the default for a round_runner
+#: that does not (yet) wire contradiction detection. The default keeps the
+#: field additive: an existing caller that only cares about saturation sees
+#: no behaviour change, while the loop still evaluates whatever rule the
+#: runner does supply on every round.
+_UNFIRED_CONTRADICTION_STOP_RULE = ContradictionStopRule(fired=False, offenders=())
 
 #: Default checkpoint interval for the :attr:`CheckpointTier.EVERY_N`
 #: tier — pause for operator review once every this-many rounds.
@@ -166,6 +189,12 @@ class RoundHaltReason(StrEnum):
     reason.
 
     Members:
+        CONTRADICTION: The final round's
+            :attr:`~eawf.kernel.spec.saturation.ContradictionStopRule.fired`
+            bit was ``True`` — a live claim stands refuted. Distinct from
+            :attr:`SATURATED`: firing the stop rule halts collection, it does
+            not mean the campaign converged, and it is never inferred from
+            (or reported as) a saturation gate failure.
         SATURATED: The campaign reached saturation — the final round's
             :attr:`SaturationReport.saturated` bit was ``True``.
         ROUND_BUDGET: The loop spent its ``round_budget`` without
@@ -173,11 +202,20 @@ class RoundHaltReason(StrEnum):
         CANCELLED: The caller's ``should_continue`` predicate went ``False``
             between rounds — the campaign was cancelled while the run was in
             flight, so the loop stops rather than spawning the next round.
+        EVIDENCE_BUDGET: The caller's ``halt_before_round`` hook reported that
+            the next round would push the campaign's evidence budget past a
+            limit, so the loop stops before paying for it.
+        PAUSED: The caller's ``halt_before_round`` hook reported a blocking
+            operator input, so the loop yields to the operator between rounds
+            instead of spawning the next one.
     """
 
+    CONTRADICTION = "contradiction"
     SATURATED = "saturated"
     ROUND_BUDGET = "round_budget"
     CANCELLED = "cancelled"
+    EVIDENCE_BUDGET = "evidence_budget"
+    PAUSED = "paused"
 
 
 class Checkpoint(BaseModel):
@@ -212,20 +250,31 @@ class RoundOutcome(BaseModel):
 
     A round_runner does the (later-wired) survey work for one round and
     reports back through this envelope. The driver reads
-    :attr:`saturation` to decide whether to halt; it never inspects the
-    survey internals. The runner stays free to carry its own side state —
-    the driver depends only on this typed surface.
+    :attr:`saturation` and :attr:`contradiction_stop` to decide whether to
+    halt; it never inspects the survey internals. The runner stays free to
+    carry its own side state — the driver depends only on this typed surface.
 
     Attributes:
         saturation: The four-gate :class:`SaturationReport` computed over
             the campaign ledgers AFTER this round's claims were appended.
             The driver halts the loop when
             :attr:`SaturationReport.saturated` is ``True``.
+        contradiction_stop: The
+            :class:`~eawf.kernel.spec.saturation.ContradictionStopRule`
+            computed independently of :attr:`saturation` over the same
+            post-round ledger. The driver halts the loop when
+            :attr:`~eawf.kernel.spec.saturation.ContradictionStopRule.fired`
+            is ``True``, ahead of the saturation / budget checks. Defaults to
+            an unfired rule so a runner that does not (yet) wire
+            contradiction detection is unaffected.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     saturation: SaturationReport
+    contradiction_stop: ContradictionStopRule = Field(
+        default_factory=lambda: _UNFIRED_CONTRADICTION_STOP_RULE
+    )
 
 
 class RoundLoopResult(BaseModel):
@@ -249,6 +298,11 @@ class RoundLoopResult(BaseModel):
         final_saturation: The :class:`SaturationReport` from the terminal
             round — ``saturated`` is ``True`` iff
             :attr:`halt_reason` is :attr:`RoundHaltReason.SATURATED`.
+        final_contradiction_stop: The
+            :class:`~eawf.kernel.spec.saturation.ContradictionStopRule` from
+            the terminal round, computed independently of
+            :attr:`final_saturation` — ``fired`` is ``True`` iff
+            :attr:`halt_reason` is :attr:`RoundHaltReason.CONTRADICTION`.
     """
 
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
@@ -257,11 +311,35 @@ class RoundLoopResult(BaseModel):
     halt_reason: RoundHaltReason
     checkpoints: list[Checkpoint] = Field(default_factory=list)
     final_saturation: SaturationReport
+    final_contradiction_stop: ContradictionStopRule = Field(
+        default_factory=lambda: _UNFIRED_CONTRADICTION_STOP_RULE
+    )
 
     @property
     def saturated(self) -> bool:
         """Whether the loop halted because the campaign converged."""
         return self.halt_reason is RoundHaltReason.SATURATED
+
+    @property
+    def contradiction_fired(self) -> bool:
+        """Whether the loop halted because a live claim stood refuted."""
+        return self.halt_reason is RoundHaltReason.CONTRADICTION
+
+
+def _between_rounds_halt(
+    should_continue: Callable[[], bool] | None,
+    halt_before_round: Callable[[], RoundHaltReason | None] | None,
+) -> RoundHaltReason | None:
+    """Return why the loop must stop before the next round, or ``None`` to go on.
+
+    A cancellation wins over the caller's own halt hook: a cancelled campaign
+    stops as cancelled even when its budget is also spent.
+    """
+    if should_continue is not None and not should_continue():
+        return RoundHaltReason.CANCELLED
+    if halt_before_round is not None:
+        return halt_before_round()
+    return None
 
 
 def run_round_loop(
@@ -270,15 +348,21 @@ def run_round_loop(
     round_budget: int = DEFAULT_ROUND_BUDGET,
     checkpoint_policy: CheckpointPolicy | None = None,
     should_continue: Callable[[], bool] | None = None,
+    halt_before_round: Callable[[], RoundHaltReason | None] | None = None,
 ) -> RoundLoopResult:
     """Drive a bounded research-campaign round loop until dry or out of budget.
 
     Runs *round_runner* once per round, starting at round ``1``, and
-    halts on the FIRST of two conditions: the round reports
-    :attr:`SaturationReport.saturated` (the campaign is dry), or the loop
-    has run *round_budget* rounds (the hard ceiling). Saturation is
-    checked before budget, so a round that both saturates and exhausts
-    the budget records :attr:`RoundHaltReason.SATURATED`.
+    halts on the FIRST of three conditions: the round's
+    :attr:`~eawf.kernel.spec.saturation.ContradictionStopRule.fired` bit
+    (a live claim stands refuted), :attr:`SaturationReport.saturated` (the
+    campaign is dry), or the loop has run *round_budget* rounds (the hard
+    ceiling). The contradiction stop is checked first, then saturation,
+    then budget, so a round that fires more than one of the three records
+    the earliest-checked reason -- see the module docstring's "Halt
+    precedence" section for why. The stop rule and the saturation report
+    are read off the same :class:`RoundOutcome` but computed independently;
+    neither is derived from, or mutated by, this precedence check.
 
     The driver is pure with respect to its own body: it allocates no
     subprocess, opens no runtime session, and imports no adapter. All
@@ -295,7 +379,8 @@ def run_round_loop(
     Args:
         round_runner: Callback invoked once per round with the 1-based
             round number; returns the round's :class:`RoundOutcome`
-            carrying the post-round saturation report.
+            carrying the post-round saturation report and contradiction
+            stop rule.
         round_budget: Hard ceiling on rounds. Must be ``>= 1`` (a loop
             must run at least one round). Defaults to
             :data:`DEFAULT_ROUND_BUDGET`.
@@ -310,10 +395,16 @@ def run_round_loop(
             never consulted before the first round, which keeps the
             at-least-one-round guarantee that makes the terminal outcome
             non-``None``. ``None`` means no cancellation check.
+        halt_before_round: Optional hook consulted BETWEEN rounds, after
+            *should_continue*. A non-``None`` return halts the loop with that
+            reason before the next round spawns (an exhausted evidence budget,
+            an operator pause). Like *should_continue* it is never consulted
+            before the first round. ``None`` means no such check.
 
     Returns:
         A :class:`RoundLoopResult` with the rounds run, the halt reason,
-        the recorded checkpoints, and the terminal saturation report.
+        the recorded checkpoints, and the terminal saturation report +
+        contradiction stop rule.
 
     Raises:
         ValueError: when *round_budget* is less than 1 (the loop cannot
@@ -331,17 +422,24 @@ def run_round_loop(
     while round_number < round_budget:
         # Consulted only once a round has run, so the terminal outcome is always
         # populated: a cancel cannot arrive before the run itself has started.
-        if round_number >= 1 and should_continue is not None and not should_continue():
-            halt_reason = RoundHaltReason.CANCELLED
-            break
+        if round_number >= 1:
+            halt_reason = _between_rounds_halt(should_continue, halt_before_round)
+            if halt_reason is not None:
+                break
         round_number += 1
         outcome = round_runner(round_number)
+        contradiction_fired = outcome.contradiction_stop.fired
         saturated = outcome.saturation.saturated
         budget_spent = round_number >= round_budget
-        # Saturation wins the precedence: a round that both converges and
+        # The contradiction stop rule wins the precedence: it halts collection
+        # over an unresolved live claim regardless of what the independently
+        # computed saturation report or the budget say this same round.
+        # Saturation wins over budget: a round that both converges and
         # exhausts the budget reports the campaign as dry, not starved.
-        halted = saturated or budget_spent
-        if saturated:
+        halted = contradiction_fired or saturated or budget_spent
+        if contradiction_fired:
+            halt_reason = RoundHaltReason.CONTRADICTION
+        elif saturated:
             halt_reason = RoundHaltReason.SATURATED
         elif budget_spent:
             halt_reason = RoundHaltReason.ROUND_BUDGET
@@ -364,13 +462,15 @@ def run_round_loop(
     logger.debug(
         f"run_round_loop rounds={round_number} budget={round_budget} "
         f"halt={halt_reason.value} checkpoints={len(checkpoints)} "
-        f"saturated={outcome.saturation.saturated}"
+        f"saturated={outcome.saturation.saturated} "
+        f"contradiction_fired={outcome.contradiction_stop.fired}"
     )
     return RoundLoopResult(
         rounds_run=round_number,
         halt_reason=halt_reason,
         checkpoints=checkpoints,
         final_saturation=outcome.saturation,
+        final_contradiction_stop=outcome.contradiction_stop,
     )
 
 

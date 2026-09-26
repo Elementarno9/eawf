@@ -733,7 +733,7 @@ def test_render_campaign_stats_counts_claims_conflicts_and_questions() -> None:
         checkpoints=2,
     )
     assert "2 claim(s) · 1 conflict(s)" in detail
-    assert "QUESTIONS[/] [$muted]1 open · 0 answered · 1 blocking" in detail
+    assert "QUESTIONS[/] [$muted]1 open · 0 answered · 0 auto-resolved · 1 blocking" in detail
     assert "CHECKPOINT[/] [$muted]2 open" in detail
 
 

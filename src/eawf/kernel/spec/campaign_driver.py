@@ -64,15 +64,20 @@ from eawf.kernel.spec.round_loop import (
     DEFAULT_ROUND_BUDGET,
     CheckpointPolicy,
     CheckpointTier,
+    RoundHaltReason,
     RoundLoopResult,
     RoundOutcome,
     run_round_loop,
 )
-from eawf.kernel.spec.saturation import SaturationReport
+from eawf.kernel.spec.saturation import (
+    DEFAULT_NOVELTY_WINDOW,
+    ContradictionStopRule,
+    SaturationReport,
+)
 from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import datetime, timedelta
 
     from eawf.kernel.state.models import Claim, OpenQuestion
 
@@ -200,6 +205,14 @@ def parse_researcher_findings(domain: str, raw: Mapping[str, object]) -> Researc
 #: returning a fixed report so the loop's halt arithmetic stays unit-testable.
 RoundSaturationReducer = Callable[[RoundFindings], SaturationReport]
 
+#: Type of the injected per-round contradiction-stop-rule reducer the
+#: production round runner consults ALONGSIDE the saturation reducer -- the
+#: two are called separately and neither result derives from the other.
+#: Production binds a closure that evaluates
+#: :meth:`~eawf.kernel.spec.saturation.ContradictionStopRule.evaluate` over
+#: the live Claim ledger; a test binds a stub returning a fixed rule.
+RoundContradictionReducer = Callable[[RoundFindings], ContradictionStopRule]
+
 
 @dataclass
 class _RoundRecorder:
@@ -219,6 +232,7 @@ def build_round_runner(
     staged: StagedCampaign,
     spawn: DispatchSpawner,
     saturation: RoundSaturationReducer,
+    contradiction: RoundContradictionReducer,
 ) -> tuple[Callable[[int], RoundOutcome], list[RoundFindings]]:
     """Build the production round runner that spawns + parses one round.
 
@@ -239,10 +253,11 @@ def build_round_runner(
        a body that fails to parse raises :class:`ResearcherDispatchError`
        rather than producing a silent empty round, and
     3. folds the parsed bodies (plus any per-domain failures) into a
-       :class:`RoundFindings` record, appends it to the returned list, and
-       reduces it to the round's
-       :class:`~eawf.kernel.spec.saturation.SaturationReport` via the injected
-       *saturation* reducer.
+       :class:`RoundFindings` record, appends it to the returned list, then
+       calls the injected *saturation* reducer AND the injected
+       *contradiction* reducer -- two separate calls, neither result derived
+       from the other -- and carries both onto the returned
+       :class:`RoundOutcome`.
 
     The runner spawns nothing itself: *spawn* is the only contact with the
     runtime, so the whole binding is unit-testable behind a recording stub --
@@ -256,6 +271,10 @@ def build_round_runner(
             test: a recording stub returning a fixture ``agent_end`` body).
         saturation: The per-round reducer that scores whether the campaign is
             dry after this round's findings.
+        contradiction: The per-round reducer that scores whether a live
+            contradiction must halt collection this round -- called
+            separately from *saturation*, over the same findings, with
+            neither reducer reading the other's result.
 
     Returns:
         A ``(round_runner, rounds)`` pair: the per-round callback for
@@ -304,12 +323,13 @@ def build_round_runner(
         )
         recorder.rounds.append(findings)
         report = saturation(findings)
+        stop_rule = contradiction(findings)
         logger.info(
             f"build_round_runner round={round_number} dispatches={len(bodies)} "
             f"failures={len(failures)} findings={len(findings.finding_lines)} "
-            f"saturated={report.saturated}"
+            f"saturated={report.saturated} contradiction_fired={stop_rule.fired}"
         )
-        return RoundOutcome(saturation=report)
+        return RoundOutcome(saturation=report, contradiction_stop=stop_rule)
 
     return _round_runner, recorder.rounds
 
@@ -319,6 +339,7 @@ def ledger_saturation_reducer(
     questions_for_round: Callable[[RoundFindings], Sequence[OpenQuestion]],
     *,
     now_for_round: Callable[[RoundFindings], datetime],
+    novelty_window: timedelta = DEFAULT_NOVELTY_WINDOW,
 ) -> RoundSaturationReducer:
     """Build a saturation reducer over the post-round Claim / question ledgers.
 
@@ -332,6 +353,10 @@ def ledger_saturation_reducer(
         questions_for_round: Returns the OpenQuestion ledger to score.
         now_for_round: Returns the reference instant the novelty window is
             measured back from for the round.
+        novelty_window: Trailing duration a claim counts as new within,
+            forwarded to :meth:`SaturationReport.reduce`. A campaign run passes
+            a zero window measured from the round's own logging instant, so
+            novelty counts exactly the claims that round added.
 
     Returns:
         A :class:`RoundSaturationReducer` the production round runner consults.
@@ -342,9 +367,38 @@ def ledger_saturation_reducer(
             claims_for_round(findings),
             questions_for_round(findings),
             now=now_for_round(findings),
+            novelty_window=novelty_window,
         )
 
     return _reduce
+
+
+def ledger_contradiction_reducer(
+    claims_for_round: Callable[[RoundFindings], Sequence[Claim]],
+) -> RoundContradictionReducer:
+    """Build a contradiction-stop-rule reducer over the post-round Claim ledger.
+
+    Mirrors :func:`ledger_saturation_reducer`'s injection shape but composes
+    :meth:`~eawf.kernel.spec.saturation.ContradictionStopRule.evaluate`
+    instead of :meth:`SaturationReport.reduce`. Both reducers may share the
+    same *claims_for_round* callback -- they read the identical Claim ledger
+    -- but neither calls into the other, so the stop rule and the saturation
+    gate stay independently computed end to end.
+
+    Args:
+        claims_for_round: Returns the Claim ledger to scan for a given round
+            (typically the same callback passed to
+            :func:`ledger_saturation_reducer`).
+
+    Returns:
+        A :class:`RoundContradictionReducer` the production round runner
+        consults alongside the saturation reducer.
+    """
+
+    def _evaluate(findings: RoundFindings) -> ContradictionStopRule:
+        return ContradictionStopRule.evaluate(claims_for_round(findings))
+
+    return _evaluate
 
 
 class MissingRoundRunnerError(ValueError):
@@ -406,6 +460,7 @@ def drive_campaign(
     round_budget: int = DEFAULT_ROUND_BUDGET,
     checkpoint_policy: CheckpointPolicy | None = None,
     should_continue: Callable[[], bool] | None = None,
+    halt_before_round: Callable[[], RoundHaltReason | None] | None = None,
 ) -> CampaignDriveResult:
     """Dispatch a research campaign to the runner for its cockpit *level*.
 
@@ -443,6 +498,10 @@ def drive_campaign(
             forwarded to the live branch's loop. ``False`` halts the run
             before the next round spawns, so a cancelled campaign stops
             paying for researchers it will never use.
+        halt_before_round: Optional between-rounds halt hook, forwarded to
+            the live branch's loop. A non-``None`` reason (an exhausted
+            evidence budget, an operator pause) halts the run with that
+            reason before the next round spawns.
 
     Returns:
         A :class:`CampaignDriveResult` carrying the level, the staged plan,
@@ -470,6 +529,7 @@ def drive_campaign(
             round_budget=round_budget,
             checkpoint_policy=checkpoint_policy,
             should_continue=should_continue,
+            halt_before_round=halt_before_round,
         )
         logger.info(
             f"drive_campaign level={level.value} branch=live "
@@ -507,10 +567,12 @@ __all__ = [
     "DispatchSpawner",
     "MissingRoundRunnerError",
     "ResearcherDispatchError",
+    "RoundContradictionReducer",
     "RoundFindings",
     "RoundSaturationReducer",
     "build_round_runner",
     "drive_campaign",
+    "ledger_contradiction_reducer",
     "ledger_saturation_reducer",
     "parse_researcher_findings",
 ]

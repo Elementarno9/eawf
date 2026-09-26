@@ -53,6 +53,7 @@ from eawf.kernel.state.enums import (
     MeasurementStatus,
     MemoryStatus,
     MemoryTier,
+    OpenQuestionDropReason,
     OpenQuestionStatus,
     OutcomeDirection,
     OutcomeStatus,
@@ -1128,10 +1129,29 @@ class OpenQuestion(_StrictModel):
             additive (pre-urgency states and in-code constructors stay valid).
         answered_by_claim_id: Optional :class:`Claim` id that resolved the
             question when :attr:`status` is
-            :attr:`OpenQuestionStatus.ANSWERED`; ``None`` otherwise.
+            :attr:`OpenQuestionStatus.ANSWERED` (an operator or claim-evidence
+            answer) or :attr:`OpenQuestionStatus.AUTO_RESOLVED` (a policy
+            pairing with no human answer); ``None`` otherwise.
+        superseded_by_question_ref: The successor question's ``id`` when a
+            later question replaces this one; required exactly when
+            :attr:`drop_reason` is
+            :attr:`~eawf.kernel.state.enums.OpenQuestionDropReason.SUPERSEDED`,
+            forbidden otherwise. Never self-referential; a chain of
+            references across the question ledger must terminate rather than
+            cycle back on itself (enforced on :class:`State`, which holds the
+            full ledger).
+        drop_reason: Why the question was dropped; forbidden unless
+            :attr:`status` is :attr:`OpenQuestionStatus.DROPPED`, and
+            required to be
+            :attr:`~eawf.kernel.state.enums.OpenQuestionDropReason.SUPERSEDED`
+            exactly when :attr:`superseded_by_question_ref` is set. A plain
+            moot / out-of-scope drop may leave this ``None``; the successor
+            pairing is what the model enforces, never inferred from the
+            reference's absence.
         created_at: When the question was opened.
         resolved_at: When the question reached a terminal state
-            (``ANSWERED`` / ``DROPPED``); ``None`` while still open.
+            (``ANSWERED`` / ``AUTO_RESOLVED`` / ``SEALED`` / ``DROPPED``);
+            ``None`` while still open.
     """
 
     id: IdStr
@@ -1142,8 +1162,32 @@ class OpenQuestion(_StrictModel):
     blocking: bool = False
     urgency: Urgency = Urgency.NORMAL
     answered_by_claim_id: str | None = None
+    superseded_by_question_ref: str | None = None
+    drop_reason: OpenQuestionDropReason | None = None
     created_at: UtcDatetime
     resolved_at: UtcDatetime | None = None
+
+    @model_validator(mode="after")
+    def _validate_drop_disposition(self) -> OpenQuestion:
+        """Keep the drop reason and the supersession reference in lockstep.
+
+        ``drop_reason`` is forbidden outside ``DROPPED`` (a live or answered
+        question names no drop disposition); ``superseded_by_question_ref``
+        is set exactly when ``drop_reason`` is ``SUPERSEDED``, and it can
+        never name this question's own id (the trivial one-node cycle). A
+        plain ``DROPPED`` question -- moot or out of scope -- may still omit
+        ``drop_reason``: only the successor pairing is a hard invariant here.
+        """
+        if self.status is not OpenQuestionStatus.DROPPED and self.drop_reason is not None:
+            raise ValueError(f"drop_reason is forbidden outside DROPPED, got {self.status!r}")
+        has_successor = self.superseded_by_question_ref is not None
+        if (self.drop_reason is OpenQuestionDropReason.SUPERSEDED) != has_successor:
+            raise ValueError(
+                "superseded_by_question_ref is required exactly when drop_reason is superseded"
+            )
+        if self.superseded_by_question_ref == self.id:
+            raise ValueError(f"open question cannot supersede itself: {self.id!r}")
+        return self
 
 
 class Round(_StrictModel):
@@ -2161,6 +2205,30 @@ class State(_StrictModel):
                 raise ValueError(
                     f"wave dependency binding edge {expected!r} is not declared in wave deps"
                 )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_open_question_supersession(self) -> State:
+        """Refuse an OpenQuestion supersession chain that cycles back on itself.
+
+        A single question's own field validator catches a self-reference;
+        it cannot see a longer cycle spread across several questions
+        (Q1 superseded by Q2, Q2 superseded by Q1), which only the full
+        ledger held here can detect.
+        """
+        questions = self.open_questions or {}
+        for question in questions.values():
+            seen = {question.id}
+            cursor = question.superseded_by_question_ref
+            while cursor is not None:
+                if cursor in seen:
+                    raise ValueError(
+                        f"open question {question.id!r} supersession chain cycles "
+                        f"through {cursor!r}"
+                    )
+                seen.add(cursor)
+                successor = questions.get(cursor)
+                cursor = successor.superseded_by_question_ref if successor is not None else None
         return self
 
 

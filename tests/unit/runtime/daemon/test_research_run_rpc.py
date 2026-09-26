@@ -404,7 +404,7 @@ def test_run_campaign_flips_to_terminal_converged(tmp_path: Path) -> None:
         # The final (2nd) round is persisted, not dropped.
         assert [r.round_number for r in read_campaign_rounds(state_path, "campaign-cap")] == [1, 2]
 
-        # Saturation halt also converges.
+        # A dry run that never logs a claim ends on the budget and converges too.
         await create_campaign(ctx, _stage_params("campaign-sat"))
         run_campaign(
             ctx,
@@ -413,6 +413,51 @@ def test_run_campaign_flips_to_terminal_converged(tmp_path: Path) -> None:
         )
         sat = read_latest_campaign(state_path, "campaign-sat")
         assert sat is not None and sat.status is CampaignStatus.CONVERGED
+
+    _run(body)
+
+
+def test_run_campaign_contradiction_halt_leaves_campaign_active(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A contradiction-halted run leaves the campaign ACTIVE, not CONVERGED.
+
+    W08 follow-up: a live contradiction blocks convergence (PLAN-035), so a
+    ``contradiction`` halt must not flip the campaign the way a saturation or
+    round-budget halt does. No researcher finding can naturally produce a
+    REFUTED claim yet (``reconcile_round_claims`` only ever writes ``OPEN``
+    rows), so the contradiction reducer's factory is monkeypatched to force
+    one fired verdict -- exercising the real ``run_campaign`` wiring end to
+    end rather than a synthetic unit call.
+    """
+    from eawf.kernel.spec.saturation import ContradictionStopRule
+    from eawf.kernel.state.enums import CampaignStatus
+    from eawf.runtime.daemon.methods.research import read_latest_campaign
+
+    def _always_fires(claims_for_round: object) -> Any:
+        def _evaluate(findings: Any) -> ContradictionStopRule:
+            return ContradictionStopRule(fired=True, offenders=("CLM-fixture",))
+
+        return _evaluate
+
+    monkeypatch.setattr(research_mod, "ledger_contradiction_reducer", _always_fires)
+
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-contradiction"))
+        result = run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id="campaign-contradiction", round_budget=5),
+            produce_agent_end=_produce_findings,
+        )
+        assert result["halt_reason"] == "contradiction"
+        assert result["rounds_run"] == 1
+        assert result["saturated"] is False
+        assert result["contradiction_offenders"] == ["CLM-fixture"]
+        latest = read_latest_campaign(state_path, "campaign-contradiction")
+        assert latest is not None and latest.status is CampaignStatus.ACTIVE
 
     _run(body)
 
@@ -449,23 +494,49 @@ def test_run_campaign_compacts_duplicate_findings_across_rounds(tmp_path: Path) 
 
 
 def test_run_campaign_halts_on_saturation(tmp_path: Path) -> None:
-    """A round returning no findings saturates and halts the loop early."""
-    state_path = tmp_path / "state.json"
-    ctx = _build_ctx(state_path)
+    """A round that adds no new claim to a non-empty ledger saturates the run.
+
+    Round 1 logs two evidence-backed claims; round 2 re-surfaces the same
+    findings, which dedup onto the ledger, so novelty has decayed and the
+    four-gate reducer declares the campaign dry.
+    """
+    ctx, state_path = _build_live_ctx(tmp_path)
 
     async def body() -> None:
         await create_campaign(ctx, _stage_params("campaign-dry"))
         result = run_campaign(
             ctx,
             RunCampaignParams(campaign_id="campaign-dry", round_budget=5),
-            produce_agent_end=_produce_empty,
+            produce_agent_end=_produce_findings,
         )
-        assert result["rounds_run"] == 1
+        assert result["rounds_run"] == 2
         assert result["halt_reason"] == "saturated"
         assert result["saturated"] is True
         rounds = read_campaign_rounds(state_path, "campaign-dry")
-        assert len(rounds) == 1
-        assert rounds[0].saturated is True
+        assert [r.saturated for r in rounds] == [False, True]
+
+    _run(body)
+
+
+def test_run_campaign_empty_ledger_never_saturates(tmp_path: Path) -> None:
+    """A run whose rounds log no claim at all runs to its round budget.
+
+    An empty claim ledger has gathered no evidence to be dry about, so the
+    four-gate reducer never reads it as saturated.
+    """
+    state_path = tmp_path / "state.json"
+    ctx = _build_ctx(state_path)
+
+    async def body() -> None:
+        await create_campaign(ctx, _stage_params("campaign-empty"))
+        result = run_campaign(
+            ctx,
+            RunCampaignParams(campaign_id="campaign-empty", round_budget=3),
+            produce_agent_end=_produce_empty,
+        )
+        assert result["rounds_run"] == 3
+        assert result["halt_reason"] == "round_budget"
+        assert result["saturated"] is False
 
     _run(body)
 
@@ -864,7 +935,7 @@ def test_research_run_ping_and_steer_answer_while_background_run_blocks(
     monkeypatch.setattr(
         research_mod,
         "_live_agent_end_producer",
-        lambda _ctx, runtime, *, campaign_id: _gated_producer,
+        lambda _ctx, runtime, *, campaign_id, research_scope_id=None: _gated_producer,
     )
 
     async def body() -> None:

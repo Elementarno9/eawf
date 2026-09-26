@@ -55,6 +55,7 @@ from eawf.kernel.spec.round_loop import (
     DEFAULT_ROUND_BUDGET,
     CheckpointPolicy,
     CheckpointTier,
+    RoundHaltReason,
     RoundLoopResult,
     RoundOutcome,
     run_round_loop,
@@ -133,6 +134,7 @@ def run_live_rounds(
     round_budget: int = DEFAULT_ROUND_BUDGET,
     checkpoint_policy: CheckpointPolicy | None = None,
     should_continue: Callable[[], bool] | None = None,
+    halt_before_round: Callable[[], RoundHaltReason | None] | None = None,
 ) -> tuple[StagedCampaign, RoundLoopResult]:
     """Drive a live (Level 3+) research campaign: stage the plan, then run rounds.
 
@@ -181,6 +183,9 @@ def run_live_rounds(
             forwarded to :func:`run_round_loop`. ``False`` halts the run with
             :attr:`~eawf.kernel.spec.round_loop.RoundHaltReason.CANCELLED`
             before the next round spawns.
+        halt_before_round: Optional between-rounds halt hook, forwarded to
+            :func:`run_round_loop`. A non-``None`` reason halts the run with
+            that reason before the next round spawns.
 
     Returns:
         A ``(staged_campaign, loop_result)`` pair: the Level-1 plan that was
@@ -216,6 +221,7 @@ def run_live_rounds(
         round_budget=round_budget,
         checkpoint_policy=policy,
         should_continue=should_continue,
+        halt_before_round=halt_before_round,
     )
     logger.info(
         f"run_live_rounds level={level.value} domains={staged.domain_count} "

@@ -520,11 +520,17 @@ _EXTENDED: dict[type, dict[object, ResolvedSigil]] = {
         ClaimStatus.SUPERSEDED: _from_sigil(Sigil.ABANDONED),
     },
     # Open-question status -- OPEN ring, ANSWERED filled circle, BLOCKED the
-    # warn triangle (it gates work), DROPPED the muted withheld slash.
+    # warn triangle (it gates work), AUTO_RESOLVED the same warn triangle
+    # (still reversible while its override window is open -- never the
+    # ANSWERED filled circle, per PLAN-036), SEALED a warn-tinted withheld
+    # slash (terminal, but not a clean operator answer), DROPPED the muted
+    # withheld slash.
     OpenQuestionStatus: {
         OpenQuestionStatus.OPEN: _from_sigil(Sigil.PENDING),
         OpenQuestionStatus.ANSWERED: _from_sigil(Sigil.CLOSED),
         OpenQuestionStatus.BLOCKED: _warn(),
+        OpenQuestionStatus.AUTO_RESOLVED: _warn(),
+        OpenQuestionStatus.SEALED: _withheld(tint_hex=BAND_HEX["warn"]),
         OpenQuestionStatus.DROPPED: _from_sigil(Sigil.ABANDONED),
     },
 }

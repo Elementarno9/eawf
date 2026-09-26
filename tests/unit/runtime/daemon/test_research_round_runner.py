@@ -13,6 +13,9 @@ researcher session and parses each ``agent_end`` body into typed findings rows:
 * :func:`~eawf.runtime.daemon.methods.research.build_bound_round_runner` binds
   the runner over the (stubbed-in-test) ``agent.dispatch`` spawn path so a
   whole live round drives end to end without spawning a real subprocess.
+* :func:`~eawf.runtime.daemon.methods.research._finalize_run_status` decides
+  whether a finished run's ACTIVE campaign converges: every halt reason but
+  CONTRADICTION flips it to CONVERGED, a CONTRADICTION halt leaves it ACTIVE.
 
 The live spawn is stubbed with a recording fake + fixture ``agent_end`` bodies,
 mirroring how :mod:`tests.integration.runtime.daemon.test_fleet_drive` injects a spawner; no live
@@ -22,6 +25,7 @@ campaign is run here.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 
@@ -41,11 +45,15 @@ from eawf.kernel.spec.research_campaign import (
     stage_campaign,
 )
 from eawf.kernel.spec.round_loop import CheckpointPolicy, CheckpointTier, RoundHaltReason
-from eawf.kernel.spec.saturation import SaturationReport
+from eawf.kernel.spec.saturation import ContradictionStopRule, SaturationReport
+from eawf.kernel.state.enums import CampaignStatus
 from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
+from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
 from eawf.runtime.daemon.methods.research import (
+    _finalize_run_status,
     build_bound_round_runner,
     build_live_dispatch_spawner,
+    read_latest_campaign,
 )
 
 pytestmark = pytest.mark.unit
@@ -101,6 +109,11 @@ def _never_saturate(findings: RoundFindings) -> SaturationReport:
 def _saturate(findings: RoundFindings) -> SaturationReport:
     """A reducer that declares the campaign dry immediately."""
     return SaturationReport(saturated=True, gates=(), live_claim_count=1, empty_ledger=False)
+
+
+def _no_contradiction(findings: RoundFindings) -> ContradictionStopRule:
+    """A reducer that never fires the contradiction stop rule."""
+    return ContradictionStopRule(fired=False, offenders=())
 
 
 # --------------------------------------------------------------------------
@@ -159,7 +172,7 @@ def test_round_runner_spawns_every_dispatch_and_records_findings() -> None:
         "pricing-models": _agent_end_body("pricing-models", findings=["pm-1"]),
     }
     spawner = _RecordingSpawner(bodies)
-    runner, rounds = build_round_runner(staged, spawner, _saturate)
+    runner, rounds = build_round_runner(staged, spawner, _saturate, _no_contradiction)
 
     outcome = runner(1)
 
@@ -189,7 +202,7 @@ def test_round_runner_failed_parse_surfaces_typed_error_not_empty_round() -> Non
         },
     }
     spawner = _RecordingSpawner(bodies)
-    runner, rounds = build_round_runner(staged, spawner, _saturate)
+    runner, rounds = build_round_runner(staged, spawner, _saturate, _no_contradiction)
 
     with pytest.raises(ResearcherDispatchError, match="pricing-models"):
         runner(1)
@@ -205,7 +218,7 @@ def test_round_runner_drives_bounded_loop_to_budget() -> None:
         "pricing-models": _agent_end_body("pricing-models", findings=["pm"]),
     }
     spawner = _RecordingSpawner(bodies)
-    runner, rounds = build_round_runner(staged, spawner, _never_saturate)
+    runner, rounds = build_round_runner(staged, spawner, _never_saturate, _no_contradiction)
 
     result = drive_campaign(
         "liquidity regimes",
@@ -239,7 +252,7 @@ def test_build_bound_round_runner_parses_each_agent_end() -> None:
         produced.append(dispatch.domain)
         return _agent_end_body(dispatch.domain, findings=[f"{dispatch.domain}-finding"])
 
-    runner, rounds = build_bound_round_runner(staged, _produce, _saturate)
+    runner, rounds = build_bound_round_runner(staged, _produce, _saturate, _no_contradiction)
     outcome = runner(1)
 
     assert outcome.saturation.saturated is True
@@ -268,3 +281,60 @@ def test_live_dispatch_spawner_invokes_producer() -> None:
     body = spawner(dispatch)
     assert seen == [dispatch]
     assert body["role"] == "researcher"
+
+
+# --------------------------------------------------------------------------
+# _finalize_run_status -- a CONTRADICTION halt leaves the campaign ACTIVE
+# --------------------------------------------------------------------------
+
+
+def _active_payload(campaign_id: str) -> ResearchCampaignPayload:
+    """An ACTIVE ResearchCampaignPayload fixture for a fresh campaign_id."""
+    return ResearchCampaignPayload(
+        campaign_id=campaign_id,
+        config=_block(),
+        campaign=stage_campaign("liquidity regimes", _block()),
+    )
+
+
+def test_finalize_run_status_contradiction_leaves_campaign_active(tmp_path: Path) -> None:
+    """A CONTRADICTION halt returns ACTIVE and never persists a convergence flip."""
+    state_path = tmp_path / "state.json"
+    payload = _active_payload("campaign-contradiction")
+
+    result = _finalize_run_status(state_path, payload, halt_reason=RoundHaltReason.CONTRADICTION)
+
+    assert result is CampaignStatus.ACTIVE
+    # No convergence flip was persisted -- the store was never written to.
+    assert read_latest_campaign(state_path, "campaign-contradiction") is None
+
+
+def test_finalize_run_status_saturated_converges(tmp_path: Path) -> None:
+    """A SATURATED halt persists the convergence flip and returns CONVERGED."""
+    state_path = tmp_path / "state.json"
+    payload = _active_payload("campaign-saturated")
+
+    result = _finalize_run_status(state_path, payload, halt_reason=RoundHaltReason.SATURATED)
+
+    assert result is CampaignStatus.CONVERGED
+    latest = read_latest_campaign(state_path, "campaign-saturated")
+    assert latest is not None and latest.status is CampaignStatus.CONVERGED
+
+
+def test_finalize_run_status_round_budget_converges(tmp_path: Path) -> None:
+    """A ROUND_BUDGET halt converges too -- only CONTRADICTION is special-cased."""
+    state_path = tmp_path / "state.json"
+    payload = _active_payload("campaign-budget")
+
+    result = _finalize_run_status(state_path, payload, halt_reason=RoundHaltReason.ROUND_BUDGET)
+
+    assert result is CampaignStatus.CONVERGED
+
+
+def test_finalize_run_status_none_latest_returns_none(tmp_path: Path) -> None:
+    """An unresolvable campaign record (None) reports None, no persist attempted."""
+    result = _finalize_run_status(
+        tmp_path / "state.json", None, halt_reason=RoundHaltReason.SATURATED
+    )
+
+    assert result is None

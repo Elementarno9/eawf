@@ -446,7 +446,7 @@ def test_cancel_campaign_rejects_already_cancelled(tmp_path: Path) -> None:
     async def body() -> None:
         await create_campaign(ctx, _params("campaign-twice"))
         await cancel_campaign(ctx, {"campaign_id": "campaign-twice"})
-        with pytest.raises(ValueError, match="not active"):
+        with pytest.raises(ValueError, match="illegal campaign transition"):
             await cancel_campaign(ctx, {"campaign_id": "campaign-twice"})
 
     _run(body)

@@ -1,9 +1,11 @@
 """Round-end reconcile pairs a claim to an open question only by elimination.
 
 A researcher finding carries no link to the question it addresses, so
-:func:`~eawf.runtime.daemon.methods.research.reconcile_round_claims` may mark
-a question ANSWERED only when it is the scope's single OPEN, non-blocking
-candidate. With two or more candidates any pairing would be a guess, so every
+:func:`~eawf.runtime.daemon.methods.research.reconcile_round_claims` may pair
+a question only when it is the scope's single OPEN, non-blocking candidate.
+The pairing is a policy inference, not an operator answering the question, so
+it lands the question AUTO_RESOLVED, never ANSWERED (PLAN-036 keeps the two
+distinct). With two or more candidates any pairing would be a guess, so every
 question must stay OPEN.
 """
 
@@ -88,7 +90,7 @@ def _status(state: State, qid: str) -> OpenQuestionStatus:
     return state.open_questions[qid].status
 
 
-def test_reconcile_single_candidate_is_answered_by_first_claim() -> None:
+def test_reconcile_single_candidate_is_auto_resolved_by_first_claim() -> None:
     """One OPEN non-blocking question is every claim's single candidate."""
     state = _state(_question("OQ-a"))
 
@@ -98,7 +100,7 @@ def test_reconcile_single_candidate_is_answered_by_first_claim() -> None:
 
     assert state.open_questions is not None
     question = state.open_questions["OQ-a"]
-    assert question.status is OpenQuestionStatus.ANSWERED
+    assert question.status is OpenQuestionStatus.AUTO_RESOLVED
     assert question.answered_by_claim_id == written[0]
     assert question.resolved_at == _NOW
     assert state.claims is not None
@@ -121,22 +123,22 @@ def test_reconcile_two_candidates_answers_neither() -> None:
 
 
 def test_reconcile_blocking_question_is_not_a_candidate() -> None:
-    """A blocking checkpoint never auto-answers and does not count as a candidate."""
+    """A blocking checkpoint never auto-resolves and does not count as a candidate."""
     state = _state(_question("OQ-a"), _question("OQ-gate", blocking=True))
 
     reconcile_round_claims(state, _findings("claim one"), scope_id=None, now=_NOW)
 
-    assert _status(state, "OQ-a") is OpenQuestionStatus.ANSWERED
+    assert _status(state, "OQ-a") is OpenQuestionStatus.AUTO_RESOLVED
     assert _status(state, "OQ-gate") is OpenQuestionStatus.OPEN
 
 
 def test_reconcile_other_scope_question_is_not_a_candidate() -> None:
-    """A question in another scope neither answers nor blocks the pairing."""
+    """A question in another scope neither resolves nor blocks the pairing."""
     state = _state(_question("OQ-a"), _question("OQ-other", scope="XYZ"))
 
     reconcile_round_claims(state, _findings("claim one"), scope_id=None, now=_NOW)
 
-    assert _status(state, "OQ-a") is OpenQuestionStatus.ANSWERED
+    assert _status(state, "OQ-a") is OpenQuestionStatus.AUTO_RESOLVED
     assert _status(state, "OQ-other") is OpenQuestionStatus.OPEN
 
 

@@ -29,10 +29,10 @@ not started converging and is never saturated):
     an open contradiction the campaign must resolve before it is dry.
 (d) **integration closed** — the claim graph has no dangling edge: every claim
     that names an ``answers_question_id`` points at a question that is actually
-    ``ANSWERED``, and every live claim carries at least one ``evidence_refs``
-    entry so it integrates into the closed evidence graph (the rung-1 EviBound
-    resolver scores *whether* those refs resolve; this gate scores only that a
-    live claim is not evidence-less).
+    ``ANSWERED``, ``AUTO_RESOLVED``, or ``SEALED``, and every live claim carries
+    at least one ``evidence_refs`` entry so it integrates into the closed
+    evidence graph (the rung-1 EviBound resolver scores *whether* those refs
+    resolve; this gate scores only that a live claim is not evidence-less).
 
 The reducer keys on the closed
 :class:`~eawf.kernel.state.enums.ClaimStatus` /
@@ -48,6 +48,20 @@ every gate held and the loop stops (the campaign is dry), ``False`` means at
 least one gate is open and the loop runs another round.
 :meth:`SaturationReport.blocking_gates` names the still-open gates so the loop
 (or the operator) can see *why* the campaign is not yet dry.
+
+Contradiction stop rule, separate from gate (c)
+------------------------------------------------
+:class:`ContradictionStopRule` answers a narrower, differently-purposed
+question over the same ledger: "does a live claim stand refuted right now",
+independent of the four-gate saturation reducer. It is evaluated and reported
+through its own :meth:`ContradictionStopRule.evaluate` call, never derived
+from or folded into a :class:`SaturationReport` -- a caller that wires only
+the stop rule, only gate (c), or both, gets two verdicts that read the same
+ledger but never set each other. Firing the rule halts collection; it never
+resolves the contradiction (the offending claim is not retracted,
+auto-superseded, or downgraded by recency -- only an explicit subsuming
+claim moves the ledger past it), and it never implies the saturation gate is
+open or closed, nor is the gate ever inferred from it.
 """
 
 from __future__ import annotations
@@ -83,6 +97,20 @@ _LIVE_CLAIM_STATUSES: frozenset[ClaimStatus] = frozenset(
 #: campaign with any question in one of these states fails gate (a).
 _UNCLOSED_QUESTION_STATUSES: frozenset[OpenQuestionStatus] = frozenset(
     {OpenQuestionStatus.OPEN, OpenQuestionStatus.BLOCKED}
+)
+
+#: The :class:`OpenQuestionStatus` values gate (d) accepts as a claim's
+#: answer-edge target: an operator/claim-evidence ``ANSWERED`` question, or
+#: an ``AUTO_RESOLVED`` / ``SEALED`` policy pairing (PLAN-036 keeps those
+#: distinct from ANSWERED, but the claim graph still closes on either -- a
+#: policy-paired claim is not a dangling edge just because no human answered
+#: it).
+_ANSWER_EDGE_TARGET_STATUSES: frozenset[OpenQuestionStatus] = frozenset(
+    {
+        OpenQuestionStatus.ANSWERED,
+        OpenQuestionStatus.AUTO_RESOLVED,
+        OpenQuestionStatus.SEALED,
+    }
 )
 
 
@@ -248,6 +276,50 @@ class SaturationReport:
         )
 
 
+@dataclass(frozen=True)
+class ContradictionStopRule:
+    """Independent halt signal: does a live claim stand refuted right now.
+
+    Produced only by :meth:`evaluate`. Reads the same Claim ledger as gate
+    (c) of :class:`SaturationReport` but through a wholly separate code
+    path -- neither this rule nor the saturation gate reads, derives from,
+    or mutates the other, so a caller may wire either mechanism alone or
+    both without either result changing shape. See the module docstring
+    for why the two stay split.
+
+    Attributes:
+        fired: ``True`` iff at least one live claim (status in
+            :data:`_LIVE_CLAIM_STATUSES`) is :attr:`ClaimStatus.REFUTED`.
+        offenders: Ids of the firing claims, in ledger order. Empty when
+            :attr:`fired` is ``False``.
+    """
+
+    fired: bool
+    offenders: tuple[str, ...]
+
+    @classmethod
+    def evaluate(cls, claims: Iterable[Claim]) -> ContradictionStopRule:
+        """Scan *claims* for a live contradiction.
+
+        Pure: the same ledger always yields the same rule; no I/O, no
+        mutation, no raise on the read path, and no read of a
+        :class:`SaturationReport` -- computing the rule never touches the
+        saturation reducer's state, and computing the reducer never touches
+        this rule.
+
+        Args:
+            claims: The Claim ledger -- every row, including ``SUPERSEDED``
+                rows (a superseded claim cannot also be REFUTED since
+                :class:`ClaimStatus` is a single field, so it never fires).
+
+        Returns:
+            A :class:`ContradictionStopRule` naming every live REFUTED
+            claim id, or an unfired rule with no offenders.
+        """
+        offenders = tuple(c.id for c in claims if c.status is ClaimStatus.REFUTED)
+        return cls(fired=bool(offenders), offenders=offenders)
+
+
 def _gate_no_open_question(questions: Sequence[OpenQuestion]) -> SaturationGateResult:
     """Gate (a): no question is left in an unclosed (``OPEN`` / ``BLOCKED``) state."""
     offenders = tuple(q.id for q in questions if q.status in _UNCLOSED_QUESTION_STATUSES)
@@ -314,13 +386,14 @@ def _gate_integration_closed(
 
     Two ways a live claim leaves the integration open:
 
-    * It names an ``answers_question_id`` pointing at a question that is
-      not ``ANSWERED`` (a dangling answer-edge — the claim asserts it
-      closes a question the question ledger does not agree is closed).
+    * It names an ``answers_question_id`` pointing at a question that is not
+      ``ANSWERED`` / ``AUTO_RESOLVED`` / ``SEALED`` (a dangling answer-edge —
+      the claim asserts it closes a question the question ledger does not
+      agree is closed).
     * It carries an empty ``evidence_refs`` list (an evidence-less live
       claim does not integrate into the closed evidence graph).
     """
-    answered_question_ids = {q.id for q in questions if q.status is OpenQuestionStatus.ANSWERED}
+    answered_question_ids = {q.id for q in questions if q.status in _ANSWER_EDGE_TARGET_STATUSES}
     offenders: list[str] = []
     for claim in live_claims:
         dangling_edge = (
@@ -347,6 +420,7 @@ def _gate_integration_closed(
 __all__ = [
     "DEFAULT_NOVELTY_FLOOR",
     "DEFAULT_NOVELTY_WINDOW",
+    "ContradictionStopRule",
     "SaturationGateResult",
     "SaturationReport",
 ]

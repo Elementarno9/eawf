@@ -25,9 +25,9 @@ import logging
 import threading
 import time
 import uuid
-from collections.abc import Callable, Collection, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -37,10 +37,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
 from eawf.kernel.spec.campaign_driver import (
     DispatchSpawner,
+    RoundContradictionReducer,
     RoundFindings,
     RoundSaturationReducer,
     build_round_runner,
     drive_campaign,
+    ledger_contradiction_reducer,
+    ledger_saturation_reducer,
 )
 from eawf.kernel.spec.live_rounds import CockpitLevel
 from eawf.kernel.spec.operator_input import (
@@ -59,7 +62,12 @@ from eawf.kernel.spec.research_campaign import (
     StagedCampaign,
     stage_campaign,
 )
-from eawf.kernel.spec.round_loop import DEFAULT_ROUND_BUDGET, CheckpointPolicy, CheckpointTier
+from eawf.kernel.spec.round_loop import (
+    DEFAULT_ROUND_BUDGET,
+    CheckpointPolicy,
+    CheckpointTier,
+    RoundHaltReason,
+)
 from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
@@ -68,6 +76,7 @@ from eawf.kernel.state.enums import (
     ClaimStatus,
     Confidence,
     EffortBucket,
+    OpenQuestionDropReason,
     OpenQuestionStatus,
     ReportSource,
     StoreKind,
@@ -80,7 +89,13 @@ from eawf.kernel.store.kinds.agent_report import ResearcherReportBody
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.kernel.store.kinds.research_campaign import (
     CampaignTombstone,
+    IllegalCampaignTransitionError,
     ResearchCampaignPayload,
+    charge_evidence_budget,
+    complete_campaign,
+    exhausted_budget_axis,
+    open_evidence_budget,
+    validate_campaign_transition,
 )
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
@@ -111,7 +126,8 @@ from eawf.workflow.verify.dispatch_close import DispatchCloseBlockedError
 if TYPE_CHECKING:
     from eawf.kernel.spec.research_campaign import StagedDispatch
     from eawf.kernel.spec.round_loop import RoundOutcome
-    from eawf.kernel.state.models import Claim, State
+    from eawf.kernel.spec.saturation import SaturationReport
+    from eawf.kernel.state.models import Claim, OpenQuestion, State
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +193,7 @@ def build_bound_round_runner(
     campaign: StagedCampaign,
     produce_agent_end: AgentEndProducer,
     saturation: RoundSaturationReducer,
+    contradiction: RoundContradictionReducer,
 ) -> tuple[Callable[[int], RoundOutcome], list[Any]]:
     """Bind a campaign's round runner over the live ``agent.dispatch`` spawn.
 
@@ -192,12 +209,14 @@ def build_bound_round_runner(
         produce_agent_end: The per-dispatch agent-end producer (the live
             spawn in production; a fixture stub in tests).
         saturation: The per-round saturation reducer the runner consults.
+        contradiction: The per-round contradiction-stop-rule reducer the
+            runner consults, separately from *saturation*.
 
     Returns:
         The ``(round_runner, rounds)`` pair the campaign driver consumes.
     """
     spawner = build_live_dispatch_spawner(produce_agent_end)
-    return build_round_runner(campaign, spawner, saturation)
+    return build_round_runner(campaign, spawner, saturation, contradiction)
 
 
 class CreateCampaignParams(BaseModel):
@@ -209,12 +228,16 @@ class CreateCampaignParams(BaseModel):
         campaign: The plan-only :class:`StagedCampaign` the Level-1 runner
             emitted. Validated into a :class:`ResearchCampaignPayload` before
             any side effect.
+        budget_limits: Evidence-budget limit per axis (``rounds`` / ``usd``);
+            the campaign starts with nothing spent on each. Empty creates an
+            unbudgeted campaign.
     """
 
     model_config = ConfigDict(extra="forbid")
     campaign_id: str
     config: ResearchProfileBlock
     campaign: StagedCampaign
+    budget_limits: dict[str, float] = Field(default_factory=dict)
 
 
 class CreateCampaignResult(BaseModel):
@@ -292,7 +315,8 @@ async def create_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
 
     Raises:
         ValueError: When *params* does not validate against
-            :class:`CreateCampaignParams` or the payload exceeds the staged-
+            :class:`CreateCampaignParams`, a budget limit names an unknown
+            axis or is negative, or the payload exceeds the staged-
             dispatch bound. The server maps this to ``-32602 invalid params``.
         RuntimeError: When ``ctx.state_path`` is unset (unit tests running the
             daemon without an on-disk store).
@@ -304,6 +328,7 @@ async def create_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         campaign_id=args.campaign_id,
         config=args.config,
         campaign=args.campaign,
+        evidence_budget=open_evidence_budget(args.budget_limits),
     )
     appended_id = persist_campaign(Path(ctx.state_path), payload)
     appended_at = datetime.now(UTC).isoformat()
@@ -323,12 +348,15 @@ class StageCampaignParams(BaseModel):
         campaign_id: Optional caller-allocated stable id for the staged
             campaign. ``None`` allocates a fresh ``campaign-<hex>`` id so the
             common caller (the Research board) need not mint one.
+        budget_limits: Evidence-budget limit per axis (``rounds`` / ``usd``),
+            as for :class:`CreateCampaignParams`.
     """
 
     model_config = ConfigDict(extra="forbid")
     topic: str
     config: ResearchProfileBlock
     campaign_id: str | None = Field(default=None, min_length=1)
+    budget_limits: dict[str, float] = Field(default_factory=dict)
 
 
 class StageCampaignResult(BaseModel):
@@ -390,6 +418,7 @@ async def stage_campaign_method(ctx: MethodContext, params: dict[str, Any]) -> d
         campaign_id=campaign_id,
         config=args.config,
         campaign=campaign,
+        evidence_budget=open_evidence_budget(args.budget_limits),
     )
     appended_id = persist_campaign(Path(ctx.state_path), payload)
     appended_at = datetime.now(UTC).isoformat()
@@ -484,9 +513,12 @@ async def cancel_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         Dict matching :class:`CancelCampaignResult`.
 
     Raises:
-        ValueError: When *params* does not validate, the campaign id names no
-            stored campaign, or the campaign is not ACTIVE. The server maps
-            this to ``-32602 invalid params``.
+        ValueError: When *params* does not validate or the campaign id names
+            no stored campaign. The server maps this to ``-32602 invalid
+            params``.
+        IllegalCampaignTransitionError: When the campaign's status cannot
+            move to CANCELLED (it is already converged or cancelled). A
+            ``ValueError`` subclass, so the server maps it the same way.
         RuntimeError: When ``ctx.state_path`` is unset.
     """
     args = CancelCampaignParams.model_validate(params)
@@ -496,8 +528,7 @@ async def cancel_campaign(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     current = read_latest_campaign(state_path, args.campaign_id)
     if current is None:
         raise ValueError(f"unknown campaign: {args.campaign_id!r}")
-    if current.status is not CampaignStatus.ACTIVE:
-        raise ValueError(f"campaign not active: {args.campaign_id!r} is {current.status.value!r}")
+    validate_campaign_transition(current.status, CampaignStatus.CANCELLED)
     cancelled_at = datetime.now(UTC)
     tombstoned = current.model_copy(
         update={
@@ -737,7 +768,12 @@ def _apply_resolve_question(state: State, args: ResolveQuestionParams) -> dict[s
     ``blocking`` bool, not the status, so a resolve that left the bit set would
     never drop the count and the run would stay halted. ``answered_by_claim_id``
     stays ``None`` (an operator resolve has no answering claim, unlike the
-    round-reconcile path).
+    round-reconcile path). A ``DROPPED`` row always carries
+    :attr:`~eawf.kernel.state.enums.OpenQuestionDropReason.OUT_OF_SCOPE`: this
+    verb has no successor question to name (that is the separate supersede
+    path, :attr:`~eawf.kernel.state.enums.OpenQuestionDropReason.SUPERSEDED`),
+    so every drop through it is the operator deciding the question no longer
+    matters -- an unreasoned drop is never left silent.
 
     Args:
         state: Loaded :class:`State`. ``state.open_questions`` is mutated in
@@ -757,10 +793,12 @@ def _apply_resolve_question(state: State, args: ResolveQuestionParams) -> dict[s
     if question is None:
         raise ValueError(f"unknown question: {args.question_id!r}")
     status = OpenQuestionStatus.DROPPED if args.drop else OpenQuestionStatus.ANSWERED
+    drop_reason = OpenQuestionDropReason.OUT_OF_SCOPE if args.drop else None
     questions[args.question_id] = question.model_copy(
         update={
             "status": status,
             "blocking": False,
+            "drop_reason": drop_reason,
             "resolved_at": datetime.now(UTC),
         }
     )
@@ -838,6 +876,70 @@ def _normalize_claim_text(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
+def _refute_named_claims(
+    claims: dict[str, Claim], bodies: tuple[ResearcherReportBody, ...], resolved_scope: str
+) -> list[str]:
+    """Flip every LIVE claim a body names in ``refuted_claim_ids`` to REFUTED.
+
+    A researcher names the prior claim its survey contradicts explicitly
+    (never inferred from finding text) -- a stale or foreign-scope id, or one
+    already REFUTED / SUPERSEDED, is silently skipped rather than raised: a
+    round's contradiction signal must not abort the whole reconcile over one
+    bad reference.
+
+    Args:
+        claims: The round's working claim dict (id -> row), mutated in place.
+        bodies: The round's parsed researcher bodies.
+        resolved_scope: The campaign's resolved scope id.
+
+    Returns:
+        The ids flipped to REFUTED this call, in body order.
+    """
+    refuted: list[str] = []
+    for body in bodies:
+        for target_id in body.refuted_claim_ids:
+            target = claims.get(target_id)
+            if (
+                target is not None
+                and target.scope_id == resolved_scope
+                and target.status in (ClaimStatus.OPEN, ClaimStatus.SUPPORTED)
+            ):
+                claims[target_id] = target.model_copy(update={"status": ClaimStatus.REFUTED})
+                refuted.append(target_id)
+    return refuted
+
+
+def _seal_stale_auto_resolutions(questions: dict[str, OpenQuestion], resolved_scope: str) -> int:
+    """Seal every AUTO_RESOLVED question the scope carries from an earlier round.
+
+    PLAN-036's override window is exactly one round wide: a policy pairing
+    that survived to the NEXT round's reconcile has stood unchallenged and
+    locks in as SEALED. A pairing THIS round's own elimination step makes is
+    never passed here -- the caller runs this seal BEFORE that step, so it has
+    not yet crossed a round boundary.
+
+    Args:
+        questions: The round's working question dict (id -> row), mutated in
+            place.
+        resolved_scope: The campaign's resolved scope id.
+
+    Returns:
+        The count of questions sealed this call.
+    """
+    sealed = 0
+    for question_id, question in questions.items():
+        is_carried_auto_resolve = (
+            question.scope_id == resolved_scope
+            and question.status is OpenQuestionStatus.AUTO_RESOLVED
+        )
+        if is_carried_auto_resolve:
+            questions[question_id] = question.model_copy(
+                update={"status": OpenQuestionStatus.SEALED}
+            )
+            sealed += 1
+    return sealed
+
+
 def reconcile_round_claims(
     state: State,
     findings: RoundFindings,
@@ -854,21 +956,36 @@ def reconcile_round_claims(
     resolver + the saturation reducer score real rows). The claim id is
     ``CLM-r<round>-<domain>-<n>`` so a re-run round does not collide. A finding
     line over the title bound is truncated to the 72-char title cap with its
-    full text preserved in the description.
+    full text preserved in the description. A body naming a claim id in
+    :attr:`~eawf.kernel.store.kinds.agent_report.ResearcherReportBody.refuted_claim_ids`
+    flips that LIVE claim (scope-matched, ``OPEN``/``SUPPORTED``) to
+    :attr:`~eawf.kernel.state.enums.ClaimStatus.REFUTED` -- the only place a
+    claim ever reaches that status, feeding the campaign's contradiction stop
+    rule. Also seals every ``AUTO_RESOLVED`` question the scope carries from a
+    STRICTLY earlier round: PLAN-036's override window is exactly one round
+    wide, so a policy pairing that survived to the next round's reconcile has
+    stood unchallenged and locks in as ``SEALED``. A pairing this same round's
+    elimination step makes (below) is untouched here since it has not yet
+    crossed a round boundary.
 
     Pure with respect to its inputs aside from mutating *state* in place (the
-    caller owns the canonical persist). Returns the ids of the claims written so
-    the caller can record the per-round claim count.
+    caller owns the canonical persist). Returns the ids of every Claim row this
+    round touched -- newly written, then newly REFUTED -- so the caller carries
+    a fresh copy of a flipped claim forward into its own ledger (never just the
+    per-round claim count: a REFUTED status change is invisible to a
+    round-to-round contradiction check unless the fresh row rides this return).
 
     Args:
-        state: Loaded :class:`State`. ``state.claims`` is mutated in place.
+        state: Loaded :class:`State`. ``state.claims`` / ``state.open_questions``
+            are mutated in place.
         findings: The round's parsed findings.
         scope_id: Explicit scope for the claims; ``None`` resolves to the
             project code.
         now: The instant the claims are logged at.
 
     Returns:
-        The ids of the Claim rows written this round, in finding order.
+        The ids of the Claim rows this round wrote (new rows, finding order)
+        followed by the ids it flipped to REFUTED (pre-existing rows).
     """
     from eawf.kernel.state.models import Claim
 
@@ -909,14 +1026,20 @@ def reconcile_round_claims(
                 created_at=now,
             )
             written.append(claim_id)
+    refuted = _refute_named_claims(claims, findings.bodies, resolved_scope)
     # A finding carries no link to the question it addresses, so a claim can
     # only be paired by elimination: when the scope has exactly one OPEN,
     # non-blocking question, that question is every claim's single candidate
-    # and the round's first claim answers it. With two or more candidates the
-    # pairing would be a guess, so every question stays OPEN for the operator.
-    # Blocking questions are operator checkpoints and never auto-answer.
+    # and the round's first claim pairs with it. With two or more candidates
+    # the pairing would be a guess, so every question stays OPEN for the
+    # operator. Blocking questions are operator checkpoints and never
+    # auto-resolve. The pairing is a policy inference, not an operator
+    # answering the question, so it lands AUTO_RESOLVED (PLAN-036): folding
+    # it into ANSWERED would attribute a machine decision to a person and
+    # hide that no human looked at the question.
     questions = dict(state.open_questions or {})
-    answered = 0
+    sealed = _seal_stale_auto_resolutions(questions, resolved_scope)
+    auto_resolved = 0
     candidates = [
         q
         for q in questions.values()
@@ -927,12 +1050,12 @@ def reconcile_round_claims(
         claims[claim_id] = claims[claim_id].model_copy(update={"answers_question_id": question.id})
         questions[question.id] = question.model_copy(
             update={
-                "status": OpenQuestionStatus.ANSWERED,
+                "status": OpenQuestionStatus.AUTO_RESOLVED,
                 "answered_by_claim_id": claim_id,
                 "resolved_at": now,
             }
         )
-        answered = 1
+        auto_resolved = 1
     state.claims = claims
     state.open_questions = questions
     # A researcher that returns verdict=blocked with a clarification
@@ -960,10 +1083,10 @@ def reconcile_round_claims(
             raised += 1
     logger.info(
         f"reconcile_round_claims round={findings.round_number} scope_id={resolved_scope!r} "
-        f"claims={len(written)} compacted={compacted} answered_questions={answered} "
-        f"raised_clarifications={raised}"
+        f"claims={len(written)} compacted={compacted} refuted={len(refuted)} sealed={sealed} "
+        f"auto_resolved_questions={auto_resolved} raised_clarifications={raised}"
     )
-    return written
+    return written + refuted
 
 
 # --------------------------------------------------------------------------
@@ -1088,8 +1211,8 @@ class RunCampaignParams(BaseModel):
     Drives a bounded campaign run over the persisted staged campaign. The run
     spawns a researcher session per staged dispatch each round (the W01 round
     runner), reconciles the round's findings into Claim rows, persists the
-    round + checkpoint, and halts on the first of saturation or the round
-    budget.
+    round + checkpoint, and halts on the first of saturation, the round
+    budget, or the campaign's evidence budget.
 
     Attributes:
         campaign_id: The persisted campaign to run; must name an ACTIVE
@@ -1115,10 +1238,17 @@ class RunCampaignResult(BaseModel):
     Attributes:
         campaign_id: The campaign that was run.
         rounds_run: How many rounds the bounded loop executed.
-        halt_reason: Why the loop stopped (``saturated`` / ``round_budget``).
+        halt_reason: Why the loop stopped (``saturated`` / ``round_budget``
+            / ``contradiction`` / ``cancelled`` / ``evidence_budget`` /
+            ``paused``).
         saturated: Whether the run ended because the campaign converged.
         checkpoints: How many operator-review checkpoints the run recorded.
         claim_ids: The Claim row ids written across every round.
+        contradiction_offenders: Ids of the live REFUTED claims that fired
+            the contradiction stop rule this run. Empty when the rule
+            never fired. Populated so the operator can see why a
+            ``contradiction`` halt left the campaign ACTIVE rather than
+            CONVERGED.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1128,6 +1258,7 @@ class RunCampaignResult(BaseModel):
     saturated: bool
     checkpoints: int
     claim_ids: list[str]
+    contradiction_offenders: list[str] = Field(default_factory=list)
 
 
 class ResearchRunHandle(BaseModel):
@@ -1209,7 +1340,7 @@ def research_run_in_flight(campaign_id: str | None = None) -> bool:
 
 
 def _live_agent_end_producer(
-    ctx: MethodContext, runtime: str, *, campaign_id: str
+    ctx: MethodContext, runtime: str, *, campaign_id: str, research_scope_id: str | None = None
 ) -> AgentEndProducer:
     """Build the production agent-end producer over the ``agent.dispatch`` spawn.
 
@@ -1225,6 +1356,10 @@ def _live_agent_end_producer(
         ctx: The daemon context the spawn runs under (needs state + event
             paths for the live spawn).
         runtime: The runtime adapter the researcher spawns on.
+        campaign_id: The running campaign id (the cost / session scope).
+        research_scope_id: The campaign's research scope (mirrors
+            ``RunCampaignParams.scope_id``), forwarded so each round's prompt
+            can offer the scope's live claim ids.
 
     Returns:
         An :data:`AgentEndProducer` that spawns one researcher per dispatch.
@@ -1232,7 +1367,11 @@ def _live_agent_end_producer(
 
     def _produce(dispatch: StagedDispatch) -> Mapping[str, object]:
         return _run_research_spawn_threaded(
-            ctx, runtime=runtime, dispatch=dispatch, campaign_id=campaign_id
+            ctx,
+            runtime=runtime,
+            dispatch=dispatch,
+            campaign_id=campaign_id,
+            research_scope_id=research_scope_id,
         )
 
     return _produce
@@ -1244,6 +1383,7 @@ def _run_research_spawn_threaded(
     runtime: str,
     dispatch: StagedDispatch,
     campaign_id: str,
+    research_scope_id: str | None = None,
 ) -> Mapping[str, object]:
     """Run one live researcher spawn from the synchronous round-runner seam."""
     import asyncio
@@ -1251,7 +1391,11 @@ def _run_research_spawn_threaded(
 
     async def _spawn() -> Mapping[str, object]:
         return await _spawn_researcher_agent_end(
-            ctx, runtime=runtime, dispatch=dispatch, campaign_id=campaign_id
+            ctx,
+            runtime=runtime,
+            dispatch=dispatch,
+            campaign_id=campaign_id,
+            research_scope_id=research_scope_id,
         )
 
     def _run() -> Mapping[str, object]:
@@ -1406,6 +1550,7 @@ async def _spawn_researcher_agent_end(
     runtime: str,
     dispatch: StagedDispatch,
     campaign_id: str,
+    research_scope_id: str | None = None,
 ) -> Mapping[str, object]:
     """Spawn one researcher and return its validated ``agent_end`` body.
 
@@ -1415,6 +1560,17 @@ async def _spawn_researcher_agent_end(
     schema-assist loop, prices the spawn, and drives the dispatch runner so
     dispatch-cost / agent-output / role-specific ``agent_end`` evidence lands
     in the stores.
+
+    Args:
+        ctx: Daemon context (needs ``state_path`` + ``event_path``).
+        runtime: The runtime adapter to spawn the researcher on.
+        dispatch: The staged dispatch (topic, domain, depth) to prompt for.
+        campaign_id: The running campaign id (the cost / session scope).
+        research_scope_id: The campaign's research scope (``RunCampaignParams
+            .scope_id``, not the per-session scope this function derives
+            below) -- read for the round prompt's live-claim offer
+            (:func:`_researcher_prompt`); ``None`` resolves to the project
+            code, same as :func:`_resolve_research_scope`.
     """
     if ctx.state_path is None or ctx.event_path is None:
         raise RuntimeError("research.run live spawn requires state_path + event_path")
@@ -1441,7 +1597,14 @@ async def _spawn_researcher_agent_end(
         scope_id=scope_id,
         runtime=serving_runtime,
     )
-    prompt = _researcher_prompt(dispatch)
+    live_claims = [
+        claim
+        for claim in _scope_claims(
+            state_path, research_scope_id, fold_into_state=state_path.exists()
+        )
+        if claim.status in (ClaimStatus.OPEN, ClaimStatus.SUPPORTED)
+    ]
+    prompt = _researcher_prompt(dispatch, live_claims=live_claims)
     repo_root = state_path.parent.parent
     model = model_for_runtime(
         AgentSessionRole.RESEARCHER,
@@ -1631,16 +1794,39 @@ def _active_research_wave_id_or_none(state_path: Path) -> str | None:
     return None
 
 
-def _researcher_prompt(dispatch: StagedDispatch) -> str:
-    """Render the researcher prompt with a strict ``agent_end`` JSON contract."""
+def _researcher_prompt(dispatch: StagedDispatch, *, live_claims: Sequence[Claim] = ()) -> str:
+    """Render the researcher prompt with a strict ``agent_end`` JSON contract.
+
+    Args:
+        dispatch: The staged dispatch (topic, domain, depth) to prompt for.
+        live_claims: The scope's current OPEN/SUPPORTED claims, offered so a
+            researcher whose finding contradicts one NAMES it in
+            ``refuted_claim_ids`` rather than inventing an id -- empty on a
+            first round, or an offline/no-fold run with no ledger to read.
+
+    Returns:
+        The rendered prompt text.
+    """
+    claims_note = ""
+    if live_claims:
+        listed = "\n".join(f"- {claim.id}: {claim.title}" for claim in live_claims)
+        claims_note = (
+            "\n\nLive claims already on this scope's ledger:\n"
+            f"{listed}\n"
+            "If this round's finding directly contradicts one of them, name its "
+            "id in refuted_claim_ids; leave refuted_claim_ids empty otherwise -- "
+            "never infer a contradiction from a mere absence of support.\n"
+        )
     return (
         f"{dispatch.prompt}\n\n"
         f"Research domain: {dispatch.domain}\n"
-        f"Depth: {dispatch.depth.value}\n\n"
+        f"Depth: {dispatch.depth.value}\n"
+        f"{claims_note}\n"
         "Return only a JSON object matching this agent_end schema:\n"
         '{"role":"researcher","verdict":"pass|pass-with-followups|fail|blocked",'
         '"confidence":"low|medium|high","summary":"...","question":"...",'
         '"findings":["..."],"recommendation":"...",'
+        '"refuted_claim_ids":["id of a LIVE claim this finding directly contradicts"],'
         '"evidence_refs":[{"kind":"store_record","ref":"repo-relative ref"}]}\n'
         "Use repo-relative or external evidence refs only."
     )
@@ -1729,13 +1915,28 @@ def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
     return cast(EnforceMode, value)
 
 
-def _validate_runnable_campaign(state_path: Path, campaign_id: str) -> None:
-    """Raise when *campaign_id* cannot be started as an ACTIVE campaign."""
+#: The spend a campaign's first round is projected at: one round, and no
+#: researcher spend yet observed to extrapolate from.
+_FIRST_ROUND_SPEND: dict[str, float] = {"rounds": 1.0, "usd": 0.0}
+
+
+def _validate_runnable_campaign(state_path: Path, campaign_id: str) -> ResearchCampaignPayload:
+    """Return *campaign_id*'s latest record, or raise when it cannot be started.
+
+    Raises:
+        ValueError: When the campaign is unknown, not ACTIVE, or its evidence
+            budget cannot afford even the first round -- the loop always runs
+            one round, so the refusal has to happen before it starts.
+    """
     campaign = read_latest_campaign(state_path, campaign_id)
     if campaign is None:
         raise ValueError(f"unknown campaign: {campaign_id!r}")
     if campaign.status is not CampaignStatus.ACTIVE:
         raise ValueError(f"campaign not active: {campaign_id!r} is {campaign.status.value!r}")
+    axis = exhausted_budget_axis(campaign.evidence_budget, _FIRST_ROUND_SPEND)
+    if axis is not None:
+        raise ValueError(f"campaign evidence budget exhausted: {campaign_id!r} axis {axis!r}")
+    return campaign
 
 
 def _research_worker_context(
@@ -1945,18 +2146,26 @@ def _prune_carried_ledger(
 ) -> None:
     """Carry the round's claims forward and prune the ledger to the live frontier.
 
-    Appends *round_claims* to the accumulated *carried_claims* ledger, then runs
-    the L1 between-rounds reducer (:func:`~eawf.kernel.spec.pruning.prune_round_carryover`)
-    over it so the provably-dead rows (``SUPERSEDED`` + answers-to-``DROPPED``-
-    questions) drop. The ledger is trimmed in place to the kept (live) frontier
-    the next round carries.
+    Folds *round_claims* into the accumulated *carried_claims* ledger -- an id
+    already carried is REPLACED by the round's fresh copy rather than appended
+    alongside the stale one, so a claim :func:`reconcile_round_claims` flips to
+    REFUTED this round (an id it already wrote in an earlier round) overwrites
+    its carried OPEN/SUPPORTED copy instead of leaving both in the ledger,
+    which would double-count it and hide the contradiction behind the stale
+    row. Then runs the L1 between-rounds reducer
+    (:func:`~eawf.kernel.spec.pruning.prune_round_carryover`) over it so the
+    provably-dead rows (``SUPERSEDED`` + answers-to-``DROPPED``-questions)
+    drop. The ledger is trimmed in place to the kept (live) frontier the next
+    round carries.
 
     Args:
         carried_claims: The accumulated ledger, mutated in place.
-        round_claims: The Claim rows this round reconciled.
+        round_claims: The Claim rows this round touched (written or REFUTED).
         campaign_id: The running campaign id (for the log line).
         now: The reference instant threaded into the reducer.
     """
+    touched_ids = {claim.id for claim in round_claims}
+    carried_claims[:] = [claim for claim in carried_claims if claim.id not in touched_ids]
     carried_claims.extend(round_claims)
     pruned = prune_round_carryover(carried_claims, [], now=now)
     kept_ids = set(pruned.kept)
@@ -1965,6 +2174,172 @@ def _prune_carried_ledger(
         f"_prune_carried_ledger campaign={campaign_id!r} "
         f"kept={len(pruned.kept)} dropped={len(pruned.dropped)}"
     )
+
+
+def _finalize_run_status(
+    state_path: Path,
+    latest: ResearchCampaignPayload | None,
+    *,
+    halt_reason: RoundHaltReason,
+) -> CampaignStatus | None:
+    """Flip an ACTIVE campaign to its terminal status after a bounded run, or not.
+
+    A :attr:`~eawf.kernel.spec.round_loop.RoundHaltReason.CONTRADICTION` halt
+    leaves the campaign as it stands: a live contradiction blocks
+    convergence, so the run must not persist -- or report -- a CONVERGED
+    campaign it never reached. A
+    :attr:`~eawf.kernel.spec.round_loop.RoundHaltReason.PAUSED` halt does the
+    same, so the operator can answer and run the campaign again. Every other
+    halt reason (saturation, round budget, evidence budget) asks
+    :func:`complete_campaign` for the CONVERGED edge; the transition matrix
+    refuses it for a campaign already off ACTIVE (an operator cancel
+    mid-run), which is then reported as it stands, untouched.
+
+    Args:
+        state_path: Path to the scope's state dir, forwarded to
+            :func:`persist_campaign` when a convergence flip is needed.
+        latest: The freshly re-read campaign record, or ``None`` when it
+            could not be resolved.
+        halt_reason: Why the bounded round loop stopped this run.
+
+    Returns:
+        The campaign's status after this call, or ``None`` when *latest*
+        is ``None``.
+    """
+    if latest is None:
+        return None
+    if halt_reason in (RoundHaltReason.CONTRADICTION, RoundHaltReason.PAUSED):
+        return latest.status
+    try:
+        completed = complete_campaign(latest)
+    except IllegalCampaignTransitionError as exc:
+        logger.info(f"_finalize_run_status campaign={latest.campaign_id!r} refused={exc}")
+        return latest.status
+    persist_campaign(state_path, completed)
+    return CampaignStatus.CONVERGED
+
+
+class _EvidenceBudgetMeter:
+    """Charge a campaign's evidence budget per round and project the next one.
+
+    Each executed round costs one ``rounds`` unit plus the researcher spend
+    booked against the campaign since the previous round. The next round is
+    projected to cost what the last one did, which is the best estimate a
+    run has before it spawns a round.
+    """
+
+    def __init__(self, state_path: Path, campaign: ResearchCampaignPayload) -> None:
+        """Start metering *campaign* from the spend already booked against it.
+
+        Args:
+            state_path: Path to the scope's ``state.json``.
+            campaign: The campaign record the run started from.
+        """
+        self._state_path = state_path
+        self._campaign_id = campaign.campaign_id
+        self._budget = campaign.evidence_budget
+        self._next_spend = dict(_FIRST_ROUND_SPEND)
+        self._cost_seen = (
+            read_campaign_cost(state_path, self._campaign_id) if self._budget else Decimal("0")
+        )
+
+    def charge_round(self) -> None:
+        """Add the round just run to the budget and persist the charged record.
+
+        The latest record is re-read before the append so an operator cancel
+        that landed mid-run keeps its tombstone; only the budget changes.
+        """
+        if not self._budget:
+            return
+        cost_total = read_campaign_cost(self._state_path, self._campaign_id)
+        spend = {"rounds": 1.0, "usd": float(cost_total - self._cost_seen)}
+        self._cost_seen = cost_total
+        self._next_spend = spend
+        self._budget = charge_evidence_budget(self._budget, spend)
+        latest = read_latest_campaign(self._state_path, self._campaign_id)
+        if latest is not None:
+            persist_campaign(
+                self._state_path, latest.model_copy(update={"evidence_budget": self._budget})
+            )
+
+    def exhausted_axis(self) -> str | None:
+        """Name the budget axis the next round would exceed, or ``None``."""
+        return exhausted_budget_axis(self._budget, self._next_spend)
+
+
+def _scope_claims(state_path: Path, scope_id: str | None, *, fold_into_state: bool) -> list[Claim]:
+    """Return the Claim ledger already persisted for the campaign's scope.
+
+    Every campaign in a scope shares this ledger: the researcher prompt offers
+    its live rows, and :func:`_campaign_claims` narrows it to one campaign's
+    own rows to seed ``run_campaign``'s carried ledger.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        scope_id: Explicit scope; ``None`` resolves to the project.
+        fold_into_state: Whether the run folds into real state; without it
+            there is no persisted ledger to seed from.
+
+    Returns:
+        The scope's already-persisted claims, live or not.
+    """
+    if not fold_into_state:
+        return []
+    state = load_state(state_path)
+    resolved = _resolve_research_scope(state, scope_id)
+    return [c for c in (state.claims or {}).values() if c.scope_id == resolved]
+
+
+def _campaign_claims(
+    state_path: Path, scope_id: str | None, campaign_id: str, *, fold_into_state: bool
+) -> list[Claim]:
+    """Return the persisted claims an earlier run of *campaign_id* touched.
+
+    Seeds ``run_campaign``'s carried ledger. The scope is shared by every
+    campaign in it, so seeding from the whole scope would hand one campaign
+    another campaign's REFUTED rows and halt it on a contradiction it never
+    recorded. Ownership is read off the campaign's persisted rounds, whose
+    ``claim_ids`` name every row a round wrote or refuted.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        scope_id: Explicit scope; ``None`` resolves to the project.
+        campaign_id: The campaign whose own claims to return.
+        fold_into_state: Whether the run folds into real state; without it
+            there is no persisted ledger to seed from.
+
+    Returns:
+        The campaign's already-persisted claims, live or not, in ledger order.
+    """
+    owned = {cid for rnd in read_campaign_rounds(state_path, campaign_id) for cid in rnd.claim_ids}
+    if not owned:
+        return []
+    return [
+        c
+        for c in _scope_claims(state_path, scope_id, fold_into_state=fold_into_state)
+        if c.id in owned
+    ]
+
+
+def _scope_questions(
+    state_path: Path, scope_id: str | None, *, fold_into_state: bool
+) -> list[OpenQuestion]:
+    """Return the OpenQuestion ledger the campaign's claims bind to.
+
+    Args:
+        state_path: Path to the scope's ``state.json``.
+        scope_id: Explicit scope; ``None`` resolves to the project.
+        fold_into_state: Whether the run folds into real state; without it
+            there is no question ledger to read.
+
+    Returns:
+        The scope's questions, terminal or not.
+    """
+    if not fold_into_state:
+        return []
+    state = load_state(state_path)
+    resolved = _resolve_research_scope(state, scope_id)
+    return [q for q in (state.open_questions or {}).values() if q.scope_id == resolved]
 
 
 def run_campaign(
@@ -1981,8 +2356,10 @@ def run_campaign(
     bounded loop via :func:`~eawf.kernel.spec.campaign_driver.drive_campaign`
     at the live cockpit level, and after each round reconciles the round's
     findings into Claim rows + persists a :class:`ResearchRoundPayload`. The
-    run respects *args.round_budget* (the hard ceiling) and the saturation
-    gates (the loop halts on the first of saturation or budget).
+    run respects *args.round_budget* (the hard ceiling), the four saturation
+    gates reduced over the carried claim ledger, and the campaign's evidence
+    budget: each round is charged against it and a round it cannot afford
+    halts the run with the ``evidence_budget`` reason before it spawns.
 
     The spawn is injected so the whole run is unit-testable under a stub
     producer + fixture ``agent_end`` bodies (no live subprocess).
@@ -2000,18 +2377,15 @@ def run_campaign(
 
     Raises:
         RuntimeError: When ``ctx.state_path`` is unset.
-        ValueError: When the campaign id names no ACTIVE campaign.
+        ValueError: When the campaign id names no ACTIVE campaign, or its
+            evidence budget cannot afford the first round.
         ResearcherDispatchError: Propagated when a round's spawned researcher
             body fails to parse.
     """
     if ctx.state_path is None:
         raise RuntimeError("state_path not configured on daemon context")
     state_path = Path(ctx.state_path)
-    campaign = read_latest_campaign(state_path, args.campaign_id)
-    if campaign is None:
-        raise ValueError(f"unknown campaign: {args.campaign_id!r}")
-    if campaign.status is not CampaignStatus.ACTIVE:
-        raise ValueError(f"campaign not active: {args.campaign_id!r} is {campaign.status.value!r}")
+    campaign = _validate_runnable_campaign(state_path, args.campaign_id)
 
     # Reconcile each round's findings into Claim rows as the loop drives, so
     # the saturation reducer scores the real ledger. Each round's claims fold
@@ -2021,15 +2395,28 @@ def run_campaign(
     # per-round store append + the L1 carryover prune ride alongside.
     claim_ids: list[str] = []
     round_payloads: list[ResearchRoundPayload] = []
-    # The accumulated live-claim ledger carried between rounds. The L1 carryover
-    # reducer (:func:`prune_round_carryover`) runs over it after each round so
-    # the next round + the synthesis work over only the live claims.
-    carried_claims: list[Claim] = []
+    # The instant each round's claims were logged at, keyed by round number.
+    round_logged_at: dict[int, datetime] = {}
     # The canonical state writer needs the on-disk state + a WAL dir. The
     # run-rpc unit path drives run_campaign against a context with neither (no
     # real ``.ea/state.json``, no ``wal_dir``); there the run still completes and
     # accumulates the round's claim ids in-memory, but no state fold occurs.
     can_fold_state = state_path.exists() and isinstance(ctx.wal_dir, Path)
+    # The live-claim ledger carried between rounds, SEEDED from this campaign's
+    # own already-persisted claims (:func:`_campaign_claims`) rather than
+    # starting empty: a resumed campaign's earlier ``run_campaign`` call folded
+    # its claims into ``state.claims`` before dying with its own Python frame,
+    # and the saturation gates must still score them. The L1 carryover reducer
+    # (:func:`prune_round_carryover`) runs over it after each round so the next
+    # round + the synthesis work over only the live claims.
+    carried_claims: list[Claim] = _campaign_claims(
+        state_path, args.scope_id, args.campaign_id, fold_into_state=can_fold_state
+    )
+    # Claims this run flipped to REFUTED. The contradiction halt reads only
+    # these: a refutation an earlier run already halted on has been surfaced,
+    # and nothing clears REFUTED, so halting on it again would stop every later
+    # run after one round with no way forward.
+    refuted_this_run: set[str] = set()
 
     def _channel_notes() -> tuple[list[str], bool]:
         """Fold the operator channel: return the queued notes + paused bit.
@@ -2053,6 +2440,7 @@ def run_campaign(
 
     def _reconcile(findings: RoundFindings) -> tuple[list[str], bool]:
         now = datetime.now(UTC)
+        round_logged_at[findings.round_number] = now
         steer_notes, paused = _channel_notes()
         round_claims = _reconcile_round_claims_for(
             ctx,
@@ -2065,6 +2453,9 @@ def run_campaign(
         )
         written = [claim.id for claim in round_claims]
         claim_ids.extend(written)
+        refuted_this_run.update(
+            claim.id for claim in round_claims if claim.status is ClaimStatus.REFUTED
+        )
         # Carry the round's claims forward, then run the L1 carryover reducer over
         # the accumulated ledger so the next round + the synthesis work over only
         # the live claims (dead rows drop). The kept set is the live frontier the
@@ -2084,27 +2475,53 @@ def run_campaign(
         round_payloads.append(payload)
         return steer_notes, paused
 
-    def _saturation(findings: RoundFindings) -> Any:
-        from eawf.kernel.spec.saturation import SaturationReport
+    # The four-gate reducer scores the carried claim ledger. Novelty is
+    # measured back from the round's own logging instant over a zero window, so
+    # it counts exactly the claims that round added: a round whose findings all
+    # deduped onto earlier claims has stopped turning up anything new.
+    ledger_saturation: RoundSaturationReducer = ledger_saturation_reducer(
+        lambda _findings: carried_claims,
+        lambda _findings: _scope_questions(
+            state_path, args.scope_id, fold_into_state=can_fold_state
+        ),
+        now_for_round=lambda findings: round_logged_at[findings.round_number],
+        novelty_window=timedelta(0),
+    )
+    meter = _EvidenceBudgetMeter(state_path, campaign)
+    paused_after_round = [False]
 
-        _steer_notes, paused = _reconcile(findings)
-        # A blocking operator input (D-2) soft-pauses the round: the loop halts
-        # as if saturated so the run yields to the operator. Otherwise a round
-        # with findings stays not-dry so the loop runs to the budget (the real
-        # ledger fold lands with W05/W06).
-        dry = paused or not findings.finding_lines
-        return SaturationReport(
-            saturated=dry,
-            gates=(),
-            live_claim_count=len(findings.finding_lines),
-            empty_ledger=not findings.finding_lines,
-        )
+    def _saturation(findings: RoundFindings) -> SaturationReport:
+        _steer_notes, paused_after_round[0] = _reconcile(findings)
+        meter.charge_round()
+        return ledger_saturation(findings)
 
-    spawner: DispatchSpawner = build_live_dispatch_spawner(produce_agent_end)
+    def _halt_before_round() -> RoundHaltReason | None:
+        """Stop before the next round on an operator pause or an exhausted budget.
+
+        A blocking operator input soft-pauses the run so it yields to the
+        operator between rounds; a round the evidence budget cannot afford is
+        never spawned.
+        """
+        if paused_after_round[0]:
+            return RoundHaltReason.PAUSED
+        if meter.exhausted_axis() is not None:
+            return RoundHaltReason.EVIDENCE_BUDGET
+        return None
+
+    # Reads the accumulated live-claim ledger _saturation's _reconcile call
+    # already folded this round's findings into -- a separate call over the
+    # same ledger, never derived from the SaturationReport the reducer builds --
+    # narrowed to the refutations this run recorded.
+    contradiction: RoundContradictionReducer = ledger_contradiction_reducer(
+        lambda _findings: [c for c in carried_claims if c.id in refuted_this_run]
+    )
+
     # The runner records its own RoundFindings list, but run_campaign builds the
     # richer per-round payloads inside _reconcile (folding in the claim ids), so
     # the runner's bare list is intentionally unused here.
-    runner, _runner_rounds = build_round_runner(campaign.campaign, spawner, _saturation)
+    runner, _runner_rounds = build_bound_round_runner(
+        campaign.campaign, produce_agent_end, _saturation, contradiction
+    )
     policy = (
         checkpoint_policy
         if checkpoint_policy is not None
@@ -2130,6 +2547,7 @@ def run_campaign(
         round_budget=args.round_budget,
         checkpoint_policy=policy,
         should_continue=_still_active,
+        halt_before_round=_halt_before_round,
     )
     loop = result.loop_result
     assert loop is not None  # a live drive always runs the loop
@@ -2153,23 +2571,22 @@ def run_campaign(
             saturated=stamped.saturated,
             checkpoint=stamped.checkpoint,
         )
-    # Flip the campaign to its terminal CONVERGED state: the run halted on
-    # saturation or the hard round cap, so the campaign is done and must NOT
-    # linger ACTIVE forever (the stuck-active record the operator saw). Re-read
-    # so an operator cancel mid-run wins; only an ACTIVE campaign converges.
+    # Flip the campaign to its terminal CONVERGED state -- unless the loop
+    # halted on a live contradiction, which leaves it ACTIVE (see
+    # _finalize_run_status). Re-read so an operator cancel mid-run wins;
+    # only an ACTIVE campaign converges.
     latest = read_latest_campaign(state_path, args.campaign_id)
-    terminal = latest.status if latest is not None else None
-    if latest is not None and latest.status is CampaignStatus.ACTIVE:
-        persist_campaign(state_path, latest.model_copy(update={"status": CampaignStatus.CONVERGED}))
-        terminal = CampaignStatus.CONVERGED
+    terminal = _finalize_run_status(state_path, latest, halt_reason=loop.halt_reason)
     # Report the state the campaign actually reached, not the one this branch
     # would have set: when an operator cancels mid-run the flip is skipped, and
     # a hardcoded terminal=converged would log a convergence that never
     # happened -- which is then read back as evidence that it did.
+    contradiction_offenders = list(loop.final_contradiction_stop.offenders)
     logger.info(
         f"run_campaign campaign={args.campaign_id!r} rounds={loop.rounds_run} "
         f"halt={loop.halt_reason.value} checkpoints={len(loop.checkpoints)} "
-        f"claims={len(claim_ids)} terminal={terminal.value if terminal else 'absent'}"
+        f"claims={len(claim_ids)} terminal={terminal.value if terminal else 'absent'} "
+        f"contradiction_offenders={len(contradiction_offenders)}"
     )
     return RunCampaignResult(
         campaign_id=args.campaign_id,
@@ -2178,6 +2595,7 @@ def run_campaign(
         saturated=loop.saturated,
         checkpoints=len(loop.checkpoints),
         claim_ids=claim_ids,
+        contradiction_offenders=contradiction_offenders,
     ).model_dump(mode="json")
 
 
@@ -2211,7 +2629,7 @@ async def run(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     # harness injects a stub producer into run_campaign directly, so this RPC
     # entrypoint never spawns a real subprocess under test.
     produce_agent_end = _live_agent_end_producer(
-        ctx, runtime="claude", campaign_id=args.campaign_id
+        ctx, runtime="claude", campaign_id=args.campaign_id, research_scope_id=args.scope_id
     )
     handle = start_background_research_run(
         ctx,

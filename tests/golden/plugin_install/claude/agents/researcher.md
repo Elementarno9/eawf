@@ -34,6 +34,10 @@ You emit a typed `IntentBrief`: every claim carries `evidence_refs` (file:line, 
 
 Structured findings block with `Question / Findings / Alternatives / Recommendation / Open questions`. Word budget: ≤500 words unless the parent specifies otherwise.
 
+## Refuting a prior claim
+
+A research-campaign round prompt lists the scope's current live claim ids for exactly this: when your finding directly contradicts one of them, name that claim's id in `refuted_claim_ids`. Leave it empty otherwise -- never infer a contradiction from a mere absence of support, and never name a claim the prompt did not list.
+
 ## Anti-patterns
 
 - Recommending a path without naming what would change your mind.
@@ -66,6 +70,7 @@ At completion, emit an `agent_end` body matching this JSON shape. Do not include
   "alternatives": [
     "alternative considered"
   ],
-  "recommendation": "recommended next step"
+  "recommendation": "recommended next step",
+  "refuted_claim_ids": []
 }
 ```

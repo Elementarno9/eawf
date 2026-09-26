@@ -172,6 +172,69 @@ def test_campaign_new_daemon_proxy_forwards_params(
     assert "staged campaign campaign-" in result.stdout
 
 
+def test_campaign_new_forwards_budget_limits_the_rpc_accepts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """--budget-rounds / --budget-usd reach the RPC as params its model accepts."""
+    from eawf.runtime.daemon.methods.research import CreateCampaignParams
+
+    workspace = _make_workspace(tmp_path)
+    _patch_block(monkeypatch, _block())
+    _FakeOkClient.captured = {}
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
+
+    result = runner.invoke(
+        app,
+        [
+            "-w",
+            str(workspace),
+            "research",
+            "campaign",
+            "new",
+            "--budget-rounds",
+            "4",
+            "--budget-usd",
+            "1.5",
+            "Budgeted topic",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    params = CreateCampaignParams.model_validate(_FakeOkClient.captured["params"])
+    assert params.budget_limits == {"rounds": 4.0, "usd": 1.5}
+
+
+def test_campaign_new_offline_fallback_persists_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = _make_workspace(tmp_path)
+    _patch_block(monkeypatch, _block())
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
+
+    result = runner.invoke(
+        app,
+        ["-w", str(workspace), "research", "campaign", "new", "--budget-rounds", "2", "Topic"],
+    )
+    assert result.exit_code == 0, result.output
+    rows = _read_rows(workspace / ".ea" / "state.json")
+    assert rows[0].evidence_budget["rounds"].limit == 2.0
+    assert rows[0].evidence_budget["rounds"].spent == 0.0
+
+
+def test_campaign_new_rejects_negative_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workspace = _make_workspace(tmp_path)
+    _patch_block(monkeypatch, _block())
+    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
+
+    result = runner.invoke(
+        app,
+        ["-w", str(workspace), "research", "campaign", "new", "--budget-usd", "-1", "Topic"],
+    )
+    assert result.exit_code == 1
+    assert _read_rows(workspace / ".ea" / "state.json") == []
+
+
 def test_campaign_new_offline_fallback_appends_row(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

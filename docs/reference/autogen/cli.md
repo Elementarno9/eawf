@@ -49,6 +49,7 @@ Manage artifacts (add / show / verify).
 | `add` | Register a durable artifact. |
 | `promote-contract` | Promote a measured contract onto the evidence path. |
 | `show` | Show artifact metadata. |
+| `submit-evidence` | Submit a verified SpikeReport's measured contracts onto the evidence path. |
 | `update` | Update mutable fields on a registered artifact. |
 | `validate` | Validate one markdown artifact body. |
 | `verify` | Recompute artifact sha256 and compare to the registered hash. |
@@ -107,6 +108,7 @@ Delivery-batch lifecycle (activate, ready).
 | Verb | Summary |
 |---|---|
 | `activate` | Move a PLANNED delivery Batch to ACTIVE. |
+| `create` | Admit a new delivery Batch's create document into the addressed tree. |
 | `ready` | Declare an ACTIVE Batch ready to merge. |
 
 ### `eawf bench`
@@ -407,7 +409,9 @@ Milestone lifecycle (activate, open-review, accept, cancel).
 | `accept` | Accept a Milestone in review against a sealed approval receipt. |
 | `activate` | Move a PLANNED Milestone to ACTIVE under an active Track. |
 | `cancel` | Cancel a Milestone that has not completed. |
+| `create` | Admit a new Milestone's create document into the addressed tree. |
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
+| `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
 
 ### `eawf operator`
 
@@ -445,8 +449,11 @@ Read-only iter plan view (DAG, waves, checks, risks).
 
 | Verb | Summary |
 |---|---|
+| `apply` | Materialise one APPROVED plan revision into its Milestone. |
+| `approve` | Seal a human principal's approval onto a VALIDATED plan revision. |
 | `promote` | — |
 | `show` | Print the active iter plan view (markdown or JSON). |
+| `submit` | Record one planner proposal as a VALIDATED plan revision. |
 
 ### `eawf plugin`
 
@@ -627,8 +634,10 @@ Task lifecycle (promote, start).
 
 | Verb | Summary |
 |---|---|
+| `create` | Admit a new Task's create document into the addressed tree. |
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
 | `start` | Start a CLAIMED Task under the Run the payload binds it to. |
+| `submit` | File one Run's claim that its leased workspace is ready to integrate. |
 
 ### `eawf telemetry`
 
@@ -645,6 +654,7 @@ Track lifecycle (add, switch).
 | Verb | Summary |
 |---|---|
 | `add` | Add a track under the active project. |
+| `create` | Admit a new Track's create document into the addressed tree. |
 | `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
 | `switch` | Set the active track pointer. |
 | `sync` | Recompute a Track's measured outcome statuses from their samples. |
