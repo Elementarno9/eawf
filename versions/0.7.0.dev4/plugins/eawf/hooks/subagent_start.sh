@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Eä-managed hook wrapper for session_start (codex runtime).
+# Eä-managed hook wrapper for subagent_start (codex runtime).
 # Generator: eawf plugin install codex (managed file — re-render via
 # `eawf plugin update codex`; hand-edits are detected by `eawf plugin doctor`).
 set -euo pipefail
@@ -58,12 +58,12 @@ else
     _eawf_arg3="$(_eawf_json_escape "${3-}")"
     _eawf_arg4="$(_eawf_json_escape "${4-}")"
     _eawf_payload=$(printf '{"hook_event_name":"%s","claude_event_name":"%s","args":["%s","%s","%s","%s"]}' \
-        "SessionStart" \
-        "session_start" \
+        "SubagentStart" \
+        "subagent_start" \
         "${_eawf_arg1}" \
         "${_eawf_arg2}" \
         "${_eawf_arg3}" \
         "${_eawf_arg4}")
 fi
 
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run session_start --runtime codex
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run subagent_start --runtime codex >/dev/null

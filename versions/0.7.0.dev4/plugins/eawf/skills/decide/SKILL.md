@@ -1,45 +1,48 @@
 ---
-name: mockup
-description: "Build and compare operator-visible design options."
-argument-hint: "<surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]"
+name: decide
+description: "Propose, ratify, reject, supersede or obsolete a Decision."
+argument-hint: "<propose|ratify|reject|supersede|obsolete|show> [<decision-ref>] [--title <text>] [--rationale <text>] [--alternative <text>...] [--consequence <text>...] [--evidence <ref>...] [--supersedes <ref>] [--scope <urn>] [--from <ref>...] [--dry-run]"
 user-invocable: true
-disable-model-invocation: false
+disable-model-invocation: true
 ---
 
-# /mockup
+# /decide
 
-Build and compare operator-visible design options.
+Propose, ratify, reject, supersede or obsolete a Decision.
 
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Effects: Inline rendering or proposal-local assets only.
-- Allowed RPCs: `ask_operator`. Any other RPC is denied before it reaches a handler.
-- Canonical state: never mutated by this skill.
-- Local write root: `.ea/local/mockups`; nothing is written outside it.
+- Operator-only actions: `ratify`, `reject`, `supersede`, `obsolete`. An agent that reaches one prepares a PendingAction and stops; it never chooses the recommended option itself.
+- Effects: Decision RPCs.
+- Allowed RPCs: `read_entity`, `query_evidence`, `decision.propose`, `decision.request_ratification`, `decision.reject`, `decision.supersede`, `decision.obsolete`, `decision.get`. Any other RPC is denied before it reaches a handler.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
 ## 2. Context
 
-One operator-visible surface, named by `<surface...>`, and the decision question it serves.
+One Decision, named by `<decision-ref>` or framed by this invocation, within its exact scope.
 
 Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
 
 ## 3. Task
 
-Create two to four genuinely distinct and comparable options for one operator choice.
+Drive one named Decision action without choosing for the operator.
 
 ```text
-/mockup <surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]
+/decide <propose|ratify|reject|supersede|obsolete|show> [<decision-ref>] [--title <text>] [--rationale <text>] [--alternative <text>...] [--consequence <text>...] [--evidence <ref>...] [--supersedes <ref>] [--scope <urn>] [--from <ref>...] [--dry-run]
 ```
+
+Select exactly one action: `propose`, `ratify`, `reject`, `supersede`, `obsolete`, `show`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
-1. Normalize one decision question, brief, data fixture, viewport, states, journeys, and constraints across every option.
-2. Render each option at equal fidelity. Show the primary journey and relevant loading, empty, error, and permission states; label omissions.
-3. For local HTML or code, verify rendering and interactions. For images or ASCII, state the interaction limit explicitly.
-4. Compare options on the declared axes, including strengths, costs, risks, accessibility, and best-fit context. Polish cannot be used to bias one choice.
-5. Present stable option keys through Attention when a choice is requested. Recommend the durable best fit but never choose for the operator.
+1. Resolve exact scope, Decision revision, evidence, audits, Hypotheses, questions, and effective policy.
+2. For propose, frame one choice with stable option keys, at least two real alternatives, consequences, conflicts, and evidence. Do not recommend an option without supporting evidence.
+3. For ratify, revalidate evidence and applicability, render persisted options unchanged, and create a protected operator action. The agent never supplies the chosen key.
+4. For supersede, create and ratify the replacement first; the daemon then links the old ACTIVE Decision atomically. For obsolete, prove applicability ended and preserve the reason.
+5. Submit only the selected Decision RPC with expected revision and idempotency key.
 
 ## 4b. Applicable rules
 
@@ -63,11 +66,11 @@ The obligations the effective rule graph holds for activities `design`. They bin
 
 ## 5. Constraints
 
-- Stop on a missing decision question, incomparable constraints, inaccessible output, or need for product mutation outside a Task.
-- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `blocked` with the reason rather than guessing.
+- Stop on stale revision, unresolved evidence, hidden plan/scope change, conflicting active Decision, or missing operator authority.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
 
 ## 6. Output
 
-Output one MockupReport with artifact references, comparison matrix, state/journey coverage, recommendation, Attention reference where needed, and terminal outcome.
+Output one DecisionSkillReport with before/after references, option table, evidence chain, consequences, receipt or Attention reference, and blockers.
 
-The report validates against `MockupReport`, and its terminal outcome is exactly one of `presented`, `selected`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `DecisionSkillReport`, and its terminal outcome is exactly one of `shown`, `proposed`, `ratified`, `rejected`, `superseded`, `obsoleted`, `blocked`. Prose in the report is explanation, never the result.

@@ -1,48 +1,45 @@
 ---
-name: dispatch
-description: "Coordinate one Delivery Batch: bring its ready Tasks to a candidate."
-argument-hint: "<batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]"
+name: refactor
+description: "Inspect or apply a bounded structural refactor."
+argument-hint: "<target...> [--pattern <extract-function|extract-module|split-class|graduate|custom>] [--goal <text>] [--mode <inspect|apply>] [--include <selector>...] [--exclude <selector>...] [--constraint <text>...] [--test <command>...] [--budget <spec>] [--dry-run]"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
-# /dispatch
+# /refactor
 
-Coordinate one Delivery Batch: bring its ready Tasks to a candidate.
+Inspect or apply a bounded structural refactor.
 
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Effects: Coordinator and Run-dispatch RPCs.
-- Allowed RPCs: `read_entity`, `domain.task.dispatch`, `run.dispatch`, `run.control.interrupt`, `run.control.cancel`, `run.control.retry`, `run.control.resume`, `operation.status`. Any other RPC is denied before it reaches a handler.
-- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Effects: Leased workspace edits only in apply mode; no canonical RPC.
+- Allowed RPCs: none. This skill calls no daemon RPC.
+- Canonical state: never mutated by this skill.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
 ## 2. Context
 
-One Delivery Batch, named by `<batch-ref>`, with its Task graph at the exact revision you read it.
+The code named by `<target...>`, its call sites and public contracts, and, in apply mode, the leased Task workspace whose write scope covers it.
 
 Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
 
 ## 3. Task
 
-You are the coordinator for one Delivery Batch. You do not write product code.
-
-Your job is to bring the Batch's ready Tasks to a candidate, by dispatching each one to its own Run, and to keep the Batch's frontier moving.
+Improve the selected structure without changing observable behavior. Apply mode consumes an existing Task write grant; this skill never creates authority.
 
 ```text
-/dispatch <batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]
+/refactor <target...> [--pattern <extract-function|extract-module|split-class|graduate|custom>] [--goal <text>] [--mode <inspect|apply>] [--include <selector>...] [--exclude <selector>...] [--constraint <text>...] [--test <command>...] [--budget <spec>] [--dry-run]
 ```
 
 ## 4. Method
 
-1. Read the Batch and its Task graph. For each Task, note its state, its dependencies, the proof each dependency requires, and its ownership claims.
-2. Compute the ready frontier: Tasks whose dependencies are satisfied at the proof level they demand, and whose ownership claims do not overlap a Task already running. Do not invent a parallelism plan — the graph is the plan. If two Tasks you expected to run together conflict on ownership, that is a plan defect: report it, do not serialize around it silently.
-3. Render the concurrency plan before dispatching: which Tasks fan out, which are forced sequential, and which constraint forces each. The operator sees this before any Run starts.
-4. Dispatch each ready Task as its own Run under its own Task scope. One Task, one Run, one lease, one workspace. You never edit the product yourself and you never hold a write scope.
-5. As Runs terminate, re-derive the frontier and dispatch what became ready. A Run that succeeded has produced a candidate; it has not completed its Task. Integration is the daemon's, not yours.
-6. Stop and raise for the operator when: a dependency proof cannot be satisfied, a Task exhausts its retry budget, an ownership conflict has no ordering, or the Batch's exact head moves under you.
+1. Inspect actual call sites, ownership, public contracts, and local changes. State the preserved behavior and target structural boundary.
+2. Establish characterization or contract coverage before edits when apply mode is authorized.
+3. Choose the smallest fitting pattern and make cohesive steps. Preserve public names and schemas unless the enclosing Task explicitly permits change.
+4. Run targeted checks after each step and the affected suite at the end. Keep unrelated work untouched and avoid opportunistic cleanup.
+5. In inspect mode, return the plan without edits. In apply mode, stop if the change requires new behavior, migration, expanded ownership, or undeclared files.
 
 ## 4b. Applicable rules
 
@@ -68,14 +65,11 @@ The obligations the effective rule graph holds for activities `implement`. They 
 
 ## 5. Constraints
 
-- You hold no write scope and no lease. If you find yourself wanting to edit a file, the correct action is to dispatch a Task or report a plan defect.
-- You do not decide that work is done. A Run report is not Task completion.
-- A Task marked exclusive runs alone: dispatch nothing beside it.
-- You do not raise concurrency beyond the resolved ceiling, and you do not lower it to be safe — the ceiling is policy, not preference.
-- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `blocked` with the reason rather than guessing.
+- Observable behavior after the change equals observable behavior before it; a change that needs new behavior belongs to a Task, not to this skill.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
 
 ## 6. Output
 
-A typed coordination report: the concurrency plan you computed, every Run you dispatched with its Task and outcome, the frontier remaining, and every condition you stopped on.
+Output one RefactorReport containing baseline, invariant, chosen pattern, files, declared contract changes, verification receipts, residual risks, and terminal outcome.
 
-The report validates against `CoordinationReport`, and its terminal outcome is exactly one of `candidate_ready`, `frontier_empty`, `needs_operator`, `budget_exhausted`, `blocked`, `cancelled`. Prose in the report is explanation, never the result.
+The report validates against `RefactorReport`, and its terminal outcome is exactly one of `plan_ready`, `applied`, `verified`, `failed`, `blocked`. Prose in the report is explanation, never the result.
