@@ -39,7 +39,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
 from eawf.kernel.spec.release import Release, ReleaseTrain, validate_release_against_train
@@ -56,6 +56,9 @@ from eawf.workflow.evidence.provider_certification import (
     summarise_findings,
 )
 from eawf.workflow.release.advance import draft_release_for
+
+if TYPE_CHECKING:
+    from eawf.kernel.spec.release_config import ReleaseConfig
 
 logger = logging.getLogger(__name__)
 
@@ -255,6 +258,46 @@ def committed_membership_refs(repo_root: Path, release_key: str) -> tuple[str, .
     )
 
 
+def checkpoint_release_config(version: str, *, repo_root: Path) -> ReleaseConfig:
+    """Return the authored configuration of checkpoint *version*, as tag time sees it.
+
+    The tag chokepoint, the preflight verb and the post-merge pipeline
+    all sweep a checkpoint before any record exists, so all three resolve
+    its membership bundles from :func:`committed_membership_refs` rather
+    than from a stored record. A rung that does not require membership
+    reads the export but ignores it.
+
+    Args:
+        version: Normalized checkpoint version, e.g. ``0.7.0.dev3``.
+        repo_root: Checkout the committed canary export is read from.
+
+    Returns:
+        The loaded, train-validated configuration.
+
+    Raises:
+        KeyError: When no configuration is authored for *version*.
+        ValueError: When the committed canary export does not load,
+            prefixed ``committed canary evidence:``.
+        ReleaseConfigError: When the loader rejects the configuration,
+            including ``invalid_membership_cardinality`` when a rung that
+            requires membership finds no matching export.
+    """
+    from eawf.kernel.release.checkpoint_template import with_membership_refs
+    from eawf.kernel.spec.release import release_key
+    from eawf.kernel.spec.release_config import load_release_config
+    from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+
+    source = checkpoint_config_yaml(version)
+    try:
+        membership_refs = committed_membership_refs(repo_root, release_key(version))
+    except ValueError as exc:
+        raise ValueError(f"committed canary evidence: {exc}") from exc
+    document: str | Mapping[str, Any] = source
+    if membership_refs:
+        document = with_membership_refs(source, membership_refs=membership_refs)
+    return load_release_config(document, train=V07_TRAIN)
+
+
 def create_checkpoint_release(
     state: State,
     *,
@@ -313,6 +356,7 @@ __all__ = [
     "PROMOTION_COMMAND",
     "assert_measured_contracts",
     "assert_membership_resolves",
+    "checkpoint_release_config",
     "committed_membership_refs",
     "create_checkpoint_release",
     "required_contract_ids",

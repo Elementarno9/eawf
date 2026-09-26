@@ -30,20 +30,17 @@ keeps the registry free of scan-based growth. An unregistered root
 therefore refuses rather than silently resolving to its parent's
 workspace.
 
-Two further rules keep a workspace from reaching outside itself.
-:func:`qualify_rows` tags every aggregated row with the workspace and
-repository that produced it, so two repos minting the same bare id
-never collide once their rows sit in one aggregated view.
+One further rule keeps a workspace from reaching outside itself.
 :func:`update_membership` refuses to add a repository that already
 anchors a different workspace, so a mutation issued against one
-workspace can never reach a root another workspace owns; both refusals
-share :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`.
+workspace can never reach a root another workspace owns, refusing with
+:data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -412,80 +409,12 @@ def update_membership(
     return _with_workspaces(registry, workspaces)
 
 
-class QualifiedRow(BaseModel):
-    """One aggregated row, qualified by workspace and repository.
-
-    Two repositories in the same workspace can each mint the same bare
-    id (both call their active phase ``P01``); aggregating their rows
-    under a bare id alone would collide the two. Tagging every row with
-    the workspace and repository that produced it keeps the aggregated
-    identities distinct even when the bare ids match.
-
-    Attributes:
-        workspace_key: The workspace the row was aggregated under.
-        project_code: The repository that minted the row.
-        bare_id: The row's identifier as its own repository spells it.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    workspace_key: str
-    project_code: str
-    bare_id: str
-
-    @property
-    def qualified_id(self) -> str:
-        """Return the collision-proof identity: workspace/repo/bare id."""
-        return f"{self.workspace_key}/{self.project_code}/{self.bare_id}"
-
-
-def qualify_rows(
-    resolution: WorkspaceResolution, rows_by_code: Mapping[str, Iterable[str]]
-) -> list[QualifiedRow]:
-    """Qualify bare ids aggregated from a workspace's member repositories.
-
-    Args:
-        resolution: The workspace the rows are aggregated under.
-        rows_by_code: Bare ids grouped by the project code that minted
-            them.
-
-    Returns:
-        One :class:`QualifiedRow` per ``(code, bare_id)`` pair, ordered
-        by project code then bare id.
-
-    Raises:
-        WorkspaceMutationError: :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`
-            when *rows_by_code* names a repository that is not a member
-            of *resolution* - aggregating a foreign repository's rows
-            under this workspace's key would misattribute them to a
-            workspace that does not own that root.
-    """
-    for code in rows_by_code:
-        if code not in resolution.record.member_project_codes:
-            raise WorkspaceMutationError(
-                code=CROSS_WORKSPACE_MUTATION_FORBIDDEN,
-                message=(
-                    f"repository {code!r} is not a member of workspace "
-                    f"{resolution.key!r}; its rows cannot be aggregated under "
-                    f"a workspace that does not own that root"
-                ),
-            )
-    rows = [
-        QualifiedRow(workspace_key=resolution.key, project_code=code, bare_id=bare_id)
-        for code, bare_ids in rows_by_code.items()
-        for bare_id in bare_ids
-    ]
-    rows.sort(key=lambda row: (row.project_code, row.bare_id))
-    return rows
-
-
 __all__ = [
     "CROSS_WORKSPACE_MUTATION_FORBIDDEN",
     "WORKSPACE_ALREADY_REGISTERED",
     "WORKSPACE_AMBIGUOUS",
     "WORKSPACE_NOT_REGISTERED",
     "WORKSPACE_REVISION_CONFLICT",
-    "QualifiedRow",
     "WorkspaceMutationError",
     "WorkspaceResolution",
     "WorkspaceResolutionError",
@@ -494,7 +423,6 @@ __all__ = [
     "get_workspace",
     "list_workspaces",
     "project_codes_at_root",
-    "qualify_rows",
     "resolve_workspace",
     "update_membership",
 ]

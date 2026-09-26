@@ -586,3 +586,82 @@ def test_resolve_source_tree_refuses_a_directory_that_is_not_a_repository(
         resolve_source_tree(tmp_path, "a" * 40)
 
     assert CandidateRefusal.SOURCE_TREE_UNRESOLVED.value in str(excinfo.value)
+
+
+# --- a rung that requires membership ------------------------------------------
+
+DEV3 = "0.7.0.dev3"
+DEV3_MEMBERSHIP_REF = (
+    "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001"
+)
+DEV3_RECEIPTS: dict[str, dict[str, Any]] = {
+    "pypi": {
+        "target_id": "pypi",
+        "version": DEV3,
+        "job_conclusion": "success",
+        "run_id": "1",
+        "artifact_digests": {
+            f"eawf-{DEV3}-py3-none-any.whl": f"sha256:{'1' * 64}",
+            f"eawf-{DEV3}.tar.gz": f"sha256:{'3' * 64}",
+        },
+    },
+    "npm": {
+        "target_id": "npm",
+        "version": "0.7.0-dev.3",
+        "job_conclusion": "success",
+        "run_id": "2",
+        "artifact_digests": {f"elementarno-eawf-{DEV3}.tgz": f"sha256:{'5' * 64}"},
+    },
+    "github": {
+        "target_id": "github",
+        "version": DEV3,
+        "job_conclusion": "success",
+        "run_id": "2",
+        "artifact_digests": {
+            "RELEASE_NOTES.md": f"sha256:{'6' * 64}",
+            "SHA256SUMS": f"sha256:{'7' * 64}",
+            f"eawf-plugin-{DEV3}.tar.gz": f"sha256:{'8' * 64}",
+        },
+    },
+    "plugins-dist": {
+        "target_id": "plugins-dist",
+        "version": DEV3,
+        "job_conclusion": "success",
+        "run_id": "2",
+        "artifact_digests": {f"eawf-plugin-{DEV3}.tar.gz": f"sha256:{'8' * 64}"},
+    },
+}
+
+
+def test_candidate_resolves_a_membership_rung_with_the_draft_refs(repo: Path) -> None:
+    """A dev3 DRAFT opened with its acceptance bundle pins instead of refusing cardinality."""
+    draft = Release(
+        uid=UUID(int=78),
+        key=release_key(DEV3),
+        version=DEV3,
+        channel="dev",  # type: ignore[arg-type]
+        authority_epoch=1,
+        status=ReleaseStatus.DRAFT,
+        supersedes_release_ref=DEV2_KEY,
+        membership_refs=(DEV3_MEMBERSHIP_REF,),
+    )
+    ctx = context(repo, record=draft)
+    receipts = repo / "receipts-dev3"
+    receipts.mkdir()
+    for target_id, body in DEV3_RECEIPTS.items():
+        (receipts / f"publication-receipt-{target_id}.json").write_text(
+            json.dumps(body), encoding="utf-8"
+        )
+    params = {
+        "version": DEV3,
+        "receipts_dir": str(receipts),
+        "source_sha": git(repo, "rev-parse", "HEAD"),
+    }
+
+    result = asyncio.run(candidate(ctx, params))
+
+    record = read_release_record(Path(str(ctx.state_path)), release_key(DEV3))
+    assert record is not None
+    assert record.status is ReleaseStatus.CANDIDATE
+    assert record.membership_refs == (DEV3_MEMBERSHIP_REF,)
+    assert record.manifest_digest == result["manifest_digest"]

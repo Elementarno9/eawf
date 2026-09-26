@@ -22,7 +22,6 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.platform.registry import (
-    CROSS_WORKSPACE_MUTATION_FORBIDDEN,
     WORKSPACE_ALREADY_REGISTERED,
     WORKSPACE_AMBIGUOUS,
     WORKSPACE_NOT_REGISTERED,
@@ -37,7 +36,6 @@ from eawf.platform.registry import (
     get_workspace,
     list_workspaces,
     project_codes_at_root,
-    qualify_rows,
     resolve_workspace,
     update_membership,
 )
@@ -308,45 +306,3 @@ def test_list_workspaces_is_ordered_by_key() -> None:
         },
     )
     assert [record.key for record in list_workspaces(registry)] == ["ABC", "MID", "ZED"]
-
-
-# ---- qualify_rows -----------------------------------------------------------
-
-
-def test_qualify_rows_distinguishes_a_shared_bare_id(roots: dict[str, Path]) -> None:
-    """Two repos minting the same bare id must not collide once aggregated."""
-    registry = _registry(repos=roots, workspaces={"MONO": ({"EAWF", "DEMO"}, "EAWF")})
-    resolution = resolve_workspace(registry, repo_root=roots["EAWF"])
-    rows = qualify_rows(resolution, {"EAWF": ["P01"], "DEMO": ["P01"]})
-    ids = {row.qualified_id for row in rows}
-    assert ids == {"MONO/EAWF/P01", "MONO/DEMO/P01"}
-
-
-def test_qualify_rows_orders_by_project_code_then_bare_id(roots: dict[str, Path]) -> None:
-    registry = _registry(repos=roots, workspaces={"MONO": ({"EAWF", "DEMO"}, "EAWF")})
-    resolution = resolve_workspace(registry, repo_root=roots["EAWF"])
-    rows = qualify_rows(resolution, {"DEMO": ["P02", "P01"], "EAWF": ["P01"]})
-    assert [(row.project_code, row.bare_id) for row in rows] == [
-        ("DEMO", "P01"),
-        ("DEMO", "P02"),
-        ("EAWF", "P01"),
-    ]
-
-
-def test_qualify_rows_empty_mapping_returns_empty_list(roots: dict[str, Path]) -> None:
-    registry = _registry(repos=roots, workspaces={"MONO": ({"EAWF"}, "EAWF")})
-    resolution = resolve_workspace(registry, repo_root=roots["EAWF"])
-    assert qualify_rows(resolution, {}) == []
-
-
-def test_qualify_rows_refuses_a_repository_outside_the_workspace(roots: dict[str, Path]) -> None:
-    registry = _registry(
-        repos=roots,
-        workspaces={"MONO": ({"EAWF"}, "EAWF"), "SIDE": ({"SOLO"}, "SOLO")},
-    )
-    resolution = resolve_workspace(registry, repo_root=roots["EAWF"])
-    with pytest.raises(WorkspaceMutationError) as excinfo:
-        qualify_rows(resolution, {"SOLO": ["P01"]})
-    assert excinfo.value.code == CROSS_WORKSPACE_MUTATION_FORBIDDEN
-    assert "SOLO" in str(excinfo.value)
-    assert "MONO" in str(excinfo.value)

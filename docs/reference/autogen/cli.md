@@ -501,6 +501,7 @@ Tag releases and drive the release train's checkpoint records.
 | `create` | Open one checkpoint's DRAFT record, after measured admission. |
 | `notes` | Render a scrubbed release-notes draft. |
 | `observe` | Read one publication target back and settle it against the manifest. |
+| `pipeline` | Take a merged phase's checkpoint from tag to BAKED and the train advance. |
 | `preflight` | Sweep every readiness signal for one checkpoint over this checkout. |
 | `publish` | Open the publication episode and return its reference at once. |
 | `readiness` | Ask the daemon for a checkpoint's readiness sweep. |

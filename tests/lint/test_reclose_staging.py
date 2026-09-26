@@ -74,20 +74,30 @@ _SUPERSEDED_RECLOSE_WAVE = "P30-I21-W22"
 def _stray_pending_waves(state: dict) -> list[str]:
     """The PENDING waves that no live plan accounts for.
 
-    A PENDING wave is accounted for when it is the re-close vehicle, when it
-    sits in the ACTIVE iter, or when its phase is still PLANNED. The phase is
-    read off the ``P<NN>`` prefix that a wave id and its iter id share, and a
-    wave whose phase has no row at all stays stray so the census fails closed.
+    A PENDING wave is accounted for when it is the re-close vehicle, when
+    it sits in the ACTIVE iter, when its own iter is still PLANNED, or
+    when its phase is still PLANNED. The iter-PLANNED case is what a
+    roadmap staged ahead of the active one looks like: ``roadmap propose``
+    plus ``roadmap apply`` land a PLANNED iter's waves PENDING under a
+    phase that is itself ACTIVE (its first iter already running), so a
+    phase-status check alone reddens the census for following the
+    documented multi-iter procedure. The phase is read off the ``P<NN>``
+    prefix that a wave id and its iter id share, and a wave whose phase
+    has no row at all stays stray so the census fails closed.
     """
     active_iter = state["current"].get("iter_id")
     phases = state["phases"]
+    iters = state.get("iters") or {}
     stray: list[str] = []
     for wave_id, wave in state["waves"].items():
         if wave.get("status") != "pending":
             continue
         if wave_id == _RECLOSE_WAVE or wave.get("iter_id") == active_iter:
             continue
-        phase_id = (wave.get("iter_id") or wave_id).split("-", 1)[0]
+        iter_id = wave.get("iter_id")
+        if iter_id is not None and (iters.get(iter_id) or {}).get("status") == "planned":
+            continue
+        phase_id = (iter_id or wave_id).split("-", 1)[0]
         if (phases.get(phase_id) or {}).get("status") == "planned":
             continue
         stray.append(wave_id)
@@ -191,6 +201,42 @@ def test_stray_pending_waves_edges(waves: dict, expected: list[str]) -> None:
         "waves": waves,
     }
     assert _stray_pending_waves(state) == expected
+
+
+def test_stray_pending_waves_admits_a_planned_iter_of_an_active_phase() -> None:
+    """A staged next-iter roadmap under an already-ACTIVE phase is not stray.
+
+    ``roadmap propose`` plus ``roadmap apply`` land a PLANNED iter's
+    waves PENDING while an earlier iter of the SAME phase is already
+    ACTIVE -- exactly P35-I02..I04 while P35-I01 runs. A bare
+    phase-status check would flag every one of them; the iter's own
+    PLANNED status is what admits them.
+    """
+    state = {
+        "current": {"iter_id": "P35-I01"},
+        "phases": {"P35": {"status": "active"}},
+        "iters": {"P35-I01": {"status": "active"}, "P35-I02": {"status": "planned"}},
+        "waves": {
+            "P35-I01-W01": {"iter_id": "P35-I01", "status": "closed"},
+            "P35-I02-W01": {"iter_id": "P35-I02", "status": "pending"},
+        },
+    }
+    assert _stray_pending_waves(state) == []
+
+
+def test_stray_pending_waves_flags_a_non_planned_iter_of_a_settled_phase() -> None:
+    """An iter row that exists but is not PLANNED does not excuse its waves.
+
+    Proves the new admission is narrow: only a PLANNED iter is let
+    through, not any wave whose iter happens to have a row at all.
+    """
+    state = {
+        "current": {"iter_id": "P31-I01"},
+        "phases": {"P30": {"status": "closed"}},
+        "iters": {"P30-I26": {"status": "active"}},
+        "waves": {"P30-I26-W91": {"iter_id": "P30-I26", "status": "pending"}},
+    }
+    assert _stray_pending_waves(state) == ["P30-I26-W91"]
 
 
 def test_stray_pending_waves_rejects_a_state_without_phases() -> None:

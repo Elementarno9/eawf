@@ -1,25 +1,41 @@
-"""``eawf plan show`` — read-only iter plan view.
+"""``eawf plan`` — iter plan view (read-only) plus plan-revision verbs.
 
-Renders the active iteration plan as either a deterministic markdown body
-(human reviewers, GitHub PR previews) or a JSON envelope conforming to
-``src/eawf/schemas/plan-view.schema.json`` (tooling).
-
-Resolves the active iter (``state.current.iter_id``) when ``--iter`` is
-omitted, then projects the validated :class:`~eawf.kernel.state.models.State`
-through :func:`eawf.surfaces.render.plan_view.build_view`. The handler is a pure
+``eawf plan show`` renders the active iteration plan as either a
+deterministic markdown body (human reviewers, GitHub PR previews) or a
+JSON envelope conforming to ``src/eawf/schemas/plan-view.schema.json``
+(tooling). It resolves the active iter (``state.current.iter_id``) when
+``--iter`` is omitted, then projects the validated
+:class:`~eawf.kernel.state.models.State` through
+:func:`eawf.surfaces.render.plan_view.build_view`. The handler is a pure
 projection — read-only over ``state.json`` (rule 4: no lock acquisition,
 no JSONL appends, no state mutations).
 
-Exit codes:
+``eawf plan submit`` / ``approve`` / ``apply`` are mutating dispatch
+verbs: each builds the wire parameters for one
+``planning.plan_revision.*`` JSON-RPC call, sends it to the daemon, and
+renders whatever
+:class:`~eawf.runtime.daemon.methods.domain_envelope.DomainEnvelope`
+comes back.
+
+Exit codes (the canonical 0..5 surface; see
+:mod:`eawf.surfaces.cli.exit_codes`):
 
 - ``0`` on success.
-- ``2`` (``NOT_FOUND``) when no ``state.json`` is found, OR when the
-  resolved iter is not in ``state.iters``.
-- ``3`` (``INVALID_INPUT``) when ``--iter`` fails the iter-id grammar,
-  when no active iter is set and ``--iter`` is omitted, or when
-  ``--json`` and ``--format markdown`` are passed together.
-- ``4`` (``VALIDATION_FAILED``) when the resolved ``state.json`` fails
-  Pydantic schema validation.
+- ``1`` (``USER_ERROR``) for an operator-fixable input problem: no
+  ``state.json`` found, an unresolved iter, an invalid ``--iter`` id, no
+  active iter with ``--iter`` omitted, ``--json`` and ``--format
+  markdown`` passed together (``show``), or a missing / malformed
+  ``--from-spec`` document or a non-positive ``--expected-plan-revision``
+  (``submit`` / ``approve`` / ``apply``).
+- ``2`` (``VALIDATION_ERROR``) when the resolved ``state.json`` fails
+  Pydantic schema validation or is not valid JSON (``show`` only).
+- ``3`` (``STATE_CONFLICT``) when ``submit`` / ``approve`` / ``apply``
+  is refused by a domain guard (a stale revision, the epoch-2 fence,
+  etc.) — :data:`~eawf.surfaces.cli.commands.domain.DOMAIN_REFUSAL_EXIT`.
+- ``4`` (``DAEMON_UNREACHABLE``) when a plan-revision verb cannot reach
+  the daemon.
+- ``5`` (``INTERNAL_ERROR``) when the daemon answers something that is
+  not a valid envelope, or on any other uncaught error.
 """
 
 from __future__ import annotations
@@ -108,7 +124,8 @@ class PlanSection(StrEnum):
 
 plan_app = typer.Typer(
     name="plan",
-    help="Read-only iter plan view (DAG, waves, checks, risks).",
+    help="Iter plan view (read-only: DAG, waves, checks, risks) "
+    "plus the submit/approve/apply plan-revision verbs.",
     no_args_is_help=True,
     add_completion=False,
 )

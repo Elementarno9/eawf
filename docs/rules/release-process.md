@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `release-process`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=release-process version=1.2 hash=67e000e7b42e0811 -->
+<!-- BEGIN EAWF:managed id=release-process version=1.3 hash=7608626b75e44fa1 -->
 # `release-process`
 
 Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation.
@@ -19,9 +19,9 @@ Under ``per-phase``, ``eawf phase close`` refuses until the phase-close audit ca
 - A migration note exists when ``state.json`` ``schema_version`` changed since the last release.
 - The phase-close commit subject carries the optional ``(release=v<X.Y.Z>)`` annotation accepted by ``tools/commit_prefix_lint.py``.
 
-Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, checks it against the package version, and prints the tag command. It pushes no tag and creates no release object: a tag pushed with a workflow's default token starts no other workflow, so nothing would publish. Who pushes the tag depends on how the repo releases:
+Post-merge, ``.github/workflows/phase-release.yaml`` reads the annotation, checks it against the package version, and prints the release command. It pushes no tag and creates no release object: a tag pushed with a workflow's default token starts no other workflow, so nothing would publish. Who pushes the tag depends on how the repo releases:
 
-- A repo that releases through an eawf release train tags the merge commit with ``eawf release tag --push`` from a clean checkout of it. The verb runs the readiness sweep before it tags, and its push starts the publish workflows, which mark every dev and release-candidate tag as a prerelease.
+- A repo that releases through an eawf release train runs ``eawf release pipeline <version> --phase P<NN> --publish`` from a clean checkout of the merge commit. The verb runs the readiness sweep before it tags, its push starts the publish workflows, which mark every dev and release-candidate tag as a prerelease, and it then walks the checkpoint to BAKED and advances the train.
 - Every other repo keeps its own tag flow: the tagging it already runs after a merge stays its tagging path.
 
 Repos on the default ``manual`` cadence skip the gate and the workflow.

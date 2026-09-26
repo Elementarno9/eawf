@@ -1,0 +1,62 @@
+{
+  "schema_version": "frozen-manifest/v1",
+  "release_key": "REL-0.7.0.dev3",
+  "version": "0.7.0.dev3",
+  "targets": {
+    "pypi": {
+      "identity": "eawf",
+      "artifacts": [
+        {
+          "kind": "wheel",
+          "filename": "eawf-0.7.0.dev3-py3-none-any.whl",
+          "digest": "sha256:fdca5d1b409038197bf1585de2a09152f86bf24e25406bfc9c08f5f07e1baecc"
+        },
+        {
+          "kind": "sdist",
+          "filename": "eawf-0.7.0.dev3.tar.gz",
+          "digest": "sha256:9b2e0e10a29dd6cbc906676fdc37f088fc4455614f3623c4b2b4c97ebe8b840f"
+        }
+      ]
+    },
+    "npm": {
+      "identity": "@elementarno/eawf",
+      "artifacts": [
+        {
+          "kind": "codex_plugin",
+          "filename": "elementarno-eawf-0.7.0-dev.3.tgz",
+          "digest": "sha256:88690e0f1fe3de171e2185c5034688b1bca5b8d3c7971a5274fa4646b375b4d9"
+        }
+      ]
+    },
+    "github": {
+      "identity": "Elementarno9/eawf",
+      "artifacts": [
+        {
+          "kind": "release_notes",
+          "filename": "RELEASE_NOTES.md",
+          "digest": "sha256:ce551cd1bde2c5d60996de58c57478acd757cf953e8609e3843ed52d528e1bd1"
+        },
+        {
+          "kind": "checksums",
+          "filename": "SHA256SUMS",
+          "digest": "sha256:1002f1cf93a53ae98c92dcb39eac28b3e6715506ca870b60ae4f9521ea9e4d20"
+        },
+        {
+          "kind": "plugin_bundle",
+          "filename": "eawf-plugin-0.7.0.dev3.tar.gz",
+          "digest": "sha256:5108eeda72a3a93ab8836fdbc6efdbb4f1c0f36a0d12336f3d286a84b48b6b0e"
+        }
+      ]
+    },
+    "plugins-dist": {
+      "identity": "Elementarno9/eawf",
+      "artifacts": [
+        {
+          "kind": "codex_plugin",
+          "filename": "versions/0.7.0.dev3/plugins/eawf",
+          "digest": "sha256:7c5552c76be35d2a1c0b30d034c08227edbf4a6777b2e52fed021aa146a84935"
+        }
+      ]
+    }
+  }
+}

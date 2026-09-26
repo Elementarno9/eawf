@@ -104,9 +104,14 @@ async def candidate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     """
     args = CandidateParams.model_validate(params)
     state_path = require_state_path(ctx)
-    config = resolve_config(args.version)
     key = release_key(args.version)
     draft = read_release_record(state_path, key)
+    # A rung that requires membership validates its cardinality against
+    # the refs the DRAFT was opened with, so the draft is read first; an
+    # unauthored version still reports that before the missing record.
+    config = resolve_config(
+        args.version, membership_refs=() if draft is None else draft.membership_refs
+    )
     if draft is None:
         raise DaemonValidationError(
             f"validation_failed: no release record is stored for {key!r}; open the "

@@ -1,0 +1,320 @@
+{
+  "channel": "dev",
+  "computed_at": "2026-09-25T04:07:28.039814Z",
+  "gate_profile": "native_canary",
+  "gates": [
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "version_consistency",
+      "gate": "version_consistency",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "changelog",
+      "gate": "changelog_entry",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal_component",
+      "evidence_ref": "dependencies.inventory",
+      "gate": "dependency_inventory",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "artifacts",
+      "gate": "artifact_reproducibility",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal_component",
+      "evidence_ref": "dependencies.vulnerability",
+      "gate": "security_review",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:epoch1_stabilization_suite",
+      "gate": "epoch1_stabilization",
+      "remediation": "gate 'epoch1_stabilization' is settled by proof command 'epoch1_stabilization_suite'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:telemetry_turn_cost_record",
+      "gate": "telemetry_producer",
+      "remediation": "gate 'telemetry_producer' is settled by proof command 'telemetry_turn_cost_record'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:front_door_install_smoke",
+      "gate": "front_door_journey",
+      "remediation": "gate 'front_door_journey' is settled by proof command 'front_door_install_smoke'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "migration",
+      "gate": "migration",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:hosted_close_runs_the_gates",
+      "gate": "hosted_gate_runner",
+      "remediation": "gate 'hosted_gate_runner' is settled by proof command 'hosted_close_runs_the_gates'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:epoch2_strictness_census",
+      "gate": "schema_strictness",
+      "remediation": "gate 'schema_strictness' is settled by proof command 'epoch2_strictness_census'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "waiver_block",
+      "evidence_ref": "readiness:waivers",
+      "gate": "waiver_count",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "provider",
+      "gate": "provider",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "membership",
+      "gate": "membership",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:canary_leaves_production_untouched",
+      "gate": "canary_isolation",
+      "remediation": "gate 'canary_isolation' is settled by proof command 'canary_leaves_production_untouched'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    }
+  ],
+  "ready": true,
+  "release_key": "REL-0.7.0.dev3",
+  "required_signals": [
+    "version_consistency",
+    "changelog",
+    "ancestry",
+    "tree_cleanliness",
+    "membership",
+    "migration",
+    "artifacts",
+    "dependencies",
+    "provider"
+  ],
+  "schema_version": "release-readiness/v1",
+  "signals": [
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "version:0.7.0.dev3",
+        "npm-version:0.7.0-dev.3"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "version_consistency",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "CHANGELOG.md:0.7.0.dev3"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "changelog",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "ancestor-of:origin/main"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "ancestry",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "git-status:clean"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "tree_cleanliness",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "milestone:W37CANARY:MLS-0001:sha256:3ae76205b3971f345313bafefbedb1ecd5befcb6d6fd23f545e2f7282ce270e3"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "membership",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "rehearsal:empty-repository:imports",
+        "rehearsal:minimal-active:imports",
+        "rehearsal:all-terminal:imports",
+        "rehearsal:multi-root-workspace:imports",
+        "rehearsal:interrupted-close:imports",
+        "rehearsal:open-attention:imports",
+        "rehearsal:corrupt-reference:refuses",
+        "rehearsal:unknown-extension-field:refuses",
+        "rehearsal:p30-i26-history:imports",
+        "rehearsal:largest-supported-state:imports"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "migration",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "source_sha:026b33abddebcde0bc57eb71ff37c747db16d468",
+        "source_date_epoch:1790297576",
+        "artifact:eawf-0.7.0.dev3-py3-none-any.whl:fdca5d1b409038197bf1585de2a09152f86bf24e25406bfc9c08f5f07e1baecc",
+        "artifact:eawf-0.7.0.dev3.tar.gz:9b2e0e10a29dd6cbc906676fdc37f088fc4455614f3623c4b2b4c97ebe8b840f"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "artifacts",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "lock_digest:sha256:556bb948fab6e68b73aed30c908461c4bdba8e7e88d1bf2783940c53dd18299c",
+        "locked_packages:50",
+        "undeclared_license:babel",
+        "undeclared_license:backrefs",
+        "undeclared_license:colorama",
+        "undeclared_license:ghp-import",
+        "undeclared_license:markdown",
+        "undeclared_license:mergedeep",
+        "undeclared_license:mkdocs",
+        "undeclared_license:mkdocs-get-deps",
+        "undeclared_license:mkdocs-material",
+        "undeclared_license:mkdocs-material-extensions",
+        "undeclared_license:paginate",
+        "undeclared_license:pymdown-extensions",
+        "undeclared_license:python-dateutil",
+        "undeclared_license:pywin32",
+        "undeclared_license:pyyaml-env-tag",
+        "undeclared_license:six",
+        "undeclared_license:watchdog",
+        "lock_digest:sha256:556bb948fab6e68b73aed30c908461c4bdba8e7e88d1bf2783940c53dd18299c"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "dependencies",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "ci://eawf/.github/workflows/ci.yaml#linux-jail"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "platform",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [
+        "certification://claude-code/2026-09-18"
+      ],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": null,
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "",
+      "signal": "provider",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": "perfect_realization_failed",
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "module_length_exclusion: all 11 EAWF010 exemption(s) are within their grant, but the remaining realization assertions have no producer at this checkpoint; register one or drop the requirement",
+      "signal": "perfect_realization",
+      "status": "unavailable"
+    },
+    {
+      "computed_at": "2026-09-25T04:07:28.039814Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-25T05:07:28.039814Z",
+      "failure_code": "credential_unavailable",
+      "observed_revision": "026b33abddebcde0bc57eb71ff37c747db16d468",
+      "remediation": "no producer is registered for the 'credentials' signal at this checkpoint; register a probe or drop the requirement",
+      "signal": "credentials",
+      "status": "unavailable"
+    }
+  ],
+  "version": "0.7.0.dev3",
+  "waiver_acknowledgements": [],
+  "waiver_count": 0,
+  "waiver_disposition": "none",
+  "waivers": []
+}

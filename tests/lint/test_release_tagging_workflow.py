@@ -45,7 +45,7 @@ _TAGGING_COMMANDS: dict[str, re.Pattern[str]] = {
     "gh release create": re.compile(r"\bgh\s+release\s+create\b"),
 }
 
-_RELEASE_TAG_VERB = re.compile(r"eawf release tag\b[^`\n]*--push")
+_RELEASE_TAG_VERB = re.compile(r"eawf release pipeline\b[^`\n]*--publish")
 
 #: Versions whose tag must publish as a prerelease, one per pre segment.
 _PRERELEASE_VERSIONS = ("0.7.0.dev3", "0.7.0rc1", "0.8.0a1", "0.8.0b2", "0.8.0.dev12")
@@ -82,8 +82,8 @@ def tag_push_violations(workflow: dict[str, Any]) -> list[str]:
     Returns:
         One problem per violation; empty when no step tags, pushes or
         creates a release, the token cannot write, the annotation and
-        version checks remain, and the tag command is printed for the
-        annotated version.
+        version checks remain, and the release pipeline command is printed
+        for the annotated version and phase.
     """
     job = workflow.get("jobs", {}).get("phase-release")
     if job is None:
@@ -110,26 +110,35 @@ def tag_push_violations(workflow: dict[str, Any]) -> list[str]:
 
 
 def _tag_command_problems(job: dict[str, Any]) -> list[str]:
-    """Report the ways the job could finish without naming the tag command."""
+    """Report the ways the job could finish without naming the release command."""
     printer = next(
-        (step for step in job.get("steps", []) if "eawf release tag" in str(step.get("run", ""))),
+        (
+            step
+            for step in job.get("steps", [])
+            if "eawf release pipeline" in str(step.get("run", ""))
+        ),
         None,
     )
     if printer is None:
-        return ["no step prints the eawf release tag --push command"]
+        return ["no step prints the eawf release pipeline --publish command"]
     run = str(printer.get("run", ""))
     problems: list[str] = []
-    if not re.search(r"eawf release tag \$\{VERSION\} --push", run):
-        problems.append("the printed command is not eawf release tag ${VERSION} --push")
-    if "steps.annotation.outputs.version" not in str(printer.get("env", {})):
+    if not re.search(r"eawf release pipeline \$\{VERSION\} --phase \$\{PHASE\} --publish", run):
+        problems.append(
+            "the printed command is not eawf release pipeline ${VERSION} --phase ${PHASE} --publish"
+        )
+    env = str(printer.get("env", {}))
+    if "steps.annotation.outputs.version" not in env:
         problems.append("the printed command is not bound to the annotated version")
+    if "steps.annotation.outputs.phase" not in env:
+        problems.append("the printed command is not bound to the merged phase")
     if "release_required == 'true'" not in str(printer.get("if", "")):
-        problems.append("the tag command prints even when the merge carries no annotation")
+        problems.append("the release command prints even when the merge carries no annotation")
     return problems
 
 
 def test_tag_push_absent_from_phase_release() -> None:
-    """The live workflow only checks the annotation and prints the tag verb."""
+    """The live workflow only checks the annotation and prints the release verb."""
     assert tag_push_violations(_load(_PHASE_RELEASE)) == []
 
 
@@ -142,7 +151,7 @@ def test_tag_push_gate_reds_on_a_tagging_workflow() -> None:
     old = copy.deepcopy(_load(_PHASE_RELEASE))
     old["permissions"]["contents"] = "write"
     job = old["jobs"]["phase-release"]
-    job["steps"] = [s for s in job["steps"] if "eawf release tag" not in str(s.get("run", ""))]
+    job["steps"] = [s for s in job["steps"] if "eawf release pipeline" not in str(s.get("run", ""))]
     job["steps"] += [
         {
             "name": "Create annotated tag",
@@ -278,7 +287,7 @@ def test_prerelease_gate_reds_on_missing_steps() -> None:
 # --- the rule text names the tag verb for release-train repos only ----------
 
 
-def release_tag_rule_mismatches(body: str) -> list[str]:
+def release_rule_mismatches(body: str) -> list[str]:
     """Return every way a release or ship rule *body* misstates the tagging path.
 
     Args:
@@ -293,9 +302,11 @@ def release_tag_rule_mismatches(body: str) -> list[str]:
     verb_lines = [line for line in lines if _RELEASE_TAG_VERB.search(line)]
     problems: list[str] = []
     if not verb_lines:
-        problems.append("does not name eawf release tag --push")
+        problems.append("does not name eawf release pipeline --publish")
     if any("release train" not in line for line in verb_lines):
-        problems.append("names eawf release tag --push without scoping it to release-train repos")
+        problems.append(
+            "names eawf release pipeline --publish without scoping it to release-train repos"
+        )
     if not any("own tag flow" in line and "every other repo" in line.lower() for line in lines):
         problems.append("does not keep the repo's own tag flow for every other repo")
     sentences = (s for line in lines for s in re.split(r"(?<=[.;])\s+", line))
@@ -313,14 +324,14 @@ def _core_rule_bodies() -> dict[str, str]:
     }
 
 
-def test_rule_text_names_the_release_tag_verb() -> None:
+def test_rule_text_names_the_release_pipeline_verb() -> None:
     """Both rules, authored and rendered, scope the verb to release-train repos."""
     bodies = _core_rule_bodies()
     assert sorted(bodies) == sorted(_RULE_IDS)
     for rule_id, body in bodies.items():
-        assert release_tag_rule_mismatches(body) == [], rule_id
+        assert release_rule_mismatches(body) == [], rule_id
         rendered = (_REPO_ROOT / "docs" / "rules" / f"{rule_id}.md").read_text(encoding="utf-8")
-        assert release_tag_rule_mismatches(rendered) == [], f"re-render docs/rules/{rule_id}.md"
+        assert release_rule_mismatches(rendered) == [], f"re-render docs/rules/{rule_id}.md"
 
 
 def test_rule_text_check_reds_on_the_workflow_tagging_text() -> None:
@@ -331,8 +342,8 @@ def test_rule_text_check_reds_on_the_workflow_tagging_text() -> None:
         "annotation off the phase-close commit, tags the merge commit, and publishes "
         "notes from the PR body.\n"
     )
-    assert release_tag_rule_mismatches(old) == [
-        "does not name eawf release tag --push",
+    assert release_rule_mismatches(old) == [
+        "does not name eawf release pipeline --publish",
         "does not keep the repo's own tag flow for every other repo",
         "still says phase-release.yaml tags the merge commit",
     ]
@@ -340,8 +351,8 @@ def test_rule_text_check_reds_on_the_workflow_tagging_text() -> None:
 
 def test_rule_text_check_reds_on_an_unscoped_tag_verb() -> None:
     """Naming the verb for every repo is the other half of the defect."""
-    unscoped = "Every repo tags with ``eawf release tag --push``.\n"
-    assert release_tag_rule_mismatches(unscoped) == [
-        "names eawf release tag --push without scoping it to release-train repos",
+    unscoped = "Every repo releases with ``eawf release pipeline <version> --publish``.\n"
+    assert release_rule_mismatches(unscoped) == [
+        "names eawf release pipeline --publish without scoping it to release-train repos",
         "does not keep the repo's own tag flow for every other repo",
     ]

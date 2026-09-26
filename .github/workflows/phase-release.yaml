@@ -2,9 +2,10 @@ name: Phase Release
 
 # phase-release.yaml ships: post-merge per-phase release check. Reads a
 # phase-close commit subject annotation like ``(release=v0.4.0)``, verifies the
-# source version matches, and prints the ``eawf release tag --push`` command.
-# It pushes no tag: a tag pushed with this job's token starts no workflow run,
-# so release.yaml and plugin-release.yaml would never publish it.
+# source version matches, and prints the ``eawf release pipeline`` command that
+# takes the merge from tag to BAKED. It pushes no tag: a tag pushed with this
+# job's token starts no workflow run, so release.yaml and plugin-release.yaml
+# would never publish it.
 
 on:
   pull_request:
@@ -58,6 +59,8 @@ jobs:
           print("release_required=true")
           print(f"tag={match.group(1)}")
           print(f"version={match.group(1)[1:]}")
+          phase = re.match(r"\[(P\d{2,})\]", subject)
+          print(f"phase={phase.group(1) if phase else 'P<NN>'}")
           PY
 
       - name: Stop when PR has no release annotation
@@ -106,28 +109,35 @@ jobs:
           print(f"version source agrees with the annotation: {normalise(actual)}")
           PY
 
-      - name: Print the release tag command
+      - name: Print the release pipeline command
         if: steps.annotation.outputs.release_required == 'true'
-        # The operator tags from a clean checkout of the merge commit: the
-        # verb sweeps readiness before it tags, and a push made with the
-        # operator's own credentials is what starts the publish workflows.
-        # No release object is made here either. plugin-release.yaml creates
-        # or edits it with the prerelease flag, where one made here would
-        # advertise a dev tag as the latest release. The notice lands on the
-        # run page because nothing publishes until the tag is pushed.
+        # The merge is release-ready by the time it lands: the phase cannot
+        # close without a passing release preflight. What remains is the
+        # post-merge walk, which is one resumable operator verb rather than
+        # hand-driven waves of the next phase. The operator runs it from a
+        # clean checkout of the merge commit: it sweeps readiness before it
+        # tags, and only a push made with the operator's own credentials
+        # starts the publish workflows. No release object is made here
+        # either. plugin-release.yaml creates or edits it with the
+        # prerelease flag, where one made here would advertise a dev tag as
+        # the latest release. The notice lands on the run page because
+        # nothing publishes until the operator passes --publish.
         env:
           VERSION: ${{ steps.annotation.outputs.version }}
+          PHASE: ${{ steps.annotation.outputs.phase }}
           MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
         run: |
           set -euo pipefail
-          command="eawf release tag ${VERSION} --push"
-          echo "::notice title=Tag the phase release::Nothing is published yet. From a clean checkout of ${MERGE_SHA}, run: ${command}"
+          command="eawf release pipeline ${VERSION} --phase ${PHASE} --publish"
+          echo "::notice title=Release the phase::Nothing is published yet. From a clean checkout of ${MERGE_SHA}, run: ${command}"
           {
-            echo "## Tag the phase release"
+            echo "## Release the phase"
             echo
             echo "Nothing is published yet. From a clean checkout of the merge commit \`${MERGE_SHA}\`, run:"
             echo
             echo '```'
             echo "${command}"
             echo '```'
+            echo
+            echo "It tags, publishes, pins, approves and bakes the checkpoint, then advances the train. A refused step names its reason; rerunning resumes there. Add \`--membership-ref <bundle>\` for a rung that requires membership."
           } >> "$GITHUB_STEP_SUMMARY"

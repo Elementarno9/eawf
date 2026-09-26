@@ -1,0 +1,24 @@
+{
+  "adoption": null,
+  "approval_ref": "repo:.ea/artifacts/evidence/2026-09-25-dev3-publication/receipts.json",
+  "authority_epoch": 2,
+  "channel": "dev",
+  "key": "REL-0.7.0.dev3",
+  "last_invalidation": null,
+  "manifest_digest": "sha256:c431c633f591df874501607db315baf00afe852867bfce2d95fcbbe18ca20eba",
+  "manifest_ref": "manifest://REL-0.7.0.dev3/sha256:c431c633f591df874501607db315baf00afe852867bfce2d95fcbbe18ca20eba",
+  "membership_refs": [
+    "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001"
+  ],
+  "policy_revision": 1,
+  "publication_operation_ref": null,
+  "revision": 2,
+  "schema_version": "release/v2",
+  "source_sha": "026b33abddebcde0bc57eb71ff37c747db16d468",
+  "source_tree_sha": "5e6828724aa207ae7894fa4018a126fd76f42fdb",
+  "status": "approved",
+  "supersedes_release_ref": "REL-0.7.0.dev2",
+  "target_statuses": {},
+  "uid": "d5fa0e16-26f9-443e-99da-dd9cba346e68",
+  "version": "0.7.0.dev3"
+}

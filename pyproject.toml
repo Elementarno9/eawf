@@ -120,7 +120,10 @@ DEP001 = ["duckdb"]
 # may skip it; the check degrades to a failed audit result naming the missing
 # dev-only dependency instead of crashing CLI import/registry startup.
 DEP002 = ["mkdocs", "mkdocs-material"]
-DEP004 = ["hypothesis"]
+# The post-merge release pipeline lazy-imports ``detect_secrets`` only in its
+# final evidence step, which runs in this repo's own development checkout; a
+# runtime install without it refuses that step by name instead of failing.
+DEP004 = ["hypothesis", "detect_secrets"]
 # DEP003 (transitive): ``pydantic_core`` is pydantic's own compiled core,
 # pulled in transitively with pydantic; the direct ``ErrorDetails`` import
 # rides that coupling.

@@ -39,9 +39,8 @@ actually caught.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 
@@ -84,31 +83,21 @@ def _checkpoint_config(version: str, *, repo_root: Path) -> ReleaseConfig:
             ``invalid_membership_cardinality`` when a rung that requires
             membership finds no matching export to resolve against.
     """
-    from eawf.kernel.release.checkpoint_template import with_membership_refs
-    from eawf.kernel.spec.release import release_key
-    from eawf.kernel.spec.release_config import ReleaseConfigError, load_release_config
-    from eawf.workflow.release.admission import committed_membership_refs
-    from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
+    from eawf.kernel.spec.release_config import ReleaseConfigError
+    from eawf.workflow.release.admission import checkpoint_release_config
 
     try:
-        source = checkpoint_config_yaml(version)
+        return checkpoint_release_config(version, repo_root=repo_root)
     except KeyError as exc:
         raise cli_errors.UserError(
             f"no release configuration authored for {version!r}; author its checkpoint "
             f"before tagging or publishing it",
             kind="NotFound",
         ) from exc
-    try:
-        membership_refs = committed_membership_refs(repo_root, release_key(version))
-    except ValueError as exc:
-        raise cli_errors.ValidationError(f"committed canary evidence: {exc}") from exc
-    document: str | Mapping[str, Any] = source
-    if membership_refs:
-        document = with_membership_refs(source, membership_refs=membership_refs)
-    try:
-        return load_release_config(document, train=V07_TRAIN)
     except ReleaseConfigError as exc:
         raise cli_errors.ValidationError(f"{exc.code.value}: {exc}") from exc
+    except ValueError as exc:
+        raise cli_errors.ValidationError(str(exc)) from exc
 
 
 def _sweep_release(

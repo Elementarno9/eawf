@@ -14,10 +14,12 @@ nobody can call.
 The two train-walking verbs, ``receipts`` and ``advance``, live in
 :mod:`eawf.surfaces.cli.commands.release_train`; the manifest pin,
 ``candidate``, lives in
-:mod:`eawf.surfaces.cli.commands.release_candidate`; and the local sweep
+:mod:`eawf.surfaces.cli.commands.release_candidate`; the local sweep
 verbs, ``tag`` and ``preflight``, live in
-:mod:`eawf.surfaces.cli.commands.release_tag`. All three attach their
-verbs to :data:`release_app` when this module is imported.
+:mod:`eawf.surfaces.cli.commands.release_tag`; and the post-merge walk,
+``pipeline``, lives in :mod:`eawf.surfaces.cli.commands.release_pipeline`.
+All four attach their verbs to :data:`release_app` when this module is
+imported.
 """
 
 from __future__ import annotations
@@ -974,6 +976,7 @@ def release_cancel(
 # the app carries every verb the parity map names. The imports sit after
 # every shared symbol is defined, so the siblings can import them from here.
 from eawf.surfaces.cli.commands import release_candidate as _release_candidate  # noqa: E402, F401
+from eawf.surfaces.cli.commands import release_pipeline as _release_pipeline  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_tag as _release_tag  # noqa: E402, F401
 from eawf.surfaces.cli.commands import release_train as _release_train  # noqa: E402, F401
 
