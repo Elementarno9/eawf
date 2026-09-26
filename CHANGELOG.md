@@ -19,7 +19,7 @@ This is the fifth development checkpoint of the v0.7.0 release train, and the pr
 
 - **This repository is cut over to epoch 2.** The live cutover is recorded in `.ea/artifacts/evidence/2026-09-dev5-live-cutover/live-cutover.json`; the re-run selected the same generation and wrote nothing.
 - **Imported records continue after cutover.** Waves imported from epoch 1 are finished through a legacy continuation route, and ledger rows are appended after the cutover rather than rewritten.
-- **Commit lint and the requirement trace read the epoch-2 generation,** and an imported wave cites its whole intent brief in the trace.
+- **Commit lint and the requirement trace read the epoch-2 generation,** and an imported wave cites its whole intent brief in the trace. Commit lint also accepts an `Task: <KEY>` trailer naming a CLAIMED or RUNNING native Task, capped at one commit per Task like a wave, and the trace refuses a satisfied disposition whose commit names a different phase or whose test path does not exist.
 - **The native console runs on this repository's tree,** with run controls committed as patches and a live smoke recorded against it.
 
 ### Fixed
@@ -32,7 +32,8 @@ This is the fifth development checkpoint of the v0.7.0 release train, and the pr
 
 ### Limitations
 
-- **Most canary-window receipts bind proving suites and committed records rather than live runs.** Only the plan receipt carries live references, the operator's approvals of the rc1, rc2 and stable revisions; the accepted Milestone the membership row reads is still the disposable canary's, re-recorded for this release.
+- **Four of the six pre-merge canary receipts bind fixture or canary-walk tests, not a live run on this repository.** `parallel_dispatch`, `exact_head_integration`, `real_diff_review` and `milestone_accepted` are each proven by a fixture suite or the disposable canary walk; the accepted Milestone the membership row reads is still the disposable canary's, re-recorded for this release.
+- **Two pre-merge receipts bind live evidence.** `plan_revision_approved` cites the operator's approvals of the rc1, rc2 and stable revisions, and `migration_rerun_identical` cites the committed record of the live cutover of this repository, whose re-run selected the same generation and wrote nothing.
 - **The runtime certification is carried forward from dev3** (`claude-code` 2.1.274, expiring 2026-12-17), not re-probed.
 
 ## [0.7.0.dev4]

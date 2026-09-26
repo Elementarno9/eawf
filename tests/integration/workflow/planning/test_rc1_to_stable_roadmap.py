@@ -102,6 +102,9 @@ def _copied_tree(tmp_path: Path) -> Path:
             shutil.copytree(source, target)
         else:
             shutil.copy2(source, target)
+    # A satisfied disposition names the tests that prove it, and the trace
+    # refuses one whose tests are missing, so the tree needs the real ones.
+    (root / "tests").symlink_to(REPO_ROOT / "tests", target_is_directory=True)
     authority = require_native_authority(root / ".ea")
     assert authority.target is not None and authority.generation_id is not None
     document_path = authority.target.generation_path(authority.generation_id) / GENERATION_DOCUMENT

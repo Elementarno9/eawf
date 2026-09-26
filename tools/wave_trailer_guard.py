@@ -1,4 +1,4 @@
-"""Refuse a history rewrite that drops a wave's ``Eawf-Wave`` trailer.
+"""Refuse a history rewrite that drops an ``Eawf-Wave`` or ``Task`` trailer.
 
 Wave pins are recovered after a rewrite by trailer (see the lifecycle
 ``wave_trailer_repin`` module), so a rewrite that loses a trailer loses the
@@ -10,7 +10,9 @@ What the check sees is two tips of the same ref: *old* (what the remote holds)
 and *new* (what is about to replace it). A fast-forward, where *old* is an
 ancestor of *new*, rewrites nothing and passes without reading any message.
 Otherwise both sides are read from their merge-base, and every wave named by
-a trailer in ``base..old`` must still be named by a trailer in ``base..new``.
+a trailer in ``base..old`` must still be named by a trailer in ``base..new``,
+and so must every native Task an ``Task`` trailer names, since that
+trailer is the only identity a native Task commit carries.
 
 ``commit_prefix_lint.py`` dispatches here for its ``--check-rewrite OLD NEW``
 and ``--pre-push`` modes; the latter reads the tips from the
@@ -26,7 +28,7 @@ import subprocess
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from commit_prefix_lint import _WAVE_TRAILER_RE
+from commit_prefix_lint import _TASK_TRAILER_RE, _WAVE_TRAILER_RE
 
 _GIT_TIMEOUT_SECONDS = 20.0
 _REC_SEP = "\x00"
@@ -45,6 +47,13 @@ def trailer_wave_ids(messages: Iterable[str]) -> set[str]:
             parts = match.group("wave").split("-")
             wave_ids.add("-".join(parts) if len(parts) == 3 else f"{parts[0]}-I01-{parts[1]}")
     return wave_ids
+
+
+def trailer_task_keys(messages: Iterable[str]) -> set[str]:
+    """Return every native Task key named on an ``Task`` line of *messages*."""
+    return {
+        match.group("key") for message in messages for match in _TASK_TRAILER_RE.finditer(message)
+    }
 
 
 def dropped_wave_ids(old_messages: Iterable[str], new_messages: Iterable[str]) -> list[str]:
@@ -99,13 +108,19 @@ def check_rewrite(old: str, new: str, *, repo_root: Path | None = None) -> tuple
     if old_messages is None or new_messages is None:
         return 1, f"wave-trailer guard: cannot read the commits between {old} and {new}"
     dropped = dropped_wave_ids(old_messages, new_messages)
-    if not dropped:
+    dropped_tasks = sorted(trailer_task_keys(old_messages) - trailer_task_keys(new_messages))
+    if not dropped and not dropped_tasks:
         return 0, ""
+    losses = [
+        f"the {name} trailer of {', '.join(ids)}"
+        for name, ids in (("Eawf-Wave", dropped), ("Task", dropped_tasks))
+        if ids
+    ]
     return 1, (
-        f"wave-trailer guard: this rewrite drops the Eawf-Wave trailer of {', '.join(dropped)}. "
-        "Every wave must keep a trailer so its pin can be recovered after the rewrite; "
-        "restore the dropped lines (a squashed commit carries one per wave), or land by "
-        "fast-forward instead."
+        f"wave-trailer guard: this rewrite drops {' and '.join(losses)}. "
+        "Every wave and Task must keep a trailer so its pin can be recovered after the "
+        "rewrite; restore the dropped lines (a squashed commit carries one per wave or "
+        "Task), or land by fast-forward instead."
     )
 
 

@@ -798,11 +798,13 @@ def _git(repo: Path, *args: str) -> None:
     )
 
 
-#: The revision the dev4 clone rehearsal pinned. Its committed document still
-#: carries the stale worktree rows the live cut later reconciled, so it is the
-#: corpus the reconcile has real work on; HEAD's frozen document has none.
+#: The P35 close on main, the last revision before the live cut. Its committed
+#: document still carries the stale worktree rows the live cut later
+#: reconciled, so it is the corpus the reconcile has real work on; HEAD's
+#: frozen document has none. It must stay reachable from main, since a fresh
+#: checkout resolves it.
 # pragma: allowlist nextline secret
-PRE_RECONCILE_REVISION: Final = "e2d6a5df8b599a30aa08d5306335ac5381a3d0c6"
+PRE_RECONCILE_REVISION: Final = "9b59f041406a26030feb1a7f64feb48dddd18c16"
 
 
 def _repo_with_document(root: Path, document: dict[str, Any]) -> Path:

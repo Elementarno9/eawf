@@ -254,8 +254,16 @@ def test_skill_run_failed_status_exits_four(
 def test_skill_run_needs_user_status_exits_seven(
     cli_runner: CliRunner,
     stub_needs_user_skill: type[Skill],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _ = stub_needs_user_skill
+    # The question fires the typed-choice practice trigger, which records
+    # into the resolved tree; without a tree of its own the run would reach
+    # the repository's .ea.
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir()
+    monkeypatch.setenv("EA_STATE", str(state_path))
     result = cli_runner.invoke(
         app,
         ["--json", "skill", "run", "/plan"],

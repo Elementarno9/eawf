@@ -16,11 +16,15 @@ the two halves of that job are restated here rather than imported:
   reads as epoch 1, as it does for the resolver.
 - the status map is the inverse of
   ``eawf.kernel.migration.epoch2.status_map``. Imported lifecycle rows keep
-  their epoch-1 id as the record key, which is what a trailer names;
-  rows keyed any other way are native work no trailer can name, so the
+  their epoch-1 id as the record key, which is what an ``Eawf-Wave``
+  trailer names; rows keyed any other way are native work, so the
   projection leaves them out.
+- the native Task key grammar mirrors the task family of
+  ``eawf.kernel.identity.keys``: ``<PROJECT>-####``, which is what an
+  ``Task`` trailer names. :func:`native_task_status` reads such a row
+  in its native spelling, since it has no epoch-1 counterpart.
 
-Both copies are pinned against the package by
+All three copies are pinned against the package by
 ``tests/unit/test_commit_prefix_lint_epoch2.py``.
 """
 
@@ -43,6 +47,7 @@ _GENERATION_ID_RE = re.compile(r"^gen-[0-9a-f]{16}$")
 _PHASE_KEY_RE = re.compile(r"^P\d{2,}$")
 _ITER_KEY_RE = re.compile(r"^P\d{2,}-I\d{2,}$")
 _WAVE_KEY_RE = re.compile(r"^P\d{2,}-I\d{2,}-W\d{2,}$")
+NATIVE_TASK_KEY_RE = re.compile(r"^[A-Z][A-Z0-9_-]{1,15}-\d{4}$")
 
 # The inverse of the importer's status maps. A native status with no
 # epoch-1 spelling reads as its own lowercase name, which the hook treats
@@ -229,3 +234,23 @@ def generation_lifecycle_view(generation: Path) -> dict[str, Any]:
         "iters": iters,
         "waves": waves,
     }
+
+
+def native_task_status(generation: Path, key: str) -> str | None:
+    """Return the native status of Task *key* in *generation*.
+
+    Args:
+        generation: The selected generation directory.
+        key: A native Task key such as ``EAWF-0137``.
+
+    Returns:
+        The row's status as the generation spells it (``CLAIMED``,
+        ``RUNNING``, ...), or ``None`` when no Task carries *key*.
+
+    Raises:
+        OSError: The generation document cannot be read.
+        ValueError: The document or the task ledger is not the expected
+            JSON shape.
+    """
+    row = _collection_rows(generation, "task").get(key)
+    return None if row is None else str(row.get("status", ""))

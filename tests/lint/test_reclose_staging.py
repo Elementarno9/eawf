@@ -25,6 +25,9 @@ _RUNBOOK = _REPO_ROOT / ".ea" / "artifacts" / "plans" / "2026-07-03-v0.6.0-reclo
 #: annotation must be its own paren group for the tag job to fire.
 _EXTRACTION_RE = re.compile(r"\(release=(v\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?)\)")
 
+#: The minor of the ``schema_version`` 0.6.0 shipped on.
+_V060_SCHEMA_MINOR = 19
+
 _DRAFTED_SUBJECT = "[P30] state: close iter + phase (audit=A-P30-I22-ship) (release=v0.6.0)"
 
 
@@ -256,14 +259,19 @@ def test_changelog_carries_the_release_section() -> None:
     """
     changelog = (_REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert re.search(r"^## \[0\.6\.0\]", changelog, re.M)
-    section = changelog.split("## [0.6.0]", 1)[1].split("\n## [", 1)[0]
+    later, rest = changelog.split("## [0.6.0]", 1)
+    section = rest.split("\n## [", 1)[0]
     assert re.search(r"^- ", section, re.M), "0.6.0 section has no bullets"
-    # 1.8 is the schema v0.5.x shipped on; every edge from there to the
-    # persisted version is part of this release.
+    # 1.8 is the schema v0.5.x shipped on and 1.19 the one 0.6.0 shipped on;
+    # an edge past 1.19 belongs to the later release that shipped it, so it
+    # is looked for in the sections above 0.6.0 rather than in 0.6.0 itself.
     major, minor = (int(part) for part in _state()["schema_version"].split("."))
     for target in range(9, minor + 1):
         edge = f"{major}.{target - 1} -> {major}.{target}"
-        assert edge in section, f"0.6.0 ships schema edge {edge} with no migration note"
+        if target <= _V060_SCHEMA_MINOR:
+            assert edge in section, f"0.6.0 ships schema edge {edge} with no migration note"
+        else:
+            assert edge in later, f"schema edge {edge} has no migration note after 0.6.0"
     # The I25 entry described four lifecycle bugs long after the iter grew into
     # the runtime-measurement repair; pin the two strands it actually shipped.
     assert "calibration_excluded" in section, "the 0.6.0 notes omit the calibration exclusion"

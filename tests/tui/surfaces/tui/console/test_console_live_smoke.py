@@ -71,8 +71,9 @@ from tests.integration.workflow.release._canary_acceptance_walk import CanaryWal
 #: The five journeys the brief names, in the console's own route-id spelling.
 JOURNEYS: tuple[str, ...] = ("scope.home", "activity", "attention", "run.detail", "settings")
 
-#: How long a socket answer already asked for is waited on; a failure guard only.
-CALL_TIMEOUT_SECONDS = 1.0
+#: How long a socket answer already asked for is waited on; a failure guard only,
+#: sized for a loaded CI runner, where a settings read can take over a second.
+CALL_TIMEOUT_SECONDS = 10.0
 
 #: The system temp dir, captured before anything under test might redirect it.
 SYSTEM_TEMP_DIR = tempfile.gettempdir()

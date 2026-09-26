@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": "cacc5041956e0eba392a54d5af395e1b3ecc504c",
+  "revision": "8c62cf5a3eb92f009ed0a6579d4b95025f147a7b",
   "summary": {
     "total": 1170,
     "owned": 1108,
@@ -205,7 +205,7 @@
         "CON-160",
         "CON-161"
       ],
-      "phase": "P34",
+      "phase": "P33",
       "commit": "18e0ab7b8fb90dc2d69d617912fad1bb9bbf92de",
       "tests": [
         "tests/integration/runtime/daemon/test_semantic_gateway_guards.py",
@@ -225,7 +225,7 @@
         "DEL-034",
         "PLAN-003"
       ],
-      "phase": "P34",
+      "phase": "P33",
       "commit": "2fb5fb7186999357864773c222203dcd56f573d7",
       "tests": [
         "tests/unit/kernel/delivery/test_criteria.py",
@@ -249,7 +249,7 @@
       "ids": [
         "CON-094"
       ],
-      "phase": "P34",
+      "phase": "P33",
       "commit": "e31bd23bd72f4009ba34cb55d10a1dd6e61ce9ce",
       "tests": [
         "tests/snapshots/tui/console/test_golden_journeys.py"
@@ -264,7 +264,7 @@
         "CON-153",
         "CON-159"
       ],
-      "phase": "P34",
+      "phase": "P33",
       "commit": "f89649470ba8e7a4d703af4887669dbe50ba3fde",
       "tests": [
         "tests/snapshots/tui/console/test_golden_frames.py",
@@ -280,7 +280,7 @@
       "ids": [
         "AUTH-027"
       ],
-      "phase": "P34",
+      "phase": "P33",
       "commit": "fb2019d8bb5fe610ad84ae619e6b0cae4b3aed1e",
       "tests": [
         "tests/unit/kernel/runtime/test_budget_notice.py"

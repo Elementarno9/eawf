@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.identity.keys import TASK_ORDINAL_WIDTH, EntityKind, format_entity_key
 from eawf.kernel.migration.epoch2.canary import (
     CANARY_DECLARATION_FILENAME,
     GENERATIONS_DIRNAME,
@@ -28,6 +29,8 @@ from eawf.kernel.migration.epoch2.canary import (
     OPT_IN_DECLARATION_FILENAME,
 )
 from eawf.kernel.state.epoch2.authority import resolve_authority
+from eawf.kernel.state.ids import RE_PROJECT_CODE
+from eawf.runtime.integration.commit_policy import TASK_TRAILER_KEY
 from tests.integration.kernel.migration._cutover_harness import (
     APPLIED_AT,
     apply_once,
@@ -304,6 +307,148 @@ def test_marked_root_with_a_torn_generation_refuses_rather_than_reading_the_froz
 
     assert code == 1
     assert "managed state decode failed" in diag
+
+
+# --- a native Task trailer ------------------------------------------------------
+
+_NATIVE_STATUSES = {
+    "EAWF-0137": "CLAIMED",
+    "EAWF-0138": "RUNNING",
+    "EAWF-0139": "PLANNED",
+    "EAWF-0140": "FAILED",
+}
+_COMPACTED = "EAWF-0141"
+
+
+@pytest.fixture()
+def native(marked: Path) -> Path:
+    """The marked root with native Tasks planted beside the imported ones.
+
+    Live rows sit in the document; a COMPLETED one is compacted into the
+    ledger only, as a terminal row is, so the proof must read both halves.
+    """
+    generation = next(p for p in (marked / GENERATIONS_DIRNAME).iterdir() if p.name[:4] == "gen-")
+    document_path = generation / "state.json"
+    document = json.loads(document_path.read_text(encoding="utf-8"))
+    for key, status in _NATIVE_STATUSES.items():
+        document.setdefault("task", {})[key] = {"key": key, "status": status}
+    document_path.write_text(json.dumps(document), encoding="utf-8")
+    ledger = generation / "ledger" / "task.jsonl"
+    ledger.parent.mkdir(exist_ok=True)
+    with ledger.open("a", encoding="utf-8") as handle:
+        for status in ("RUNNING", "COMPLETED"):
+            handle.write(json.dumps({"record_key": _COMPACTED, "status": status}) + "\n")
+    return marked
+
+
+def _task_lint(mod: Any, tmp_path: Path, ea_dir: Path, key: str) -> tuple[int, str]:
+    return _lint(mod, tmp_path, ea_dir, f"fix: land it\n\nTask: {key}\n", ["src/eawf/x.py"])
+
+
+@pytest.mark.parametrize("key", ["EAWF-0137", "EAWF-0138"])
+def test_marked_root_accepts_a_task_trailer_naming_a_live_native_task(
+    mod: Any, tmp_path: Path, native: Path, key: str
+) -> None:
+    """The trailer also satisfies the open-phase rule a bare subject would fail."""
+    code, diag = _task_lint(mod, tmp_path, native, key)
+
+    assert code == 0, diag
+
+
+@pytest.mark.parametrize(
+    ("key", "found"),
+    [
+        ("EAWF-0139", "status 'PLANNED'"),
+        ("EAWF-0140", "status 'FAILED'"),
+        (_COMPACTED, "status 'COMPLETED'"),
+        ("EAWF-0999", "no such Task"),
+    ],
+)
+def test_marked_root_refuses_a_task_trailer_naming_a_task_that_is_not_live(
+    mod: Any, tmp_path: Path, native: Path, key: str, found: str
+) -> None:
+    """Gate-fire: a planted PLANNED and a ledger-compacted COMPLETED Task each red."""
+    code, diag = _task_lint(mod, tmp_path, native, key)
+
+    assert code == 1
+    assert f"Task trailer rejected: {key!r}" in diag
+    assert found in diag
+
+
+@pytest.mark.parametrize("key", [_CLAIMED, "eawf-0137", "EAWF-137", "EAWF-01370"])
+def test_marked_root_refuses_a_task_trailer_with_a_malformed_key(
+    mod: Any, tmp_path: Path, native: Path, key: str
+) -> None:
+    code, diag = _task_lint(mod, tmp_path, native, key)
+
+    assert code == 1
+    assert "is not a native Task key" in diag
+
+
+def test_unmarked_root_refuses_a_task_trailer(mod: Any, tmp_path: Path, unmarked: Path) -> None:
+    code, diag = _task_lint(mod, tmp_path, unmarked, "EAWF-0137")
+
+    assert code == 1
+    assert "this root is not marked epoch 2" in diag
+
+
+def test_a_task_refused_even_beside_a_live_wave_trailer(
+    mod: Any, tmp_path: Path, native: Path
+) -> None:
+    code, diag = _lint(
+        mod,
+        tmp_path,
+        native,
+        f"fix: land it\n\nEawf-Wave: {_CLAIMED}\nTask: EAWF-0139\n",
+        ["src/eawf/x.py"],
+    )
+
+    assert code == 1
+    assert "status 'PLANNED'" in diag
+
+
+def test_a_second_commit_for_a_task_is_capped_and_its_amend_is_not(
+    mod: Any, tmp_path: Path, native: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    prior = "f" * 40
+    monkeypatch.setattr(
+        mod,
+        "_prior_wave_commits",
+        lambda terms, **_kw: [prior] if terms == ["Task: EAWF-0137"] else [],
+    )
+    monkeypatch.setattr(mod, "_head_identity", lambda _root: (prior, "1788883700"))
+    state = native / "state.json"
+    message = _message(tmp_path, "fix: more\n\nTask: EAWF-0137\n")
+
+    def run(env: dict[str, str]) -> tuple[int, str]:
+        return mod.lint(
+            message,
+            ["src/eawf/x.py"],
+            env=env,
+            state_path=state,
+            canonical_state_path=state,
+            subject_style="trailer",
+        )
+
+    appended = run({"GIT_AUTHOR_DATE": "@1788899999 +0000"})
+    amended = run({"GIT_AUTHOR_DATE": "@1788883700 +0000"})
+
+    assert appended[0] == 1
+    assert f"second commit for task EAWF-0137: {prior[:12]}" in appended[1]
+    assert amended[0] == 0, amended[1]
+
+
+def test_the_task_trailer_name_mirrors_the_package(mod: Any) -> None:
+    assert mod._TASK_TRAILER_NAME == TASK_TRAILER_KEY
+
+
+def test_the_native_task_key_grammar_mirrors_the_package(view_mod: Any) -> None:
+    assert view_mod.NATIVE_TASK_KEY_RE.pattern == (
+        f"{RE_PROJECT_CODE.pattern.removesuffix('$')}-\\d{{{TASK_ORDINAL_WIDTH}}}$"
+    )
+    for code in ("EAWF", "QR", "A_B-C"):
+        key = format_entity_key(EntityKind.TASK, 42, project_code=code)
+        assert view_mod.NATIVE_TASK_KEY_RE.match(key), key
 
 
 # --- the state-commit whitelist -----------------------------------------------

@@ -282,6 +282,7 @@ __all__ = [
     "CODEX_DOC_CAP_KEY",
     "HOST_FACT_NAMES",
     "HOST_RUNTIMES",
+    "CapScope",
     "CertifiedCap",
     "HostFact",
     "HostFactError",

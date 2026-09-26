@@ -435,7 +435,9 @@ def _control_mark(payload: Mapping[str, Any]) -> ControlMark | None:
     ref = payload.get("control_request_ref")
     if ref is None:
         return None
-    return ControlMark(control_request_ref=ref, disposition=payload.get("control_disposition"))
+    return ControlMark.model_validate(
+        {"control_request_ref": ref, "disposition": payload.get("control_disposition")}
+    )
 
 
 def _moved_record(envelope: Envelope) -> tuple[QualifiedUrn, str, int]:
@@ -513,13 +515,13 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
         raise ValueError(f"{collection.value} row {key!r} is a {type(row).__name__}, not an object")
     if "urn" not in row and ROW_PAYLOAD_FIELD in row:
         legacy = read_legacy_row(collection, key, row)
-        urn, revision = entity_ref(collection, key), 1 + len(legacy.continuation)
+        legacy_urn, legacy_revision = entity_ref(collection, key), 1 + len(legacy.continuation)
         return ProjectionRow(
             key=key,
-            urn=urn,
+            urn=legacy_urn,
             collection=collection,
-            revision=revision,
-            status=_status_field(status=legacy.status, urn=urn, revision=revision),
+            revision=legacy_revision,
+            status=_status_field(status=legacy.status, urn=legacy_urn, revision=legacy_revision),
         )
     urn, revision = row.get("urn"), row.get("revision")
     if not isinstance(urn, str) or not urn.strip():

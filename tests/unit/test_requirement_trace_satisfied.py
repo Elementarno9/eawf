@@ -3,8 +3,9 @@
 An id a closed phase already built, but no wave text cites, is accounted for
 by a satisfaction naming the admitting decision, the closed phase and the
 commit that built it. The gate-fire proofs are the refusals: a commit the
-repository cannot resolve, and a phase that is open or missing, each raise
-rather than letting an id read as satisfied on evidence nobody can inspect.
+repository cannot resolve, a phase that is open or missing, a commit that
+names another phase and a listed test that does not exist each raise rather
+than letting an id read as satisfied on evidence nobody can inspect.
 
 Every fixture uses placeholder families (``ABC``, ``DEF``) so this module
 never reads as a test of a real packet id when the live trace scans it.
@@ -29,6 +30,7 @@ from tools.requirement_trace import (
     StateView,
     TraceInputError,
     TraceStatus,
+    _named_phases,
     build_trace,
     load_catalog,
     load_state,
@@ -46,6 +48,11 @@ _TITLES = {
 }
 _UNKNOWN_SHA = "0" * 40
 _REPO_ROOT = Path(__file__).resolve().parents[2]
+#: The committed catalog's first satisfaction: a commit this repository's
+#: history holds, and the phase that commit names.
+_BUILT = load_catalog(_REPO_ROOT / CATALOG_PATH).satisfactions[0]
+_OTHER_CLOSED_PHASE = "P01" if _BUILT.phase != "P01" else "P02"
+_BUILT_TEST = "tests/test_built.py"
 
 
 def _state(*, phase_status: str = "closed", decision_status: str = "active") -> dict[str, Any]:
@@ -57,7 +64,11 @@ def _state(*, phase_status: str = "closed", decision_status: str = "active") -> 
             "D01": {"id": "D01", "status": "active"},
             "D02": {"id": "D02", "status": decision_status},
         },
-        "phases": {"P08": {"status": phase_status}, "P09": {"status": "active"}},
+        "phases": {
+            _BUILT.phase: {"status": phase_status},
+            _OTHER_CLOSED_PHASE: {"status": "closed"},
+            "P99": {"status": "active"},
+        },
     }
 
 
@@ -67,12 +78,14 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("GIT_DIR", str(_REPO_ROOT / ".git"))
     (tmp_path / ".ea").mkdir()
     (tmp_path / STATE_PATH).write_text(json.dumps(_state()), encoding="utf-8")
+    (tmp_path / _BUILT_TEST).parent.mkdir()
+    (tmp_path / _BUILT_TEST).touch()
     return tmp_path
 
 
 def _head(_repo: Path) -> str:
     """Return a commit this repository's history holds: the committed catalog's first."""
-    return load_catalog(_REPO_ROOT / CATALOG_PATH).satisfactions[0].commit
+    return _BUILT.commit
 
 
 def _blob_sha(path: Path) -> str:
@@ -85,9 +98,9 @@ def _satisfaction(repo: Path, **overrides: Any) -> Satisfaction:
     fields: dict[str, Any] = {
         "decision": "D02",
         "ids": ("ABC-002", "ABC-003"),
-        "phase": "P08",
+        "phase": _BUILT.phase,
         "commit": _head(repo),
-        "tests": ("tests/test_built.py",),
+        "tests": (_BUILT_TEST,),
     }
     fields.update(overrides)
     return Satisfaction.model_validate(fields)
@@ -136,12 +149,37 @@ def test_a_sha_naming_a_blob_rather_than_a_commit_raises(repo: Path) -> None:
 
 def test_a_phase_that_is_not_closed_raises(repo: Path) -> None:
     with pytest.raises(TraceInputError, match="not a closed phase"):
-        _trace(repo, (_satisfaction(repo, phase="P09"),))
+        _trace(repo, (_satisfaction(repo, phase="P99"),))
 
 
 def test_a_phase_the_state_lacks_raises(repo: Path) -> None:
     with pytest.raises(TraceInputError, match="P77, which is not a closed phase"):
         _trace(repo, (_satisfaction(repo, phase="P77"),))
+
+
+def test_a_commit_naming_another_phase_raises(repo: Path) -> None:
+    """Gate-fire: a closed phase cited for a commit whose carriers name another."""
+    with pytest.raises(
+        TraceInputError,
+        match=f"cites {_OTHER_CLOSED_PHASE}, but the commit names {_BUILT.phase}",
+    ):
+        _trace(repo, (_satisfaction(repo, phase=_OTHER_CLOSED_PHASE),))
+
+
+def test_a_listed_test_that_does_not_exist_raises(repo: Path) -> None:
+    with pytest.raises(TraceInputError, match=r"tests that do not exist: tests/test_gone\.py"):
+        _trace(repo, (_satisfaction(repo, tests=(_BUILT_TEST, "tests/test_gone.py")),))
+
+
+def test_named_phases_reads_trailers_and_the_bracketed_subject() -> None:
+    assert _named_phases("") == set()
+    assert _named_phases("fix: no carrier\n\nsee Eawf-Wave: P05-I01-W01\n") == set()
+    assert _named_phases("[P03-W02] feat: x\n") == {"P03"}
+    assert _named_phases("[P03] state: x\n") == {"P03"}
+    assert _named_phases("feat: x\n\nEawf-Wave: P33-I01-W01\nEawf-Wave: P34-I01-W02\n") == {
+        "P33",
+        "P34",
+    }
 
 
 def test_an_imported_milestone_completed_status_counts_as_closed(repo: Path) -> None:
@@ -204,7 +242,7 @@ def test_check_require_owned_passes_on_satisfied_ids_and_reds_on_a_planted_sha(
 ) -> None:
     catalog = _trace(repo, (_satisfaction(repo),))
     (repo / CATALOG_PATH).write_text(render(catalog), encoding="utf-8")
-    assert load_state(repo / STATE_PATH).phases["P08"].closed
+    assert load_state(repo / STATE_PATH).phases[_BUILT.phase].closed
 
     assert main(["--repo-root", str(repo), "check", "--require-owned"]) == 0
 

@@ -220,14 +220,14 @@ def _projection_frames(envelope: Envelope) -> tuple[bytes, ...]:
     )
 
 
-#: What the one streamer writes for each subscribe verb. The verbs share the
-#: connection, the bus and the subscriber; only the frame differs, which is what
-#: keeps the projection feed on the socket ``state.subscribe`` already rides.
 #: The largest newline-framed request one connection reads. asyncio caps a
 #: line at 64 KiB by default, which refuses a real plan revision carrying
 #: hundreds of source atoms; the cap still bounds what one frame buffers.
 MAX_FRAME_BYTES: Final = 16 * 1024 * 1024
 
+#: What the one streamer writes for each subscribe verb. The verbs share the
+#: connection, the bus and the subscriber; only the frame differs, which is what
+#: keeps the projection feed on the socket ``state.subscribe`` already rides.
 _SUBSCRIBE_FRAMES: Final[Mapping[str, Callable[[Envelope], tuple[bytes, ...]]]] = {
     name: (_projection_frames if name == PROJECTION_SUBSCRIBE_METHOD else _event_frames)
     for name in SUBSCRIBE_METHODS
