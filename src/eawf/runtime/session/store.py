@@ -494,15 +494,23 @@ def terminalize_session(
     return staged
 
 
-def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
-    """Flip every ``ACTIVE`` agent session to ``STALE`` at daemon boot.
+def reconcile_orphaned_sessions(
+    state_path: Path,
+    event_path: Path,
+    *,
+    opened_since: datetime | None = None,
+) -> int:
+    """Flip the booting daemon's ``ACTIVE`` agent sessions to ``STALE``.
 
     A daemon's spawned children (researcher / executor agents) die with the
     daemon, but their :class:`~eawf.kernel.state.models.AgentSession` rows stay
     ``ACTIVE`` in ``state.json``, so the Watch surface renders a zombie live
     agent that never dies. A fresh daemon owns no live children by definition,
-    so every ``ACTIVE`` session at startup is orphaned -- this is a blanket
-    flip, not a per-pid probe (``AgentSession`` carries no subprocess pid).
+    so every ``ACTIVE`` session its lineage opened is orphaned -- a flip by
+    open time, not a per-pid probe (``AgentSession`` carries no subprocess
+    pid). A session opened before the lineage first booted belongs to some
+    other daemon (a checkout's committed sessions under a gate-proof daemon
+    on a fresh runtime dir) and is left alone, so that boot writes nothing.
 
     Each flip routes through :func:`close_session`, which stamps the terminal
     status + ``ended_at``, drops the sid from ``state.current.active_session_ids``,
@@ -520,10 +528,13 @@ def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
     Args:
         state_path: Path to ``state.json``.
         event_path: Path to ``event.jsonl`` (the ``session.close`` event sink).
+        opened_since: The booting lineage's birth; only sessions started at
+            or after it are flipped. ``None`` flips every ``ACTIVE`` session,
+            for a lineage older than its retained boot records.
 
     Returns:
         The count of sessions flipped from ``ACTIVE`` to ``STALE`` (0 when the
-        state is absent / unloadable / has no ACTIVE session).
+        state is absent / unloadable / has no ACTIVE session of the lineage).
     """
     # Imported lazily: the ``eawf.workflow.evidence`` package __init__ pulls in
     # the verdict path, which imports this module -- a module-level import here
@@ -543,6 +554,7 @@ def reconcile_orphaned_sessions(state_path: Path, event_path: Path) -> int:
             sid
             for sid, session in state.agent_sessions.items()
             if session.status is AgentSessionStatus.ACTIVE
+            and (opened_since is None or session.started_at >= opened_since)
         ]
         for sid in orphan_ids:
             close_session(

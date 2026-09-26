@@ -30,6 +30,7 @@ is CPU-idle-based, not worker-aware) before asserting.
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -2015,18 +2016,20 @@ def test_autopilot_multi_select_excludes_non_ready_waves(tmp_path: Path) -> None
     asyncio.run(body())
 
 
-def test_autopilot_multi_select_commit_stages_batch_and_tears_down(tmp_path: Path) -> None:
-    """Committing the checklist (``Enter``) stages the batch and tears it down.
+def commit_two_wave_batch(tmp_path: Path) -> str:
+    """Check two ready waves in the multi-select, commit, and return the toasts.
 
-    After checking two waves and pressing ``Enter``, the shell records the
-    staged claim batch (single-sourced from the ready frontier choices) and
-    removes the checklist. The bare test harness has no reachable daemon, so the
-    commit surfaces the honest :data:`BATCH_NO_DAEMON` line (the W07 dispatch
-    wiring); the positive-dispatch path is covered by the fake-client tests
-    below.
+    Asserts the checklist tore down and the batch was staged. The daemon the
+    commit sees is whatever ``EAWF_RUNTIME_DIR`` points at when this runs.
+
+    Args:
+        tmp_path: Directory the state document is written under.
+
+    Returns:
+        Every toast message the app raised, newline-joined.
     """
-    state = _three_ready_state()
-    state_path = _write_state(tmp_path, state)
+    state_path = _write_state(tmp_path, _three_ready_state())
+    toasts: list[str] = []
 
     async def body() -> None:
         app = EaApp(scope="repo", state_path=state_path)
@@ -2050,10 +2053,32 @@ def test_autopilot_multi_select_commit_stages_batch_and_tears_down(tmp_path: Pat
             # The checklist tore down on commit + the batch was staged.
             assert not pane.query(f"#{MULTI_SELECT_ID}")
             assert pane._claim_batch == ("P01-I01-W02", "P01-I03-W04")
-            toasts = "\n".join(toast_messages(app))
-            assert BATCH_NO_DAEMON in toasts
+            toasts.extend(toast_messages(app))
 
     asyncio.run(body())
+    return "\n".join(toasts)
+
+
+def test_autopilot_multi_select_commit_stages_batch_and_tears_down(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Committing the checklist (``Enter``) stages the batch and tears it down.
+
+    After checking two waves and pressing ``Enter``, the shell records the
+    staged claim batch (single-sourced from the ready frontier choices) and
+    removes the checklist. With no reachable daemon the commit surfaces the
+    honest :data:`BATCH_NO_DAEMON` line; the positive-dispatch path is covered
+    by the fake-client tests below.
+
+    The runtime dir is pinned to one this test owns: the worker-wide dir is
+    shared with every earlier test, and a daemon one of them left running
+    would otherwise answer the probe. The dir sits directly under the system
+    temp root so a socket path in it stays inside the 104-byte AF_UNIX cap.
+    """
+    with tempfile.TemporaryDirectory(prefix="eawf-ap-") as own_runtime_dir:
+        monkeypatch.setenv("EAWF_RUNTIME_DIR", own_runtime_dir)
+        toasts = commit_two_wave_batch(tmp_path)
+    assert BATCH_NO_DAEMON in toasts
 
 
 def test_autopilot_multi_select_empty_frontier_surfaces_no_target(tmp_path: Path) -> None:

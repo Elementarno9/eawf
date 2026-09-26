@@ -22,6 +22,7 @@ import os
 import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Final
@@ -178,6 +179,34 @@ def read_churn_records(runtime_dir: Path) -> tuple[ChurnRecord, ...]:
     return tuple(records)
 
 
+def lineage_born_at(runtime_dir: Path) -> datetime | None:
+    """Return when the daemon lineage living in *runtime_dir* first booted.
+
+    Every daemon on one runtime directory is a restart of the same lineage,
+    so the earliest boot record bounds which agent sessions that lineage can
+    have opened. A daemon on a fresh directory (a gate proof in a release
+    checkout) is born now and so owns none of the sessions a checkout
+    already carries.
+
+    Args:
+        runtime_dir: The booting daemon's runtime directory, whose own boot
+            record is already written.
+
+    Returns:
+        The earliest boot instant (UTC); ``None`` once the ledger has
+        rotated, because the lineage then predates every retained record
+        and may own any session; the current instant when no boot record
+        was written at all.
+    """
+    if (runtime_dir / CHURN_LEDGER_ROTATED_NAME).exists():
+        return None
+    boots = [
+        record.at_ns for record in read_churn_records(runtime_dir) if record.op is ChurnOp.BOOT
+    ]
+    born_ns = min(boots) if boots else time.time_ns()
+    return datetime.fromtimestamp(born_ns / 1_000_000_000, tz=UTC)
+
+
 def snapshot_runtime_dir(path: Path) -> RuntimeDirSnapshot:
     """Capture the entry set and mtime of *path*.
 
@@ -266,6 +295,7 @@ __all__ = [
     "ChurnOp",
     "ChurnRecord",
     "RuntimeDirSnapshot",
+    "lineage_born_at",
     "read_churn_records",
     "record_churn",
     "snapshot_runtime_dir",

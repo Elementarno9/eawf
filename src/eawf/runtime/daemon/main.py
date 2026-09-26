@@ -37,7 +37,7 @@ from eawf.observability.logging.scrub import SensitiveScrubber
 from eawf.platform.registry.models import RegistryReadError, read_registry
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.churn import ChurnOp, record_churn
+from eawf.runtime.daemon.churn import ChurnOp, lineage_born_at, record_churn
 from eawf.runtime.daemon.epoch2_recovery import (
     recover_native_store_trees,
     repair_native_ledger_tails,
@@ -1087,11 +1087,18 @@ def run(*, foreground: bool = True) -> int:
             # Reconcile orphaned agent sessions: a prior daemon's spawned
             # children died with it, but their AgentSession rows stay ACTIVE in
             # state.json and render as zombie live agents on the Watch surface.
-            # A fresh daemon owns no live children, so every ACTIVE session at
-            # boot is orphaned -- flip them all to STALE. Single-threaded here,
-            # pre-listener, so there is no contention on the state lock.
+            # A fresh daemon owns no live children, so every ACTIVE session its
+            # runtime-dir lineage opened is orphaned -- flip those to STALE.
+            # Sessions older than the lineage belong to another daemon: a gate
+            # proof on a fresh runtime dir must not rewrite a checkout's
+            # committed state. Single-threaded here, pre-listener, so there is
+            # no contention on the state lock.
             if not legacy_frozen:
-                orphaned = reconcile_orphaned_sessions(project_state_path, project_event_path)
+                orphaned = reconcile_orphaned_sessions(
+                    project_state_path,
+                    project_event_path,
+                    opened_since=lineage_born_at(rt_dir),
+                )
                 if orphaned:
                     logger.info(f"run reconciled-orphan-sessions flipped={orphaned}")
 
