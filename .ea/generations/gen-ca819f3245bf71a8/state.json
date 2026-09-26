@@ -1,5 +1,32 @@
 {
   "batch": {
+    "BAT-0100": {
+      "created_at": "2026-09-26T23:19:51.409592Z",
+      "current_head_binding": null,
+      "failure": null,
+      "key": "BAT-0100",
+      "milestone_ref": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0100",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "repository_ref": "eawf://EAWF/EAWF/EAWF/repository/EAWF",
+      "revision": 2,
+      "status": "ACTIVE",
+      "target_branch": "feature/eawf-v0.7-p36",
+      "task_refs": [
+        "eawf://EAWF/EAWF/EAWF/task/EAWF-0001"
+      ],
+      "uid": "c41f87fb-3d4d-5abc-9a55-a46c0c2ba29d",
+      "updated_at": "2026-09-26T23:19:52.496932Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0100"
+    },
     "BAT-0101": {
       "created_at": "2026-09-26T22:44:48.921387Z",
       "current_head_binding": null,
@@ -597,8 +624,64 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 27,
+  "canonical_sequence": 37,
   "milestone": {
+    "MLS-0100": {
+      "acceptance_bundle_revision": null,
+      "acceptance_journey": [
+        {
+          "action": "run the fast suite on the landed fix commit",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "the full fast suite exits 0 and the five regressed tests pass",
+          "required": true,
+          "step_id": "AS-01"
+        },
+        {
+          "action": "re-audit the P36 iter close on the landed fix commit",
+          "actor": "operator",
+          "evidence_kinds": [
+            "artifact"
+          ],
+          "expected_observation": "the fresh audit reports no open finding",
+          "required": true,
+          "step_id": "AS-02"
+        }
+      ],
+      "accepted_binding": null,
+      "appetite": "M",
+      "contributing_track_refs": [],
+      "created_at": "2026-09-26T23:19:48.242984Z",
+      "description": null,
+      "exclusions": [
+        "the rc1 work MLS-0101 carries",
+        "any new feature beyond the audit findings"
+      ],
+      "key": "MLS-0100",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "outcome": "P36 closes clean: every iter-close audit finding is fixed, the five suite regressions pass, the commit lint accepts a Task trailer naming a claimed or running native Task, the satisfied dispositions cite the right phase, and P36-I01 and P36 close through the legacy route.",
+      "primary_track_ref": "eawf://EAWF/EAWF/EAWF/track/TRK-EAWF-CORE",
+      "required_batch_refs": [
+        "eawf://EAWF/EAWF/EAWF/batch/BAT-0100"
+      ],
+      "revision": 2,
+      "status": "ACTIVE",
+      "title": "Close out P36 and the 0.7.0.dev5 canary",
+      "uid": "66848e80-6631-5277-bf5a-c643753a9413",
+      "updated_at": "2026-09-26T23:19:49.283434Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0100"
+    },
     "MLS-0101": {
       "acceptance_bundle_revision": null,
       "acceptance_journey": [
@@ -8605,6 +8688,41 @@
       "revision": 1,
       "updated_at": "2026-09-26T22:41:33.691887Z",
       "urn": "eawf://EAWF/EAWF/EAWF/repository/EAWF"
+    }
+  },
+  "run": {
+    "RUN-00000001": {
+      "created_at": "2026-09-26T23:19:54.413539Z",
+      "ended_at": null,
+      "failure": null,
+      "key": "RUN-00000001",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "revision": 2,
+      "scope": {
+        "purpose": "implement",
+        "scope_kind": "task",
+        "task_ref": "eawf://EAWF/EAWF/EAWF/task/EAWF-0001",
+        "write_set": [
+          "src/eawf",
+          "tests",
+          "tools"
+        ]
+      },
+      "started_at": "2026-09-26T23:19:54Z",
+      "status": "RUNNING",
+      "suspension_reason": null,
+      "uid": "3fc690aa-1e2e-5e22-a09e-4d30142df005",
+      "updated_at": "2026-09-26T23:19:54.797702Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/run/RUN-00000001"
     }
   },
   "sandbox_policy": {
@@ -21020,6 +21138,142 @@
       },
       "recorded_at": "2026-09-26T21:14:53.351831+00:00",
       "status": "DROPPED"
+    },
+    "EAWF-0001": {
+      "active_run_ref": "eawf://EAWF/EAWF/EAWF/run/RUN-00000001",
+      "batch_ref": "eawf://EAWF/EAWF/EAWF/batch/BAT-0100",
+      "contract_revision": 1,
+      "created_at": "2026-09-26T23:19:50.320084Z",
+      "criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-001",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/test_commit_prefix_lint_epoch2.py exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the commit-lint epoch-2 tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The commit lint accepts a Task trailer naming a CLAIMED or RUNNING native Task and still rejects one naming a Task in any other status",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-002",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest over test_cli_skill, test_skills_engine, test_cli_help_groups, test_release_tag_membership and test_reclose_staging exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the five regressed tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The five suite regressions the P36 iter-close audit named pass",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-003",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/test_requirement_trace_satisfied.py exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the disposition-citation tests",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Every satisfied disposition the P36 roadmap revisions record cites the phase that actually satisfied it",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "measured",
+          "id": "CR-004",
+          "kind": "behavioral",
+          "measurable_signal": "just test exits zero",
+          "oracle_tier": null,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the full fast suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "The full fast suite exits zero on the landed fix commit",
+          "waiver_reason": null
+        }
+      ],
+      "due_scope": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0100",
+      "integrated_binding": null,
+      "intent": "Fix the P36 iter-close audit findings and suite regressions",
+      "key": "EAWF-0001",
+      "origin": {
+        "confidence": "exact",
+        "kind": "native",
+        "mapping_basis": "native",
+        "source_digest": null,
+        "source_id": null,
+        "source_kind": null,
+        "source_schema_version": null,
+        "source_urn": null
+      },
+      "priority": "P0",
+      "revision": 4,
+      "status": "RUNNING",
+      "uid": "ca683b21-0a34-5146-abe1-c0c2d9f6d99c",
+      "updated_at": "2026-09-26T23:19:55.825085Z",
+      "urn": "eawf://EAWF/EAWF/EAWF/task/EAWF-0001"
     },
     "EAWF-0101": {
       "active_run_ref": null,
