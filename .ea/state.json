@@ -24771,13 +24771,37 @@
         "P35-I05-W08",
         "P35-I05-W09"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-26T08:02:30.045067Z",
       "id": "SES-20260926T025530.053090Z-operator-claude-7d1d1f63-f508-49d1-8873-2014ad8199dd",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P35-I05",
       "started_at": "2026-09-26T02:55:30.053090Z",
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
+      "worktree_ids": []
+    },
+    "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P36-I01-W01",
+        "P36-I01-W13",
+        "P36-I01-W06",
+        "P36-I01-W07",
+        "P36-I01-W08",
+        "P36-I01-W09",
+        "P36-I01-W10",
+        "P36-I01-W12"
+      ],
+      "ended_at": null,
+      "id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P36-I01",
+      "started_at": "2026-09-26T18:35:28.478061Z",
       "status": "active",
       "summary": null,
       "worktree_ids": []
@@ -29560,16 +29584,16 @@
       "title": "Regenerate the shipped skill pages for the new lifecycle grammar"
     },
     "B172": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-26T18:11:30.634960Z",
+      "commit": "bdfe9cb1",
       "created_at": "2026-09-24T21:17:32.411823Z",
       "description": "W42 merges ledger-held terminal rows only for Milestone; Batch compacts the same way. W27: native frames call header_row with needs=0, so the Attention count is not live. W30: the stuck-migration entry layer renders NOT HELD and exits 4 instead of showing the repair command. W28: help overlay omits native paging.",
       "id": "B172",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Delivered by P35-I04-W12: Batch compaction merge, header needs count and the remaining console read gaps; verified in the P36 research brief (projection.py Batch merge).",
       "scope_id": "P35",
-      "status": "open",
+      "status": "closed",
       "title": "Finish the console read gaps found live"
     },
     "B173": {
@@ -29818,6 +29842,45 @@
       "scope_id": "P35",
       "status": "open",
       "title": "Isolate the autopilot claim-batch test from a leaked daemon"
+    },
+    "B192": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-26T17:18:29.153063Z",
+      "description": "tests/tui/test_modes_autopilot.py::test_autopilot_multi_select_commit_stages_batch_and_tears_down assumes its worker's shared session EAWF_RUNTIME_DIR has no daemon; an earlier test leaves one, so the serial epoch1_stabilization proof (uv run pytest tests -q) fails deterministically. Blocked REL-0.7.0.dev4 at 14/15 receipts and will block dev5. Fix the test isolation and find the leaking test.",
+      "id": "B192",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P36",
+      "status": "open",
+      "title": "Isolate the autopilot batch test from a leaked suite daemon"
+    },
+    "B193": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-26T17:18:30.261772Z",
+      "description": "release pipeline prove_gates starts a daemon on the release checkout; its startup reconcile marks committed active sessions orphaned and dirties .ea/state.json, so the next step refuses dirty_release_tree. Seen on the dev4 cut; worked around by parking the derived diff.",
+      "id": "B193",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P36",
+      "status": "open",
+      "title": "Keep the gate-proof daemon off the release checkout's sessions"
+    },
+    "B194": {
+      "closed_at": null,
+      "commit": null,
+      "created_at": "2026-09-26T17:18:31.280803Z",
+      "description": "REL-0.7.0.dev4 was tagged and published to all four targets, but its record stopped at CANDIDATE: a proof gate can never be receipted at its pinned source, burn needs an open publication operation and cancel refuses a registry-touching checkpoint. Decide and build the route (burn from CANDIDATE, or adopt-style settlement) before dev5.",
+      "id": "B194",
+      "intent": null,
+      "priority": "P1",
+      "resolution": null,
+      "scope_id": "P36",
+      "status": "open",
+      "title": "Give a published CANDIDATE record a route to a terminal status"
     },
     "B70": {
       "closed_at": "2026-09-24T16:49:34.428192Z",
@@ -46093,11 +46156,20 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260926T025530.053090Z-operator-claude-7d1d1f63-f508-49d1-8873-2014ad8199dd"
+      "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb"
     ],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_wave_ids": [
+      "P36-I01-W01",
+      "P36-I01-W06",
+      "P36-I01-W07",
+      "P36-I01-W08",
+      "P36-I01-W09",
+      "P36-I01-W10",
+      "P36-I01-W12",
+      "P36-I01-W13"
+    ],
+    "iter_id": "P36-I01",
+    "phase_id": "P36",
     "project_code": "EAWF",
     "track_id": null
   },
@@ -47604,6 +47676,52 @@
       "status": "active",
       "superseded_by": null,
       "title": "Cut 0.7.0.dev4 as native canary and move product canary to dev5"
+    },
+    "D71": {
+      "alternatives": [
+        "Keep P36 as rc1 and add a dev5 phase before it"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-26T18:10:21.655860Z",
+      "description": null,
+      "id": "D71",
+      "obsoleted_at": null,
+      "rationale": "Operator ruling 2026-09-26. P36-I01 ships 0.7.0.dev5 (D70) and one release per phase (D10) forbids also cutting rc1, so P36 is retitled to the live epoch-2 cutover and the dev5 product canary. The rc1 flag-day work (epoch-1 TUI retirement B154, epoch-1 state refusal, LINT dispositions) is authored as a native rc1 Milestone in P36-I01-W04 and ships in the next phase. P36 also consumes B194, B192, B191, B193, B170, B190, B164, B178, B185 and the audit leftovers B176, B179, B181, B182, B184, B186, B187, B189 before the cutover, and closes B172 as delivered. Evidence: .ea/local/research/2026-09-26-p36-post-cutover-and-backlog.md",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Make P36 the epoch-2 cutover and 0.7.0.dev5 phase and move rc1 out"
+    },
+    "D72": {
+      "alternatives": [
+        "A native Task per unowned id",
+        "One blanket deferral of all uncited ids"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-26T18:10:22.599342Z",
+      "description": null,
+      "id": "D72",
+      "obsoleted_at": null,
+      "rationale": "Operator ruling 2026-09-26. The trace finds 593 of 1,170 packet ids unowned, about 477 of them built but cited by no wave text. The trace gains a typed satisfied disposition that cites the closed phase or cluster and commit evidence; only unbuilt ids get native Tasks or D64-style deferrals. Evidence: .ea/local/research/2026-09-26-p36-post-cutover-and-backlog.md",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Own built but uncited requirement ids with a typed satisfied disposition"
+    },
+    "D73": {
+      "alternatives": [
+        "Record caller-supplied gate receipts only"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-26T18:10:23.521167Z",
+      "description": null,
+      "id": "D73",
+      "obsoleted_at": null,
+      "rationale": "Operator ruling 2026-09-26. After the live cut, imported waves move only through a legacy-continuation verb; completing a Task through it runs the Task's decisive gates through the existing gate runner and binds receipts before COMPLETED, so post-cut closes are as trustworthy as epoch-1 wave closes. Evidence: .ea/local/research/2026-09-26-p36-cutover-path.md",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Run a Task's decisive gates in the post-cutover continuation close"
     }
   },
   "dispatch_paused": false,
@@ -64003,7 +64121,7 @@
       "intent": null,
       "opened_at": "2026-09-03T18:03:30.594271Z",
       "phase_id": "P36",
-      "status": "planned",
+      "status": "active",
       "title": "Prepare and run the live epoch-2 cutover and retire epoch-1 surfaces",
       "trigger": "none",
       "wave_ids": [
@@ -64011,7 +64129,15 @@
         "P36-I01-W02",
         "P36-I01-W03",
         "P36-I01-W04",
-        "P36-I01-W05"
+        "P36-I01-W05",
+        "P36-I01-W06",
+        "P36-I01-W07",
+        "P36-I01-W08",
+        "P36-I01-W09",
+        "P36-I01-W10",
+        "P36-I01-W11",
+        "P36-I01-W12",
+        "P36-I01-W13"
       ]
     },
     "P37-I01": {
@@ -65402,7 +65528,7 @@
       "depends_on": [
         "P35"
       ],
-      "description": "Sixth v0.7.0 phase, the rc1 flag day. Epoch-1 state refused with migration guidance, epoch-1 mutators removed, full migration rehearsal with backup restore, daemonless bypass removed, task-trailer commit grammar, coverage grid reconciled, turn cost re-measured. Console frames drawn to packet layouts with token paint, missing capabilities ported, epoch-1 TUI deleted (D63); LINT dispositions (D64). Waves authored at the cutover (D65).",
+      "description": "Sixth v0.7.0 phase, retitled by D71: epoch-2-aware commit lint, trace and legacy-continuation routes (D69, D73), release-path and audit-leftover backlog before the cut, the live epoch-2 cutover of this repository (D62), the console live on this tree (D63), the rc1, rc2 and stable roadmap authored as native plans with typed satisfied dispositions (D65, D72), and 0.7.0.dev5 as the product_canary rung (D70). rc1 moves to the next phase.",
       "id": "P36",
       "intent": null,
       "iter_ids": [
@@ -65410,11 +65536,11 @@
       ],
       "opened_at": "2026-09-03T18:03:30.594095Z",
       "outcome_ids": [],
-      "release": null,
+      "release": "v0.7.0",
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "planned",
-      "title": "Cut the 0.7.0rc1 flag day and retire the epoch-1 surfaces",
+      "status": "active",
+      "title": "Cut this repository over to epoch 2 and ship the 0.7.0.dev5 canary",
       "track_id": null
     },
     "P37": {
@@ -65494,7 +65620,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T06:15:11.221618Z",
+  "updated_at": "2026-09-26T18:35:36.505331Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -244497,9 +244623,7 @@
     },
     "P35-I02-W08": {
       "agent_role": "executor",
-      "blocks": [
-        "P36-I01-W02"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260925T170826.643374Z-operator-claude-89f14ccf-7543-4583-8892-a50ea9660b51",
       "claimed_at": "2026-09-25T17:08:28.404541Z",
       "closed_at": "2026-09-25T17:29:35.404393Z",
@@ -244597,9 +244721,7 @@
     },
     "P35-I02-W09": {
       "agent_role": "executor",
-      "blocks": [
-        "P36-I01-W02"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260925T170826.643374Z-operator-claude-89f14ccf-7543-4583-8892-a50ea9660b51",
       "claimed_at": "2026-09-25T17:08:29.366812Z",
       "closed_at": "2026-09-25T17:19:23.360974Z",
@@ -244798,9 +244920,7 @@
     },
     "P35-I02-W11": {
       "agent_role": "executor",
-      "blocks": [
-        "P36-I01-W02"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260925T151527.707569Z-operator-claude-f4146331-0560-4b40-83a6-74ab0247ef4c",
       "claimed_at": "2026-09-25T16:22:11.771536Z",
       "closed_at": "2026-09-25T16:30:44.707623Z",
@@ -246416,9 +246536,7 @@
     },
     "P35-I03-W07": {
       "agent_role": "executor",
-      "blocks": [
-        "P36-I01-W02"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260925T194949.873089Z-operator-claude-2c926932-b50c-4659-a551-5273933e5ecd",
       "claimed_at": "2026-09-25T19:49:53.370140Z",
       "closed_at": "2026-09-25T20:11:11.501663Z",
@@ -246635,9 +246753,7 @@
     },
     "P35-I03-W09": {
       "agent_role": "executor",
-      "blocks": [
-        "P36-I01-W02"
-      ],
+      "blocks": [],
       "claim_session_id": "SES-20260925T193410.340795Z-operator-claude-58e994cf-879a-403b-8dca-0db5deea22f4",
       "claimed_at": "2026-09-25T19:34:14.526942Z",
       "closed_at": "2026-09-25T19:55:01.540654Z",
@@ -246932,7 +247048,6 @@
     "P35-I03-W12": {
       "agent_role": "executor",
       "blocks": [
-        "P36-I01-W02",
         "P36-I01-W04"
       ],
       "claim_session_id": "SES-20260925T191541.055083Z-operator-claude-d0e2c902-6171-4046-9462-63b640e13b93",
@@ -250942,14 +251057,14 @@
       "blocks": [
         "P36-I01-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:29.474931Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
       "criteria_floor_waiver": null,
       "deps": [],
-      "description": "Decision D69 prerequisite for the live cutover: make commit-prefix-lint and the requirement trace resolve against the epoch-2 generation, give the imported claimed wave and audit, backlog, decision, artifact and Milestone close native routes, and land B188 (apply guard against uncommitted live state, quiescence refusal guidance) before W02 cuts over.",
+      "description": "D69 prerequisite for the live cutover: commit-prefix-lint and the requirement trace resolve against the epoch-2 generation on a marked root, evidence.append is fenced after the cut, and B188 lands (apply refuses live state that diverged from the snapshot; quiescence refusal names its remediation). The continuation and bookkeeping routes moved to W13 (D73).",
       "dispatch_history": [],
       "effort_bucket": "L",
       "file_scopes": [
@@ -250986,7 +251101,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/kernel/migration/test_post_cutover_bookkeeping.py",
+              "tests/unit/test_requirement_trace_epoch2.py",
               "-q"
             ],
             "scope": "touched"
@@ -250994,6 +251109,44 @@
           "cadence": "every-wave",
           "criterion_id": "CR-02",
           "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/kernel/state/test_legacy_write_fence.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_epoch2_apply_guards.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
           "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
@@ -251021,7 +251174,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -251043,11 +251196,11 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "zero from the test commit prefix lint epoch2 suite",
+            "object": "zero from the commit prefix lint epoch-2 suite",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Gate-fire proof: on a root carrying the epoch-2 marker, commit-prefix-lint resolves an Eawf-Wave trailer against the generation's Tasks and admits .ea/generations paths in state commits, the requirement trace reads the generation, and an unmarked root keeps the epoch-1 behaviour; pytest exits 0 over tests/unit/test_commit_prefix_lint_epoch2.py",
+          "text": "Gate-fire proof: on a root with the epoch-2 declaration and EPOCH2_ACTIVE marker, commit-prefix-lint reads the generation stdlib-only and accepts an Eawf-Wave trailer naming an imported CLAIMED or RUNNING Task keyed by its epoch-1 id, refuses a PLANNED one, admits .ea/generations and .ea/epoch2-opt-in.json in state commits only when marked, and an unmarked root keeps epoch-1 behaviour; a planted PLANNED trailer reds; pytest exits 0 over tests/unit/test_commit_prefix_lint_epoch2.py",
           "waiver_reason": null
         },
         {
@@ -251061,7 +251214,7 @@
           "grounding": "assumed",
           "id": "CR-02",
           "kind": "behavioral",
-          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_post_cutover_bookkeeping.py -q exits zero",
+          "measurable_signal": "uv run pytest tests/unit/test_requirement_trace_epoch2.py -q exits zero",
           "oracle_tier": 4,
           "quality_dimension": "functional_suitability",
           "required": true,
@@ -251070,11 +251223,65 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "zero from the test post cutover bookkeeping suite",
+            "object": "zero from the requirement trace epoch-2 reader suite",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Gate-fire proof: after a cutover the imported claimed wave can be completed natively and the audit, backlog, decision and artifact records and the Milestone review close each have a native write route that the epoch-1 fence does not refuse; pytest exits 0 over tests/integration/kernel/migration/test_post_cutover_bookkeeping.py",
+          "text": "Gate-fire proof: on a marked root the requirement trace builds its StateView from the selected generation (imported Tasks cite payload.record text, native Tasks cite intent and criteria text, decisions come from the decision ledger, CANCELLED, FAILED and DROPPED Tasks are dead) and returns the same owned set as the epoch-1 reader over the same corpus; dropping one owning Task reds; pytest exits 0 over tests/unit/test_requirement_trace_epoch2.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/kernel/state/test_legacy_write_fence.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the legacy write fence suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: on a marked root evidence.append raises legacy_operation_removed (daemon -32002, CLI exit 2) and leaves .ea/store/evidence.jsonl bytes unchanged, while an unmarked root still appends; removing the fence from the evidence method reds; pytest exits 0 over tests/unit/kernel/state/test_legacy_write_fence.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "grounding": "assumed",
+          "id": "CR-04",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_epoch2_apply_guards.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "safety",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the epoch-2 apply guard suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: apply_cutover raises migration_live_state_diverged naming each locator when the live .ea/state.json, config.yaml or a committed store jsonl digest differs from SourceSnapshotIdentity, and migration_not_quiescent emits grouped holder counts with a remediation naming eawf worktree reconcile and eawf session close instead of eawf validate; a planted live edit after the state commit reds; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_apply_guards.py",
           "waiver_reason": null
         }
       ],
@@ -251086,8 +251293,8 @@
     "P36-I01-W02": {
       "agent_role": "executor",
       "blocks": [
-        "P36-I01-W03",
-        "P36-I01-W04"
+        "P36-I01-W04",
+        "P36-I01-W03"
       ],
       "claim_session_id": null,
       "claimed_at": null,
@@ -251097,13 +251304,15 @@
       "criteria_floor_waiver": null,
       "deps": [
         "P36-I01-W01",
-        "P35-I04-W10",
-        "P35-I02-W08",
-        "P35-I02-W09",
-        "P35-I02-W11",
-        "P35-I03-W07",
-        "P35-I03-W09",
-        "P35-I03-W12"
+        "P36-I01-W06",
+        "P36-I01-W07",
+        "P36-I01-W08",
+        "P36-I01-W09",
+        "P36-I01-W10",
+        "P36-I01-W11",
+        "P36-I01-W12",
+        "P36-I01-W13",
+        "P35-I04-W10"
       ],
       "description": "E18, D62, REL-031. After I01-I03 close on epoch 1: apply the 1.19 to 1.20 edge with B143 folded in, quiesce with the daemon stopped, rerun the clone rehearsal at the frozen revision, then apply live with the opt-in declaration. The live manifest digest must equal the clone digest and resolve_authority returns epoch 2. This is irreversible past the first native mutation, and the operator gates it. Moved from P35-I04-W13 by D69.",
       "dispatch_history": [],
@@ -251121,7 +251330,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/release/test_dev4_cutover_record.py",
+              "tests/integration/kernel/migration/test_epoch2_live_cutover_record.py",
               "-q"
             ],
             "scope": "touched"
@@ -251171,7 +251380,7 @@
           "grounding": "assumed",
           "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Live digest equals clone digest; authority epoch 2",
+          "measurable_signal": "Live digest equals clone digest, re-apply is a no-op, authority reads epoch 2",
           "oracle_tier": 4,
           "quality_dimension": "reliability",
           "required": true,
@@ -251180,11 +251389,11 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "cutover evidence record and authority resolution",
+            "object": "zero from the live cutover record suite",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Gate-fire proof: the committed cutover record returns a live manifest digest equal to the recorded clone digest and resolve_authority returns epoch 2 for this repository; a mismatched digest fixture reds the record test; pytest exits 0 over tests/integration/workflow/release/test_dev4_cutover_record.py",
+          "text": "Gate-fire proof: the committed cutover record returns a live manifest digest equal to the pinned-clone digest taken at the frozen HEAD, a re-run apply returns already-selected with zero journal rows and the same digest, the rollback-boundary marker is written, and resolve_authority returns epoch 2 for this repository; a mismatched digest fixture reds the record test; pytest exits 0 over tests/integration/kernel/migration/test_epoch2_live_cutover_record.py",
           "waiver_reason": null
         }
       ],
@@ -251205,7 +251414,8 @@
       "commit_identity_digest": null,
       "criteria_floor_waiver": null,
       "deps": [
-        "P36-I01-W02"
+        "P36-I01-W02",
+        "P36-I01-W09"
       ],
       "description": "TUI wave 9 on the real tree (TUI live-testing memory). With a real daemon, walk the home, activity, attention, run and settings journeys at 80, 120 and 160 columns on this repository. Compare rendered images with the packet mockups and file findings. No prototype row may appear. Moved from P35-I04-W14 by D69.",
       "dispatch_history": [],
@@ -251270,7 +251480,7 @@
           "grounding": "assumed",
           "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "No prototype data in live frames across five journeys",
+          "measurable_signal": "No prototype data in this repository's live frames across five journeys at every width",
           "oracle_tier": 4,
           "quality_dimension": "interaction_capability",
           "required": true,
@@ -251279,11 +251489,11 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "rendered live frames",
+            "object": "zero from the console live smoke suite over this repository",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Gate-fire proof: the live smoke over this repository's projection emits no prototype literal in any of the five journey frames, a planted prototype row reds the check, and rendered images compared with the packet mockups are filed as findings; pytest exits 0 over tests/tui/surfaces/tui/console/test_console_live_smoke.py",
+          "text": "Gate-fire proof: when the repository root resolves to epoch 2 the live smoke serves this repository's projection read-only and emits no prototype literal in the scope.home, activity, attention, run.detail and settings frames at every SIZES width, a planted prototype register reds the frame check, and frames, rendered images and a mockup findings table land in .ea/artifacts/evidence/2026-09-dev5-console-live/; pytest exits 0 over tests/tui/surfaces/tui/console/test_console_live_smoke.py",
           "waiver_reason": null
         }
       ],
@@ -251337,6 +251547,63 @@
           "policy": "block",
           "required": true,
           "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/test_requirement_trace_satisfied.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/planning/test_v07_native_plans.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_ci_requirement_trace_owned.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
         }
       ],
       "id": "P36-I01-W04",
@@ -251374,7 +251641,7 @@
           "grounding": "assumed",
           "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Zero unowned ids after apply; removal reds",
+          "measurable_signal": "Zero unowned ids after apply; unapplying one fixture plan makes its ids unowned again",
           "oracle_tier": 4,
           "quality_dimension": "functional_suitability",
           "required": true,
@@ -251383,11 +251650,92 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "requirement trace over native plans",
+            "object": "zero from the rc1-to-stable roadmap trace suite",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Gate-fire proof: after P36 to P38 PlanRevisions apply, the requirement trace over the post-cutover state returns zero unowned rc1-to-stable ids and exits 0, and unapplying one fixture plan returns its ids unowned with a nonzero exit; pytest exits 0 over tests/integration/workflow/planning/test_rc1_to_stable_roadmap.py",
+          "text": "Gate-fire proof: after the rc1, rc2 and stable PlanRevisions apply, the requirement trace over the post-cutover generation returns zero unowned ids and exits 0 under check --require-owned, and unapplying one fixture plan returns its ids unowned with a nonzero exit; pytest exits 0 over tests/integration/workflow/planning/test_rc1_to_stable_roadmap.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/test_requirement_trace_satisfied.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the satisfied disposition suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: per D72 tools/requirement_trace.py validates a satisfied disposition (decision D72, requirement ids, a closed phase or cluster ref, a commit sha, optional test paths) through an extra=forbid model and returns status satisfied for its ids, and raises TraceInputError when the commit does not resolve or the phase is not closed; a planted unknown sha reds; pytest exits 0 over tests/unit/test_requirement_trace_satisfied.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/planning/test_v07_native_plans.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the native v0.7 plan revision suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: three native PlanRevisions validate and apply: rc1 (the D63, D64 and D71 flag-day work: B154 epoch-1 TUI retirement, epoch-1 state refusal, LINT dispositions, rendered-artifact gates), rc2 (the current P37 content) and stable (P38); each approval names an operator principal and a non-operator approval raises; every source atom maps to a criterion; pytest exits 0 over tests/integration/workflow/planning/test_v07_native_plans.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "grounding": "assumed",
+          "id": "CR-04",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/lint/test_ci_requirement_trace_owned.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the CI require-owned lint",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: the CI requirement-trace step in .github/workflows/ci.yaml runs check --require-owned (B186 F10), and a source test that parses the workflow reds when the flag is removed; pytest exits 0 over tests/lint/test_ci_requirement_trace_owned.py",
           "waiver_reason": null
         }
       ],
@@ -251408,6 +251756,9 @@
       "deps": [
         "P36-I01-W03",
         "P36-I01-W04",
+        "P36-I01-W06",
+        "P36-I01-W07",
+        "P36-I01-W08",
         "P35-I01-W14"
       ],
       "description": "Cluster 18, REL-011, REL-031, REL-032. Bump to 0.7.0.dev4, write the CHANGELOG section, bind the canary milestone's receipts (plan approval, parallel dispatch, integration on exact head, audit and review, acceptance, re-run manifest), and prove preflight is release-ready on the phase head. The W14 pipeline then tags, publishes and bakes after the merge, so dev4 does not slip into P36. Moved from P35-I04-W16 by D69.",
@@ -251426,7 +251777,7 @@
               "uv",
               "run",
               "pytest",
-              "tests/integration/workflow/release/test_dev5_ready_record.py",
+              "tests/integration/workflow/release/test_dev5_config_render.py",
               "-q"
             ],
             "scope": "touched"
@@ -251434,6 +251785,44 @@
           "cadence": "every-wave",
           "criterion_id": "CR-01",
           "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev5_ready_record.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_dev5_succession.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
           "kind": "command_exit_zero",
           "policy": "block",
           "required": true,
@@ -251475,7 +251864,34 @@
           "grounding": "assumed",
           "id": "CR-01",
           "kind": "behavioral",
-          "measurable_signal": "Ready with seven receipts; missing receipt reds",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev5_config_render.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the dev5 product_canary config render suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: PROFILE_GATES declares product_canary as the fifteen native_canary gates plus plan_revision_approved, parallel_dispatch, exact_head_integration, real_diff_review, milestone_accepted, migration_rerun_identical and the post-merge release_tagged_observed, CHECKPOINT_CONFIGS renders 0.7.0.dev5 with four targets, and a profile gate with no binding raises GateBindingError; pytest exits 0 over tests/integration/workflow/release/test_dev5_config_render.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "Ready pending post-merge observation with six receipts; any removed receipt reds",
           "oracle_tier": 4,
           "quality_dimension": "functional_suitability",
           "required": true,
@@ -251484,15 +251900,1574 @@
             "gate_ref": "command_exit_zero",
             "jury_reason": null,
             "locus": "pytest",
-            "object": "readiness record and receipt set",
+            "object": "zero from the dev5 readiness record suite",
             "observe": "exits",
             "quantifier": "single"
           },
-          "text": "Gate-fire proof: the dev5 readiness record returns release-ready with all seven product-canary receipts bound, removing the re-run manifest receipt returns not ready, and the version reads 0.7.0.dev5 with a changelog section; pytest exits 0 over tests/integration/workflow/release/test_dev5_ready_record.py",
+          "text": "Gate-fire proof: the dev5 readiness record binds the six pre-merge receipts and returns release-ready pending post-merge observation while release_tagged_observed is unbound, returns not ready when any one pre-merge receipt is removed, and the version reads 0.7.0.dev5 with a CHANGELOG section; a removed migration_rerun_identical receipt reds; pytest exits 0 over tests/integration/workflow/release/test_dev5_ready_record.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_dev5_succession.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the dev5 succession suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: the dev5 record carries supersedes_release_ref naming REL-0.7.0.dev4 and its create is admitted only once dev4 reached PARTIALLY_RELEASED through the B194 burn route, while a dev4 record left at CANDIDATE raises predecessor_live; pytest exits 0 over tests/integration/workflow/release/test_dev5_succession.py",
           "waiver_reason": null
         }
       ],
       "title": "Make 0.7.0.dev5 release-ready at merge with product-canary receipts",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W06": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W02",
+        "P36-I01-W05"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:31.513202Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "B194: allow adopt_publication at CANDIDATE and add a CANDIDATE to PARTIALLY_RELEASED edge guarded by that adoption so dev4 reaches a terminal status and dev5 can record supersedes_release_ref.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/release/lifecycle.py",
+        "src/eawf/workflow/release/adoption.py",
+        "src/eawf/workflow/release/publication.py",
+        "src/eawf/workflow/verify/checkpoint_succession.py",
+        "src/eawf/runtime/daemon/methods/release.py",
+        "tests/integration/workflow/release/test_candidate_burn_route.py",
+        "tests/integration/workflow/release/test_candidate_burn_succession.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_candidate_burn_route.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/workflow/release/test_candidate_burn_succession.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W06",
+      "intent": {
+        "desired_outcome": "A burned predecessor admits the next rung create",
+        "evidence_refs": [],
+        "planned_steps": [
+          "admit adopt_publication at CANDIDATE",
+          "add the guarded CANDIDATE to PARTIALLY_RELEASED edge",
+          "admit the next rung create after a burned predecessor"
+        ],
+        "priority_rationale": null,
+        "problem": "dev4 is stuck at CANDIDATE and blocks the dev5 release create with predecessor_live",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:42.222736Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_candidate_burn_route.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the CANDIDATE adoption and burn route suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: adopt_publication admits a CANDIDATE record whose every configured target is observed and returns it still at CANDIDATE carrying the adoption, a burn then transitions to PARTIALLY_RELEASED through a new CANDIDATE edge guarded by that adoption, and a burn of a CANDIDATE with no adoption or an unobserved target raises; deleting the edge from RELEASE_TRANSITIONS reds; pytest exits 0 over tests/integration/workflow/release/test_candidate_burn_route.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/workflow/release/test_candidate_burn_succession.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the burned-predecessor succession suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: over the daemon release methods, once the predecessor rung is burned to PARTIALLY_RELEASED the next rung's create is admitted and returns a record whose supersedes_release_ref names the burned key, while a predecessor left at CANDIDATE raises predecessor_live; a succession check that ignores PARTIALLY_RELEASED reds; pytest exits 0 over tests/integration/workflow/release/test_candidate_burn_succession.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Give a published CANDIDATE release a guarded burn route",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W07": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W11",
+        "P36-I01-W02",
+        "P36-I01-W05"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:32.499444Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "B192 and B193: pin the autopilot test runtime dir and find the leaking test, and limit the boot orphan sweep to sessions of the same daemon lineage so the release gate-proof daemon leaves the checkout clean. B191 closes as a duplicate of B192.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "tests/tui/test_modes_autopilot.py",
+        "tests/tui/test_autopilot_daemon_isolation.py",
+        "tests/conftest.py",
+        "src/eawf/runtime/session/store.py",
+        "src/eawf/runtime/daemon/main.py",
+        "tests/integration/runtime/daemon/test_orphan_reconcile_lineage.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/test_modes_autopilot.py",
+              "tests/tui/test_autopilot_daemon_isolation.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_orphan_reconcile_lineage.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W07",
+      "intent": {
+        "desired_outcome": "A hermetic autopilot test and a release checkout left clean",
+        "evidence_refs": [],
+        "planned_steps": [
+          "pin a function-local EAWF_RUNTIME_DIR",
+          "add a session-end socket check",
+          "scope reconcile_orphaned_sessions to the runtime-dir lineage"
+        ],
+        "priority_rationale": null,
+        "problem": "A leaked daemon breaks epoch1_stabilization and the gate-proof daemon dirties state.json",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:43.258979Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/tui/test_modes_autopilot.py tests/tui/test_autopilot_daemon_isolation.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the autopilot daemon isolation suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: test_autopilot_multi_select_commit_stages_batch_and_tears_down pins a function-local EAWF_RUNTIME_DIR and returns BATCH_NO_DAEMON even with a live daemon planted on the worker session runtime dir, and a session-end socket check names any test that leaves a daemon reachable; the planted daemon reds the unpinned test; pytest exits 0 over tests/tui/test_modes_autopilot.py tests/tui/test_autopilot_daemon_isolation.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_orphan_reconcile_lineage.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the orphan reconcile lineage suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: reconcile_orphaned_sessions at daemon boot transitions to STALE only ACTIVE sessions opened under the booting daemon's own runtime-dir lineage, so a gate-proof daemon on a fresh EAWF_RUNTIME_DIR leaves committed ACTIVE sessions untouched and .ea/state.json bytes unchanged, while a same-lineage restart still flips each orphan; a planted blanket sweep reds; pytest exits 0 over tests/integration/runtime/daemon/test_orphan_reconcile_lineage.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Isolate the autopilot test daemon and scope the boot orphan sweep",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W08": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W11",
+        "P36-I01-W02",
+        "P36-I01-W05"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:33.492318Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "B170 and B179 F21: prove report to seal to verify over a real daemon and derive a deterministic seal idempotency key from refs.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/skills/integrate.py",
+        "src/eawf/workflow/skills/verify.py",
+        "src/eawf/runtime/daemon/semantic_handlers.py",
+        "src/eawf/runtime/daemon/methods/candidate.py",
+        "tests/integration/runtime/daemon/test_integrate_seal_real_daemon.py",
+        "tests/unit/workflow/skills/test_integrate_seal_idempotency.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_integrate_seal_real_daemon.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/skills/test_integrate_seal_idempotency.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W08",
+      "intent": {
+        "desired_outcome": "An end-to-end seal proof and idempotent seals",
+        "evidence_refs": [],
+        "planned_steps": [
+          "file submit_report over a real daemon",
+          "seal the candidate from the accepted report",
+          "derive the seal idempotency key from refs"
+        ],
+        "priority_rationale": null,
+        "problem": "The seal path is proven only by direct verb calls and its idempotency key is random",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:44.289223Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_integrate_seal_real_daemon.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the real-daemon report, seal and verify suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: over a real daemon a Run files submit_report through its semantic handler, /integrate seal presented only the Run and the resulting tree binds the accepted report and seals the candidate without candidate_report_unbound, and /verify opens the acceptance approval itself; unregistering the SUBMIT_REPORT handler reds; pytest exits 0 over tests/integration/runtime/daemon/test_integrate_seal_real_daemon.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/workflow/skills/test_integrate_seal_idempotency.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the seal idempotency suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: /integrate seal derives its idempotency key from the Run and candidate refs instead of uuid4, so a repeated seal returns the standing binding with no second ledger row (B179 F21); planting uuid4 back reds; pytest exits 0 over tests/unit/workflow/skills/test_integrate_seal_idempotency.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Prove the integrate seal and submit_report path over a real daemon",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W09": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W02",
+        "P36-I01-W03"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:34.477706Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "B190: commit run-control at a canonical sequence, grey bound verbs with no operator principal, emit one receipt per answer, and remove the live fx.proto.attention fallbacks in the console dispatch and frame modules.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/runtime/daemon/methods/run.py",
+        "src/eawf/surfaces/tui/console/dispatch.py",
+        "src/eawf/surfaces/tui/console/frame.py",
+        "src/eawf/surfaces/tui/console/attention.py",
+        "src/eawf/surfaces/tui/console/reads.py",
+        "tests/integration/runtime/daemon/test_run_control_sequence.py",
+        "tests/tui/surfaces/tui/console/test_console_write_path.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/runtime/daemon/test_run_control_sequence.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/tui/surfaces/tui/console/test_console_write_path.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-UI",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W09",
+      "intent": {
+        "desired_outcome": "Patch-driven run control and no prototype reads on live paths",
+        "evidence_refs": [],
+        "planned_steps": [
+          "commit run-control at a canonical sequence",
+          "grey every bound verb with no operator",
+          "drop the fx.proto.attention fallback"
+        ],
+        "priority_rationale": null,
+        "problem": "Console reconnect re-sends run-control and live paths still read prototype attention",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:45.290832Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/runtime/daemon/test_run_control_sequence.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the run-control canonical sequence suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: run-control request and acknowledge commit at a canonical sequence and emit an entity_ref patch, so a reconnecting console reads the acknowledged state from the patch and returns no re-sent request; a request appended as a bare ledger fact with no sequence reds; pytest exits 0 over tests/integration/runtime/daemon/test_run_control_sequence.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02",
+            "G-UI"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/tui/surfaces/tui/console/test_console_write_path.py -q exits zero and the home affordance parity check passes at 120x40",
+          "oracle_tier": 4,
+          "quality_dimension": "interaction_capability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the console write path suite and the home affordance parity gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: with no operator principal the console greys every bound verb before selection, each answered attention item emits its own receipt, and _confirm in dispatch.py and needs_count in frame.py read only the held attention register with no fx.proto.attention fallback, so a console holding prototype registers and no read model sends nothing and shows no badge; a planted fallback reds; pytest exits 0 over tests/tui/surfaces/tui/console/test_console_write_path.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Finish the console write path and drop the prototype attention fallback",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W10": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W02"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:35.504566Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "B164, B178 and B185: prove the canary runtime dir stays under the tree root, prove domain refusals exit 3 over a real daemon, and add sourced Claude 5 pricing rows or a typed unpriced-with-reason.",
+      "dispatch_history": [],
+      "effort_bucket": "S",
+      "file_scopes": [
+        "src/eawf/platform/install/canary.py",
+        "tests/unit/platform/test_canary_runtime_dir.py",
+        "tests/integration/surfaces/cli/test_domain_create_activate_daemon.py",
+        "src/eawf/observability/telemetry/pricing.py",
+        "tests/unit/observability/telemetry/test_claude5_pricing.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/test_canary_runtime_dir.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/surfaces/cli/test_domain_create_activate_daemon.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/observability/telemetry/test_claude5_pricing.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W10",
+      "intent": {
+        "desired_outcome": "Each defect is proven closed by a test",
+        "evidence_refs": [],
+        "planned_steps": [
+          "allocate the canary runtime dir under the tree root",
+          "exit 3 over a real daemon",
+          "cite a published rate page"
+        ],
+        "priority_rationale": null,
+        "problem": "Three small canary, exit-code and pricing defects are open",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:46.273049Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/platform/test_canary_runtime_dir.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the canary runtime dir suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: provision_canary allocates its runtime dir under the tree root it is handed and removes it on a failed provision and on teardown, so no eawf-canary-* dir appears in the redirected system temp dir (B164); reverting to a bare tempfile.mkdtemp with no dir reds; pytest exits 0 over tests/unit/platform/test_canary_runtime_dir.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/surfaces/cli/test_domain_create_activate_daemon.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the real-daemon domain create and activate suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: over a real daemon a domain create then activate exits 0 and a refused activate exits 3 (STATE_CONFLICT), the exit the corrected P35-I01-W12 spec text now states (B178); a test driven only through a fake client is replaced, and a planted exit-code change reds; pytest exits 0 over tests/integration/surfaces/cli/test_domain_create_activate_daemon.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/observability/telemetry/test_claude5_pricing.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the Claude 5 pricing suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: lookup_pricing returns a PRICING row for claude-opus-5-5 and claude-sonnet-5 whose source field cites a published rate page, or, when no published source can be cited, returns None with a typed unpriced-with-reason entry replacing the bare UNPRICED_MODELS set (B185); a Claude 5 id priced by 4.x prefix fallback reds; pytest exits 0 over tests/unit/observability/telemetry/test_claude5_pricing.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Settle the canary runtime dir, domain exit code and Claude 5 pricing",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W11": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W02"
+      ],
+      "claim_session_id": null,
+      "claimed_at": null,
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [
+        "P36-I01-W07",
+        "P36-I01-W08"
+      ],
+      "description": "B176, B179, B181 and B182: fix the P34 prune, release and CI edges and the P35-I01 and P35-I02 low audit findings, one test per backlog row.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/workflow/lifecycle/",
+        "src/eawf/workflow/release/",
+        "src/eawf/platform/rules/",
+        "src/eawf/platform/registry/",
+        "src/eawf/runtime/daemon/",
+        "src/eawf/surfaces/cli/",
+        "tools/",
+        "tests/lint/test_p34_audit_edges.py",
+        "tests/unit/platform/registry/test_workspace_foreign_home.py",
+        "tests/unit/platform/rules/",
+        "tests/unit/runtime/daemon/test_research_question_writer.py",
+        "tests/unit/workflow/lifecycle/test_wave_archive_prune.py",
+        "tests/unit/workflow/test_gate_proof_and_submit_findings.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/lifecycle/test_wave_archive_prune.py",
+              "tests/lint/test_p34_audit_edges.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/runtime/daemon/test_research_question_writer.py",
+              "tests/unit/platform/registry/test_workspace_foreign_home.py",
+              "tests/unit/workflow/test_gate_proof_and_submit_findings.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/rules/test_import_shim_and_views.py",
+              "tests/unit/platform/rules/test_practice_triggers.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/platform/rules/test_host_fact_certification.py",
+              "tests/unit/platform/rules/test_render_transaction.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-UI",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W11",
+      "intent": {
+        "desired_outcome": "Each finding is fixed and pinned by a test",
+        "evidence_refs": [],
+        "planned_steps": [
+          "guard prune at the expected SHA",
+          "write the chosen drop reason",
+          "pass the real import list"
+        ],
+        "priority_rationale": null,
+        "problem": "Low-severity audit findings from P34 and P35 remain open",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:47.235066Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "pending",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/workflow/lifecycle/test_wave_archive_prune.py tests/lint/test_p34_audit_edges.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the prune guard and P34 audit edge suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B176): wave-archive prune deletes a branch only at its expected SHA and refuses the phase branch when not checked out, the jury-convened check matches only a jury event of the audited scope, the ci.yaml always() steps skip cancelled runs, admission.py text and code both read COMPLETED, and agent.py state writers call validate_state; a planted SHA mismatch reds; pytest exits 0 over tests/unit/workflow/lifecycle/test_wave_archive_prune.py tests/lint/test_p34_audit_edges.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/runtime/daemon/test_research_question_writer.py tests/unit/platform/registry/test_workspace_foreign_home.py tests/unit/workflow/test_gate_proof_and_submit_findings.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the P35-I01 leftover suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B179 F11 F15 F19 F20): a question drop writes the chosen reason and superseded_by_question_ref, create_workspace raises on a foreign home, the gate-proof step reuses its daemon, and submit emits every finding with the dead JUDGED branch removed; each planted regression reds; pytest exits 0 over tests/unit/runtime/daemon/test_research_question_writer.py tests/unit/platform/registry/test_workspace_foreign_home.py tests/unit/workflow/test_gate_proof_and_submit_findings.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03",
+            "G-UI"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/platform/rules/test_import_shim_and_views.py tests/unit/platform/rules/test_practice_triggers.py -q exits zero and home affordance parity passes",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the view import and practice trigger suites and the home affordance parity gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B181): refuse_view_imports receives the render's real import list in claude_shim.py so a planted view import raises at render, and the practice-trigger hook raises a typed error on its own failure instead of only logging; removing the real import list reds; pytest exits 0 over tests/unit/platform/rules/test_import_shim_and_views.py tests/unit/platform/rules/test_practice_triggers.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "grounding": "assumed",
+          "id": "CR-04",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/platform/rules/test_host_fact_certification.py tests/unit/platform/rules/test_render_transaction.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "compatibility",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the host-fact and render transaction suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B182 N4 N5 N6): conformance reads runtime_facts from the certified host-fact store, the render transaction records token size, cap scope and RULE-126 delivery facts, eawf sync ignores AGENTS.override.md in a repo initialised before that change, and host-fact text says Codex loads card or policy; a caller-supplied runtime_facts reds; pytest exits 0 over tests/unit/platform/rules/test_host_fact_certification.py tests/unit/platform/rules/test_render_transaction.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Clear the P34, P35-I01 and P35-I02 low audit leftovers",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W12": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W02"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:36.504879Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "B184, B186, B187 and B189: rewrite stale wave and phase ids in source comments, delete retired skill bodies, fix the red-to-green and claim guard leftovers, and close the canary reversible window.",
+      "dispatch_history": [],
+      "effort_bucket": "M",
+      "file_scopes": [
+        "src/eawf/",
+        "tests/lint/test_source_comment_lifecycle_ids.py",
+        "tests/unit/kernel/migration/test_activation_window.py",
+        "tests/unit/runtime/budget/test_prompt_budget_ceiling.py",
+        "tests/unit/runtime/daemon/test_epoch2_root_context.py",
+        "tests/unit/surfaces/render/test_skill_registry_catalog.py",
+        "tests/unit/workflow/verify/test_red_to_green_close.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/lint/test_source_comment_lifecycle_ids.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/surfaces/render/test_skill_registry_catalog.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/workflow/verify/test_red_to_green_close.py",
+              "tests/unit/runtime/budget/test_prompt_budget_ceiling.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/unit/runtime/daemon/test_epoch2_root_context.py",
+              "tests/unit/kernel/migration/test_activation_window.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-04",
+          "id": "G-04",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "mode": "home",
+            "size": [
+              120,
+              40
+            ],
+            "state_path": ".ea/state.json"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-UI",
+          "kind": "affordance_parity",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W12",
+      "intent": {
+        "desired_outcome": "Each leftover is fixed and pinned by a test",
+        "evidence_refs": [],
+        "planned_steps": [
+          "rewrite stale wave ids in comments",
+          "delete the retired skill bodies",
+          "close the canary reversible window"
+        ],
+        "priority_rationale": null,
+        "problem": "Stale lifecycle ids and low audit leftovers from P35-I02 to P35-I04 remain",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:48.225248Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/lint/test_source_comment_lifecycle_ids.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the lifecycle id comment scan",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B184): no comment or docstring in the B184 files (config.py, roles.py, render/agents.py, plugin_install, plugin_package, metrics.py, enums.py, skills/engine.py, doctor/checks.py, hook.py) matches pattern P\\d{2}-I\\d{2}-W\\d{2}, each hand-rewritten to carry the why; a planted wave id in any listed file reds the source scan; pytest exits 0 over tests/lint/test_source_comment_lifecycle_ids.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02",
+            "G-UI"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/surfaces/render/test_skill_registry_catalog.py -q exits zero and home affordance parity passes",
+          "oracle_tier": 4,
+          "quality_dimension": "maintainability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the skill registry catalog suite and the home affordance parity gate",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B186 F11, F13): the unread plan_authority leaf is removed from platform/profiles/models.py, and the retired skill bodies are deleted from surfaces/render/skills/registry.py under a recorded deletion decision so the rendered skill set returns only catalog skills; a planted retired body reds; pytest exits 0 over tests/unit/surfaces/render/test_skill_registry_catalog.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/workflow/verify/test_red_to_green_close.py tests/unit/runtime/budget/test_prompt_budget_ceiling.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the red-to-green and budget ceiling suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B187 N3, N4): the repro test-id convention is a typed constant red_to_green.py reads and the executor prompt renders from, so an id merely containing _repro_ outside that form no longer counts, and the claim guard and budget consume agree at the ceiling under soft enforce; a planted soft-mode refusal at the ceiling reds; pytest exits 0 over tests/unit/workflow/verify/test_red_to_green_close.py tests/unit/runtime/budget/test_prompt_budget_ceiling.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-04"
+          ],
+          "grounding": "assumed",
+          "id": "CR-04",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/unit/runtime/daemon/test_epoch2_root_context.py tests/unit/kernel/migration/test_activation_window.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the activation window and seal fault suites",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof (B189 F7, F8): the canary reversible window transitions to closed when its closing event is recorded in activation.py instead of reporting open for every opt-in tree, and a failed activation seal in epoch2_root.py raises a typed fault recorded for the operator instead of only logging; a planted always-open window reds; pytest exits 0 over tests/unit/runtime/daemon/test_epoch2_root_context.py tests/unit/kernel/migration/test_activation_window.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Clear the P35-I02 to P35-I04 leftovers and stale source ids",
+      "token_budget": null,
+      "tokens_consumed": 0,
+      "worktree_id": null
+    },
+    "P36-I01-W13": {
+      "agent_role": "executor",
+      "blocks": [
+        "P36-I01-W02"
+      ],
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:30.498349Z",
+      "closed_at": null,
+      "commit": null,
+      "commit_identity_digest": null,
+      "criteria_floor_waiver": null,
+      "deps": [],
+      "description": "D69 and D73: a domain.legacy.advance route moves imported Tasks, Batches and Milestones on a closed edge table, runs a Task's decisive gates before COMPLETED, and domain.record.append writes audit, decision and artifact rows to the generation ledger.",
+      "dispatch_history": [],
+      "effort_bucket": "L",
+      "file_scopes": [
+        "src/eawf/kernel/migration/epoch2/",
+        "src/eawf/runtime/daemon/methods/domain.py",
+        "src/eawf/surfaces/cli/commands/domain.py",
+        "tests/integration/kernel/migration/test_legacy_continuation.py",
+        "tests/integration/kernel/migration/test_legacy_continuation_gates.py",
+        "tests/integration/kernel/migration/test_post_cutover_bookkeeping.py"
+      ],
+      "gates": [
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_legacy_continuation.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-01",
+          "id": "G-01",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_legacy_continuation_gates.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-02",
+          "id": "G-02",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        },
+        {
+          "args": {
+            "argv": [
+              "uv",
+              "run",
+              "pytest",
+              "tests/integration/kernel/migration/test_post_cutover_bookkeeping.py",
+              "-q"
+            ],
+            "scope": "touched"
+          },
+          "cadence": "every-wave",
+          "criterion_id": "CR-03",
+          "id": "G-03",
+          "kind": "command_exit_zero",
+          "policy": "block",
+          "required": true,
+          "timeout_s": null
+        }
+      ],
+      "id": "P36-I01-W13",
+      "intent": {
+        "desired_outcome": "Imported P36 rows advance natively with gated completion and ledger bookkeeping",
+        "evidence_refs": [],
+        "planned_steps": [
+          "move imported rows on a closed edge table",
+          "run the decisive gates before COMPLETED",
+          "append audit decision and artifact records to the ledger"
+        ],
+        "priority_rationale": null,
+        "problem": "After the cut no verb can move an imported record or write audit and decision rows",
+        "risks": [],
+        "source_brief_ids": []
+      },
+      "iter_id": "P36-I01",
+      "opened_at": "2026-09-26T18:21:49.186051Z",
+      "outcome": null,
+      "runtime_baseline": null,
+      "runtime_carry": null,
+      "runtime_latest": null,
+      "runtime_preference": null,
+      "sessions": {},
+      "status": "claimed",
+      "success_criteria": [
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-01"
+          ],
+          "grounding": "assumed",
+          "id": "CR-01",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_legacy_continuation.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the legacy continuation state machine suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: domain.legacy.advance moves imported rows only on a closed edge table (Task PLANNED-CLAIMED-RUNNING-COMPLETED, CLAIMED-COMPLETED, DRAFT-DROPPED; Batch ACTIVE-COMPLETED when all task_refs are terminal; Milestone ACTIVE-COMPLETED when all Batches are terminal plus an audit ref, PLANNED-CANCELLED with a plan ref), keeps payload immutable and raises legacy_edge_refused on a planted off-table edge; pytest exits 0 over tests/integration/kernel/migration/test_legacy_continuation.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-02"
+          ],
+          "grounding": "assumed",
+          "id": "CR-02",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_legacy_continuation_gates.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "reliability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the continuation decisive-gate suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: per D73, completing an imported Task through domain.legacy.advance runs its decisive gates through run_gate_out_of_process, binds each receipt id and digest to the row's continuation event before COMPLETED, and raises with the failing gate named when a gate reds or only caller-supplied receipts are presented; a planted failing gate reds and leaves the Task RUNNING; pytest exits 0 over tests/integration/kernel/migration/test_legacy_continuation_gates.py",
+          "waiver_reason": null
+        },
+        {
+          "acceptance_style": "binary",
+          "accepted_risk_decision_ref": null,
+          "contract_refs": [],
+          "evidence_kind": "deterministic",
+          "gate_ids": [
+            "G-03"
+          ],
+          "grounding": "assumed",
+          "id": "CR-03",
+          "kind": "behavioral",
+          "measurable_signal": "uv run pytest tests/integration/kernel/migration/test_post_cutover_bookkeeping.py -q exits zero",
+          "oracle_tier": 4,
+          "quality_dimension": "functional_suitability",
+          "required": true,
+          "response": {
+            "expected": null,
+            "gate_ref": "command_exit_zero",
+            "jury_reason": null,
+            "locus": "pytest",
+            "object": "zero from the post-cutover bookkeeping suite",
+            "observe": "exits",
+            "quantifier": "single"
+          },
+          "text": "Gate-fire proof: on the applied_tree fixture seeded with a claimed wave, the wave advances to COMPLETED, domain.record.append validates audit, decision and artifact records through extra=forbid models and appends them to the generation ledger, an imported backlog row transitions to DROPPED, the Batch and Milestone close, and the epoch-1 state.json bytes stay unchanged; a malformed record raises; pytest exits 0 over tests/integration/kernel/migration/test_post_cutover_bookkeeping.py",
+          "waiver_reason": null
+        }
+      ],
+      "title": "Give imported records a gated legacy-continuation and bookkeeping route",
       "token_budget": null,
       "tokens_consumed": 0,
       "worktree_id": null
