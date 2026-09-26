@@ -224,8 +224,8 @@ def launch_tui(
         return emit_status(workspace=workspace, no_input=no_input, plain=plain)
 
     state_path, _reason = resolve_with_reason(workspace=workspace)
-    root = state_path.parent.parent
-    authority = resolve_authority(root)
+    # A tree declares its epoch inside its ``.ea`` directory, beside the state file.
+    authority = resolve_authority(state_path.parent)
     chrome = load_chrome()
     state_id = entry_state_id_for(authority)
 
@@ -274,7 +274,8 @@ def _launch_native(
         route=_HOME_ROUTE,
         scope_id=scope_id,
         state_path=state_path,
-        repo_root=authority.root,
+        # The daemon addresses a tree by its repository and appends ``.ea`` itself.
+        repo_root=authority.root.parent,
         operator=operator,
     )
     app = ConsoleApp(chrome=chrome, seam=seam, clock=Clock(), verbose=verbose)

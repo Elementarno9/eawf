@@ -37,6 +37,8 @@ from typing import Annotated, Any, Final, Literal
 from pydantic import ConfigDict, Field
 
 from eawf.kernel.identity import IdentityError, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.migration.epoch2.continuation import entity_ref, read_legacy_row
+from eawf.kernel.migration.epoch2.cutover import ROW_PAYLOAD_FIELD
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
 from eawf.kernel.projection.truth import (
     Completeness,
@@ -495,14 +497,30 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
     nothing the document held. Only the status may be absent, because a console can
     render an unknown status honestly but cannot render a row it cannot address.
 
+    A row the epoch-2 cutover imported states neither a URN nor a revision: the
+    import wraps the epoch-1 record in a payload instead. It is addressed by the
+    name the legacy continuation gives it, and its revision counts the import as
+    one plus each continuation move it has made since.
+
     Raises:
-        ValueError: The row is keyed by a blank, is not an object, or states no URN
-            or no positive revision.
+        ValueError: The row is keyed by a blank, is not an object, states no URN
+            or no positive revision, or is an import wrapper that does not
+            validate as an imported record of this collection.
     """
     if not key.strip():
         raise ValueError(f"a {collection.value} row is keyed by a blank, so nothing selects it")
     if not isinstance(row, dict):
         raise ValueError(f"{collection.value} row {key!r} is a {type(row).__name__}, not an object")
+    if "urn" not in row and ROW_PAYLOAD_FIELD in row:
+        legacy = read_legacy_row(collection, key, row)
+        urn, revision = entity_ref(collection, key), 1 + len(legacy.continuation)
+        return ProjectionRow(
+            key=key,
+            urn=urn,
+            collection=collection,
+            revision=revision,
+            status=_status_field(status=legacy.status, urn=urn, revision=revision),
+        )
     urn, revision = row.get("urn"), row.get("revision")
     if not isinstance(urn, str) or not urn.strip():
         raise ValueError(f"{collection.value} row {key!r} states no urn, so nothing addresses it")

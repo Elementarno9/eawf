@@ -257,8 +257,8 @@ LIVE_REPOSITORY_KEY: Final = "EAWF"
 LIVE_TRACK_KEY: Final = DEFAULT_TRACK_KEY
 
 
-def clone_at_revision(*, repo_root: Path, destination: Path) -> str:
-    """Clone the repository holding ``repo_root`` and pin it at its HEAD.
+def clone_at_revision(*, repo_root: Path, destination: Path, revision: str) -> str:
+    """Clone the repository holding ``repo_root`` and pin it at ``revision``.
 
     The clone is detached at the full commit id rather than left on a
     branch, so nothing that moves a branch while the rehearsal runs can
@@ -269,6 +269,7 @@ def clone_at_revision(*, repo_root: Path, destination: Path) -> str:
     Args:
         repo_root: Any directory inside the repository to clone.
         destination: Where the clone lands; it must not exist yet.
+        revision: The commit to detach at.
 
     Returns:
         The revision the clone is checked out at.
@@ -278,10 +279,28 @@ def clone_at_revision(*, repo_root: Path, destination: Path) -> str:
             repository with a commit.
         subprocess.CalledProcessError: git refused the clone or checkout.
     """
-    top, revision = repository_revision(repo_root)
+    top, _head = repository_revision(repo_root)
     _git_quiet(["clone", "--quiet", "--no-checkout", str(top), str(destination)])
     _git_quiet(["-C", str(destination), "checkout", "--quiet", "--detach", revision])
     return revision
+
+
+def pre_cutover_revision(repo_root: Path) -> str:
+    """Return the frozen revision this repository's live cutover was taken at.
+
+    The repository is on epoch 2 now, so its HEAD carries a selected
+    generation whose restore point is machine-local and never committed; a
+    clone of HEAD cannot be cut over again. The live cut recorded the
+    epoch-1 revision it froze, which is the corpus a rehearsal reproduces.
+
+    Args:
+        repo_root: The repository's root directory.
+
+    Returns:
+        The 40-character revision named in the committed cutover record.
+    """
+    record = repo_root / ".ea" / "artifacts" / "evidence" / "2026-09-dev5-live-cutover"
+    return str(json.loads((record / "live-cutover.json").read_text(encoding="utf-8"))["revision"])
 
 
 def _git_quiet(args: list[str]) -> None:

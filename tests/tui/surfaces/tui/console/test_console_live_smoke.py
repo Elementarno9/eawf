@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -48,7 +49,9 @@ from typing import Any, Final
 from unittest import mock
 
 import orjson
+import pytest
 
+from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.bus import EventBus
@@ -58,6 +61,7 @@ from eawf.runtime.daemon.server import handle_connection
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
+from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.harness import capture_cells, grid_errors, settle
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
@@ -99,6 +103,16 @@ RECORD_EVIDENCE_ENV: Final = "EAWF_RECORD_CONSOLE_LIVE"
 #: (``Eawf-Wave: P34-I01-W42``) gave ``PendingAction`` its own ``urn`` field,
 #: so this is now a positive assertion, not a documented gap.
 ATTENTION_ACTION_KEY = "ACT-0001"
+
+#: This repository's root: the this-repository mode serves its own ``.ea`` tree.
+REPO_ROOT: Final = Path(__file__).resolve().parents[5]
+
+#: Where the this-repository mode files its frames, images and findings table.
+REPO_EVIDENCE_DIR: Final = REPO_ROOT / ".ea/artifacts/evidence/2026-09-dev5-console-live"
+
+#: The authority files a read-only serve must leave byte for byte as it found them,
+#: relative to :data:`REPO_ROOT`; every file under ``.ea/generations`` is added too.
+AUTHORITY_FILES: Final = (".ea/state.json", ".ea/epoch2-opt-in.json")
 
 
 class _LoopbackClient:
@@ -167,14 +181,14 @@ def _socket_dir() -> Path:
 
 @contextlib.asynccontextmanager
 async def live_console(
-    walk: CanaryWalk, runtime_root: Path
+    repo_root: Path, runtime_root: Path
 ) -> AsyncIterator[tuple[ConsoleApp, ProjectionSeam]]:
-    """Serve the already-walked canary at an isolated well-known socket and connect.
+    """Serve the epoch-2 tree at ``repo_root`` at an isolated well-known socket and connect.
 
     ``walk_canary`` itself calls ``asyncio.run`` per RPC (see ``Walker.verb``), so
-    it must be built by the caller *before* entering an event loop -- this helper
-    only serves it, which is why it takes the finished walk rather than building
-    one; see ``tests/integration/workflow/release/_canary_acceptance_walk.py``.
+    a canary must be walked by the caller *before* entering an event loop -- this
+    helper only serves a finished tree, which is why it takes a root rather than
+    building one; see ``tests/integration/workflow/release/_canary_acceptance_walk.py``.
 
     ``EAWF_RUNTIME_DIR`` is redirected to a fresh directory this call owns, and
     the daemon is served AT ``runtime_dir() / "eawfd.sock"`` -- the exact path
@@ -184,10 +198,10 @@ async def live_console(
     state into a sibling test.
 
     Args:
-        walk: The already-produced canary walk, built synchronously outside any
-            running event loop.
+        repo_root: The repository whose ``.ea`` tree resolves to epoch 2: an
+            already-walked canary, or this repository itself.
         runtime_root: Where the daemon context this suite serves keeps its WAL --
-            must be the same directory ``walk`` was produced against.
+            for a canary, the same directory its walk was produced against.
 
     Yields:
         The console (built exactly as ``eawf tui`` builds it for an epoch-2 tree,
@@ -208,9 +222,9 @@ async def live_console(
         try:
             seam = ProjectionSeam(
                 route=JOURNEYS[0],
-                scope_id=RootIdentity.of(walk.canary.root).root_id,
+                scope_id=RootIdentity.of(repo_root).root_id,
                 state_path=None,
-                repo_root=walk.canary.root,
+                repo_root=repo_root,
                 daemon_client_factory=lambda: _LoopbackClient(sock_path),
             )
             app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
@@ -266,6 +280,29 @@ async def render_setup(app: ConsoleApp, pilot: Any, setup: SessionSetup) -> str:
     app.render_frame()
     text, _cycles = await settle(pilot)
     return text
+
+
+def authority_digests(repo_root: Path) -> dict[str, str]:
+    """Return the sha256 of every authority file under ``repo_root``, keyed by relative path."""
+    paths = [repo_root / rel for rel in AUTHORITY_FILES]
+    paths += sorted(p for p in (repo_root / ".ea/generations").rglob("*") if p.is_file())
+    return {
+        p.relative_to(repo_root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in paths
+        if p.is_file()
+    }
+
+
+def require_epoch2_repository() -> None:
+    """Skip unless this repository's ``.ea`` tree resolves to epoch 2.
+
+    The root comes from this file's own location, never from ``EA_STATE``, so a
+    close runner that exports it at a sandbox copy of the state file cannot
+    redirect which tree this mode serves.
+    """
+    authority = resolve_authority(REPO_ROOT / ".ea")
+    if authority.epoch != 2:
+        pytest.skip(f"this repository resolves to epoch 1 ({authority.gap})")
 
 
 def test_walk_canary_admits_the_milestone_this_suite_keys_on(tmp_path: Path) -> None:
@@ -345,7 +382,7 @@ def test_console_live_journeys_render_the_canarys_own_ids_at_every_tracked_width
     async def body() -> dict[str, str]:
         frames: dict[str, str] = {}
         async with (
-            live_console(walk, runtime_root) as (app, seam),
+            live_console(walk.canary.root, runtime_root) as (app, seam),
             app.run_test(size=SIZES[0]) as pilot,
         ):
             for size_index, (w, h) in enumerate(SIZES):
@@ -436,7 +473,7 @@ def test_header_connection_value_is_live_only_while_the_seam_holds_a_read(
 
     async def body() -> tuple[str, str]:
         async with (
-            live_console(walk, runtime_root) as (app, seam),
+            live_console(walk.canary.root, runtime_root) as (app, seam),
             app.run_test(size=SIZES[0]) as pilot,
         ):
             live_text = await render_setup(app, pilot, SessionSetup(route="scope.home"))
@@ -454,3 +491,111 @@ def test_header_connection_value_is_live_only_while_the_seam_holds_a_read(
     assert "DISCONNECTED" not in live_header
     assert "DISCONNECTED" in disconnected_header
     assert "LIVE" not in disconnected_header
+
+
+def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -> None:
+    """CR-01: this repository's own projection, served live, draws no prototype literal.
+
+    The canary above proves the read path on a tree a test built; this mode
+    proves it on the tree an operator actually opens. A real daemon serves
+    :data:`REPO_ROOT`'s ``.ea`` tree over the same isolated socket, the same
+    five journeys render at every :data:`SIZES` width, and every frame must be
+    on its grid and free of the prototype's literals
+    (``test_console_live_no_fixture.assert_no_fixture_literal``). The header of
+    every held route must name this repository's own root id, so a pass cannot
+    come from a console drawing some other tree. The authority files are
+    digested before and after, so a serve that wrote to the tree reds.
+
+    ``scope.home`` must hold this repository's Milestones -- rows the cutover
+    imported, which state no URN of their own -- and draw the first of them at
+    every width.
+
+    Setting :data:`RECORD_EVIDENCE_ENV` also files each frame's text and a
+    Textual SVG screenshot under :data:`REPO_EVIDENCE_DIR`.
+    """
+    # Imported here: that module imports this one at load time.
+    from tests.tui.surfaces.tui.console.test_console_live_no_fixture import (
+        assert_no_fixture_literal,
+    )
+
+    require_epoch2_repository()
+    root_id = RootIdentity.of(REPO_ROOT / ".ea").root_id
+    before = authority_digests(REPO_ROOT)
+
+    async def body() -> tuple[dict[str, str], dict[str, str]]:
+        frames: dict[str, str] = {}
+        images: dict[str, str] = {}
+        async with (
+            live_console(REPO_ROOT, tmp_path / "runtime") as (app, seam),
+            app.run_test(size=SIZES[0]) as pilot,
+        ):
+            for size_index, (w, h) in enumerate(SIZES):
+                for route in JOURNEYS:
+                    text = await render_setup(
+                        app, pilot, SessionSetup(route=route, size=size_index)
+                    )
+                    label = f"{route}@{w}x{h}"
+                    errors = grid_errors(text, (w, h), capture_cells(app))
+                    assert not errors, f"{label}: {'; '.join(errors)}"
+                    if seam.projection_for(route) is not None:
+                        assert root_id in text.splitlines()[0], f"{label} names another tree"
+                    frames[label] = text
+                    images[label] = app.export_screenshot(title=label)
+            home = seam.projection_for("scope.home")
+            assert home is not None, "scope.home was walked, so its route must be held"
+            milestone_ids = [r.key for r in home.rows if r.collection is Epoch2Collection.MILESTONE]
+        assert milestone_ids, "this repository's imported Milestones must be read"
+        for w, h in SIZES:
+            assert milestone_ids[0] in frames[f"scope.home@{w}x{h}"], f"scope.home@{w}x{h}"
+        return frames, images
+
+    frames, images = asyncio.run(body())
+
+    assert_no_fixture_literal(frames)
+    assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the authority tree"
+
+    if os.environ.get(RECORD_EVIDENCE_ENV) == "1":
+        for kind, captures, suffix in (("frames", frames, "txt"), ("images", images, "svg")):
+            target = REPO_EVIDENCE_DIR / kind
+            target.mkdir(parents=True, exist_ok=True)
+            for label, content in captures.items():
+                (target / f"{label}.{suffix}").write_text(content, encoding="utf-8")
+
+
+def test_planted_prototype_register_reds_this_repositorys_frame_check(tmp_path: Path) -> None:
+    """Gate-fire proof: the same live console, falling back to the prototype registers, reds.
+
+    Each journey is first rendered clean over this repository's own projection.
+    Then the registers the golden harness loads are planted into that console and
+    its link to the daemon is dropped: the seeded shape of the honesty-floor
+    defect, a console that loses its read model and draws the prototype's rows
+    instead of saying so. The frame check must name a literal on every journey.
+    """
+    from tests.tui.surfaces.tui.console.test_console_live_no_fixture import (
+        FIXTURE_DIR,
+        assert_no_fixture_literal,
+    )
+
+    require_epoch2_repository()
+
+    async def body() -> tuple[dict[str, str], dict[str, str]]:
+        live: dict[str, str] = {}
+        planted: dict[str, str] = {}
+        async with (
+            live_console(REPO_ROOT, tmp_path / "runtime") as (app, _seam),
+            app.run_test(size=SIZES[0]) as pilot,
+        ):
+            for route in JOURNEYS:
+                live[route] = await render_setup(app, pilot, SessionSetup(route=route))
+            app.fixture = load_fixture(FIXTURE_DIR)
+            app.seam = None
+            for route in JOURNEYS:
+                planted[route] = await render_setup(app, pilot, SessionSetup(route=route))
+        return live, planted
+
+    live, planted = asyncio.run(body())
+
+    assert_no_fixture_literal(live)
+    for route, text in planted.items():
+        with pytest.raises(AssertionError, match="fixture literal"):
+            assert_no_fixture_literal({route: text})

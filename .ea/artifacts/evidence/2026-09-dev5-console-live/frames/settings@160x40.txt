@@ -1,0 +1,40 @@
+ Eä ▸ root-fa6049a562f1396a ▸ Settings                                                                                                                    ● LIVE
+ 181 leaves · 38 sections · 2 winning layers · cursor 4
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   LEAF                                  EFFECTIVE             LAYER      OVERRODE
+ ▸ acceptance.commands.build             null                  built-in   nothing
+   acceptance.commands.lint              null                  built-in   nothing
+   acceptance.commands.tests             null                  built-in   nothing
+   acceptance.commands.typecheck         null                  built-in   nothing
+   acceptance.required_before_ship       [state]               built-in   nothing
+   agents.extra_tools                    {}                    built-in   nothing
+   audit.default_checks                  [state, tests, lint,… built-in   nothing
+   audit.default_level                   standard              built-in   nothing
+   audit.flaky_retry_count               1                     built-in   nothing
+   cli.canonical_command                 eawf                  built-in   nothing
+   cli.install_aliases                   [ea]                  built-in   nothing
+   cli.omit_ea_alias                     false                 built-in   nothing
+   cli.preferred_command                 eawf                  built-in   nothing
+   commands.inventory_policy             full_io_spec_before_c…built-in   nothing
+   config.layers_visible                 true                  built-in   nothing
+   daemon.idle_timeout_seconds           300                   built-in   nothing
+   daemon.proxy_enabled                  true                  built-in   nothing
+   daemon.session_handle_ttl_seconds     86400                 built-in   nothing
+   dispatch.role_tier_token_cap          2400                  built-in   nothing
+   dispatch.session_handle_ttl_seconds   86400                 built-in   nothing
+   dispatch.session_policy_default       fresh                 built-in   nothing
+   docs.categories                       [roadmap, research,…  built-in   nothing
+   docs.generated_default_dir            .ea/artifacts/renderedbuilt-in   nothing
+   docs.generation_policy                ask_per_category      built-in   nothing
+   estimation.buckets.high_confidence_n  30                    built-in   nothing
+   estimation.buckets.n_min              5                     built-in   nothing
+   estimation.buckets.overrides          {}                    built-in   nothing
+   estimation.calibration_profile        eawf_v0_lockbox_2026_…built-in   nothing
+   estimation.display.eu_quantum         0.25                  built-in   nothing
+   estimation.display.show_category      false                 built-in   nothing
+   estimation.display.show_expected_time true                  built-in   nothing
+   estimation.display.show_pessimistic_t…true                  built-in   nothing
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ WINDOW     1-32 of 181 leaves
+ READ ONLY  a value is changed through the config verbs, never from here.
+ ↑↓ row   Enter drill   \ filter   i inspect   Esc back

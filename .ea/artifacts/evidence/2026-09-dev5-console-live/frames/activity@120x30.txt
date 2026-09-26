@@ -1,0 +1,30 @@
+ Eä ▸ root-fa6049a562f1396a ▸ Activity                                                                            ● LIVE
+ 0 runs · cursor 4
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+ BUCKETS   ∅ unavailable
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   ROW                               KIND        STATUS
+   this scope holds no record the read model renders
+ WINDOW    0 of 0
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ↑↓ row   PageUp PageDown page   Home End ends   Enter drill   Tab buckets   \ filter   . actions

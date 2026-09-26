@@ -1,0 +1,30 @@
+ Eä ▸ root-fa6049a562f1396a ▸ Needs you                                                                           ● LIVE
+ ∅ unavailable · cursor 4
+════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+ MINE      ? · nothing here opened itself
+           no epoch-2 producer writes this register yet
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   ROW                               KIND        STATUS
+   this scope holds no record the read model renders
+ WINDOW    0 of 0
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ UNWRITTEN  pending_action ?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ↑↓ row   PageUp PageDown page   Home End ends   Enter open   Tab buckets   a answer   x deny   z snooze   v resolve

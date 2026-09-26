@@ -1,0 +1,24 @@
+ Eä ▸ root-fa6049a562f1396a ▸ run                                         ● LIVE
+ 0 runs · cursor 4
+════════════════════════════════════════════════════════════════════════════════
+ REGIONS   timeline
+────────────────────────────────────────────────────────────────────────────────
+   ROW                               KIND        STATUS
+   this scope holds no record the read model renders
+ WINDOW    0 of 0
+────────────────────────────────────────────────────────────────────────────────
+ UNSTATED  provider ? · elapsed ? · cost ?
+
+
+
+
+
+
+
+
+
+
+
+
+
+ ↑↓ event   PageUp PageDown page   Home End ends   . actions   r raw
