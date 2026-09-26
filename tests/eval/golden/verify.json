@@ -1,0 +1,29 @@
+{
+  "body_keys": [
+    "acceptance_bundle",
+    "approval_ref",
+    "blocking_criterion_ids",
+    "bundle_digest",
+    "head_generation",
+    "kind",
+    "merge_ready",
+    "method",
+    "mode",
+    "outcome",
+    "reason",
+    "refusal_code",
+    "rows",
+    "settled_criterion_ids",
+    "stage",
+    "subject_ref",
+    "unresolved_request_fields",
+    "user_question"
+  ],
+  "eval_score_threshold": 0.85,
+  "evidence_refs_present": false,
+  "repair_commands_count": 1,
+  "skill": "/verify",
+  "state_mutation_kinds": [],
+  "status": "blocked",
+  "warnings_count": 1
+}

@@ -28,6 +28,14 @@ Contract (state mutation):
   waves raise :class:`KeyError`.
 * :func:`check_budget` — read-only classify the wave against
   :mod:`eawf.runtime.budget.policy`.
+* :func:`emit_budget_notice` — upsert the scope's non-blocking notice once
+  a consumption reached its ceiling. Nothing opens below the ceiling: the
+  observed fraction stays readable in the statusline, and a notice reports
+  an event that happened rather than a prediction. A storage failure is
+  logged and swallowed: a notice is observability, so losing one must
+  never stop the work it describes.
+* :func:`load_budget_config` — read and validate the repo's ``flow.budget``
+  table, the one source every ceiling is derived from.
 """
 
 from __future__ import annotations
@@ -37,10 +45,27 @@ import signal
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
 from typing import Protocol
 
+from pydantic import ValidationError
+
+from eawf.kernel.config.layered import merge_config
 from eawf.kernel.state.models import State, Wave
-from eawf.runtime.budget.policy import classify
+from eawf.runtime.budget.notices import (
+    BudgetCrossing,
+    NoticeBasis,
+    NoticeUpsert,
+    upsert_notice,
+)
+from eawf.runtime.budget.policy import (
+    BudgetConfig,
+    PromptBudgetCeiling,
+    budget_config_from,
+    classify,
+)
+from eawf.runtime.lock.portalock import LockTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +149,73 @@ def check_budget(state: State, wave_id: str) -> str | None:
     """
     wave = _get_wave_or_raise(state, wave_id)
     return classify(wave.tokens_consumed, wave.token_budget)
+
+
+def load_budget_config(repo: Path) -> BudgetConfig:
+    """Return the validated ``flow.budget`` table of *repo*'s layered config.
+
+    Args:
+        repo: The repo root whose ``.ea/`` config layers are merged.
+
+    Raises:
+        eawf.runtime.budget.policy.DuplicateCeilingError: A layer declares a
+            second ceiling.
+        ValueError: The table is not a mapping.
+        pydantic.ValidationError: A declared value is out of range.
+    """
+    merged, _sources = merge_config(workspace=repo, repo=repo)
+    return budget_config_from(merged)
+
+
+def emit_budget_notice(
+    notices_file: Path,
+    *,
+    scope_id: str,
+    consumed: int,
+    ceiling: PromptBudgetCeiling | None,
+    observed_at: datetime,
+) -> NoticeUpsert | None:
+    """Upsert *scope_id*'s budget notice once *consumed* reached *ceiling*.
+
+    Below the ceiling, or with no ceiling, nothing is recorded: a notice
+    reports that the limit was reached, never that it is being approached.
+    The notice never pauses, asks or holds anything -- it is recorded and
+    left for a reader. Its basis follows the ceiling's enforce mode: a
+    ``hard`` ceiling is an enforced limit, a ``soft`` one an estimate the
+    work may legitimately outgrow.
+
+    Args:
+        notices_file: The notice ledger file.
+        scope_id: The scope whose consumption was metered.
+        consumed: Cumulative consumption after the latest increment.
+        ceiling: The scope's one ceiling, or ``None`` when none is set.
+        observed_at: When the consumption was read.
+
+    Returns:
+        The upsert result, or ``None`` when the ceiling was not reached or
+        the ledger could not be written.
+
+    Raises:
+        ValueError: ``consumed`` is negative.
+    """
+    if consumed < 0:
+        raise ValueError(f"consumed must be non-negative; got {consumed}")
+    if ceiling is None or not ceiling.reached(consumed):
+        return None
+    basis: NoticeBasis = "hard_limit" if ceiling.enforce == "hard" else "estimate"
+    crossing = BudgetCrossing(
+        scope_id=scope_id,
+        basis=basis,
+        band="limit_reached",
+        observed_value=consumed,
+        budget_value=ceiling.tokens,
+        observed_at=observed_at,
+    )
+    try:
+        return upsert_notice(notices_file, crossing)
+    except (OSError, LockTimeout, ValidationError) as exc:
+        logger.warning(f"emit_budget_notice scope={scope_id} failed={exc!r}")
+        return None
 
 
 class TerminableProcess(Protocol):

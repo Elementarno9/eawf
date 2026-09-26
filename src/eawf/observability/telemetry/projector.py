@@ -70,12 +70,19 @@ from eawf.observability.telemetry.aggregator import (
     session_from_envelope,
 )
 from eawf.observability.telemetry.models import (
+    ObservedDuration,
+    ObservedSession,
     TelemetryDispatchCost,
     TelemetryFileMeta,
     TelemetryIncident,
     TelemetrySession,
 )
 from eawf.observability.telemetry.sources.base import SessionSource
+from eawf.observability.telemetry.sources.session_history import (
+    discover_history,
+    observed_rows,
+    parse_transcript,
+)
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
 logger = logging.getLogger(__name__)
@@ -84,6 +91,8 @@ _SESSIONS_TABLE = "telemetry_sessions"
 _INCIDENTS_TABLE = "telemetry_incidents"
 _DISPATCH_COSTS_TABLE = "telemetry_dispatch_costs"
 _FILE_META_TABLE = "telemetry_file_meta"
+_OBSERVED_SESSIONS_TABLE = "telemetry_observed_sessions"
+_OBSERVED_DURATIONS_TABLE = "telemetry_observed_durations"
 
 #: Source adapters whose files are line-independent: every line parses to a
 #: complete, self-contained row, so the incremental tail slice (bytes past the
@@ -497,9 +506,152 @@ def _stamp_file_meta(
     index.by_path[meta.jsonl_path] = meta
 
 
+class SweepStage(StrEnum):
+    """The coverage-funnel stage a swept session file failed to reach."""
+
+    PARSED = "parsed"
+    ATTRIBUTED = "attributed"
+    PROJECTED = "projected"
+
+
+class SweepDropReason(StrEnum):
+    """Closed reasons a swept session file leaves the coverage funnel.
+
+    Values:
+        CORRUPT_RECORD: The file holds no decodable JSON record.
+        NO_OPERATOR_WORK: The session billed no assistant message, so it has
+            no token classes to attribute.
+        PROJECTION_REFUSED: A built row failed its invariants at write.
+    """
+
+    CORRUPT_RECORD = "corrupt_record"
+    NO_OPERATOR_WORK = "no_operator_work"
+    PROJECTION_REFUSED = "projection_refused"
+
+
+@dataclass(frozen=True, slots=True)
+class SweepDrop:
+    """One session file that left the funnel, named by its file name only.
+
+    Attributes:
+        file_name: Base name of the dropped file (never its directory).
+        stage: The stage the file failed to reach.
+        reason: Why it was dropped.
+    """
+
+    file_name: str
+    stage: SweepStage
+    reason: SweepDropReason
+
+
+@dataclass(slots=True)
+class SweepFunnel:
+    """Coverage funnel of one session-history sweep.
+
+    Every stage counts files that reached it, so the counts never increase
+    from one stage to the next, and each file missing from a later stage has
+    exactly one :class:`SweepDrop` saying why.
+
+    Attributes:
+        seen: Session files discovered.
+        parsed: Files holding at least one decodable record.
+        attributed: Parsed sessions with billed work to attribute.
+        projected: Sessions whose rows were written.
+        durations: Per-kind duration rows written.
+        drops: One entry per file that left the funnel.
+    """
+
+    seen: int = 0
+    parsed: int = 0
+    attributed: int = 0
+    projected: int = 0
+    durations: int = 0
+    drops: list[SweepDrop] = field(default_factory=list)
+
+    def stages(self) -> tuple[int, int, int, int]:
+        """Return ``(seen, parsed, attributed, projected)``."""
+        return (self.seen, self.parsed, self.attributed, self.projected)
+
+
+def sweep_session_history(
+    store: AbstractMetricsStore,
+    history_root: Path,
+    *,
+    project_id: str,
+    runtime: str = "claude",
+) -> SweepFunnel:
+    """Sweep local session history into the observed collection.
+
+    The sole writer of the observed tables: each transcript under
+    *history_root* is parsed, attributed when it billed work, and projected
+    into one observed session row plus its per-kind duration rows. A file
+    that fails a stage is dropped with a typed reason and the sweep goes on.
+
+    Args:
+        store: An initialised metrics store.
+        history_root: The runtime's local history directory; a missing
+            directory sweeps nothing.
+        project_id: Scope label stamped on every observed session row.
+        runtime: Runtime the history belongs to.
+
+    Returns:
+        The coverage funnel of the sweep.
+    """
+    funnel = SweepFunnel()
+    for path in discover_history(history_root):
+        funnel.seen += 1
+        parsed = parse_transcript(path)
+        if parsed is None:
+            funnel.drops.append(
+                SweepDrop(path.name, SweepStage.PARSED, SweepDropReason.CORRUPT_RECORD)
+            )
+            continue
+        funnel.parsed += 1
+        if not parsed.has_operator_work:
+            funnel.drops.append(
+                SweepDrop(path.name, SweepStage.ATTRIBUTED, SweepDropReason.NO_OPERATOR_WORK)
+            )
+            continue
+        funnel.attributed += 1
+        try:
+            session, durations = observed_rows(parsed, runtime=runtime, project_id=project_id)
+        except ValueError as exc:
+            logger.warning(f"sweep_session_history file={path.name!r} error={exc!r} refused")
+            funnel.drops.append(
+                SweepDrop(path.name, SweepStage.PROJECTED, SweepDropReason.PROJECTION_REFUSED)
+            )
+            continue
+        _write_observed(store, session, durations)
+        funnel.projected += 1
+        funnel.durations += len(durations)
+    store.commit()
+    logger.info(
+        f"sweep_session_history runtime={runtime} seen={funnel.seen} parsed={funnel.parsed} "
+        f"attributed={funnel.attributed} projected={funnel.projected} "
+        f"durations={funnel.durations} drops={len(funnel.drops)}"
+    )
+    return funnel
+
+
+def _write_observed(
+    store: AbstractMetricsStore,
+    session: ObservedSession,
+    durations: list[ObservedDuration],
+) -> None:
+    """Upsert one observed session and its duration rows."""
+    store.upsert(_OBSERVED_SESSIONS_TABLE, session)
+    for row in durations:
+        store.upsert(_OBSERVED_DURATIONS_TABLE, row)
+
+
 __all__ = [
     "RebuildMode",
     "RebuildReport",
     "SourceSpec",
+    "SweepDrop",
+    "SweepDropReason",
+    "SweepFunnel",
+    "SweepStage",
     "rebuild",
+    "sweep_session_history",
 ]

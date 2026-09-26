@@ -235,7 +235,7 @@ def test_plugin_doctor_codex_surfaces_untrusted_hooks_after_install(
         app, ["-w", str(tmp_path), "plugin", "doctor", "codex", "--scope", "user"]
     )
     assert result.exit_code == 3, result.stdout
-    assert "ok=46 drifted=0 missing=0" in result.stdout
+    assert "ok=36 drifted=0 missing=0" in result.stdout
     assert "untrusted=4" in result.stdout
     assert "hook needs review in Codex /hooks" in result.stdout
 

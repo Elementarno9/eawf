@@ -10,7 +10,8 @@ checks the sub-verb dispatch:
 - ``metrics export --format prom|json|csv`` serialises to stdout and to a
   ``--out`` file.
 - ``metrics info`` prints cache stats (db kind, path, pricing version).
-- ``metrics rebuild --full`` drives the projector over the (empty) sources.
+- ``metrics rebuild --full`` drives the projector over the (empty) sources
+  and reports the session-history sweep funnel.
 - An unknown sub-verb fails fast.
 - REL-009: over a seeded session fixture the ingestion path reports a
   non-zero session count and ``metrics show`` renders a duration p50. This
@@ -34,6 +35,7 @@ from typer.testing import CliRunner
 
 import eawf.kernel.config.layered as layered
 from eawf.observability.telemetry.models import TelemetrySession
+from eawf.observability.telemetry.sources.session_history import claude_history_root
 from eawf.observability.telemetry.store import SqliteMetricsStore
 from eawf.surfaces.cli.app import app
 
@@ -42,10 +44,15 @@ runner = CliRunner()
 
 @pytest.fixture(autouse=True)
 def _isolate_global_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Point the global config layer at an empty tmp file + clear EA_STATE."""
+    """Point the global config layer at an empty tmp file + clear EA_STATE.
+
+    The session-history root is redirected too, so ``metrics rebuild`` never
+    sweeps the real home directory.
+    """
     fake_global = tmp_path / "global-config.yaml"
     monkeypatch.setattr(layered, "global_config_path", lambda: fake_global)
     monkeypatch.delenv("EA_STATE", raising=False)
+    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(tmp_path / "claude-projects"))
 
 
 def _make_workspace(tmp_path: Path, *, telemetry_enabled: bool) -> Path:
@@ -336,3 +343,25 @@ def test_metrics_show_duration_family_is_empty_without_sessions(tmp_path: Path) 
     assert result.exit_code == 0, result.output
     assert "# TYPE eawf_session_duration_ms gauge" in result.stdout
     assert "eawf_session_duration_ms{quantile=" not in result.stdout
+
+
+def test_metrics_rebuild_reports_session_history_funnel(tmp_path: Path) -> None:
+    """``metrics rebuild`` sweeps session history and names the unparsable file."""
+    workspace = _make_workspace(tmp_path, telemetry_enabled=True)
+    history = claude_history_root(workspace.resolve())
+    history.mkdir(parents=True)
+    record = {
+        "type": "assistant",
+        "sessionId": "s1",
+        "timestamp": "2026-09-01T10:00:00Z",
+        "message": {"id": "m1", "model": "claude-opus-4-7", "usage": {"input_tokens": 3}},
+    }
+    (history / "a.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    (history / "bad.jsonl").write_text("{", encoding="utf-8")
+
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "metrics", "rebuild", "--full"])
+
+    assert result.exit_code == 0, result.output
+    funnel = json.loads(result.stdout)["session_history"]
+    assert [funnel[k] for k in ("seen", "parsed", "attributed", "projected")] == [2, 1, 1, 1]
+    assert funnel["drops"] == [{"file": "bad.jsonl", "stage": "parsed", "reason": "corrupt_record"}]

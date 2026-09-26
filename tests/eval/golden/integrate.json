@@ -1,0 +1,24 @@
+{
+  "body_keys": [
+    "action",
+    "candidates",
+    "conflict_refs",
+    "generation_ids",
+    "kind",
+    "method",
+    "outcome",
+    "reason",
+    "refusal_code",
+    "subject_ref",
+    "unresolved_request_fields",
+    "user_question",
+    "verification_receipts"
+  ],
+  "eval_score_threshold": 0.85,
+  "evidence_refs_present": false,
+  "repair_commands_count": 1,
+  "skill": "/integrate",
+  "state_mutation_kinds": [],
+  "status": "blocked",
+  "warnings_count": 1
+}

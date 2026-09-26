@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from eawf.kernel.spec.common import CriterionSpec, GateSpec
 
 from eawf.kernel.spec.intent import IntentBrief
+from eawf.kernel.state.budget_signal import refuse_budget_signal
 from eawf.kernel.state.enums import (
     ActualStatus,
     AgentSessionRole,
@@ -1166,6 +1167,13 @@ class OpenQuestion(_StrictModel):
     drop_reason: OpenQuestionDropReason | None = None
     created_at: UtcDatetime
     resolved_at: UtcDatetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_budget_signal(cls, data: Any) -> Any:
+        """Refuse a budget event, which is a notice and never a question."""
+        refuse_budget_signal(data, target="an open question")
+        return data
 
     @model_validator(mode="after")
     def _validate_drop_disposition(self) -> OpenQuestion:

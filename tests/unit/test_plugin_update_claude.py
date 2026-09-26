@@ -31,7 +31,7 @@ def test_update_plugin_succeeds_on_clean_tree(tmp_path: Path) -> None:
 
 def test_update_plugin_aborts_on_hand_edit(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    skill_path = tmp_path / ".claude" / "skills" / "audit" / "SKILL.md"
+    skill_path = tmp_path / ".claude" / "skills" / "verify" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# hand-edit\n")
     with pytest.raises(IntegrityViolation):
         update_plugin(tmp_path)
@@ -64,7 +64,7 @@ def test_update_plugin_aborts_on_hand_edit_in_hook(tmp_path: Path) -> None:
 def test_update_plugin_after_external_install_force_succeeds(tmp_path: Path) -> None:
     """If ``install --force`` rewrote drift, ``update`` then succeeds."""
     install_plugin(tmp_path)
-    skill_path = tmp_path / ".claude" / "skills" / "audit" / "SKILL.md"
+    skill_path = tmp_path / ".claude" / "skills" / "verify" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# drift\n")
     # Operator escalates to force install (the documented recipe).
     install_plugin(tmp_path, force=True)

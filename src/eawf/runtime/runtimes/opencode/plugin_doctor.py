@@ -31,7 +31,7 @@ from eawf.runtime.runtimes.opencode.plugin_install import (
     expected_plugin_js_bytes,
 )
 from eawf.surfaces.render.agents import AGENT_REGISTRY
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 
 @dataclass(frozen=True)
@@ -228,7 +228,7 @@ def doctor_plugin(
             drifted.append(entry)
 
     expected_commands = expected_command_bodies()
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         if not skill_spec.user_invocable:
             continue
         command_path = _command_target(

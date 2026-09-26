@@ -1641,7 +1641,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
-    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.advance_after.audit": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",

@@ -29,11 +29,13 @@ from eawf.runtime.runtimes.claude.plugin_install import (
 )
 from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 
 def _all_skill_paths(target_dir: Path) -> list[Path]:
-    return [target_dir / ".claude" / "skills" / s.skill_name / "SKILL.md" for s in SKILL_REGISTRY]
+    return [
+        target_dir / ".claude" / "skills" / s.skill_name / "SKILL.md" for s in shipped_skill_specs()
+    ]
 
 
 def _all_agent_paths(target_dir: Path) -> list[Path]:
@@ -57,7 +59,7 @@ def test_install_plugin_writes_full_tree(tmp_path: Path) -> None:
     """Happy path: every registry entry produces a file on disk."""
     result = install_plugin(tmp_path)
     assert isinstance(result, InstallResult)
-    assert len(result.skills) == len(SKILL_REGISTRY)
+    assert len(result.skills) == len(shipped_skill_specs())
     assert len(result.agents) == len(AGENT_REGISTRY)
     assert len(result.hooks) == len(_installed_hook_specs())
     assert result.settings is not None and result.settings.action == "created"
@@ -144,7 +146,7 @@ def test_install_plugin_settings_managed_namespace_only(tmp_path: Path) -> None:
     assert "__eawf_managed" in parsed
     managed = parsed["__eawf_managed"]
     assert managed["version"] == eawf.__version__
-    assert {s["name"] for s in managed["skills"]} == {s.skill_name for s in SKILL_REGISTRY}
+    assert {s["name"] for s in managed["skills"]} == {s.skill_name for s in shipped_skill_specs()}
     assert {a["name"] for a in managed["agents"]} == {a.role for a in AGENT_REGISTRY}
     assert "hash" in managed and len(managed["hash"]) == 16
 
@@ -207,7 +209,7 @@ def test_install_plugin_renders_skill_md_with_correct_frontmatter(tmp_path: Path
     """Spot check: the rendered SKILL.md contains the registry's description."""
     install_plugin(tmp_path)
     body = (tmp_path / ".claude" / "skills" / "research" / "SKILL.md").read_text(encoding="utf-8")
-    spec = next(s for s in SKILL_REGISTRY if s.skill_name == "research")
+    spec = next(s for s in shipped_skill_specs() if s.skill_name == "research")
     assert f"description: {json.dumps(spec.description, ensure_ascii=False)}\n" in body
 
 

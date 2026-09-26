@@ -38,6 +38,8 @@ from typing import Any, Final, Literal, get_args, get_origin
 from pydantic import BaseModel
 
 from eawf.observability.telemetry.models import (
+    ObservedDuration,
+    ObservedSession,
     TelemetryCompaction,
     TelemetryDispatchCost,
     TelemetryFileMeta,
@@ -123,6 +125,17 @@ TABLES: Final[tuple[TableSpec, ...]] = (
         model=TelemetryDispatchCost,
         primary_key=("envelope_id",),
         not_null=frozenset({"runtime", "model", "pricing_version"}),
+    ),
+    TableSpec(
+        name="telemetry_observed_sessions",
+        model=ObservedSession,
+        primary_key=("runtime", "vendor_session_ref"),
+        not_null=frozenset({"project_id", "total_tokens", "price_source"}),
+    ),
+    TableSpec(
+        name="telemetry_observed_durations",
+        model=ObservedDuration,
+        primary_key=("runtime", "vendor_session_ref", "kind", "label"),
     ),
     TableSpec(
         name="telemetry_incidents",

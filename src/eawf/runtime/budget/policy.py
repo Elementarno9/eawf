@@ -17,15 +17,25 @@ Two layers live here, both I/O-free and state-free:
   same cap so the dispatcher can run the SIGTERM -> SIGKILL ladder
   (:func:`eawf.runtime.budget.service.terminate_with_grace`).
 
+* **The one ceiling**: :class:`BudgetConfig` is the validated
+  ``flow.budget`` table and :meth:`BudgetConfig.ceiling` derives the single
+  :class:`PromptBudgetCeiling` a scope is metered, noticed, enforced and
+  displayed against. A table that declares a second ceiling under any other
+  key is refused with :class:`DuplicateCeilingError`, so no consumer can
+  define its own.
+
 No I/O. No state mutation. The CLI / daemon layer owns persistence and
 the actual process signalling.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Final, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 WARN_FRACTION: float = 0.75
 BLOCK_FRACTION: float = 1.0
@@ -81,6 +91,125 @@ class BudgetDecision:
     cap: int | None
     consumed: int
     over_cap: bool
+
+
+class DuplicateCeilingError(ValueError):
+    """A budget table declares a second ceiling beside the one it derives.
+
+    Attributes:
+        keys: The offending ``flow.budget`` keys, sorted.
+    """
+
+    def __init__(self, keys: list[str]) -> None:
+        self.keys = sorted(keys)
+        named = ", ".join(f"flow.budget.{key}" for key in self.keys)
+        super().__init__(
+            f"duplicate_ceiling: {named} declares a second ceiling; the one ceiling is "
+            "the scope's budget scaled by flow.budget.multiplier"
+        )
+
+
+#: Key fragments that make an undeclared ``flow.budget`` key a ceiling or a
+#: threshold -- a second place a limit could be set -- rather than a typo.
+_CEILING_KEY_MARKERS: Final[tuple[str, ...]] = (
+    "cap",
+    "ceiling",
+    "limit",
+    "max",
+    "token",
+    "budget",
+    "fraction",
+    "threshold",
+    "warn",
+)
+
+
+class PromptBudgetCeiling(BaseModel):
+    """The one token ceiling a scope is metered, noticed, enforced and shown against.
+
+    Attributes:
+        tokens: The ceiling itself; consumption at or above it has reached it.
+        enforce: ``soft`` keeps the work running past the ceiling; ``hard``
+            stops it there.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    tokens: StrictInt = Field(ge=0)
+    enforce: EnforceMode
+
+    def reached(self, consumed: int) -> bool:
+        """Return whether *consumed* met or crossed the ceiling."""
+        return consumed >= self.tokens
+
+    def decide(self, consumed: int) -> BudgetDecision:
+        """Classify *consumed* against this ceiling.
+
+        Raises:
+            ValueError: ``consumed`` is negative.
+        """
+        return classify_enforcement(consumed, self.tokens, enforce=self.enforce, multiplier=1.0)
+
+
+class BudgetConfig(BaseModel):
+    """The validated ``flow.budget`` table: how a budget becomes its ceiling.
+
+    Attributes:
+        enforce: The enforce mode every derived ceiling carries.
+        multiplier: The factor a base budget is scaled by into the ceiling.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    enforce: EnforceMode = DEFAULT_ENFORCE
+    multiplier: float = Field(default=DEFAULT_MULTIPLIER, ge=1.0)
+
+    def ceiling(self, budget: int | None) -> PromptBudgetCeiling | None:
+        """Return the ceiling *budget* derives, or ``None`` when no budget is set."""
+        tokens = effective_cap(budget, self.multiplier)
+        if tokens is None:
+            return None
+        return PromptBudgetCeiling(tokens=tokens, enforce=self.enforce)
+
+
+#: A sealed capsule ceiling is already the limit, not a baseline to scale,
+#: and it is enforced exactly.
+SEALED_BUDGET: Final[BudgetConfig] = BudgetConfig(enforce="hard", multiplier=1.0)
+
+
+def budget_config_from(merged: Mapping[str, Any]) -> BudgetConfig:
+    """Validate the ``flow.budget`` table of a merged layered config.
+
+    Args:
+        merged: The merged layered config mapping.
+
+    Returns:
+        The validated :class:`BudgetConfig`; defaults when no table is set.
+
+    Raises:
+        DuplicateCeilingError: The table declares a ceiling or threshold key
+            beside ``enforce`` and ``multiplier``.
+        ValueError: ``flow`` or ``flow.budget`` is not a mapping.
+        pydantic.ValidationError: A declared value is out of range, or an
+            unknown key that names no ceiling is present.
+    """
+    flow = merged.get("flow")
+    if flow is None:
+        return BudgetConfig()
+    if not isinstance(flow, Mapping):
+        raise ValueError(f"flow must be a mapping; got {type(flow).__name__}")
+    table = flow.get("budget")
+    if table is None:
+        return BudgetConfig()
+    if not isinstance(table, Mapping):
+        raise ValueError(f"flow.budget must be a mapping; got {type(table).__name__}")
+    undeclared = [str(key) for key in table if key not in BudgetConfig.model_fields]
+    second = [
+        key for key in undeclared if any(marker in key.lower() for marker in _CEILING_KEY_MARKERS)
+    ]
+    if second:
+        raise DuplicateCeilingError(second)
+    return BudgetConfig.model_validate(dict(table))
 
 
 def classify(consumed: int, budget: int | None) -> str | None:

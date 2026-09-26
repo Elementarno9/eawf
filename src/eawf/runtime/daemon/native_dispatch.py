@@ -95,6 +95,7 @@ from eawf.runtime.daemon.run_events import (
     hello_facts_of,
     next_hello_sequence,
 )
+from eawf.runtime.mcp.grant import intersect_run_tools
 from eawf.runtime.runtimes.adapter import (
     NativeLaunchOutcome,
     NativeLaunchRequest,
@@ -648,7 +649,10 @@ def seal_capsule(
     Every enforcement field is taken from the spec except the tool grants and
     denials, which arrive on the request and are checked against the spec's
     merged tool policy before sealing, so the capsule can be stricter than
-    the spec but never looser.
+    the spec but never looser. The requested grants are then narrowed to the
+    intersection of the Run's role, its task and its certification, so the
+    sealed capsule -- and every MCP configuration rendered from it -- carries
+    no tool one of the three withheld.
 
     Args:
         spec: The compiled spec the capsule accompanies.
@@ -659,11 +663,15 @@ def seal_capsule(
         The sealed capsule.
 
     Raises:
-        ValueError: The request's tool fields widen the merged tool policy.
-        pydantic.ValidationError: A grant names no catalog tool, or the
+        ValueError: The request's tool fields widen the merged tool policy,
+            or a grant names no catalog tool.
+        pydantic.ValidationError: A denial names no catalog tool, or the
             scope does not admit a tool that writes.
     """
     _reject_capsule_widening(spec=spec, request=request)
+    intersection = intersect_run_tools(
+        role=spec.agent_role, task_grants=request.tool_grants, capabilities=spec.capabilities
+    )
     return AuthorityCapsule.seal(
         {
             "run_ref": spec.run_ref,
@@ -673,7 +681,7 @@ def seal_capsule(
             "agent_role": spec.agent_role,
             "purpose": spec.purpose,
             "authority": spec.authority,
-            "tool_grants": request.tool_grants,
+            "tool_grants": tuple(tool.value for tool in intersection.granted),
             "tool_denials": request.tool_denials,
             "filesystem_policy_ref": spec.sandbox.filesystem_policy_ref,
             "network_policy_ref": spec.sandbox.network_policy_ref,

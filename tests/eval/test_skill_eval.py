@@ -1,18 +1,21 @@
 """Skill-dispatch eval harness — golden envelope regression suite.
 
-Each case loads a golden envelope JSON from ``tests/eval/golden/<slug>.json``
+Each case loads a golden envelope JSON from ``tests/eval/golden/<skill_id>.json``
 and asserts the live dispatch produces a structurally-equivalent envelope:
 same skill name, same status, same set of body keys, same warning /
 repair-command counts. The harness is opt-in via the ``eval`` pytest
 marker — default ``uv run pytest`` skips the cluster; the regression run is
-``uv run pytest -m eval``.
+``uv run pytest -m eval``, which the ``skill-eval`` CI job runs.
 
-The shape test (``test_skill_envelope_matches_golden``) is the v0.2
-guard-rail that protects the envelope contract across model/version
-changes. The score test (``test_skill_envelope_score_meets_threshold``)
-adds a P13-W03 / B042 weighted-score regression: each fixture carries a
-per-skill ``eval_score_threshold`` (default ``0.85``) that the live
-envelope must clear via :func:`eawf.observability.eval.score_envelope`.
+The cases are derived from the closed skill catalog: every catalog skill with
+an engine implementation is a case, so a skill that joins the catalog without
+a golden fails here, and a golden left behind by a retired skill fails the
+coverage test. Scoring is a pure structural comparison — no model is called.
+
+The shape test (``test_skill_envelope_matches_golden``) pins the envelope
+contract exactly. The score test (``test_skill_envelope_score_meets_threshold``)
+checks the weighted :func:`eawf.observability.eval.score_envelope` total against
+the fixture's ``eval_score_threshold`` (default ``0.85``).
 """
 
 from __future__ import annotations
@@ -23,26 +26,28 @@ from typing import cast
 
 import pytest
 
+import eawf.workflow.skills._bootstrap  # noqa: F401  registers every engine skill
 from eawf.observability.eval import score_envelope
-from eawf.workflow.skills.audit import AuditSkill
+from eawf.workflow.skills.catalog import SKILL_CATALOG
 from eawf.workflow.skills.engine import Skill, SkillContext, run_skill
-from eawf.workflow.skills.polish import PolishSkill
-from eawf.workflow.skills.prep import PrepSkill
-from eawf.workflow.skills.research import ResearchSkill
-from eawf.workflow.skills.review import ReviewSkill
-from eawf.workflow.skills.ship import ShipSkill
+from eawf.workflow.skills.registry import lookup
 
 _GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
 
 
-_SKILL_CASES: tuple[tuple[str, type[Skill]], ...] = (
-    ("research", ResearchSkill),
-    ("prep", PrepSkill),
-    ("audit", AuditSkill),
-    ("ship", ShipSkill),
-    ("review", ReviewSkill),
-    ("polish", PolishSkill),
-)
+def _catalog_cases() -> tuple[tuple[str, type[Skill]], ...]:
+    # Catalog skills without an engine class are rendered pages only; they
+    # emit no envelope, so there is nothing to compare.
+    cases: list[tuple[str, type[Skill]]] = []
+    for entry in SKILL_CATALOG.entries:
+        cls = lookup(entry.invocation_name)
+        if cls is not None:
+            cases.append((entry.skill_id, cls))
+    return tuple(cases)
+
+
+_SKILL_CASES = _catalog_cases()
+_CASE_IDS = [s for s, _ in _SKILL_CASES]
 
 
 def _load_golden(slug: str) -> dict[str, object]:
@@ -50,7 +55,16 @@ def _load_golden(slug: str) -> dict[str, object]:
 
 
 @pytest.mark.eval
-@pytest.mark.parametrize("slug,skill_cls", _SKILL_CASES, ids=[s for s, _ in _SKILL_CASES])
+def test_skill_eval_cases_cover_catalog_goldens() -> None:
+    """Goldens exist for exactly the catalog skills with an engine class."""
+    golden_slugs = sorted(p.stem for p in _GOLDEN_DIR.glob("*.json"))
+    assert golden_slugs == sorted(_CASE_IDS)
+    retired = {row.skill_id for row in SKILL_CATALOG.retired}
+    assert not retired & set(golden_slugs)
+
+
+@pytest.mark.eval
+@pytest.mark.parametrize("slug,skill_cls", _SKILL_CASES, ids=_CASE_IDS)
 def test_skill_envelope_matches_golden(
     slug: str,
     skill_cls: type[Skill],
@@ -86,7 +100,7 @@ def test_skill_envelope_matches_golden(
 
 
 @pytest.mark.eval
-@pytest.mark.parametrize("slug,skill_cls", _SKILL_CASES, ids=[s for s, _ in _SKILL_CASES])
+@pytest.mark.parametrize("slug,skill_cls", _SKILL_CASES, ids=_CASE_IDS)
 def test_skill_envelope_score_meets_threshold(
     slug: str,
     skill_cls: type[Skill],
@@ -95,11 +109,9 @@ def test_skill_envelope_score_meets_threshold(
 ) -> None:
     """Live envelope scores at or above the golden's ``eval_score_threshold``.
 
-    Companion to the shape guard above. The score combines six normalised
-    dimensions (status, body_keys, warnings ±1, repair_commands ±1,
-    evidence_refs presence, state_mutation kinds) into a 0..1 total; the
-    default pass floor is 0.85 with per-fixture overrides supported via
-    the ``eval_score_threshold`` field.
+    The score combines six normalised dimensions (status, body_keys,
+    warnings ±1, repair_commands ±1, evidence_refs presence,
+    state_mutation kinds) into a 0..1 total.
     """
     golden = _load_golden(slug)
     env = run_skill(skill_cls(), eval_ctx)
@@ -108,3 +120,20 @@ def test_skill_envelope_score_meets_threshold(
     assert score.total >= threshold, (
         f"score {score.total:.3f} < threshold {threshold:.3f} for {slug}: per_dim={score.per_dim}"
     )
+
+
+@pytest.mark.eval
+@pytest.mark.parametrize("slug,skill_cls", _SKILL_CASES, ids=_CASE_IDS)
+def test_skill_envelope_score_drifted_golden_below_threshold(
+    slug: str,
+    skill_cls: type[Skill],
+    eval_state_dir: Path,
+    eval_ctx: SkillContext,
+) -> None:
+    """A golden whose body keys drift by one key scores below its threshold."""
+    golden = _load_golden(slug)
+    drifted = {**golden, "body_keys": [*cast(list[str], golden["body_keys"]), "drifted_key"]}
+    env = run_skill(skill_cls(), eval_ctx)
+    score = score_envelope(env, drifted)
+    assert score.per_dim["body_keys"] == pytest.approx(0.0)
+    assert score.total < float(golden.get("eval_score_threshold", 0.85))  # type: ignore[arg-type]

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from eawf.runtime.runtimes.claude.plugin_install import _render_skill
 from eawf.surfaces.render.skills import SKILL_REGISTRY, render_skill_md_from_spec
+from eawf.workflow.skills.catalog import shipped_skill_specs
 from eawf.workflow.skills.discovery import reconcile_skills
 
 
@@ -60,7 +61,7 @@ def test_mockup_body_documents_advisory_contract() -> None:
 
 
 def _render_clean_tree(root: Path) -> None:
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = root / spec.skill_name
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(_render_skill(spec), encoding="utf-8")

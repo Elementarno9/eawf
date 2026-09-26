@@ -114,7 +114,8 @@ from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.platform.scrub.scan import rewrite_text
 from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
+from eawf.runtime.budget.policy import BudgetConfig
+from eawf.runtime.budget.service import load_budget_config
 from eawf.runtime.daemon.dispatch_runner import (
     DispatchResult,
     DispatchTokens,
@@ -825,16 +826,9 @@ def _preflight_spawn_model(
     )
 
 
-def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
-    """Resolve ``flow.budget.enforce`` for the repo that owns ``state_path``."""
-    repo = state_path.parent.parent
-    merged, _sources = merge_config(workspace=repo, repo=repo)
-    flow = merged.get("flow")
-    budget = flow.get("budget") if isinstance(flow, dict) else None
-    value = budget.get("enforce", DEFAULT_ENFORCE) if isinstance(budget, dict) else DEFAULT_ENFORCE
-    if value not in ("soft", "hard"):
-        raise ValueError(f"invalid flow.budget.enforce: {value!r}")
-    return cast(EnforceMode, value)
+def _resolve_budget_config(state_path: Path) -> BudgetConfig:
+    """Resolve the validated ``flow.budget`` table for the repo that owns ``state_path``."""
+    return load_budget_config(state_path.parent.parent)
 
 
 def _resolve_config_runtime_preference(state_path: Path) -> list[str]:
@@ -2133,7 +2127,7 @@ async def _spawn_and_dispatch(
         session_scope_id=binding.scope_id,
         session_started_at=binding.started_at,
     )
-    enforce = _resolve_budget_enforce(state_path)
+    budget = _resolve_budget_config(state_path)
 
     # 8. Drive the runner with the registered session id + the validated body
     # so the role-specific ``agent_end`` emit persists the agent's own outcome
@@ -2155,7 +2149,7 @@ async def _spawn_and_dispatch(
         session_id=session_id,
         report_body=report_body,
         pgid=pid,
-        enforce=enforce,
+        budget=budget,
         # The spawned agent's OWN captured answer text feeds the W08 stdout
         # producer so the live spawn emits an ``agent.output`` event the
         # agent-watch tail renders -- without this the producer is wired into
@@ -2164,7 +2158,7 @@ async def _spawn_and_dispatch(
     )
     logger.info(
         f"_spawn_and_dispatch wave={wave_id} runtime={serving_runtime!r} pid={pid} "
-        f"session={session_id!r} attempt={attempt} enforce={enforce} "
+        f"session={session_id!r} attempt={attempt} enforce={budget.enforce} "
         f"cost_usd={metered.cost_usd} report_id={result.report_id!r} terminated={result.terminated}"
     )
     return DispatchPlan(

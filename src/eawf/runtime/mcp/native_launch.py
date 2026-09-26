@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 
+from eawf.runtime.mcp.grant import assert_capsule_within_intersection
 from eawf.runtime.mcp.semantic_stdio import (
     RunServerBinding,
     RunServerConfig,
@@ -73,12 +74,18 @@ def native_run_server_config(request: NativeLaunchRequest, *, runtime_id: str) -
         The rendered, already-materialized configuration.
 
     Raises:
-        RuntimeSpawnError: No configuration could be rendered for
-            *runtime_id*, or the configuration that was rendered does not
-            register the Run's server, so starting the child on it would
-            run without the semantic tool catalog rather than refuse.
+        RuntimeSpawnError: The capsule reaches a tool outside the
+            intersection of the Run's role, task and certification; no
+            configuration could be rendered for *runtime_id*; or the
+            configuration that was rendered does not register the Run's
+            server, so starting the child on it would run without the
+            semantic tool catalog rather than refuse.
     """
     spec = request.spec
+    try:
+        assert_capsule_within_intersection(spec=spec, capsule=request.capsule)
+    except ValueError as error:
+        raise RuntimeSpawnError(str(error)) from error
     artifact_dir = request.workspace / MCP_ARTIFACT_DIRNAME
     artifact_dir.mkdir(parents=True, exist_ok=True)
     capsule_path = artifact_dir / "capsule.json"

@@ -284,10 +284,13 @@ def test_new_clauses_land_on_all_four_rendered_surfaces() -> None:
     repo = Path(__file__).resolve().parents[2]
     golden = repo / "tests" / "golden"
 
-    skill_md = (golden / "plugin_install" / "claude" / "skills" / "prep" / "SKILL.md").read_text(
+    # /prep is retired from the shipped skill bundle; the dispatch-discipline
+    # clause now reaches the operator through the rendered operator agent.
+    operator_agent = (golden / "plugin_install" / "claude" / "agents" / "operator.md").read_text(
         encoding="utf-8"
     )
-    assert "dispatch resume" in skill_md  # W40 dispatch-discipline clause
+    assert "dispatch resume" in operator_agent
+    assert not (golden / "plugin_install" / "claude" / "skills" / "prep").exists()
 
     # The executor's readiness and evidence obligations are embedded in the
     # Claude agent and the Codex agent alike.

@@ -40,6 +40,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
+from eawf.observability.telemetry.contracts import check_metric_contracts
 from eawf.observability.telemetry.models import (
     TelemetryDispatchCost,
     TelemetryIncident,
@@ -158,6 +159,9 @@ def build_snapshot(store: AbstractMetricsStore, *, scope: str) -> MetricsSnapsho
 
     Returns:
         A :class:`MetricsSnapshot` of metric families in declaration order.
+
+    Raises:
+        UndeclaredMetricError: A family has no declared telemetry contract.
     """
     sessions = [
         row
@@ -185,6 +189,7 @@ def build_snapshot(store: AbstractMetricsStore, *, scope: str) -> MetricsSnapsho
         _run_tokens_family(runs, scope=scope),
         _run_cost_family(runs, scope=scope),
     ]
+    check_metric_contracts(family.name for family in families)
     snapshot = MetricsSnapshot(scope=scope, families=tuple(families))
     logger.info(
         f"build_snapshot scope={scope!r} sessions={len(sessions)} "

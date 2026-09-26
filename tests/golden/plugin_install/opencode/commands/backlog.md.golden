@@ -1,0 +1,75 @@
+---
+description: "Add, prioritize, defer, drop or propose promotion of draft Tasks."
+---
+
+# /backlog
+
+Add, prioritize, defer, drop or propose promotion of draft Tasks.
+
+## 1. Authority
+
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Operator-only actions: `drop`. An agent that reaches one prepares a PendingAction and stops; it never chooses the recommended option itself.
+- Effects: Task-draft and PlanRevision proposal RPCs.
+- Allowed RPCs: `read_entity`, `domain.task.create_draft`, `domain.task.set_priority`, `domain.task.defer`, `domain.task.drop`, `planning.plan_revision.propose`. Any other RPC is denied before it reaches a handler.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+A draft Task is a real Task in DRAFT: it carries a key, a one-line intent, a priority, and a due scope — the Milestone, Batch, or Release by which it must be defined and executed. It carries no Batch, no criteria, and no ownership until it is promoted. The queue is the draft Tasks of the scope this invocation names.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+You maintain the draft Task queue for one scope.
+
+```text
+/backlog <add|list|prioritize|defer|drop|promote> [<task-ref>] [--intent <text>] [--priority <critical|high|normal|low>] [--due-scope <urn>] [--to-batch <ref>] [--criterion <text>...] [--owner <path-selector>...] [--reason <text>] [--limit <N>] [--dry-run]
+```
+
+Select exactly one action: `add`, `list`, `prioritize`, `defer`, `drop`, `promote`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Read the queue and the scopes it references. An item whose due scope has passed is overdue and is surfaced first.
+2. Add, re-prioritize, defer, or drop as instructed. Deferral and drop each require a durable reason; the reason is what makes the decision recoverable later.
+3. Promotion is a plan act, not a queue act. To promote, the Task needs criteria, ownership claims, and a Batch, and it goes through a PlanRevision. If those are missing, say what is missing rather than promoting a shell.
+4. Report the queue's shape: counts by priority, what is overdue, what has been deferred more than once. A row deferred repeatedly is a decision nobody is making, and naming it is more useful than carrying it.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `plan`. They bind what you do; they grant no capability.
+
+- must: **Give every activity a non-empty rule set.** Keep every activity governed by at least one rule; an activity whose effective rule set is empty is a defect, never a statement that no rules apply.
+- must: **Scope conduct rules to the closed activity set.** Scope an activity-bound rule only to research, plan, design, implement, test, review, integrate, commit, release, deploy or operate; a rule scoped to any other activity is refused with the offending value named.
+- must: **Block on a question only when proceeding is unsafe.** Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the completed work useless if the assumption proved wrong; resolve every other uncertainty by assumption plus disclosure.
+- must: **Dispatch independent units of work together.** Dispatch independent units of work together rather than in sequence, where neither consumes the other's output; a sequential dispatch of independent units is a recorded miss.
+- must: **Evaluate the practice set at each decision point.** Evaluate the applicable practice set at each decision point rather than recalling it: at least before dispatching work, before presenting a choice to the operator and before emitting a terminal report.
+- must: **Expand every abbreviation on first use.** Expand every abbreviation, internal code and lifecycle identifier on first use in an operator-facing surface; write for a competent newcomer, not for the author of the state.
+- must: **State the concern once and finish the task.** When a task looks ill-specified, state the concern once, record the assumption you proceed under and complete the work; do not halt and do not silently substitute your own reading.
+- must: **Finish independent work before raising a question.** Before raising a question, complete all work that does not depend on its answer, and raise it only where the dependent work begins.
+- must: **Recommend the option best for the long term.** Mark the option best for the long term as recommended and state why; where the repository configures a value the choice would override, show the configured value beside the recommendation.
+- must: **Decide instead of asking when every option is the same work.** Do not ask a question with no consequence: where every option leads to the same work, select one, state the selection and proceed.
+- must: **Retrieve the current practice set in one step.** Retrieve the practice set for the current activity with one query at each decision point instead of remembering which practices apply.
+- must: **Record a scope delta before widening the work.** Record a typed scope delta against the task before any widening work begins; an unrecorded widening fails review even when the added work is correct.
+- must: **Surface a decision as a typed choice with named options.** Surface a decision as a typed choice with named options, never as free text, and give each option a plain-prose description of what happens if it is selected.
+- should: **Show a concrete rendering when options differ in structure.** Where options differ structurally, give each a concrete rendering of its outcome, such as a layout, a diagram or a worked example, rather than a description of the difference.
+
+## 5. Constraints
+
+- A draft is never dispatchable. Every dispatch guard requires a planned Task.
+- Dropping is terminal and keeps the row readable, so the decision not to do something stays recoverable.
+- Do not invent criteria to make a draft promotable. Missing criteria mean the work is not understood yet.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+The queue after your changes, plus the overdue set and the repeatedly-deferred set called out by name.
+
+The report validates against `BacklogSkillReport`, and its terminal outcome is exactly one of `listed`, `added`, `updated`, `deferred`, `dropped`, `promotion_proposed`, `blocked`. Prose in the report is explanation, never the result.
+
+<!-- argument hint: <add|list|prioritize|defer|drop|promote> [<task-ref>] [--intent <text>] [--priority <critical|high|normal|low>] [--due-scope <urn>] [--to-batch <ref>] [--criterion <text>...] [--owner <path-selector>...] [--reason <text>] [--limit <N>] [--dry-run] -->
+ARGUMENTS: $ARGUMENTS

@@ -1,30 +1,73 @@
 ---
 name: mockup
-description: "Author 2-4 UI mockups as ASCII layouts and surface them as side-by-side AskUserQuestion option previews to compare."
-argument-hint: "<surface-slug>"
+description: "Build and compare operator-visible design options."
+argument-hint: "<surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]"
 user-invocable: true
 disable-model-invocation: false
 ---
 
 # /mockup
 
-## Canonical algorithm
+Build and compare operator-visible design options.
 
-1. Take the UI surface under design and the operator's intent (the fields to show, the terminal width budget, the priority elements).
-2. Author 2-4 concrete mockup variants as ASCII layouts. Use plain ASCII box characters (`+`, `-`, `|`) so the render stays lint-clean; do not use Unicode box-drawing glyphs.
-3. Surface the variants as `UserQuestionOption.preview` strings on a single `UserQuestion` so the operator compares the layouts side-by-side and picks one. Each option's `preview` carries that variant's full multi-line layout; the `label` is the variant name.
-4. Stop at the mockup. `/mockup` is advisory: it produces layouts and the comparison prompt, it does not write files or mutate state.
+## 1. Authority
 
-## Pre-flight checklist
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Effects: Inline rendering or proposal-local assets only.
+- Allowed RPCs: `ask_operator`. Any other RPC is denied before it reaches a handler.
+- Canonical state: never mutated by this skill.
+- Local write root: `.ea/local/mockups`; nothing is written outside it.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
-- [ ] Read-only / advisory -- no state mutations, no file writes.
-- [ ] 2-4 variants only (the `AskUserQuestion` cap; single-select).
-- [ ] ASCII-only box art so the preview renders cleanly everywhere.
+## 2. Context
 
-## Decision surfaces
+One operator-visible surface, named by `<surface...>`, and the decision question it serves.
 
-The variant choice is the one operator-facing decision. Surface it through `AskUserQuestion`, one option per variant, with the layout in each option's `preview` box -- never bounce the operator to free-text.
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
 
-## Output contract
+## 3. Task
 
-Skill envelope whose body conforms to `MockupBody`: the authored `variants` plus the optional `UserQuestion` whose options carry the side-by-side `preview` layouts.
+Create two to four genuinely distinct and comparable options for one operator choice.
+
+```text
+/mockup <surface...> [--question <text>] [--option <text>...] [--count <2..4>] [--format <ascii|html|image>] [--viewport <spec>...] [--state <name>...] [--compare <axis>...] [--output <inline|local>] [--local-root <path-under-.ea/local/mockups>] [--budget <spec>]
+```
+
+## 4. Method
+
+1. Normalize one decision question, brief, data fixture, viewport, states, journeys, and constraints across every option.
+2. Render each option at equal fidelity. Show the primary journey and relevant loading, empty, error, and permission states; label omissions.
+3. For local HTML or code, verify rendering and interactions. For images or ASCII, state the interaction limit explicitly.
+4. Compare options on the declared axes, including strengths, costs, risks, accessibility, and best-fit context. Polish cannot be used to bias one choice.
+5. Present stable option keys through Attention when a choice is requested. Recommend the durable best fit but never choose for the operator.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `design`. They bind what you do; they grant no capability.
+
+- must: **Give every activity a non-empty rule set.** Keep every activity governed by at least one rule; an activity whose effective rule set is empty is a defect, never a statement that no rules apply.
+- must: **Scope conduct rules to the closed activity set.** Scope an activity-bound rule only to research, plan, design, implement, test, review, integrate, commit, release, deploy or operate; a rule scoped to any other activity is refused with the offending value named.
+- must: **Block on a question only when proceeding is unsafe.** Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the completed work useless if the assumption proved wrong; resolve every other uncertainty by assumption plus disclosure.
+- must: **Expand every abbreviation on first use.** Expand every abbreviation, internal code and lifecycle identifier on first use in an operator-facing surface; write for a competent newcomer, not for the author of the state.
+- must: **State the concern once and finish the task.** When a task looks ill-specified, state the concern once, record the assumption you proceed under and complete the work; do not halt and do not silently substitute your own reading.
+- must: **Recommend the option best for the long term.** Mark the option best for the long term as recommended and state why; where the repository configures a value the choice would override, show the configured value beside the recommendation.
+- must: **Deliver every must rule by a deterministic vehicle.** Deliver every must rule through a certified deterministic vehicle, never through a retrieval command a model may decline to run; a retrieval command delivers only should and information rules.
+- must: **Decide instead of asking when every option is the same work.** Do not ask a question with no consequence: where every option leads to the same work, select one, state the selection and proceed.
+- must: **Reject abstraction serving a use site that does not exist.** Reject an abstraction introduced for a use site that does not yet exist, whatever its quality: name the missing caller, and have the author supply one or remove the abstraction.
+- must: **Give every practice rule an observable trigger.** Declare a trigger for every practice rule: an observable condition that marks the moment it applies, distinct from its activity scope.
+- must: **State each claim once across rendered prose.** Hold prose to the same budget as code: a rendered artifact states its claim once, and restating a requirement in a second file is duplicate ownership, not emphasis.
+- must: **Surface a decision as a typed choice with named options.** Surface a decision as a typed choice with named options, never as free text, and give each option a plain-prose description of what happens if it is selected.
+- must: **Verify behavioural claims against the source tree.** Verify behavioural, quantitative and schema claims against the implementation before asserting them. Where a design document and the source disagree, quote the source and report the drift.
+- should: **Show a concrete rendering when options differ in structure.** Where options differ structurally, give each a concrete rendering of its outcome, such as a layout, a diagram or a worked example, rather than a description of the difference.
+- should: **Fix a high-miss practice by where it surfaces.** Treat a practice rule with a high lifetime miss rate as a surfacing defect: bind it to a narrower trigger or an earlier decision point, or rewrite or retire it; never restate it more emphatically.
+
+## 5. Constraints
+
+- Stop on a missing decision question, incomparable constraints, inaccessible output, or need for product mutation outside a Task.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one MockupReport with artifact references, comparison matrix, state/journey coverage, recommendation, Attention reference where needed, and terminal outcome.
+
+The report validates against `MockupReport`, and its terminal outcome is exactly one of `presented`, `selected`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result.

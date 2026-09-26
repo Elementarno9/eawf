@@ -1,0 +1,16 @@
+{
+  "body_keys": [
+    "kind",
+    "name",
+    "reason",
+    "tier",
+    "verb"
+  ],
+  "eval_score_threshold": 0.85,
+  "evidence_refs_present": false,
+  "repair_commands_count": 0,
+  "skill": "/memory",
+  "state_mutation_kinds": [],
+  "status": "needs_user",
+  "warnings_count": 2
+}

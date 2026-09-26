@@ -35,14 +35,19 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, Self
+from typing import Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 
 __all__ = [
+    "DURATION_LABELS",
+    "OTHER_LABEL",
+    "DurationKind",
     "EndMarker",
+    "ObservedDuration",
+    "ObservedSession",
     "PriceSourceKind",
     "RuntimeErrorClass",
     "TelemetryCompaction",
@@ -410,6 +415,184 @@ class TelemetryDispatchCost(BaseModel):
             price_source=self.price_source,
             rate_table_version=self.rate_table_version,
         )
+        return self
+
+
+class DurationKind(StrEnum):
+    """The transcript block kinds whose measured durations are observed.
+
+    Values:
+        TOOL_CALL: Any tool invocation, from its request to its result.
+        COMMAND: A shell tool invocation, labelled by command family.
+        SUBAGENT: A delegated child agent, labelled by delegation purpose.
+    """
+
+    TOOL_CALL = "tool_call"
+    COMMAND = "command"
+    SUBAGENT = "subagent"
+
+
+OTHER_LABEL: Final[str] = "other"
+"""The fallback every duration classifier emits for a name outside its vocabulary."""
+
+DURATION_LABELS: Final[dict[DurationKind, frozenset[str]]] = {
+    DurationKind.TOOL_CALL: frozenset(
+        {
+            "Agent",
+            "Bash",
+            "Edit",
+            "Glob",
+            "Grep",
+            "NotebookEdit",
+            "Read",
+            "Skill",
+            "Task",
+            "TodoWrite",
+            "WebFetch",
+            "WebSearch",
+            "Write",
+            "mcp",
+            OTHER_LABEL,
+        }
+    ),
+    DurationKind.COMMAND: frozenset(
+        {
+            "cat",
+            "eawf",
+            "find",
+            "gh",
+            "git",
+            "grep",
+            "just",
+            "ls",
+            "make",
+            "npm",
+            "pytest",
+            "python",
+            "rg",
+            "sed",
+            "uv",
+            OTHER_LABEL,
+        }
+    ),
+    DurationKind.SUBAGENT: frozenset({"Explore", "Plan", "general-purpose", OTHER_LABEL}),
+}
+"""Closed label vocabulary per duration kind.
+
+A label is persisted into a local store, so it must never carry transcript
+text: a command's first token can come from a heredoc body. Only names in
+this table are written; anything else becomes :data:`OTHER_LABEL`.
+"""
+
+
+class ObservedSession(BaseModel):
+    """One vendor runtime session swept from local session history.
+
+    Observed rows have no Run subject: the key is the hashed vendor session
+    reference plus the runtime. They live only in the gitignored telemetry
+    cache and never enter a committed artifact.
+
+    Attributes:
+        vendor_session_ref: Hashed vendor session id (``vsid-`` digest).
+        runtime: Runtime whose history the session came from.
+        project_id: Scope label of the project the history belongs to.
+        model: First model the session billed against, or ``None``.
+        started_at: Earliest record timestamp.
+        ended_at: Latest record timestamp.
+        duration_ms: Wall-clock span between the two, or ``None``.
+        turn_count: Number of distinct billed assistant messages.
+        input_tokens: Non-cached input tokens.
+        output_tokens: Output tokens, reasoning included.
+        cache_read_tokens: Prompt-cache read tokens.
+        cache_write_tokens: Prompt-cache write tokens.
+        reasoning_tokens: Reasoning slice of output, or ``None`` when the
+            runtime reports no reasoning counter.
+        total_tokens: Input + output + cache-read + cache-write.
+        cost_usd: Priced cost in USD.
+        price_source: Provenance of ``cost_usd``.
+        rate_table_version: Rate-table revision behind a list-reconstructed
+            cost.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vendor_session_ref: str = Field(pattern=r"^vsid-[0-9a-f]{32}$")
+    runtime: RuntimeName
+    project_id: str
+    model: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    duration_ms: int | None = Field(default=None, ge=0)
+    turn_count: int = Field(default=0, ge=0)
+    input_tokens: int = Field(default=0, ge=0)
+    output_tokens: int = Field(default=0, ge=0)
+    cache_read_tokens: int = Field(default=0, ge=0)
+    cache_write_tokens: int = Field(default=0, ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
+    total_tokens: int = Field(ge=0)
+    cost_usd: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    price_source: PriceSourceKind
+    rate_table_version: str | None = None
+
+    @model_validator(mode="after")
+    def _usage_reconciles(self) -> Self:
+        """Enforce the token-total identity and the price-source contract.
+
+        Raises:
+            ValueError: Propagated from :func:`check_token_identity` or
+                :func:`check_price_source`.
+        """
+        check_token_identity(
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
+            cache_read_tokens=self.cache_read_tokens,
+            cache_write_tokens=self.cache_write_tokens,
+            reasoning_tokens=self.reasoning_tokens,
+            total_tokens=self.total_tokens,
+        )
+        check_price_source(
+            cost_usd=self.cost_usd,
+            price_source=self.price_source,
+            rate_table_version=self.rate_table_version,
+        )
+        return self
+
+
+class ObservedDuration(BaseModel):
+    """Measured durations of one block kind + label within one observed session.
+
+    Attributes:
+        vendor_session_ref: Hashed vendor session id of the owning session.
+        runtime: Runtime whose history the session came from.
+        kind: The transcript block kind measured.
+        label: Closed-vocabulary label within *kind*.
+        count: Number of completed blocks measured.
+        total_ms: Summed block duration.
+        max_ms: Longest single block.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    vendor_session_ref: str = Field(pattern=r"^vsid-[0-9a-f]{32}$")
+    runtime: RuntimeName
+    kind: DurationKind
+    label: str
+    count: int = Field(ge=1)
+    total_ms: int = Field(ge=0)
+    max_ms: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _label_in_vocabulary(self) -> Self:
+        """Refuse a label outside the kind's closed vocabulary.
+
+        Raises:
+            ValueError: When *label* is not in :data:`DURATION_LABELS` for
+                *kind*, or *max_ms* exceeds *total_ms*.
+        """
+        if self.label not in DURATION_LABELS[self.kind]:
+            raise ValueError(f"label {self.label!r} is outside the {self.kind.value} vocabulary")
+        if self.max_ms > self.total_ms:
+            raise ValueError(f"max_ms {self.max_ms} exceeds total_ms {self.total_ms}")
         return self
 
 

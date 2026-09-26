@@ -15,11 +15,11 @@ sibling :mod:`eawf.surfaces.render.skills.render`; the package ``__init__``
 re-exports both halves so every historical
 ``from eawf.surfaces.render.skills import ...`` keeps resolving unchanged.
 
-The ``SKILL_REGISTRY`` carries the operator-facing workflow skills plus
-a tail of model-only code-quality playbooks (``user_invocable=False`` —
-hidden from the slash menu but reachable by the model). It is consumed
-by :mod:`eawf.runtime.runtimes.claude.plugin_install` to produce the
-deterministic plugin tree the golden test pins.
+The ``SKILL_REGISTRY`` carries the pre-catalog workflow skills plus a
+tail of model-only code-quality playbooks. No packager ships it: every
+shipped page is rendered from the closed skill catalog through the prompt
+chassis in :mod:`eawf.workflow.skills.bodies.chassis`, so these bodies are
+a store kept only until their removal is decided.
 """
 
 from __future__ import annotations

@@ -27,7 +27,7 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.runtime.mcp.native_launch import native_run_server_config
+from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME, native_run_server_config
 from eawf.runtime.runtimes.adapter import (
     ConcurrentSpawnCapError,
     ErrorClass,
@@ -43,6 +43,10 @@ from eawf.runtime.runtimes.adapter import (
     release_spawn_slot,
 )
 from eawf.runtime.runtimes.cache_control import inject_cache_control
+from eawf.runtime.runtimes.claude.managed_run import (
+    ManagedClaudeIsolation,
+    prepare_managed_isolation,
+)
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.runtime.runtimes.selector import runtime_supports
 from eawf.runtime.runtimes.stream_json import terminal_result_envelope
@@ -654,6 +658,7 @@ class ClaudeAdapter:
         on_chunk: Callable[[str], Awaitable[None]] | None = None,
         session: str = "",
         enforcement_sink: EnforcementSink | None = None,
+        isolation: ManagedClaudeIsolation | None = None,
     ) -> SpawnResult:
         """Spawn a live ``claude -p`` subprocess and collect its result.
 
@@ -746,6 +751,12 @@ class ClaudeAdapter:
                 event this spawn records.
             enforcement_sink: The sink each enforcement decision is
                 persisted through; ``None`` only logs.
+            isolation: The clean configuration home, instruction
+                suppression and settings-source flags of a managed Run.
+                Its flags precede *extra_args* and its variables are laid
+                over the scrubbed environment, so the child never reads
+                the operator's configuration home. ``None`` spawns against
+                whatever configuration home the scrubbed environment names.
 
         Returns:
             The validated :class:`SpawnResult` for the completed call.
@@ -797,6 +808,7 @@ class ClaudeAdapter:
             "--model",
             model,
             *deny_flag,
+            *(isolation.argv_flags if isolation is not None else ()),
             *extra_args,
         ]
         # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the
@@ -812,6 +824,8 @@ class ClaudeAdapter:
         # credential-bearing families were dropped) onto the denial timeline.
         child_env = build_child_env(self.id, extra_path_dir=resolve_binary_dir(self.cli_binary))
         self._record_env_scrub(child_env, session=session, sink=enforcement_sink)
+        if isolation is not None:
+            child_env.update(isolation.env)
 
         # The concurrent-spawn cap is the LAST gate before the fork so the
         # slot is held only for the real subprocess lifetime; it is released
@@ -980,7 +994,10 @@ class ClaudeNativeLauncher:
     The launcher reads policy from the spec and from nothing else: the
     model, the wall ceiling, the deny list and the working directory are
     all compiled values, so a layered document cannot reach the child
-    through this seam.
+    through this seam. Nor can the operator's own configuration: the child
+    is started against a clean configuration home under the Run's root
+    with instruction discovery and settings files switched off (see
+    :mod:`~eawf.runtime.runtimes.claude.managed_run`).
 
     There is no vendor SDK behind the CLI, so a launch is one headless
     turn: the child is started, the turn is awaited, and the worker's
@@ -1031,6 +1048,9 @@ class ClaudeNativeLauncher:
         """
         spec = request.spec
         server_config = native_run_server_config(request, runtime_id=self._adapter.id)
+        isolation = prepare_managed_isolation(
+            request.workspace / MCP_ARTIFACT_DIRNAME, operator_env=os.environ
+        )
         pgid_box: list[int | None] = [None]
         relayed_terminated = False
         usage_accumulator = _ClaudeUsageAccumulator()
@@ -1068,6 +1088,7 @@ class ClaudeNativeLauncher:
             timeout=float(spec.limits.wall_seconds),
             on_pgid=_capture_pgid if request.usage_sink is not None else None,
             on_chunk=_relay_usage if request.usage_sink is not None else None,
+            isolation=isolation,
         )
         return NativeLaunchOutcome(
             provider_session_ref=result.session_id,

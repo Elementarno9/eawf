@@ -15,6 +15,9 @@ Public surface:
 - :func:`resolve_theme` — pick a theme by name with fallback to ``default``.
 - :func:`render_segments` — apply the theme to a list of segments,
   return the joined line.
+- :func:`budget_segment` / :func:`budget_unavailable_segment` — the active
+  scope's spend against its one ceiling, and the marker naming why it
+  cannot be shown.
 
 Theme schema is documented in ``src/eawf/platform/templates/themes.yaml``. The schema
 is intentionally permissive — unknown segment/status/module keys silently
@@ -34,6 +37,7 @@ from typing import Any, Literal
 import yaml
 
 from eawf.surfaces.render.bars import DEFAULT_WIDTH, render_block_bar
+from eawf.surfaces.render.units import format_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -371,6 +375,62 @@ def rate_window_segment(ratio: float, *, width: int = DEFAULT_WIDTH) -> Statusli
     return StatuslineSegment(module=_RATE_WINDOW_MODULE, text=render_usage_bar(ratio, width=width))
 
 
+_BUDGET_MODULE: str = "budget"
+"""Stable module id for the spend-against-ceiling segment."""
+
+_LIMIT_NOTICE_MARK: str = "!limit"
+"""Suffix shown while the scope's limit-reached notice is open."""
+
+
+def budget_segment(*, spent: int, limit: int, notice_open: bool) -> StatuslineSegment:
+    """Build the segment showing *spent* against the scope's one ceiling *limit*.
+
+    The spend stays readable continuously; only the open limit-reached
+    notice changes the segment's status, because that notice is the event,
+    and a fraction short of the ceiling is not.
+
+    Args:
+        spent: Tokens consumed by the scope so far.
+        limit: The scope's one ceiling, in tokens.
+        notice_open: Whether the scope's limit-reached notice is open.
+
+    Returns:
+        A ``budget:<spent>/<limit>`` segment, suffixed ``!limit`` with status
+        ``warn`` while the notice is open.
+
+    Raises:
+        ValueError: *spent* or *limit* is negative.
+    """
+    if spent < 0 or limit < 0:
+        raise ValueError(f"spent and limit must be non-negative; got {spent}/{limit}")
+    text = f"budget:{format_tokens(spent)}/{format_tokens(limit)}"
+    if notice_open:
+        return StatuslineSegment(
+            module=_BUDGET_MODULE, text=f"{text} {_LIMIT_NOTICE_MARK}", status="warn"
+        )
+    return StatuslineSegment(module=_BUDGET_MODULE, text=text)
+
+
+def budget_unavailable_segment(reason: str) -> StatuslineSegment:
+    """Build the budget segment for a scope whose spend or ceiling is unknown.
+
+    No ratio is drawn across an unknown side, so the segment names why
+    instead of showing a number it cannot source.
+
+    Args:
+        reason: A short, single-token reason such as ``no-budget``.
+
+    Returns:
+        A ``budget:n/a(<reason>)`` segment with status ``missing``.
+
+    Raises:
+        ValueError: *reason* is empty or contains whitespace.
+    """
+    if not reason or any(char.isspace() for char in reason):
+        raise ValueError(f"reason must be one non-empty token; got {reason!r}")
+    return StatuslineSegment(module=_BUDGET_MODULE, text=f"budget:n/a({reason})", status="missing")
+
+
 def terminal_supports_color() -> bool:
     """Return ``True`` when the active terminal can render ANSI colour.
 
@@ -457,6 +517,8 @@ __all__ = [
     "SegmentStatus",
     "StatuslineSegment",
     "StatuslineTheme",
+    "budget_segment",
+    "budget_unavailable_segment",
     "context_usage_segment",
     "load_themes",
     "rate_window_segment",

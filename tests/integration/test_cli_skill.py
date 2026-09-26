@@ -80,15 +80,15 @@ def stub_research_skill() -> Iterator[type[Skill]]:
 
 @pytest.fixture
 def stub_failing_skill() -> Iterator[type[Skill]]:
-    """Register a stub ``/audit`` skill whose action raises.
+    """Register a stub ``/verify`` skill whose action raises.
 
     The engine catches the exception and returns ``status=failed``; the
     CLI must exit with ``VALIDATION_FAILED`` (4). The fixture displaces
-    the production ``/audit`` skill for the duration of the test.
+    the production ``/verify`` skill for the duration of the test.
     """
 
     class _StubFailingSkill(Skill):
-        name: SkillName = "/audit"
+        name: SkillName = "/verify"
 
         def probe(self, ctx: SkillContext) -> ProbeOutcome:
             return ProbeOutcome(ok=True)
@@ -96,54 +96,37 @@ def stub_failing_skill() -> Iterator[type[Skill]]:
         def action(self, ctx: SkillContext) -> SkillResult:
             raise RuntimeError("simulated audit failure")
 
-    previous = registry.lookup("/audit")
-    registry.unregister("/audit")
+    previous = registry.lookup("/verify")
+    registry.unregister("/verify")
     registry.register(_StubFailingSkill)
     try:
         yield _StubFailingSkill
     finally:
-        registry.unregister("/audit")
+        registry.unregister("/verify")
         if previous is not None:
             registry.register(previous)
 
 
 @pytest.fixture
 def stub_needs_user_skill() -> Iterator[type[Skill]]:
-    """Register a stub ``/prep`` skill that returns ``needs_user``.
+    """Register a stub ``/plan`` skill that returns ``needs_user``.
 
     The CLI must exit with ``USER_DECLINED`` (7). The fixture displaces
-    the production ``/prep`` skill for the duration of the test.
+    the production ``/plan`` skill for the duration of the test.
     """
 
     class _StubNeedsUserSkill(Skill):
-        name: SkillName = "/prep"
+        name: SkillName = "/plan"
 
         def probe(self, ctx: SkillContext) -> ProbeOutcome:
             return ProbeOutcome(ok=True)
 
         def action(self, ctx: SkillContext) -> SkillResult:
-            # Conform to ``PrepBody`` so the engine's bound body-validation
-            # gate passes; the ``needs_user`` path carries a user_question.
-            # The planning-DAG invariant requires a non-empty,
-            # reconciled DAG on a non-no_op body, so the stub carries one task
-            # and a wave that references it.
             return SkillResult(
                 status="needs_user",
                 body={
-                    "iter_id": "P00-I01",
-                    "objective": "stub prep awaiting approval",
-                    "dag": [{"task_id": "P00-I01-W01", "risk": "low"}],
-                    "waves": [
-                        {
-                            "wave_id": "P00-I01",
-                            "tasks": ["P00-I01-W01"],
-                            "worktree_policy": "auto",
-                            "estimate_eu": 1.0,
-                        }
-                    ],
-                    "approval_required": True,
                     "user_question": {
-                        "question": "Approve the prep plan?",
+                        "question": "Approve the plan?",
                         "options": [
                             {"label": "approve"},
                             {"label": "cancel"},
@@ -152,51 +135,31 @@ def stub_needs_user_skill() -> Iterator[type[Skill]]:
                 },
             )
 
-    previous = registry.lookup("/prep")
-    registry.unregister("/prep")
+    previous = registry.lookup("/plan")
+    registry.unregister("/plan")
     registry.register(_StubNeedsUserSkill)
     try:
         yield _StubNeedsUserSkill
     finally:
-        registry.unregister("/prep")
+        registry.unregister("/plan")
         if previous is not None:
             registry.register(previous)
 
 
 def test_skill_list_shows_every_canonical_name(cli_runner: CliRunner) -> None:
-    """Every canonical skill name appears in the table.
+    """Every catalog skill appears in the listing and no retired name does.
 
-    Post-W03 every canonical skill (six core + four meta) is registered
-    at import time and reports ``installed``; W26 added the six C04b
-    skills to the user-facing catalog (17 total). The "every name
-    visible" invariant the table contract promises is independent of the
-    per-skill registration state.
+    The "every name visible" invariant is independent of the per-skill
+    registration state.
     """
     result = cli_runner.invoke(app, ["skill", "list"])
     assert result.exit_code == 0, result.stdout
-    expected_names = [
-        "/research",
-        "/prep",
-        "/audit",
-        "/ship",
-        "/review",
-        "/polish",
-        "/init",
-        "/roadmap",
-        "/differentiate",
-        "/flow",
-        "/blitz",
-        "/coauthor",
-        "/memory",
-        "/agent-dispatch",
-        "/compress",
-        "/wave-spec",
-        "/security-review",
-    ]
-    for name in expected_names:
-        assert name in result.stdout, f"missing {name!r} in: {result.stdout}"
-    # Post-W03 every row reports ``installed``; ``missing`` only surfaces
-    # via the explicit-unregister fixtures in other tests.
+    from eawf.workflow.skills.catalog import SKILL_CATALOG
+
+    for entry in SKILL_CATALOG.entries:
+        assert entry.invocation_name in result.stdout, f"missing {entry.invocation_name!r}"
+    for retired in ("/prep", "/audit", "/ship", "/flow", "/blitz"):
+        assert f"  {retired} " not in result.stdout, f"retired {retired!r} still listed"
     assert "installed" in result.stdout
 
 
@@ -224,24 +187,17 @@ def test_skill_list_json_payload_carries_status_and_schema(
     payload = json.loads(result.stdout)
     assert "skills" in payload
     skills = cast(list[dict[str, object]], payload["skills"])
-    # 20 execution-backed canonical skills plus the six model-only
-    # code-quality playbooks and the four advisory design-surface skills
-    # (``/mockup``, ``/design``, ``/spike``, ``/math-explainer``). The
-    # latter ten ship as builtin SKILL.md files (so ``skill list``
-    # discovers them) but carry no execution body, so they surface with
-    # ``status="user"`` and ``body_schema=None``.
-    assert len(skills) == 30
+    # One row per catalog skill; retired skills are absent, not aliased.
+    assert len(skills) == 20
     by_name = {cast(str, s["name"]): s for s in skills}
     research = by_name["/research"]
     assert research["status"] == "installed"
     assert research["body_schema"] == "eawf.workflow.skills.bodies.research.ResearchBody"
-    # /audit is registered by W02 import-side effects.
-    assert by_name["/audit"]["status"] == "installed"
-    # Meta skills are also registered post-W03.
-    assert by_name["/flow"]["status"] == "installed"
-    assert by_name["/flow"]["body_schema"] == "eawf.workflow.skills.bodies.flow.FlowBody"
-    assert by_name["/blitz"]["status"] == "installed"
-    assert by_name["/blitz"]["body_schema"] == "eawf.workflow.skills.bodies.blitz.BlitzBody"
+    assert research["output_schema"] == "SwiftResearchReport"
+    assert by_name["/verify"]["status"] == "installed"
+    assert by_name["/accept"]["status"] == "missing"
+    assert by_name["/accept"]["body_schema"] is None
+    assert "/audit" not in by_name
 
 
 def test_skill_run_unknown_skill_returns_invalid_input(cli_runner: CliRunner) -> None:
@@ -254,10 +210,10 @@ def test_skill_run_known_but_unregistered_returns_not_found(cli_runner: CliRunne
     # /ship is a valid name; the test displaces the W02 production
     # registration to confirm the NotFound branch fires when the slot is
     # truly empty.
-    previous = registry.lookup("/ship")
-    registry.unregister("/ship")
+    previous = registry.lookup("/accept")
+    registry.unregister("/accept")
     try:
-        result = cli_runner.invoke(app, ["skill", "run", "/ship"], input="")
+        result = cli_runner.invoke(app, ["skill", "run", "/accept"], input="")
         assert result.exit_code == 1, result.stdout
     finally:
         if previous is not None:
@@ -287,7 +243,7 @@ def test_skill_run_failed_status_exits_four(
     _ = stub_failing_skill
     result = cli_runner.invoke(
         app,
-        ["--json", "skill", "run", "/audit"],
+        ["--json", "skill", "run", "/verify"],
         input="",
     )
     assert result.exit_code == 2, result.stdout
@@ -302,7 +258,7 @@ def test_skill_run_needs_user_status_exits_seven(
     _ = stub_needs_user_skill
     result = cli_runner.invoke(
         app,
-        ["--json", "skill", "run", "/prep"],
+        ["--json", "skill", "run", "/plan"],
         input="",
     )
     assert result.exit_code == 1, result.stdout
@@ -369,7 +325,7 @@ def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> 
     captured: dict[str, dict[str, object]] = {}
 
     class _CapturingSkill(Skill):
-        name: SkillName = "/polish"
+        name: SkillName = "/why"
 
         def probe(self, ctx: SkillContext) -> ProbeOutcome:
             return ProbeOutcome(ok=True)
@@ -378,19 +334,19 @@ def test_skill_run_passes_stdin_args_to_skill_context(cli_runner: CliRunner) -> 
             captured["args"] = dict(ctx.args)
             return SkillResult(status="ok", body={})
 
-    previous = registry.lookup("/polish")
-    registry.unregister("/polish")
+    previous = registry.lookup("/why")
+    registry.unregister("/why")
     registry.register(_CapturingSkill)
     try:
         result = cli_runner.invoke(
             app,
-            ["--json", "skill", "run", "/polish"],
+            ["--json", "skill", "run", "/why"],
             input=orjson.dumps({"depth": "quick"}).decode("utf-8"),
         )
         assert result.exit_code == 0, result.stdout
         assert captured["args"] == {"depth": "quick"}
     finally:
-        registry.unregister("/polish")
+        registry.unregister("/why")
         if previous is not None:
             registry.register(previous)
 

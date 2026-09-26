@@ -22,7 +22,6 @@ import pytest
 from pydantic import BaseModel, ValidationError
 
 from eawf.surfaces.render.envelope import CANONICAL_SKILL_NAMES
-from eawf.surfaces.render.skills import SKILL_REGISTRY
 from eawf.workflow.skills import dispatch as dispatch_skill
 from eawf.workflow.skills import integrate as integrate_skill
 from eawf.workflow.skills import verify as verify_skill
@@ -30,6 +29,7 @@ from eawf.workflow.skills.bodies import SKILL_BODY_MODELS, body_model_for
 from eawf.workflow.skills.bodies.dispatch import DispatchBody
 from eawf.workflow.skills.bodies.integrate import IntegrateBody
 from eawf.workflow.skills.bodies.verify import VerifyBody
+from eawf.workflow.skills.catalog import resolve_skill, shipped_skill_specs
 from eawf.workflow.skills.engine import SkillContext, SkillResult
 from eawf.workflow.skills.lifecycle_rpc import (
     UNTYPED_REFUSAL_CODE,
@@ -165,11 +165,11 @@ def test_lifecycle_skill_declares_closed_terminal_outcomes(
 def test_canonical_skill_list_names_the_lifecycle_skill(
     name: str, module: Any, model: type[BaseModel]
 ) -> None:
-    """The canonical list, the body map and the render registry all carry the name."""
+    """The canonical list, the body map and the shipped pages all carry the name."""
     assert name in CANONICAL_SKILL_NAMES
     assert name in SKILL_BODY_MODELS
     assert lookup(name) is not None
-    rendered = {spec.skill_name for spec in SKILL_REGISTRY}
+    rendered = {spec.skill_name for spec in shipped_skill_specs()}
     assert name.removeprefix("/") in rendered
 
 
@@ -177,12 +177,12 @@ def test_canonical_skill_list_names_the_lifecycle_skill(
 def test_rendered_skill_body_states_grammar_effects_and_outcomes(
     name: str, module: Any, model: type[BaseModel]
 ) -> None:
-    """The shipped skill body carries all four halves of the contract."""
-    spec = next(s for s in SKILL_REGISTRY if s.skill_name == name.removeprefix("/"))
-    assert "## Invocation" in spec.body
-    assert "## Effects boundary" in spec.body
-    assert "## Output contract" in spec.body
-    assert module.OUTPUT_SCHEMA in spec.body
+    """The shipped skill page carries grammar, authority and output in chassis slots."""
+    spec = next(s for s in shipped_skill_specs() if s.skill_name == name.removeprefix("/"))
+    assert "## 1. Authority" in spec.body
+    assert "## 3. Task" in spec.body
+    assert "## 6. Output" in spec.body
+    assert f"`{resolve_skill(name).output.schema_name}`" in spec.body
     for outcome in module.TERMINAL_OUTCOMES:
         assert f"`{outcome}`" in spec.body, f"{name} body omits terminal outcome {outcome!r}"
 

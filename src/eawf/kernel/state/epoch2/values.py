@@ -19,12 +19,13 @@ read.
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 from uuid import UUID
 
 from pydantic import ConfigDict, model_validator
 
 from eawf.kernel.identity import EntityKind
+from eawf.kernel.state.budget_signal import refuse_budget_signal
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
@@ -194,6 +195,13 @@ class Hold(Epoch2Model):
     created_by: OwnerPrincipal
     created_at: UtcDatetime
     released_at: UtcDatetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_budget_signal(cls, data: Any) -> Any:
+        """Refuse a budget event, which is a notice and never a hold."""
+        refuse_budget_signal(data, target="a hold")
+        return data
 
     @model_validator(mode="after")
     def _release_follows_creation(self) -> Self:

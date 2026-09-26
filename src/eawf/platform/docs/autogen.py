@@ -7,7 +7,7 @@ never hand-authored, so a doc/source drift cannot survive a build:
   every sub-group verb), walked from the root :data:`eawf.surfaces.cli.app.app`
   Typer instance.
 - ``skills.md`` — the Eä skill catalog, read from
-  :data:`eawf.surfaces.render.skills.SKILL_REGISTRY`.
+  :func:`eawf.workflow.skills.catalog.shipped_skill_specs`.
 - ``schema.md`` — the JSON Schema of the canonical Pydantic models
   (:class:`~eawf.kernel.state.models.State`, the event envelope, and the output
   envelope), with each schema also dumped to a sibling ``.schema.json``
@@ -295,19 +295,19 @@ def cli_page() -> GeneratedPage:
 
 
 def skills_page() -> GeneratedPage:
-    """Generate ``skills.md`` from :data:`SKILL_REGISTRY`."""
-    from eawf.surfaces.render.skills import SKILL_REGISTRY
+    """Generate ``skills.md`` from the closed skill catalog."""
+    from eawf.workflow.skills.catalog import shipped_skill_specs
 
     lines: list[str] = [
         "# eawf skill catalog",
         "",
-        "Auto-generated from `eawf.surfaces.render.skills:SKILL_REGISTRY`. Each row "
+        "Auto-generated from `eawf.workflow.skills.catalog:shipped_skill_specs`. Each row "
         "is an Eä skill the runtime can install as a slash command.",
         "",
         "| Skill | User-invocable | Argument hint | Description |",
         "|---|---|---|---|",
     ]
-    for spec in sorted(SKILL_REGISTRY, key=lambda s: s.skill_name):
+    for spec in sorted(shipped_skill_specs(), key=lambda s: s.skill_name):
         invocable = "yes" if spec.user_invocable else "no"
         hint = spec.argument_hint or "—"
         lines.append(

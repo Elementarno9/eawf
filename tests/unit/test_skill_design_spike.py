@@ -31,6 +31,7 @@ from eawf.surfaces.render.skills import (
     SkillSpec,
     render_skill_md_from_spec,
 )
+from eawf.workflow.skills.catalog import shipped_skill_specs
 from eawf.workflow.skills.discovery import reconcile_skills
 
 
@@ -128,20 +129,19 @@ def test_no_smoke_test_skill_registered() -> None:
 
 
 def _render_clean_tree(root: Path) -> None:
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = root / spec.skill_name
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(_render_skill(spec), encoding="utf-8")
 
 
 def test_reconcile_clean_with_design_and_spike_present(tmp_path: Path) -> None:
-    """A tree rendered from the registry (incl /design + /spike) has zero drift."""
+    """A clean catalog tree ships /spike and omits the retired /design."""
     root = tmp_path / ".claude" / "skills"
     _render_clean_tree(root)
-    assert (root / "design" / "SKILL.md").is_file()
+    assert not (root / "design").exists()
     assert (root / "spike" / "SKILL.md").is_file()
     report = reconcile_skills(root)
     assert report.has_drift is False
-    for name in ("design", "spike"):
-        assert name not in report.missing_on_disk
-        assert name not in report.extra_on_disk
+    assert "spike" not in report.missing_on_disk
+    assert "spike" not in report.extra_on_disk

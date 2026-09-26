@@ -18,9 +18,9 @@ from eawf.runtime.runtimes.claude.plugin_install import IntegrityViolation
 from eawf.runtime.runtimes.claude.plugin_package import PublishSource, package_plugin
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.exit_codes import STATE_CONFLICT, USER_ERROR
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
-_SKILL_COUNT = len(SKILL_REGISTRY)
+_SKILL_COUNT = len(shipped_skill_specs())
 
 pytestmark = pytest.mark.integration
 
@@ -66,7 +66,8 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     # ``/plugin marketplace add <path>`` is unchanged; npm is opt-in.
     assert marketplace["plugins"][0]["source"] == "./"
     assert (target / "skills" / "research" / "SKILL.md").exists()
-    assert (target / "skills" / "flow" / "SKILL.md").exists()
+    assert (target / "skills" / "verify" / "SKILL.md").exists()
+    assert not (target / "skills" / "flow").exists()
     assert len(list((target / "skills").iterdir())) == _SKILL_COUNT
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8

@@ -27,7 +27,7 @@ from eawf.runtime.runtimes.codex.hook_map import (
 from eawf.runtime.runtimes.codex.plugin_install import IntegrityViolation
 from eawf.runtime.runtimes.codex.skills import render_codex_agent_toml
 from eawf.surfaces.render.agents import AGENT_REGISTRY
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 _GOLDEN_DIR = Path(__file__).parents[1] / "golden" / "plugin_install" / "codex"
 _TRUSTED_HOOK_HASHES = {
@@ -170,7 +170,7 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
     root = _plugin_root(tmp_path, scope, fake_home)
     assert (root / ".codex-plugin" / "plugin.json").is_file()
     assert (root / ".codex-plugin" / ".eawf-managed.json").is_file()
-    assert len(result.skills) == len(SKILL_REGISTRY)
+    assert len(result.skills) == len(shipped_skill_specs())
     assert len(result.agents) == len(AGENT_REGISTRY)
     assert len(result.hooks) == len(CODEX_HOOK_EVENT_TYPES)
     assert result.hook_config is not None
@@ -188,7 +188,7 @@ def test_install_creates_plugin_layout(tmp_path: Path, fake_home: Path, scope: s
     assert (_config_path(tmp_path, scope, fake_home).parent / "skills").exists() is False
     # Codex requires each skill on disk as a directory containing SKILL.md
     # (not a flat <name>.md). Verify the directory layout for every skill.
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = root / "skills" / spec.skill_name
         assert skill_dir.is_dir(), skill_dir
         assert (skill_dir / "SKILL.md").is_file(), skill_dir / "SKILL.md"

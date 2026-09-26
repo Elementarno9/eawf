@@ -67,7 +67,7 @@ from eawf.runtime.runtimes.codex.plugin_install import (
 )
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.hooks import render_hook_sh
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +301,7 @@ def package_plugin(
     plugin_root = _plugin_root(target)
 
     skill_deltas: list[FileDelta] = []
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         path = plugin_root / "skills" / spec.skill_name.lstrip("/") / "SKILL.md"
         payload = _render_skill(spec).encode("utf-8")
         action = _classify(path, payload)

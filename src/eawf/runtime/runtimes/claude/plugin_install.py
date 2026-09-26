@@ -8,13 +8,13 @@ defaults to the workspace root):
 
     .claude/
       skills/
-        <skill_name>/SKILL.md           # one per skill in render.skills.SKILL_REGISTRY
+        <skill_name>/SKILL.md           # one per skill in the closed skill catalog
       agents/
         <role>.md                       # one per role in render.agents.AGENT_REGISTRY
       hooks/
         <event_type>.sh                 # one per event in render.hooks.HOOK_REGISTRY
-      settings.json                     # __eawf_managed namespace patched in;
-                                          # user-owned keys preserved verbatim
+      settings.json                     # __eawf_managed namespace + statusLine
+                                          # patched in; user-owned keys preserved
     .mcp.json                           # project-scoped MCP config scaffold
 
 The renderer is *idempotent*: invoked twice on the same target with the
@@ -46,6 +46,7 @@ import eawf
 from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
+from eawf.runtime.runtimes.claude.statusline_install import build_statusline_command
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents import (
     AGENT_REGISTRY,
@@ -57,11 +58,11 @@ from eawf.surfaces.render.agents import (
 from eawf.surfaces.render.hooks import HOOK_REGISTRY, HookSpec, render_hook_sh
 from eawf.surfaces.render.manifest import Manifest, ManifestEntry, save_atomic
 from eawf.surfaces.render.skills import (
-    SKILL_REGISTRY,
     SkillSpec,
     SkillTemplateContext,
     render_skill_md,
 )
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +228,9 @@ def _render_managed_block(timestamp: str) -> dict[str, Any]:
     (sorted-keys JSON) — the patcher recomputes it after assembly so a
     hand-edit to the body still flips the recorded hash.
     """
-    skills_payload = [{"name": spec.skill_name, "version": spec.version} for spec in SKILL_REGISTRY]
+    skills_payload = [
+        {"name": spec.skill_name, "version": spec.version} for spec in shipped_skill_specs()
+    ]
     agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     hooks_payload = [
         {"event_type": spec.event_type.value, "path": f".claude/hooks/{spec.event_type.value}.sh"}
@@ -250,6 +253,9 @@ def _render_managed_block(timestamp: str) -> dict[str, Any]:
 #: Used to replace Eä's own hook entries idempotently on re-install while
 #: preserving every user / other-plugin entry.
 _HOOK_COMMAND_MARKER: str = "/.claude/hooks/"
+
+#: The Claude Code settings key naming the statusline command.
+_STATUSLINE_KEY: str = "statusLine"
 
 
 def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
@@ -333,6 +339,9 @@ def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> byt
       and replacing only Eä's own (idempotent). This is the wire that makes
       CC actually invoke the rendered ``.claude/hooks/*.sh`` wrappers -- e.g.
       ``Stop`` -> ``session_end`` -> daemon ``runtime.capture`` (EU capture).
+    - Wire ``statusLine`` to ``eawf cc statusline`` so the project renders
+      the Eä statusline, unless the operator already set a statusline of
+      their own, which is kept.
     - Every other key is preserved verbatim.
     - Render the resulting object as deterministic JSON (sorted keys,
       2-space indent, trailing newline) so two installs are byte-stable.
@@ -357,6 +366,8 @@ def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> byt
     merged_hooks = _merge_settings_hooks(parsed.get("hooks"), _eawf_settings_hooks())
     if merged_hooks:
         parsed["hooks"] = merged_hooks
+    if _STATUSLINE_KEY not in parsed:
+        parsed[_STATUSLINE_KEY] = build_statusline_command()
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return rendered.encode("utf-8")
 
@@ -379,7 +390,7 @@ def _build_manifest(
     new_generated: dict[str, ManifestEntry] = {}
     # Carry through entries that don't belong to the claude tree we own.
     own_targets: set[str] = set()
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         own_targets.add(_skill_target(target_dir, skill_spec).as_posix())
     for agent_spec in AGENT_REGISTRY:
         own_targets.add(_agent_target(target_dir, agent_spec).as_posix())
@@ -391,7 +402,7 @@ def _build_manifest(
         if entry.target not in own_targets:
             new_generated[key] = entry
 
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         path = _skill_target(target_dir, skill_spec)
         body = _render_skill(skill_spec)
         new_generated[f"{path.as_posix()}::plugin.claude.skill.{skill_spec.skill_name}"] = (
@@ -466,7 +477,7 @@ def _check_for_drift(target_dir: Path, manifest: Manifest, *, force: bool) -> No
     if force:
         return
     own_paths: list[Path] = []
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         own_paths.append(_skill_target(target_dir, skill_spec))
     for agent_spec in AGENT_REGISTRY:
         own_paths.append(_agent_target(target_dir, agent_spec))
@@ -560,7 +571,7 @@ def install_plugin(
     hook_deltas: list[FileDelta] = []
 
     # Render skills.
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         path = _skill_target(target_dir, spec)
         payload = _render_skill(spec).encode("utf-8")
         action = _classify(path, payload)
@@ -648,7 +659,7 @@ def expected_paths(target_dir: Path) -> tuple[Mapping[str, Path], Path]:
     """
     target_dir = Path(target_dir).resolve()
     paths: dict[str, Path] = {}
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         paths[f"plugin.claude.skill.{spec.skill_name}"] = _skill_target(target_dir, spec)
     for agent_spec in AGENT_REGISTRY:
         paths[f"plugin.claude.agent.{agent_spec.role}"] = _agent_target(target_dir, agent_spec)
@@ -672,7 +683,7 @@ def _expected_bytes_for(
     """
     if region_id.startswith("plugin.claude.skill."):
         skill_name = region_id.removeprefix("plugin.claude.skill.")
-        spec = next(s for s in SKILL_REGISTRY if s.skill_name == skill_name)
+        spec = next(s for s in shipped_skill_specs() if s.skill_name == skill_name)
         return _render_skill(spec).encode("utf-8")
     if region_id.startswith("plugin.claude.agent."):
         role = region_id.removeprefix("plugin.claude.agent.")

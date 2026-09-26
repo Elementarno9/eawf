@@ -4,7 +4,7 @@ Sources, highest precedence first:
 
 1. Workspace catalogue — ``<workspace>/.ea/skills/<name>/SKILL.md``.
 2. User catalogue — ``~/.eawf/skills/<name>/SKILL.md``.
-3. Built-in registry — :data:`eawf.surfaces.render.skills.SKILL_REGISTRY`.
+3. Built-in catalog — :func:`eawf.workflow.skills.catalog.shipped_skill_specs`.
 
 The discovered union is what ``eawf skill list`` exposes through the
 new ``--scope`` filter. Workspace and user SKILL.md files carry YAML
@@ -36,7 +36,7 @@ Public API:
     reconcile_skills(skills_root)    -> SkillReconcileReport
 
 The reconcile path compares the frozen built-in
-:data:`~eawf.surfaces.render.skills.SKILL_REGISTRY` against the rendered
+:func:`~eawf.workflow.skills.catalog.shipped_skill_specs` against the rendered
 plugin skill tree on disk (``<root>/<name>/SKILL.md``). It reports three
 drift classes: skills in the registry with no SKILL.md on disk
 (``missing_on_disk``), SKILL.md dirs on disk with no registry row
@@ -58,7 +58,7 @@ from typing import Any
 
 import yaml
 
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +214,7 @@ def discover_skills(
             continue
         discovered[name] = DiscoveredSkill(**{**parsed.__dict__, "name": name})
 
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         normalized = spec.skill_name if spec.skill_name.startswith("/") else f"/{spec.skill_name}"
         if normalized in discovered:
             continue
@@ -349,7 +349,7 @@ def reconcile_skills(skills_root: Path | str) -> SkillReconcileReport:
 
     Walks ``<skills_root>/<name>/SKILL.md`` and compares the discovered
     names + frontmatter flags against
-    :data:`~eawf.surfaces.render.skills.SKILL_REGISTRY` (the frozen,
+    :func:`~eawf.workflow.skills.catalog.shipped_skill_specs` (the closed,
     canonical skill set). The registry is the source of truth; disk
     entries that disagree are reported as drift rather than silently
     reconciled.
@@ -370,7 +370,7 @@ def reconcile_skills(skills_root: Path | str) -> SkillReconcileReport:
             user_invocable=spec.user_invocable,
             disable_model_invocation=spec.disable_model_invocation,
         )
-        for spec in SKILL_REGISTRY
+        for spec in shipped_skill_specs()
     }
 
     disk_flags: dict[str, SkillFlags] = {}

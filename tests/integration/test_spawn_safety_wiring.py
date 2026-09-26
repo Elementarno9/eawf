@@ -37,7 +37,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.models import State
-from eawf.runtime.budget.policy import classify_enforcement
+from eawf.runtime.budget.policy import BudgetConfig, classify_enforcement
 from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.daemon import dispatch_runner
 from eawf.runtime.daemon.budget_interlock import InterlockOutcome, enforce_token_cap
@@ -361,7 +361,7 @@ def test_hard_cap_breach_terminates_via_threaded_pgid(
     monkeypatch.setattr(dispatch_runner, "enforce_token_cap", _enforce_with_fake_cancel)
 
     outcome = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=_tokens(2000), pgid=4242, enforce="hard"
+        ctx, wave_id=_WAVE_ID, tokens=_tokens(2000), pgid=4242, budget=BudgetConfig(enforce="hard")
     )
 
     assert outcome is not None
@@ -379,7 +379,7 @@ def test_soft_cap_breach_does_not_terminate_even_with_pgid(
     ctx = _ctx(state_path)
 
     outcome = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=_tokens(5000), pgid=4242, enforce="soft"
+        ctx, wave_id=_WAVE_ID, tokens=_tokens(5000), pgid=4242, budget=BudgetConfig(enforce="soft")
     )
 
     assert outcome is not None
@@ -394,7 +394,7 @@ def test_hard_cap_breach_with_no_pgid_logs_but_does_not_terminate(
     ctx = _ctx(state_path)
 
     outcome = accrue_tokens_consumed(
-        ctx, wave_id=_WAVE_ID, tokens=_tokens(2000), pgid=None, enforce="hard"
+        ctx, wave_id=_WAVE_ID, tokens=_tokens(2000), pgid=None, budget=BudgetConfig(enforce="hard")
     )
 
     assert outcome is not None

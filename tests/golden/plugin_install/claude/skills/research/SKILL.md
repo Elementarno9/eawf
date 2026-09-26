@@ -1,49 +1,63 @@
 ---
 name: research
-description: "Read-only investigation of an open question. Produces a research brief or surfaces findings inline; no code changes, no state mutations."
-argument-hint: "<topic-slug> [--depth=shallow|medium|deep|exhaustive] [--final] [--rounds=<n>] [--agents=<n>] [--budget=<tokens>]"
+description: "Answer one question with a swift one-page investigation; no Campaign."
+argument-hint: "<topic...> [--question <text>] [--scope <urn>] [--from <ref>...] [--include <selector>...] [--exclude <selector>...] [--sources <repo|external|both>] [--web <auto|allow|deny|required>] [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>] [--agents <1..3>] [--budget <spec>] [--save [<relative-path>]] [--output <markdown|json>]"
 user-invocable: true
 disable-model-invocation: false
 ---
 
 # /research
 
-## Canonical algorithm
+Answer one question with a swift one-page investigation; no Campaign.
 
-1. Define the question. State the hypothesis or unknown in one sentence.
-2. Survey: read source, run `git log`, fetch external refs as needed.
-3. Compare alternatives — bullet list of options with pros/cons.
-4. Verdict: recommend one path, or recommend "stay open" with the next discriminating experiment.
-5. If `--final`: persist a research brief with `references` and render it through `eawf research show --md`.
+## 1. Authority
 
-## Output contract: `IntentBrief` + dispatch-plan
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Effects: No Campaign or lifecycle RPC; optional gitignored local brief.
+- Allowed RPCs: `read_entity`, `query_evidence`, `retrieve_source`, `submit_report`. Any other RPC is denied before it reaches a handler.
+- Canonical state: never mutated by this skill.
+- Local write root: `.ea/local/research`; nothing is written outside it.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
-The brief body conforms to `kernel/spec/intent.IntentBrief` — typed claims with `evidence_refs` (a brief is promotable iff every claim has at least one resolving + entailing reference; the EviBound rung-1 gate in `platform/artifacts/validation.validate_markdown_artifact` enforces this at promotion time, not at ingestion). The session also emits an optional dispatch-plan when the verdict names a follow-up wave the brief informs, so `/prep` and `/roadmap propose` can wire the brief into the next wave's References block automatically.
+## 2. Context
 
-## Options
+The question named by `<topic...>` and `--question`, within the scope and the sources this invocation declares.
 
-- `--depth shallow|medium|deep|exhaustive` — survey budget (file reads, external fetches, cross-wave grep sweeps); read from `ctx.args["depth"]`, then the `research.default_depth` layered-config leaf (reuses `StageProfile`, no new key). Default `medium`.
-- `--final` — persist a research brief with `references` and render it through `eawf research show --md`. Default off.
-- `--rounds <n>` — bound the fan-out iteration count (today the fan-out is depth-derived only). Default `1`.
-- `--agents <n>` — fan-out width; resolves through the `research.agent_count` layered-config leaf. Default `4`.
-- `--budget <tokens>` — recorded on the envelope; enforcement binds once metering rows exist. Default uncapped.
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
 
-## Spike convention
+## 3. Task
 
-A *spike* — a short read-only investigation done before claiming a real wave — is run via `/research` and produces a brief under `.ea/local/<YYYY-MM-DD>-<slug>.md` (or the conventional `.ea/local/research/` sub-directory). The filename follows the `<date>-<slug>.md` stem so it sorts chronologically and slug-matches the wave, iter, or phase it informs. Briefs stay local-only — `.ea/local/` is gitignored — and are promoted to `.ea/artifacts/` only when they inform a decision recorded in `state.json` (the artifact-chassis rule then applies). See `spike-workflow` in AGENTS.md for the full convention.
+Answer one bounded question quickly in at most one rendered page. You do not create, own, resume, or mutate a Campaign.
 
-## Pre-flight checklist
+```text
+/research <topic...> [--question <text>] [--scope <urn>] [--from <ref>...] [--include <selector>...] [--exclude <selector>...] [--sources <repo|external|both>] [--web <auto|allow|deny|required>] [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>] [--agents <1..3>] [--budget <spec>] [--save [<relative-path>]] [--output <markdown|json>]
+```
 
-- [ ] No state mutations — read-only.
-- [ ] Cite sources as dense `[N]` references backed by `Citation` rows.
-- [ ] Keep promoted artifact prose scrub-clean and repo-relative.
-- [ ] Distinguish "what the code does" from "what the doc claims".
-- [ ] If this run is a spike, name the brief `<YYYY-MM-DD>-<slug>.md` and place it under `.ea/local/` (or `.ea/local/research/`) so the dispatch renderer can surface it to the next wave's executor.
+## 4. Method
 
-## Decision surfaces
+1. State the exact question and the decision or next action it informs. Narrow an over-broad topic before reading.
+2. Inspect supplied and repository-local primary sources first. Fetch external sources only under the resolved source policy.
+3. Run one survey pass. Independent parallel slices are allowed within the agent ceiling, but recursion and additional rounds are forbidden.
+4. Reconcile evidence once. Distinguish implementation fact, document claim, external claim, and inference. Resolve every citation used by the verdict.
+5. Compare plausible alternatives with their main advantage and cost. Give a verdict, confidence, and material open gaps.
+6. If evidence cannot decide, recommend the cheapest discriminating next step. Do not turn the invocation into a Campaign or Spike implicitly.
+7. Stop at one pass, one rendered page, or the first hard budget cap. Saving writes only the same report to the declared gitignored local path.
 
-When the verdict reduces to a small set of named alternatives, surface the choice through `AskUserQuestion` rather than free-text — the operator can pick without retyping the option labels.
+## 4b. Applicable rules
 
-## Output contract
+The obligations the effective rule graph holds for activities `research` and roles `researcher`. They bind what you do; they grant no capability.
 
-Eä-rendered skill envelope (`OutputEnvelope`) with `header.skill = "/research"`. Body carries the structured findings; footer records any persisted brief.
+- must: **Verify behavioural claims against the source tree.** Verify behavioural, quantitative and schema claims against the implementation before asserting them. Where a design document and the source disagree, quote the source and report the drift.
+- must: **Name a refuted claim only when a finding contradicts it.** Name a claim in refuted_claim_ids only when a finding directly contradicts one of the live claims the prompt listed; never infer a contradiction from absent support, and never name a claim the prompt did not list.
+- must: **Back every claim with a reference that resolves and entails it.** Back every claim in a brief with at least one reference that resolves and entails it, a file:line, a store URN or an external URL; mark a claim you cannot back as unresolved and queue it as a next-research item instead of citing weakly.
+
+## 5. Constraints
+
+- Every parallel slice declares what its result would rule out; a slice that cannot name it is not dispatched.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one SwiftResearchReport containing question, scope, findings, alternatives, verdict, confidence, open gaps, references, coverage, and stop reason.
+
+The report validates against `SwiftResearchReport`, and its terminal outcome is exactly one of `answered`, `open`, `blocked`. Prose in the report is explanation, never the result.

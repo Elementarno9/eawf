@@ -32,17 +32,13 @@ from typer.testing import CliRunner
 from eawf.runtime.runtimes.claude.plugin_install import _render_skill
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands.skill import _list_payload
-from eawf.surfaces.render.envelope import CANONICAL_SKILL_NAMES
-from eawf.surfaces.render.skills import SKILL_REGISTRY, render_skill_md_from_spec
+from eawf.surfaces.render.skills import render_skill_md_from_spec
+from eawf.workflow.skills.catalog import SKILL_CATALOG, shipped_skill_specs
 
-# ``eawf skill render`` is the operator surface over the execution-backed
-# skills (``CANONICAL_SKILL_NAMES``). The render ``SKILL_REGISTRY`` is a
-# superset that also carries model-only code-quality playbooks; those have
-# no execution body and are intentionally not operator-renderable.
-_RENDERABLE_SPECS = [s for s in SKILL_REGISTRY if f"/{s.skill_name}" in set(CANONICAL_SKILL_NAMES)]
-_MODEL_ONLY_SPECS = [
-    s for s in SKILL_REGISTRY if f"/{s.skill_name}" not in set(CANONICAL_SKILL_NAMES)
-]
+# ``eawf skill render`` is the operator surface over the closed skill catalog:
+# every shipped spec renders, and every retired name refuses.
+_RENDERABLE_SPECS = list(shipped_skill_specs())
+_RETIRED_NAMES = [row.skill_id for row in SKILL_CATALOG.retired]
 
 
 @pytest.fixture
@@ -59,7 +55,7 @@ def test_render_cmd_skill_md_matches_plugin_install_bytes(cli_runner: CliRunner)
     pins it so a future refactor that diverges the two code paths fails
     loudly.
     """
-    spec = SKILL_REGISTRY[0]  # research
+    spec = next(s for s in shipped_skill_specs() if s.skill_name == "research")
     expected = _render_skill(spec)
 
     result = cli_runner.invoke(app, ["skill", "render", spec.skill_name])
@@ -75,7 +71,7 @@ def test_render_cmd_skill_md_uses_shared_render_helper(cli_runner: CliRunner) ->
     :func:`render_skill_md_from_spec` emits — the two helpers are the
     canonical render path and must not diverge.
     """
-    spec = SKILL_REGISTRY[3]  # ship
+    spec = next(s for s in shipped_skill_specs() if s.skill_name == "verify")
     expected = render_skill_md_from_spec(spec)
 
     result = cli_runner.invoke(app, ["skill", "render", spec.skill_name])
@@ -87,7 +83,7 @@ def test_render_cmd_skill_md_accepts_slashed_form(cli_runner: CliRunner) -> None
     """``--format=skill-md`` resolves a leading-slash skill name via
     :func:`_resolve_skill_name` exactly as the bare form does.
     """
-    spec_research = next(s for s in SKILL_REGISTRY if s.skill_name == "research")
+    spec_research = next(s for s in shipped_skill_specs() if s.skill_name == "research")
     expected = render_skill_md_from_spec(spec_research)
 
     result = cli_runner.invoke(app, ["skill", "render", "/research"])
@@ -97,7 +93,7 @@ def test_render_cmd_skill_md_accepts_slashed_form(cli_runner: CliRunner) -> None
 
 def test_render_cmd_skill_md_accepts_bare_form(cli_runner: CliRunner) -> None:
     """Bare form (no leading slash) resolves identically."""
-    spec_research = next(s for s in SKILL_REGISTRY if s.skill_name == "research")
+    spec_research = next(s for s in shipped_skill_specs() if s.skill_name == "research")
     expected = render_skill_md_from_spec(spec_research)
 
     result = cli_runner.invoke(app, ["skill", "render", "research"])
@@ -120,20 +116,30 @@ def test_render_cmd_json_keys_match_list_payload(cli_runner: CliRunner) -> None:
     for key in metadata_keys:
         assert payload[key] == list_row[key]
     # Body field is the canonical SKILL.md string.
-    spec_research = next(s for s in SKILL_REGISTRY if s.skill_name == "research")
+    spec_research = next(s for s in shipped_skill_specs() if s.skill_name == "research")
     assert payload["body"] == render_skill_md_from_spec(spec_research)
 
 
 def test_render_cmd_json_keys_are_exactly_the_documented_set(cli_runner: CliRunner) -> None:
-    """The JSON payload exposes exactly five top-level keys:
-    ``name``/``status``/``body_schema``/``description``/``body``. Pin
-    the set so a future field addition fails the test and the surface
-    documentation gets updated alongside.
+    """The JSON payload is one catalog row plus ``body``. Pin the set so a
+    future field addition fails the test and the surface documentation gets
+    updated alongside.
     """
-    result = cli_runner.invoke(app, ["skill", "render", "/audit", "--format", "json"])
+    result = cli_runner.invoke(app, ["skill", "render", "/verify", "--format", "json"])
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert set(payload.keys()) == {"name", "status", "body_schema", "description", "body"}
+    assert set(payload.keys()) == {
+        "name",
+        "status",
+        "body_schema",
+        "description",
+        "skill_class",
+        "audience",
+        "argument_hint",
+        "output_schema",
+        "terminal_outcomes",
+        "body",
+    }
 
 
 def test_render_cmd_unknown_skill_returns_invalid_input(cli_runner: CliRunner) -> None:
@@ -185,17 +191,14 @@ def test_render_cmd_json_for_every_renderable_entry(cli_runner: CliRunner) -> No
 
 
 def test_render_cmd_rejects_model_only_skills(cli_runner: CliRunner) -> None:
-    """Model-only code-quality playbooks are not operator-renderable: the
-    ``skill render`` CLI rejects them with :class:`InvalidInput` (exit 1)
-    even though they live in the render ``SKILL_REGISTRY``. They are
-    reachable only as on-disk SKILL.md files the model reads, not via the
-    operator CLI.
+    """Retired skills are not renderable: ``skill render`` refuses each with
+    :class:`InvalidInput` (exit 1) and names the successor rather than aliasing.
     """
-    assert _MODEL_ONLY_SPECS, "expected at least one model-only skill in the registry"
-    for spec in _MODEL_ONLY_SPECS:
-        result = cli_runner.invoke(app, ["skill", "render", spec.skill_name])
-        assert result.exit_code == 1, f"{spec.skill_name!r} unexpectedly rendered: {result.stdout}"
-        assert "unknown skill" in result.stdout
+    assert _RETIRED_NAMES, "expected at least one retired skill in the catalog"
+    for name in _RETIRED_NAMES:
+        result = cli_runner.invoke(app, ["skill", "render", name])
+        assert result.exit_code == 1, f"{name!r} unexpectedly rendered: {result.stdout}"
+        assert "is retired; use" in result.stdout
 
 
 def test_render_cmd_help_documents_format_alternatives(cli_runner: CliRunner) -> None:

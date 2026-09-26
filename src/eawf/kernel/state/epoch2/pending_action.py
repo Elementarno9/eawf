@@ -52,6 +52,7 @@ from eawf.kernel.identity import (
     parse_qualified_urn,
     validate_entity_key,
 )
+from eawf.kernel.state.budget_signal import refuse_budget_signal
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     NonEmptyStr,
@@ -292,6 +293,13 @@ class PendingAction(_FrozenModel):
     dispositions: tuple[PrincipalDispositionRow, ...] = ()
     created_at: UtcDatetime
     updated_at: UtcDatetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_budget_signal(cls, data: Any) -> Any:
+        """Refuse a budget event, which is a notice and never a pending action."""
+        refuse_budget_signal(data, target="a pending action")
+        return data
 
     @model_validator(mode="before")
     @classmethod

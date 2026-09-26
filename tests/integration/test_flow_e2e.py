@@ -3,9 +3,10 @@
 The acceptance contract runs ``/flow "demo"`` against a tmp Eä repo and
 collects envelopes for all five current core skills.
 
-Drives the flow via the W07 CLI surface (``eawf --json skill run /flow``)
-so the test exercises the registry + engine + body wiring + the meta
-skill's own short-circuit logic.
+``/flow`` is retired from the operator skill surface (``eawf skill run
+/flow`` refuses and names ``/dispatch``), so the test drives the engine
+directly through :func:`run_skill`, exercising the engine + body wiring +
+the meta skill's own short-circuit logic.
 
 Marked ``integration`` so the test runs under both the default suite
 and ``pytest -m integration``.
@@ -17,11 +18,10 @@ import json
 from pathlib import Path
 
 import pytest
-from typer.testing import CliRunner
 
-from eawf.surfaces.cli.app import app
-from eawf.surfaces.render.envelope import OutputEnvelope
 from eawf.workflow.skills.bodies.flow import FlowBody
+from eawf.workflow.skills.engine import SkillContext, run_skill
+from eawf.workflow.skills.flow import FlowSkill
 
 
 @pytest.fixture
@@ -43,16 +43,14 @@ def integration_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 @pytest.mark.integration
 def test_flow_demo_runs_six_core_skills(integration_repo: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(
-        app,
-        ["--json", "skill", "run", "/flow"],
-        input='{"topic": "demo", "advance_after": true}',
+    env = run_skill(
+        FlowSkill(),
+        SkillContext(
+            scope="urn:eawf:v1:state:cli-skill-run",
+            session="urn:eawf:v1:store:cli/sessions/SES-skill-run",
+            args={"topic": "demo", "advance_after": True},
+        ),
     )
-    assert result.exit_code == 0, result.stdout
-
-    payload = json.loads(result.stdout)
-    env = OutputEnvelope.model_validate(payload)
     assert env.header.skill == "/flow"
     assert env.header.status == "ok"
 

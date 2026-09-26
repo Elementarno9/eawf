@@ -16,7 +16,7 @@ from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin
 from eawf.runtime.runtimes.claude.plugin_install import install_plugin
 from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 
 def test_doctor_clean_after_install(tmp_path: Path) -> None:
@@ -27,16 +27,18 @@ def test_doctor_clean_after_install(tmp_path: Path) -> None:
     assert not report.missing
     # Total ok count = skills + agents + installed (handler-backed) hooks + settings.
     installed_hooks = sum(1 for spec in HOOK_REGISTRY if spec.has_handler)
-    assert len(report.ok) == (len(SKILL_REGISTRY) + len(AGENT_REGISTRY) + installed_hooks + 1)
+    assert len(report.ok) == (
+        len(shipped_skill_specs()) + len(AGENT_REGISTRY) + installed_hooks + 1
+    )
 
 
 def test_doctor_detects_skill_drift(tmp_path: Path) -> None:
     install_plugin(tmp_path)
-    skill_path = tmp_path / ".claude" / "skills" / "polish" / "SKILL.md"
+    skill_path = tmp_path / ".claude" / "skills" / "verify" / "SKILL.md"
     skill_path.write_text(skill_path.read_text() + "\n# drift\n")
     report = doctor_plugin(tmp_path)
     assert report.clean is False
-    assert any(e.region_id == "plugin.claude.skill.polish" for e in report.drifted)
+    assert any(e.region_id == "plugin.claude.skill.verify" for e in report.drifted)
 
 
 def test_doctor_detects_agent_drift(tmp_path: Path) -> None:

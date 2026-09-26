@@ -72,7 +72,8 @@ from eawf.surfaces.render.manifest import (
 from eawf.surfaces.render.manifest import (
     save_atomic as save_manifest_atomic,
 )
-from eawf.surfaces.render.skills import SKILL_REGISTRY, SkillSpec
+from eawf.surfaces.render.skills import SkillSpec
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -492,7 +493,9 @@ def _render_manifest() -> bytes:
 
 
 def _build_sidecar_body(timestamp: str) -> dict[str, object]:
-    skills_payload = [{"name": spec.skill_name, "version": spec.version} for spec in SKILL_REGISTRY]
+    skills_payload = [
+        {"name": spec.skill_name, "version": spec.version} for spec in shipped_skill_specs()
+    ]
     agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     hooks_payload = [
         {
@@ -616,7 +619,7 @@ def _persist_manifest(
     config_path = _config_target(target_dir, scope=scope, home=home)
     sidecar_path = _sidecar_target(plugin_root)
 
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         path = _skill_target(plugin_root, skill_spec)
         body = _render_skill(skill_spec).encode("utf-8")
         region_id = f"plugin.codex.skill.{skill_spec.skill_name}"
@@ -765,7 +768,7 @@ def install_plugin(
             force=force,
             dry_run=dry_run,
         )
-        for spec in SKILL_REGISTRY
+        for spec in shipped_skill_specs()
     ]
     agent_deltas = [
         _write_managed_file(
@@ -839,7 +842,7 @@ def expected_paths(
         plugin_root=plugin_root,
     )
     paths: dict[str, Path] = {}
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         paths[f"plugin.codex.skill.{spec.skill_name}"] = _skill_target(plugin_root, spec)
     for agent_spec in AGENT_REGISTRY:
         paths[f"plugin.codex.agent.{agent_spec.role}"] = _agent_target(

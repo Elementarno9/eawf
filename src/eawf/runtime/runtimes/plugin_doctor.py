@@ -29,7 +29,7 @@ plus four additional drift kinds:
    walks the on-disk ``.claude/skills/<name>/`` directories of an
    installed Claude plugin tree and flags any skill directory with no
    corresponding :class:`~eawf.surfaces.render.skills.render.SkillSpec`
-   row in :data:`~eawf.surfaces.render.skills.registry.SKILL_REGISTRY`
+   row in :func:`~eawf.workflow.skills.catalog.shipped_skill_specs`
    (an *orphan* — a skill rendered or hand-dropped on disk that the
    registry no longer knows about). The kind FLAGS orphans only; it
    never auto-registers or imports them, honouring the
@@ -73,7 +73,7 @@ from eawf.runtime.runtimes.claude.plugin_doctor import doctor_plugin as claude_d
 from eawf.runtime.runtimes.codex.plugin_doctor import doctor_plugin as codex_doctor_plugin
 from eawf.runtime.runtimes.manifest import PluginManifest, RuntimeId
 from eawf.runtime.runtimes.opencode.plugin_doctor import doctor_plugin as opencode_doctor_plugin
-from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -478,7 +478,7 @@ def check_orphan_disk_vs_registry(target_dir: Path) -> DriftKindReport:
     tree's ``.claude/skills/<name>/`` directories and flags any whose
     name has no matching
     :class:`~eawf.surfaces.render.skills.render.SkillSpec` in
-    :data:`~eawf.surfaces.render.skills.registry.SKILL_REGISTRY`. Such a
+    :func:`~eawf.workflow.skills.catalog.shipped_skill_specs`. Such a
     directory is an *orphan* — a skill rendered (or hand-dropped) on
     disk that the registry no longer declares.
 
@@ -503,7 +503,7 @@ def check_orphan_disk_vs_registry(target_dir: Path) -> DriftKindReport:
             clean=True,
             skipped=True,
         )
-    registered = {spec.skill_name for spec in SKILL_REGISTRY}
+    registered = {spec.skill_name for spec in shipped_skill_specs()}
     findings: list[DriftFinding] = []
     for child in sorted(skills_root.iterdir()):
         if not child.is_dir():
@@ -515,7 +515,7 @@ def check_orphan_disk_vs_registry(target_dir: Path) -> DriftKindReport:
                 runtime="claude-code",
                 location=f".claude/skills/{child.name}",
                 detail=(
-                    f"on-disk skill directory has no SKILL_REGISTRY row: "
+                    f"on-disk skill directory has no skill catalog row: "
                     f"{child.name!r} (flagged only — register it explicitly "
                     f"or remove the directory)"
                 ),

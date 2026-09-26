@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "319a08a60664754d",
+    "hash": "ce51bb7d8e1e7e82",
     "hooks": [
       {
         "event_type": "session_start",
@@ -48,83 +48,23 @@
     ],
     "skills": [
       {
-        "name": "research",
+        "name": "accept",
         "version": "1.0"
       },
       {
-        "name": "prep",
+        "name": "attend",
         "version": "1.0"
       },
       {
-        "name": "audit",
+        "name": "backlog",
         "version": "1.0"
       },
       {
-        "name": "ship",
+        "name": "campaign",
         "version": "1.0"
       },
       {
-        "name": "review",
-        "version": "1.0"
-      },
-      {
-        "name": "polish",
-        "version": "1.0"
-      },
-      {
-        "name": "init",
-        "version": "1.0"
-      },
-      {
-        "name": "roadmap",
-        "version": "1.0"
-      },
-      {
-        "name": "differentiate",
-        "version": "1.0"
-      },
-      {
-        "name": "mockup",
-        "version": "1.0"
-      },
-      {
-        "name": "design",
-        "version": "1.0"
-      },
-      {
-        "name": "spike",
-        "version": "1.0"
-      },
-      {
-        "name": "flow",
-        "version": "1.0"
-      },
-      {
-        "name": "blitz",
-        "version": "1.0"
-      },
-      {
-        "name": "coauthor",
-        "version": "1.0"
-      },
-      {
-        "name": "memory",
-        "version": "1.0"
-      },
-      {
-        "name": "agent-dispatch",
-        "version": "1.0"
-      },
-      {
-        "name": "compress",
-        "version": "1.0"
-      },
-      {
-        "name": "wave-spec",
-        "version": "1.0"
-      },
-      {
-        "name": "security-review",
+        "name": "decide",
         "version": "1.0"
       },
       {
@@ -136,35 +76,55 @@
         "version": "1.0"
       },
       {
+        "name": "memory",
+        "version": "1.0"
+      },
+      {
+        "name": "milestone",
+        "version": "1.0"
+      },
+      {
+        "name": "mockup",
+        "version": "1.0"
+      },
+      {
+        "name": "plan",
+        "version": "1.0"
+      },
+      {
+        "name": "refactor",
+        "version": "1.0"
+      },
+      {
+        "name": "reflect",
+        "version": "1.0"
+      },
+      {
+        "name": "release",
+        "version": "1.0"
+      },
+      {
+        "name": "research",
+        "version": "1.0"
+      },
+      {
+        "name": "spike",
+        "version": "1.0"
+      },
+      {
+        "name": "test",
+        "version": "1.0"
+      },
+      {
+        "name": "track",
+        "version": "1.0"
+      },
+      {
         "name": "verify",
         "version": "1.0"
       },
       {
-        "name": "refactor-god-class",
-        "version": "1.0"
-      },
-      {
-        "name": "write-adr",
-        "version": "1.0"
-      },
-      {
-        "name": "math-explainer",
-        "version": "1.0"
-      },
-      {
-        "name": "add-property-test",
-        "version": "1.0"
-      },
-      {
-        "name": "extract-function",
-        "version": "1.0"
-      },
-      {
-        "name": "extract-module",
-        "version": "1.0"
-      },
-      {
-        "name": "graduate-research-code",
+        "name": "why",
         "version": "1.0"
       }
     ],
@@ -193,5 +153,9 @@
         "matcher": ""
       }
     ]
+  },
+  "statusLine": {
+    "command": "eawf cc statusline",
+    "type": "command"
   }
 }

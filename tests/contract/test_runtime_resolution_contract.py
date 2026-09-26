@@ -46,7 +46,7 @@ from eawf.runtime.runtimes.opencode import plugin_install as opencode_install
 from eawf.runtime.runtimes.selector import runtime_supports, select_adapter
 from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 pytestmark = pytest.mark.unit
 
@@ -55,11 +55,11 @@ pytestmark = pytest.mark.unit
 # playbooks carry ``user_invocable=False`` and OpenCode only materialises
 # user-invocable skills as ``/<name>`` commands.
 def _user_invocable_skill_names() -> set[str]:
-    return {spec.skill_name for spec in SKILL_REGISTRY if spec.user_invocable}
+    return {spec.skill_name for spec in shipped_skill_specs() if spec.user_invocable}
 
 
 def _all_skill_names() -> set[str]:
-    return {spec.skill_name for spec in SKILL_REGISTRY}
+    return {spec.skill_name for spec in shipped_skill_specs()}
 
 
 def _all_agent_roles() -> set[str]:
@@ -165,16 +165,15 @@ def test_opencode_installer_emits_every_user_invocable_skill(tmp_path: Path) -> 
 
 
 def test_opencode_command_surface_omits_model_only_skills(tmp_path: Path) -> None:
-    """Model-only (``user_invocable=False``) skills do not become commands."""
+    """Every catalog skill is user-invocable, so every one becomes a command."""
     paths = _opencode_paths(tmp_path)
     emitted = {
         region.removeprefix("plugin.opencode.command.")
         for region in paths
         if region.startswith("plugin.opencode.command.")
     }
-    model_only = _all_skill_names() - _user_invocable_skill_names()
-    assert model_only, "fixture invariant: at least one model-only skill exists"
-    assert emitted.isdisjoint(model_only)
+    assert _all_skill_names() == _user_invocable_skill_names()
+    assert emitted == _all_skill_names()
 
 
 # ---------------------------------------------------------------------------

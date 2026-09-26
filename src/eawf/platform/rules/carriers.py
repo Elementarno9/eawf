@@ -138,12 +138,14 @@ def carrier_roles(graph: RuleGraph) -> tuple[str, ...]:
 
 
 @functools.cache
-def _applied_builtin_records() -> tuple[RuleRecord, ...]:
+def applied_builtin_records() -> tuple[RuleRecord, ...]:
     """Return the builtin records that bind every repository, in graph order.
 
     Core modules and the conduct module apply whether or not a repository
     selects them. Every one of them is a builtin record, so the effective
-    graph orders them by identifier and revision.
+    graph orders them by identifier and revision. Anything rendered without a
+    repository graph, such as an agent definition or a shipped skill page,
+    reads its rules from here.
 
     Returns:
         The records, sorted the way the effective graph sorts them.
@@ -167,7 +169,7 @@ def builtin_carrier_roles() -> tuple[str, ...]:
     Returns:
         The roles, sorted; each has a :func:`builtin_carrier_body`.
     """
-    records = _applied_builtin_records()
+    records = applied_builtin_records()
     return tuple(sorted({role for record in records for role in record.scope.roles}))
 
 
@@ -187,7 +189,7 @@ def builtin_carrier_body(role: str) -> str | None:
     """
     if role not in builtin_carrier_roles():
         return None
-    return _carrier_body(role, _applied_builtin_records())[0]
+    return _carrier_body(role, applied_builtin_records())[0]
 
 
 def render_role_carriers(graph: RuleGraph) -> tuple[RenderedCarrier, ...]:
@@ -355,6 +357,7 @@ __all__ = [
     "CARRIER_DIRECTORY",
     "CARRIER_NAME_PREFIX",
     "RenderedCarrier",
+    "applied_builtin_records",
     "builtin_carrier_body",
     "builtin_carrier_roles",
     "carrier_name",

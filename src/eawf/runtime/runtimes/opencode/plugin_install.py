@@ -54,7 +54,8 @@ from eawf.surfaces.render.manifest import (
 from eawf.surfaces.render.manifest import (
     save_atomic as save_manifest_atomic,
 )
-from eawf.surfaces.render.skills import SKILL_REGISTRY, SkillSpec
+from eawf.surfaces.render.skills import SkillSpec
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -462,7 +463,7 @@ def _render_sidecar_body(timestamp: str, plugin_js_bytes: bytes) -> dict[str, An
     agents_payload = [{"name": spec.role, "version": spec.version} for spec in AGENT_REGISTRY]
     commands_payload = [
         {"name": spec.skill_name, "version": spec.version}
-        for spec in SKILL_REGISTRY
+        for spec in shipped_skill_specs()
         if spec.user_invocable
     ]
     body: dict[str, Any] = {
@@ -628,7 +629,7 @@ def _persist_manifest(
             generated_at=timestamp,
             scope=scope,
         )
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         if not skill_spec.user_invocable:
             continue
         command_path = _command_target(
@@ -754,7 +755,7 @@ def install_plugin(
         )
 
     command_deltas: list[FileDelta] = []
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         if not skill_spec.user_invocable:
             continue
         command_path = _command_target(
@@ -828,7 +829,7 @@ def expected_paths(
             home=home,
             opencode_config_dir=opencode_config_dir,
         )
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         if not skill_spec.user_invocable:
             continue
         paths[f"plugin.opencode.command.{skill_spec.skill_name}"] = _command_target(
@@ -858,7 +859,7 @@ def expected_command_bodies() -> dict[str, bytes]:
     """Return ``{skill_name: rendered_bytes}`` for every emitted command file."""
     return {
         spec.skill_name: _render_opencode_command_md(spec).encode("utf-8")
-        for spec in SKILL_REGISTRY
+        for spec in shipped_skill_specs()
         if spec.user_invocable
     }
 

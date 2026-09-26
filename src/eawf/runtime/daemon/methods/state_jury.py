@@ -39,9 +39,10 @@ from eawf.workflow.lifecycle.transitions import (
 )
 
 if TYPE_CHECKING:
+    from eawf.kernel.state.models import Decision
     from eawf.observability.eval.jury import JurorBallot
     from eawf.observability.eval.jury_validation import BlockAuthority
-    from eawf.platform.profiles.models import VerifyBlock
+    from eawf.platform.profiles.models import JuryCalibration, VerifyBlock
     from eawf.workflow.dispatch.verdict import DurableAuditContext
 from eawf.runtime.daemon.methods.state_context import read_state
 
@@ -463,6 +464,60 @@ def build_durable_audit_context(  # noqa: C901
     )
 
 
+#: The phrase a ratifying Decision's title or rationale must carry, so an
+#: unrelated active Decision cannot be cited to unlock a blocking jury.
+CALIBRATION_DECISION_MARKER = "jury calibration"
+
+
+class JuryCalibrationRefusedError(LifecycleError):
+    """A blocking close-jury configuration that no ratified Decision backs."""
+
+
+def ratified_calibration_decision(calibration: JuryCalibration, state: State) -> Decision:
+    """Return the active Decision that ratified a blocking close-jury calibration.
+
+    Args:
+        calibration: The profile's calibration contract; its
+            ``close_authority`` must be ``"blocking"``.
+        state: Loaded state whose ``decisions`` the id resolves against.
+
+    Returns:
+        The ratifying :class:`~eawf.kernel.state.models.Decision`.
+
+    Raises:
+        JuryCalibrationRefusedError: The calibration is not blocking, names
+            no Decision, names one absent from state, one that is no longer
+            active, or one whose title and rationale never mention the jury
+            calibration.
+    """
+    from eawf.kernel.state.enums import DecisionStatus
+
+    decision_id = calibration.calibration_decision
+    if calibration.close_authority != "blocking" or decision_id is None:
+        raise JuryCalibrationRefusedError(
+            "jury calibration refused: only a blocking close jury with a "
+            "calibration_decision can be ratified"
+        )
+    decision = state.decisions.get(decision_id)
+    if decision is None:
+        raise JuryCalibrationRefusedError(
+            f"jury calibration refused: calibration_decision {decision_id!r} is not a "
+            "Decision in state; ratify the calibration before configuring a blocking jury"
+        )
+    if decision.status is not DecisionStatus.ACTIVE:
+        raise JuryCalibrationRefusedError(
+            f"jury calibration refused: Decision {decision_id!r} is "
+            f"{decision.status.value}, not active"
+        )
+    named_text = f"{decision.title} {decision.rationale}".lower()
+    if CALIBRATION_DECISION_MARKER not in named_text:
+        raise JuryCalibrationRefusedError(
+            f"jury calibration refused: Decision {decision_id!r} does not name the "
+            f"{CALIBRATION_DECISION_MARKER} it would ratify"
+        )
+    return decision
+
+
 def resolve_jury_block_authority(
     state: State,
     *,
@@ -489,6 +544,13 @@ def resolve_jury_block_authority(
       runs the earned-authority gate
       (:func:`~eawf.observability.eval.jury_validation.jury_block_authority`).
 
+    The profile's :class:`~eawf.platform.profiles.models.JuryCalibration`
+    decides whether scoring happens at all: an advisory close jury (the
+    default) resolves advisory without reading the substrate, and a blocking
+    one must cite an active Decision that ratified the calibration
+    (:func:`ratified_calibration_decision`); its precision floor then tightens
+    the known-bad catch floor.
+
     Default-advisory by construction: the validation substrate is empty today
     (no labelled cohort, no recorded ballots), so the cohort is honest-empty,
     the validation report is :attr:`JuryValidationStatus.INSUFFICIENT`, and the
@@ -510,6 +572,10 @@ def resolve_jury_block_authority(
         The :class:`~eawf.observability.eval.jury_validation.BlockAuthority`
         the jury has earned -- ``BLOCKING`` only when every trust floor clears,
         else ``ADVISORY``.
+
+    Raises:
+        JuryCalibrationRefusedError: The profile configures a blocking close
+            jury that no ratified Decision backs.
     """
     from eawf.observability.eval.jury_validation import (
         BlockAuthority,
@@ -525,9 +591,13 @@ def resolve_jury_block_authority(
     if verify_block is None:
         return BlockAuthority.ADVISORY
     leaf = verify_block.jury_authority
+    calibration = leaf.calibration
+    if calibration.close_authority == "advisory":
+        return BlockAuthority.ADVISORY
+    ratified_calibration_decision(calibration, state)
     authority_config = EvalJuryAuthorityConfig(
         min_labeled_waves=leaf.min_labeled_waves,
-        known_bad_catch_lb_floor=leaf.known_bad_catch_lb_floor,
+        known_bad_catch_lb_floor=max(leaf.known_bad_catch_lb_floor, calibration.precision_floor),
         unanimous_pass_ceiling=leaf.unanimous_pass_ceiling,
     )
     cohort = build_jury_validation_cohort(state, state_path)

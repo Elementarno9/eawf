@@ -46,7 +46,7 @@ from eawf.runtime.runtimes.codex.plugin_install import (
 )
 from eawf.surfaces.render.agents import AGENT_REGISTRY
 from eawf.surfaces.render.hooks import HookSpec
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 
 @dataclass(frozen=True)
@@ -312,7 +312,7 @@ def doctor_plugin(
     ok: list[DoctorEntry] = []
     drifted: list[DoctorEntry] = []
     missing: list[DoctorEntry] = []
-    for skill_spec in SKILL_REGISTRY:
+    for skill_spec in shipped_skill_specs():
         _classify_entry(
             _skill_target(plugin_root, skill_spec),
             region_id=f"plugin.codex.skill.{skill_spec.skill_name}",

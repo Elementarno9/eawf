@@ -7,7 +7,7 @@ as a ``status="failed"`` segment so the whole pipeline never crashes.
 
 Design notes:
 
-- Module order is fixed (left-to-right): ``state``, ``git``,
+- Module order is fixed (left-to-right): ``state``, ``budget``, ``git``,
   ``model_session_cwd``, ``context_tokens``, ``mcp_health``,
   ``hooks_plugins``, ``memory``, ``token_saving``.
 - Every module signature is uniform: ``build(claude_payload, state_path) ->
@@ -48,6 +48,7 @@ from eawf.runtime.runtime_counter_sidecar import (
 )
 from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
 from eawf.runtime.runtimes.claude.statusline_modules import (
+    budget,
     context_tokens,
     git,
     hooks_plugins,
@@ -71,6 +72,7 @@ logger = logging.getLogger(__name__)
 
 _MODULE_ORDER: list[Any] = [
     state,
+    budget,
     git,
     model_session_cwd,
     context_tokens,

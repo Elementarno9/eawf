@@ -88,10 +88,10 @@ def test_settings_re_render_byte_stable(tmp_path: Path) -> None:
 def test_settings_managed_skill_listing_matches_registry(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     parsed = json.loads((tmp_path / ".claude" / "settings.json").read_text(encoding="utf-8"))
-    from eawf.surfaces.render.skills import SKILL_REGISTRY
+    from eawf.workflow.skills.catalog import shipped_skill_specs
 
     listed = {s["name"] for s in parsed["__eawf_managed"]["skills"]}
-    expected = {s.skill_name for s in SKILL_REGISTRY}
+    expected = {s.skill_name for s in shipped_skill_specs()}
     assert listed == expected
 
 

@@ -2,9 +2,10 @@
 
 Surface contract:
 
-- ``eawf skill list`` (Phase 4 W07) enumerates all 10 canonical skill
-  names with their body schema name and an ``installed``/``missing``
-  status.
+- ``eawf skill list`` enumerates the closed skill catalog
+  (:mod:`eawf.workflow.skills.catalog`) with each skill's output schema,
+  argument hint and an ``installed``/``missing`` status. A retired skill
+  name is refused with its successor named, never aliased.
 - ``eawf skill render <name>`` (Phase 10 W01) prints a registered
   skill's canonical ``SKILL.md`` body (``--format=skill-md``, default)
   or a metadata+body JSON object (``--format=json``). Bytes are
@@ -72,34 +73,6 @@ skill_app = typer.Typer(
 )
 
 
-# Per-skill metadata used by ``eawf skill list``. Mirrors `docs/architecture/envelope.md`:
-# six core (research/prep/audit/ship/review/polish) + four meta
-# (init/roadmap/differentiate/flow) + /blitz + the six skill-surface
-# bodies (coauthor/memory/agent-dispatch/compress/wave-spec/security-review),
-# descriptions kept short enough for a terminal table column.
-_SKILL_DESCRIPTIONS: dict[SkillName, str] = {
-    "/research": "Investigate questions; produce a peer-reviewed brief.",
-    "/prep": "Plan a wave: enumerate steps, success criteria, instruments.",
-    "/audit": "Run a structured audit against the active scope and persist findings.",
-    "/ship": "Close a wave/iter: gather artefacts, persist outcomes, advance pointers.",
-    "/review": "Review changes against the active hypothesis and acceptance set.",
-    "/polish": "Apply finishing touches: lint, format, doc updates, link checks.",
-    "/init": "Bootstrap a new Eä Workflow workspace via the install wizard.",
-    "/roadmap": "Plan or update the long-running roadmap from the active scope.",
-    "/differentiate": "Compare options and produce a differentiation matrix.",
-    "/flow": "Composite skill that chains the six core skills end-to-end.",
-    "/blitz": "Auto-chain research follow-ups when residual unknowns remain.",
-    "/coauthor": "Resolve the Co-Authored-By trailer policy for the active repo.",
-    "/memory": "Save, list, or forget curated durable memory entries.",
-    "/agent-dispatch": "Dispatch a claimed wave to a runtime per the V8 session-reuse ladder.",
-    "/compress": "Compress the session conversation when context approaches the limit.",
-    "/wave-spec": "Scaffold or validate a WaveSpec deliverable for a claimed wave.",
-    "/security-review": "Run the security-audit DSL against a closed scope and emit findings.",
-    "/dispatch": "Coordinate one Delivery Batch: bring its ready Tasks to a candidate.",
-    "/integrate": "Prepare or execute one daemon-owned integration action on a Delivery Batch.",
-    "/verify": "Verify one Delivery Batch at one exact revision, as auditor or as reviewer.",
-}
-
 # Body schema lookup. The "fingerprint" column in ``skill list`` is the
 # fully-qualified class name of this model — stable enough to spot a
 # drift between the canonical body schema and an installed skill at a
@@ -123,37 +96,33 @@ def _skill_body_models() -> dict[SkillName, type[Any]]:
 
 
 def _all_skill_names() -> list[SkillName]:
-    """Return the 10 canonical skill names in declaration order.
+    """Return the slashed catalog skill names in catalog order."""
+    from eawf.workflow.skills.catalog import SKILL_CATALOG
 
-    Sourced from :data:`~eawf.surfaces.render.envelope.SkillName` via
-    :func:`typing.get_args` so the list never drifts from the frozen
-    literal.
-    """
-    from eawf.surfaces.render.envelope import CANONICAL_SKILL_NAMES
-
-    return list(CANONICAL_SKILL_NAMES)
+    return [entry.invocation_name for entry in SKILL_CATALOG.entries]
 
 
 def _resolve_skill_name(raw: str) -> SkillName:
-    """Coerce *raw* into the frozen :data:`SkillName` literal.
+    """Resolve *raw* to a catalog skill name, refusing retired and unknown names.
 
     Accepts the canonical form (``/research``) and the bare form
     (``research``) so operators don't have to escape the leading slash
     in shells that interpret it.
 
     Raises:
-        UserError: ``raw`` is not one of the ten canonical names
-            (``kind="InvalidInput"``).
+        UserError: ``raw`` is retired (the message names its successor) or
+            is not a catalog skill (``kind="InvalidInput"``).
     """
-    candidate = _normalise_skill_input(raw)
-    valid = _all_skill_names()
-    if candidate not in valid:
-        raise cli_errors.UserError(
-            f"unknown skill {raw!r}; expected one of {sorted(valid)}", kind="InvalidInput"
-        )
-    # mypy narrows ``candidate`` to the :data:`SkillName` literal via the
-    # ``in valid`` membership test, so no cast is required here.
-    return candidate
+    from eawf.workflow.skills.catalog import (
+        SkillRetiredError,
+        UnknownSkillError,
+        resolve_skill,
+    )
+
+    try:
+        return resolve_skill(raw).invocation_name
+    except (SkillRetiredError, UnknownSkillError) as exc:
+        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
 
 
 def _parse_stdin_args(stdin_text: str) -> dict[str, Any]:
@@ -256,29 +225,31 @@ def _emit_envelope(env: OutputEnvelope, *, as_json: bool) -> None:
     typer.echo(to_markdown(env), nl=False)
 
 
-def _build_list_table(*, plain: bool) -> str:
-    """Render the ``skill list`` table.
+def _body_schema(name: SkillName) -> str | None:
+    """Return the engine body-model fingerprint for *name*, or ``None``."""
+    body_cls = _skill_body_models().get(name)
+    if body_cls is None:
+        return None
+    return f"{body_cls.__module__}.{body_cls.__qualname__}"
 
-    Plain mode emits ``"<name>  <status>  <body>  <description>"`` lines
+
+def _build_list_table(*, plain: bool) -> str:
+    """Render the ``skill list`` table from the closed skill catalog.
+
+    Plain mode emits ``"<name>  <status>  <output>  <description>"`` lines
     (no ANSI markup) so terminals without colour stay readable. The
     Rich branch builds a :class:`Table` into a string buffer with a
-    fixed width (100) so the output is deterministic for golden tests.
+    fixed width so the output is deterministic for golden tests.
     """
-    from eawf.workflow.skills import registry
-
-    rows: list[tuple[SkillName, str, str, str]] = []
-    for name in _all_skill_names():
-        registered = registry.lookup(name)
-        status = "installed" if registered is not None else "missing"
-        body_cls = _skill_body_models()[name]
-        fingerprint = f"{body_cls.__module__}.{body_cls.__qualname__}"
-        description = _SKILL_DESCRIPTIONS[name]
-        rows.append((name, status, fingerprint, description))
+    rows = [
+        (row["name"], row["status"], row["output_schema"], row["description"])
+        for row in _list_payload()["skills"]
+    ]
 
     if plain:
         lines: list[str] = []
-        for name, status, fingerprint, description in rows:
-            lines.append(f"{name:<16}  {status:<10}  {fingerprint:<48}  {description}")
+        for name, status, output_schema, description in rows:
+            lines.append(f"{name:<16}  {status:<10}  {output_schema:<24}  {description}")
         return "\n".join(lines)
 
     buf = io.StringIO()
@@ -286,85 +257,67 @@ def _build_list_table(*, plain: bool) -> str:
     table = Table(title="eawf skills", show_lines=False)
     table.add_column("name", style="cyan")
     table.add_column("status", justify="left", style="bold")
-    table.add_column("body schema", style="magenta")
+    table.add_column("output schema", style="magenta")
     table.add_column("description")
-    for name, status, fingerprint, description in rows:
+    for name, status, output_schema, description in rows:
         style = "green" if status == "installed" else "yellow"
-        table.add_row(
-            name,
-            f"[{style}]{status}[/{style}]",
-            fingerprint,
-            description,
-        )
+        table.add_row(name, f"[{style}]{status}[/{style}]", output_schema, description)
     console.print(table)
     return buf.getvalue().rstrip()
 
 
 def _list_payload() -> dict[str, Any]:
-    """Build the JSON shape for ``skill list --json``."""
-    from eawf.workflow.skills import registry
+    """Build the JSON shape for ``skill list --json``: one row per catalog skill."""
+    from eawf.workflow.skills.catalog import SKILL_CATALOG
 
-    skills: list[dict[str, Any]] = []
-    for name in _all_skill_names():
-        registered = registry.lookup(name)
-        body_cls = _skill_body_models()[name]
-        skills.append(
-            {
-                "name": name,
-                "status": "installed" if registered is not None else "missing",
-                "body_schema": f"{body_cls.__module__}.{body_cls.__qualname__}",
-                "description": _SKILL_DESCRIPTIONS[name],
-            }
-        )
-    return {"skills": skills}
+    return {"skills": [_skill_payload(entry.invocation_name) for entry in SKILL_CATALOG.entries]}
 
 
 def _skill_payload(name: SkillName) -> dict[str, Any]:
-    """Build the per-skill row :func:`_list_payload` would emit for *name*.
+    """Build the catalog row for *name* shared by ``skill list`` and ``skill render``.
 
-    Returns the same four keys (``name``, ``status``, ``body_schema``,
-    ``description``) so the ``skill render --format=json`` surface stays
-    aligned with the ``skill list --json`` surface. The caller is
-    expected to splice an additional ``body`` field carrying the
-    canonical SKILL.md text.
+    Carries the historical ``name``/``status``/``body_schema``/``description``
+    keys plus the catalog's class, audience, argument hint, output schema and
+    terminal outcomes, so every surface reads the grammar and output contract
+    from the one catalog record.
     """
     from eawf.workflow.skills import registry
+    from eawf.workflow.skills.catalog import resolve_skill
 
-    registered = registry.lookup(name)
-    body_cls = _skill_body_models()[name]
+    entry = resolve_skill(name)
     return {
         "name": name,
-        "status": "installed" if registered is not None else "missing",
-        "body_schema": f"{body_cls.__module__}.{body_cls.__qualname__}",
-        "description": _SKILL_DESCRIPTIONS[name],
+        "status": "installed" if registry.lookup(name) is not None else "missing",
+        "body_schema": _body_schema(name),
+        "description": entry.description,
+        "skill_class": entry.skill_class,
+        "audience": entry.audience,
+        "argument_hint": entry.grammar.argument_hint,
+        "output_schema": entry.output.schema_name,
+        "terminal_outcomes": list(entry.output.terminal_outcomes),
     }
 
 
 def _resolve_skill_spec(name: SkillName) -> SkillSpec:
-    """Return the :class:`SkillSpec` for *name* (slashed canonical form).
+    """Return the shipped :class:`SkillSpec` for catalog skill *name*.
 
-    :data:`SKILL_REGISTRY` stores bare skill names (e.g. ``"research"``)
-    but the CLI / :data:`SkillName` literal uses the slashed canonical
-    form (``"/research"``). This helper bridges the two so callers can
-    work in the slashed namespace.
+    The shipped specs store bare names (``"research"``) while the CLI works in
+    the slashed form (``"/research"``); this bridges the two.
 
     Raises:
-        cli_errors.UserError: ``name`` has no matching :data:`SkillSpec`
-            entry (``kind="InvalidInput"``). This should be unreachable in
-            practice because
-            :func:`_resolve_skill_name` validates the canonical literal
-            BEFORE we land here — the registry and the literal are
-            frozen at the same ten names — but we still raise the
-            canonical error so the surface stays defensive.
+        cli_errors.UserError: ``name`` has no shipped spec
+            (``kind="InvalidInput"``). Unreachable once
+            :func:`_resolve_skill_name` has accepted the name, because both
+            read the same catalog.
     """
-    from eawf.surfaces.render.skills import SKILL_REGISTRY
+    from eawf.workflow.skills.catalog import shipped_skill_specs
 
     bare = name.removeprefix("/")
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         if spec.skill_name == bare:
             return spec
     raise cli_errors.UserError(
-        f"no SkillSpec registered for {name!r}; SKILL_REGISTRY and SkillName drifted",
+        f"no shipped skill spec for {name!r}; the skill catalog and its specs drifted",
         kind="InvalidInput",
     )
 
@@ -379,9 +332,9 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
     ``body_schema``, ``description``) plus the new layered metadata
     introduced by P14-W09: ``source`` (``builtin|user|workspace``),
     ``runtimes`` (per-runtime visibility hint; empty == visible to all),
-    ``path``, and ``version``.
+    ``path``, and ``version``. Catalog skills also carry the catalog's class,
+    audience, argument hint, output schema and terminal outcomes.
     """
-    from eawf.workflow.skills import registry
     from eawf.workflow.skills.discovery import discover_skills
 
     rows = discover_skills(workspace=workspace)
@@ -391,19 +344,11 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
     builtin_names = set(_all_skill_names())
     for entry in rows:
         name = entry.name
+        item: dict[str, Any] = {"name": name, "status": "user", "body_schema": None}
         if name in builtin_names:
-            registered = registry.lookup(name)
-            body_cls = _skill_body_models()[name]
-            status = "installed" if registered is not None else "missing"
-            body_schema = f"{body_cls.__module__}.{body_cls.__qualname__}"
-        else:
-            status = "user"
-            body_schema = None
-        items.append(
+            item = _skill_payload(name)
+        item.update(
             {
-                "name": name,
-                "status": status,
-                "body_schema": body_schema,
                 "description": entry.description,
                 "source": entry.source,
                 "runtimes": list(entry.runtimes),
@@ -411,6 +356,7 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
                 "version": entry.version,
             }
         )
+        items.append(item)
     return {"skills": items, "scope": scope}
 
 
@@ -691,18 +637,11 @@ def run_cmd(
         _emit_envelope(envelope, as_json=flags.json_output)
         return
 
-    if candidate not in _all_skill_names():
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"unknown skill {name!r}; expected one of {sorted(_all_skill_names())} "
-                "or a workspace/user skill",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
+    try:
+        skill_name = _resolve_skill_name(candidate)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
         return
-
-    skill_name: SkillName = candidate
 
     skill_cls = registry.lookup(skill_name)
     if skill_cls is None:

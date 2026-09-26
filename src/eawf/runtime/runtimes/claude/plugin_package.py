@@ -11,7 +11,7 @@ differs from :mod:`eawf.runtime.runtimes.claude.plugin_install`:
       .claude-plugin/
         plugin.json                  # always emitted
         marketplace.json             # gated by ``include_marketplace``
-      skills/<name>/SKILL.md         # one per SKILL_REGISTRY entry
+      skills/<name>/SKILL.md         # one per skill catalog entry
       agents/<role>.md               # one per AGENT_REGISTRY entry
       README.md                      # gated by ``include_readme``
 
@@ -73,11 +73,11 @@ from eawf.surfaces.render.agents import (
 )
 from eawf.surfaces.render.hooks import render_hook_sh
 from eawf.surfaces.render.skills import (
-    SKILL_REGISTRY,
     SkillSpec,
     SkillTemplateContext,
     render_skill_md,
 )
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 logger = logging.getLogger(__name__)
 
@@ -508,7 +508,7 @@ def package_plugin(
     readme = _render_readme() if include_readme else None
 
     skill_outputs: list[tuple[Path, str]] = []
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         path = target_dir / "skills" / spec.skill_name / "SKILL.md"
         skill_outputs.append((path, _render_skill(spec)))
 
@@ -537,7 +537,7 @@ def package_plugin(
             path = target_dir / "hooks" / f"{value}.sh"
             hook_outputs.append((path, render_hook_sh(hook_spec.event_type)))
 
-    skill_names = [spec.skill_name for spec in SKILL_REGISTRY]
+    skill_names = [spec.skill_name for spec in shipped_skill_specs()]
     agent_roles = [spec.role for spec in AGENT_REGISTRY]
 
     if dry_run:

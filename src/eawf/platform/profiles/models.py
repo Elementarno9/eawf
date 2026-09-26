@@ -174,6 +174,59 @@ class CheckpointBlock(BaseModel):
     drift_budget_eu: float = Field(default=3.5, ge=0.0)
 
 
+#: The lowest precision floor a calibration may declare. A jury that catches
+#: fewer than half of the known-bad subjects discriminates no better than a
+#: coin, so no calibration can grant it authority below this line.
+MIN_JURY_PRECISION_FLOOR = 0.5
+
+
+class JuryCalibration(BaseModel):
+    """The one contract that decides where a jury's veto may block.
+
+    The jury runs at two sites. The plan site is advisory permanently: plan
+    quality never acquires a ground truth a cohort could be scored against,
+    so ``plan_authority`` admits only ``"advisory"``. The close site may block,
+    but only under a calibration an operator ratified as a Decision:
+    ``close_authority="blocking"`` requires ``calibration_decision`` here, and
+    the close gate additionally refuses unless that id resolves to an active
+    Decision in state that names the jury calibration. No Decision, no
+    blocking.
+
+    Attributes:
+        plan_authority: Authority of the plan-site jury; always advisory.
+        close_authority: Authority of the close-site jury. ``"advisory"``
+            (default) logs a veto without blocking; ``"blocking"`` lets an
+            earned veto refuse the close.
+        calibration_decision: Id of the Decision that ratified the
+            calibration (``D<digits>``). Required when ``close_authority`` is
+            ``"blocking"``.
+        precision_floor: The lower bound the jury's known-bad catch rate must
+            clear before a blocking close jury earns its veto. Floored at
+            :data:`MIN_JURY_PRECISION_FLOOR`.
+
+    Raises:
+        pydantic.ValidationError: A blocking close jury without a
+            ``calibration_decision``, a plan jury configured to block, or a
+            precision floor outside ``[0.5, 1.0]``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    plan_authority: Literal["advisory"] = "advisory"
+    close_authority: Literal["advisory", "blocking"] = "advisory"
+    calibration_decision: str | None = Field(default=None, pattern=r"^D\d+$")
+    precision_floor: float = Field(default=0.80, ge=MIN_JURY_PRECISION_FLOOR, le=1.0)
+
+    @model_validator(mode="after")
+    def _blocking_needs_decision(self) -> JuryCalibration:
+        if self.close_authority == "blocking" and self.calibration_decision is None:
+            raise ValueError(
+                "a blocking close jury needs a ratified calibration: set "
+                "calibration_decision to the Decision id that ratified it"
+            )
+        return self
+
+
 class JuryAuthorityConfig(BaseModel):
     """The trust floors a cross-vendor jury must clear to earn blocking authority.
 
@@ -206,6 +259,9 @@ class JuryAuthorityConfig(BaseModel):
             (false-clean) rate, in ``[0.0, 1.0]``. A jury whose false-clean rate
             is at or above this ceiling is denied authority -- a hot blind spot
             disqualifies the panel even when the catch-rate LB clears.
+        calibration: The :class:`JuryCalibration` deciding whether the close
+            jury may block at all. Its default keeps both sites advisory, so
+            the floors above only matter once a Decision ratifies blocking.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -213,6 +269,7 @@ class JuryAuthorityConfig(BaseModel):
     min_labeled_waves: int = Field(default=20, ge=1)
     known_bad_catch_lb_floor: float = Field(default=0.80, ge=0.0, le=1.0)
     unanimous_pass_ceiling: float = Field(default=0.10, ge=0.0, le=1.0)
+    calibration: JuryCalibration = Field(default_factory=JuryCalibration)
 
 
 class VerifyBlock(BaseModel):

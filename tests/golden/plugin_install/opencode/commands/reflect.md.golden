@@ -1,0 +1,62 @@
+---
+description: "Report where effort, time and money actually went, without mutating canonical state."
+---
+
+# /reflect
+
+Report where effort, time and money actually went, without mutating canonical state.
+
+## 1. Authority
+
+- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Effects: Read-only apart from the session title fill, which --local-only disables; persists statistics and metadata to the resolved output path.
+- Allowed RPCs: `read_entity`, `query_measurement`, `query_telemetry`. Any other RPC is denied before it reaches a handler.
+- Canonical state: never mutated by this skill.
+- Local write root: `.ea/local/reflect`; nothing is written outside it.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+Inputs are the measurement collections owned by V07-MEAS: runtime counters, actuals, and estimates. Do not re-scrape provider session history; a second reader of the same facts drifts from the first, and the measured rows already carry harness, model, quality, and exclusion state. The one input from outside those collections is the local title cache of step 8, which holds provider answers keyed by digest hash and never a transcript line.
+
+Scope defaults to the current project. A wider scope, up to all_local - every project whose collections exist on this machine - is read only when the operator asks for it explicitly. A wider read is still a local read: the read and the render send nothing anywhere, and no content excerpt is persisted at any scope beyond the bounded scrubbed title. The only egress is the title fill of the run verb, which sends a scrubbed structural digest and never prompt text; --local-only disables it, every title then falls back to scrubbed_extract or structural, and the report states which source each title carries.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+Report where effort, time, and money actually went. This skill is operator-only and mutates no canonical state. It is read-only apart from one effect: the title fill of step 8, which sends a scrubbed structural digest to the provider and caches the answer, and which --local-only disables.
+
+```text
+/reflect [--window <duration|from..to>] [--scope <all_local|workspace|project|track|milestone>] [--cohort <project-first|personal>] [--format <report|json>] [--out <path>] [--local-only]
+```
+
+## 4. Method
+
+1. Bind the reporting window and the cohort. Prefer a project-first cohort when it holds at least the configured minimum comparable sample; otherwise fall back through wider personal cohorts and say which was used. Exclude prior runs of this skill, and every helper session this skill spawned, from every cohort, not only from the overhead line, or the tool inflates its own norms each time it runs.
+2. Aggregate measured rows only. Never substitute an estimate for an actual, never render a ratio when either side is unavailable, and never compare across effort-unit mapping revisions without labelling the comparison.
+3. Classify excluded rows separately and report them in their own section with their reasons. Excluded work is still observed usage; it is removed from the baseline, not from the report.
+4. Report unpriced spend as unpriced. A placeholder rate is never presented as a dollar figure, and zero is never printed where the source recorded unknown.
+5. Measure and exclude the reflection run's own overhead from the baseline it reports.
+6. Bound the first pass. Inventory the full approved scope, parse a bounded first sample under the declared per-source ceilings, and write a digest-bound verification manifest carrying parser versions, scope fingerprint, inventory digest, candidate count and bytes, approved source prefixes, sample references and verdicts, malformed ratio, schema drift, and coverage. Include an orchestrated root, an aborted or incomplete root, and a noise candidate in the sample where each exists. If validation passes, process the remaining approved inventory without a second operator decision.
+7. Mark every row by quotability. A statistic scoped to the current project is quotable into a committed artifact. A cross-project row is not, and is labelled non-quotable in the report itself so a later agent citing it can see the boundary rather than infer it.
+8. Fill session titles from the local cache, then from the provider unless --local-only is set, sending only the scrubbed structural digest. Leave an unanswerable digest uncached, name every helper session with the reflection marker so the sweep drops it, and fall back per title to scrubbed_extract then structural, stating the source each title carries.
+
+## 4b. Applicable rules
+
+No rule in the effective rule graph is scoped to this skill, which selects no activity or role; the repository policy still binds every session.
+
+## 5. Constraints
+
+- Persist statistics and metadata only. Bounded content may be inspected in memory to classify a candidate finding; no excerpt is persisted beyond the bounded scrubbed title, at any scope.
+- You are operator-invoked, you mutate no canonical state, and you send nothing beyond the scrubbed structural digests of step 8; producing agent-readable output does not make this skill agent-invocable.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one ReflectReport containing window, scope, cohort and its sample size, measured totals by Track, Milestone, Batch, Task, and Run, estimate-versus-actual variance with its mapping revision, pricing quality, the excluded-row section, and every unavailable field named with its reason. Emit it in a form an agent can consume without re-deriving it: a machine-readable overview and typed highlighted issues beside the rendered prose, each issue carrying its subject, its evidence rows, and its quotability mark.
+
+The report validates against `ReflectReport`, and its terminal outcome is exactly one of `reported`, `partial`, `unavailable`, `blocked`. Prose in the report is explanation, never the result.
+
+<!-- argument hint: [--window <duration|from..to>] [--scope <all_local|workspace|project|track|milestone>] [--cohort <project-first|personal>] [--format <report|json>] [--out <path>] [--local-only] -->
+ARGUMENTS: $ARGUMENTS

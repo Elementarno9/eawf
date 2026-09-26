@@ -30,11 +30,11 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
+from eawf.kernel.config.layered import resolve_runtime_tier_models
 from eawf.kernel.spec.campaign_driver import (
     DispatchSpawner,
     RoundContradictionReducer,
@@ -100,7 +100,7 @@ from eawf.kernel.store.kinds.research_campaign import (
 from eawf.kernel.store.kinds.research_round import ResearchRoundPayload
 from eawf.kernel.store.paths import store_path
 from eawf.platform.scrub.scan import rewrite_text
-from eawf.runtime.budget.policy import DEFAULT_ENFORCE, EnforceMode
+from eawf.runtime.budget.service import load_budget_config
 from eawf.runtime.daemon.dispatch_runner import (
     DispatchTokens,
     _chunk_should_flush,
@@ -1712,7 +1712,7 @@ async def _spawn_researcher_agent_end(
             session_id=session_id,
             report_body=body,
             pgid=pid,
-            enforce=_resolve_budget_enforce(state_path),
+            budget=load_budget_config(state_path.parent.parent),
             output_text=spawn_result.text,
             # Researcher spend is a campaign cost, not a wave cost: never fold
             # it into a wave budget. The dispatch_cost event books it to the
@@ -1903,18 +1903,6 @@ def _register_researcher_session(
         f"session={session_id!r} before={before_version} after={after_version}"
     )
     return session_id
-
-
-def _resolve_budget_enforce(state_path: Path) -> EnforceMode:
-    """Resolve ``flow.budget.enforce`` for the repo that owns ``state_path``."""
-    repo = state_path.parent.parent
-    merged, _sources = merge_config(workspace=repo, repo=repo)
-    flow = merged.get("flow")
-    budget = flow.get("budget") if isinstance(flow, dict) else None
-    value = budget.get("enforce", DEFAULT_ENFORCE) if isinstance(budget, dict) else DEFAULT_ENFORCE
-    if value not in ("soft", "hard"):
-        raise ValueError(f"invalid flow.budget.enforce: {value!r}")
-    return cast(EnforceMode, value)
 
 
 #: The spend a campaign's first round is projected at: one round, and no

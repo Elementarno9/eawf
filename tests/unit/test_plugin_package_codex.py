@@ -9,7 +9,7 @@ import pytest
 
 from eawf.runtime.runtimes.codex import PublishSource, package_plugin
 from eawf.runtime.runtimes.codex.hook_map import CODEX_HOOK_EVENT_TYPES
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 
 def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
@@ -25,13 +25,13 @@ def test_package_writes_marketplace_and_plugin_tree(tmp_path: Path) -> None:
     assert result.marketplace.action == "created"
     assert result.manifest is not None
     assert result.manifest.action == "created"
-    assert len(result.skills) == len(SKILL_REGISTRY)
+    assert len(result.skills) == len(shipped_skill_specs())
     assert len(result.hooks) == len(CODEX_HOOK_EVENT_TYPES)
     plugin_root = target / "plugins" / "eawf"
     assert result.hook_config is not None
     assert result.hook_config.path == plugin_root / "hooks" / "hooks.json"
     # Codex requires each skill on disk as a directory containing SKILL.md.
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = plugin_root / "skills" / spec.skill_name
         assert skill_dir.is_dir(), skill_dir
         assert (skill_dir / "SKILL.md").is_file(), skill_dir / "SKILL.md"

@@ -399,7 +399,7 @@ _EXPECTED_CONFIG_CONSUMERS: dict[str, str] = {
     "flow.advance_after.polish": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.prep": "eawf.workflow.skills.flow.FlowSkill._run_steps",
     "flow.advance_after.research": "eawf.workflow.skills.flow.FlowSkill._run_steps",
-    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_enforce",
+    "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
     "flow.max_repair_cycles": "eawf.workflow.skills.flow._config_max_repair_cycles",
     "planning.max_parallel_waves": ("eawf.workflow.lifecycle._capacity.resolve_max_parallel_waves"),
     "prep.auto_resume": "eawf.workflow.skills.prep.PrepSkill._resolve_auto_resume",

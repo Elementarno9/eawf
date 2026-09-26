@@ -4,7 +4,7 @@ Plugin sync is the canonical per-runtime artifact regeneration verb.
 The existing ``eawf plugin install <runtime>`` surface stays as the
 per-runtime affordance; ``plugin sync`` is the **single-shot
 multi-runtime** orchestrator that drives all three runtimes in one
-call, deterministically derived from :data:`SKILL_REGISTRY` +
+call, deterministically derived from :func:`~eawf.workflow.skills.catalog.shipped_skill_specs` +
 :data:`AGENT_REGISTRY` + :data:`HOOK_REGISTRY`.
 
 Architectural shape

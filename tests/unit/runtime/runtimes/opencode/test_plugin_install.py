@@ -403,13 +403,13 @@ def test_install_permission_task_gates_subagent_spawn(tmp_path: Path) -> None:
 def test_install_emits_commands_for_invocable_skills(
     tmp_path: Path, fake_home: Path, fake_opencode_config_dir: Path, scope: str
 ) -> None:
-    """Each ``user_invocable=True`` SKILL_REGISTRY entry produces
+    """Each ``user_invocable=True`` shipped_skill_specs() entry produces
     ``<base>/commands/<name>.md``."""
-    from eawf.surfaces.render.skills import SKILL_REGISTRY
+    from eawf.workflow.skills.catalog import shipped_skill_specs
 
     result = install_plugin(tmp_path, **_install_kwargs(scope, fake_home, fake_opencode_config_dir))
     base = tmp_path / ".opencode" if scope == "project" else fake_opencode_config_dir
-    invocable = [s for s in SKILL_REGISTRY if s.user_invocable]
+    invocable = [s for s in shipped_skill_specs() if s.user_invocable]
     for spec in invocable:
         cmd_path = base / "commands" / f"{spec.skill_name}.md"
         assert cmd_path.is_file(), cmd_path

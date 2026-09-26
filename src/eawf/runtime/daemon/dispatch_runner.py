@@ -96,8 +96,9 @@ from eawf.kernel.store.kinds.events.base import (
 )
 from eawf.observability.telemetry.models import EndMarker, PriceSourceKind, RuntimeErrorClass
 from eawf.observability.telemetry.pricing import resolve_price_source
-from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER, EnforceMode
-from eawf.runtime.budget.service import record_consumption
+from eawf.runtime.budget.notices import notices_path
+from eawf.runtime.budget.policy import BudgetConfig
+from eawf.runtime.budget.service import emit_budget_notice, record_consumption
 from eawf.runtime.daemon.budget_interlock import InterlockOutcome, enforce_token_cap
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.adapter import RuntimeSpawnError
@@ -1157,7 +1158,7 @@ def accrue_tokens_consumed(
     wave_id: str,
     tokens: DispatchTokens,
     pgid: int | None = None,
-    enforce: EnforceMode = DEFAULT_ENFORCE,
+    budget: BudgetConfig = BudgetConfig(),  # noqa: B008 -- frozen, so one shared default is safe
 ) -> InterlockOutcome | None:
     """Fold a dispatch's token tally into ``Wave.tokens_consumed``, live.
 
@@ -1185,9 +1186,11 @@ def accrue_tokens_consumed(
     ``os.killpg`` the runaway group (``terminated=True`` on the returned
     :class:`~eawf.runtime.daemon.budget_interlock.InterlockOutcome`). A
     ``None`` pgid (a stateless / plan-only caller) still computes + logs the
-    decision but sends no signal. *enforce* defaults to the documented
+    decision but sends no signal. *budget* defaults to the documented
     config default (``soft``, which never reaches HALT); the live caller
-    threads the config-resolved mode so ``hard`` can fire.
+    threads the config-resolved table so ``hard`` can fire. The notice, the
+    interlock and the statusline all measure against the one ceiling
+    :meth:`~eawf.runtime.budget.policy.BudgetConfig.ceiling` derives.
 
     The accrual is opt-in and tolerant: it is skipped (returning ``None``)
     when ``ctx.state_path`` is unset (stateless unit-test contexts). The
@@ -1202,8 +1205,9 @@ def accrue_tokens_consumed(
         pgid: Process-group id of the wave's live spawn, threaded so a
             hard-cap breach can reap the group. ``None`` (the default)
             computes + logs the decision but signals nothing.
-        enforce: Enforce mode the interlock runs under -- ``soft`` (default,
-            never HALTs) or ``hard`` (HALTs + reaps at the cap).
+        budget: The validated ``flow.budget`` table the ceiling derives
+            from -- ``soft`` (default, never HALTs) or ``hard`` (HALTs +
+            reaps at the ceiling).
 
     Returns:
         The :class:`~eawf.runtime.daemon.budget_interlock.InterlockOutcome`
@@ -1237,6 +1241,16 @@ def accrue_tokens_consumed(
         after_version=after_version,
         tokens_consumed=tokens_consumed,
     )
+    # A threshold crossing lands as one non-blocking notice per wave, outside
+    # the state lock: the notice ledger has its own lock, and a notice write
+    # failing must not hold up the accrual or the interlock below.
+    emit_budget_notice(
+        notices_path(state_path),
+        scope_id=wave_id,
+        consumed=tokens_consumed,
+        ceiling=budget.ceiling(token_budget),
+        observed_at=datetime.now(UTC),
+    )
     # Safety-floor token-cap interlock: classify the post-increment burn
     # against the wave's budget and, on a hard-enforce HALT, reap the wave's
     # spawned process group. Run outside the state portalock so the kill
@@ -1247,8 +1261,8 @@ def accrue_tokens_consumed(
     outcome = enforce_token_cap(
         consumed=tokens_consumed,
         base_budget=token_budget,
-        enforce=enforce,
-        multiplier=DEFAULT_MULTIPLIER,
+        enforce=budget.enforce,
+        multiplier=budget.multiplier,
         pgid=pgid,
     )
     logger.info(
@@ -1689,7 +1703,7 @@ def run_dispatch(
     confidence: Confidence = Confidence.HIGH,
     report_body: AgentReportBody | None = None,
     pgid: int | None = None,
-    enforce: EnforceMode = DEFAULT_ENFORCE,
+    budget: BudgetConfig = BudgetConfig(),  # noqa: B008 -- frozen, so one shared default is safe
     output_text: str | None = None,
     accrue_wave_budget: bool = True,
 ) -> DispatchResult:
@@ -1750,6 +1764,8 @@ def run_dispatch(
             body from *outcome*. The live-spawn caller supplies this so the
             persisted report carries the agent's words; the hand-fed-outcome
             caller leaves it ``None`` (the synthetic body is built).
+        budget: The validated ``flow.budget`` table the wave's one ceiling
+            derives from, threaded to :func:`accrue_tokens_consumed`.
         output_text: Optional captured stdout/stderr of the spawned child
             (FA4, W08). When supplied the runner fans its bounded line tail to
             the live output tail via :func:`emit_agent_output` (an
@@ -1840,7 +1856,7 @@ def run_dispatch(
     # its tokens into, so the wave-budget accrual is skipped; the dispatch_cost
     # event above still books the spend against the campaign scope.
     interlock = (
-        accrue_tokens_consumed(ctx, wave_id=wave_id, tokens=tokens, pgid=pgid, enforce=enforce)
+        accrue_tokens_consumed(ctx, wave_id=wave_id, tokens=tokens, pgid=pgid, budget=budget)
         if accrue_wave_budget
         else None
     )

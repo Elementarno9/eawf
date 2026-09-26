@@ -256,6 +256,31 @@ jobs:
       - name: Requirement trace check
         run: uv run python tools/requirement_trace.py check
 
+  skill-eval:
+    name: Skill envelope evals
+    # The eval marker is excluded from the default pytest run, so without
+    # this job a skill whose envelope drifts from its golden stays green.
+    # The cases compare envelope structure against committed goldens and
+    # call no model, so the job is deterministic and cheap enough to run
+    # on every push.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Skill envelope evals
+        run: uv run pytest tests/eval/test_skill_eval.py -m eval -q
+
   linux-jail:
     name: Linux jail real-bwrap launch
     # The `test` matrix runs on hosts WITHOUT bubblewrap, so every real-jail
@@ -502,6 +527,7 @@ jobs:
         tool-install-smoke,
         snapshot-pairing,
         requirement-trace,
+        skill-eval,
         linux-jail,
         twice-green,
         prose-gate,

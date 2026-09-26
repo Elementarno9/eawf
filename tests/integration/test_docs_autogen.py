@@ -134,11 +134,12 @@ def test_cli_page_lists_a_known_command_group() -> None:
 
 
 def test_skills_page_lists_registry_entries() -> None:
-    """Every skill in the registry appears as a slash-command row."""
-    from eawf.surfaces.render.skills import SKILL_REGISTRY
+    """Every catalog skill appears as a slash-command row; retired ones do not."""
+    from eawf.workflow.skills.catalog import shipped_skill_specs
 
     body = autogen.skills_page().body
-    for spec in SKILL_REGISTRY:
+    assert "`/prep`" not in body
+    for spec in shipped_skill_specs():
         assert f"`/{spec.skill_name}`" in body
 
 

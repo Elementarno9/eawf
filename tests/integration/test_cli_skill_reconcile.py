@@ -19,7 +19,7 @@ from typer.testing import CliRunner
 
 from eawf.runtime.runtimes.claude.plugin_install import _render_skill
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def cli_runner() -> CliRunner:
 
 
 def _render_clean_tree(root: Path) -> None:
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = root / spec.skill_name
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(_render_skill(spec), encoding="utf-8")
@@ -60,13 +60,13 @@ def test_reconcile_drift_reported_default_exit_zero(cli_runner: CliRunner, tmp_p
     """Default (report-only) mode reports drift but still exits 0."""
     root = tmp_path / ".claude" / "skills"
     _render_clean_tree(root)
-    for child in (root / "audit").iterdir():
+    for child in (root / "verify").iterdir():
         child.unlink()
-    (root / "audit").rmdir()
+    (root / "verify").rmdir()
     result = cli_runner.invoke(app, ["skill", "reconcile", "--skills-root", str(root)])
     assert result.exit_code == 0, result.stdout
     assert "missing on disk" in result.stdout
-    assert "/audit" in result.stdout
+    assert "/verify" in result.stdout
 
 
 def test_reconcile_check_flag_exits_validation_error_on_drift(

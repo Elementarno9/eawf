@@ -152,11 +152,11 @@ def test_check_registry_vs_disk_clean_after_install(tmp_path: Path) -> None:
 def test_check_registry_vs_disk_detects_hand_edit(tmp_path: Path) -> None:
     """A hand edit to a rendered file fires a registry-vs-disk finding."""
     install_plugin(tmp_path)
-    skill = tmp_path / ".claude" / "skills" / "polish" / "SKILL.md"
+    skill = tmp_path / ".claude" / "skills" / "verify" / "SKILL.md"
     skill.write_text(skill.read_text() + "\n# drift\n", encoding="utf-8")
     report = check_registry_vs_disk(tmp_path, runtimes=("claude-code",))
     assert report.clean is False
-    assert any(f.runtime == "claude-code" and "polish" in f.location for f in report.findings)
+    assert any(f.runtime == "claude-code" and "verify" in f.location for f in report.findings)
 
 
 def test_check_registry_vs_disk_detects_missing_file(tmp_path: Path) -> None:
@@ -312,7 +312,7 @@ def test_check_orphan_detects_unregistered_skill_dir(tmp_path: Path) -> None:
     finding = report.findings[0]
     assert finding.runtime == "claude-code"
     assert finding.location == ".claude/skills/totally-made-up-skill"
-    assert "no SKILL_REGISTRY row" in finding.detail
+    assert "no skill catalog row" in finding.detail
 
 
 def test_check_orphan_ignores_loose_files_in_skills_root(tmp_path: Path) -> None:
@@ -388,7 +388,7 @@ def test_run_doctor_clean_after_fresh_install(tmp_path: Path) -> None:
 def test_run_doctor_surfaces_drift_when_hand_edit_present(tmp_path: Path) -> None:
     """Hand edit → ``clean=False`` and the offending kind is dirty."""
     install_plugin(tmp_path)
-    skill = tmp_path / ".claude" / "skills" / "polish" / "SKILL.md"
+    skill = tmp_path / ".claude" / "skills" / "verify" / "SKILL.md"
     skill.write_text("hand-edited\n", encoding="utf-8")
     report = run_doctor(tmp_path, runtimes=("claude-code",))
     assert report.clean is False

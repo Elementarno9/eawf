@@ -61,7 +61,12 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER, EnforceMode
+from eawf.runtime.budget.policy import (
+    DEFAULT_ENFORCE,
+    DEFAULT_MULTIPLIER,
+    SEALED_BUDGET,
+    EnforceMode,
+)
 from eawf.runtime.budget.service import TerminationResult
 from eawf.runtime.control.reducer import decide_control_lease, reduce_run_control
 from eawf.runtime.daemon.budget_interlock import InFlightBudgetOutcome, guard_in_flight_budget
@@ -538,8 +543,8 @@ class InFlightRunMeter:
             control_request_ref=control_request_ref,
             actor=actor,
             base_budget=cap_tokens,
-            enforce="hard",
-            multiplier=1.0,
+            enforce=SEALED_BUDGET.enforce,
+            multiplier=SEALED_BUDGET.multiplier,
             idempotency_key=idempotency_key,
         )
         self._meter = InFlightMeter()

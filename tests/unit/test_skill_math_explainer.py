@@ -32,6 +32,7 @@ from eawf.surfaces.render.skills import (
     SkillSpec,
     render_skill_md_from_spec,
 )
+from eawf.workflow.skills.catalog import shipped_skill_specs
 from eawf.workflow.skills.discovery import reconcile_skills
 
 
@@ -94,18 +95,17 @@ def test_math_explainer_body_has_no_dangling_smoke_test_reference() -> None:
 
 
 def _render_clean_tree(root: Path) -> None:
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = root / spec.skill_name
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(_render_skill(spec), encoding="utf-8")
 
 
 def test_reconcile_clean_with_math_explainer_present(tmp_path: Path) -> None:
-    """A tree rendered from the registry (incl /math-explainer) has zero drift."""
+    """The retired /math-explainer is not shipped, so a clean tree omits it."""
     root = tmp_path / ".claude" / "skills"
     _render_clean_tree(root)
-    assert (root / "math-explainer" / "SKILL.md").is_file()
+    assert not (root / "math-explainer").exists()
     report = reconcile_skills(root)
     assert report.has_drift is False
     assert "math-explainer" not in report.missing_on_disk
-    assert "math-explainer" not in report.extra_on_disk

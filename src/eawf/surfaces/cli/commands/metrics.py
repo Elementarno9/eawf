@@ -16,7 +16,10 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
 - ``eawf metrics export --format prom|json|csv`` — serialise the projected
   metrics through :mod:`eawf.observability.telemetry.exporter` to stdout or ``--out``.
 - ``eawf metrics rebuild [--full|--incremental]`` — drive the projector
-  (:func:`eawf.observability.telemetry.projector.rebuild`) over the discovered sources.
+  (:func:`eawf.observability.telemetry.projector.rebuild`) over the discovered sources,
+  then sweeps the local Claude Code session history into the observed
+  collection and reports its coverage funnel (seen, parsed, attributed,
+  projected) with a typed reason per dropped file.
 - ``eawf metrics info`` — print cache stats: DB kind, path, schema +
   pricing version, and row counts.
 - ``eawf metrics variance`` — emit the C09 §5.9.6 M26
@@ -531,8 +534,14 @@ def _telemetry_export(flags: GlobalFlags, *, fmt: str, out: Path | None) -> None
 
 def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> None:
     """Drive the projector over the discovered sources into the local cache."""
-    from eawf.observability.telemetry.projector import RebuildMode, SourceSpec, rebuild
+    from eawf.observability.telemetry.projector import (
+        RebuildMode,
+        SourceSpec,
+        rebuild,
+        sweep_session_history,
+    )
     from eawf.observability.telemetry.sources.event_jsonl import EventJsonlSource
+    from eawf.observability.telemetry.sources.session_history import claude_history_root
     from eawf.observability.telemetry.store import metrics_db_path, open_store
 
     if full and incremental:
@@ -554,6 +563,11 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
             project_id=_scope_label(state_path),
         )
         report = rebuild(store, [spec], mode=mode)
+        funnel = sweep_session_history(
+            store,
+            claude_history_root(state_path.parent.parent.resolve()),
+            project_id=_scope_label(state_path),
+        )
     finally:
         store.close()
 
@@ -563,11 +577,26 @@ def _telemetry_rebuild(flags: GlobalFlags, *, full: bool, incremental: bool) -> 
         "incidents": report.incidents,
         "files_scanned": report.files_scanned,
         "files_skipped": report.files_skipped,
+        "session_history": {
+            "seen": funnel.seen,
+            "parsed": funnel.parsed,
+            "attributed": funnel.attributed,
+            "projected": funnel.projected,
+            "durations": funnel.durations,
+            "drops": [
+                {"file": drop.file_name, "stage": drop.stage.value, "reason": drop.reason.value}
+                for drop in funnel.drops
+            ],
+        },
     }
     text = (
         f"rebuild {mode.value}: sessions={report.sessions} incidents={report.incidents} "
-        f"scanned={report.files_scanned} skipped={report.files_skipped}"
+        f"scanned={report.files_scanned} skipped={report.files_skipped}\n"
+        f"session history: seen={funnel.seen} parsed={funnel.parsed} "
+        f"attributed={funnel.attributed} projected={funnel.projected}"
     )
+    for drop in funnel.drops:
+        text += f"\n  dropped {drop.file_name} before {drop.stage.value}: {drop.reason.value}"
     emit_json_or_text(payload, text, flags=flags)
 
 

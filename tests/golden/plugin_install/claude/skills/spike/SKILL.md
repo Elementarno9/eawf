@@ -1,73 +1,65 @@
 ---
 name: spike
-description: "Read-only multi-axis direction investigation that unblocks /roadmap propose or /design: N rounds x M axis picks, optional postmortem + scope deltas. No state mutations."
-argument-hint: "<spike-slug> [--final] [--from-briefs <path1,path2,...>] [--postmortem <phase-id>] [--rounds=<n>] [--axes-per-round=<m>] [--worktree]"
+description: "Build, test, independently verify and present a local proof of concept."
+argument-hint: "<idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]"
 user-invocable: true
 disable-model-invocation: false
 ---
 
 # /spike
 
-## Purpose
+Build, test, independently verify and present a local proof of concept.
 
-A *spike* is a time-boxed read-only investigation that produces **direction** — picks across many design axes — to unblock the next planning skill. Direction-only means no wave plan, no success criteria, and no EU estimates fall out of a spike; those belong to `/design` and `/roadmap propose`. Spike writes only under `.ea/local/`.
+## 1. Authority
 
-Three failure modes it prevents:
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Effects: Writes only under the resolved local spike folder; separate builder and verifier Runs; extracted contracts are submitted for promotion.
+- Allowed RPCs: `retrieve_source`, `run.dispatch`, `submit_report`, `submit_evidence`. Any other RPC is denied before it reaches a handler.
+- Canonical state: never mutated by this skill.
+- Local write root: `.ea/local/spikes`; nothing is written outside it.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
 
-1. Single-verdict context loss. `/research` answers one question; a rebuild or phase-opening decision has many entangled axes. Spike runs them as multi-round AUQ batches in one session with a rolling matrix.
-2. Silent scope creep. Mid-session picks can quietly expand or reduce surface vs prior briefs. Spike surfaces scope deltas as a mandatory section when prior briefs exist.
-3. Postmortem-without-next-plan. Spike couples a postmortem (gap matrix + root causes + salvage matrix) to direction picks in the same brief so the rebuild plan inherits the lessons.
+## 2. Context
 
-## When to invoke
+The idea named by `<idea...>`, its hypothesis and discriminating conditions, and the local spike folder that holds the proof of concept.
 
-Reach for `/spike` when multiple decisions block `/roadmap propose` and must be picked together to stay coherent, when a prior attempt shipped but missed its briefs and the next phase is a rebuild, or when direction picks span scope-expansions and -reductions that need explicit acknowledgement. Pick a neighbour instead when one unknown blocks progress and a single verdict lands it (`/research`), or when direction is locked and an interactive surface needs a full statechart + matrix + journey design (`/design`).
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
 
-## Canonical algorithm
+## 3. Task
 
-1. Resolve the slug from the argument or AUQ. Filename stem: `<YYYY-MM-DD>-<slug>.md`.
-2. Frame the multi-axis unknown in one paragraph; list the prior briefs feeding the spike (`--from-briefs`). On `--postmortem <phase-id>`, declare the phase under postmortem.
-3. Survey: read the cited prior briefs, read source on the verdict ladder (verify-before-claim), run `git log` for shipped-vs-spec drift. Optionally dispatch worktree subagents for independent investigative arms; the parent compiles the chunks.
-4. Multi-round AUQ picks. Each round = 3-6 axes batched into one `AskUserQuestion` call. Decisions accumulate into the rolling matrix; round-close is gated on all axes in the batch answered.
-5. Scope-delta surfacing. When picks diverge from prior briefs, record explicit expansion and reduction tables, each row citing the original brief line and the new pick.
-6. Critical-contracts capture. When picks ripple into process changes (commit-prefix lint, success-criteria shape, schema migration, audit kind), surface them with enforcement + effect named.
-7. Open follow-ups. Enumerate explicitly — "none" is rare. Label each with a next-action (next-spike, next-research, hypothesis-open, blocked-on-EU, blocked-on-demo).
-8. Hand-off declaration. The Summary closes with a literal `next:` line naming the unblocked skill and its args.
-9. Self-lint, then write (on `--final`) `.ea/local/research/<YYYY-MM-DD>-<slug>.md` with the sentinel `<!-- eawf-template: spike-brief -->` on line 1. Return the output envelope.
+Build the smallest runnable proof of concept that discriminates the stated idea. This is local experimental work, not a Campaign and not product implementation.
 
-## Options
+```text
+/spike <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]
+```
 
-Spike is model-driven, so these are prose parameters the session honours, not engine-parsed flags:
+## 4. Method
 
-- `--rounds <n>` — number of multi-axis AUQ rounds; parameterizes the default "3-6 axes per round" shape. Default is model-judged.
-- `--axes-per-round <m>` — axes batched into each `AskUserQuestion` round. Default `3-6`.
-- `--worktree` — make the execution-spike isolation branch explicit and mandatory: when passed, code that imports `eawf.*` runs in a dedicated worktree branch rather than the local PoC scope.
-- `--final` / `--from-briefs <paths>` / `--postmortem <phase-id>` — see the canonical algorithm above.
+1. Allocate `.ea/local/spikes/<date>-<slug>/` or the validated resume folder. Never write canonical stores, tracked product paths, or another local root.
+2. Before coding, write `spike.yaml` with question, hypothesis, observable confirm and reject conditions, inputs, exclusions, safety/network policy, and hard budget.
+3. Build real source or scripts, fixtures, and a runnable entrypoint. Optimize only for the stated discriminator; do not grow production architecture around the experiment.
+4. Run the exact verification commands and capture bounded machine-readable observations, logs, environment assumptions, and result receipts. Then extract contracts from those observations: for each probed surface, state what it is, what it accepts and returns, and its non-empty boundary - the conditions under which the observation stops holding. An observation records that a run printed something; a contract records what the surface is. Emit each as a MeasuredContract and promote it through the evidence-promotion path so it becomes a canonical artifact a plan can cite by ArtifactUrn. A contract with an empty boundary is not extracted.
+5. Stop building when confirm/reject condition is observed, the cap is reached, a safety boundary blocks work, or further progress requires production engineering.
+6. Dispatch a fresh verifier agent with the folder, manifest, and commands but no producer transcript. The verifier reruns from clean instructions and returns pass, fail, or inconclusive.
+7. The builder may repair within the remaining budget and request one fresh verification. READY requires an independent pass; self-verification never suffices.
+8. Finish the folder with `README.md`, manifest, runnable entrypoint, fixtures, results, limitations, verifier report, and a short operator demo. Preserve it by default; never auto-delete uncommitted local work.
+9. Promotion is a later `/plan` or Task action. This skill may recommend promotion but cannot commit, publish, or move the prototype into product source.
 
-## PoC allowance + execution-spike isolation
+## 4b. Applicable rules
 
-A spike MAY produce throwaway runnable artifacts to ground direction picks — smoke demos, probe scripts, config experiments — under `.ea/local/` only (`.ea/local/smoke/<slug>/`, `.ea/local/poc/<slug>/`, or `.ea/local/research/notes/<slug>/`), gitignored, with a manifest table + a "How to run the PoCs" section when >=1 is built.
+The obligations the effective rule graph holds for activities `research`, `test`. They bind what you do; they grant no capability.
 
-A *direction spike* is read-only. An *execution spike* writes code to ground a verdict against a running artifact, so it needs isolation the read-only flow does not. Zero-internal-dep throwaway scripts stay in the local gitignored PoC scope. Code that imports `eawf.*` runs in a dedicated worktree branch off the current feature-branch HEAD (`feature/<symbol>-vX.Y-spike-<slug>`); on a green verdict the commits are cherry-picked into the feature branch (never merged), and on a rejected verdict the worktree is torn down. Do NOT commit spike code straight onto the shared feature branch — a pre-verdict commit interleaves with concurrent sessions and bakes unratified experiment into history.
+- must: **Name the command and exit status behind a claim.** Back every verification claim with the command executed and its exit status; a green claim whose run cannot be located in the receipt is a fabrication, not an oversight.
+- must: **Finish independent parts when one part fails.** When part of the scope cannot be completed, complete every independent remaining part in full, then state plainly what was left undone and why.
+- must: **Re-execute only what failed.** After a failure, re-execute only what failed, unless the change is cross-cutting, the artifact is a cross-scope scorecard, or a release gate needs a full pass.
+- must: **Verify behavioural claims against the source tree.** Verify behavioural, quantitative and schema claims against the implementation before asserting them. Where a design document and the source disagree, quote the source and report the drift.
 
-## Brief chassis
+## 5. Constraints
 
-Required sections (the writer rejects on missing): frontmatter (scope URN, `status=local-draft`, created date, agent); the sentinel on line 1; Summary (verdict rollup + direction bullets + the `next:` line); a decision matrix (>=1 round table when picks were made, else a Findings section); Open follow-ups (labelled); References (dense `[N]` rows, repo-relative + external URLs + Eä URNs); Provenance (`store_record=none (local-only spike)`, starting commit SHA, session slug); and Scrub (repo-relative paths only, no PII, placeholder names when project codes appear). Conditionally required: the PoC manifest + run guide when >=1 PoC was built, the postmortem arc when `--postmortem` is passed, and the scope-delta tables when `--from-briefs` cites prior briefs.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
 
-## Pre-flight checklist
+## 6. Output
 
-- [ ] No state mutations; `state.json` untouched. PoCs under `.ea/local/{smoke,poc,research/notes}/` only (gitignored).
-- [ ] If an execution spike that landed runnable code — code is isolated (worktree branch for internal deps, local PoC scope for zero deps) and ships a `.ea/local/` user test guide.
-- [ ] Multi-round picks via `AskUserQuestion`, never free-text; recommended option first, labelled.
-- [ ] Every direction pick carries a one-line rationale (`[N]` cite or "because X").
-- [ ] Scope deltas surfaced when `--from-briefs` cited; critical contracts surfaced when picks ripple into process change.
-- [ ] Open follow-ups enumerated with next-action labels; `next:` line present in the Summary.
-- [ ] References dense `[N]`, repo-relative only; Provenance records the starting commit SHA + session slug; Scrub confirms no PII.
-- [ ] Brief filename `<YYYY-MM-DD>-<slug>.md` under `.ea/local/research/`; sentinel `<!-- eawf-template: spike-brief -->` on line 1.
+Output one SpikeReport containing folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason.
 
-## Decision surfaces
-
-Round axis picks, scope-delta acknowledgement, and the hand-off declaration are all surfaced through `AskUserQuestion` batches — the hand-off AUQ options name the unblocked skill (`/roadmap propose`, another `/spike`, `/research --final`, or `/design`).
-
-## Output contract
-
-Eä-rendered envelope (`OutputEnvelope`) with `header.skill = "/spike"`. Body carries the Summary + `next:` line, the round tables (decision matrix), the postmortem arc when `--postmortem`, the scope deltas when `--from-briefs` cited, the critical contracts when applicable, the labelled open follow-ups, and the References + Provenance + Scrub chassis tail. The footer records the persisted brief path + sentinel when `--final` was passed.
+The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. Prose in the report is explanation, never the result.

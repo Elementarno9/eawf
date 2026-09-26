@@ -28,92 +28,42 @@ from pathlib import Path
 import pytest
 
 from eawf.runtime.runtimes.claude.plugin_install import _render_skill
-from eawf.surfaces.render.skills import SKILL_REGISTRY
+from eawf.workflow.skills.catalog import shipped_skill_specs
 from eawf.workflow.skills.discovery import (
     SkillFrontmatterError,
     reconcile_skills,
 )
 
-# Read-only / investigative / advisory skills the model MAY auto-invoke.
-# These either make no persisted change (research, audit, review,
-# security-review, blitz, differentiate, mockup, spike) or only resolve a
-# value / record a telemetry-or-intent event while routing the actual
-# mutation to the daemon (coauthor resolves a trailer; compress records a
-# compression directive) — none drives a lifecycle / state transition on
-# its own, so autonomous invocation is safe. ``mockup`` produces ASCII UI
-# mockups as AskUserQuestion previews; ``spike`` is a read-only multi-axis
-# direction investigation that writes only under ``.ea/local/`` — both
-# drive no state mutation.
+# Read-only skills the model MAY auto-invoke: none of them mutates canonical
+# state, so autonomous invocation cannot drive a lifecycle transition.
 _READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
-    {
-        "research",
-        "audit",
-        "review",
-        "security-review",
-        "blitz",
-        "differentiate",
-        "mockup",
-        "spike",
-        "coauthor",
-        "compress",
-    }
+    {"mockup", "refactor", "research", "spike", "test", "why"}
 )
 
-# Read-only-but-model-barred skills: they write only under ``.ea/local/``
-# (no state mutation) yet stay model-barred because they are
-# operator-driven multi-round ``AskUserQuestion`` passes, not
-# model-autoinvocable probes. ``design`` triangulates an interactive
-# surface (statechart + matrix + journeys) across operator AUQ rounds;
-# ``math-explainer`` authors a verification-grounded math doc through an
-# operator-driven facet + clarity loop over typed MathClaim rows.
-_READ_ONLY_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
+# Skills the model is BARRED from auto-invoking: every canonical-mutating
+# skill, plus every operator-only (``user_only``) skill whatever its effects.
+_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
     {
-        "design",
-        "math-explainer",
-    }
-)
-
-# Mutating / lifecycle skills the model is BARRED from auto-invoking. The
-# six lifecycle drivers (prep, ship, polish, init, roadmap, flow) advance
-# the workflow; three more scaffold or dispatch a concrete lifecycle
-# artifact (memory writes durable recall, wave-spec scaffolds a spec,
-# agent-dispatch hands a wave to a runtime); and the three native
-# delivery drivers (dispatch, integrate, verify) open Runs, apply
-# integrations and file verification receipts — auto-invoking any of them
-# would drive workflow progress without operator intent.
-_MUTATING_SKILL_NAMES: frozenset[str] = frozenset(
-    {
-        "prep",
-        "ship",
-        "polish",
-        "init",
-        "roadmap",
-        "flow",
-        "memory",
-        "agent-dispatch",
-        "wave-spec",
+        "accept",
+        "attend",
+        "backlog",
+        "campaign",
+        "decide",
         "dispatch",
         "integrate",
+        "memory",
+        "milestone",
+        "plan",
+        "reflect",
+        "release",
+        "track",
         "verify",
-    }
-)
-
-# Model-only code-quality playbooks: hidden from the slash menu
-# (``user_invocable=False``) yet model-invocable.
-_MODEL_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
-    {
-        "refactor-god-class",
-        "write-adr",
-        "add-property-test",
-        "extract-function",
-        "extract-module",
-        "graduate-research-code",
     }
 )
 
 
 def _registry_by_name() -> dict[str, object]:
-    return {spec.skill_name: spec for spec in SKILL_REGISTRY}
+    return {spec.skill_name: spec for spec in shipped_skill_specs()}
 
 
 # --- model-invocation classification contract -------------------------------
@@ -128,53 +78,30 @@ def test_read_only_skill_is_model_invocable(name: str) -> None:
     )
 
 
-@pytest.mark.parametrize("name", sorted(_MUTATING_SKILL_NAMES))
+@pytest.mark.parametrize("name", sorted(_MODEL_BARRED_SKILL_NAMES))
 def test_mutating_skill_is_model_barred(name: str) -> None:
-    """Each mutating/lifecycle skill stays ``disable_model_invocation=True``."""
+    """Each mutating or operator-only skill stays ``disable_model_invocation=True``."""
     spec = _registry_by_name()[name]
     assert spec.disable_model_invocation is True, (
-        f"{name} mutates state/commits and must stay model-barred"
+        f"{name} mutates state or is operator-only and must stay model-barred"
     )
 
 
-@pytest.mark.parametrize("name", sorted(_READ_ONLY_MODEL_BARRED_SKILL_NAMES))
-def test_read_only_model_barred_skill_is_user_invocable_and_model_barred(name: str) -> None:
-    """Each read-only-but-model-barred skill is slash-visible yet model-barred."""
-    spec = _registry_by_name()[name]
-    assert spec.user_invocable is True, f"{name} must stay in the slash menu"
-    assert spec.disable_model_invocation is True, (
-        f"{name} is an operator-driven AUQ pass and must stay model-barred"
-    )
-
-
-@pytest.mark.parametrize("name", sorted(_MODEL_ONLY_SKILL_NAMES))
-def test_model_only_playbook_is_model_invocable(name: str) -> None:
-    """Model-only playbooks stay hidden-but-model-invocable."""
-    spec = _registry_by_name()[name]
-    assert spec.user_invocable is False
-    assert spec.disable_model_invocation is False
+def test_every_shipped_skill_is_user_invocable() -> None:
+    """No presented skill is hidden from the slash menu."""
+    assert all(spec.user_invocable for spec in shipped_skill_specs())
 
 
 def test_classification_partitions_the_registry() -> None:
-    """The four classified sets exactly cover every registry skill.
+    """The two classified sets exactly and disjointly cover every shipped skill.
 
     Guards against a new skill landing without an explicit read-only /
-    read-only-model-barred / mutating / model-only classification (which
-    would leave its model-invocability un-pinned).
+    model-barred classification (which would leave its model-invocability
+    un-pinned).
     """
-    classified = (
-        _READ_ONLY_SKILL_NAMES
-        | _READ_ONLY_MODEL_BARRED_SKILL_NAMES
-        | _MUTATING_SKILL_NAMES
-        | _MODEL_ONLY_SKILL_NAMES
-    )
-    registry_names = {spec.skill_name for spec in SKILL_REGISTRY}
-    assert classified == registry_names
-
-
-def test_no_user_invocable_skill_is_both_read_only_and_mutating() -> None:
-    """Read-only and mutating sets are disjoint (no double-classification)."""
-    assert _READ_ONLY_SKILL_NAMES.isdisjoint(_MUTATING_SKILL_NAMES)
+    assert _READ_ONLY_SKILL_NAMES.isdisjoint(_MODEL_BARRED_SKILL_NAMES)
+    registry_names = {spec.skill_name for spec in shipped_skill_specs()}
+    assert registry_names == _READ_ONLY_SKILL_NAMES | _MODEL_BARRED_SKILL_NAMES
 
 
 # --- reconcile sweep --------------------------------------------------------
@@ -182,7 +109,7 @@ def test_no_user_invocable_skill_is_both_read_only_and_mutating() -> None:
 
 def _render_clean_tree(root: Path) -> None:
     """Render a faithful ``<root>/<name>/SKILL.md`` tree from the registry."""
-    for spec in SKILL_REGISTRY:
+    for spec in shipped_skill_specs():
         skill_dir = root / spec.skill_name
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(_render_skill(spec), encoding="utf-8")
@@ -204,12 +131,12 @@ def test_reconcile_skills_missing_on_disk(tmp_path: Path) -> None:
     """Deleting a rendered skill dir surfaces it as missing-on-disk."""
     root = tmp_path / ".claude" / "skills"
     _render_clean_tree(root)
-    for child in (root / "audit").iterdir():
+    for child in (root / "verify").iterdir():
         child.unlink()
-    (root / "audit").rmdir()
+    (root / "verify").rmdir()
     report = reconcile_skills(root)
     assert report.has_drift is True
-    assert report.missing_on_disk == ("audit",)
+    assert report.missing_on_disk == ("verify",)
     assert report.extra_on_disk == ()
     assert report.flag_mismatches == ()
 
@@ -258,7 +185,7 @@ def test_reconcile_skills_missing_root_reports_all_missing(tmp_path: Path) -> No
     """A non-existent root marks every registry skill missing-on-disk."""
     report = reconcile_skills(tmp_path / "does-not-exist")
     assert report.has_drift is True
-    assert len(report.missing_on_disk) == len(SKILL_REGISTRY)
+    assert len(report.missing_on_disk) == len(shipped_skill_specs())
     assert report.extra_on_disk == ()
     assert report.flag_mismatches == ()
 
@@ -266,7 +193,7 @@ def test_reconcile_skills_missing_root_reports_all_missing(tmp_path: Path) -> No
 def test_reconcile_skills_description_with_colon_does_not_crash(tmp_path: Path) -> None:
     """A description carrying an embedded ``': '`` parses cleanly.
 
-    The rendered ``description`` value is unquoted; ``/prep``'s text
+    The rendered ``description`` value is unquoted; ``/dispatch``'s text
     ("Activate the next PLANNED phase: surface its DAG ...") embeds a
     colon. The reconcile parser line-scans the two flag keys instead of
     YAML-loading the block so the colon does not derail the sweep.
@@ -274,8 +201,8 @@ def test_reconcile_skills_description_with_colon_does_not_crash(tmp_path: Path) 
     root = tmp_path / ".claude" / "skills"
     _render_clean_tree(root)
     report = reconcile_skills(root)
-    # ``/prep`` (colon in description) must NOT be reported missing.
-    assert "prep" not in report.missing_on_disk
+    # ``/dispatch`` (colon in description) must NOT be reported missing.
+    assert "dispatch" not in report.missing_on_disk
     assert report.has_drift is False
 
 
@@ -312,32 +239,7 @@ def test_parse_rendered_flags_rejects_missing_frontmatter(tmp_path: Path) -> Non
         _parse_rendered_flags(skill_md)
 
 
-# --- P30-I23-W44 (SKH-7): argument-hint updates survive the render ----------
-
-#: The runtime-option flag tokens each touched skill's ``argument-hint``
-#: frontmatter line MUST carry once rendered to disk (section 4 of the
-#: skills-agents-hardening spec). Mirrors ``_SECTION4_HINT_OPTIONS`` in
-#: ``test_skill_registry_p11.py`` but is asserted against the RENDERED
-#: ``SKILL.md``, so a hint that never reaches the plugin tree fails here.
-_SECTION4_HINT_OPTIONS: dict[str, tuple[str, ...]] = {
-    "research": ("--depth", "--final", "--rounds", "--agents", "--budget"),
-    "prep": ("--auto-resume", "--out-of-order", "--ceremony", "--runtime"),
-    "audit": ("--kind", "--level", "--enforce"),
-    "ship": ("--dry-run", "--gauntlet", "--release", "--skip-pr-pass"),
-    "review": ("--level", "--criteria"),
-    "polish": ("--scope", "--auto-apply-safe", "--category"),
-    "roadmap": ("--dry-run", "--criteria-from-brief"),
-    "spike": ("--rounds", "--axes-per-round", "--worktree"),
-    "flow": (
-        "--advance-after",
-        "--stop-after",
-        "--resume",
-        "--args-per-step",
-        "--caps",
-        "--max-repair-cycles",
-    ),
-    "agent-dispatch": ("--runtime", "--headless", "--model"),
-}
+# --- the rendered argument-hint is the catalog grammar ----------------------
 
 
 def _rendered_argument_hint(rendered: str) -> str:
@@ -348,17 +250,12 @@ def _rendered_argument_hint(rendered: str) -> str:
     raise AssertionError("rendered SKILL.md carries no argument-hint frontmatter line")
 
 
-@pytest.mark.parametrize("name", sorted(_SECTION4_HINT_OPTIONS))
+@pytest.mark.parametrize("name", sorted(_READ_ONLY_SKILL_NAMES | _MODEL_BARRED_SKILL_NAMES))
 def test_rendered_skill_md_argument_hint_carries_runtime_options(name: str) -> None:
-    """Each section-4 hint update lands in the rendered ``argument-hint`` line."""
+    """Every option the catalog grammar declares lands in the rendered hint line."""
+    from eawf.workflow.skills.catalog import resolve_skill
+
     spec = _registry_by_name()[name]
     hint_line = _rendered_argument_hint(_render_skill(spec))
-    for opt in _SECTION4_HINT_OPTIONS[name]:
+    for opt in resolve_skill(name).grammar.options:
         assert opt in hint_line, f"{name} rendered SKILL.md dropped {opt!r} from its argument-hint"
-
-
-def test_rendered_agent_dispatch_hint_omits_sandbox_profile() -> None:
-    """``--sandbox-profile`` (P31, no seam) never reaches the rendered hint line."""
-    spec = _registry_by_name()["agent-dispatch"]
-    hint_line = _rendered_argument_hint(_render_skill(spec))
-    assert "--sandbox-profile" not in hint_line

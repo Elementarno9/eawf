@@ -19,26 +19,26 @@ from __future__ import annotations
 from eawf.surfaces.cli.commands.skill import _list_payload
 
 _EXPECTED_SKILL_NAMES: tuple[str, ...] = (
-    "/research",
-    "/prep",
-    "/audit",
-    "/ship",
-    "/review",
-    "/polish",
-    "/init",
-    "/roadmap",
-    "/differentiate",
-    "/flow",
-    "/blitz",
-    "/coauthor",
-    "/memory",
-    "/agent-dispatch",
-    "/compress",
-    "/wave-spec",
-    "/security-review",
+    "/accept",
+    "/attend",
+    "/backlog",
+    "/campaign",
+    "/decide",
     "/dispatch",
     "/integrate",
+    "/memory",
+    "/milestone",
+    "/mockup",
+    "/plan",
+    "/refactor",
+    "/reflect",
+    "/release",
+    "/research",
+    "/spike",
+    "/test",
+    "/track",
     "/verify",
+    "/why",
 )
 
 
@@ -60,13 +60,23 @@ def test_list_payload_carries_every_canonical_name_in_order() -> None:
 
 
 def test_list_payload_row_keys_are_exactly_the_documented_set() -> None:
-    """Per-row keys are exactly ``name``/``status``/``body_schema``/
-    ``description``. The ``skill render --format=json`` surface adds a
-    ``body`` field on top — that addition is exercised in
-    ``test_cli_skill_render.py`` so the two surfaces stay aligned.
+    """Per-row keys are the historical four plus the catalog's class, audience,
+    argument hint, output schema and terminal outcomes. The ``skill render
+    --format=json`` surface adds a ``body`` field on top — that addition is
+    exercised in ``test_cli_skill_render.py`` so the two surfaces stay aligned.
     """
     payload = _list_payload()
-    expected_keys = {"name", "status", "body_schema", "description"}
+    expected_keys = {
+        "name",
+        "status",
+        "body_schema",
+        "description",
+        "skill_class",
+        "audience",
+        "argument_hint",
+        "output_schema",
+        "terminal_outcomes",
+    }
     for row in payload["skills"]:
         assert set(row.keys()) == expected_keys, f"unexpected keys in row {row}"
 
@@ -82,14 +92,17 @@ def test_list_payload_status_is_installed_or_missing() -> None:
 
 def test_list_payload_body_schema_is_a_dotted_class_path() -> None:
     """``body_schema`` is the fully-qualified class name of the
-    skill body model — the format ``<module>.<class>``. Pin via a
-    simple dotted-path probe so a future fingerprint scheme that
-    drops the module qualifier (e.g. just ``ResearchBody``) fails
-    the test.
+    skill body model — the format ``<module>.<class>`` — or ``None`` for a
+    catalog skill with no engine body model yet. Pin via a simple
+    dotted-path probe so a future fingerprint scheme that drops the module
+    qualifier (e.g. just ``ResearchBody``) fails the test.
     """
     payload = _list_payload()
+    assert any(row["body_schema"] is None for row in payload["skills"])
     for row in payload["skills"]:
         body_schema = row["body_schema"]
+        if body_schema is None:
+            continue
         assert isinstance(body_schema, str)
         assert "." in body_schema, f"body_schema {body_schema!r} lacks a module qualifier"
         assert body_schema.startswith("eawf.workflow.skills.bodies."), body_schema
