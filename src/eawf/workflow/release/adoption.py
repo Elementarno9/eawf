@@ -24,8 +24,9 @@ becoming a way around the normal path:
   :attr:`~eawf.kernel.spec.release.Release.approval_ref` on the same
   record, so a reader never has to interpret a reference string to tell
   an adopted checkpoint from an earned one;
-* it does not end the checkpoint. The adopted record stays at DRAFT,
-  now carrying the external effect it was blind to, and is driven
+* it does not end the checkpoint. The adopted record stays at DRAFT --
+  or at CANDIDATE, when the version was pinned before a run published
+  it without opening an operation -- now carrying the external effect it was blind to, and is driven
   terminal by the same
   :func:`~eawf.workflow.release.publication.burn_release` the recovery
   path uses. There is one terminal burn, reached two ways.
@@ -39,11 +40,19 @@ record back in the dark about it.
 from __future__ import annotations
 
 import logging
+from typing import Final
 
 from eawf.kernel.spec.release import Release, ReleaseAdoption, ReleaseStatus
 from eawf.kernel.spec.release_config import ReleaseConfig
 
 logger = logging.getLogger(__name__)
+
+#: A candidate is pinned but neither approved nor dispatched, so a
+#: publication that reached the registries from it ran outside the
+#: machinery exactly as one from a draft would have.
+_ADOPTABLE_STATUSES: Final[frozenset[ReleaseStatus]] = frozenset(
+    {ReleaseStatus.DRAFT, ReleaseStatus.CANDIDATE}
+)
 
 
 def unconfigured_targets(config: ReleaseConfig, adoption: ReleaseAdoption) -> tuple[str, ...]:
@@ -77,17 +86,18 @@ def adopt_publication(
     answer out of it.
 
     Args:
-        release: The DRAFT record of the checkpoint that was published.
+        release: The DRAFT or CANDIDATE record of the checkpoint that
+            was published.
         config: Loaded checkpoint configuration naming every target.
         adoption: The observed facts and the reason they are being
             adopted.
 
     Returns:
-        The successor record at DRAFT, carrying the adoption and the
-        per-target projection it asserts, at the next revision.
+        The successor record at the same status, carrying the adoption
+        and the per-target projection it asserts, at the next revision.
 
     Raises:
-        ValueError: When the record is not at DRAFT, when it already
+        ValueError: When the record is past CANDIDATE, when it already
             carries an adoption, or when a configured target has no
             observation -- an adoption that leaves a declared leg
             unobserved would leave the record blind to part of the
@@ -96,10 +106,11 @@ def adopt_publication(
             :class:`~eawf.kernel.spec.release.Release` invariant, e.g.
             an adoption landing beside an approval reference.
     """
-    if release.status is not ReleaseStatus.DRAFT:
+    if release.status not in _ADOPTABLE_STATUSES:
         raise ValueError(
             f"release {release.key!r} is {release.status.value!r}; an adoption is "
-            f"recorded on a draft, before any status the machinery itself produced"
+            f"recorded on a draft or a candidate, before any approval or dispatch "
+            f"the machinery itself produced"
         )
     if release.adoption is not None:
         raise ValueError(

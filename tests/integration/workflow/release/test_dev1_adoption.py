@@ -270,10 +270,10 @@ def test_adoption_refuses_a_record_that_already_carries_one(ctx: MethodContext) 
 
 @pytest.mark.parametrize(
     "status",
-    [ReleaseStatus.CANDIDATE, ReleaseStatus.PREFLIGHT_FAILED, ReleaseStatus.PARTIALLY_RELEASED],
+    [ReleaseStatus.PREFLIGHT_FAILED, ReleaseStatus.PARTIALLY_RELEASED],
 )
-def test_adoption_refuses_a_record_past_draft(status: ReleaseStatus) -> None:
-    """An adoption belongs before any status the machinery itself made."""
+def test_adoption_refuses_a_record_past_candidate(status: ReleaseStatus) -> None:
+    """An adoption belongs before any approval or dispatch the machinery made."""
     pinned = dev1_draft().model_copy(
         update={
             "status": status,

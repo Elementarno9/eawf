@@ -139,6 +139,7 @@ class TransitionGuard(StrEnum):
     OBSERVED_PRERELEASE = "observed_prerelease"
     OBSERVED_STABLE = "observed_stable"
     PROMOTION_CONTRACT_COMPLETE = "promotion_contract_complete"
+    PUBLICATION_ADOPTED = "publication_adopted"
     REASON_RECORDED = "reason_recorded"
     RECONCILIATION_MATCHED = "reconciliation_matched"
     RECOVERY_EXHAUSTED = "recovery_exhausted"
@@ -281,6 +282,7 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.OBSERVED_PRERELEASE: DenialCode.PUBLICATION_NOT_OBSERVED,
     TransitionGuard.OBSERVED_STABLE: DenialCode.PUBLICATION_NOT_OBSERVED,
     TransitionGuard.PROMOTION_CONTRACT_COMPLETE: DenialCode.TASK_PROMOTION_INCOMPLETE,
+    TransitionGuard.PUBLICATION_ADOPTED: DenialCode.PUBLICATION_NOT_OBSERVED,
     TransitionGuard.REASON_RECORDED: DenialCode.TRANSITION_REASON_MISSING,
     TransitionGuard.RECONCILIATION_MATCHED: DenialCode.BATCH_RECONCILIATION_PENDING,
     TransitionGuard.RECOVERY_EXHAUSTED: DenialCode.RECOVERY_BUDGET_AVAILABLE,
@@ -823,6 +825,13 @@ _RELEASE_ROWS: Final[tuple[TransitionRow, ...]] = (
         to=ReleaseStatus.APPROVED,
         verb=TransitionVerb.APPROVED,
         guards=(TransitionGuard.GATES_GREEN,),
+    ),
+    TransitionRow(
+        entity=LifecycleEntity.RELEASE,
+        frm=ReleaseStatus.CANDIDATE,
+        to=ReleaseStatus.PARTIALLY_RELEASED,
+        verb=TransitionVerb.BURNED,
+        guards=(TransitionGuard.PUBLICATION_ADOPTED,),
     ),
     TransitionRow(
         entity=LifecycleEntity.RELEASE,

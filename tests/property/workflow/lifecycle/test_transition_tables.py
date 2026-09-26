@@ -346,6 +346,10 @@ _RELEASE_REFERENCE: dict[tuple[ReleaseStatus, ReleaseStatus], ReleaseGuardName] 
     (ReleaseStatus.CANDIDATE, ReleaseStatus.DRAFT): ReleaseGuardName.NO_EXTERNAL_EFFECT,
     (ReleaseStatus.CANDIDATE, ReleaseStatus.CANCELLED): ReleaseGuardName.NO_EXTERNAL_EFFECT,
     (ReleaseStatus.CANDIDATE, ReleaseStatus.APPROVED): ReleaseGuardName.GATES_GREEN,
+    (
+        ReleaseStatus.CANDIDATE,
+        ReleaseStatus.PARTIALLY_RELEASED,
+    ): ReleaseGuardName.PUBLICATION_ADOPTED,
     (ReleaseStatus.PREFLIGHT_FAILED, ReleaseStatus.DRAFT): ReleaseGuardName.NO_EXTERNAL_EFFECT,
     (
         ReleaseStatus.PREFLIGHT_FAILED,
