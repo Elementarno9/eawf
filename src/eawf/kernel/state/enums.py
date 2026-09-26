@@ -762,7 +762,7 @@ class StoreKind(StrEnum):
 
 
 class ArtifactKind(StrEnum):
-    """Closed enumeration of recognised artifact kinds (P14-W11 / B059).
+    """Closed enumeration of recognised artifact kinds.
 
     Existing string ``Artifact.kind`` values migrate onto this enum so
     downstream consumers can switch on a typed value rather than a free
@@ -787,7 +787,7 @@ class ArtifactKind(StrEnum):
 
 
 class SpecStatus(StrEnum):
-    """Lifecycle states for Spec entity (C01-IMPL W03 placeholder; full DAG in C03).
+    """Lifecycle states for the Spec entity.
 
     Per c01-foundations §5.4.15: specs live on the filesystem at
     ``.ea/specs/<phase>/[<iter>/]<wave|spec>.md``; no State.specs dict in

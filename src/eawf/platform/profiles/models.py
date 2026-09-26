@@ -185,15 +185,15 @@ class JuryCalibration(BaseModel):
 
     The jury runs at two sites. The plan site is advisory permanently: plan
     quality never acquires a ground truth a cohort could be scored against,
-    so ``plan_authority`` admits only ``"advisory"``. The close site may block,
-    but only under a calibration an operator ratified as a Decision:
+    so the contract carries no plan-site authority to configure. The close
+    site may block, but only under a calibration an operator ratified as a
+    Decision:
     ``close_authority="blocking"`` requires ``calibration_decision`` here, and
     the close gate additionally refuses unless that id resolves to an active
     Decision in state that names the jury calibration. No Decision, no
     blocking.
 
     Attributes:
-        plan_authority: Authority of the plan-site jury; always advisory.
         close_authority: Authority of the close-site jury. ``"advisory"``
             (default) logs a veto without blocking; ``"blocking"`` lets an
             earned veto refuse the close.
@@ -206,13 +206,12 @@ class JuryCalibration(BaseModel):
 
     Raises:
         pydantic.ValidationError: A blocking close jury without a
-            ``calibration_decision``, a plan jury configured to block, or a
-            precision floor outside ``[0.5, 1.0]``.
+            ``calibration_decision``, an unknown key, or a precision floor
+            outside ``[0.5, 1.0]``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    plan_authority: Literal["advisory"] = "advisory"
     close_authority: Literal["advisory", "blocking"] = "advisory"
     calibration_decision: str | None = Field(default=None, pattern=r"^D\d+$")
     precision_floor: float = Field(default=0.80, ge=MIN_JURY_PRECISION_FLOOR, le=1.0)

@@ -106,18 +106,19 @@ def test_validate_claim_budget_raw_budget_is_not_the_limit() -> None:
 @pytest.mark.parametrize(("consumed", "refused"), [(1499, False), (1500, True), (1501, True)])
 def test_validate_claim_budget_off_by_one_at_the_ceiling(consumed: int, refused: bool) -> None:
     wave = wave_at(1000, consumed)
+    hard = BudgetConfig(enforce="hard")
     if not refused:
-        validate_claim_budget(wave, budget=BudgetConfig())
+        validate_claim_budget(wave, budget=hard)
         return
     with pytest.raises(LifecycleGuardError, match="over token budget") as caught:
-        validate_claim_budget(wave, budget=BudgetConfig())
+        validate_claim_budget(wave, budget=hard)
     assert caught.value.code == CLAIM_BUDGET_CEILING_REACHED
     assert "1500 ceiling" in caught.value.message
 
 
 def test_validate_claim_budget_zero_budget_is_reached_at_zero() -> None:
     with pytest.raises(LifecycleGuardError):
-        validate_claim_budget(wave_at(0, 0), budget=BudgetConfig())
+        validate_claim_budget(wave_at(0, 0), budget=BudgetConfig(enforce="hard"))
 
 
 def claimable(tmp_path: Path, *, consumed: int, config: str | None) -> Any:
@@ -164,13 +165,14 @@ def claim(ctx: Any) -> dict[str, Any]:
 
 
 def test_mutate_wave_claim_refuses_at_the_ceiling(tmp_path: Path) -> None:
-    ctx = claimable(tmp_path, consumed=1500, config=None)
+    ctx = claimable(tmp_path, consumed=1500, config="flow:\n  budget:\n    enforce: hard\n")
     with pytest.raises(DaemonValidationError, match=CLAIM_BUDGET_CEILING_REACHED):
         claim(ctx)
 
 
 def test_mutate_wave_claim_measures_the_configured_ceiling(tmp_path: Path) -> None:
-    ctx = claimable(tmp_path, consumed=1500, config="flow:\n  budget:\n    multiplier: 2.0\n")
+    config = "flow:\n  budget:\n    enforce: hard\n    multiplier: 2.0\n"
+    ctx = claimable(tmp_path, consumed=1500, config=config)
     assert claim(ctx)["event"]["payload"]["event_kind"] == "wave_claimed"
 
 

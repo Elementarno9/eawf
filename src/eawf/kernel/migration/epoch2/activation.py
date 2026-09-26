@@ -18,15 +18,22 @@ reversible window** belongs only to an opted-in repository; it opens at the
 opt-in and closes only once a whole milestone has run on epoch-2 authority
 and a migration re-run reproduces the manifest byte for byte. While it is
 open the boundary stays queryable, and after the first native mutation the
-answer it gives is forward repair rather than restore.
+answer it gives is forward repair rather than restore. The window closes
+when its closing event is journaled as a ``canary_window_closed`` row.
+
+A seal that fails does not pass silently: the daemon records the fault
+under the tree's machine-local directory, and the boundary report names it
+until a later session's seal lands.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Final
+from pathlib import Path
+from typing import Annotated, Final, Literal
 
 from pydantic import Field
 
@@ -35,6 +42,7 @@ from eawf.kernel.migration.epoch2.generation import generation_digest, read_mark
 from eawf.kernel.migration.epoch2.journal import (
     ActivationRecord,
     CutoverJournal,
+    CutoverJournalRow,
     CutoverStage,
     read_journal,
     require_chain_intact,
@@ -49,6 +57,11 @@ logger = logging.getLogger(__name__)
 
 #: What closes the simple rollback window.
 SIMPLE_WINDOW_CLOSES_ON: Final = "the first native mutation against the activated generation"
+
+#: The machine-local record of a seal that failed after its mutation
+#: committed. Machine-local because the fault is one daemon's run, not a
+#: fact a clone should inherit.
+SEAL_FAULT_LOCATOR: Final = "local/epoch2-activation-seal-fault.json"
 
 #: What closes the canary reversible window of an opted-in repository.
 CANARY_WINDOW_CLOSES_ON: Final = (
@@ -99,16 +112,34 @@ class CanaryReversibleWindow(StrictMigrationModel):
     """The opted-in repository's reversible window.
 
     Attributes:
-        state: ``open`` for an opted-in tree, ``not_applicable`` for a
+        state: ``open`` for an opted-in tree until its closing event is
+            journaled, ``closed`` after, ``not_applicable`` for a
             disposable canary, which has no such window.
         remedy: How the tree would be taken back today, or ``None`` when
             the window does not apply.
         closes_on: What closes the window.
+        closed_at: When the closing event was journaled, or ``None``
+            while the window is open or does not apply.
     """
 
     state: WindowState
     remedy: RollbackRemedy | None
     closes_on: str
+    closed_at: datetime | None
+
+
+class ActivationSealFault(StrictMigrationModel):
+    """A seal that failed after the native mutation it would record committed.
+
+    Attributes:
+        code: Always ``activation_seal_failed``.
+        observed_at: When the failing seal was attempted.
+        error: The class name of the error the seal raised.
+    """
+
+    code: Literal["activation_seal_failed"] = "activation_seal_failed"
+    observed_at: datetime
+    error: Annotated[str, Field(min_length=1, max_length=120)]
 
 
 class RollbackBoundaryReport(StrictMigrationModel):
@@ -123,6 +154,8 @@ class RollbackBoundaryReport(StrictMigrationModel):
             reported separately and never folded into the simple one.
         activation: The activation seal, once the first native mutation
             has landed.
+        seal_fault: The recorded fault of a seal that failed and has not
+            landed since, or ``None``.
     """
 
     declaration: DeclarationKind
@@ -131,6 +164,39 @@ class RollbackBoundaryReport(StrictMigrationModel):
     simple_rollback_window: SimpleRollbackWindow
     canary_reversible_window: CanaryReversibleWindow
     activation: ActivationRecord | None
+    seal_fault: ActivationSealFault | None
+
+
+def seal_fault_path(target: DisposableTarget) -> Path:
+    """Return where *target*'s activation seal fault is recorded.
+
+    Args:
+        target: The fence-cleared target tree.
+
+    Returns:
+        The machine-local fault record's path.
+    """
+    return target.root / SEAL_FAULT_LOCATOR
+
+
+def read_seal_fault(target: DisposableTarget) -> ActivationSealFault | None:
+    """Return the seal fault recorded for *target*, if any.
+
+    Args:
+        target: The fence-cleared target tree.
+
+    Returns:
+        The recorded fault, or ``None`` when no seal has failed since the
+        last one landed.
+
+    Raises:
+        pydantic.ValidationError: The record does not parse.
+        OSError: The record exists but cannot be read.
+    """
+    path = seal_fault_path(target)
+    if not path.is_file():
+        return None
+    return ActivationSealFault.model_validate_json(path.read_bytes())
 
 
 def seal_first_native_mutation(
@@ -220,12 +286,7 @@ def rollback_boundary_report(target: DisposableTarget) -> RollbackBoundaryReport
         closes_on=SIMPLE_WINDOW_CLOSES_ON,
         closed_at=activation.first_native_mutation_at if activation is not None else None,
     )
-    opted_in = target.kind is DeclarationKind.OPT_IN
-    canary = CanaryReversibleWindow(
-        state=WindowState.OPEN if opted_in else WindowState.NOT_APPLICABLE,
-        remedy=remedy if opted_in else None,
-        closes_on=CANARY_WINDOW_CLOSES_ON,
-    )
+    canary = _canary_window(target, rows=rows, remedy=remedy)
     return RollbackBoundaryReport(
         declaration=target.kind,
         boundary=assessment.boundary,
@@ -233,6 +294,42 @@ def rollback_boundary_report(target: DisposableTarget) -> RollbackBoundaryReport
         simple_rollback_window=simple,
         canary_reversible_window=canary,
         activation=activation,
+        seal_fault=read_seal_fault(target),
+    )
+
+
+def _canary_window(
+    target: DisposableTarget, *, rows: Sequence[CutoverJournalRow], remedy: RollbackRemedy
+) -> CanaryReversibleWindow:
+    """Return the canary reversible window as the journal leaves it.
+
+    Args:
+        target: The fence-cleared target tree.
+        rows: The journal's rows, in file order.
+        remedy: How the tree would be taken back while the window is open.
+
+    Returns:
+        ``not_applicable`` for a disposable canary; ``closed`` once the
+        journal carries the closing row, after which only forward repair
+        remains; ``open`` otherwise.
+    """
+    if target.kind is not DeclarationKind.OPT_IN:
+        return CanaryReversibleWindow(
+            state=WindowState.NOT_APPLICABLE,
+            remedy=None,
+            closes_on=CANARY_WINDOW_CLOSES_ON,
+            closed_at=None,
+        )
+    closing = next((row for row in rows if row.stage is CutoverStage.CANARY_WINDOW_CLOSED), None)
+    if closing is None:
+        return CanaryReversibleWindow(
+            state=WindowState.OPEN, remedy=remedy, closes_on=CANARY_WINDOW_CLOSES_ON, closed_at=None
+        )
+    return CanaryReversibleWindow(
+        state=WindowState.CLOSED,
+        remedy=RollbackRemedy.FORWARD_REPAIR,
+        closes_on=CANARY_WINDOW_CLOSES_ON,
+        closed_at=closing.recorded_at,
     )
 
 
@@ -250,13 +347,17 @@ def boundary_envelope(report: RollbackBoundaryReport) -> dict[str, object]:
 
 __all__ = [
     "CANARY_WINDOW_CLOSES_ON",
+    "SEAL_FAULT_LOCATOR",
     "SIMPLE_WINDOW_CLOSES_ON",
+    "ActivationSealFault",
     "CanaryReversibleWindow",
     "RollbackBoundaryReport",
     "RollbackRemedy",
     "SimpleRollbackWindow",
     "WindowState",
     "boundary_envelope",
+    "read_seal_fault",
     "rollback_boundary_report",
+    "seal_fault_path",
     "seal_first_native_mutation",
 ]

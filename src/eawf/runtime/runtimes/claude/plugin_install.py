@@ -1,6 +1,6 @@
 """Render a complete Claude Code plugin tree under a target directory.
 
-Per Phase 4 W05 acceptance §1, ``eawf plugin install claude`` produces
+``eawf plugin install claude`` produces
 the following layout under ``<target_dir>/.claude/`` (target_dir
 defaults to the workspace root):
 

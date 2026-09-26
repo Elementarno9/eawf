@@ -28,6 +28,7 @@ legible.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -311,6 +312,45 @@ def red_to_green_finding(runs: Sequence[TaskTestRun]) -> RedToGreenFinding | Non
             test_id=test_id, reason=f"the last run at {runs[-1].revision} is red"
         )
     return None
+
+
+@dataclass(frozen=True)
+class ReproTestName:
+    """The function-name form the test-first protocol gives a defect repro test.
+
+    Only the test function's own name is read. A module path or a class name
+    that happens to contain ``_repro_`` does not turn every test under it
+    into a blocking repro, and a name such as ``test_nonrepro_case`` is not
+    one either.
+
+    Attributes:
+        pattern: Full-match pattern for the bare function name.
+        form: The human-readable form the executor prompt shows.
+    """
+
+    pattern: re.Pattern[str]
+    form: str
+
+    def matches(self, test_id: str) -> bool:
+        """Return whether *test_id* names a defect repro test.
+
+        Args:
+            test_id: A pytest node id; a parametrize suffix such as ``[a-1]``
+                is ignored.
+
+        Returns:
+            ``True`` when the function name after the last ``::`` has the
+            repro form.
+        """
+        name = test_id.rsplit("::", 1)[-1].split("[", 1)[0]
+        return self.pattern.fullmatch(name) is not None
+
+
+#: The single home of the repro naming convention.
+REPRO_TEST_NAME = ReproTestName(
+    pattern=re.compile(r"test_(?:[A-Za-z0-9]+_)*repro_[A-Za-z0-9_]+"),
+    form="test_<subject>_repro_<defect>",
+)
 
 
 def kind_directory(kind: TestKind) -> str:

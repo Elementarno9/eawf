@@ -8,9 +8,13 @@ test ran red before its first green run and ended green.
 
 A finding is advisory, except on a defect repro test: the test-first
 protocol requires a repro to prove red on the pre-fix basis before close,
-so a repro test without the pair blocks. The check proves only that a
-red-then-green pair was recorded, not that the test stayed honest between
-the two runs.
+so a repro test without the pair blocks. A test is a repro only when its
+function name has the form
+:data:`~eawf.platform.lint.kind_taxonomy.REPRO_TEST_NAME` declares; the
+executor prompt renders that form from the same constant, so the rule an
+executor reads and the rule close applies cannot drift apart. The check
+proves only that a red-then-green pair was recorded, not that the test
+stayed honest between the two runs.
 
 Only tests gated at the wave tier are checked. A test whose kind runs at
 iter or release tier (golden, TUI, conformance, e2e, perf) is not part of
@@ -25,6 +29,7 @@ from dataclasses import dataclass
 
 from eawf.kernel.store.kinds.agent_report import ExecutorReportBody
 from eawf.platform.lint.kind_taxonomy import (
+    REPRO_TEST_NAME,
     GateTier,
     RedToGreenFinding,
     RunOutcome,
@@ -35,9 +40,6 @@ from eawf.platform.lint.kind_taxonomy import (
 )
 
 logger = logging.getLogger(__name__)
-
-#: The name segment the test-first protocol gives a defect repro test.
-REPRO_MARK = "_repro_"
 
 
 @dataclass(frozen=True)
@@ -100,12 +102,13 @@ def red_to_green_close_findings(
             continue
         finding = red_to_green_finding(runs)
         if finding is not None:
-            findings.append(RedToGreenCloseFinding(finding=finding, blocking=REPRO_MARK in test_id))
+            findings.append(
+                RedToGreenCloseFinding(finding=finding, blocking=REPRO_TEST_NAME.matches(test_id))
+            )
     return tuple(findings)
 
 
 __all__ = [
-    "REPRO_MARK",
     "RedToGreenCloseFinding",
     "red_to_green_close_findings",
 ]

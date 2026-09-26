@@ -191,8 +191,8 @@ def _envelope_for(
 
     The envelope is the same shape every Eä CLI command emits; we use
     ``/audit`` as the carrier ``skill`` because there is no dedicated
-    skill for the CLI hook surface yet (W05 may add ``/hook`` if an
-    operator-facing skill is required). Status is ``ok`` when no hook
+    skill for the CLI hook surface (a ``/hook`` skill would only be
+    worth adding if operators need to invoke hooks by hand). Status is ``ok`` when no hook
     blocked, ``blocked`` otherwise.
     """
     from eawf.surfaces.render.envelope import (

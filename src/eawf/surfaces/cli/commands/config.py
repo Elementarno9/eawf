@@ -18,7 +18,7 @@ Layer label conventions match :data:`eawf.kernel.config.layered.LAYER_ORDER`:
 ``built-in | global | workspace | repo | local | env | cli``. Only file
 layers (global / workspace / repo / local) are writable.
 
-Exit-code mapping (per W00 plan / ``cli/exit_codes.py``):
+Exit-code mapping (per ``cli/exit_codes.py``):
 
 - ``0``: success.
 - ``2``: ``NOT_FOUND`` — key not present in merged config (``get``).
@@ -69,10 +69,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# Resolve repo/workspace anchors. The Phase 2 W06 surface is intentionally
-# narrow: workspace comes from the global ``-w`` flag; repo defaults to the
-# current working directory. Phase 3 will integrate with state-resolver
-# upgrades once those land.
+# Resolve repo/workspace anchors. The surface is intentionally narrow:
+# workspace comes from the global ``-w`` flag and repo defaults to the
+# current working directory, so no state resolution is needed to read
+# or write a layer.
 def _resolve_anchors(flags: GlobalFlags) -> tuple[Path, Path | None]:
     """Return ``(repo, workspace)`` anchors for the layered merge.
 
@@ -84,20 +84,19 @@ def _resolve_anchors(flags: GlobalFlags) -> tuple[Path, Path | None]:
     return repo, workspace
 
 
-# --- Minimal config schema (Phase 3 W02 will tighten) -----------------------
+# --- Minimal config schema ------------------------------------------------
 
 
 class _ConfigSchema(BaseModel):
     """Minimal Pydantic schema for ``config validate``.
 
-    For v0.1 P02 the minimal schema mirrors the section list in
+    The minimal schema mirrors the section list in
     ``docs/architecture/envelope.md`` "Config schema required sections".
-    Phase 3 W02 will tighten each section into a strict Pydantic model.
 
     The minimal contract is: every required top-level section listed in the
     inventory is present and is a mapping (or, for the ``commands`` section,
-    a mapping). Deeper structure is left as ``dict[str, Any]`` until Phase 3
-    W02 lands the strict per-section models.
+    a mapping). Deeper structure is left as ``dict[str, Any]``: this check
+    guards only that each required section is present and shaped.
     """
 
     # Pydantic v2 strict per AGENTS.md rule 2 — extra="forbid" on every model.
@@ -298,15 +297,15 @@ def _save_value_to_layer(
 ) -> None:
     """Persist ``key=value`` into the YAML layer at *target_path*.
 
-    Since P24-W10 this helper is a thin dispatcher:
+    This helper is a thin dispatcher:
 
     * **Daemon-proxy arm (default).** When ``daemon.proxy_enabled``
-      is ``True`` (the default since W10) AND the daemon is reachable,
+      is ``True`` (the default) AND the daemon is reachable,
       the call routes through ``config.set_layer_value`` RPC. The
       daemon owns the portalock + atomic-rename + bus publish. The
       caller's *repo_root* is forwarded so the daemon resolves the
-      target layer against the right repo (the daemon is one per user;
-      pre-W03 callers could be mis-routed against the daemon's
+      target layer against the right repo (the daemon is one per user,
+      so without it a call could be mis-routed against the daemon's
       boot-time cwd).
     * **In-process fallback arm.** Reached when (a) ``proxy_enabled``
       is ``False`` (V1 carve-out), (b) ``EAWF_DAEMONLESS=1`` is set,
@@ -356,7 +355,7 @@ def _save_value_to_layer(
             except DaemonRpcError as exc:
                 if exc.code == -32601:
                     # Method not found — fall through to in-process
-                    # path so a pre-W10 daemon stays usable.
+                    # path so an older daemon without the method stays usable.
                     logger.debug("_save_value_to_layer daemon-rpc method-not-found; fallback")
                 else:
                     raise
@@ -806,7 +805,7 @@ def profile_enable(
     emit_json_or_text(result, text, flags=flags)
 
 
-# --- Interactive menu (questionary, P20-W10) --------------------------------
+# --- Interactive menu (questionary) ----------------------------------------
 
 
 # Pinned questionary style — mirrors the init wizard's palette so the two

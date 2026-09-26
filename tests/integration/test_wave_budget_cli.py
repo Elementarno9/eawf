@@ -194,10 +194,13 @@ def test_wave_budget_set_unknown_wave_exits_2(workspace: Path) -> None:
 
 
 def test_wave_claim_refuses_over_budget(workspace: Path) -> None:
-    """Once ``tokens_consumed`` reaches the one ceiling (the budget scaled
+    """Once ``tokens_consumed`` reaches a hard ceiling (the budget scaled
     by ``flow.budget.multiplier``, 1.5 by default), ``wave claim`` refuses
     with exit 2 and the canonical error string."""
     _bootstrap_pending_wave(workspace)
+    (workspace / ".ea" / "config.yaml").write_text(
+        "flow:\n  budget:\n    enforce: hard\n", encoding="utf-8"
+    )
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
     assert runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code == 0
     # Lower the budget so its ceiling (500 x 1.5) equals the existing

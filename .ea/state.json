@@ -18000,6 +18000,21 @@
       "status": "done",
       "updated_at": "2026-09-26T18:54:42.089009Z"
     },
+    "P36-I01-W12": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P36-I01-W12",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P36-I01-W12",
+      "model": null,
+      "scope_id": "P36-I01-W12",
+      "status": "done",
+      "updated_at": "2026-09-26T19:45:55.522085Z"
+    },
     "P36-I01-W13": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -24915,30 +24930,32 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-26T19:45:03.066564Z",
       "id": "SES-20260926T191649.319049Z-auditor-claude-e57a7811-3050-46be-9079-0e3c0ca99bac",
       "role": "auditor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P36-I01-W13",
       "started_at": "2026-09-26T19:16:49.319049Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260926T191911.882878Z-operator-claude-1201c629-271a-439a-b05a-5f39c3996e24": {
       "agent_principal_id": null,
       "artifact_ids": [],
-      "claimed_wave_ids": [],
-      "ended_at": null,
+      "claimed_wave_ids": [
+        "P36-I01-W11"
+      ],
+      "ended_at": "2026-09-26T19:45:03.121443Z",
       "id": "SES-20260926T191911.882878Z-operator-claude-1201c629-271a-439a-b05a-5f39c3996e24",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P36-I01",
       "started_at": "2026-09-26T19:19:11.882878Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260926T191945.198030Z-auditor-claude-code-96105a43-8ade-4985-adc8-18c679dfdd42": {
@@ -24954,6 +24971,21 @@
       "started_at": "2026-09-26T19:19:45.198030Z",
       "status": "closed",
       "summary": "auditor report appended",
+      "worktree_ids": []
+    },
+    "SES-20260926T194506.177056Z-operator-claude-0f9bbfa5-7258-496c-9421-7bae773e94f9": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [],
+      "ended_at": null,
+      "id": "SES-20260926T194506.177056Z-operator-claude-0f9bbfa5-7258-496c-9421-7bae773e94f9",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P36-I01",
+      "started_at": "2026-09-26T19:45:06.177056Z",
+      "status": "active",
+      "summary": null,
       "worktree_ids": []
     }
   },
@@ -34590,6 +34622,61 @@
       "waiver_decision_ids": [],
       "wave_id": "P33-I01-W07",
       "wave_revision_digest": "9705eedc95dbf814e569a930ea75ae126026cfc375e1b841a060c1dbcbaa20e3"
+    },
+    "close-50fdd7e0d32a0624ca031e3b": {
+      "apply_event_id": "EV-5fb6aecc8063",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "90577a90db455e211e9066eddd7198ea3c8da87b",
+      "commit_identity_digest": "sha256:924e20ca4b642ca99e98bcf34226260f2d72240308a3a9209483f376128f8111",
+      "criteria_digest": "2834b99316e196ac78e20faf86399ca6594b88761ba3f90e447d7323d6e940e1",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "51bece0bbaa0d49231dd114c5f7691b5278b3903fcdb721b532a3feb21abfc2b",
+      "gate_receipt_ids": [
+        "GR-3e3b4fa6a3649e7edf234855192170ba",
+        "GR-92dd578094c33b21eda2db5f9890fb34",
+        "GR-fe276d41ca8a50c3ca06913cf2e3bc86",
+        "GR-ab39ec77c510f247fb994bbb61666848",
+        "GR-abf5ef42e3a51d7f1866f1c1ccf21a40"
+      ],
+      "generation": 1,
+      "id": "close-50fdd7e0d32a0624ca031e3b",
+      "idempotency_key": "80d42699495f0cca9738b2e30a7f1ee33b2a4debe0553a3386839f2cb86a3473",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "90577a90db455e211e9066eddd7198ea3c8da87b",
+      "integration_id": "integration-d71fb275760fba5cb279a9a4",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Stale lifecycle ids rewritten in source comments; retired skill bodies and unread plan_authority removed; repro convention typed; soft ceiling agrees; canary window closes; seal failure raises a typed fault",
+      "policy_digest": "eef14812c50231202be16b85d5928b3e396ffb0452265a8053b6460486645b0b",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-26T19:45:08.458804Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03",
+        "G-04",
+        "G-UI"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "f82f5eede57c9efb2d0513e84999e29618b404128efc7fa629e10b95a9fb43ba",
+      "spec_digest": "6b53c038f2a159acceb680e54571e0996d01bd59bf2a9e5d24eb75439c1315a8",
+      "started_at": "2026-09-26T19:45:08.935056Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-26T19:45:57.162988Z",
+      "tokens_consumed": null,
+      "tree_sha": "d91c3cb354793fb98440b6ea9ca301d22b0035c7",
+      "updated_at": "2026-09-26T19:45:57.162984Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P36-I01-W12",
+      "wave_revision_digest": "fdf0b13b7c3d2a6310680b04b9f1c5ad5c77fbbaef8b0427738dccd6c7210c34"
     },
     "close-53385e701bd3d7f0e86acb20": {
       "apply_event_id": "EV-198f0049220a",
@@ -46608,12 +46695,11 @@
   },
   "current": {
     "active_session_ids": [
-      "SES-20260926T191649.319049Z-auditor-claude-e57a7811-3050-46be-9079-0e3c0ca99bac",
-      "SES-20260926T191911.882878Z-operator-claude-1201c629-271a-439a-b05a-5f39c3996e24"
+      "SES-20260926T194506.177056Z-operator-claude-0f9bbfa5-7258-496c-9421-7bae773e94f9"
     ],
     "active_wave_ids": [
       "P36-I01-W01",
-      "P36-I01-W12"
+      "P36-I01-W11"
     ],
     "iter_id": "P36-I01",
     "phase_id": "P36",
@@ -48171,7 +48257,7 @@
       "title": "Run a Task's decisive gates in the post-cutover continuation close"
     }
   },
-  "dispatch_paused": true,
+  "dispatch_paused": false,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -66067,7 +66153,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T19:43:25.402829Z",
+  "updated_at": "2026-09-26T19:45:57.163075Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -69370,6 +69456,28 @@
       "start_fact_ref": "integration:integration-f5882234107120211508bd59",
       "tree_sha": "dafa84214ba4b2ab78260db26231048d104b5ed7",
       "wave_id": "P35-I04-W11"
+    },
+    "P36-I01-W11::P36-I01-W07": {
+      "bound_at": "2026-09-26T19:44:01.980373Z",
+      "dep_wave_id": "P36-I01-W07",
+      "generation": 1,
+      "integrated_sha": "25e419488344b0e4844b0c4d668aa964bab24bd4",
+      "integration_id": "integration-84d6949e0dfe99c282472097",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-84d6949e0dfe99c282472097",
+      "tree_sha": "4c4a3b1381f0aeae7dbe84d59dc2fe34b926ed12",
+      "wave_id": "P36-I01-W11"
+    },
+    "P36-I01-W11::P36-I01-W08": {
+      "bound_at": "2026-09-26T19:44:01.980373Z",
+      "dep_wave_id": "P36-I01-W08",
+      "generation": 1,
+      "integrated_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "integration_id": "integration-645f07ce3246a5dc51f0bbfa",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-645f07ce3246a5dc51f0bbfa",
+      "tree_sha": "c27fafc7ea4a2b35d9b44b1a0b8b5489940dc4ec",
+      "wave_id": "P36-I01-W11"
     }
   },
   "wave_integrations": {
@@ -74348,6 +74456,22 @@
       "supersedes_id": null,
       "tree_sha": "e91d88a505bcae887eb164695c3e21cca503ca14",
       "wave_id": "P33-I01-W79"
+    },
+    "integration-d71fb275760fba5cb279a9a4": {
+      "base_sha": "c64ad65d3e8db78136f475efeb8721854df94364",
+      "candidate_sha": "90577a90db455e211e9066eddd7198ea3c8da87b",
+      "created_at": "2026-09-26T19:45:07.184944Z",
+      "diff_digest": "27847b8325ed262c03f5384d7cbf3764a5fe1e0a44a44739c6132eb676ed6667",
+      "generation": 1,
+      "id": "integration-d71fb275760fba5cb279a9a4",
+      "integrated_sha": "90577a90db455e211e9066eddd7198ea3c8da87b",
+      "kind": "adopt",
+      "reason": "cherry-picked from wave worktree branch",
+      "spec_digest": "6b53c038f2a159acceb680e54571e0996d01bd59bf2a9e5d24eb75439c1315a8",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "d91c3cb354793fb98440b6ea9ca301d22b0035c7",
+      "wave_id": "P36-I01-W12"
     },
     "integration-d74132fbcd13e93d3c4bae0b": {
       "base_sha": "7185508201dcf0d45f21f9b6ee174e7a54f484a2",
@@ -253295,8 +253419,8 @@
       "blocks": [
         "P36-I01-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T191911.882878Z-operator-claude-1201c629-271a-439a-b05a-5f39c3996e24",
+      "claimed_at": "2026-09-26T19:44:01.980652Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -253445,7 +253569,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -253569,9 +253693,9 @@
       ],
       "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
       "claimed_at": "2026-09-26T18:35:36.504879Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-26T19:45:55.522085Z",
+      "commit": "90577a90db455e211e9066eddd7198ea3c8da87b",
+      "commit_identity_digest": "sha256:924e20ca4b642ca99e98bcf34226260f2d72240308a3a9209483f376128f8111",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "B184, B186, B187 and B189: rewrite stale wave and phase ids in source comments, delete retired skill bodies, fix the red-to-green and claim guard leftovers, and close the canary reversible window.",
@@ -253699,13 +253823,13 @@
       },
       "iter_id": "P36-I01",
       "opened_at": "2026-09-26T18:21:48.225248Z",
-      "outcome": null,
+      "outcome": "Stale lifecycle ids rewritten in source comments; retired skill bodies and unread plan_authority removed; repro convention typed; soft ceiling agrees; canary window closes; seal failure raises a typed fault",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",

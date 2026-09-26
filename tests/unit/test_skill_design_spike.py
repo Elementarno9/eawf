@@ -1,24 +1,23 @@
-"""Unit tests for the ``/design`` and ``/spike`` skills.
+"""Unit tests for the ``/spike`` skill and the retired ``/design`` page.
 
-``/design`` and ``/spike`` are registry-resident workflow skills: each
-renders a ``SKILL.md`` (so it installs as a slash command and reconciles
-against the disk tree) but drives no state mutation, so neither has an
-engine ``Skill`` subclass. They join ``/mockup`` as the design-surface
-skills under the operator-facing workflow group.
+``/spike`` is a registry-resident workflow skill: it renders a
+``SKILL.md`` (so it installs as a slash command and reconciles against
+the disk tree) but drives no state mutation, so it has no engine
+``Skill`` subclass. ``/design`` is retired from the catalog, so its
+registry body is gone and a clean tree omits it.
 
 Pinned here:
 
-- both ``SkillSpec`` rows resolve under their canonical names;
-- ``/design`` is user-invocable but NOT model-invocable (it is an
-  operator-driven multi-round AUQ design pass);
+- the ``/spike`` ``SkillSpec`` row resolves under its canonical name;
 - ``/spike`` is user-invocable AND model-invocable (it mirrors
   ``/research`` — the local frontmatter's ``disable-model-invocation:
   true`` is corrected to ``False`` in the registry row);
-- each renders a frontmatter-shaped ``SKILL.md`` without raising, with
+- it renders a frontmatter-shaped ``SKILL.md`` without raising, with
   the classification flags reflected in the YAML;
-- neither body carries a dangling ``/smoke-test`` reference (no such
+- the body carries no dangling ``/smoke-test`` reference (no such
   skill is registered);
-- ``reconcile_skills`` stays clean with both rows present.
+- ``reconcile_skills`` stays clean, with ``/spike`` shipped and
+  ``/design`` absent.
 """
 
 from __future__ import annotations
@@ -39,26 +38,12 @@ def _spec(name: str) -> SkillSpec:
     return next(s for s in SKILL_REGISTRY if s.skill_name == name)
 
 
-def test_design_skill_row_resolves() -> None:
-    """``/design`` is registered as a SkillSpec row in the registry."""
-    spec = _spec("design")
-    assert spec.skill_name == "design"
-    assert spec.argument_hint == "<surface-slug> [--final] [--from-brief <path>]"
-
-
 def test_spike_skill_row_resolves() -> None:
     """``/spike`` is registered as a SkillSpec row in the registry."""
     spec = _spec("spike")
     assert spec.skill_name == "spike"
     assert "<spike-slug>" in spec.argument_hint
     assert "--postmortem" in spec.argument_hint
-
-
-def test_design_skill_is_user_invocable_not_model_invocable() -> None:
-    """``/design`` is operator-driven: visible in the slash menu, model-barred."""
-    spec = _spec("design")
-    assert spec.user_invocable is True
-    assert spec.disable_model_invocation is True
 
 
 def test_spike_skill_is_user_and_model_invocable() -> None:
@@ -74,16 +59,6 @@ def test_spike_skill_is_user_and_model_invocable() -> None:
     assert spec.disable_model_invocation is False
 
 
-def test_design_skill_renders_frontmatter() -> None:
-    """The rendered ``/design`` SKILL.md carries the frontmatter + body heading."""
-    output = render_skill_md_from_spec(_spec("design"))
-    assert output.startswith("---\n")
-    assert "\nname: design\n" in output
-    assert "\nuser-invocable: true\n" in output
-    assert "\ndisable-model-invocation: true\n" in output
-    assert "# /design" in output
-
-
 def test_spike_skill_renders_frontmatter() -> None:
     """The rendered ``/spike`` SKILL.md carries the frontmatter + body heading."""
     output = render_skill_md_from_spec(_spec("spike"))
@@ -94,15 +69,6 @@ def test_spike_skill_renders_frontmatter() -> None:
     assert "# /spike" in output
 
 
-def test_design_body_documents_rigour_mechanisms() -> None:
-    """The ``/design`` body names the statechart + matrix + liveness contract."""
-    body = _spec("design").body
-    assert "statechart" in body
-    assert "liveness contract" in body
-    assert "AskUserQuestion" in body
-    assert "L1..L11" in body
-
-
 def test_spike_body_documents_direction_contract() -> None:
     """The ``/spike`` body names the direction-only + AUQ + next-line contract."""
     body = _spec("spike").body
@@ -110,11 +76,6 @@ def test_spike_body_documents_direction_contract() -> None:
     assert "AskUserQuestion" in body
     assert "next:" in body
     assert "--from-briefs" in body
-
-
-def test_design_body_has_no_dangling_smoke_test_reference() -> None:
-    """No ``/smoke-test`` skill is registered, so the body must not cite one."""
-    assert "smoke-test" not in _spec("design").body
 
 
 def test_spike_body_has_no_dangling_smoke_test_reference() -> None:
@@ -135,7 +96,7 @@ def _render_clean_tree(root: Path) -> None:
         (skill_dir / "SKILL.md").write_text(_render_skill(spec), encoding="utf-8")
 
 
-def test_reconcile_clean_with_design_and_spike_present(tmp_path: Path) -> None:
+def test_reconcile_clean_ships_spike_and_omits_design(tmp_path: Path) -> None:
     """A clean catalog tree ships /spike and omits the retired /design."""
     root = tmp_path / ".claude" / "skills"
     _render_clean_tree(root)
