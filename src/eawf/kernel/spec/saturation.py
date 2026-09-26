@@ -101,8 +101,8 @@ _UNCLOSED_QUESTION_STATUSES: frozenset[OpenQuestionStatus] = frozenset(
 
 #: The :class:`OpenQuestionStatus` values gate (d) accepts as a claim's
 #: answer-edge target: an operator/claim-evidence ``ANSWERED`` question, or
-#: an ``AUTO_RESOLVED`` / ``SEALED`` policy pairing (PLAN-036 keeps those
-#: distinct from ANSWERED, but the claim graph still closes on either -- a
+#: an ``AUTO_RESOLVED`` / ``SEALED`` policy pairing (kept distinct from
+#: ANSWERED, but the claim graph still closes on either -- a
 #: policy-paired claim is not a dangling edge just because no human answered
 #: it).
 _ANSWER_EDGE_TARGET_STATUSES: frozenset[OpenQuestionStatus] = frozenset(

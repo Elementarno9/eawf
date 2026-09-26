@@ -645,7 +645,7 @@ def _build_citation_resolvers(context: Epoch2RootContext) -> _CitationResolvers:
     A promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
     and a recorded :class:`~eawf.kernel.state.models.Decision` are both
     registered in the v1 ``state.json`` this epoch-2 tree sits beside
-    (``PLAN-025``'s evidence path), read once here rather than once per
+    (the evidence path), read once here rather than once per
     citation.
 
     A tree carrying no such file -- one that predates either store, or a

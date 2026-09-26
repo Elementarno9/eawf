@@ -368,7 +368,7 @@ _CLAIM_SIGIL: dict[ClaimStatus, Sigil | None] = {
 #: muted dot). ``OPEN`` is pending (hollow circle), ``ANSWERED`` reads as
 #: closed-resolved (filled circle), ``AUTO_RESOLVED`` reads as claimed
 #: (half-filled circle -- a policy pairing, still reversible while its
-#: override window is open, never the ANSWERED filled circle per PLAN-036),
+#: override window is open, never the ANSWERED filled circle),
 #: ``SEALED`` shares ``DROPPED``'s withheld shape (terminal, but not an
 #: operator answer), and ``DROPPED`` is inert (no shape). ``BLOCKED`` is
 #: absent on purpose: a blocking question short-circuits to the literal
@@ -445,7 +445,7 @@ class RoundProgress:
             claim-evidence answer only; never an :attr:`~eawf.kernel.state
             .enums.OpenQuestionStatus.AUTO_RESOLVED` /
             :attr:`~eawf.kernel.state.enums.OpenQuestionStatus.SEALED`
-            policy pairing (PLAN-036).
+            policy pairing.
         auto_resolved_count: Auto-resolved or sealed (saturating) questions
             -- a policy pairing with no human answer, counted apart from
             :attr:`answered_count` so a defaulted question never inflates
@@ -544,9 +544,9 @@ def compute_round_progress(
     only; an :attr:`~eawf.kernel.state.enums.OpenQuestionStatus.AUTO_RESOLVED`
     / :attr:`~eawf.kernel.state.enums.OpenQuestionStatus.SEALED` policy
     pairing counts under :attr:`RoundProgress.auto_resolved_count` instead,
-    never folded into the answered tally (PLAN-036). When real run records
+    never folded into the answered tally. When real run records
     are present the state derives from them
-    (:func:`classify_round_state_from_records`, the W08 live-wire); otherwise it
+    (:func:`classify_round_state_from_records`); otherwise it
     falls back to the question-ledger classification. A pure function of the
     rows on hand.
 

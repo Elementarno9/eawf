@@ -634,6 +634,15 @@ class PendingAction(_FrozenModel):
         by :meth:`answer` for both outcomes, and by a daemon method that
         seals a still-waiting action so the winner's own disposition rides
         the same commit as the seal.
+
+        Args:
+            principal_id: The principal whose disposition row is replaced.
+            outcome: How that principal's answer landed.
+            option_id: The option the principal chose.
+
+        Returns:
+            A validated copy carrying the replaced disposition row, at the
+            same ``revision``.
         """
         row = PrincipalDispositionRow(
             principal_id=principal_id, outcome=outcome, option_id=option_id

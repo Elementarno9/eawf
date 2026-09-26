@@ -1,4 +1,4 @@
-"""P35-I01-W17: the locked write chokepoint and a production spike-report filer.
+"""The locked write chokepoint and a production spike-report filer.
 
 ``_submit_evidence`` used to persist ``state.json`` with a plain
 ``write_text`` -- no lock, no atomic write, no leak check -- and appended

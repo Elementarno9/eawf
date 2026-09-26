@@ -522,7 +522,7 @@ _EXTENDED: dict[type, dict[object, ResolvedSigil]] = {
     # Open-question status -- OPEN ring, ANSWERED filled circle, BLOCKED the
     # warn triangle (it gates work), AUTO_RESOLVED the same warn triangle
     # (still reversible while its override window is open -- never the
-    # ANSWERED filled circle, per PLAN-036), SEALED a warn-tinted withheld
+    # ANSWERED filled circle), SEALED a warn-tinted withheld
     # slash (terminal, but not a clean operator answer), DROPPED the muted
     # withheld slash.
     OpenQuestionStatus: {

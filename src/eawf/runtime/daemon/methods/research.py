@@ -912,7 +912,7 @@ def _refute_named_claims(
 def _seal_stale_auto_resolutions(questions: dict[str, OpenQuestion], resolved_scope: str) -> int:
     """Seal every AUTO_RESOLVED question the scope carries from an earlier round.
 
-    PLAN-036's override window is exactly one round wide: a policy pairing
+    The override window is exactly one round wide: a policy pairing
     that survived to the NEXT round's reconcile has stood unchallenged and
     locks in as SEALED. A pairing THIS round's own elimination step makes is
     never passed here -- the caller runs this seal BEFORE that step, so it has
@@ -962,7 +962,7 @@ def reconcile_round_claims(
     :attr:`~eawf.kernel.state.enums.ClaimStatus.REFUTED` -- the only place a
     claim ever reaches that status, feeding the campaign's contradiction stop
     rule. Also seals every ``AUTO_RESOLVED`` question the scope carries from a
-    STRICTLY earlier round: PLAN-036's override window is exactly one round
+    STRICTLY earlier round: the override window is exactly one round
     wide, so a policy pairing that survived to the next round's reconcile has
     stood unchallenged and locks in as ``SEALED``. A pairing this same round's
     elimination step makes (below) is untouched here since it has not yet
@@ -1034,7 +1034,7 @@ def reconcile_round_claims(
     # the pairing would be a guess, so every question stays OPEN for the
     # operator. Blocking questions are operator checkpoints and never
     # auto-resolve. The pairing is a policy inference, not an operator
-    # answering the question, so it lands AUTO_RESOLVED (PLAN-036): folding
+    # answering the question, so it lands AUTO_RESOLVED: folding
     # it into ANSWERED would attribute a machine decision to a person and
     # hide that no human looked at the question.
     questions = dict(state.open_questions or {})

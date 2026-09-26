@@ -8,7 +8,7 @@ real Typer app with a stand-in daemon client, mirroring the shape
 lifecycle and create verbs.
 
 This file also carries the CLI command census: every native create, plan,
-seal and submit RPC this wave adds a command for, gathered from both
+seal and submit RPC that has a CLI command, gathered from both
 :mod:`eawf.surfaces.cli.commands.domain` and this module, so a command
 dropped from either file reds a single assertion rather than going
 unnoticed.
@@ -164,8 +164,8 @@ def test_plan_revision_cli_methods_match_the_registered_rpcs() -> None:
 
 # ---- CR-01: the cross-module native-verb census -----------------------------
 
-#: Every native create, plan, seal and submit RPC this wave adds a command
-#: for. Each entry is read off the constant its own ``@app.command``
+#: Every native create, plan, seal and submit RPC that has a CLI command.
+#: Each entry is read off the constant its own ``@app.command``
 #: decoration sends (see ``test_every_census_verb_forwards_its_own_rpc``),
 #: so dropping a command's use of its constant, or dropping the constant
 #: from this tuple, reds one of the two assertions below.

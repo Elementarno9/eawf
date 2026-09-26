@@ -1,12 +1,12 @@
-"""``/dispatch --budget`` wires the Run token ceiling; the P34 leftovers close.
+"""``/dispatch --budget`` wires the Run token ceiling; idle leftovers close.
 
 ``--budget`` was declared on :class:`DispatchArgs` but never read: the pass
 always forwarded the presented ``--run-request`` capsule untouched, so an
 operator naming a token ceiling on the invocation line watched it silently
 dropped. This suite pins the fix -- a named budget overrides the presented
 capsule's ``token_budget``, an omitted one leaves it exactly as compiled --
-and confirms the idle-surface census no longer lists the three P34
-surfaces this wave wires or removes.
+and confirms the idle-surface census no longer lists the three
+formerly idle surfaces, each now wired to a caller or removed.
 
 No daemon, no socket, no filesystem beyond reading the repo's own source
 tree for the census check.
@@ -28,9 +28,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SOURCE_ROOT = _REPO_ROOT / "src" / "eawf"
 _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 
-#: The test-only / orphaned P34 surfaces this wave wires to a caller or
-#: removes outright; none of them may read as idle once this wave lands.
-_P34_LEFTOVER_NAMES = frozenset(
+#: Formerly test-only / orphaned surfaces, each wired to a caller or
+#: removed outright; none of them may read as idle.
+_WIRED_LEFTOVER_NAMES = frozenset(
     {"assemble_verify_request", "assemble_completion_request", "route_claim_to_rung"}
 )
 
@@ -112,8 +112,8 @@ def test_dispatch_negative_budget_is_rejected() -> None:
         DispatchArgs.model_validate(_args(budget=-1))
 
 
-def test_p34_leftover_surfaces_no_longer_read_as_idle() -> None:
-    """The idle-surface census no longer lists the three names this wave closes."""
+def test_find_idle_functions_omits_wired_leftovers() -> None:
+    """The idle-surface census no longer lists the three wired leftovers."""
     idle = {name for name, _ in find_idle_functions(_SOURCE_ROOT, caller_roots=_CALLER_ROOTS)}
 
-    assert not idle & _P34_LEFTOVER_NAMES
+    assert not idle & _WIRED_LEFTOVER_NAMES

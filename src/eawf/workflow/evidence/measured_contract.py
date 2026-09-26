@@ -632,8 +632,9 @@ def _require_compatible_environment(contract: MeasuredContract, *, repository: s
     measured_in = contract.environment.repository
     if measured_in is not None and measured_in != repository:
         logger.warning(
-            f"measured contract environment refusal contract_id={contract.contract_id!r} "
-            f"measured_in={measured_in!r} repository={repository!r}"
+            f"_require_compatible_environment environment_refused "
+            f"contract_id={contract.contract_id!r} measured_in={measured_in!r} "
+            f"repository={repository!r}"
         )
         raise UserError(
             f"contract {contract.contract_id} was measured in repository {measured_in!r}, "
@@ -775,7 +776,7 @@ def submit_evidence(
 ) -> tuple[ContractPromotion, ...]:
     """Promote every contract of a verified :class:`SpikeReport`, mutating *state* in place.
 
-    This is PLAN-025's evidence path: a
+    This is the evidence path: a
     :class:`~eawf.kernel.spec.measured_contract.MeasuredContract` becomes
     canonical only by being submitted here out of a verified report, never
     by being hand-written into a promotion table. Each contract is
@@ -950,7 +951,7 @@ def _require_citable_here(state: State, artifact: Artifact) -> None:
     measured_in = environment.get("repository")
     if measured_in is not None and measured_in != state.project.code:
         logger.warning(
-            f"resolve_contract_citation environment refusal artifact_id={artifact.id!r} "
+            f"resolve_contract_citation environment_refused artifact_id={artifact.id!r} "
             f"measured_in={measured_in!r} repository={state.project.code!r}"
         )
         raise UserError(

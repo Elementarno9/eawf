@@ -47,6 +47,7 @@ Manage artifacts (add / show / verify).
 | Verb | Summary |
 |---|---|
 | `add` | Register a durable artifact. |
+| `file-spike-report` | File a SpikeReport as the artifact a ``submit_evidence`` call resolves. |
 | `promote-contract` | Promote a measured contract onto the evidence path. |
 | `show` | Show artifact metadata. |
 | `submit-evidence` | Submit a verified SpikeReport's measured contracts onto the evidence path. |
@@ -445,7 +446,7 @@ Phase lifecycle (open, close, reopen).
 
 ### `eawf plan`
 
-Read-only iter plan view (DAG, waves, checks, risks).
+Iter plan view (read-only: DAG, waves, checks, risks) plus the submit/approve/apply plan-revision verbs.
 
 | Verb | Summary |
 |---|---|

@@ -74,7 +74,7 @@ def _plan_payload() -> dict[str, Any]:
     """Return one loader-valid plan body payload carrying two live findings.
 
     ``CR-SHARED`` is declared once on each of two Tasks -- reusing an id
-    across Tasks is not a defect (F7), so this must NOT fire
+    across Tasks is not a defect, so this must NOT fire
     DUPLICATE_MECHANISM. ``CR-DUP`` is declared twice on the first Task's
     own ``criteria`` list, which IS the defect the lens catches, so the
     property below proves more than "an empty tuple equals an empty
@@ -182,7 +182,7 @@ def test_lens_output_carries_the_seeded_findings() -> None:
 
 
 def test_duplicate_mechanism_lens_scopes_ids_per_task() -> None:
-    """F7: a criterion id shared by two different Tasks submits.
+    """A criterion id shared by two different Tasks submits.
 
     The fixture declares ``CR-SHARED`` once on each Task (not a defect)
     and ``CR-DUP`` twice on one Task (a real defect). Exactly one

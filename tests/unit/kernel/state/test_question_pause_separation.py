@@ -1,6 +1,6 @@
 """Question status/supersession and OpenPause stay distinct from ANSWERED.
 
-Covers three separate defects this wave closes:
+Covers three separate defects:
 
 * :class:`~eawf.kernel.state.enums.OpenQuestionStatus` gains ``AUTO_RESOLVED``
   and ``SEALED`` members distinct from ``ANSWERED``, so a real answered-count

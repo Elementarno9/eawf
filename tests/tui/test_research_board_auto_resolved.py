@@ -1,16 +1,16 @@
-"""W19 repair: the research board surfaces auto-resolved questions + drop reasons.
+"""The research board surfaces auto-resolved questions + drop reasons.
 
-Two independent M-series audit findings, both against the question lifecycle
+Two independent defects, both against the question lifecycle
 surfaces:
 
-* **M3** -- :func:`~eawf.surfaces.tui.modes.research_board.compute_round_progress`
+* :func:`~eawf.surfaces.tui.modes.research_board.compute_round_progress`
   already derived ``auto_resolved_count``, but none of the four render sites
   that print the ``open / answered / pruned`` triad (:func:`build_tree_nodes`'s
   scope-questions node, :func:`render_progress`'s BUDGET band, and
   :func:`render_campaign_stats`'s QUESTIONS + BUDGET bands) ever displayed it --
   a run that auto-paired its one question read as ``0 open / 0 answered /
   0 pruned``, silently dropping the only signal that anything happened.
-* **M4** -- :func:`~eawf.runtime.daemon.methods.research._apply_resolve_question`
+* :func:`~eawf.runtime.daemon.methods.research._apply_resolve_question`
   dropped a question without ever writing :attr:`OpenQuestion.drop_reason`.
 """
 
@@ -64,7 +64,7 @@ def _answering_claim(claim_id: str = "CL-0001") -> Claim:
 
 
 # --------------------------------------------------------------------------
-# M3 -- the four render sites surface auto_resolved_count
+# The four render sites surface auto_resolved_count
 # --------------------------------------------------------------------------
 
 
@@ -110,7 +110,7 @@ def test_render_campaign_stats_shows_auto_resolved_count() -> None:
 
 
 # --------------------------------------------------------------------------
-# M4 -- the resolve path writes a drop reason
+# The resolve path writes a drop reason
 # --------------------------------------------------------------------------
 
 

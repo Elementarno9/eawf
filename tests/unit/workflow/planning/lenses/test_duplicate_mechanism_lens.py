@@ -7,7 +7,7 @@ Two criterion rows sharing one id on the SAME Task give one identity two
 canonical owners, which is the "same persisted truth under two names"
 defect the design brief describes. Two different Tasks each naming their
 own criterion the same id are not that defect: a reused id across Tasks
-names two different mechanisms, not one mechanism with two owners (F7).
+names two different mechanisms, not one mechanism with two owners.
 """
 
 from __future__ import annotations
@@ -113,13 +113,13 @@ def test_duplicate_mechanism_lens_admits_two_tasks_with_distinct_ids() -> None:
     assert _findings(body) == []
 
 
-# ---- boundary: an id shared across Tasks is not a defect (F7) ---------------
+# ---- boundary: an id shared across Tasks is not a defect --------------------
 
 
 def test_duplicate_mechanism_lens_admits_the_same_id_shared_across_two_tasks() -> None:
     """Two different Tasks each declaring their own criterion the same id submits.
 
-    F7: reusing an id across Tasks names two different mechanisms, not
+    Reusing an id across Tasks names two different mechanisms, not
     one mechanism with two owners -- the approval gate's own criterion
     identity is the Task/id pair, not the id alone.
     """

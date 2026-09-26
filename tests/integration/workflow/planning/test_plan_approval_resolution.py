@@ -1,8 +1,8 @@
-"""H1/M4: approval resolves every grounding citation, or refuses closed.
+"""Approval resolves every grounding citation, or refuses closed.
 
-Two failure modes share one fix. F1: an accepted-risk criterion's
+Two failure modes share one fix. First, an accepted-risk criterion's
 ``accepted_risk_decision_ref`` was only checked for presence, so an id
-naming no recorded Decision (``DEC-bogus``) reached ``APPROVED``. F10: a
+naming no recorded Decision (``DEC-bogus``) reached ``APPROVED``. Second, a
 v1 ``state.json`` that exists but fails to load was treated the same as
 one that never existed, admitting every ``measured`` and ``accepted-risk``
 citation instead of refusing them.

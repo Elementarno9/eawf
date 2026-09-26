@@ -422,13 +422,12 @@ def test_run_campaign_contradiction_halt_leaves_campaign_active(
 ) -> None:
     """A contradiction-halted run leaves the campaign ACTIVE, not CONVERGED.
 
-    W08 follow-up: a live contradiction blocks convergence (PLAN-035), so a
+    A live contradiction blocks convergence (PLAN-035), so a
     ``contradiction`` halt must not flip the campaign the way a saturation or
-    round-budget halt does. No researcher finding can naturally produce a
-    REFUTED claim yet (``reconcile_round_claims`` only ever writes ``OPEN``
-    rows), so the contradiction reducer's factory is monkeypatched to force
-    one fired verdict -- exercising the real ``run_campaign`` wiring end to
-    end rather than a synthetic unit call.
+    round-budget halt does. The contradiction reducer's factory is
+    monkeypatched to force one fired verdict, isolating the halt from the
+    refutation path ``test_contradiction_live.py`` covers while still
+    exercising the real ``run_campaign`` wiring end to end.
     """
     from eawf.kernel.spec.saturation import ContradictionStopRule
     from eawf.kernel.state.enums import CampaignStatus

@@ -1,6 +1,6 @@
 """Tests for the live-claim contradiction path: refutation, seeding, sealing.
 
-Covers the three W19 repair criteria:
+Covers the live-claim contradiction guarantees:
 
 * :func:`~eawf.runtime.daemon.methods.research.reconcile_round_claims` folds a
   researcher's ``refuted_claim_ids`` into a REFUTED status on the named LIVE

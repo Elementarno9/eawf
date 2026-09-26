@@ -352,7 +352,7 @@ def test_campaign_acceptance_two_rounds_steer_claims_checkpoint_and_evibound(
         # and W17 resolved it: round 1's pairing claim marked it AUTO_RESOLVED
         # (a policy pairing, not an operator answer) and linked both sides (no
         # phantom OPEN question after a productive run). Round 2's reconcile
-        # then SEALS it (W19): PLAN-036's override window is exactly one round
+        # then SEALS it: PLAN-036's override window is exactly one round
         # wide, so a pairing that survives to the next round's reconcile has
         # stood unchallenged and locks in.
         state = load_state(state_path)
