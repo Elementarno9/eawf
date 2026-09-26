@@ -35,6 +35,7 @@ from __future__ import annotations
 import copy
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -43,8 +44,9 @@ from pydantic import ConfigDict
 
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
+from eawf.kernel.spec.common import grade_criterion_grounding
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
-from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.epoch2.base import Epoch2Model, PrincipalKey
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
@@ -79,6 +81,11 @@ from eawf.runtime.daemon.epoch2_transaction import (
     MutationReceipt,
 )
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, mark_fsynced, write_pending
+from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.cli.errors import ValidationError as CliValidationError
+from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence.measured_contract import resolve_contract_citation
+from eawf.workflow.planning.lenses import blocking_findings, run_plan_lenses
 from eawf.workflow.planning.revision import (
     ObservedPlanWorld,
     PlanRefusal,
@@ -209,6 +216,32 @@ def plan_lock_urns(body: PlanBody) -> tuple[str, ...]:
     )
 
 
+def grade_plan_grounding(body: PlanBody) -> PlanBody:
+    """Return *body* with every criterion graded from the evidence it carries.
+
+    A planner emits criteria without a grounding grade, which defaults to
+    ``assumed``; grading them here, where every plan producer's proposal
+    is admitted, means a criterion bound to a probe gate reaches approval
+    graded ``measured`` while one with no probe stays ``assumed`` and is
+    refused. See :func:`~eawf.kernel.spec.common.grade_criterion_grounding`.
+
+    Args:
+        body: The plan content the producer emitted.
+
+    Returns:
+        The graded body, or *body* itself when no criterion changes grade.
+    """
+    tasks = tuple(
+        task.model_copy(
+            update={"criteria": tuple(grade_criterion_grounding(c) for c in task.criteria)}
+        )
+        for task in body.tasks
+    )
+    if tasks == body.tasks:
+        return body
+    return body.model_copy(update={"tasks": tasks})
+
+
 def validate_plan_proposal(
     document: dict[str, Any], *, proposal: PlanRevisionProposal, at: UtcDatetime
 ) -> PlanRevisionAdvanced | PlanRefusal:
@@ -219,6 +252,9 @@ def validate_plan_proposal(
     operator's submission. The two differ in what they may do with the
     verdict, not in how the verdict is reached: this function decides,
     and only :func:`submit_plan_revision` may record what it decided.
+    A proposal naming a ``parent_key`` has that parent's stored body
+    resolved and handed to the lens runner, so the semantic-diff lens can
+    compare the repair against what it repairs.
 
     Args:
         document: The locked generation document the bindings are
@@ -228,9 +264,11 @@ def validate_plan_proposal(
 
     Returns:
         The validated revision beside the event it emits, or the typed
-        refusal. A refusal names the exact guard that produced it.
+        refusal. A refusal names the exact guard that produced it. The
+        recorded body is the proposal's graded by
+        :func:`grade_plan_grounding`.
     """
-    body = proposal.body
+    body = grade_plan_grounding(proposal.body)
     if _stored_revision(document, key=proposal.key) is not None:
         return PlanRefusal(
             code=PlanRefusalCode.REVISION_CONFLICT,
@@ -257,6 +295,29 @@ def validate_plan_proposal(
             guard="repository_head_readable",
             detail=f"these repositories record no head to bind: {', '.join(missing)}",
             remediation="Record each repository's head before planning against it.",
+        )
+    parent_body: PlanBody | None = None
+    if proposal.parent_key is not None:
+        parent_record = _stored_revision(document, key=proposal.parent_key)
+        if parent_record is None:
+            return PlanRefusal(
+                code=PlanRefusalCode.IDENTITY_NOT_FOUND,
+                guard="parent_plan_revision_resolved",
+                detail=(
+                    f"the plan names parent revision {proposal.parent_key!r}, which the "
+                    "document does not hold as a readable row"
+                ),
+                remediation="Submit the repair against a parent revision the document holds.",
+            )
+        parent_body = parent_record.body
+    blocking = blocking_findings(run_plan_lenses(body, parent=parent_body))
+    if blocking:
+        finding = blocking[0]
+        return PlanRefusal(
+            code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
+            guard=f"plan_lens_{finding.lens.value}",
+            detail=finding.message,
+            remediation=finding.remediation,
         )
     draft = PlanRevision.model_validate(
         {
@@ -550,6 +611,92 @@ def submit_plan_revision(
         )
 
 
+@dataclass(frozen=True, slots=True)
+class _CitationResolvers:
+    """The two grounding-citation resolvers one v1 state read builds.
+
+    Attributes:
+        contract_is_resolvable: Forwarded to
+            :func:`~eawf.workflow.planning.revision.ungrounded_approval_criteria`
+            as ``contract_is_resolvable``.
+        decision_is_resolvable: Forwarded to the same call as
+            ``decision_is_resolvable``.
+    """
+
+    contract_is_resolvable: Callable[[str], bool] | None
+    decision_is_resolvable: Callable[[str], bool] | None
+
+
+def _refuse_every_citation(_ref: str) -> bool:
+    """Fail-closed resolver: refuse every citation.
+
+    Used when the tree's ``state.json`` exists but could not be read --
+    broken JSON, a schema-invalid payload, or a race with a concurrent
+    writer. Such a store might resolve the reference or might not, and
+    admitting a citation on a store this call could not read would let
+    corruption forge grounding, so every citation refuses instead.
+    """
+    return False
+
+
+def _build_citation_resolvers(context: Epoch2RootContext) -> _CitationResolvers:
+    """Return the contract and Decision resolvers for *context*'s v1 state.
+
+    A promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
+    and a recorded :class:`~eawf.kernel.state.models.Decision` are both
+    registered in the v1 ``state.json`` this epoch-2 tree sits beside
+    (``PLAN-025``'s evidence path), read once here rather than once per
+    citation.
+
+    A tree carrying no such file -- one that predates either store, or a
+    canary that never provisioned one -- has nothing to honestly refuse a
+    citation against, so both resolvers are ``None``, which skips the
+    check entirely. A tree whose ``state.json`` exists but fails to load
+    is a different case: the store was provisioned and something is
+    wrong with it, so both resolvers become :func:`_refuse_every_citation`
+    -- failing closed rather than treating an unreadable store the same
+    as an absent one.
+
+    Args:
+        context: The native context of the addressed root.
+
+    Returns:
+        The two resolvers, both ``None`` when *state_path* is absent, or
+        both :func:`_refuse_every_citation` when it exists but does not load.
+    """
+    state_path = context.identity.tree_root / "state.json"
+    if not state_path.exists():
+        return _CitationResolvers(contract_is_resolvable=None, decision_is_resolvable=None)
+    try:
+        state = load_state(state_path)
+    except UserError, CliValidationError, OSError, ValueError:
+        return _CitationResolvers(
+            contract_is_resolvable=_refuse_every_citation,
+            decision_is_resolvable=_refuse_every_citation,
+        )
+
+    def contract_resolves(ref: str) -> bool:
+        try:
+            resolve_contract_citation(state, ref)
+        except UserError:
+            return False
+        return True
+
+    def decision_resolves(ref: str) -> bool:
+        # A superseded, reversed or obsolete Decision no longer stands
+        # behind the risk it once accepted, so only a live one resolves.
+        decision = state.decisions.get(ref)
+        return (
+            decision is not None
+            and decision.status is DecisionStatus.ACTIVE
+            and decision.superseded_by is None
+        )
+
+    return _CitationResolvers(
+        contract_is_resolvable=contract_resolves, decision_is_resolvable=decision_resolves
+    )
+
+
 def approve_plan_revision(
     context: Epoch2RootContext,
     *,
@@ -567,6 +714,13 @@ def approve_plan_revision(
     the request claims: the digest is recomputed from the stored body and
     the bindings are copied off the stored record, so approving is an act
     of consent to exactly what is filed and to nothing else.
+
+    A criterion graded ``measured`` or ``accepted-risk`` is also checked
+    here against the v1 state beside this tree -- see
+    :func:`_build_citation_resolvers` -- so a citation naming a contract
+    nobody promoted, or a Decision nobody recorded or that no longer stands
+    (superseded, reversed, obsolete), refuses the same as a
+    criterion still graded assumed.
 
     Args:
         context: The native context of the addressed root.
@@ -621,8 +775,14 @@ def approve_plan_revision(
             policy_revision=record.policy_revision,
             head_bindings=record.head_bindings,
         )
+        resolvers = _build_citation_resolvers(context)
         outcome = advance_plan_revision(
-            record, to=PlanRevisionStatus.APPROVED, at=at, approval=approval
+            record,
+            to=PlanRevisionStatus.APPROVED,
+            at=at,
+            approval=approval,
+            contract_is_resolvable=resolvers.contract_is_resolvable,
+            decision_is_resolvable=resolvers.decision_is_resolvable,
         )
         if isinstance(outcome, PlanRefusal):
             return outcome

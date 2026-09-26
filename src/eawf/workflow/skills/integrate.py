@@ -15,15 +15,19 @@ subject per sealed candidate, the affected criteria), checks every
 presented reference against the tree, and the skill sends exactly that
 request to the delivery verb. Without the references the branch stops
 naming them. ``seal`` addresses the candidate report verb, whose request
-names the accepted report's schema, digest and verdict, and ``select``
-needs a candidate set no read model renders; both stop with the
-unresolved fields named rather than sending a request whose halves were
-invented.
+names the Run and the candidate always, and the accepted report's
+schema, digest and verdict only when the caller wants to name them
+itself -- the daemon reads them off the Run's own accepted report
+otherwise, so naming just the Run and the candidate is enough. ``select``
+needs a candidate set no read model renders, so it always stops. Every
+stop names the unresolved fields rather than sending a request whose
+halves were invented.
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -86,6 +90,8 @@ INVOCATION_GRAMMAR: Final = (
     "[--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] "
     "[--verify-after] [--reason <text>] [--base <revision-binding>] "
     "[--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] "
+    "[--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] "
+    "[--verdict <verdict>] [--resulting-tree-digest <digest>] "
     "[--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]"
 )
 
@@ -118,11 +124,15 @@ _INTEGRATE_REFERENCES: Final[tuple[tuple[str, str], ...]] = (
     ("diagnostic_ref", "diagnostic"),
 )
 
-#: The request fields the candidate-report verb names that no surface resolves.
-_SEAL_UNRESOLVED: Final[tuple[str, ...]] = (
-    "report_schema_ref",
-    "report_digest",
-    "verdict",
+#: The references a seal request needs that no record holds, as the
+#: request names them beside the args field that presents each. The
+#: report's own schema, digest and verdict are not named here: the daemon
+#: resolves them from the Run's accepted report when this invocation
+#: omits them, so only the Run and the candidate's own tree are required
+#: up front.
+_SEAL_REFERENCES: Final[tuple[tuple[str, str], ...]] = (
+    ("urn", "run"),
+    ("resulting_tree_digest", "resulting_tree_digest"),
 )
 
 #: Why a selection cannot be computed from what a caller can read.
@@ -164,8 +174,15 @@ class IntegrateArgs(BaseModel):
         exit: Where each conflict exit lands, by exit kind.
         diagnostic: The evidence a conflict diagnostic is filed against.
         dry_run: Resolve and validate, record no effect.
+        run: The Run whose accepted report a seal binds.
+        report_schema_ref: The schema the accepted report body satisfies,
+            presented to override the Run's own accepted report rather
+            than to name what a seal otherwise has no way to resolve.
+        report_digest: The digest of the accepted report body, the same.
+        verdict: The verdict the accepted report carried, the same.
+        resulting_tree_digest: The tree the accepted report was about.
         expected_revision: The Batch revision the caller read.
-        idempotency_key: This request's name.
+        idempotency_key: This request's name; minted when omitted.
         repo_root: The tree to address, when not the daemon's own.
         output: The rendering the caller wants.
     """
@@ -182,6 +199,11 @@ class IntegrateArgs(BaseModel):
     base: dict[str, Any] | None = None
     exit: dict[str, str] = Field(default_factory=dict)
     diagnostic: str | None = None
+    run: str | None = None
+    report_schema_ref: str | None = None
+    report_digest: str | None = None
+    verdict: str | None = None
+    resulting_tree_digest: str | None = None
     dry_run: bool = False
     expected_revision: int | None = None
     idempotency_key: str | None = None
@@ -248,15 +270,7 @@ class IntegrateSkill(Skill):
                 ),
             )
         if args.action == "seal":
-            return self._stopped(
-                args,
-                code=_SEAL_STOP,
-                unresolved=_SEAL_UNRESOLVED,
-                reason=(
-                    "sealing binds a Run's accepted report, whose schema, digest and verdict this "
-                    "invocation carries no option for"
-                ),
-            )
+            return self._seal(caller, args, params)
         unresolved = tuple(
             request_field
             for request_field, presented in _INTEGRATE_REFERENCES
@@ -274,6 +288,65 @@ class IntegrateSkill(Skill):
                 ),
             )
         return self._apply(caller, args, params)
+
+    def _seal(self, caller: RpcCaller, args: IntegrateArgs, params: dict[str, Any]) -> SkillResult:
+        """Bind the named Run's accepted report and attempt the candidate's seal.
+
+        The report's own schema, digest and verdict travel unresolved
+        when this invocation omits them: the daemon reads them off the
+        Run's accepted report, and refuses only when the Run holds none.
+
+        Raises:
+            RpcRefusedError: The daemon refused the report-bind call.
+        """
+        unresolved = tuple(
+            request_field
+            for request_field, presented in _SEAL_REFERENCES
+            if not getattr(args, presented)
+        )
+        if unresolved:
+            return self._stopped(
+                args,
+                code=_SEAL_STOP,
+                unresolved=unresolved,
+                reason=(
+                    "sealing binds a Run's accepted report to the named candidate, and this "
+                    "invocation does not present the Run and the resulting tree the request "
+                    "always needs"
+                ),
+            )
+        answer = RPC_SCOPE.call(
+            caller,
+            CANDIDATE_REPORT_BIND_METHOD,
+            {
+                **params,
+                "urn": args.run,
+                "actor": _ACTOR_PRINCIPAL,
+                "idempotency_key": args.idempotency_key or uuid.uuid4().hex,
+                "candidate_ref": args.subject_ref,
+                "report_schema_ref": args.report_schema_ref,
+                "report_digest": args.report_digest,
+                "verdict": args.verdict,
+                "resulting_tree_digest": args.resulting_tree_digest,
+            },
+        )
+        sealed = bool(answer.get("sealed", False))
+        outcome: IntegrateOutcome = "sealed" if sealed else "blocked"
+        body = IntegrateBody(
+            action=args.action,
+            subject_ref=args.subject_ref,
+            method=CANDIDATE_REPORT_BIND_METHOD,
+            outcome=outcome,
+            reason=str(
+                answer.get("reason", f"candidate {args.subject_ref} report bind was attempted")
+            ),
+        )
+        return SkillResult(
+            status=status_for(outcome),
+            body=body.model_dump(mode="json"),
+            next_valid_actions=[f"/verify {args.subject_ref} --mode all"],
+            repair_commands=None if sealed else [f"/integrate show {args.subject_ref}"],
+        )
 
     def _apply(self, caller: RpcCaller, args: IntegrateArgs, params: dict[str, Any]) -> SkillResult:
         """Assemble the Batch's delivery request and send exactly that request.

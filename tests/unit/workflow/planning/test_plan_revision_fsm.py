@@ -67,6 +67,8 @@ CRITERION: dict[str, Any] = {
     "evidence_kind": "deterministic",
     "quality_dimension": "functional_suitability",
     "measurable_signal": "uv run pytest tests/unit/kernel/state exits zero",
+    "grounding": "measured",
+    "contract_refs": ["MCT-0001"],
 }
 
 OPERATOR: dict[str, str] = {"principal_kind": "operator", "principal_id": "OP-0001"}

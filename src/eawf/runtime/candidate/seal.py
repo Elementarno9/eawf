@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from eawf.kernel.runtime.candidate import (
     DELIVERABLE_VERDICTS,
+    AcceptedReport,
     CandidateBundle,
     CandidateId,
     CandidateReportBinding,
@@ -58,6 +59,11 @@ BINDING_KEY_PREFIX: Final = "CRB-"
 #: The ledger-line key prefix a sealed bundle is filed under.
 BUNDLE_KEY_PREFIX: Final = "CBN-"
 
+#: The ledger-line key prefix a Run's accepted report is filed under,
+#: before any candidate names it. Keyed by the Run rather than a
+#: candidate, since none may exist yet when the report is accepted.
+ACCEPTED_REPORT_KEY_PREFIX: Final = "ARP-"
+
 #: The status a submission line records: the submission's own
 #: ``report_binding``, which never reads anything else.
 SUBMISSION_STATUS: Final = "pending"
@@ -67,6 +73,9 @@ BINDING_STATUS: Final = "bound"
 
 #: The status a bundle line records.
 BUNDLE_STATUS: Final = "sealed"
+
+#: The status an accepted-report line records.
+ACCEPTED_REPORT_STATUS: Final = "accepted"
 
 
 class SealCheckTableError(ValueError):
@@ -311,6 +320,17 @@ def bundle_of(records: tuple[LedgerRecord, ...], candidate_ref: str) -> Candidat
     return None
 
 
+def accepted_report_of(records: tuple[LedgerRecord, ...], run_ref: str) -> AcceptedReport | None:
+    """Return the standing accepted report of one Run, or ``None``."""
+    for item in records:
+        if item.payload.get("payload_kind") != "accepted_report":
+            continue
+        accepted = AcceptedReport.model_validate(item.payload)
+        if str(accepted.run_ref) == run_ref:
+            return accepted
+    return None
+
+
 def submission_record(submission: CandidateSubmission) -> LedgerRecord:
     """Return the run-ledger line one candidate submission is filed as."""
     return _run_line(
@@ -341,6 +361,16 @@ def bundle_record(bundle: CandidateBundle) -> LedgerRecord:
     )
 
 
+def accepted_report_record(report: AcceptedReport) -> LedgerRecord:
+    """Return the run-ledger line one Run's accepted report is filed as."""
+    return _run_line(
+        key=f"{ACCEPTED_REPORT_KEY_PREFIX}{report.run_ref.entity_key}",
+        status=ACCEPTED_REPORT_STATUS,
+        recorded_at=report.accepted_at,
+        payload=report.model_dump(mode="json"),
+    )
+
+
 def _run_line(
     *, key: str, status: str, recorded_at: datetime, payload: dict[str, Any]
 ) -> LedgerRecord:
@@ -355,6 +385,7 @@ def _run_line(
 
 
 __all__ = [
+    "ACCEPTED_REPORT_KEY_PREFIX",
     "BINDING_KEY_PREFIX",
     "BUNDLE_KEY_PREFIX",
     "SEAL_CHECKS",
@@ -363,6 +394,8 @@ __all__ = [
     "SealCheckTableError",
     "SealInputs",
     "SealOutcome",
+    "accepted_report_of",
+    "accepted_report_record",
     "binding_of",
     "binding_record",
     "bundle_of",

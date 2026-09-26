@@ -15,6 +15,10 @@ only when every answer is yes -- builds the whole successor document and
 hands it to one atomic replace. The Milestone, its Batches and its PLANNED
 Tasks land in the same bytes, so a partial apply is not a state the tree
 can be left in.
+
+:mod:`~eawf.workflow.planning.lenses` also decides, and is also pure: the
+fixed-order deterministic lenses a submitted plan body is run through
+before it may become a decider's DRAFT record.
 """
 
 from __future__ import annotations

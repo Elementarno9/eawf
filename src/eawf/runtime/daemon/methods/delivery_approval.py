@@ -21,13 +21,17 @@ against, and its own disposition rides the same commit as the seal. The
 resolver is typed a person, and has to be the actor asking, so a caller
 cannot seal on somebody else's behalf. The receipt the answer cites is
 resolved against the evidence ledger. Every answer once one already has
--- a different principal's, the same principal choosing differently, or
-the winning answer retried under a fresh idempotency key -- writes
-nothing and reports the ``superseded`` outcome and the winning choice
-instead of a refusal; the same seal retried under its own idempotency
-key returns the original receipt through the ordinary replay path.
+-- a different principal's, or the same principal choosing differently
+-- records that principal's own disposition beside the standing seal,
+without moving it, and reports the ``superseded`` outcome and the
+winning choice instead of a refusal. The winning answer retried under a
+fresh idempotency key writes nothing and returns the original receipt
+in the reply; the same answer, winning or losing, retried under its own
+idempotency key returns the original receipt through the ordinary
+replay path.
 
-Both commits go through the transaction's
+Every commit -- opening, the winning seal, and a losing principal's own
+disposition -- goes through the transaction's
 :func:`~eawf.runtime.daemon.epoch2_transaction._persist` step and the
 bundle line through
 :func:`~eawf.runtime.daemon.epoch2_transaction.commit_ledger_append`, so
@@ -77,6 +81,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     OptionId,
     PendingAction,
     PendingActionStatus,
+    PrincipalDispositionRow,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, EvidenceUrn, MilestoneUrn
 from eawf.kernel.state.epoch2.values import ExactRevisionBinding
@@ -138,6 +143,14 @@ APPROVAL_OPENED_EVENT: Final = (
 #: The event an answer is sealed under. Sealing is not a lifecycle edge of
 #: a driven machine, so it names its event in a namespace of its own.
 APPROVAL_SEALED_EVENT: Final = f"resolution.{Epoch2Collection.PENDING_ACTION.value}.sealed"
+
+#: The event a losing answer's own disposition is recorded under. The
+#: seal itself does not move -- ``from_status`` and ``to_status`` both
+#: read ``SEALED`` -- so this names its own event rather than reusing
+#: :data:`APPROVAL_SEALED_EVENT`, which would claim a second seal.
+APPROVAL_ANSWER_RECORDED_EVENT: Final = (
+    f"resolution.{Epoch2Collection.PENDING_ACTION.value}.answer_recorded"
+)
 
 #: Version of the payload both events carry.
 APPROVAL_EVENT_SCHEMA_VERSION: Final = "1"
@@ -253,6 +266,13 @@ class ApprovalAnswer(BaseModel):
             or ``SUPERSEDED``. ``None`` for an open, which answers no
             question yet.
         reason: One sentence an operator reads.
+        receipt_ref: The evidence row the action stands sealed on, or
+            ``None`` before any seal. Set from the winner's own seal even
+            when this particular answer lost the race, so a duplicate or
+            superseded answer still learns which receipt the question is
+            resolved on.
+        dispositions: Every principal's own outcome of the action so far,
+            the loser's row beside the winner's.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -267,6 +287,8 @@ class ApprovalAnswer(BaseModel):
     canonical_sequence: int | None = None
     outcome: str | None = None
     reason: str
+    receipt_ref: str | None = None
+    dispositions: tuple[PrincipalDispositionRow, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -508,6 +530,8 @@ def _answer(
         canonical_sequence=None if receipt is None else receipt.canonical_sequence,
         outcome=None if outcome is None else outcome.value,
         reason=reason,
+        receipt_ref=None if action.receipt_ref is None else str(action.receipt_ref),
+        dispositions=action.dispositions,
     )
 
 
@@ -717,10 +741,12 @@ def _answered_after_seal(
 ) -> AnswerResult:
     """Return the result of an answer that reaches an action the tree already sealed.
 
-    Nothing is written for this call: the seal the answer would have made
-    was already made, by this same request under an earlier idempotency
-    key or by somebody else's, so the race is reported rather than
-    retried or refused.
+    This alone writes nothing: the seal the answer would have made was
+    already made, by this same request under an earlier idempotency key
+    or by somebody else's, so the race is reported rather than retried
+    or refused. The caller persists the loser's own disposition when the
+    result is superseded; the identical winning answer retried needs no
+    write at all.
 
     Raises:
         TransactionRefusedError: The option named is not one the question
@@ -756,12 +782,15 @@ def seal_acceptance_approval(
 
     Returns:
         The sealed question and the row to publish, the winner's own
-        disposition riding the same commit. A retry of a seal this root
-        already committed, and an answer that reaches an action the tree
-        already sealed -- a conflicting one or the winning one retried
-        under a fresh idempotency key -- return the question as it
-        stands, having written nothing; the latter reports the
-        ``superseded`` or ``sealed`` outcome rather than a refusal.
+        disposition riding the same commit. The winning answer retried
+        under its own idempotency key, and a losing answer retried under
+        its, each return the question as it stands having written
+        nothing a second time. A conflicting answer reached for the first
+        time -- a different principal's, or the same principal choosing
+        differently -- records that principal's own disposition beside
+        the standing seal without moving it, and every answer once one
+        already has reports the ``superseded`` or ``sealed`` outcome and
+        the winning choice rather than a refusal.
 
     Raises:
         TransactionRefusedError: The tree holds no such question, a
@@ -774,27 +803,27 @@ def seal_acceptance_approval(
     with context.session([str(args.urn)]) as session:
         replayed = _replayed_receipt(context, request=request)
         action = _action_at(session.read_document(), args.urn)
-        if replayed is not None:
-            logger.info(f"seal_acceptance_approval replayed action={action.id}")
-            return ApprovalCommit(
-                answer=_answer(
-                    action,
-                    urn=args.urn,
-                    bundle=None,
-                    receipt=None,
-                    outcome=AnswerOutcome.SEALED,
-                    reason=f"{action.id} was already sealed by this request",
-                )
-            )
         if action.status is PendingActionStatus.SEALED:
             result = _answered_after_seal(action, args=args, now=now)
             logger.info(
                 f"seal_acceptance_approval action={action.id} outcome={result.outcome.value} "
-                f"option={args.option_id}"
+                f"option={args.option_id} replayed={replayed is not None}"
             )
+            envelopes: tuple[Envelope, ...] = ()
+            if replayed is None and result.outcome is AnswerOutcome.SUPERSEDED:
+                committed = _commit_action(
+                    context=context,
+                    session=session,
+                    request=request,
+                    before=action,
+                    after=result.action,
+                    event_name=APPROVAL_ANSWER_RECORDED_EVENT,
+                    now=now,
+                )
+                envelopes = (committed.envelope,)
             return ApprovalCommit(
                 answer=_answer(
-                    action,
+                    result.action,
                     urn=args.urn,
                     bundle=None,
                     receipt=None,
@@ -803,7 +832,8 @@ def seal_acceptance_approval(
                         f"{action.id} is answered {result.option_id!r} by "
                         f"{result.resolution_actor.principal_id}"
                     ),
-                )
+                ),
+                envelopes=envelopes,
             )
         if _evidence(session).row(args.receipt_ref.entity_key) is None:
             raise TransactionRefusedError(
@@ -898,6 +928,7 @@ async def _seal_acceptance_approval(
 
 
 __all__ = [
+    "APPROVAL_ANSWER_RECORDED_EVENT",
     "APPROVAL_EVENT_SCHEMA_VERSION",
     "APPROVAL_OPENED_EVENT",
     "APPROVAL_SEALED_EVENT",

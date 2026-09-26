@@ -121,3 +121,25 @@ def test_seal_capsule_still_takes_its_other_fields_from_the_spec() -> None:
     assert capsule.run_ref == spec.run_ref
     assert capsule.policy_digest == spec.policy_digest
     assert capsule.compiled_spec_digest == spec.contract_digest
+
+
+# ---- a request that names no tool_grants at all ----------------------------
+
+
+def test_a_request_naming_no_tool_grants_still_reaches_submit_report() -> None:
+    """Omitting tool_grants still lets the Run file the report it must end with."""
+    capsule = seal_capsule(
+        spec=_spec(),
+        request=CapsuleRequest(
+            criteria_digest=fx.digest("b"),
+            report_schema_ref="schema://agent/report/v1",
+            stop_conditions=(StopCondition.BUDGET_EXHAUSTED,),
+        ),
+    )
+    assert capsule.tool_grants == ("submit_report",)
+
+
+def test_an_explicit_empty_tool_grants_overrides_the_default() -> None:
+    """Naming an empty grant list is a positive statement, not an omission."""
+    capsule = seal_capsule(spec=_spec(), request=_request(grants=()))
+    assert capsule.tool_grants == ()

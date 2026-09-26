@@ -32,8 +32,10 @@ from typing import Any, Final
 
 import pytest
 
+from eawf.kernel.runtime.candidate import CandidateSubmission, candidate_identity
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.compiled import canonical_digest
+from eawf.kernel.runtime.lease import LeaseStatus, WorkLease
 from eawf.kernel.runtime.semantic import (
     SemanticCall,
     SemanticToolErrorCode,
@@ -51,7 +53,9 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import CanaryProvision, canary_ref, provision_canary
+from eawf.runtime.candidate.seal import submission_record
 from eawf.runtime.daemon import methods
+from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.run import RUN_BIND_METHOD
 from eawf.runtime.daemon.methods.semantic import SEMANTIC_CALL_METHOD
@@ -61,9 +65,15 @@ from eawf.runtime.daemon.semantic_handlers import (
     REPORTABLE_PLAN_CODES,
     SEMANTIC_HANDLERS,
     PlanProposalArtifact,
+    SpikeReportArtifact,
     _record_plan_proposal_artifact,
+    _record_spike_report_artifact,
 )
+from eawf.runtime.workspace.lease import write_lease
 from eawf.workflow.planning.revision import PlanRefusalCode
+from eawf.workflow.skills import integrate as integrate_skill
+from eawf.workflow.skills.engine import SkillContext
+from eawf.workflow.skills.lifecycle_rpc import RpcCaller, RpcRefusedError, refusal_code
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     BATCH_URN,
     MILESTONE_URN,
@@ -81,6 +91,12 @@ RUN_KEY: Final = "RUN-00000010"
 SLOT: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 RUN_URN: Final = f"{SLOT}/run/{RUN_KEY}"
 REPOSITORY_URN: Final = f"{SLOT}/repository/REP-EAWF"
+#: The fixture project code the seeded v1 state carries; promoted URNs
+#: resolve under it.
+V1_STATE_SCOPE: Final = "QR"
+V1_STATE_FIXTURE = (
+    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
+)
 TRACK_URN: Final = f"{SLOT}/track/TRK-RUNTIME"
 FINDING_URN: Final = f"{SLOT}/campaign-finding/CFN-0001"
 PLAN_TASK_URN: Final = f"{SLOT}/task/EAWF-0042"
@@ -242,6 +258,78 @@ def call_verb(method: str, ctx: MethodContext, **params: Any) -> dict[str, Any]:
     return asyncio.run(methods.dispatch(method, ctx, params))
 
 
+def skill_caller(ctx: MethodContext, canary: CanaryProvision) -> RpcCaller:
+    """Bridge a lifecycle skill's calls to the same verb dispatch these tests use.
+
+    Mirrors :func:`eawf.workflow.skills.lifecycle_rpc.daemon_rpc_caller`: a
+    refused verb call is turned into :class:`RpcRefusedError` rather than
+    left to propagate as the daemon's own validation error, which is the
+    seam a skill's ``action`` is written against.
+    """
+
+    def call(method: str, params: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return call_verb(method, ctx, repo_root=str(canary.root), **params)
+        except DaemonValidationError as error:
+            raise RpcRefusedError(
+                method=method, code=refusal_code(str(error)), detail=str(error)
+            ) from error
+
+    return call
+
+
+def seal_fixture(canary: CanaryProvision, runtime_root: Path) -> tuple[str, str]:
+    """Seed a standing candidate submission and its Run's active lease.
+
+    Bypasses ``runtime.candidate.submit`` and the git worktree it pins a
+    commit against: the seal checks read only the submission and the
+    lease records, so this builds those two directly rather than
+    materializing a real worktree for one candidate.
+
+    Returns:
+        The candidate ref the submission was filed under, and the
+        resulting tree digest it names.
+    """
+    tree_digest = digest("9")
+    ref = candidate_identity(task_ref=TASK_URN, resulting_tree_digest=tree_digest)
+    context = root_context(canary, runtime_root)
+    lease = WorkLease(
+        lease_id=f"LSE-{'1' * 32}",
+        run_ref=RUN_URN,
+        task_ref=TASK_URN,
+        purpose=RunPurpose.IMPLEMENT,
+        workspace_handle=f"wsh-{'2' * 32}",
+        workspace_generation=1,
+        branch=f"eawf/lease/wsh-{'2' * 32}",
+        base_commit=HEAD,
+        writable_roots=("src",),
+        issued_at=AT,
+        heartbeat_at=AT,
+        # The seal check reads the lease against the wall clock, not AT,
+        # so the lease must outlive whenever this suite actually runs.
+        expires_at=AT + timedelta(days=3650),
+        status_at=AT,
+        status=LeaseStatus.ACTIVE,
+    )
+    submission = CandidateSubmission(
+        candidate_ref=ref,
+        run_ref=RUN_URN,
+        task_ref=TASK_URN,
+        lease_id=lease.lease_id,
+        workspace_handle=lease.workspace_handle,
+        workspace_generation=lease.workspace_generation,
+        base_commit=lease.base_commit,
+        submission_ref=f"artifact://git/commit/{HEAD}",
+        changed_paths=("src/module.py",),
+        resulting_tree_digest=tree_digest,
+        submitted_at=AT,
+    )
+    with context.session([RUN_URN]) as session:
+        write_lease(context, lease)
+        commit_ledger_append(session, submission_record(submission))
+    return ref, tree_digest
+
+
 def bind(ctx: MethodContext, canary: CanaryProvision, capsule: AuthorityCapsule) -> None:
     """Record the contract this Run's calls must echo."""
     call_verb(
@@ -331,6 +419,79 @@ def file_proposal(
     return content_digest
 
 
+def spike_report_payload(
+    *, verified: bool = True, report_id: str = "RPT-0001", contract_id: str = "MCT-99990001"
+) -> dict[str, Any]:
+    """Return one SpikeReport document carrying one synthetic contract."""
+    return {
+        "report_id": report_id,
+        "verified": verified,
+        "contracts": [
+            {
+                "contract_id": contract_id,
+                "surface": "a synthetic surface probed for this test",
+                "probe_command": "uv run python probe.py",
+                "observed": {"widget_count": 3},
+                "limits": [
+                    {
+                        "name": "widget_count",
+                        "value": 3.0,
+                        "unit": "count",
+                        "direction": "ceiling",
+                        "basis": "one synthetic probe run",
+                    }
+                ],
+                "boundary": "measured once, on one synthetic population",
+                "observed_at": AT.isoformat(),
+                "observed_at_ref": "tests/fixtures/measured_contract/probe-output.json",
+                "environment": {
+                    "scale_band": "dev",
+                    "population": "one synthetic surface probed for this test",
+                    "population_size": 1,
+                    "host_platform": "darwin",
+                    "toolchain": "python 3.14.3",
+                },
+            }
+        ],
+    }
+
+
+def file_spike_report(
+    canary: CanaryProvision,
+    runtime_root: Path,
+    *,
+    report: dict[str, Any],
+    ref: str,
+) -> str:
+    """File one spike report as an artifact and return its digest."""
+    content_digest = canonical_digest(report)
+    artifact = SpikeReportArtifact(artifact_ref=ref, content_digest=content_digest, report=report)
+    context = root_context(canary, runtime_root)
+    with context.session([RUN_URN]) as session:
+        _record_spike_report_artifact(session, artifact, now=AT)
+    return content_digest
+
+
+def seed_v1_state(canary: CanaryProvision) -> None:
+    """Write a v1 ``state.json`` beside *canary*'s epoch-2 tree.
+
+    This is the store ``submit_evidence``'s handler promotes a contract
+    into, at ``<repo_root>/.ea/state.json`` -- the same path
+    ``native_root()`` resolves this call's ``repo_root`` to.
+    """
+    state_path = Path(canary.root) / ".ea" / "state.json"
+    state_path.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def evidence_payload(*, spike_report_ref: str, spike_report_digest: str) -> dict[str, Any]:
+    """Return the payload of a submit_evidence call."""
+    return {
+        "tool_id": "submit_evidence",
+        "spike_report_ref": spike_report_ref,
+        "spike_report_digest": spike_report_digest,
+    }
+
+
 def receipt_lines(canary: CanaryProvision, runtime_root: Path) -> int:
     """Return how many receipt lines the canary's receipt ledger holds."""
     context = root_context(canary, runtime_root)
@@ -389,7 +550,9 @@ def test_every_brokered_tool_has_a_handler_and_no_other_tool_does() -> None:
     assert {
         SemanticToolId.BUDGET_STATUS,
         SemanticToolId.SUBMIT_CANDIDATE,
+        SemanticToolId.SUBMIT_EVIDENCE,
         SemanticToolId.SUBMIT_PLAN,
+        SemanticToolId.SUBMIT_REPORT,
     } == BROKERED_TOOLS
     assert set(SemanticToolId) > BROKERED_TOOLS
 
@@ -803,3 +966,340 @@ def test_a_receipt_survives_the_call_that_asked_for_it(
     assert receipt_lines(plan_canary, runtime_root) == before + 1
     assert filed["call_id"] == answer["call_id"]
     assert filed["result"]["bounded_output"]["accepted"] is True
+
+
+# ---------------------------------------------------------------------------
+# submit_report resolves to a handler that checks the Run's own contract
+# ---------------------------------------------------------------------------
+
+
+def test_a_report_naming_its_own_contract_is_accepted(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_report",
+            payload={
+                "tool_id": "submit_report",
+                "report_schema_ref": capsule.report_schema_ref,
+                "contract_digest": capsule.contract_digest,
+                "body_ref": "artifact://report/executor/ar-0001",
+                "body_digest": digest("7"),
+                "verdict": "pass",
+            },
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert answer["result"]["status"] == "succeeded"
+    assert output["accepted"] is True
+    assert output["report_ref"] == RUN_URN
+    assert output["findings"] == []
+
+
+def test_a_report_naming_another_schema_than_its_run_is_refused(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_report",
+            payload={
+                "tool_id": "submit_report",
+                "report_schema_ref": "schema://other-report/v1",
+                "contract_digest": capsule.contract_digest,
+                "body_ref": "artifact://report/executor/ar-0002",
+                "body_digest": digest("7"),
+                "verdict": "pass",
+            },
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "report_schema_mismatch"
+    assert output["findings"][0]["field_path"] == "/report_schema_ref"
+
+
+def test_a_report_naming_a_contract_its_run_was_not_sealed_under_is_refused(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_report",
+            payload={
+                "tool_id": "submit_report",
+                "report_schema_ref": capsule.report_schema_ref,
+                "contract_digest": digest("0"),
+                "body_ref": "artifact://report/executor/ar-0003",
+                "body_digest": digest("7"),
+                "verdict": "pass",
+            },
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "report_contract_mismatch"
+    assert output["findings"][0]["field_path"] == "/contract_digest"
+
+
+# ---------------------------------------------------------------------------
+# /integrate seal reaches the report-bind verb instead of stopping
+# ---------------------------------------------------------------------------
+
+
+def test_integrate_seal_stops_when_the_run_and_tree_are_not_presented(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    """Naming only the candidate still names neither field the verb always needs."""
+    caller = skill_caller(ctx, task_canary)
+
+    result = integrate_skill.IntegrateSkill(caller=caller).action(
+        SkillContext(
+            scope="scope",
+            session="session",
+            args={"action": "seal", "subject_ref": f"CND-{'0' * 32}"},
+        )
+    )
+
+    assert isinstance(result.body, dict)
+    assert result.body["outcome"] == "blocked"
+    assert result.body["refusal_code"] == "candidate_report_unbound"
+    assert set(result.body["unresolved_request_fields"]) == {"urn", "resulting_tree_digest"}
+
+
+def test_integrate_seal_binds_the_report_and_returns_a_sealed_candidate(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """Presented in full, the seal reaches the verb and the candidate seals."""
+    ref, tree_digest = seal_fixture(task_canary, runtime_root)
+    caller = skill_caller(ctx, task_canary)
+
+    result = integrate_skill.IntegrateSkill(caller=caller).action(
+        SkillContext(
+            scope="scope",
+            session="session",
+            args={
+                "action": "seal",
+                "subject_ref": ref,
+                "run": RUN_URN,
+                "report_schema_ref": "schema://executor-report/v1",
+                "report_digest": digest("7"),
+                "verdict": "pass",
+                "resulting_tree_digest": tree_digest,
+            },
+        )
+    )
+
+    assert isinstance(result.body, dict)
+    assert result.body["method"] == integrate_skill.CANDIDATE_REPORT_BIND_METHOD
+    assert result.body["outcome"] == "sealed"
+    assert result.status == "ok"
+
+
+def test_integrate_seal_reads_the_report_off_the_run_when_omitted(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """Naming only the Run and the candidate is enough once a report was accepted."""
+    ref, tree_digest = seal_fixture(task_canary, runtime_root)
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_report"))
+    bind(ctx, task_canary, capsule)
+    invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_report",
+            payload={
+                "tool_id": "submit_report",
+                "report_schema_ref": capsule.report_schema_ref,
+                "contract_digest": capsule.contract_digest,
+                "body_ref": "artifact://report/executor/ar-0009",
+                "body_digest": digest("7"),
+                "verdict": "pass",
+            },
+        ),
+        capsule,
+    )
+    caller = skill_caller(ctx, task_canary)
+
+    result = integrate_skill.IntegrateSkill(caller=caller).action(
+        SkillContext(
+            scope="scope",
+            session="session",
+            args={
+                "action": "seal",
+                "subject_ref": ref,
+                "run": RUN_URN,
+                "resulting_tree_digest": tree_digest,
+            },
+        )
+    )
+
+    assert isinstance(result.body, dict)
+    assert result.body["outcome"] == "sealed"
+    assert result.status == "ok"
+
+
+def test_integrate_seal_still_stops_when_the_run_holds_no_accepted_report(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """A Run that never submitted a report has nothing to resolve the omission from."""
+    ref, tree_digest = seal_fixture(task_canary, runtime_root)
+    caller = skill_caller(ctx, task_canary)
+
+    result = integrate_skill.IntegrateSkill(caller=caller).action(
+        SkillContext(
+            scope="scope",
+            session="session",
+            args={
+                "action": "seal",
+                "subject_ref": ref,
+                "run": RUN_URN,
+                "resulting_tree_digest": tree_digest,
+            },
+        )
+    )
+
+    assert isinstance(result.body, dict)
+    assert result.body["outcome"] == "blocked"
+    assert result.body["refusal_code"] == "candidate_report_unresolved"
+
+
+# ---------------------------------------------------------------------------
+# submit_evidence promotes a verified SpikeReport's contracts
+# ---------------------------------------------------------------------------
+
+
+def test_submit_evidence_promotes_a_contract_through_the_real_handler(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """The registered submit_evidence handler writes an artifact revision."""
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
+    bind(ctx, task_canary, capsule)
+    seed_v1_state(task_canary)
+    ref = "artifact://spike/run-10"
+    digest = file_spike_report(task_canary, runtime_root, report=spike_report_payload(), ref=ref)
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_evidence",
+            payload=evidence_payload(spike_report_ref=ref, spike_report_digest=digest),
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert answer["result"]["status"] == "succeeded"
+    assert output["tool_id"] == "submit_evidence"
+    assert output["accepted"] is True
+    assert output["contract_refs"] == [f"urn:eawf:v1:artifact:{V1_STATE_SCOPE}/MCT-99990001"]
+
+
+def test_submit_evidence_refuses_an_unverified_report_through_the_real_handler(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    """An unverified report is reported as a finding, and nothing is promoted."""
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
+    bind(ctx, task_canary, capsule)
+    seed_v1_state(task_canary)
+    ref = "artifact://spike/run-11"
+    digest = file_spike_report(
+        task_canary,
+        runtime_root,
+        report=spike_report_payload(verified=False, report_id="RPT-0002"),
+        ref=ref,
+    )
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_evidence",
+            payload=evidence_payload(spike_report_ref=ref, spike_report_digest=digest),
+            key="unverified",
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert answer["result"]["status"] == "succeeded"
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "spike_report_unverified"
+
+
+def test_submit_evidence_refuses_a_digest_the_filed_report_does_not_have(
+    task_canary: CanaryProvision, ctx: MethodContext, runtime_root: Path
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
+    bind(ctx, task_canary, capsule)
+    seed_v1_state(task_canary)
+    ref = "artifact://spike/run-12"
+    file_spike_report(task_canary, runtime_root, report=spike_report_payload(), ref=ref)
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_evidence",
+            payload=evidence_payload(spike_report_ref=ref, spike_report_digest=digest("e")),
+            key="stale-digest",
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "proof_stale"
+
+
+def test_submit_evidence_refuses_a_report_nobody_filed(
+    task_canary: CanaryProvision, ctx: MethodContext
+) -> None:
+    capsule = executor_capsule(tool_grants=("budget_status", "submit_evidence"))
+    bind(ctx, task_canary, capsule)
+    seed_v1_state(task_canary)
+
+    answer = invoke(
+        ctx,
+        task_canary,
+        seal_call(
+            capsule=capsule,
+            tool_id="submit_evidence",
+            payload=evidence_payload(
+                spike_report_ref="artifact://spike/unfiled", spike_report_digest=digest("f")
+            ),
+            key="unfiled",
+        ),
+        capsule,
+    )
+
+    output = answer["result"]["bounded_output"]
+    assert output["accepted"] is False
+    assert output["findings"][0]["code"] == "identity_not_found"

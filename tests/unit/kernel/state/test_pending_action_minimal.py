@@ -13,7 +13,9 @@ shows the check has teeth rather than being always-on.
 
 The last section drives the record's producer: a question opened and
 sealed through the native transaction on a disposable canary under
-``tmp_path``, where a second seal is refused with nothing written.
+``tmp_path``, where a second, conflicting answer records its own
+disposition beside the standing seal and a stale-revision seal is
+refused with nothing written.
 
 Nothing here reads a clock or opens a socket, and nothing writes outside
 ``tmp_path``.
@@ -667,10 +669,10 @@ def test_the_question_is_sealed_through_the_transaction(
     ]
 
 
-def test_a_second_answer_is_superseded_with_nothing_written(
+def test_a_second_answer_is_superseded_with_its_disposition_recorded(
     tree: tuple[Epoch2RootContext, Path],
 ) -> None:
-    """Nothing leaves SEALED, but a conflicting second answer is reported, not refused."""
+    """The seal never moves, but a conflicting second answer records its own disposition."""
     context, path = tree
     open_acceptance_approval(context, open_params(), now=AT)
     seal_acceptance_approval(context, seal_params(), now=LATER)
@@ -684,9 +686,67 @@ def test_a_second_answer_is_superseded_with_nothing_written(
 
     assert commit.answer.outcome == AnswerOutcome.SUPERSEDED.value
     assert commit.answer.status == PendingActionStatus.SEALED.value
-    assert commit.envelopes == ()
+    assert [item.payload["name"] for item in commit.envelopes] == [
+        "resolution.pending_action.answer_recorded"
+    ]
+    assert path.read_bytes() != before
+    resolved = stored(path)
+    assert resolved.selected_option_id == "approve"
+    assert resolved.resolution_actor is not None
+    assert resolved.resolution_actor.principal_id == "OP-0001"
+    row = {item.principal_id: item for item in resolved.dispositions}["OP-0001"]
+    assert row.outcome is AnswerOutcome.SUPERSEDED
+    assert row.option_id == "decline"
+    answer_row = {item.principal_id: item for item in commit.answer.dispositions}["OP-0001"]
+    assert answer_row.outcome is AnswerOutcome.SUPERSEDED
+
+
+def test_a_different_principals_answer_after_seal_records_its_own_disposition(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """A losing principal's disposition rides beside the winner's, not over it."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    seal_acceptance_approval(context, seal_params(), now=LATER)
+
+    commit = seal_acceptance_approval(
+        context,
+        seal_params(
+            idempotency_key="req-seal-0002",
+            expected_revision=2,
+            actor="OP-0002",
+            resolver={"principal_kind": "human", "principal_id": "OP-0002"},
+            option_id="decline",
+        ),
+        now=LATER,
+    )
+
+    assert commit.answer.outcome == AnswerOutcome.SUPERSEDED.value
+    assert len(commit.envelopes) == 1
+    rows = {item.principal_id: item for item in stored(path).dispositions}
+    assert rows["OP-0001"].outcome is AnswerOutcome.SEALED
+    assert rows["OP-0001"].option_id == "approve"
+    assert rows["OP-0002"].outcome is AnswerOutcome.SUPERSEDED
+    assert rows["OP-0002"].option_id == "decline"
+
+
+def test_a_superseded_answer_retried_under_its_own_key_writes_nothing_twice(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """A losing answer retried under the idempotency key it first lost under is a replay."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    seal_acceptance_approval(context, seal_params(), now=LATER)
+    loser = seal_params(idempotency_key="req-seal-0002", expected_revision=2, option_id="decline")
+    first = seal_acceptance_approval(context, loser, now=LATER)
+    before = path.read_bytes()
+
+    replayed = seal_acceptance_approval(context, loser, now=LATER)
+
+    assert replayed.answer.outcome == AnswerOutcome.SUPERSEDED.value
+    assert replayed.answer.outcome == first.answer.outcome
+    assert replayed.envelopes == ()
     assert path.read_bytes() == before
-    assert stored(path).selected_option_id == "approve"
 
 
 def test_a_winning_answer_retried_under_a_fresh_key_returns_the_first_receipt(
@@ -706,6 +766,7 @@ def test_a_winning_answer_retried_under_a_fresh_key_returns_the_first_receipt(
 
     assert commit.answer.outcome == AnswerOutcome.SEALED.value
     assert commit.answer.status == PendingActionStatus.SEALED.value
+    assert commit.answer.receipt_ref == RECEIPT
     assert commit.envelopes == ()
     assert path.read_bytes() == before
     assert stored(path).receipt_ref is not None

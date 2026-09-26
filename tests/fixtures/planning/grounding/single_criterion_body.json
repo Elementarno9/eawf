@@ -1,0 +1,48 @@
+{
+  "milestone_urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0031",
+  "milestone": {
+    "key": "MLS-0031",
+    "primary_track_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME",
+    "title": "Ship the grounding gate falsification fixture",
+    "outcome": "An operator cannot approve a plan that rests on an unverified claim.",
+    "appetite": "S",
+    "exclusions": ["no change to the release pipeline"],
+    "acceptance_journey": [
+      {
+        "step_id": "AS-01",
+        "actor": "operator",
+        "action": "approve the plan revision",
+        "expected_observation": "approval refuses while the sole criterion is graded assumed",
+        "evidence_kinds": ["artifact"]
+      }
+    ],
+    "required_batch_refs": ["eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0031"]
+  },
+  "batches": [
+    {
+      "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0031",
+      "repository_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/repository/REP-EAWF"
+    }
+  ],
+  "tasks": [
+    {
+      "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0031",
+      "batch_ref": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/batch/BAT-0031",
+      "priority": "P1",
+      "intent": "falsify the grounding approval gate",
+      "criteria": [
+        {
+          "id": "CR-01",
+          "text": "the sole criterion this plan carries is graded assumed",
+          "kind": "functional_suitability",
+          "acceptance_style": "binary",
+          "evidence_kind": "deterministic",
+          "quality_dimension": "functional_suitability",
+          "measurable_signal": "approval refuses while grounding stays assumed",
+          "grounding": "assumed"
+        }
+      ]
+    }
+  ],
+  "citations": []
+}

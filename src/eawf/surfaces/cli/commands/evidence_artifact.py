@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, Final
 
 import typer
 
@@ -318,6 +318,154 @@ def artifact_promote_contract(
         },
         f"contract {promotion.artifact_id} promoted urn={promotion.urn} "
         f"evidence={promotion.evidence.id}",
+        flags,
+    )
+
+
+@artifact_app.command("submit-evidence")
+def artifact_submit_evidence(
+    ctx: typer.Context,
+    report_path: Annotated[
+        Path,
+        typer.Argument(help="Path to a verified SpikeReport JSON document."),
+    ],
+    scope_id: Annotated[
+        str | None,
+        typer.Option("--scope-id", help="Owning scope (defaults to project code)."),
+    ] = None,
+) -> None:
+    """Submit a verified SpikeReport's measured contracts onto the evidence path.
+
+    This is the general form of ``promote-contract``: rather than naming
+    one of the contracts already hard-coded into this module, it reads a
+    :class:`~eawf.kernel.spec.measured_contract.SpikeReport` from
+    *report_path* and promotes every contract it carries. Refuses the
+    whole report unverified, and refuses any one contract whose
+    environment names a repository other than the target scope, before
+    anything is written.
+    """
+    from eawf.kernel.spec.measured_contract import SpikeReport
+    from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.workflow.evidence import measured_contract as contract_evi
+    from eawf.workflow.evidence._io import append_jsonl, store_paths
+
+    flags = _flags(ctx)
+    state_path = _state_path(flags)
+
+    try:
+        report = SpikeReport.model_validate(json.loads(report_path.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"cannot read spike report {report_path}: {exc}", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+
+    try:
+        with state_transaction(state_path) as state:
+            resolved_scope = scope_id
+            if resolved_scope is None:
+                if state.project is None:
+                    raise cli_errors.UserError(
+                        "scope_id required when state.project is unset", kind="InvalidInput"
+                    )
+                resolved_scope = state.project.code
+            promotions = contract_evi.submit_evidence(state, report=report, scope_id=resolved_scope)
+            paths = store_paths(state_path)
+            for promotion in promotions:
+                append_jsonl(paths[StoreKind.EVENT], promotion.artifact_event)
+                append_jsonl(paths[StoreKind.EVIDENCE], promotion.evidence_envelope)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        {
+            "report_id": report.report_id,
+            "scope_id": resolved_scope,
+            "promoted": [
+                {
+                    "contract_id": promotion.artifact_id,
+                    "urn": promotion.urn,
+                    "content_digest": promotion.content_digest,
+                }
+                for promotion in promotions
+            ],
+        },
+        f"spike report {report.report_id} submitted: {len(promotions)} contract(s) promoted",
+        flags,
+    )
+
+
+#: The dotted JSON-RPC name ``artifact file-spike-report`` forwards to.
+#: Spelled here rather than imported so the Typer tree builds without the
+#: daemon method registry on the path -- the same reason
+#: :mod:`eawf.surfaces.cli.commands.domain` spells its own verb table.
+#: ``tests/integration/test_cli_evidence_artifact.py`` asserts this
+#: against the daemon's own
+#: :data:`eawf.runtime.daemon.semantic_handlers.EVIDENCE_SPIKE_REPORT_FILE_METHOD`,
+#: so a renamed verb reds rather than drifts.
+EVIDENCE_SPIKE_REPORT_FILE: Final = "runtime.evidence.spike_report.file"
+
+
+@artifact_app.command("file-spike-report")
+def artifact_file_spike_report(
+    ctx: typer.Context,
+    report_path: Annotated[
+        Path,
+        typer.Argument(help="Path to a SpikeReport JSON document."),
+    ],
+    run: Annotated[str, typer.Option("--run", help="URN of the Run filing its own report.")],
+    artifact_ref: Annotated[
+        str,
+        typer.Option(
+            "--artifact-ref",
+            help="Reference a later `submit_evidence` call names this report by.",
+        ),
+    ],
+    actor: Annotated[str, typer.Option("--actor", help="Who asked.")],
+) -> None:
+    """File a SpikeReport as the artifact a ``submit_evidence`` call resolves.
+
+    Dispatch only: sends ``runtime.evidence.spike_report.file`` to the
+    daemon, which records the report once and replays the standing
+    artifact on a retry that repeats the same content -- refilling the
+    gap where only a test filer could stand in for it. Prints the filed
+    ``artifact_ref`` and ``content_digest``, the pair a later
+    ``submit_evidence`` semantic call names to promote the report's
+    contracts.
+    """
+    from eawf.surfaces.cli.commands.domain import _call_native_rpc
+
+    flags = _flags(ctx)
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"cannot read spike report {report_path}: {exc}", kind="InvalidInput"
+            ),
+            flags=flags,
+        )
+        return
+
+    try:
+        answer = _call_native_rpc(
+            EVIDENCE_SPIKE_REPORT_FILE,
+            {"urn": run, "actor": actor, "artifact_ref": artifact_ref, "report": report},
+            flags=flags,
+            verb_text="artifact file-spike-report",
+        )
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+
+    _emit(
+        answer,
+        f"spike report filed artifact_ref={answer['artifact_ref']} "
+        f"content_digest={answer['content_digest']}",
         flags,
     )
 

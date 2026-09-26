@@ -26,11 +26,12 @@ import asyncio
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.kernel.state.models import Decision
 from eawf.kernel.store.compaction import read_document, write_document
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
@@ -41,6 +42,8 @@ from eawf.runtime.daemon.methods.planning import (
     PLAN_SUBMIT_METHOD,
 )
 from eawf.runtime.daemon.wal import list_records
+from eawf.workflow.evidence._io import load_state
+from eawf.workflow.evidence.measured_contract import PREFLIGHT_CONTRACTS, promote_measured_contract
 from eawf.workflow.planning.apply import apply_plan_revision
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     AT,
@@ -60,6 +63,11 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 pytestmark = pytest.mark.integration
 
 DRIFT_CASES = Path(__file__).resolve().parents[3] / "fixtures" / "planning" / "drift_cases"
+V1_STATE_FIXTURE = (
+    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
+)
+#: The fixture project code, and the scope a contract is promoted into below.
+V1_STATE_SCOPE = "QR"
 
 SLOT = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
 TRACK_URN = f"{SLOT}/track/TRK-RUNTIME"
@@ -120,7 +128,15 @@ CRITERION: dict[str, Any] = {
     "evidence_kind": "deterministic",
     "quality_dimension": "functional_suitability",
     "measurable_signal": "uv run pytest tests/unit/kernel/state exits zero",
+    "grounding": "measured",
+    "contract_refs": ["MCT-26081303"],
 }
+
+#: The measured contract every canary here has promoted (see
+#: ``planned_canary``), matching ``CRITERION["contract_refs"]`` above so
+#: the default plan resolves against the real v1 store rather than an
+#: unresolvable placeholder.
+DEFAULT_PROMOTED_CONTRACT: Final = "MCT-26081303"
 
 BODY: dict[str, Any] = {
     "milestone_urn": MILESTONE_URN,
@@ -165,7 +181,13 @@ def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 
 def planned_canary(tmp_path: Path, *, code: str) -> CanaryProvision:
-    """Provision a canary holding the Track and repository the plan binds."""
+    """Provision a canary holding the Track and repository the plan binds.
+
+    Also seeds a v1 ``state.json`` with :data:`DEFAULT_PROMOTED_CONTRACT`
+    already promoted, so ``CRITERION``'s ``measured`` grade resolves
+    against the real store every approval here checks -- PLAN-025's
+    evidence path, not an unresolvable placeholder id.
+    """
     canary = provision(tmp_path / code.lower(), code=code)
     seed(
         canary,
@@ -174,7 +196,61 @@ def planned_canary(tmp_path: Path, *, code: str) -> CanaryProvision:
             "repository": {"REP-EAWF": {"key": "REP-EAWF", "head_sha": HEAD}},
         },
     )
+    seed_v1_state(canary, promote=DEFAULT_PROMOTED_CONTRACT)
     return canary
+
+
+def decision_row(decision_id: str) -> dict[str, Any]:
+    """Return one loader-valid, recorded-active Decision payload keyed *decision_id*."""
+    return {
+        "id": decision_id,
+        "scope_id": V1_STATE_SCOPE,
+        "title": "Ship the accepted risk unverified",
+        "rationale": "verifying it now costs more than the risk of shipping it unverified",
+        "status": "active",
+        "created_at": "2026-09-25T00:00:00Z",
+    }
+
+
+def seed_v1_state(
+    canary: CanaryProvision,
+    *,
+    promote: str | None = None,
+    decisions: dict[str, dict[str, Any]] | None = None,
+) -> None:
+    """Write a v1 ``state.json`` beside *canary*'s epoch-2 tree.
+
+    This is the store ``approve_plan_revision`` resolves ``contract_refs``
+    and ``accepted_risk_decision_ref`` citations against (PLAN-025, H1); a
+    canary that never calls this has no such file, which the resolvers
+    read as "nothing to check against" rather than "nothing resolves".
+
+    Args:
+        canary: The canary to seed. Its own ``.ea`` directory already
+            exists, provisioned as an epoch-2 tree.
+        promote: A :data:`PREFLIGHT_CONTRACTS` id to promote into the
+            written state, or ``None`` to leave the state with nothing
+            promoted.
+        decisions: Decision rows to record, keyed by id, or ``None`` to
+            leave ``decisions`` empty.
+    """
+    state_path = tree_root(canary) / "state.json"
+    state_path.write_text(V1_STATE_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+    if promote is None and decisions is None:
+        return
+    state = load_state(state_path)
+    if promote is not None:
+        contract = PREFLIGHT_CONTRACTS[promote]
+        promote_measured_contract(
+            state,
+            contract=contract,
+            scope_id=V1_STATE_SCOPE,
+            required_band=contract.environment.scale_band,
+        )
+    if decisions is not None:
+        for decision_id, row in decisions.items():
+            state.decisions[decision_id] = Decision.model_validate(row)
+    state_path.write_text(json.dumps(state.model_dump(mode="json"), indent=2), encoding="utf-8")
 
 
 def dispatch(
@@ -185,18 +261,40 @@ def dispatch(
     return asyncio.run(methods.dispatch(method, ctx, {"repo_root": str(canary.root), **params}))
 
 
-def submit(canary: CanaryProvision, tmp_path: Path, *, key: str = "req-submit") -> dict[str, Any]:
-    """Submit the plan and return the envelope."""
+def submit_body(
+    canary: CanaryProvision, tmp_path: Path, *, body: dict[str, Any], key: str = "req-submit"
+) -> dict[str, Any]:
+    """Submit *body* under the canonical revision key and return the envelope."""
     return dispatch(
         PLAN_SUBMIT_METHOD,
         canary,
         tmp_path,
         params={
-            "proposal": {"key": REVISION_KEY, "author": OPERATOR, "body": BODY},
+            "proposal": {"key": REVISION_KEY, "author": OPERATOR, "body": body},
             "actor": ACTOR,
             "idempotency_key": key,
         },
     )
+
+
+def submit(canary: CanaryProvision, tmp_path: Path, *, key: str = "req-submit") -> dict[str, Any]:
+    """Submit the plan and return the envelope."""
+    return submit_body(canary, tmp_path, body=BODY, key=key)
+
+
+def with_criterion_grounding(**overrides: Any) -> dict[str, Any]:
+    """Return a deep copy of BODY with its sole criterion regraded.
+
+    ``grounding``, ``contract_refs`` and ``accepted_risk_decision_ref`` are
+    cleared first so *overrides* fully determines the grade rather than
+    layering onto BODY's own ``measured`` citation.
+    """
+    body = json.loads(json.dumps(BODY))
+    criterion = body["tasks"][0]["criteria"][0]
+    for field in ("grounding", "contract_refs", "accepted_risk_decision_ref"):
+        criterion.pop(field, None)
+    criterion.update(overrides)
+    return body
 
 
 def approve(
@@ -610,3 +708,106 @@ def test_approving_a_revision_nobody_submitted_is_refused(tmp_path: Path) -> Non
 
     assert answer["errors"][0]["code"] == "identity_not_found"
     assert answer["errors"][0]["guard"] == "plan_revision_resolved"
+
+
+# ---- PLAN-031: the grounding gate, driven through the real approval verb ---
+
+
+def test_approval_refuses_an_acceptance_criterion_still_graded_assumed(tmp_path: Path) -> None:
+    """The daemon's own approve verb refuses a plan resting on an assumed claim."""
+    canary = planned_canary(tmp_path, code="ASSUMED")
+    assert submit_body(canary, tmp_path, body=with_criterion_grounding())["status"] == "ok"
+    before = document_path(canary).read_bytes()
+
+    answer = approve(canary, tmp_path)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == "transition_guard_failed"
+    assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
+    assert document_path(canary).read_bytes() == before
+    assert collection(canary, "plan_revision")[REVISION_KEY]["status"] == "VALIDATED"
+
+
+def test_approval_admits_the_same_plan_regraded_accepted_risk(tmp_path: Path) -> None:
+    """Regrading the criterion accepted-risk, citing a recorded Decision, clears approval."""
+    canary = planned_canary(tmp_path, code="ACCRISK")
+    seed_v1_state(canary, decisions={"DEC-0001": decision_row("DEC-0001")})
+    body = with_criterion_grounding(
+        grounding="accepted-risk", accepted_risk_decision_ref="DEC-0001"
+    )
+    assert submit_body(canary, tmp_path, body=body)["status"] == "ok"
+
+    answer = approve(canary, tmp_path)
+
+    assert answer["status"] == "ok"
+    assert collection(canary, "plan_revision")[REVISION_KEY]["status"] == "APPROVED"
+
+
+def test_approval_refuses_an_accepted_risk_criterion_whose_decision_ref_does_not_resolve(
+    tmp_path: Path,
+) -> None:
+    """H1 gate-fire proof: the v1 state ``planned_canary`` seeds records no such Decision.
+
+    Reverting :func:`~eawf.workflow.planning.apply._build_citation_resolvers`
+    to skip Decision resolution reds this test: an unrecorded id such as
+    ``DEC-bogus`` would otherwise reach APPROVED unconditionally.
+    """
+    canary = planned_canary(tmp_path, code="DECBOGUS")
+    seed_v1_state(canary, decisions={"DEC-0001": decision_row("DEC-0001")})
+    body = with_criterion_grounding(
+        grounding="accepted-risk", accepted_risk_decision_ref="DEC-BOGUS"
+    )
+    assert submit_body(canary, tmp_path, body=body)["status"] == "ok"
+
+    answer = approve(canary, tmp_path)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == "transition_guard_failed"
+    assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
+    assert collection(canary, "plan_revision")[REVISION_KEY]["status"] == "VALIDATED"
+
+
+# ---- PLAN-025: the measured grade resolves against the real contract store
+
+
+def test_approval_refuses_a_measured_criterion_whose_contract_ref_does_not_resolve(
+    tmp_path: Path,
+) -> None:
+    """The v1 state ``planned_canary`` seeds refuses a citation it never promoted."""
+    canary = planned_canary(tmp_path, code="UNRESOLVD")
+    body = with_criterion_grounding(grounding="measured", contract_refs=["MCT-99999999"])
+    assert submit_body(canary, tmp_path, body=body)["status"] == "ok"
+
+    answer = approve(canary, tmp_path)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["code"] == "transition_guard_failed"
+    assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"
+    assert collection(canary, "plan_revision")[REVISION_KEY]["status"] == "VALIDATED"
+
+
+def test_approval_admits_a_measured_criterion_whose_contract_ref_resolves(
+    tmp_path: Path,
+) -> None:
+    """The default plan body cites the contract ``planned_canary`` already promoted."""
+    canary = planned_canary(tmp_path, code="RESOLVED")
+    assert submit_body(canary, tmp_path, body=BODY)["status"] == "ok"
+
+    answer = approve(canary, tmp_path)
+
+    assert answer["status"] == "ok"
+    assert collection(canary, "plan_revision")[REVISION_KEY]["status"] == "APPROVED"
+
+
+def test_approval_of_an_assumed_criterion_is_unaffected_by_an_empty_v1_state(
+    tmp_path: Path,
+) -> None:
+    """A resolver that exists but resolves nothing still flags assumed the same way."""
+    canary = planned_canary(tmp_path, code="ASSUMEDV1")
+    seed_v1_state(canary)
+    assert submit_body(canary, tmp_path, body=with_criterion_grounding())["status"] == "ok"
+
+    answer = approve(canary, tmp_path)
+
+    assert answer["status"] == "error"
+    assert answer["errors"][0]["guard"] == "criteria_grounded_at_approval"

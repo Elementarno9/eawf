@@ -72,6 +72,9 @@ CRITERION_FIELD_ROUTES: Mapping[str, FieldRoute] = {
     "quality_dimension": _legacy("quality_dimension"),
     "response": _legacy("response"),
     "oracle_tier": _legacy("oracle_tier"),
+    "grounding": _legacy("criterion_grounding"),
+    "contract_refs": _legacy("criterion_contract_refs"),
+    "accepted_risk_decision_ref": _legacy("criterion_accepted_risk_decision_ref"),
 }
 
 GATE_FIELD_ROUTES: Mapping[str, FieldRoute] = {

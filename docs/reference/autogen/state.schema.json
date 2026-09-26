@@ -1119,7 +1119,7 @@
       "type": "object"
     },
     "CriterionGrounding": {
-      "description": "Provenance grade of the claim a criterion's subject makes.\n\nNot a proof kind: :class:`ResponseClause` (via\n:attr:`CriterionSpec.response`) already grades the proof a gate emits\nunder ``evidence_kind`` -- how the criterion is checked. This grades\nsomething else: whether the criterion's subject was probed, assumed\nfrom reading, or a risk someone decided to ship unverified. The two\nvary independently, so neither is derived from the other.",
+      "description": "Provenance grade of the claim a criterion's subject makes.\n\nNot a proof kind: :class:`ResponseClause` (via\n:attr:`CriterionSpec.response`) already grades the proof a gate emits\nunder ``evidence_kind`` -- how the criterion is checked. This grades\nsomething else: whether the criterion's subject was probed, assumed\nfrom reading, or a risk someone decided to ship unverified. The one\nplace the two meet is :func:`grade_criterion_grounding`: a criterion\nbound to a gate that executes a probe has its subject measured by\nthat probe, so an ungraded row carrying one is graded ``measured``.",
       "enum": [
         "measured",
         "assumed",

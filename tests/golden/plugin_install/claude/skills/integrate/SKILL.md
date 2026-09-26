@@ -13,14 +13,14 @@ disable-model-invocation: true
 1. Resolve the Delivery Batch, its exact base, its candidate set, its conflict frames and its current integration generation. Never author a product change, and never choose a candidate by intuition.
 2. For `show`, render Batch and conflict truth at the read cursor and mutate nothing. This is the branch that completes today.
 3. For `select`, apply the declared deterministic policy and explain every inclusion and every rejection. No read model renders a Batch's sealed candidate set, so the policy has nothing to order and the branch stops with `candidate_set_unreadable` instead of inventing one.
-4. For `seal`, recompute the candidate digest and reject dirty, incomplete, unattributed or contract-stale content. The seal request binds a Run's accepted report by schema, digest and verdict, which this grammar carries no option for, so the branch stops with `candidate_report_unbound` and names those fields.
+4. For `seal`, bind the named Run's accepted report to the candidate and attempt the seal. The request names the Run, the candidate, and the accepted report's schema, digest and verdict; presented in full, the branch sends exactly that request and returns the sealed candidate or the checks that still leave it standing. Presented in part, it stops with `candidate_report_unbound` and names the missing fields.
 5. For `apply` and `retry`, prove the expected head and the Batch base still match, then create a fresh hidden generation and leave canonical history untouched until verification succeeds. The delivery request names the exact base binding, the branch, one commit subject per sealed candidate, a typed exit per conflict kind and a diagnostic reference; no surface this invocation reaches resolves them, so the branch stops with `integration_request_unnamed` rather than fabricating a revision binding.
 6. Never resolve a conflict by editing a candidate inside this skill.
 
 ## Invocation
 
 ```text
-/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--dry-run] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]
+/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--base <revision-binding>] [--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] [--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] [--verdict <verdict>] [--resulting-tree-digest <digest>] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]
 ```
 
 Options irrelevant to the selected branch reject rather than being ignored.

@@ -602,6 +602,32 @@ def _claims_universal_scope(text: str) -> bool:
     return _UNIVERSAL_SCOPE_RE.search(text) is not None
 
 
+class CriterionGrounding(StrEnum):
+    """Provenance grade of the claim a criterion's subject makes.
+
+    Not a proof kind: :class:`ResponseClause` (via
+    :attr:`CriterionSpec.response`) already grades the proof a gate emits
+    under ``evidence_kind`` -- how the criterion is checked. This grades
+    something else: whether the criterion's subject was probed, assumed
+    from reading, or a risk someone decided to ship unverified. The one
+    place the two meet is :func:`grade_criterion_grounding`: a criterion
+    bound to a gate that executes a probe has its subject measured by
+    that probe, so an ungraded row carrying one is graded ``measured``.
+    """
+
+    MEASURED = "measured"
+    ASSUMED = "assumed"
+    ACCEPTED_RISK = "accepted-risk"
+
+
+#: A reference the grounding grade cites: a promoted MeasuredContract for
+#: ``measured``, a Decision for ``accepted-risk``. Neither target is yet an
+#: addressable typed entity at this layer, so the citation is a bounded
+#: opaque string; the consumer that resolves it (the promotion path, the
+#: approval gate) owns the actual lookup.
+GroundingCitationStr = Annotated[str, Field(min_length=1, max_length=200)]
+
+
 class CriterionSpec(_StrictModel):
     """One success-criterion row attached to a wave / iter / phase.
 
@@ -630,6 +656,69 @@ class CriterionSpec(_StrictModel):
     measurable_signal: Annotated[str, Field(min_length=20, max_length=300)]
     response: ResponseClause | None = None
     oracle_tier: OracleTier | None = None
+    grounding: CriterionGrounding = CriterionGrounding.ASSUMED
+    contract_refs: tuple[GroundingCitationStr, ...] = ()
+    accepted_risk_decision_ref: GroundingCitationStr | None = None
+
+    @model_validator(mode="after")
+    def _grounding_citation_matches_grade(self) -> CriterionSpec:
+        """Require exactly the citation its grounding grade admits.
+
+        ``measured`` names a resolving MeasuredContract, or binds a probe
+        gate (:func:`_criterion_runs_a_probe`) that measures its subject
+        on every run, and names no Decision;
+        ``accepted-risk`` names a resolving Decision and nothing else, and
+        ``assumed`` names neither -- the three exits are disjoint so a
+        criterion cannot wear two grades of provenance at once. Grading a
+        claim ``accepted-risk`` also never substitutes for ``waiver_reason``:
+        the first records that a claim was not verified and leaves its gate
+        running, the second skips the gate outright, and conflating them
+        would let one field carry two meanings.
+
+        Raises:
+            ValueError: when a grade's required citation is missing, a
+                citation belongs to a grade this criterion is not graded
+                as, or ``accepted-risk`` is paired with ``waiver_reason``.
+        """
+        if self.grounding is CriterionGrounding.MEASURED:
+            if not self.contract_refs and not _criterion_runs_a_probe(self):
+                raise ValueError(
+                    f"criterion {self.id!r} is graded measured and cites no "
+                    "contract_refs to resolve nor binds a probe gate"
+                )
+            if self.accepted_risk_decision_ref is not None:
+                raise ValueError(
+                    f"criterion {self.id!r} is graded measured and carries "
+                    "accepted_risk_decision_ref, which only accepted-risk carries"
+                )
+        elif self.grounding is CriterionGrounding.ACCEPTED_RISK:
+            if self.accepted_risk_decision_ref is None:
+                raise ValueError(
+                    f"criterion {self.id!r} is graded accepted-risk and cites no resolving Decision"
+                )
+            if self.contract_refs:
+                raise ValueError(
+                    f"criterion {self.id!r} is graded accepted-risk and carries "
+                    "contract_refs, which only measured carries"
+                )
+            if self.waiver_reason is not None:
+                raise ValueError(
+                    f"criterion {self.id!r} carries both accepted-risk and "
+                    "waiver_reason; the two are disjoint exits and neither "
+                    "substitutes for the other"
+                )
+        else:
+            if self.contract_refs:
+                raise ValueError(
+                    f"criterion {self.id!r} is graded assumed and carries "
+                    "contract_refs, which only measured carries"
+                )
+            if self.accepted_risk_decision_ref is not None:
+                raise ValueError(
+                    f"criterion {self.id!r} is graded assumed and carries "
+                    "accepted_risk_decision_ref, which only accepted-risk carries"
+                )
+        return self
 
     @model_validator(mode="after")
     def _judged_requires_reason(self) -> CriterionSpec:
@@ -701,6 +790,59 @@ class CriterionSpec(_StrictModel):
             f"scope but the proof is a single-witness {response.gate_ref!r} gate; "
             "narrow the text or widen the gate"
         )
+
+
+def _criterion_runs_a_probe(criterion: CriterionSpec) -> bool:
+    """Return whether *criterion* binds a live gate that executes a probe.
+
+    A static gate (``file_exists``, ``regex_in_file`` and the rest of the
+    T1 tier) only reads source text, which is exactly the "assumed from
+    reading" grade, so only a gate kind above T1 counts as a probe. A
+    waived row never runs its gate, and a judged clause is a jury's
+    opinion rather than a measurement, so neither counts either.
+
+    Args:
+        criterion: The criterion to inspect.
+
+    Returns:
+        ``True`` when the row is deterministic, unwaived, binds at least
+        one gate id, and its response clause names a known gate kind above
+        the static tier.
+    """
+    response = criterion.response
+    if (
+        criterion.evidence_kind != "deterministic"
+        or criterion.waiver_reason is not None
+        or not criterion.gate_ids
+        or response is None
+        or response.gate_ref is None
+        or response.observe is ObserveVerb.JUDGED
+    ):
+        return False
+    tier = _GATE_KIND_TIER.get(response.gate_ref)
+    return tier is not None and tier is not OracleTier.T1_STATIC
+
+
+def grade_criterion_grounding(criterion: CriterionSpec) -> CriterionSpec:
+    """Return *criterion* graded from the evidence it carries.
+
+    Only an ``assumed`` row is re-graded, and only upward to ``measured``
+    when it binds a probe gate: an explicit ``measured`` or
+    ``accepted-risk`` grade already names its own citation, and a row with
+    no probe has nothing to be measured by, so it stays ``assumed`` and
+    the approval gate keeps refusing it.
+
+    Args:
+        criterion: The criterion a plan producer emitted.
+
+    Returns:
+        The criterion itself, or a copy graded ``measured``.
+    """
+    if criterion.grounding is not CriterionGrounding.ASSUMED:
+        return criterion
+    if not _criterion_runs_a_probe(criterion):
+        return criterion
+    return criterion.model_copy(update={"grounding": CriterionGrounding.MEASURED})
 
 
 #: Sentinel ``kind`` for a criterion synthesised from a free-form legacy

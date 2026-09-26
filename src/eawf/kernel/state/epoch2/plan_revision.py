@@ -46,6 +46,7 @@ from eawf.kernel.state.epoch2.base import (
     StrictPositiveInt,
 )
 from eawf.kernel.state.epoch2.milestone import MilestoneCreateSpec, reject_duplicate_refs
+from eawf.kernel.state.epoch2.run import RunPurpose, WriteSetPath
 from eawf.kernel.state.epoch2.task import TaskPriority
 from eawf.kernel.state.epoch2.urns import (
     AnyEntityUrn,
@@ -240,6 +241,18 @@ class PlannedTask(Epoch2Model):
         priority: How it orders against its siblings.
         intent: What the Task is for.
         criteria: Its typed success criteria.
+        depends_on: The Tasks this one must not start ahead of.
+        write_claims: The repository paths this Task intends to write.
+            Declared at plan time, distinct from the ``write_set`` a
+            :class:`~eawf.kernel.state.epoch2.run.TaskScope` enforces at
+            run time; empty means the plan makes no claim, which the
+            ownership and role-authority lenses both treat as opt-out
+            rather than as an empty write.
+        run_purpose: The :class:`~eawf.kernel.state.epoch2.run.RunPurpose`
+            this Task is planned to run under, or ``None`` when the plan
+            leaves it undeclared. Only a declared mutating purpose is
+            checked against ``write_claims``, so a plan that says nothing
+            here earns no role-authority finding.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -249,6 +262,9 @@ class PlannedTask(Epoch2Model):
     priority: TaskPriority
     intent: NonEmptyStr
     criteria: tuple[CriterionSpec, ...]
+    depends_on: tuple[TaskUrn, ...] = ()
+    write_claims: tuple[WriteSetPath, ...] = ()
+    run_purpose: RunPurpose | None = None
 
     @field_validator("criteria")
     @classmethod
@@ -261,6 +277,98 @@ class PlannedTask(Epoch2Model):
         if not value:
             raise ValueError("a planned Task names at least one criterion")
         return value
+
+
+class SourceAtom(Epoch2Model):
+    """One decomposed unit of the design a plan is asked to cover.
+
+    An atom names the criteria that discharge it. Nothing at the loader
+    can tell a real mapping from a stale one -- that judgment needs the
+    whole plan body, which is what the source-atomization lens is for.
+
+    Attributes:
+        atom_id: The plan-local identifier for this unit of design intent.
+        text: The unit of design intent this atom carries.
+        mapped_criterion_ids: The criteria, from any Task in this plan,
+            that claim to satisfy this atom.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    atom_id: NonEmptyStr
+    text: NonEmptyStr
+    mapped_criterion_ids: tuple[NonEmptyStr, ...] = ()
+
+
+class DroppedAtom(Epoch2Model):
+    """One source atom a plan deliberately leaves unmapped.
+
+    A drop with no reason is indistinguishable from an atom nobody
+    noticed, so the reason is required rather than the atom simply being
+    absent from every mapping.
+
+    Attributes:
+        atom_ref: The dropped atom's id.
+        reason: Why it is not mapped to any criterion.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    atom_ref: NonEmptyStr
+    reason: NonEmptyStr
+
+
+class NewSurfaceKind(StrEnum):
+    """The category of new substrate one :class:`SurfaceProducerRef` names."""
+
+    FIELD = "field"
+    MODEL = "model"
+    EVENT = "event"
+    RPC = "rpc"
+    GATE = "gate"
+
+
+class SurfaceProducerRef(Epoch2Model):
+    """One new field/model/event/RPC/gate a plan introduces, and who builds it.
+
+    Nothing else in :class:`PlanBody` names an abstract surface
+    independent of a concrete write path, so a plan that adds a new RPC
+    or event has no other way to say so -- the idle-contract lens exists
+    to catch exactly the case this type makes expressible: a surface
+    named with nobody assigned to build it.
+
+    Attributes:
+        surface_id: The plan-local identifier for the new surface.
+        kind: What kind of substrate it is.
+        producer_ref: The Task this plan creates that is planned to build
+            the surface, or ``None`` when the plan names one with nothing
+            assigned to produce it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    surface_id: NonEmptyStr
+    kind: NewSurfaceKind
+    producer_ref: TaskUrn | None = None
+
+
+class DroppedTask(Epoch2Model):
+    """One parent-revision Task a repair plan deliberately no longer creates.
+
+    A repair that silently stops creating a Task the parent revision
+    created is indistinguishable, at the schema level, from a repair that
+    forgot the Task existed. Naming the drop here is what tells the two
+    apart -- the semantic-diff lens is what checks the plan actually did.
+
+    Attributes:
+        task_ref: The parent Task's URN this revision no longer creates.
+        reason: Why the repair drops it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    task_ref: TaskUrn
+    reason: NonEmptyStr
 
 
 class CampaignCitation(Epoch2Model):
@@ -313,6 +421,10 @@ class PlanBody(Epoch2Model):
     batches: tuple[PlannedBatch, ...]
     tasks: tuple[PlannedTask, ...]
     citations: tuple[CampaignCitation, ...] = ()
+    source_atoms: tuple[SourceAtom, ...] = ()
+    dropped_atoms: tuple[DroppedAtom, ...] = ()
+    new_surfaces: tuple[SurfaceProducerRef, ...] = ()
+    dropped_tasks: tuple[DroppedTask, ...] = ()
 
     @model_validator(mode="after")
     def _plan_is_internally_resolvable(self) -> Self:
@@ -322,7 +434,8 @@ class PlanBody(Epoch2Model):
             ValueError: The Milestone URN and key disagree, the plan
                 creates no Batch or no Task, a URN repeats, a Task names a
                 Batch the plan does not create, a required Batch is not
-                one of them, or a finding is cited twice.
+                one of them, a finding is cited twice, or a source atom or
+                dropped atom repeats its id.
         """
         if self.milestone.key != self.milestone_urn.entity_key:
             raise ValueError(
@@ -338,6 +451,18 @@ class PlanBody(Epoch2Model):
         reject_duplicate_refs(tuple(task.urn for task in self.tasks), field="tasks")
         reject_duplicate_refs(
             tuple(citation.finding_ref for citation in self.citations), field="citations"
+        )
+        reject_duplicate_refs(
+            tuple(atom.atom_id for atom in self.source_atoms), field="source_atoms"
+        )
+        reject_duplicate_refs(
+            tuple(dropped.atom_ref for dropped in self.dropped_atoms), field="dropped_atoms"
+        )
+        reject_duplicate_refs(
+            tuple(surface.surface_id for surface in self.new_surfaces), field="new_surfaces"
+        )
+        reject_duplicate_refs(
+            tuple(dropped.task_ref for dropped in self.dropped_tasks), field="dropped_tasks"
         )
         declared = frozenset(batch_refs)
         orphans = sorted(str(task.urn) for task in self.tasks if task.batch_ref not in declared)
@@ -483,7 +608,10 @@ __all__ = [
     "PLAN_REVISION_EDGES",
     "TERMINAL_PLAN_REVISION_STATUSES",
     "CampaignCitation",
+    "DroppedAtom",
+    "DroppedTask",
     "MilestoneCounts",
+    "NewSurfaceKind",
     "PlanApproval",
     "PlanBody",
     "PlanRevision",
@@ -492,6 +620,8 @@ __all__ = [
     "PlannedBatch",
     "PlannedTask",
     "RepositoryHeadBinding",
+    "SourceAtom",
+    "SurfaceProducerRef",
     "milestone_counts",
     "plan_content_digest",
     "validate_plan_approver",

@@ -192,10 +192,11 @@ _DECLARED_ORDER: Final[tuple[PreHandlerCheck, ...]] = (
 )
 
 #: The catalog tools a role's ceiling narrows. A read costs the same
-#: whoever asks, and every role may record evidence, report progress and
-#: submit its terminal report, so gating those would deny work the role
-#: exists to do. What a role is actually defined by is what it produces:
-#: a patch, a candidate, a plan, a coordination change.
+#: whoever asks, and every role may record evidence (attached or
+#: submitted from a verified spike), report progress and submit its
+#: terminal report, so gating those would deny work the role exists to
+#: do. What a role is actually defined by is what it produces: a patch,
+#: a candidate, a plan, a coordination change.
 ROLE_GATED_TOOLS: Final[frozenset[SemanticToolId]] = frozenset(
     {
         SemanticToolId.WORKSPACE_APPLY_PATCH,
@@ -291,6 +292,7 @@ SCOPE_RULES: Final[Mapping[SemanticToolId, ScopeRule]] = MappingProxyType(
             subject_field="task_ref", path_field="changed_paths"
         ),
         SemanticToolId.SUBMIT_REPORT: ScopeRule(),
+        SemanticToolId.SUBMIT_EVIDENCE: ScopeRule(),
         SemanticToolId.BUDGET_STATUS: ScopeRule(),
     }
 )

@@ -74,6 +74,7 @@ from eawf.kernel.runtime.lease import (
     lease_has_expired,
 )
 from eawf.kernel.runtime.provider import Digest, SchemaUrn, UniqueToolIds
+from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunScope
 from eawf.kernel.state.epoch2.urns import RunUrn, TaskUrn
@@ -112,6 +113,14 @@ from eawf.workflow.runtime.compile import RunCompileError, compile_run_spec
 
 logger = logging.getLogger(__name__)
 
+
+#: What every worker Run reaches unless the dispatch request narrows it.
+#: Filing its own terminal report is not a role-specific capability the
+#: way producing a patch or a candidate is -- every purpose the compiled
+#: spec can name ends by reporting what it did -- so a request that
+#: omits ``tool_grants`` still reaches the one tool it could never
+#: finish without.
+DEFAULT_TOOL_GRANTS: Final[UniqueToolIds] = (SemanticToolId.SUBMIT_REPORT.value,)
 
 #: The verb that drives a Task into a compiled, leased, running Run.
 RUN_DISPATCH_METHOD: Final = "runtime.run.dispatch"
@@ -300,9 +309,11 @@ class CapsuleRequest(BaseModel):
     Attributes:
         criteria_digest: The digest of the criteria the Run is judged on.
         report_schema_ref: The schema the Run's report must satisfy.
-        tool_grants: The semantic tools the Run may call. Empty means it
-            reaches none, which is a positive statement rather than a
-            default a provider can widen.
+        tool_grants: The semantic tools the Run may call, beyond
+            :data:`DEFAULT_TOOL_GRANTS`. A request that names its own
+            list replaces the default rather than adding to it, which is
+            a positive statement rather than a default a provider can
+            widen.
         tool_denials: The semantic tools withheld; a denial wins.
         stop_conditions: When the Run stops of its own accord.
         token_budget: The Run's token ceiling, sealed into the capsule and
@@ -314,7 +325,7 @@ class CapsuleRequest(BaseModel):
 
     criteria_digest: Digest
     report_schema_ref: SchemaUrn
-    tool_grants: UniqueToolIds = ()
+    tool_grants: UniqueToolIds = DEFAULT_TOOL_GRANTS
     tool_denials: UniqueToolIds = ()
     stop_conditions: Annotated[tuple[StopCondition, ...], Field(min_length=1)]
     token_budget: StrictPositiveInt | None = None
@@ -1158,6 +1169,7 @@ __all__ = [
     "ACCEPTANCE_STAGE",
     "BINDING_KEY_PREFIX",
     "BINDING_STATUS",
+    "DEFAULT_TOOL_GRANTS",
     "LINEAGE_KEY_PREFIX",
     "NATIVE_LAUNCHERS",
     "RUN_DISPATCH_METHOD",

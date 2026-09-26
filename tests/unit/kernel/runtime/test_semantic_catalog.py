@@ -1,7 +1,7 @@
 """The semantic tool catalog is closed and typed, and its errors are total.
 
-The runtime agreement states the tool contract as twelve rows, and its
-repository read row names three tools, so the catalog is fourteen ids
+The runtime agreement states the tool contract as thirteen rows, and its
+repository read row names three tools, so the catalog is fifteen ids
 under one contract each. Every id carries a typed input model and a typed
 output model, both frozen and closed, because the same models produce the
 gateway's validator and the schema the per-Run MCP server publishes.
@@ -32,6 +32,7 @@ from eawf.kernel.runtime.semantic import (
     SemanticToolId,
     SemanticToolInputBase,
     SemanticToolOutputBase,
+    SubmitEvidenceOutput,
     SubmitReportOutput,
     error_for,
     tool_contract,
@@ -53,6 +54,7 @@ CATALOG_TOOL_IDS = (
     "submit_coordination_proposal",
     "submit_candidate",
     "submit_report",
+    "submit_evidence",
     "budget_status",
 )
 ERROR_CODES = (
@@ -415,3 +417,27 @@ def test_submit_report_output_accepts_a_refusal_that_names_its_finding() -> None
         }
     )
     assert output.findings[0].code == "body_invalid"
+
+
+def test_submit_evidence_output_accepts_an_empty_contract_refs_on_acceptance() -> None:
+    """Unlike submit_report, acceptance needs no reference: a verified spike
+    that probed no external surface legitimately promotes nothing."""
+    output = SubmitEvidenceOutput.model_validate({"tool_id": "submit_evidence", "accepted": True})
+
+    assert output.contract_refs == ()
+
+
+def test_submit_evidence_output_refuses_an_acceptance_with_findings() -> None:
+    with pytest.raises(ValidationError, match="carries no findings"):
+        SubmitEvidenceOutput.model_validate(
+            {
+                "tool_id": "submit_evidence",
+                "accepted": True,
+                "findings": [{"code": "spike_report_unverified", "message": "not verified"}],
+            }
+        )
+
+
+def test_submit_evidence_output_refuses_a_refusal_with_no_finding() -> None:
+    with pytest.raises(ValidationError, match="at least one finding"):
+        SubmitEvidenceOutput.model_validate({"tool_id": "submit_evidence", "accepted": False})

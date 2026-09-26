@@ -129,6 +129,10 @@ PAYLOADS: dict[SemanticToolId, dict[str, Any]] = {
         "body_digest": DIGEST,
         "verdict": "pass",
     },
+    SemanticToolId.SUBMIT_EVIDENCE: {
+        "spike_report_ref": "artifact://spike/run-10",
+        "spike_report_digest": DIGEST,
+    },
     SemanticToolId.BUDGET_STATUS: {"include_children": True},
 }
 

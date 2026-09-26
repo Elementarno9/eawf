@@ -24,7 +24,16 @@ without disturbing its identity.
 artifact id or a full artifact URN, and it refuses a citation that points
 back into ``.ea/local/spikes/``: that path means the contract was never
 promoted, so the error names the promotion command instead of the generic
-not-found. That refusal is the ``plan_reference_missing`` cause tag.
+not-found. That refusal is the ``plan_reference_missing`` cause tag. It
+also refuses a citation whose contract was measured in a different
+repository, the ``contract_environment_incompatible`` cause tag.
+
+:func:`submit_evidence` generalises promotion beyond the four preflight
+contracts above: a verified :class:`~eawf.kernel.spec.measured_contract.SpikeReport`
+submitted here has each of its contracts promoted through
+:func:`promote_measured_contract` -- an unverified report, or a contract
+measured in a repository other than the submitting one, is refused before
+any of it is written.
 """
 
 from __future__ import annotations
@@ -35,11 +44,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Final
 
+from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.spec.measured_contract import (
     MeasuredContract,
     MeasurementEnvironment,
     ObservedLimit,
     ScaleBand,
+    SpikeReport,
     scale_band_satisfies,
 )
 from eawf.kernel.state import urn as urn_mod
@@ -447,6 +458,10 @@ class ContractPromotion:
         contract: The contract that was promoted.
         artifact_id: State-resident artifact id (equals the contract id).
         urn: Canonical ``urn:eawf:v1:artifact:<scope>/<id>`` address.
+        content_digest: The ``sha256:`` digest of the recorded metadata --
+            the artifact revision this promotion minted is addressed by
+            this digest as well as by ``artifact_id``, so a re-promotion
+            of byte-identical content is detectable as such.
         evidence: The minted evidence (EVD) record.
         artifact_event: Envelope for the ``artifact.add`` event stream.
         evidence_envelope: Envelope carrying *evidence* for the
@@ -456,6 +471,7 @@ class ContractPromotion:
     contract: MeasuredContract
     artifact_id: str
     urn: str
+    content_digest: str
     evidence: EvidenceRecord
     artifact_event: Envelope
     evidence_envelope: Envelope
@@ -581,6 +597,51 @@ def _contract_metadata(contract: MeasuredContract) -> dict[str, object]:
     }
 
 
+def _content_digest(metadata: Mapping[str, object]) -> str:
+    """Return the ``sha256:`` digest of *metadata* in canonical form.
+
+    Args:
+        metadata: The rendered ``Artifact.metadata`` mapping of a contract
+            (see :func:`_contract_metadata`).
+
+    Returns:
+        ``sha256:`` followed by 64 lowercase hex characters. A
+        byte-identical contract always digests identically, so a
+        re-submission of the same measurement is detectable as such
+        rather than minting a second, indistinguishable revision.
+    """
+    return canonical_digest(dict(metadata))
+
+
+def _require_compatible_environment(contract: MeasuredContract, *, repository: str) -> None:
+    """Refuse *contract* when its environment names a different repository.
+
+    A contract whose :attr:`~MeasurementEnvironment.repository` is unset
+    carries no repository restriction (every contract promoted before the
+    field existed, and any contract meant to be portable), so only a
+    contract that names a *different* repository is refused.
+
+    Args:
+        contract: Contract being submitted or cited.
+        repository: The repository doing the submitting or citing.
+
+    Raises:
+        UserError: ``kind="contract_environment_incompatible"`` when the
+            contract's environment names another repository.
+    """
+    measured_in = contract.environment.repository
+    if measured_in is not None and measured_in != repository:
+        logger.warning(
+            f"measured contract environment refusal contract_id={contract.contract_id!r} "
+            f"measured_in={measured_in!r} repository={repository!r}"
+        )
+        raise UserError(
+            f"contract {contract.contract_id} was measured in repository {measured_in!r}, "
+            f"not {repository!r}; a measurement does not transfer across repositories",
+            kind="contract_environment_incompatible",
+        )
+
+
 def _require_measured_band(contract: MeasuredContract, *, required_band: ScaleBand) -> ScaleBand:
     """Return the contract's measured band once it clears *required_band*.
 
@@ -640,7 +701,8 @@ def promote_measured_contract(
             over. The contract's measured band must be at least this.
 
     Returns:
-        A :class:`ContractPromotion` carrying the URN and both envelopes.
+        A :class:`ContractPromotion` carrying the URN, the content digest
+        and both envelopes.
 
     Raises:
         UserError: When the contract's measured
@@ -652,13 +714,16 @@ def promote_measured_contract(
     """
     observed_band = _require_measured_band(contract, required_band=required_band)
 
+    metadata = _contract_metadata(contract)
+    content_digest = _content_digest(metadata)
     artifact_event = add_artifact(
         state,
         artifact_id=contract.contract_id,
         kind=CONTRACT_ARTIFACT_KIND,
         uri=CONTRACT_BODY_URI,
         scope_id=scope_id,
-        metadata=_contract_metadata(contract),
+        sha256=content_digest.removeprefix("sha256:"),
+        metadata=metadata,
     )
     artifact_urn = _io.artifact_urn(scope_id, contract.contract_id)
 
@@ -698,10 +763,72 @@ def promote_measured_contract(
         contract=contract,
         artifact_id=contract.contract_id,
         urn=artifact_urn,
+        content_digest=content_digest,
         evidence=evidence,
         artifact_event=artifact_event,
         evidence_envelope=evidence_envelope,
     )
+
+
+def submit_evidence(
+    state: State, *, report: SpikeReport, scope_id: str
+) -> tuple[ContractPromotion, ...]:
+    """Promote every contract of a verified :class:`SpikeReport`, mutating *state* in place.
+
+    This is PLAN-025's evidence path: a
+    :class:`~eawf.kernel.spec.measured_contract.MeasuredContract` becomes
+    canonical only by being submitted here out of a verified report, never
+    by being hand-written into a promotion table. Each contract is
+    promoted through :func:`promote_measured_contract`, so it inherits URN
+    minting, the duplicate-id guard, and the recorded content digest that
+    makes the write an immutable artifact revision. A blank
+    ``boundary`` never reaches this function at all: the field is
+    non-blank at the :class:`MeasuredContract` schema, so a report
+    carrying one fails to parse. The caller appends every returned
+    envelope to their stores inside the same transaction.
+
+    Args:
+        state: Mutable state under transaction.
+        report: The spike report being submitted. Refused unless
+            :attr:`~eawf.kernel.spec.measured_contract.SpikeReport.verified`.
+        scope_id: Owning scope (normally the project code), and the
+            repository every contract's environment is checked against.
+
+    Returns:
+        One :class:`ContractPromotion` per contract in *report*, in
+        report order. Empty when the report measured nothing.
+
+    Raises:
+        UserError: ``kind="spike_report_unverified"`` when *report* is not
+            verified; ``kind="contract_environment_incompatible"`` when a
+            contract's environment names a repository other than
+            *scope_id*; ``kind="scale_band_below_checkpoint"`` or
+            ``kind="InvalidInput"`` as raised by
+            :func:`promote_measured_contract`.
+    """
+    if not report.verified:
+        logger.warning(f"submit_evidence unverified report_id={report.report_id!r}")
+        raise UserError(
+            f"spike report {report.report_id!r} is not verified, so nothing in it has "
+            "earned canonical status; re-run its verifier and submit the verified report",
+            kind="spike_report_unverified",
+        )
+    for contract in report.contracts:
+        _require_compatible_environment(contract, repository=scope_id)
+    promotions = tuple(
+        promote_measured_contract(
+            state,
+            contract=contract,
+            scope_id=scope_id,
+            required_band=contract.environment.scale_band,
+        )
+        for contract in report.contracts
+    )
+    logger.info(
+        f"submit_evidence report_id={report.report_id!r} scope_id={scope_id!r} "
+        f"contracts={len(promotions)}"
+    )
+    return promotions
 
 
 def refresh_contract_metadata(
@@ -763,7 +890,9 @@ def refresh_contract_metadata(
 
     now = datetime.now(UTC)
     artifacts = dict(state.artifacts)
-    artifacts[contract.contract_id] = registered.model_copy(update={"metadata": metadata})
+    artifacts[contract.contract_id] = registered.model_copy(
+        update={"metadata": metadata, "sha256": _content_digest(metadata).removeprefix("sha256:")}
+    )
     state.artifacts = artifacts
     state.updated_at = now
 
@@ -797,6 +926,40 @@ def refresh_contract_metadata(
     )
 
 
+def _require_citable_here(state: State, artifact: Artifact) -> None:
+    """Refuse *artifact* when its recorded environment names another repository.
+
+    Only a promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
+    row carries an ``environment`` key in its metadata, so any other
+    artifact kind passes through unchecked; a contract whose environment
+    carries no ``repository`` (or a state with no ``project`` to compare
+    against) is likewise unrestricted.
+
+    Args:
+        state: State the citation was resolved against.
+        artifact: The resolved artifact row.
+
+    Raises:
+        UserError: ``kind="contract_environment_incompatible"`` when the
+            artifact's recorded environment names a repository other than
+            *state*'s own project.
+    """
+    environment = artifact.metadata.get("environment")
+    if not isinstance(environment, Mapping) or state.project is None:
+        return
+    measured_in = environment.get("repository")
+    if measured_in is not None and measured_in != state.project.code:
+        logger.warning(
+            f"resolve_contract_citation environment refusal artifact_id={artifact.id!r} "
+            f"measured_in={measured_in!r} repository={state.project.code!r}"
+        )
+        raise UserError(
+            f"contract {artifact.id} was measured in repository {measured_in!r}, not "
+            f"{state.project.code!r}; a measurement does not transfer across repositories",
+            kind="contract_environment_incompatible",
+        )
+
+
 def resolve_contract_citation(state: State, citation: str) -> Artifact:
     """Resolve *citation* to a promoted artifact row.
 
@@ -804,7 +967,9 @@ def resolve_contract_citation(state: State, citation: str) -> Artifact:
     URN. A citation that addresses the gitignored spike tree is refused
     outright: that path means the contract was never promoted, so the
     error names the promotion command rather than reporting a bare
-    not-found the operator cannot act on.
+    not-found the operator cannot act on. A citation that resolves to a
+    contract measured in another repository is refused too -- see
+    :func:`_require_citable_here`.
 
     Args:
         state: State to resolve against.
@@ -818,7 +983,8 @@ def resolve_contract_citation(state: State, citation: str) -> Artifact:
             resolves only under :data:`LOCAL_SPIKE_ROOT`;
             ``kind="InvalidInput"`` when it is a malformed or
             non-artifact URN; ``kind="NotFound"`` when the id is not
-            registered.
+            registered; ``kind="contract_environment_incompatible"`` when
+            it resolves to a contract measured in another repository.
     """
     if _is_local_spike_citation(citation):
         contract_id = _contract_id_for_observation_ref(citation)
@@ -836,8 +1002,11 @@ def resolve_contract_citation(state: State, citation: str) -> Artifact:
             raise UserError(f"malformed artifact URN: {citation!r}", kind="InvalidInput") from exc
         if parsed.kind != "artifact" or not parsed.id:
             raise UserError(f"not an artifact URN with an id: {citation!r}", kind="InvalidInput")
-        return show_artifact(state, parsed.id)
-    return show_artifact(state, citation)
+        artifact = show_artifact(state, parsed.id)
+    else:
+        artifact = show_artifact(state, citation)
+    _require_citable_here(state, artifact)
+    return artifact
 
 
 __all__ = [
@@ -853,4 +1022,5 @@ __all__ = [
     "promote_measured_contract",
     "refresh_contract_metadata",
     "resolve_contract_citation",
+    "submit_evidence",
 ]

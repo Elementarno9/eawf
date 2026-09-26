@@ -10,6 +10,13 @@ when the Run's terminal report is accepted. :class:`CandidateBundle` is the
 daemon's too, and is the only one of the three that means "this may be
 integrated".
 
+:class:`AcceptedReport` is a fourth record, filed against the Run rather
+than a candidate: a Run's terminal report is accepted before anybody
+names which candidate it is about, so the acceptance is recorded on its
+own and a later request that binds a candidate's seal may name only the
+Run and read the schema, digest and verdict back rather than repeat what
+the daemon already checked.
+
 The bundle is not a rename of the submission. It exists only once every
 member of :class:`SealCheck` holds against durable records, so the three
 facts that make a submission deliverable -- a report was accepted, it was
@@ -93,6 +100,7 @@ class CandidateRefusal(StrEnum):
     SUBMISSION_NOT_COMMIT = "candidate_submission_not_commit"
     SUBMISSION_NOT_HEAD = "candidate_submission_not_head"
     SUBMISSION_OFF_BASE = "candidate_submission_off_base"
+    REPORT_UNRESOLVED = "candidate_report_unresolved"
 
 
 #: The verdicts that propose work for integration. A failed or blocked Run
@@ -223,6 +231,35 @@ class CandidateReportBinding(RuntimeRecord):
     bound_at: UtcDatetime
 
 
+class AcceptedReport(RuntimeRecord):
+    """A Run's own terminal report, accepted before any candidate names it.
+
+    Filed once ``submit_report`` accepts, so a request that binds a
+    candidate's report -- ``runtime.candidate.report.bind``, typically
+    reached through ``/integrate seal`` -- may resolve the schema, the
+    digest and the verdict from the Run alone when the caller does not
+    repeat them.
+
+    Attributes:
+        payload_kind: The discriminator separating this row from every
+            other line of the run ledger.
+        schema_version: Version of this record's shape.
+        run_ref: The Run whose report was accepted.
+        report_schema_ref: The schema the accepted body satisfies.
+        report_digest: The digest of that body.
+        verdict: The verdict the body carried.
+        accepted_at: When the daemon recorded the acceptance.
+    """
+
+    payload_kind: Literal["accepted_report"] = "accepted_report"
+    schema_version: Literal["1"] = CANDIDATE_SCHEMA_VERSION
+    run_ref: RunUrn
+    report_schema_ref: SchemaUrn
+    report_digest: Digest
+    verdict: AgentReportVerdict
+    accepted_at: UtcDatetime
+
+
 class CandidateBundle(RuntimeRecord):
     """One sealed candidate: the single record integration may act on.
 
@@ -287,6 +324,7 @@ class CandidateBundle(RuntimeRecord):
 __all__ = [
     "CANDIDATE_SCHEMA_VERSION",
     "DELIVERABLE_VERDICTS",
+    "AcceptedReport",
     "CandidateBundle",
     "CandidateId",
     "CandidateRefusal",

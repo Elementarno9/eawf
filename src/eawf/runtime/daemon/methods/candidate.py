@@ -61,6 +61,7 @@ from eawf.kernel.state.epoch2.urns import RunUrn, TaskUrn
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.runtime.candidate.seal import (
     SealInputs,
+    accepted_report_of,
     binding_of,
     binding_record,
     bundle_of,
@@ -124,10 +125,16 @@ class CandidateReportParams(BaseModel):
         actor: Who asked.
         idempotency_key: The client's name for this request.
         candidate_ref: The candidate the report is about.
-        report_schema_ref: The schema the accepted body satisfies.
-        report_digest: The digest of that body.
-        verdict: The verdict the body carried.
+        report_schema_ref: The schema the accepted body satisfies, or
+            ``None`` to resolve it from the Run's own accepted report.
+        report_digest: The digest of that body, or ``None`` to resolve it
+            the same way.
+        verdict: The verdict the body carried, or ``None`` to resolve it
+            the same way.
         resulting_tree_digest: The tree the report was written about.
+            Always named: it belongs to the candidate being sealed, not
+            to the Run's own report, so nothing on the Run could fill it
+            in.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -136,9 +143,9 @@ class CandidateReportParams(BaseModel):
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
     candidate_ref: CandidateId
-    report_schema_ref: SchemaUrn
-    report_digest: Digest
-    verdict: AgentReportVerdict
+    report_schema_ref: SchemaUrn | None = None
+    report_digest: Digest | None = None
+    verdict: AgentReportVerdict | None = None
     resulting_tree_digest: Digest
 
 
@@ -358,7 +365,9 @@ def accept_report(
 
     Raises:
         DaemonValidationError: No submission stands under the named
-            candidate, or a different report is already bound to it.
+            candidate, a different report is already bound to it, or a
+            report field is omitted and the Run holds no accepted report
+            to fill it in from.
     """
     with context.session([args.urn]) as session:
         records = read_ledger_records(run_ledger(session))
@@ -372,7 +381,16 @@ def accept_report(
         sealed = bundle_of(records, args.candidate_ref)
         if sealed is not None:
             return _replayed_seal(sealed)
-        binding = _bound_report(session, records, args, now=now)
+        report_schema_ref, report_digest, verdict = _resolved_report(records, args)
+        binding = _bound_report(
+            session,
+            records,
+            args,
+            report_schema_ref=report_schema_ref,
+            report_digest=report_digest,
+            verdict=verdict,
+            now=now,
+        )
     lease = active_lease_of(context, run_ref=str(submission.run_ref), now=now)
     outcome = seal_candidate(
         SealInputs(submission=submission, binding=binding, lease=lease), now=now
@@ -398,11 +416,45 @@ def accept_report(
     return _sealed_answer(outcome.bundle, replayed=False)
 
 
+def _resolved_report(
+    records: tuple[LedgerRecord, ...], args: CandidateReportParams
+) -> tuple[SchemaUrn, Digest, AgentReportVerdict]:
+    """Return the report schema, digest and verdict *args* names, or the Run's own.
+
+    A caller that presents all three is trusted to have presented them
+    together; one that omits any of them gets every field from the Run's
+    own accepted report rather than a request mixing a presented field
+    with a resolved one, which would let a caller name a schema the
+    resolved digest was never accepted against.
+
+    Raises:
+        DaemonValidationError: A field is omitted and the Run holds no
+            accepted report to fill it in from.
+    """
+    if (
+        args.report_schema_ref is not None
+        and args.report_digest is not None
+        and args.verdict is not None
+    ):
+        return args.report_schema_ref, args.report_digest, args.verdict
+    accepted = accepted_report_of(records, str(args.urn))
+    if accepted is None:
+        raise _refused(
+            CandidateRefusal.REPORT_UNRESOLVED,
+            f"run {args.urn.entity_key!r} holds no accepted report, so an omitted report field "
+            "names nothing to fill it in from",
+        )
+    return accepted.report_schema_ref, accepted.report_digest, accepted.verdict
+
+
 def _bound_report(
     session: RootSession,
     records: tuple[LedgerRecord, ...],
     args: CandidateReportParams,
     *,
+    report_schema_ref: SchemaUrn,
+    report_digest: Digest,
+    verdict: AgentReportVerdict,
     now: datetime,
 ) -> CandidateReportBinding:
     """Return the report binding of this candidate, appending it if new.
@@ -418,9 +470,9 @@ def _bound_report(
     binding = CandidateReportBinding(
         candidate_ref=args.candidate_ref,
         run_ref=args.urn,
-        report_schema_ref=args.report_schema_ref,
-        report_digest=args.report_digest,
-        verdict=args.verdict,
+        report_schema_ref=report_schema_ref,
+        report_digest=report_digest,
+        verdict=verdict,
         resulting_tree_digest=args.resulting_tree_digest,
         bound_at=now,
     )

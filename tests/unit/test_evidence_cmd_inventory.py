@@ -49,6 +49,8 @@ EXPECTED_ARTIFACT_VERBS = {
     "validate",
     "verify",
     "promote-contract",
+    "submit-evidence",
+    "file-spike-report",
 }
 EXPECTED_BACKLOG_VERBS = {"add", "edit", "backfill-titles", "set-priority", "close", "correct"}
 

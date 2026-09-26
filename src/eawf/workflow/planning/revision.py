@@ -6,7 +6,7 @@ typed refusal; nothing reads a file, takes a lock, or writes a byte. That
 is what lets the same rules be exercised by a unit test and by the apply
 transaction without the two being able to disagree.
 
-Three rules carry the weight.
+Four rules carry the weight.
 
 The machine is a table, so an edge that is not in it does not exist. A
 revision reaches ``APPLIED`` from ``APPROVED`` and from nowhere else,
@@ -19,6 +19,13 @@ it. Editing one character of the plan after approval therefore produces a
 body whose digest no receipt is bound to, and the edit is refused without
 anyone having to notice it.
 
+Approval also refuses an unverified claim. A criterion still graded
+``assumed`` on the edge into ``APPROVED`` blocks that edge outright, so a
+plan reaches APPROVED only once every criterion it carries is either
+measured against a resolving contract or accepted as a knowingly-shipped
+risk; the revision stays VALIDATED and reviewable rather than silently
+carrying the gap forward.
+
 Drift is checked against the document, never against the request. The
 four bound inputs -- the Track's revision, its policy revision, the
 repository heads, and the content digest -- are compared with what the
@@ -30,12 +37,13 @@ for a world that no longer exists.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from typing import Final
 
+from eawf.kernel.spec.common import CriterionGrounding
 from eawf.kernel.state.epoch2.plan_revision import (
     PLAN_REVISION_EDGES,
     PlanApproval,
@@ -163,6 +171,103 @@ def citations_are_uncounted(body: PlanBody) -> bool:
     return milestone_counts(body) == milestone_counts(body.model_copy(update={"citations": ()}))
 
 
+def ungrounded_approval_criteria(
+    body: PlanBody,
+    *,
+    contract_is_resolvable: Callable[[str], bool] | None = None,
+    decision_is_resolvable: Callable[[str], bool] | None = None,
+) -> tuple[str, ...]:
+    """Return the ids of every criterion the plan would approve unverified.
+
+    Every criterion any Task in the plan carries is part of what the plan's
+    Milestone is accepted against -- this model has no criterion that sits
+    outside that surface -- so the approval gate reads the whole set rather
+    than a separately drawn subset.
+
+    A criterion graded ``measured`` names a contract in ``contract_refs``
+    and one graded ``accepted-risk`` names a Decision in
+    ``accepted_risk_decision_ref``, but this module reads and writes
+    nothing on its own (see the module docstring), so whether either
+    citation actually resolves is answered by *contract_is_resolvable*
+    and *decision_is_resolvable*, the two seams this pure function is
+    handed into the world outside it. Passing ``None`` for either skips
+    that citation kind's check entirely -- a caller with no promoted-
+    contract store or no v1 state to consult (a tree that predates
+    either store, or one that never provisioned it) cannot honestly
+    refuse a citation it has no way to look up.
+
+    Args:
+        body: The plan content to scan.
+        contract_is_resolvable: Returns whether a ``contract_refs`` entry
+            resolves to a promoted contract, or ``None`` to skip that
+            check.
+        decision_is_resolvable: Returns whether an
+            ``accepted_risk_decision_ref`` resolves to a recorded, still-active
+            Decision, or ``None`` to skip that check.
+
+    Returns:
+        The ``<task-urn>/<criterion-id>`` pairs still graded assumed, or
+        graded measured with at least one unresolvable ``contract_refs``
+        entry, or graded accepted-risk with an unresolvable
+        ``accepted_risk_decision_ref``, in plan order.
+    """
+    ids: list[str] = []
+    for task in body.tasks:
+        for criterion in task.criteria:
+            ungrounded = (
+                criterion.grounding is CriterionGrounding.ASSUMED
+                or (
+                    criterion.grounding is CriterionGrounding.MEASURED
+                    and contract_is_resolvable is not None
+                    and not all(contract_is_resolvable(ref) for ref in criterion.contract_refs)
+                )
+                or (
+                    criterion.grounding is CriterionGrounding.ACCEPTED_RISK
+                    and decision_is_resolvable is not None
+                    and criterion.accepted_risk_decision_ref is not None
+                    and not decision_is_resolvable(criterion.accepted_risk_decision_ref)
+                )
+            )
+            if ungrounded:
+                ids.append(f"{task.urn}/{criterion.id}")
+    return tuple(ids)
+
+
+def _ungrounded_reason(body: PlanBody, ref: str) -> str:
+    """Return why the ``<task-urn>/<criterion-id>`` pair *ref* names is ungrounded.
+
+    Re-reads the criterion *ref* names rather than threading a reason
+    through :func:`ungrounded_approval_criteria`'s return value, so a
+    caller wanting only the ids (a summary, a count) still gets a single
+    scalar per criterion. The distinction matters at the message: a
+    criterion still graded ``assumed`` needs a grade, one graded
+    ``measured`` or ``accepted-risk`` already carries a citation that
+    just does not resolve, and conflating the two under one "still
+    graded assumed" phrase names the wrong fix for the second case.
+
+    Args:
+        body: The plan content *ref* was drawn from.
+        ref: One ``<task-urn>/<criterion-id>`` pair
+            :func:`ungrounded_approval_criteria` returned.
+
+    Returns:
+        A phrase naming which citation is missing or unresolved.
+    """
+    task_urn, criterion_id = ref.rsplit("/", 1)
+    for task in body.tasks:
+        if str(task.urn) != task_urn:
+            continue
+        for criterion in task.criteria:
+            if criterion.id != criterion_id:
+                continue
+            if criterion.grounding is CriterionGrounding.MEASURED:
+                return f"{ref} cites a contract_refs entry that does not resolve"
+            if criterion.grounding is CriterionGrounding.ACCEPTED_RISK:
+                return f"{ref} cites a Decision that does not resolve"
+            return f"{ref} is still graded assumed"
+    return f"{ref} is still graded assumed"
+
+
 def approval_binds_content(revision: PlanRevision, approval: PlanApproval) -> PlanRefusal | None:
     """Return why *approval* does not authorise *revision*, or ``None``.
 
@@ -213,6 +318,8 @@ def advance_plan_revision(
     to: PlanRevisionStatus,
     at: datetime,
     approval: PlanApproval | None = None,
+    contract_is_resolvable: Callable[[str], bool] | None = None,
+    decision_is_resolvable: Callable[[str], bool] | None = None,
 ) -> PlanRevisionAdvanced | PlanRefusal:
     """Return the successor of one plan-revision edge, or why it is refused.
 
@@ -224,6 +331,12 @@ def advance_plan_revision(
             refused on every other edge, because an approval arriving with
             a rejection or a supersession would record consent nobody was
             asked for.
+        contract_is_resolvable: Forwarded to
+            :func:`ungrounded_approval_criteria` on the edge into
+            ``APPROVED``; ignored on every other edge.
+        decision_is_resolvable: Forwarded to
+            :func:`ungrounded_approval_criteria` on the edge into
+            ``APPROVED``; ignored on every other edge.
 
     Returns:
         The successor beside the event it emits, or the typed refusal.
@@ -261,6 +374,25 @@ def advance_plan_revision(
         refusal = approval_binds_content(revision, approval)
         if refusal is not None:
             return refusal
+    if approving:
+        ungrounded = ungrounded_approval_criteria(
+            revision.body,
+            contract_is_resolvable=contract_is_resolvable,
+            decision_is_resolvable=decision_is_resolvable,
+        )
+        if ungrounded:
+            reasons = ", ".join(_ungrounded_reason(revision.body, ref) for ref in ungrounded)
+            return PlanRefusal(
+                code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
+                guard="criteria_grounded_at_approval",
+                detail=reasons,
+                remediation=(
+                    "Bind a probe gate or cite a promoted MeasuredContract to grade a "
+                    "claim measured, grade it accepted-risk citing an active Decision, "
+                    "or fix a citation that does not resolve."
+                ),
+                revision=revision.revision,
+            )
     if to is PlanRevisionStatus.VALIDATED and not citations_are_uncounted(revision.body):
         return PlanRefusal(
             code=PlanRefusalCode.TRANSITION_GUARD_FAILED,
@@ -373,4 +505,5 @@ __all__ = [
     "approval_binds_content",
     "citations_are_uncounted",
     "detect_plan_drift",
+    "ungrounded_approval_criteria",
 ]

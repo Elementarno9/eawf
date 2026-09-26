@@ -138,6 +138,7 @@ class SemanticToolId(StrEnum):
     SUBMIT_COORDINATION_PROPOSAL = "submit_coordination_proposal"
     SUBMIT_CANDIDATE = "submit_candidate"
     SUBMIT_REPORT = "submit_report"
+    SUBMIT_EVIDENCE = "submit_evidence"
     BUDGET_STATUS = "budget_status"
 
 
@@ -473,6 +474,20 @@ class SubmitReportInput(SemanticToolInputBase):
     verdict: AgentReportVerdict
 
 
+class SubmitEvidenceInput(SemanticToolInputBase):
+    """Submit one verified SpikeReport's measured contracts, carried by reference.
+
+    The report travels by reference for the same reason a plan proposal
+    does: it is larger than an envelope should be, and the daemon reads
+    the body from its own ledger rather than trusting the call to repeat
+    it faithfully.
+    """
+
+    tool_id: Literal["submit_evidence"]
+    spike_report_ref: ArtifactUrn
+    spike_report_digest: Digest
+
+
 class BudgetStatusInput(SemanticToolInputBase):
     """Read the Run's measured usage and remaining ceilings."""
 
@@ -495,6 +510,7 @@ SemanticToolInput = Annotated[
     | SubmitCoordinationProposalInput
     | SubmitCandidateInput
     | SubmitReportInput
+    | SubmitEvidenceInput
     | BudgetStatusInput,
     Field(discriminator="tool_id"),
 ]
@@ -715,6 +731,39 @@ class SubmitReportOutput(SemanticToolOutputBase):
         return self
 
 
+class SubmitEvidenceOutput(SemanticToolOutputBase):
+    """Whether the report validated, and the artifact revision minted per contract.
+
+    ``contract_refs`` carries the v1 ``urn:eawf:v1:artifact:<scope>/<id>``
+    form :func:`eawf.workflow.evidence.measured_contract.promote_measured_contract`
+    mints, not an :data:`ArtifactUrn` -- the two catalogs are addressed
+    differently, and this daemon promotes into the v1 one. Unlike the
+    other submit-family outputs, acceptance does not require a non-empty
+    reference either: a verified report that discriminated between
+    designs without probing an external surface legitimately promotes
+    nothing, and ``contract_refs`` is empty exactly then.
+    """
+
+    tool_id: Literal["submit_evidence"]
+    accepted: StrictBool
+    contract_refs: Annotated[tuple[BoundedText, ...], Field(max_length=64)] = ()
+    findings: Annotated[tuple[ValidationFinding, ...], Field(max_length=64)] = ()
+
+    @model_validator(mode="after")
+    def _acceptance_carries_no_findings(self) -> Self:
+        """Require no findings on acceptance and at least one on refusal.
+
+        Raises:
+            ValueError: An accepted submission carries findings, or a
+                refused one names no finding.
+        """
+        if self.accepted and self.findings:
+            raise ValueError("an accepted submission carries no findings")
+        if not self.accepted and not self.findings:
+            raise ValueError("a refused submission names at least one finding")
+        return self
+
+
 class BudgetUsage(RuntimeRecord):
     """One side of the budget: what was used, or what remains."""
 
@@ -754,6 +803,7 @@ SemanticToolOutput = Annotated[
     | SubmitCoordinationProposalOutput
     | SubmitCandidateOutput
     | SubmitReportOutput
+    | SubmitEvidenceOutput
     | BudgetStatusOutput,
     Field(discriminator="tool_id"),
 ]
@@ -803,6 +853,7 @@ _CONTRACTS: Final[tuple[SemanticToolContract, ...]] = (
         requires_mutating_task=True,
     ),
     SemanticToolContract(SemanticToolId.SUBMIT_REPORT, SubmitReportInput, SubmitReportOutput),
+    SemanticToolContract(SemanticToolId.SUBMIT_EVIDENCE, SubmitEvidenceInput, SubmitEvidenceOutput),
     SemanticToolContract(SemanticToolId.BUDGET_STATUS, BudgetStatusInput, BudgetStatusOutput),
 )
 

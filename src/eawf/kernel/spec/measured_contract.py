@@ -156,6 +156,13 @@ class MeasurementEnvironment(_StrictModel):
             measured nothing.
         host_platform: Platform the probe ran on, e.g. ``darwin``.
         toolchain: Toolchain the probe ran under, e.g. ``python 3.14.3``.
+        repository: The repository the measurement was taken against, or
+            ``None`` when the contract carries no repository restriction
+            (every contract promoted before this field existed, and any
+            contract meant to be portable across repositories). Set, a
+            citation from a different repository is refused rather than
+            silently treated as if the same surface had been measured
+            twice in two places.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -165,6 +172,7 @@ class MeasurementEnvironment(_StrictModel):
     population_size: Annotated[int, Field(ge=1)]
     host_platform: NonBlankStr
     toolchain: NonBlankStr
+    repository: NonBlankStr | None = None
 
 
 class ObservedLimit(_StrictModel):
@@ -250,6 +258,37 @@ class MeasuredContract(_StrictModel):
         raise KeyError(f"contract {self.contract_id} has no limit named {name!r}")
 
 
+class SpikeReport(_StrictModel):
+    """The output of one ``/spike`` investigation.
+
+    A :class:`SpikeReport` is the sole vector through which a
+    :class:`MeasuredContract` comes to exist: no other producer may mint
+    one, and no planner may author one from reading. ``contracts``
+    defaults to empty because a spike that discriminates between two
+    candidate designs without probing an external surface legitimately
+    measures nothing.
+
+    ``verified`` records whether the spike's own verifier run passed.
+    :func:`~eawf.workflow.evidence.measured_contract.submit_evidence`
+    refuses to promote a single contract out of a report that is not
+    verified: an unverified report's numbers have not been re-run and
+    checked, so nothing in it has earned canonical status yet.
+
+    Attributes:
+        report_id: Identifier for the spike run this report came out of,
+            e.g. the ``.ea/local/spikes/<date>-<slug>`` directory name.
+        verified: Whether the spike's verifier run passed.
+        contracts: The measured contracts this spike probed for, in spike
+            order. Empty when the spike measured nothing.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    report_id: NonBlankStr
+    verified: bool
+    contracts: tuple[MeasuredContract, ...] = ()
+
+
 __all__ = [
     "SCALE_BAND_ORDER",
     "ContractIdStr",
@@ -260,5 +299,6 @@ __all__ = [
     "ObservedLimit",
     "ObservedValue",
     "ScaleBand",
+    "SpikeReport",
     "scale_band_satisfies",
 ]

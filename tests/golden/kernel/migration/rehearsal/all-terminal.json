@@ -2,7 +2,7 @@
   "apply": {
     "applied": true,
     "generation_bytes": 15412,
-    "generation_id": "gen-1f2c6d205983a332",
+    "generation_id": "gen-3bff248276964230",
     "journal_stages": [
       "fence_cleared",
       "workspace_resolved",
@@ -23,7 +23,7 @@
   },
   "disposition": "imports",
   "dry_run": {
-    "approval_digest": "fac67cf2aa6b603b6beac28db013789329082d330598bbd0c9cd5ad8feee5a40",
+    "approval_digest": "e2be0648ff51ba28380def8ec53af03e524e2db8c4eaa074c923c8eb262a163b",
     "collections": {
       "actuals": [
         1,
@@ -216,7 +216,7 @@
         0
       ]
     },
-    "manifest_digest": "1f2c6d205983a3325ebb96cc651941410de02f762833b163c782acba5867fc34",
+    "manifest_digest": "3bff2482769642304e15bfb9035be351d4e724ec263a78d80b739b8f7a851237",
     "reproducible": true,
     "source_digest": "168ebf030453b8ee40cc9ac6bd983fa8441de966c6bca7bde996fbab06bca505",
     "source_rows": 19,
@@ -228,7 +228,7 @@
   "fixture": "all-terminal",
   "rerun": {
     "applied": false,
-    "generation_id": "gen-1f2c6d205983a332",
+    "generation_id": "gen-3bff248276964230",
     "journal_rows": 0,
     "tree_unchanged": true
   },

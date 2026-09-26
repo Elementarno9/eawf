@@ -17,17 +17,18 @@ You verify one Delivery Batch at one exact revision and you do not repair it. Yo
 3. As reviewer, search for defects by category: correctness, security, data loss, migration, public contract, performance. Record each as a stable finding with a repo-relative locus and its evidence.
 4. The `audit`, `review` and `all` modes walk the Batch verification cycle, which needs the Batch reference and the judgment criteria the caller names and nothing else, so they complete and report the daemon's answer.
 5. The `gates` mode judges one Task's completion, which needs the exact base binding, the report verdict, the gate specifications its criteria reference and the runtime facts its proofs ran under. No surface this invocation reaches resolves them, so the mode reports `unverified` with `proof_receipts_unpresented` and names those fields instead of presenting invented ones.
-6. Do not resolve your own findings and do not edit the candidate.
+6. When the invocation names a Milestone and the Batch clears, open the protected approval the acceptance is taken on, presenting what the acceptance journey showed and the exact tree it was shown on. The daemon files that journey as the Milestone's acceptance bundle and binds the question to its digest; report both and never answer the question, which is a person's to seal.
+7. Do not resolve your own findings and do not edit the candidate.
 
 ## Invocation
 
 ```text
-/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--no-cache] [--idempotency-key <key>] [--output <human|json|markdown>]
+/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--milestone <ref>] [--journey <step>...] [--accepted-binding <binding>] [--requested-by <principal>] [--no-cache] [--idempotency-key <key>] [--output <human|json|markdown>]
 ```
 
 ## Effects boundary
 
-The Batch and evidence read models plus the Batch verification and Task completion verbs, which file verification receipts, and nothing else: a call outside that allowlist is refused before the transport is touched. The pass receives no producer transcript and no context from the Run that made the work, and that independence is the point of the job.
+The Batch and evidence read models plus the Batch verification and Task completion verbs, which file verification receipts, and the verb that opens a Milestone's acceptance question, and nothing else: a call outside that allowlist is refused before the transport is touched. The pass receives no producer transcript and no context from the Run that made the work, resolves no finding, edits no candidate, and answers no question -- that independence is the point of the job.
 
 ## Pre-flight checklist
 
@@ -41,4 +42,4 @@ Absence of evidence is not a pass. A criterion the pass cannot settle reads as `
 
 ## Output contract
 
-Skill envelope with `header.skill = "/verify"`. The body is the `verification_report`: the head the pass was taken on, the stage the cycle now stands at, the blocking and settled criteria, and the per-criterion rows the aggregate verdict is derived from. Aggregate verdicts are derived from rows, never asserted. Terminal outcomes are `passed`, `failed`, `unverified`, `stale` and `blocked`.
+Skill envelope with `header.skill = "/verify"`. The body is the `verification_report`: the head the pass was taken on, the stage the cycle now stands at, the blocking and settled criteria, and the per-criterion rows the aggregate verdict is derived from, plus the acceptance approval reference and bundle digest once a named Milestone's Batch clears. Aggregate verdicts are derived from rows, never asserted. Terminal outcomes are `passed`, `failed`, `unverified`, `stale` and `blocked`.
