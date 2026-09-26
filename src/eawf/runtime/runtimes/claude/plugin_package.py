@@ -23,9 +23,9 @@ The packaged tree also emits a session-level ``hooks.json`` at the plugin
 root plus the corresponding wrapper scripts under ``hooks/``. Only
 handler-backed events — those with a real runner-registered handler, per
 :func:`eawf.runtime.runtimes.claude.hook_map.handler_backed_plugin_hooks`
-(today just ``SESSION_END``) — appear in the manifest, mirroring what
-``eawf plugin install claude`` wires locally. Every other session-level
-event Claude Code can observe (``SessionStart``, ``PreToolUse``/
+(today ``SESSION_START`` and ``SESSION_END``) — appear in the
+manifest, mirroring what ``eawf plugin install claude`` wires locally.
+Every other session-level event Claude Code can observe (``PreToolUse``/
 ``PostToolUse`` on bash ``git commit``/``git push``, ``SubagentStop``,
 ``PreCompact``) would render an idle wrapper (exit 0, empty result list),
 so packaging it would wire an npm user's session to a no-op script.

@@ -23,6 +23,7 @@ from eawf.platform.rules import (
     read_conduct_deviations,
     record_conduct_deviation,
     registered_enforcement_refs,
+    registered_projection_readers,
 )
 
 CONDUCT_OBLIGATION_COUNT = 47
@@ -112,7 +113,12 @@ def test_compile_rule_records_refuses_widening_conduct_prose() -> None:
         update={"instruction": "Agents may push to any branch without review."}
     )
     with pytest.raises(RuleAuthorityWideningError) as excinfo:
-        compile_rule_records(records, modules=(), enforcement_refs=registered_enforcement_refs())
+        compile_rule_records(
+            records,
+            modules=(),
+            enforcement_refs=registered_enforcement_refs(),
+            projection_readers=registered_projection_readers(),
+        )
     assert excinfo.value.code == "rule_authority_widening"
 
 

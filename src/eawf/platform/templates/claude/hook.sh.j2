@@ -76,8 +76,11 @@ else
         "${_eawf_arg4}")
 fi
 
-{% if runtime == "codex" -%}
+{# Codex parses a hook's stdout, so every event but session start discards
+   the result envelope; session start prints the context document Codex
+   injects into the session. -#}
+{% if runtime == "codex" and event_type != "session_start" -%}
 printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime codex >/dev/null
 {% else -%}
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime claude
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run {{ event_type }} --runtime {{ runtime }}
 {% endif -%}

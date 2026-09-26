@@ -93,3 +93,16 @@ rules:
     verification:
       method: review
     procedure_ref: docs/rules/agent-driven-cadence-adr-pointer.md
+  - rule_id: repo.research-evidence-chain
+    obligation_id: research.evidence-chain
+    revision: 1
+    title: Back every research claim with an audit-recorded artifact
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Back every claim about behaviour, performance or correctness with an audit-recorded artifact such as a notebook, log or dataset; link each audit to its hypothesis, claim and artifact id, and have each decision cite the audit that justifies it.
+    rationale: >-
+      Hypotheses, audits and decisions are state-resident records, so the evidence chain behind a decision stays reconstructible from state.json alone.
+    verification:
+      method: review

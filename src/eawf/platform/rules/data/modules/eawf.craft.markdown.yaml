@@ -10,7 +10,7 @@ rules:
     obligation_id: craft.markdown.table-shape
     revision: 1
     title: Keep every table row the same shape as its header
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Give every table a header row and a separator row, and give every body row exactly as many cells as the header.

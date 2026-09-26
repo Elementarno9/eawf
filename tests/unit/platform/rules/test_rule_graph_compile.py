@@ -29,10 +29,12 @@ from eawf.platform.rules import (
     compile_rule_graph,
     compile_rule_records,
     registered_enforcement_refs,
+    registered_projection_readers,
     rule_digest,
 )
 
 _REFS = frozenset({"gate.command_exit_zero", "lint.eawf012"})
+_READERS = registered_projection_readers()
 
 _SOURCES: dict[str, dict[str, str]] = {
     "builtin": {"kind": "builtin", "locator": "eawf.core", "digest": "sha256:" + "1" * 64},
@@ -83,7 +85,9 @@ def _supersedes(target: RuleRecord, **extra: Any) -> list[dict[str, Any]]:
 
 
 def _compile(*records: RuleRecord, modules: tuple[str, ...] = ()) -> RuleGraph:
-    return compile_rule_records(records, modules=modules, enforcement_refs=_REFS)
+    return compile_rule_records(
+        records, modules=modules, enforcement_refs=_REFS, projection_readers=_READERS
+    )
 
 
 def _write_source(repo: Path, *rules: dict[str, Any], modules: tuple[str, ...] = ()) -> None:

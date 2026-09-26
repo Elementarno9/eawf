@@ -11,6 +11,13 @@ from the profiles enabled in ``.ea/config.yaml``) and the ``CLAUDE.md`` shim,
 plus the manifest at ``.ea/indexes/generated.json``. Hand-written content
 *outside* managed regions is preserved by :func:`eawf.surfaces.render.agents_md.render_agents_md`.
 
+A repository that authors its rules in ``.ea/rules.yaml`` has switched its
+steering files to the rule graph: ``AGENTS.md`` (the project card) and
+``AGENTS.override.md`` (the policy projection) render together through
+:func:`eawf.platform.rules.render.render_rule_projections`, and the profile
+renderer no longer writes ``AGENTS.md``. ``--check`` compares the planned
+projections against disk, so a hand edit to either counts as drift.
+
 W03 also regenerates Markdown projections of ``memory.jsonl`` under
 ``.ea/artifacts/rendered/memory/<scope>.md`` (plus ``_all.md`` union view).
 The whole projection lives inside one managed region per file so re-running
@@ -222,6 +229,81 @@ def _seed_shadow(
         dst_manifest.write_bytes(src_manifest.read_bytes())
 
 
+def _rule_projections(target_dir: Path, *, write: bool, rules: bool) -> tuple[list[str], list[str]]:
+    """Render, or diff, the rule-graph projections of *target_dir*.
+
+    Args:
+        target_dir: Repository root holding ``.ea/rules.yaml``.
+        write: ``True`` runs the render transaction; ``False`` only compares
+            the planned projections against disk.
+        rules: Whether the repository authors a rule source; ``False``
+            renders nothing.
+
+    Returns:
+        The projection targets that changed (``write``) or would change,
+        and the host-fact warnings the render recorded in its manifest:
+        readers held to a cap they have not certified, and stale facts.
+
+    Raises:
+        ValidationError: The rule source, compilation or render refused.
+    """
+    from eawf.platform.rules import RuleCompileError, RuleModuleError, RuleSourceError
+    from eawf.platform.rules.render import (
+        RuleProjectionError,
+        plan_rule_projections,
+        projection_drift,
+        write_rule_projections,
+    )
+    from eawf.platform.rules.views import RuleViewError
+
+    if not rules:
+        return [], []
+    try:
+        plan = plan_rule_projections(target_dir)
+        warnings = list(plan.manifest.host_fact_warnings)
+        for warning in warnings:
+            logger.warning(f"sync_cmd host_fact_warning detail={warning!r}")
+        if not write:
+            return list(projection_drift(target_dir, plan)), warnings
+        return list(write_rule_projections(target_dir, plan).changed), warnings
+    except (
+        RuleSourceError,
+        RuleCompileError,
+        RuleModuleError,
+        RuleProjectionError,
+        RuleViewError,
+    ) as exc:
+        raise cli_errors.ValidationError(f"rule projection render refused: {exc}") from exc
+
+
+def _card_changed(*, rules: bool, projections: list[str], legacy: bool) -> bool:
+    """Report whether ``AGENTS.md`` changed under whichever renderer owns it.
+
+    Args:
+        rules: Whether the rule graph owns ``AGENTS.md``.
+        projections: Projection targets the rule render changed.
+        legacy: The profile renderer's verdict.
+
+    Returns:
+        The verdict of the owning renderer.
+    """
+    return _AGENTS_MD in projections if rules else legacy
+
+
+def _shim_changed(*, rules: bool, projections: list[str], legacy: bool) -> bool:
+    """Report whether ``CLAUDE.md`` changed under whichever renderer owns it.
+
+    Args:
+        rules: Whether the rule render transaction owns the shim.
+        projections: Targets the rule render changed or would change.
+        legacy: The profile renderer's verdict.
+
+    Returns:
+        The verdict of the owning renderer.
+    """
+    return _CLAUDE_MD in projections if rules else legacy
+
+
 def _render_into(
     *,
     target_root: Path,
@@ -229,6 +311,7 @@ def _render_into(
     enabled_profiles: list[str],
     generator: str,
     write_manifest: bool,
+    rules: bool = False,
 ) -> tuple[RenderResult, Manifest, Manifest]:
     """Run the AGENTS.md + CLAUDE.md + manifest pipeline against *target_root*.
 
@@ -243,15 +326,21 @@ def _render_into(
         and the manifest snapshot returned by
         :func:`eawf.surfaces.render.agents_md.render_agents_md`. When *write_manifest*
         is True the after-manifest is also persisted via
-        :func:`eawf.surfaces.render.manifest.save_atomic`.
+        :func:`eawf.surfaces.render.manifest.save_atomic`. When *rules* is
+        True the rule render transaction owns ``AGENTS.md`` and the
+        ``CLAUDE.md`` shim, so nothing renders here and the result carries no
+        region deltas.
     """
     from eawf.platform.profiles.compose import compose
     from eawf.platform.profiles.loader import load_profile
-    from eawf.surfaces.render.agents_md import render_agents_md
+    from eawf.surfaces.render.agents_md import RenderResult, render_agents_md
     from eawf.surfaces.render.claude_shim import render_claude_md
     from eawf.surfaces.render.manifest import load as load_manifest
     from eawf.surfaces.render.manifest import save_atomic as save_manifest_atomic
 
+    if rules:
+        manifest = load_manifest((target_root / _MANIFEST_RELPATH).resolve())
+        return RenderResult(target=(target_root / _AGENTS_MD).resolve()), manifest, manifest
     composed = compose(
         [load_profile(profile_id, workspace=profile_workspace) for profile_id in enabled_profiles]
     )
@@ -333,11 +422,13 @@ def _build_payload(
         "regions_unchanged": report["regions_unchanged"],
         "memory_views_regenerated": report.get("memory_views_regenerated", []),
         "memory_views_changed": report.get("memory_views_changed", []),
+        "projections_changed": report.get("projections_changed", []),
+        "host_fact_warnings": report.get("host_fact_warnings", []),
     }
 
 
 def _format_text(payload: dict[str, object]) -> str:
-    """One-line summary suited for the text branch of :func:`emit_json_or_text`.
+    """Summary line, then one line per host-fact warning, for :func:`emit_json_or_text`.
 
     The payload comes from :func:`_build_payload`, which always populates the
     list-typed fields with concrete ``list[str]`` values; the dict is typed
@@ -345,7 +436,7 @@ def _format_text(payload: dict[str, object]) -> str:
     the boundary, so we round-trip through ``repr`` for the formatting line —
     safe because ``list[str].__repr__`` is byte-stable across runs.
     """
-    return (
+    summary = (
         f"eawf sync ({payload['mode']!r}): "
         f"target={payload['target']!r} "
         f"profiles={payload['profiles_enabled']!r} "
@@ -356,6 +447,42 @@ def _format_text(payload: dict[str, object]) -> str:
         f"claude_md_changed={payload['claude_md_changed']} "
         f"manifest_changed={payload['manifest_changed']}"
     )
+    warnings = payload.get("host_fact_warnings")
+    lines = [f"warning: {warning}" for warning in warnings] if isinstance(warnings, list) else []
+    return "\n".join([summary, *lines])
+
+
+def _log_render_byte_budgets(target_dir: Path) -> tuple[str, str]:
+    """Measure and log the just-rendered card and policy files against their caps.
+
+    The doctor check and the agents-md-budget pre-commit lint own the
+    blocking verdict over these two files; sync is where they are (re)written,
+    so recording the outcome here too (WARNING when over) gives the operator
+    a trail without waiting for a separate `eawf doctor` or commit.
+
+    Args:
+        target_dir: Workspace root sync just wrote AGENTS.md (and
+            AGENTS.override.md, when the workspace composes a layer) into.
+
+    Returns:
+        ``(agents_md_byte_cap_status, rendered_projection_budget_status)``
+        for the caller's summary log line.
+    """
+    from eawf.observability.doctor.checks import check_agents_md_byte_cap
+    from eawf.platform.lint.tools.agents_md_budget import check_rendered_projection_budget
+
+    byte_cap = check_agents_md_byte_cap(workspace=target_dir)
+    if byte_cap.status == "fail":
+        logger.warning(f"sync_cmd agents_md_over_cap detail={byte_cap.detail!r}")
+    projection_budget = check_rendered_projection_budget(target_dir)
+    if not projection_budget.clean:
+        over = ", ".join(
+            f"{entry.target}={entry.byte_count}B>{entry.cap_bytes}B"
+            for entry in projection_budget.entries
+            if entry.over
+        )
+        logger.warning(f"sync_cmd rendered_projection_over_cap detail={over!r}")
+    return byte_cap.status, "ok" if projection_budget.clean else "over"
 
 
 def sync_cmd(
@@ -411,6 +538,9 @@ def sync_cmd(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
+    from eawf.platform.rules.render import rule_source_present
+
+    rules = rule_source_present(target_dir)
 
     if dry_run or check:
         # Shadow-tree path. Mirror existing files into a tempdir, run the
@@ -426,6 +556,10 @@ def sync_cmd(
                     enabled_profiles=enabled_profiles,
                     generator="eawf-sync",
                     write_manifest=True,  # in shadow, not the real workspace
+                    rules=rules,
+                )
+                projections, host_fact_warnings = _rule_projections(
+                    target_dir, write=False, rules=rules
                 )
             except cli_errors.CliError as exc:
                 cli_errors.emit_error(exc, flags=flags)
@@ -449,6 +583,14 @@ def sync_cmd(
             )
             report["memory_views_regenerated"] = target_view_paths
             report["memory_views_changed"] = memory_views_drift
+            report["projections_changed"] = projections
+            report["host_fact_warnings"] = host_fact_warnings
+            report["agents_md_changed"] = _card_changed(
+                rules=rules, projections=projections, legacy=bool(report["agents_md_changed"])
+            )
+            report["claude_md_changed"] = _shim_changed(
+                rules=rules, projections=projections, legacy=bool(report["claude_md_changed"])
+            )
         mode = "check" if check else "dry-run"
         payload = _build_payload(
             target=target_dir,
@@ -465,6 +607,7 @@ def sync_cmd(
                 bool(report["regions_added"])
                 or bool(report["regions_updated"])
                 or bool(report["memory_views_changed"])
+                or bool(report["projections_changed"])
             )
             if any_drift:
                 raise typer.Exit(code=4)
@@ -478,7 +621,9 @@ def sync_cmd(
             enabled_profiles=enabled_profiles,
             generator="eawf-sync",
             write_manifest=True,
+            rules=rules,
         )
+        projections, host_fact_warnings = _rule_projections(target_dir, write=True, rules=rules)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
@@ -488,14 +633,21 @@ def sync_cmd(
         cli_errors.emit_error(exc, flags=flags)
         return
     report = {
-        "agents_md_changed": bool(agents_result.regions_added or agents_result.regions_updated),
-        "claude_md_changed": False,  # CLAUDE.md is a constant payload; bytes never drift.
+        "agents_md_changed": _card_changed(
+            rules=rules,
+            projections=projections,
+            legacy=bool(agents_result.regions_added or agents_result.regions_updated),
+        ),
+        # The profile renderer's CLAUDE.md is a constant payload; its bytes never drift.
+        "claude_md_changed": _shim_changed(rules=rules, projections=projections, legacy=False),
         "manifest_changed": True,  # manifest is rewritten every call (timestamp moves).
         "regions_added": list(agents_result.regions_added),
         "regions_updated": list(agents_result.regions_updated),
         "regions_unchanged": list(agents_result.regions_unchanged),
         "memory_views_regenerated": [str(p) for p in view_paths],
         "memory_views_changed": [],
+        "projections_changed": projections,
+        "host_fact_warnings": host_fact_warnings,
     }
     payload = _build_payload(
         target=target_dir,
@@ -510,17 +662,14 @@ def sync_cmd(
     # guidance tail; recording the outcome at render time (WARNING when over)
     # gives the operator a trail without a separate `eawf doctor` run. Logged,
     # not echoed, so the ``--json`` stdout envelope stays a single clean object.
-    from eawf.observability.doctor.checks import check_agents_md_byte_cap
-
-    byte_cap = check_agents_md_byte_cap(workspace=target_dir)
-    if byte_cap.status == "fail":
-        logger.warning(f"sync_cmd agents_md_over_cap detail={byte_cap.detail!r}")
+    byte_cap_status, projection_budget_status = _log_render_byte_budgets(target_dir)
     logger.info(
         f"sync_cmd target={target_dir} profiles={enabled_profiles} "
         f"added={report['regions_added']} updated={report['regions_updated']} "
         f"unchanged={report['regions_unchanged']} "
         f"memory_views_regenerated={report['memory_views_regenerated']} "
-        f"agents_md_byte_cap={byte_cap.status}"
+        f"agents_md_byte_cap={byte_cap_status} "
+        f"rendered_projection_budget={projection_budget_status}"
     )
 
 

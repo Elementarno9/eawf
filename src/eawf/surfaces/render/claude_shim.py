@@ -15,16 +15,27 @@ bundled with the wheel) so a future change — e.g. a CLAUDE.md frontmatter
 header — can swap to template rendering without breaking the public shape
 of :class:`~eawf.surfaces.render.agents_md.RenderResult`.
 
+A repository that authors ``.ea/rules.yaml`` gets a different shim: the rule
+render transaction writes it through :func:`render_import_shim`, and its whole
+content imports the generated policy projection, because Claude discovers
+policy only through ``CLAUDE.md`` and would otherwise see the committed card
+without the obligations the policy projection carries. The shim's path is a
+host fact of the runtime, recorded in
+:mod:`eawf.platform.rules.host_facts`, not a constant of this module.
+
 Public API::
 
     render_claude_md(target) -> RenderResult
+    render_import_shim(imports) -> str
 """
 
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from collections.abc import Sequence
+from pathlib import Path, PurePosixPath
 
+from eawf.platform.rules.views import refuse_view_imports
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.agents_md import RenderResult
 
@@ -32,6 +43,34 @@ logger = logging.getLogger(__name__)
 
 
 _CLAUDE_PAYLOAD: str = "@AGENTS.md\n"
+
+
+def render_import_shim(imports: Sequence[str]) -> str:
+    """Render a shim whose entire content imports ``imports``, one per line.
+
+    The shim carries no policy text of its own, so the runtime reading it
+    receives byte-identical policy to a runtime reading the imported file.
+
+    Args:
+        imports: Repository-relative POSIX paths to import, in order.
+
+    Returns:
+        One ``@<path>`` line per import.
+
+    Raises:
+        ValueError: When ``imports`` is empty or a path is absolute, climbs
+            out of the repository, or contains whitespace.
+        RuleViewStartupImportError: When a path is a module view, which is
+            read on demand and never loaded at session start.
+    """
+    if not imports:
+        raise ValueError("an import shim must import at least one file")
+    for path in imports:
+        pure = PurePosixPath(path)
+        if not path or pure.is_absolute() or ".." in pure.parts or any(c.isspace() for c in path):
+            raise ValueError(f"import shim path {path!r} must be a plain repository-relative path")
+    refuse_view_imports(imports)
+    return "".join(f"@{path}\n" for path in imports)
 
 
 def render_claude_md(target: Path) -> RenderResult:

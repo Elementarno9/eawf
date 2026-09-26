@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import store_kind_for_role
-from eawf.surfaces.render.agents import AgentSpec
+from eawf.surfaces.render.agents import AgentSpec, embed_role_rules
 from eawf.surfaces.render.skills import (
     SkillSpec,
     SkillTemplateContext,
@@ -64,7 +64,7 @@ def render_codex_agent_toml(spec: AgentSpec) -> str:
     store_kind = store_kind_for_role(role).value
     instructions = "\n\n".join(
         [
-            spec.body.rstrip("\n"),
+            embed_role_rules(spec.role, spec.body).rstrip("\n"),
             (f"On completion emit an `agent_end` report; it persists to the `{store_kind}` store."),
         ]
     )

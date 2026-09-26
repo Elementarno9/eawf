@@ -81,8 +81,9 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 # runner-registered handler. Every other HookEventType renders an idle
 # wrapper that exits 0 with an empty result list, so installing it would
 # subscribe the operator's session to a no-op script (and paint a false-green
-# "hooks:<n>" in the statusline). SESSION_END (runtime.capture) is the sole
-# handler-backed event today — see HookSpec.has_handler.
+# "hooks:<n>" in the statusline). SESSION_START (the rule-projection
+# staleness check) and SESSION_END (runtime.capture) are the handler-backed
+# events today — see HookSpec.has_handler.
 _INSTALLED_HOOKS: tuple[HookSpec, ...] = tuple(spec for spec in HOOK_REGISTRY if spec.has_handler)
 _INSTALLED_EVENTS: frozenset[HookEventType] = frozenset(
     spec.event_type for spec in _INSTALLED_HOOKS

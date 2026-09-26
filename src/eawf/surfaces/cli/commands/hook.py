@@ -21,6 +21,12 @@ Surface contract:
 - Exit ``0`` when no registered hook returns ``block=True``. ``session_end``
   registers the built-in runtime capture hook; other events without hooks keep
   the empty-result no-op path.
+- ``session_start`` also runs the rule-projection staleness check, which
+  reports once per session when a rendered projection's stamp does not name
+  the installed rule graph. Under ``--runtime claude`` the command prints
+  that report as the host's session-start context document instead of the
+  envelope, and prints nothing when there is nothing to report, because
+  whatever a session-start hook prints lands in the session's context.
 - Exit ``9`` (``HOOK_BLOCKED``) when at least one hook reports a block.
 - Exit ``3`` (``INVALID_INPUT``) when the stdin payload is not valid JSON
   or is not a mapping.
@@ -57,7 +63,7 @@ if TYPE_CHECKING:
     from eawf.observability.logging.state_leak import StateLeakKind
     from eawf.platform.lint import LintConfig
     from eawf.runtime.hooks.event import HookEvent, HookEventType, HookRuntime
-    from eawf.runtime.hooks.runner import HookResult
+    from eawf.runtime.hooks.runner import HookResult, HookRunner
     from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope
 
 logger = logging.getLogger(__name__)
@@ -750,6 +756,57 @@ def _emit_leak_result(
     emit_json_or_text(payload, f"{hook_name}: clean ({scanned} file(s) scanned)", flags=flags)
 
 
+_STALENESS_HOOK_NAME = "rules.projection_staleness"
+
+
+def _register_projection_staleness(runner: HookRunner, *, repo_root: Path) -> None:
+    """Register the session-start rule-projection staleness check on *runner*.
+
+    Args:
+        runner: The runner dispatching this event.
+        repo_root: The repository whose projections are checked.
+    """
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.hooks.runner import HookResult
+
+    def _hook(event: HookEvent) -> HookResult:
+        from eawf.platform.rules.staleness import report_projection_staleness_once
+
+        payload = event.payloads.get(HookEventType.SESSION_START.value, {})
+        raw_session = payload.get("session_id")
+        session_id = raw_session if isinstance(raw_session, str) and raw_session else None
+        report = report_projection_staleness_once(repo_root, session_id=session_id)
+        return HookResult(name=_STALENESS_HOOK_NAME, output=report or "")
+
+    runner.register(HookEventType.SESSION_START, _hook, name=_STALENESS_HOOK_NAME)
+
+
+#: Runtimes whose session-start hook prints a host context document instead
+#: of the result envelope: Claude and Codex read ``additionalContext`` from
+#: it, and the OpenCode bridge lifts the same field out of it.
+_SESSION_CONTEXT_RUNTIMES: frozenset[str] = frozenset({"claude", "codex", "opencode"})
+
+
+def _emit_session_context(results: list[HookResult]) -> None:
+    """Print the staleness report as a session-start context document.
+
+    Args:
+        results: The session-start hook results; only the staleness
+            check's non-empty output is printed, and nothing at all when
+            there is none, so a current repository adds no context.
+    """
+    reports = [r.output for r in results if r.name == _STALENESS_HOOK_NAME and r.output]
+    if not reports:
+        return
+    document = {
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": "\n".join(reports),
+        }
+    }
+    typer.echo(orjson.dumps(document).decode("utf-8"))
+
+
 @hook_app.command(name="run")
 def run(
     ctx: typer.Context,
@@ -833,7 +890,15 @@ def run(
     runner = HookRunner()
     repo_root = (flags.workspace or Path.cwd()).resolve()
     register_runtime_capture_hooks(runner, repo_root=repo_root)
+    _register_projection_staleness(runner, repo_root=repo_root)
     results = runner.run_event(event)
+
+    if (
+        event.event_type == HookEventType.SESSION_START
+        and event.runtime in _SESSION_CONTEXT_RUNTIMES
+    ):
+        _emit_session_context(results)
+        return
 
     finished_at = datetime.now(UTC)
     envelope = _envelope_for(

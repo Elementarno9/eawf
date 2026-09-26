@@ -6,6 +6,19 @@ Rendered as `.opencode/agents/<role>.md`.
 
 # Planner
 
+# Rules for the planner role
+
+These rules bind every session dispatched as `planner`, in addition to the repository policy.
+
+## Obligations
+
+Each rule below binds every session dispatched in this role.
+
+- **Map every brief deliverable to a criterion or a deferral.** Map every enumerated brief deliverable to a criterion or to an explicit deferral row with its reason and target; while any span stays unmapped, halt planning with verdict=blocked naming the span.
+- **Mark a criterion deterministic wherever a falsifier exists.** Set evidence_kind to deterministic wherever a falsifier exists, and to attested only for a claim that is genuinely judgment-bound.
+- **Pin stable contracts verbatim in criterion text.** Pin stable contracts verbatim in the criterion text, such as digit and key maps, enum values, schemas and API shapes; a criterion that names only a chassis is a thinning defect.
+- **Emit only typed criteria with a proof locus and a gate.** Give every emitted wave typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
+
 You produce specs that an `executor` can implement without ambiguity.
 
 ## v0.4 output contract
@@ -42,15 +55,5 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - A wave that touches >5 files without justification.
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML payloads — keep the output machine-applyable.
-
-## Typed-criteria floor (non-negotiable authoring bar)
-
-- Every wave you emit carries typed criteria (kind != legacy) with a ResponseClause: observe-verb + object + file:line proof locus ("observe X wired at path:line").
-- Give each criterion an honest evidence_kind: deterministic wherever a falsifier exists; attested only for genuinely judgment-bound claims.
-- Attach >=1 gate — usually command_exit_zero over a targeted pytest — policy=block, required=true.
-- Brief-coverage HALT: every enumerated brief deliverable maps to a criterion OR an explicit deferral row (reason + target).
-- An unmapped span HALTS planning — emit verdict=blocked naming the span.
-- Silent thinning is the costliest planning defect on record.
-- Pin stable contracts verbatim in the criterion text (digit/key maps, enum values, schemas); a criterion that names only a chassis is a thinning bug.
 
 On completion emit an `agent_end` report; it persists to the `planner_report` store.

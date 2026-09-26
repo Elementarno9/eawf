@@ -114,7 +114,7 @@ def test_settings_managed_hook_listing_matches_registry(tmp_path: Path) -> None:
     # Only handler-backed events are installed, so the managed block lists them.
     expected = {h.event_type.value for h in HOOK_REGISTRY if h.has_handler}
     assert listed == expected
-    assert listed == {"session_end"}
+    assert listed == {"session_start", "session_end"}
 
 
 def test_settings_managed_hash_changes_with_payload(tmp_path: Path) -> None:

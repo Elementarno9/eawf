@@ -1,0 +1,78 @@
+# Certified host facts: what each supported runtime was measured to do.
+#
+# Every runtime declares its own facts. A fact nobody measured on a runtime is
+# recorded as uncertified with the reason, never copied from a sibling runtime:
+# a limit proven on one host and assumed on another is how a projection gets
+# truncated silently. A certified value is the runtime's default, never a value
+# one machine has configured, and it names the evidence of the boundary, the
+# day it was measured and how many days that measurement is trusted before a
+# render reports it stale.
+schema_version: 1
+claude:
+  runtime: claude
+  reads: [policy]
+  import_shim: CLAUDE.md
+  project_document_cap_bytes:
+    status: uncertified
+    measured_on: claude
+    reason: no truncation boundary of the project document has been measured on this runtime
+  context_window_tokens:
+    status: uncertified
+    measured_on: claude
+    reason: no context window measurement has been recorded for this runtime
+  auto_compaction_threshold_tokens:
+    status: uncertified
+    measured_on: claude
+    reason: no auto-compaction threshold measurement has been recorded for this runtime
+  tool_output_cap_tokens:
+    status: uncertified
+    measured_on: claude
+    reason: no tool-output cap measurement has been recorded for this runtime
+codex:
+  runtime: codex
+  # The policy projection replaces the card when present; a checkout that has
+  # not been synced yet delivers the card instead, so both are held to the cap.
+  reads: [card, policy]
+  import_shim: null
+  project_document_cap_bytes:
+    status: certified
+    measured_on: codex
+    default_value: 32768
+    evidence: >-
+      a probe run under the default configuration had its last received rule
+      end mid-sentence exactly at byte 32768, and a control run that raised only
+      the cap received the complete final rule
+    measured_at: 2026-08-12
+    remeasure_after_days: 90
+  context_window_tokens:
+    status: uncertified
+    measured_on: codex
+    reason: no context window measurement has been recorded for this runtime
+  auto_compaction_threshold_tokens:
+    status: uncertified
+    measured_on: codex
+    reason: no auto-compaction threshold measurement has been recorded for this runtime
+  tool_output_cap_tokens:
+    status: uncertified
+    measured_on: codex
+    reason: no tool-output cap measurement has been recorded for this runtime
+opencode:
+  runtime: opencode
+  reads: [card]
+  import_shim: null
+  project_document_cap_bytes:
+    status: uncertified
+    measured_on: opencode
+    reason: no truncation boundary of the project document has been measured on this runtime
+  context_window_tokens:
+    status: uncertified
+    measured_on: opencode
+    reason: no context window measurement has been recorded for this runtime
+  auto_compaction_threshold_tokens:
+    status: uncertified
+    measured_on: opencode
+    reason: no auto-compaction threshold measurement has been recorded for this runtime
+  tool_output_cap_tokens:
+    status: uncertified
+    measured_on: opencode
+    reason: no tool-output cap measurement has been recorded for this runtime

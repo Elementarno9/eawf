@@ -1,0 +1,278 @@
+schema_version: 1
+module_id: eawf.core.roles
+version: 1
+kind: core
+topic: roles
+title: Obligations that bind a single agent role
+when_to_use: a subagent is dispatched as executor, auditor, planner, researcher or polisher
+rules:
+  - rule_id: eawf.core.roles.executor-ready-spec
+    obligation_id: roles.executor.ready-spec
+    revision: 1
+    title: Start only a wave whose spec is ready to implement
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Start a wave only when every criterion is typed (kind other than legacy), pins its production call site as file:line and its contracts verbatim, and carries a gate that runs locally, and the file scope is non-empty; otherwise report verdict=blocked naming the gap.
+    rationale: >-
+      A criterion that only asks for a function to exist validates existence instead of wiring, so the wave closes green on code nothing calls.
+    scope:
+      roles: [executor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.executor-legacy-criteria
+    obligation_id: roles.executor.legacy-criteria
+    revision: 1
+    title: Verify grandfathered legacy criteria as written
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Accept a wave planned before the legacy-criteria drain despite its kind=legacy rows: flag each legacy row in followups and verify it as written.
+    rationale: >-
+      Refusing every pre-drain wave would wall the backlog with blocked verdicts for a defect the wave's author could not have avoided.
+    scope:
+      roles: [executor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.executor-wired-evidence
+    obligation_id: roles.executor.wired-evidence
+    revision: 1
+    title: Give one evidence entry per criterion, citing where it is wired
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Give evidence_refs one entry per success criterion: a gate command with its exit code, the file:line of the production call site where the behaviour is wired rather than where it is defined, or a store URN; an empty list on a criteria-bearing wave refuses close-ready.
+    rationale: >-
+      The parent closes the wave from the report alone, so a criterion without evidence, or evidence pointing at a definition, closes on an unproven claim.
+    scope:
+      roles: [executor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.executor-files-changed
+    obligation_id: roles.executor.files-changed
+    revision: 1
+    title: List every path the commit touched in files_changed
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      List in files_changed every repository path the commit actually touched; the parent syncs the wave's file scopes from it before close.
+    rationale: >-
+      A planned scope drifts from the real diff, and a stale scope makes the close checks inspect the wrong files.
+    scope:
+      roles: [executor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.executor-no-eawf-in-worktree
+    obligation_id: roles.executor.no-eawf-in-worktree
+    revision: 1
+    title: Run no eawf command inside a wave worktree
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Run no eawf command inside a wave worktree; the parent closes the wave from your report.
+    rationale: >-
+      A worktree shares the daemon and the state store with the parent, so a state command run there mutates or reverts the parent's live state.
+    scope:
+      roles: [executor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.auditor-self-test
+    obligation_id: roles.auditor.self-test
+    revision: 1
+    title: Prove the audit can fail before trusting it
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Before trusting an audit, name for at least one criterion the concrete broken input your check would reject, such as a wrong constant, a deleted call site or a reverted edit; when no such input exists, report verdict=blocked naming the untestable criterion.
+    rationale: >-
+      An audit that cannot name what it would reject passes everything, so its verdict carries no information.
+    scope:
+      roles: [auditor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.auditor-call-site-evidence
+    obligation_id: roles.auditor.call-site-evidence
+    revision: 1
+    title: Demand the call site for a wired-at-call-site criterion
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Never accept that a function exists as evidence for a wired-at-call-site criterion; demand the file:line of its production call site.
+    rationale: >-
+      A defined function with no caller is the most common way a wave closes without delivering its behaviour.
+    scope:
+      roles: [auditor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.auditor-unfalsifiable
+    obligation_id: roles.auditor.unfalsifiable
+    revision: 1
+    title: Report a criterion with no falsifier as unverified
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Report a legacy or attested criterion that has no falsifier as unverified, never as passed.
+    rationale: >-
+      A pass on a claim nothing could refute reads as evidence while proving nothing.
+    scope:
+      roles: [auditor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.auditor-fresh-context
+    obligation_id: roles.auditor.fresh-context
+    revision: 1
+    title: Judge the work without the implementing session's log
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Never read the implementing session's log; judge the work from the diff, the declared criteria and the evidence you gather yourself.
+    rationale: >-
+      An auditor who reads the implementer's reasoning inherits its blind spots, which is what a fresh-context audit exists to avoid.
+    scope:
+      roles: [auditor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.auditor-run-gates
+    obligation_id: roles.auditor.run-gates
+    revision: 1
+    title: Run the wave's own gates before re-reading its prose
+    zone: steering
+    force: should
+    effectiveness: behavioral
+    instruction: >-
+      Run the wave's own gates rather than re-reading its prose, and report a gate that cannot fail on broken input as a finding.
+    rationale: >-
+      A gate run is evidence while a re-read summary is a restatement, and a gate that cannot fail is itself a defect.
+    scope:
+      roles: [auditor]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.planner-typed-criteria
+    obligation_id: roles.planner.typed-criteria
+    revision: 1
+    title: Emit only typed criteria with a proof locus and a gate
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Give every emitted wave typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
+    rationale: >-
+      An untyped or gateless criterion cannot be checked at close, so the wave closes on the executor's word alone.
+    scope:
+      roles: [planner]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.planner-evidence-kind
+    obligation_id: roles.planner.evidence-kind
+    revision: 1
+    title: Mark a criterion deterministic wherever a falsifier exists
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Set evidence_kind to deterministic wherever a falsifier exists, and to attested only for a claim that is genuinely judgment-bound.
+    rationale: >-
+      An attested criterion skips the gate run, so labelling a checkable claim attested hides a check that could have failed.
+    scope:
+      roles: [planner]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.planner-brief-coverage
+    obligation_id: roles.planner.brief-coverage
+    revision: 1
+    title: Map every brief deliverable to a criterion or a deferral
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Map every enumerated brief deliverable to a criterion or to an explicit deferral row with its reason and target; while any span stays unmapped, halt planning with verdict=blocked naming the span.
+    rationale: >-
+      Silent thinning of a brief into fewer criteria is the costliest planning defect on record, because nothing downstream notices the dropped work.
+    scope:
+      roles: [planner]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.planner-pin-contracts
+    obligation_id: roles.planner.pin-contracts
+    revision: 1
+    title: Pin stable contracts verbatim in criterion text
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Pin stable contracts verbatim in the criterion text, such as digit and key maps, enum values, schemas and API shapes; a criterion that names only a chassis is a thinning defect.
+    rationale: >-
+      An executor implements what the criterion says, so a contract left out of it is re-invented differently.
+    scope:
+      roles: [planner]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.researcher-resolving-evidence
+    obligation_id: roles.researcher.resolving-evidence
+    revision: 1
+    title: Back every claim with a reference that resolves and entails it
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Back every claim in a brief with at least one reference that resolves and entails it, a file:line, a store URN or an external URL; mark a claim you cannot back as unresolved and queue it as a next-research item instead of citing weakly.
+    rationale: >-
+      A brief is promotable only when every claim is backed, and a weak citation makes an unbacked claim look promotable.
+    scope:
+      roles: [researcher]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.researcher-refuted-claims
+    obligation_id: roles.researcher.refuted-claims
+    revision: 1
+    title: Name a refuted claim only when a finding contradicts it
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Name a claim in refuted_claim_ids only when a finding directly contradicts one of the live claims the prompt listed; never infer a contradiction from absent support, and never name a claim the prompt did not list.
+    rationale: >-
+      A named claim is marked refuted on the ledger, so a guessed contradiction retires a claim that nothing disproved.
+    scope:
+      roles: [researcher]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.polisher-public-rename
+    obligation_id: roles.polisher.public-rename
+    revision: 1
+    title: Rename a public symbol only after operator confirmation
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Never rename a public symbol without explicit confirmation from the operator.
+    rationale: >-
+      A public rename breaks callers outside the polished scope, which a consistency pass cannot see.
+    scope:
+      roles: [polisher]
+    verification:
+      method: review
+  - rule_id: eawf.core.roles.polisher-state-untouched
+    obligation_id: roles.polisher.state-untouched
+    revision: 1
+    title: Leave state.json and the .ea directory untouched
+    zone: steering
+    force: must
+    effectiveness: behavioral
+    instruction: >-
+      Never touch state.json or anything under .ea/ during a polish pass.
+    rationale: >-
+      State belongs to the daemon, and a consistency edit there desynchronises it from the running workflow.
+    scope:
+      roles: [polisher]
+    verification:
+      method: review

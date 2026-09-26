@@ -131,10 +131,16 @@ def _apply_sync(workspace: Path) -> tuple[str, int]:
     from eawf.platform.profiles.compose import compose
     from eawf.platform.profiles.loader import load_profile
     from eawf.platform.profiles.selection import resolve_enabled_profiles
+    from eawf.platform.rules.render import refresh_rule_projections, rule_source_present
     from eawf.surfaces.render.agents_md import render_agents_md
     from eawf.surfaces.render.claude_shim import render_claude_md
     from eawf.surfaces.render.manifest import load, save_atomic
 
+    if rule_source_present(workspace):
+        # The rule render owns AGENTS.md and the CLAUDE.md shim here; the
+        # profile renderer would overwrite both with the legacy layout.
+        changed = len(refresh_rule_projections(workspace))
+        return ("applied" if changed else "noop"), changed
     profiles = resolve_enabled_profiles(workspace)
     composed = compose([load_profile(name, workspace=workspace) for name in profiles])
     manifest_path = workspace / ".ea" / "indexes" / "generated.json"

@@ -41,6 +41,7 @@ from eawf.platform.rules import (
     compile_rule_records,
     load_rule_layers,
     no_builtin_rules,
+    registered_projection_readers,
     require_committed_inputs,
     rule_digest,
     workspace_rule_locator,
@@ -186,6 +187,7 @@ def test_compile_card_graph_workspace_rule_never_reaches_committed_card(fx: _Fix
             load_rule_layers(fx.repo, home=fx.home).records(),
             modules=(),
             enforcement_refs=frozenset(),
+            projection_readers=registered_projection_readers(),
         )
 
 
@@ -350,7 +352,12 @@ def test_compile_rule_records_refuses_workspace_record_in_builtin_namespace() ->
         }
     )
     with pytest.raises(RuleIdentityShadowError, match="reserved for builtin"):
-        compile_rule_records([shadow], modules=(), enforcement_refs=frozenset())
+        compile_rule_records(
+            [shadow],
+            modules=(),
+            enforcement_refs=frozenset(),
+            projection_readers=registered_projection_readers(),
+        )
 
 
 @pytest.mark.parametrize(

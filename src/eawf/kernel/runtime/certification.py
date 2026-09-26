@@ -20,16 +20,23 @@ runtime does not report is recorded absent rather than defaulted, and a
 locally configured cap is a diagnostic fact that can lower the value the
 daemon reads but never raise it: a limit that holds on one machine is not
 a limit anything else may depend on.
+
+The four facts are the ones :mod:`eawf.kernel.runtime.host_facts` defines,
+and :meth:`CertifiedRuntimeFacts.from_host_facts` reads them off that
+record, so the render budget and runtime certification never disagree about
+a runtime's certified cap.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, time
 from enum import StrEnum
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
 
 from eawf.kernel.runtime.compiled import BoundedText
+from eawf.kernel.runtime.host_facts import HOST_FACT_NAMES, HostFactName, RuntimeHostFacts
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
     AuthKind,
@@ -81,13 +88,8 @@ MeasurementMethod = Literal["runtime_reported", "observed"]
 #: The stages in the order the runner appends them.
 STAGE_ORDER: Final[tuple[ConformanceStage, ...]] = ("probe", "canary", "certify", "rollback")
 
-#: The caps a certification measures, addressable by name.
-CertifiedFactName = Literal[
-    "context_window_tokens",
-    "auto_compaction_threshold_tokens",
-    "project_document_cap_bytes",
-    "tool_output_cap_tokens",
-]
+#: The caps a certification measures: exactly the host facts.
+CertifiedFactName = HostFactName
 
 #: The axis a refusal of unattended dispatch rests on.
 DenialAxis = Literal["install_trust", "overall_status", "capability"]
@@ -174,15 +176,16 @@ class LocalFactOverride(RuntimeRecord):
 class CertifiedRuntimeFacts(RuntimeRecord):
     """Caps measured off the certified runtime, never off the machine.
 
-    Every field is required, including the nullable one: a fact the
-    runtime does not report is written as ``None`` deliberately rather
-    than picked up from a default nobody measured.
+    Every field is required, including the nullable ones: a fact the
+    runtime does not report, or nobody has certified, is written as
+    ``None`` deliberately rather than picked up from a default nobody
+    measured.
     """
 
-    context_window_tokens: MeasuredCap
+    context_window_tokens: MeasuredCap | None
     auto_compaction_threshold_tokens: MeasuredCap | None
-    project_document_cap_bytes: MeasuredCap
-    tool_output_cap_tokens: MeasuredCap
+    project_document_cap_bytes: MeasuredCap | None
+    tool_output_cap_tokens: MeasuredCap | None
     measured_at: UtcDatetime
     measurement_method: MeasurementMethod
 
@@ -195,9 +198,40 @@ class CertifiedRuntimeFacts(RuntimeRecord):
                 would describe a compaction that can never trigger.
         """
         threshold = self.auto_compaction_threshold_tokens
-        if threshold is not None and threshold > self.context_window_tokens:
+        window = self.context_window_tokens
+        if threshold is not None and window is not None and threshold > window:
             raise ValueError("auto_compaction_threshold_tokens exceeds context_window_tokens")
         return self
+
+    @classmethod
+    def from_host_facts(cls, record: RuntimeHostFacts) -> CertifiedRuntimeFacts | None:
+        """Read one runtime's certified facts off its host-fact record.
+
+        An uncertified fact is carried as ``None``, never filled from
+        another runtime. The measurement date is the oldest certified
+        fact's, so the derived record is never fresher than its stalest
+        evidence, and the method is ``observed`` because a host fact is a
+        boundary the runner probed rather than a value the runtime reported.
+
+        Args:
+            record: The runtime's host facts.
+
+        Returns:
+            The runtime facts, or ``None`` when no fact of the runtime is
+            certified, since a record of nothing measured certifies nothing.
+        """
+        facts = tuple(record.fact(name) for name in HOST_FACT_NAMES)
+        dates = [fact.measured_at for fact in facts if fact.measured_at is not None]
+        if not dates:
+            return None
+        return cls(
+            context_window_tokens=record.context_window_tokens.default_value,
+            auto_compaction_threshold_tokens=record.auto_compaction_threshold_tokens.default_value,
+            project_document_cap_bytes=record.project_document_cap_bytes.default_value,
+            tool_output_cap_tokens=record.tool_output_cap_tokens.default_value,
+            measured_at=datetime.combine(min(dates), time(), tzinfo=UTC),
+            measurement_method="observed",
+        )
 
     def certified_cap(self, fact: CertifiedFactName) -> int | None:
         """Return the measured value of *fact*.
@@ -212,7 +246,7 @@ class CertifiedRuntimeFacts(RuntimeRecord):
         Raises:
             KeyError: *fact* is not one of the measured caps.
         """
-        caps: dict[str, int | None] = {
+        caps: dict[CertifiedFactName, int | None] = {
             "context_window_tokens": self.context_window_tokens,
             "auto_compaction_threshold_tokens": self.auto_compaction_threshold_tokens,
             "project_document_cap_bytes": self.project_document_cap_bytes,

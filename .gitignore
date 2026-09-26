@@ -44,6 +44,9 @@ site/
 #    is the committed agent contract.
 CLAUDE.md
 .claude/
+# The policy projection `eawf sync` renders from .ea/rules.yaml; AGENTS.md
+# is the committed card rendered beside it.
+AGENTS.override.md
 .codex/
 .opencode/
 

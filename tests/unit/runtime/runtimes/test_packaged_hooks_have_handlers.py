@@ -13,10 +13,11 @@ idle no-op hooks.
 ``register_runtime_capture_hooks``:
 
 - Claude: :data:`HookSpec.has_handler` on
-  :data:`eawf.surfaces.render.hooks.HOOK_REGISTRY` (today only
+  :data:`eawf.surfaces.render.hooks.HOOK_REGISTRY` (today ``SESSION_START``,
+  whose rule-projection staleness check runs for every runtime, and
   ``SESSION_END`` -- the Claude runtime never sets ``event.runtime ==
   "codex"``, so the Codex-lifecycle callable registered for
-  SESSION_START / SUBAGENT_START / SUBAGENT_STOP is a live no-op there).
+  SUBAGENT_START / SUBAGENT_STOP is a live no-op there).
 - Codex: every event in
   :data:`eawf.runtime.runtimes.codex.hook_map.CODEX_HOOK_EVENT_TYPES` is
   genuinely handled, since the Codex packager always sets
@@ -61,12 +62,12 @@ def _assert_emitted_are_handler_backed(emitted: set[str], handler_backed: frozen
 
 
 def test_claude_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None:
-    """``eawf plugin package claude`` wires only SESSION_END."""
+    """``eawf plugin package claude`` wires only SESSION_START and SESSION_END."""
     target = tmp_path / "claude-pkg"
     claude_package_plugin(target)
     emitted = {p.stem for p in (target / "hooks").iterdir()}
     _assert_emitted_are_handler_backed(emitted, _CLAUDE_HANDLER_BACKED)
-    assert emitted == {"session_end"}
+    assert emitted == {"session_start", "session_end"}
 
 
 def test_codex_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None:
@@ -97,12 +98,12 @@ def test_unbacked_hook_entry_reds_the_check() -> None:
     """Gate-fire proof: an event with no registered handler fails the shared check.
 
     Simulates the original defect directly -- a packager also emitting a
-    ``session_start.sh`` wrapper under the Claude runtime, where it has no
+    ``subagent_stop.sh`` wrapper under the Claude runtime, where it has no
     live handler -- without mutating any production registry, proving the
     assertion helper the two tests above rely on actually has teeth.
     """
-    seeded = set(_CLAUDE_HANDLER_BACKED) | {"session_start"}
-    with pytest.raises(AssertionError, match="session_start"):
+    seeded = set(_CLAUDE_HANDLER_BACKED) | {"subagent_stop"}
+    with pytest.raises(AssertionError, match="subagent_stop"):
         _assert_emitted_are_handler_backed(seeded, _CLAUDE_HANDLER_BACKED)
 
 

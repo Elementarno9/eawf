@@ -1,4 +1,15 @@
-"""Check that AGENTS.md tier-0 render blocks stay within token budget."""
+"""Check that AGENTS.md tier-0 render blocks stay within token budget.
+
+A repository that authors ``.ea/rules.yaml`` renders AGENTS.md (and
+AGENTS.override.md, when it composes a workspace layer) from the rule
+graph instead of these profile blocks, so the tier-0 weight below no
+longer reflects what a session actually loads and this gate could never
+fail on an over-budget rule render. :func:`check_rendered_projection_budget`
+is the check that measures those rendered files directly, against the
+same certified byte cap the render transaction and the doctor check hold
+them to; :func:`main` runs it instead of the tier-0 report whenever a rule
+source is present.
+"""
 
 from __future__ import annotations
 
@@ -11,6 +22,8 @@ from pathlib import Path
 
 from eawf.platform.profiles.loader import list_profiles, load_profile
 from eawf.platform.render_block import DEFAULT_TIER0_TOKEN_CAP
+from eawf.platform.rules.host_facts import ProjectionKind, load_host_facts, smallest_certified_cap
+from eawf.platform.rules.render import CARD_TARGET, POLICY_TARGET, rule_source_present
 
 _TOKEN_RE = re.compile(r"\S+")
 
@@ -85,8 +98,92 @@ def check_budget(repo_root: Path, *, workspace: Path | None = None) -> Tier0Budg
     return Tier0BudgetReport(cap=cap, tokens=tokens, blocks=tuple(blocks))
 
 
+@dataclass(frozen=True)
+class ProjectionBudgetEntry:
+    """One rendered projection's byte size against its certified cap.
+
+    Attributes:
+        target: Repository-relative path of the rendered file.
+        byte_count: Its UTF-8 byte size on disk.
+        cap_bytes: The smallest certified cap among its readers.
+    """
+
+    target: str
+    byte_count: int
+    cap_bytes: int
+
+    @property
+    def over(self) -> bool:
+        """Return whether this projection exceeds its certified cap."""
+        return self.byte_count > self.cap_bytes
+
+
+@dataclass(frozen=True)
+class RenderedProjectionBudgetReport:
+    """Byte-budget report for the rendered card and policy projections.
+
+    Empty when the repository has not switched to authoring
+    ``.ea/rules.yaml``, since nothing renders these files from that source.
+    """
+
+    entries: tuple[ProjectionBudgetEntry, ...]
+
+    @property
+    def clean(self) -> bool:
+        """Return whether every measured projection is within its cap."""
+        return not any(entry.over for entry in self.entries)
+
+
+def check_rendered_projection_budget(repo_root: Path) -> RenderedProjectionBudgetReport:
+    """Measure the rendered card and policy files against their certified cap.
+
+    Unlike :func:`check_budget`, this reads the files a repository's rule
+    graph actually renders rather than the profile render blocks that fed
+    the legacy renderer, so it is the check that can fail on an over-budget
+    rule render.
+
+    Args:
+        repo_root: Repository root holding ``.ea/rules.yaml`` and the
+            rendered ``AGENTS.md`` (and ``AGENTS.override.md``, when the
+            repository composes a workspace layer).
+
+    Returns:
+        One entry per rendered projection found on disk; empty when the
+        repository authors no rule source.
+    """
+    if not rule_source_present(repo_root):
+        return RenderedProjectionBudgetReport(entries=())
+    registry = load_host_facts()
+    entries: list[ProjectionBudgetEntry] = []
+    targets: tuple[tuple[str, ProjectionKind], ...] = (
+        (CARD_TARGET, "card"),
+        (POLICY_TARGET, "policy"),
+    )
+    for target, kind in targets:
+        path = repo_root / target
+        if not path.is_file():
+            continue
+        cap = smallest_certified_cap(registry, kind)
+        if cap is None:
+            continue
+        entries.append(
+            ProjectionBudgetEntry(
+                target=target,
+                byte_count=len(path.read_bytes()),
+                cap_bytes=cap.cap_bytes,
+            )
+        )
+    return RenderedProjectionBudgetReport(entries=tuple(entries))
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point for the AGENTS.md budget gate."""
+    """CLI entry point for the AGENTS.md budget gate.
+
+    A repository authoring ``.ea/rules.yaml`` is held to
+    :func:`check_rendered_projection_budget`'s verdict over the rendered
+    card and policy files; a repository without one falls back to
+    :func:`check_budget`'s tier-0 profile-block report.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())
     parser.add_argument(
@@ -96,8 +193,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Workspace root whose .ea/profiles overlay participates in discovery.",
     )
     args = parser.parse_args(argv)
+    repo_root = args.repo_root.resolve()
     workspace = args.workspace.resolve() if args.workspace is not None else None
-    report = check_budget(args.repo_root.resolve(), workspace=workspace)
+
+    if rule_source_present(repo_root):
+        projection_report = check_rendered_projection_budget(repo_root)
+        if projection_report.clean:
+            summary = ", ".join(
+                f"{entry.target}={entry.byte_count}B/{entry.cap_bytes}B"
+                for entry in projection_report.entries
+            )
+            print(f"agents-md-budget: clean rendered_projections={summary}")
+            return 0
+        over = ", ".join(
+            f"{entry.target}={entry.byte_count}B>{entry.cap_bytes}B cap"
+            for entry in projection_report.entries
+            if entry.over
+        )
+        print(f"agents-md-budget: rendered projection(s) over cap: {over}", file=sys.stderr)
+        return 1
+
+    report = check_budget(repo_root, workspace=workspace)
     if report.clean:
         print(
             f"agents-md-budget: clean tier0_tokens={report.tokens} "
@@ -116,4 +232,12 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["Tier0BudgetReport", "check_budget", "count_tokens", "main"]
+__all__ = [
+    "ProjectionBudgetEntry",
+    "RenderedProjectionBudgetReport",
+    "Tier0BudgetReport",
+    "check_budget",
+    "check_rendered_projection_budget",
+    "count_tokens",
+    "main",
+]

@@ -21,6 +21,7 @@ from eawf.platform.rules import (
     load_rule_source,
     parse_rule_module,
     registered_enforcement_refs,
+    registered_projection_readers,
     render_module_index,
     select_rule_modules,
 )
@@ -214,6 +215,7 @@ def test_select_rule_modules_records_compile_as_builtin_layer(tmp_path: Path) ->
         (*selection.records, *loaded.rules),
         modules=loaded.modules,
         enforcement_refs=frozenset(),
+        projection_readers=registered_projection_readers(),
     )
     builtin = [rule for rule in graph.rules if rule.record.source.kind == "builtin"]
     assert len(builtin) == len(selection.records)
@@ -227,7 +229,10 @@ def test_builtin_rule_modules_every_module_compiles_clean() -> None:
     assert set(catalog) >= {_PYTHON, _TEST, "eawf.craft.markdown", "eawf.craft.plotting"}
     records = [record for module in catalog.values() for record in module.records]
     graph = compile_rule_records(
-        records, modules=catalog.keys(), enforcement_refs=registered_enforcement_refs()
+        records,
+        modules=catalog.keys(),
+        enforcement_refs=registered_enforcement_refs(),
+        projection_readers=registered_projection_readers(),
     )
     assert len(graph.rules) == len(records)
     for reference, module in catalog.items():

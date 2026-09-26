@@ -173,56 +173,53 @@ def test_render_agent_md_empty_tools_renders_empty_list() -> None:
     assert "\ntools: []\n" in output
 
 
-# ---- W43: DoR/DoD contract blocks in the five core bodies -------------------
+# ---- role-bound obligations: one owner, in the builtin role rules ------------
 
 
-def test_five_bodies_carry_their_dor_dod_contract_blocks() -> None:
-    """CR-01: the section-5 blocks land verbatim-anchored in each body."""
-    from eawf.surfaces.render.agents import (
-        _AUDITOR_BODY,
-        _EXECUTOR_BODY,
-        _OPERATOR_BODY,
-        _PLANNER_BODY,
-        _RESEARCHER_BODY,
-    )
-
-    assert "## DoR — refuse the dispatch unless ALL hold" in _EXECUTOR_BODY
-    assert "## DoD — before you emit the close-ready report" in _EXECUTOR_BODY
-    # The grandfathered-legacy carve-out is load-bearing: pre-drain waves
-    # must not be walled with blocked verdicts.
-    assert "grandfathered kind=legacy rows" in _EXECUTOR_BODY
-    assert "do not refuse those" in _EXECUTOR_BODY
-    # The evidence_refs-required DoD bullet was deferred out of W43 and
-    # landed with W49 together with the report-schema rewrite, so the
-    # role contract and the pinned schema demand the same thing.
-    assert "evidence_refs is REQUIRED" in _EXECUTOR_BODY
+def test_operator_body_keeps_its_dispatch_loop_discipline() -> None:
+    """The operator has no role carrier, so its body keeps the loop checklist."""
+    from eawf.surfaces.render.agents import _OPERATOR_BODY
 
     assert "## Dispatch-loop discipline (every iteration)" in _OPERATOR_BODY
-    # 8 numbered items including the schema-bump daemon-stop rule.
     for item in range(1, 9):
         assert f"\n{item}. " in _OPERATOR_BODY
     assert "`eawf daemon stop`" in _OPERATOR_BODY
 
-    assert "## Refuse-broken-artifact self-test" in _AUDITOR_BODY
-    assert "UNVERIFIED, never passed" in _AUDITOR_BODY
 
-    assert "## Typed-criteria floor (non-negotiable authoring bar)" in _PLANNER_BODY
-    assert "Brief-coverage HALT" in _PLANNER_BODY
+@pytest.mark.parametrize(
+    ("body_name", "moved"),
+    [
+        ("_EXECUTOR_BODY", ("## DoR", "evidence_refs is REQUIRED", "grandfathered")),
+        ("_AUDITOR_BODY", ("## Refuse-broken-artifact self-test", "UNVERIFIED")),
+        ("_PLANNER_BODY", ("## Typed-criteria floor", "Brief-coverage HALT")),
+        ("_RESEARCHER_BODY", ("## Verify-before-claim ladder", "## Refuting a prior claim")),
+        ("_POLISHER_BODY", ("## Hard refuse",)),
+    ],
+)
+def test_role_body_leaves_moved_obligations_to_the_role_rules(
+    body_name: str, moved: tuple[str, ...]
+) -> None:
+    """A role-bound obligation has one owner: the builtin role rule, not the body."""
+    import eawf.surfaces.render.agents as agents_module
 
-    assert "## Verify-before-claim ladder" in _RESEARCHER_BODY
-    assert "dense [N] markers" in _RESEARCHER_BODY
+    body = getattr(agents_module, body_name)
+    for marker in moved:
+        assert marker not in body
 
 
-def test_contract_blocks_reach_the_rendered_role_contract() -> None:
-    """CR-01: the blocks propagate into a dispatch prompt's role contract
-    via ROLE_REGISTRY -> RoleSpec.system_prompt."""
+def test_role_contract_system_prompt_embeds_the_role_rules() -> None:
+    """A dispatch prompt's role contract carries its role rules in its own text."""
     from eawf.kernel.state.enums import AgentSessionRole
+    from eawf.platform.rules.carriers import builtin_carrier_body
     from eawf.workflow.agents.specs.roles import get_role_spec
 
+    rules = builtin_carrier_body("executor")
+    assert rules is not None
     executor = get_role_spec(AgentSessionRole.EXECUTOR)
-    assert "## DoR — refuse the dispatch unless ALL hold" in executor.system_prompt
-    auditor = get_role_spec(AgentSessionRole.AUDITOR)
-    assert "## Refuse-broken-artifact self-test" in auditor.system_prompt
+    assert rules.rstrip() in executor.system_prompt
+    reviewer = get_role_spec(AgentSessionRole.REVIEWER)
+    assert "# Rules for the" not in reviewer.system_prompt
+    assert "eawf-rules-" not in executor.system_prompt
 
 
 # --------------------------------------------------------------------------- #
@@ -376,13 +373,3 @@ def test_serena_triple_is_absent_from_the_ungranted_role_frontmatter() -> None:
             continue
         rendered = _render_with(spec, effective_agent_tools(spec, {}))
         assert "mcp__serena__" not in rendered.split("\n---\n", 1)[0]
-
-
-def test_researcher_body_ladder_opens_with_the_symbol_tool_rung() -> None:
-    """The researcher's verify ladder names the symbol tools on rung (a)."""
-    body = next(s for s in AGENT_REGISTRY if s.role == "researcher").body
-    ladder = body.split("## Verify-before-claim ladder", 1)[1]
-
-    assert ladder.lstrip().startswith("(a) Resolve the symbol with the symbol tools")
-    for tool in SERENA_READ_TOOLS:
-        assert tool in ladder

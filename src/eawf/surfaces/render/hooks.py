@@ -4,7 +4,7 @@
 for any :class:`~eawf.runtime.hooks.event.HookEventType`. Which events an
 installer actually writes to disk is the installer's decision — the Claude
 installer subscribes only handler-backed events (:attr:`HookSpec.has_handler`,
-today just ``SESSION_END``), while the Codex installer renders every event
+today ``SESSION_START`` and ``SESSION_END``), while the Codex installer renders every event
 with ``runtime="codex"``.
 
 The output is a small POSIX-bash wrapper that:
@@ -68,11 +68,13 @@ class HookSpec:
             Mirrors the Claude Code hooks reference values so the
             router dispatches correctly.
         has_handler: ``True`` when a runner-registered handler actually
-            consumes this event. Only :data:`HookEventType.SESSION_END`
-            has one — ``runtime.capture``, wired by
-            :func:`eawf.runtime.hooks.runner.register_runtime_capture_hooks`.
-            Every other event's wrapper exits ``0`` with an empty result
-            list (an idle contract), so the Claude installer subscribes
+            consumes this event: :data:`HookEventType.SESSION_END` has
+            ``runtime.capture``, wired by
+            :func:`eawf.runtime.hooks.runner.register_runtime_capture_hooks`,
+            and :data:`HookEventType.SESSION_START` has the rule-projection
+            staleness check ``eawf hook run`` registers. Every other
+            event's wrapper exits ``0`` with an empty result list (an idle
+            contract), so the Claude installer subscribes
             only handler-backed events and never wires the operator's
             session to a no-op script.
         version: Schema version pin (``"1.0"``).
@@ -167,7 +169,11 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(event_type=HookEventType.POST_PUSH, claude_event_name="PostToolUse"),
     HookSpec(event_type=HookEventType.PRE_AUDIT, claude_event_name="pre_audit"),
     HookSpec(event_type=HookEventType.POST_AUDIT, claude_event_name="post_audit"),
-    HookSpec(event_type=HookEventType.SESSION_START, claude_event_name="SessionStart"),
+    HookSpec(
+        event_type=HookEventType.SESSION_START,
+        claude_event_name="SessionStart",
+        has_handler=True,
+    ),
     HookSpec(
         event_type=HookEventType.SESSION_END,
         claude_event_name="SessionEnd",

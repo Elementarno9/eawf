@@ -1,341 +1,113 @@
-<!-- BEGIN EAWF:managed id=zone-tier0 version=1.0 hash=e0ad14f457862be5 -->
-<!-- Zone 1: always-on (tier0) -->
-<!-- END EAWF:managed id=zone-tier0 -->
-<!-- BEGIN EAWF:managed id=project-orientation version=1.0 hash=34265d38d520885e -->
-## What this repo runs on
-
-This repo is managed by eawf, an agent-driven workflow. Work nests as **phase** (one delivery, one pull request, one release) > **iter** (a review-and-close cycle) > **wave** (one agent's unit of work, one commit), with ids ``P<NN>`` / ``I<NN>`` / ``W<NN>``.
-
-Reality lives in ``.ea/state.json``, not here: this file carries the rules, ``eawf status`` carries the current position.
-
-<!-- END EAWF:managed id=project-orientation -->
-<!-- BEGIN EAWF:managed id=non-negotiable-rules version=1.12 hash=0ff2ad22299d4262 -->
-## Non-negotiable rules (core)
-
-The rules below apply to every eawf-managed project. Each rule with a non-trivial body has an expansion block immediately following.
-
-1. **CLI is dispatch; library implements.** See ``architecture-cli-dispatch``.
-2. **Strict config validation.** Every YAML/JSON ingestion path uses Pydantic v2 ``BaseModel`` with ``ConfigDict(extra="forbid")``. Validation lives in the loader; downstream functions accept already-validated typed objects only.
-3. **`.ea/` is committed.** See ``ea-directory-commit-policy``.
-4. **Daemon is the sole canonical mutator** for ``state.json``, layered config YAML, registry JSON, event/audit stores, and telemetry DB (Decision D-SUP-01; per-file authority map at ``.ea/artifacts/research/long-term/2026-05-18-authority-map.md``). Reads are free. ``uv run eawf state ...`` is the operator-facing surface: it proxies mutations to the daemon over JSON-RPC and falls back to direct ``portalocker`` writes only when the daemon is unavailable (CI, one-shot, recovery shell).
-5. **Symbol conventions.** See ``symbol-conventions``.
-6. **Deletion rule.** See ``deletion-rule``.
-7. **State is in `state.json`, not in specs.** See ``state-vs-specs``.
-8. **Verify before claiming.** See ``verify-before-claim``.
-9. **f-strings only.** No ``%``-style or ``.format()``. See the python profile for the library-module logging form.
-10. **`uv run` for all Python invocations.** See the python profile for details.
-11. **Worktree discipline.** See ``worktree-discipline``.
-12. **Branch currency.** See ``branch-currency``.
-13. **Pre-commit before commit.** ``uv run pre-commit run --all-files`` before every ``git commit``. Hook failures are root-caused, never ``--no-verify``'d.
-14. **Commit prefix.** See ``commit-prefix``.
-15. **Branch naming.** See ``branch-naming``.
-16. **Secrets and PII hygiene.** See ``secrets-hygiene``.
-17. **Naming conventions for fields/params/log keys.** See ``naming-conventions``.
-18. **Artifact chassis and citations.** See ``artifact-chassis``.
-19. **Typed agent reports.** See ``agent-report-contract``.
-20. **Planned-scope revisability.** See ``planned-scope-revisability``.
-21. **Roadmap procedure.** See ``roadmap-procedure``.
-22. **Spike workflow.** See ``spike-workflow``.
-23. **Engineering principles (DRY/KISS/YAGNI).** See ``engineering-principles``.
-24. **Other engineering practice.** See ``engineering-practice``.
-25. **Source code stays clean of design-decision references.** No inline ``# per Q<N>``, ``# per audit XB##``, ``# per Codex``, or roundtable / operator-decision-id comments in committed source files. Decision provenance lives in the commit body and the typed Decision URN in ``state.json``; source comments are reserved for WHY-the-code-does-X explanations that aid future readers irrespective of provenance. Enforced by the ``eawf012`` lint.
-26. **/prep always renders the DAG in plan mode.** See ``prep-plan-mode``.
-27. **Iter and phase close timing.** See ``iter-phase-close-timing``.
-28. **Rendered markdown is not manually line-wrapped.** See ``markdown-no-manual-wrap``.
-29. **Release process.** See ``release-process``.
-30. **Ship process.** See ``ship-process``.
-31. **Comment economy.** See ``comment-economy``.
-32. **Decisions are surfaced, not assumed.** See ``orchestrator-decision-surface``.
-33. **A new gate proves itself and sunsets.** See ``gate-fire-proof-sunset``.
-34. **One commit per wave and per deliverable.** See ``commit-granularity``.
-
-<!-- END EAWF:managed id=non-negotiable-rules -->
-<!-- BEGIN EAWF:managed id=state-vs-specs version=1.2 hash=b31103e9ebf5191f -->
-### State vs specs
-
-Specs describe intent; state reflects reality. The canonical writer of ``state.json`` is the daemon — see rule 4 for the full mutator-authority statement (operator-facing state CLI, JSON-RPC proxy, portalocker fallback). Do not hand-edit ``state.json`` to make it agree with a spec; drive the state mutation and let the spec follow.
-
-<!-- END EAWF:managed id=state-vs-specs -->
-<!-- BEGIN EAWF:managed id=worktree-discipline version=1.1 hash=74e41b8e1dbda664 -->
-### Worktree discipline
-
-Worktree subagents MUST branch from the current feature branch HEAD, not ``main``. Their commits are **cherry-picked** into the parent feature branch — never ``git merge``.
-
-Cherry-pick procedure: ``git -C <main-worktree> cherry-pick <worktree-sha>`` per commit, in order. Resolve conflicts in the parent worktree. Worktree teardown only after cherry-pick lands.
-
-Claim order (P19-W02): ``eawf wave claim`` enforces deps + W## monotonic ordering. Each claim rejects when (a) any wave in ``.deps`` is not CLOSED, or (b) a lower-numbered sibling wave under the same iter is still PENDING with its own deps already satisfied. Parallel-worktree dispatch where multiple siblings of the same dep frontier are claimed at once MUST pass ``--out-of-order`` on each claim to opt out of the gate.
-
-<!-- END EAWF:managed id=worktree-discipline -->
-<!-- BEGIN EAWF:managed id=prep-plan-mode version=1.0 hash=390f282fbb12944f -->
-### /prep always renders the DAG in plan mode
-
-Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel ``AskUserQuestion``. Free-text approvals are forbidden per the project-wide ``AskUserQuestion``-only approval policy.
-
-**Case A — PLANNED phase with at least one PENDING wave.**
-Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion`` (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
-
-**Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf roadmap revise --add-wave`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → ``AskUserQuestion`` (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf phase activate <id>`` (V11 hard gate).
-
-The plan-mode-first invariant applies to any future ``/prep`` cases (e.g. mid-flight scope expansion of an ACTIVE iter): the operator-facing surface is always the rendered DAG, not raw mutator commands.
-
-<!-- END EAWF:managed id=prep-plan-mode -->
-<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.1 hash=67c5ac9feba039ca -->
-### Iter and phase close timing
-
-Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not close an iter the moment its waves finish — run ``/audit`` and ``/polish`` first, then ``/ship`` (which runs the PR review pass + addresses feedback by appending waves to the same iter), then close.
-
-**Append, don't open a second iter.** When ``/audit`` or ``/polish`` surfaces follow-up work that fits the same delivery, append waves to the current iter via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and the new waves land PENDING). Opening a second iter under the same phase is reserved for true scope expansions or repair cycles per decision D17 (iter-bump triggers), not for routine follow-ups.
-
-**Phase close goes in the latest commit before merge.** Do not close the phase until ship CI is green AND the review-passed branch is on the remote. The phase-close mutation rides in a single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close. Merging that commit ends the phase; pre-merge close keeps ``state.json`` in sync with what reviewers approved.
-
-<!-- END EAWF:managed id=iter-phase-close-timing -->
-<!-- BEGIN EAWF:managed id=zone-reference version=1.0 hash=06f4f2b046f45f0f -->
-<!-- Zone 2: reference (lazy) -->
-<!-- END EAWF:managed id=zone-reference -->
-<!-- BEGIN EAWF:managed id=architecture-cli-dispatch version=1.0 hash=74b5794d459de4b4 -->
-### Architecture: CLI is dispatch; library implements
-
-The CLI layer parses arguments and formats output. All domain logic lives in the library. CLI handlers must accept typed config / state objects, never raw ``dict``.
-
-<!-- END EAWF:managed id=architecture-cli-dispatch -->
-<!-- BEGIN EAWF:managed id=ea-directory-commit-policy version=1.0 hash=5c10976f2c665b91 -->
-### `.ea/` directory: commit policy
-
-``.ea/state.json`` and ``.ea/profile.yaml`` are committed to version control — they are the source of truth for project state. ``.ea/locks/`` and ``.ea/local/`` are gitignored.
-
-<!-- END EAWF:managed id=ea-directory-commit-policy -->
-<!-- BEGIN EAWF:managed id=symbol-conventions version=1.1 hash=aa4eba138c4bd39e -->
-### Symbol conventions
-
-Project codes / phase IDs follow ``^[A-Z][A-Z0-9_-]{1,15}$``. Hypothesis IDs: ``H<NN>-<NN>`` (e.g., ``H03-12``). Phase IDs in commits: ``P<NN+>`` (zero-padded, two-or-more digits, e.g., ``P00``, ``P03``, ``P100``). Iter IDs: ``I<NN+>`` and wave IDs: ``W<NN+>`` likewise. The ``\d{2,}`` width matches ``tools/commit_prefix_lint.py`` so 3-digit ids land cleanly once the queue grows past ``P99`` / ``I99`` / ``W99``.
-
-<!-- END EAWF:managed id=symbol-conventions -->
-<!-- BEGIN EAWF:managed id=naming-conventions version=1.5 hash=6744ddeadba994c3 -->
-`naming-conventions` — Every cross-cutting concept has exactly one canonical name; rename an outlier to match the dominant form before merging instead of adding an adapter shim. Full text: [docs/rules/naming-conventions.md](docs/rules/naming-conventions.md)
-<!-- END EAWF:managed id=naming-conventions -->
-<!-- BEGIN EAWF:managed id=entity-title-naming version=1.1 hash=89c107c4724d2bae -->
-`entity-title-naming` — Write every entity title as an imperative noun-phrase of at most 72 characters with no trailing period, and put the long-form purpose in the description. Full text: [docs/rules/entity-title-naming.md](docs/rules/entity-title-naming.md)
-<!-- END EAWF:managed id=entity-title-naming -->
-<!-- BEGIN EAWF:managed id=deletion-rule version=1.0 hash=4198ace6dc0231ae -->
-### Deletion rule
-
-Agents MAY delete code, configs, or docs IF AND ONLY IF:
-
-(a) the content has been committed at least once on the current branch's ancestry (recoverable via ``git log -- <path>``); AND
-
-(b) the deletion is motivated by an explicit verdict (rejected hypothesis, superseded design, deprecated module) recorded in ``state.json``; AND
-
-(c) the deletion is enumerated in the commit body or PR description (``Removed: <path1> (reason); ...``) so the reviewer can object before merge.
-
-Agents MUST NOT delete: schema files, golden fixtures, MIT ``LICENSE``, ``CHANGELOG.md``, or any uncommitted file. When in doubt, propose the list and wait for explicit confirmation.
-
-<!-- END EAWF:managed id=deletion-rule -->
-<!-- BEGIN EAWF:managed id=verify-before-claim version=1.2 hash=635514562ed918e6 -->
-### Verify before claiming
-
-Quantitative or behavioural claims about command I/O, schema fields, exit codes, or rendering output MUST be verified against the actual code path before assertion. The verification ladder, in order:
-
-(a) Resolve the symbol with the symbol tools (``mcp__serena__find_symbol``, ``mcp__serena__find_referencing_symbols``, ``mcp__serena__get_symbols_overview``) — they resolve bindings, so they answer "where is X defined" and "who calls X" without the false hits and missed aliases text search returns.
-(b) Read the source file.
-(c) ``grep`` for actual call sites in the active branch — the fallback when the target is a string, a config value, or a name you do not yet know.
-(d) Inspect golden fixtures or snapshot tests.
-(e) Only then quote the behaviour.
-
-Design-intent docs (command matrix, schema inventory, ADRs) are the *design intent*; the source tree is the *implementation* — when they drift, quote the implementation. Treat doc/memory citations as a hypothesis to verify, not as ground truth.
-
-Wave commit SHA: ``Wave.commit`` is an optional ``ShaStr`` field on the state model — set by ``eawf wave close --commit <ref>`` when the operator pins a SHA at close time. Quote the SHA via ``eawf wave show --commit <wave-id>``, which prefers the pinned ``Wave.commit`` and falls back to deriving via ``git log --grep '[P##-W##]'`` so cherry-picked or unpinned waves still resolve.
-
-<!-- END EAWF:managed id=verify-before-claim -->
-<!-- BEGIN EAWF:managed id=branch-currency version=1.0 hash=f38baee54406c2d2 -->
-### Branch currency
-
-Before opening or resuming a phase, iter, or wave, verify the current branch is based on the intended source branch (normally the repo default branch or the configured phase base). Fetch first, inspect divergence, and rebase or fast-forward the long-running feature branch when it is stale.
-
-If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
-
-<!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.8 hash=b43803334553edb8 -->
-`commit-prefix` — Wave commits are written ``<type>: <summary>`` plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer; the bracket prefix form still passes but warns, and ``[P<NN>] state:`` keeps its bracket. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
-<!-- END EAWF:managed id=commit-prefix -->
-<!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
-### Branch naming
-
-Long-running phase-bundled branch: ``feature/<symbol>-v<X.Y>``. Per-wave worktree branches: ``feature/<symbol>-v<X.Y>-pNN-wMM`` — cherry-picked back into the long-running branch then deleted.
-
-PRs: one per phase (typical) — phase always ends with a PR.
-
-<!-- END EAWF:managed id=branch-naming -->
-<!-- BEGIN EAWF:managed id=secrets-hygiene version=1.0 hash=786969acaab1614a -->
-### Secrets and PII hygiene
-
-Never commit local paths, machine-specific identifiers, or sensitive info. Do **not** stage commits, code, docs, or config containing: machine-specific paths (``/Users/<name>/...``, ``~/Workspace/...``, ``C:\Users\...``), hostnames, IPs, employer / customer names, credentials, API keys, tokens, SSH keys, ``.env`` contents, internal URLs, real email addresses other than a canonical author block, or PII.
-
-Companion-doc references in rendered docs / commit messages / PR bodies / docstrings MUST stay repo-relative or generic ("external companion docs", ``docs/...``).
-
-Forward-fix only — once a leak lands in a published commit, history rewrite is the *last* resort because the blast radius (force-push, SHA churn, broken PR refs) is much larger than the prevention cost. Scrub locally before ``git add``; let ``pre-commit`` (``detect-secrets`` + custom path checks) catch the rest.
-
-<!-- END EAWF:managed id=secrets-hygiene -->
-<!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=a7f65861e1b30e94 -->
-`artifact-chassis` — Durable research, audit, decision, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
-<!-- END EAWF:managed id=artifact-chassis -->
-<!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.1 hash=d2ec84e7cc93e285 -->
-`planned-scope-revisability` — Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen. Full text: [docs/rules/planned-scope-revisability.md](docs/rules/planned-scope-revisability.md)
-<!-- END EAWF:managed id=planned-scope-revisability -->
-<!-- BEGIN EAWF:managed id=roadmap-procedure version=1.0 hash=a44fa58c7863325d -->
-### Roadmap procedure
-
-The canonical flow for altering the roadmap (one phase at a time):
-
-::
-
-  1. /research <topic> [--final]
-  2. /research <topic2> --final            # optional more briefs
-  3. /roadmap propose --phase P<NN> [--from-briefs RES-...]
-                                            # status=needs_user envelope
-                                            # Claude: plan-mode + AUQ
-                                            # Codex: text-prompt + y/N
-  4. /roadmap revise P<NN> --add-wave ...   # add waves until DAG fits
-  5. /roadmap revise P<NN> --set-deps ...   # iterate on deps
-  6. /roadmap apply P<NN>                   # confirm PLANNED scope
-  7. /prep P<NN>                            # activate_phase
-                                            # runs V11 hard gate
-                                            # dispatches waves per DAG
-
-Bulk propose (``--bulk --from-briefs RES-12,RES-13,...``) is deferred to a follow-up phase; P19 ships phase-at-a-time only. ``/roadmap reorder`` is also deferred — operator drops + re- proposes to swap order.
-
-<!-- END EAWF:managed id=roadmap-procedure -->
-<!-- BEGIN EAWF:managed id=spike-workflow version=1.3 hash=9fe63d701295e8dc -->
-`spike-workflow` — A spike is a time-boxed read-only investigation whose brief lands under ``.ea/local/`` and feeds the next roadmap proposal or wave claim; promote it only when it ratifies a verdict. Full text: [docs/rules/spike-workflow.md](docs/rules/spike-workflow.md)
-<!-- END EAWF:managed id=spike-workflow -->
-<!-- BEGIN EAWF:managed id=engineering-principles version=1.1 hash=c6bb250bd2ed16c5 -->
-`engineering-principles` — Reach for the simplest design that solves the immediate need: no helper, parameter, or config knob without a present-day caller, and no handling for states that cannot happen. Full text: [docs/rules/engineering-principles.md](docs/rules/engineering-principles.md)
-<!-- END EAWF:managed id=engineering-principles -->
-<!-- BEGIN EAWF:managed id=engineering-practice version=1.1 hash=8b2b9d6762b50c71 -->
-`engineering-practice` — Default to fail-fast at the boundary, one reason to change per unit, parsing separate from validation separate from execution, and explicit over implicit. Full text: [docs/rules/engineering-practice.md](docs/rules/engineering-practice.md)
-<!-- END EAWF:managed id=engineering-practice -->
-<!-- BEGIN EAWF:managed id=markdown-no-manual-wrap version=1.0 hash=36955a02ca956432 -->
-### Rendered markdown is not manually line-wrapped
-
-Rendered and authored markdown — PR bodies, issue/review comments, audit / research / decision artifacts, READMEs, mkdocs pages, and skill output envelopes — is written one line per paragraph. Do NOT hard-wrap prose at ~72 (or any) columns; let the renderer / viewer soft-wrap. Manual wrapping fights diffs (a one-word edit reflows a whole block), breaks tables and list continuations, and corrupts copy-paste.
-
-The ~72-column wrap convention is reserved for **commit messages** (subject + body), where tooling and ``git log`` assume it. Fenced code blocks keep their own formatting. Skill output contracts inherit this rule: a skill that emits markdown emits unwrapped paragraphs.
-
-<!-- END EAWF:managed id=markdown-no-manual-wrap -->
-<!-- BEGIN EAWF:managed id=release-process version=1.3 hash=e9197d40232446a3 -->
-`release-process` — Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
-<!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.4 hash=ee5fbe64154110e3 -->
-`ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and fast-forward main. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
-<!-- END EAWF:managed id=ship-process -->
-<!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=600b85c26e27f28b -->
-### Agent report contract
-
-Every agent session that reaches a terminal handoff MUST emit a typed ``agent_end`` report body accepted by ``AgentReportBody``. Runtime hooks own ``AgentReportHeader`` fields (session, role, scope, runtime, attempt); agents provide the role-specific body only.
-
-Reports are append-only. Never overwrite or "fix" an earlier report attempt; retry by appending the next attempt for the same ``(role, base_id)`` pair.
-
-Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followups``, ``fail``, or ``blocked``. Report store URNs use the role-specific ``StoreKind`` such as ``executor_report`` or ``reviewer_report``.
-
-<!-- END EAWF:managed id=agent-report-contract -->
-<!-- BEGIN EAWF:managed id=workflow-lifecycle version=1.1 hash=71c70a630057d4b3 -->
-`workflow-lifecycle` — The lifecycle runs research, plan, execute waves, cherry-pick, ship phase, with a branch-currency check before opening or resuming any scope. Full text: [docs/rules/workflow-lifecycle.md](docs/rules/workflow-lifecycle.md)
-<!-- END EAWF:managed id=workflow-lifecycle -->
-<!-- BEGIN EAWF:managed id=pr-template version=1.0 hash=d92fc15954e9e6e0 -->
-### PR template
-
-``## Summary`` (3-6 bullets) + ``## Test plan`` (markdown checklist). Phase PRs include a ``## Phase deliverables`` section linking back to the per-phase plan.
-
-<!-- END EAWF:managed id=pr-template -->
-<!-- BEGIN EAWF:managed id=clarity-contract version=1.1 hash=1be368cf10281612 -->
-`clarity-contract` — Every newcomer-facing artifact must be understandable without opening ``state.json``: right audience, jargon glossed on first use, motivation stated, scannable, references tabulated. Full text: [docs/rules/clarity-contract.md](docs/rules/clarity-contract.md)
-<!-- END EAWF:managed id=clarity-contract -->
-<!-- BEGIN EAWF:managed id=agent-tool-discipline version=1.0 hash=6602dedd476abc7a -->
-### Agent tool discipline
-
-- Subagents do **not** see the parent conversation. Dispatch prompts must be self-contained — paths, line numbers, success criteria. "Based on your findings, fix the bug" pushes synthesis onto the agent; that work belongs in the parent.
-- Do not use ``Read`` to verify a file you just wrote with ``Write``/``Edit``: the edit tool errors on conflict, the harness tracks file state, and re-reads waste tokens.
-- Prefer dedicated tools over ``Bash`` when one fits (``Read``, ``Edit``, ``Write``); reserve ``Bash`` for shell-only operations.
-
-<!-- END EAWF:managed id=agent-tool-discipline -->
-<!-- BEGIN EAWF:managed id=memory-hygiene version=1.1 hash=0228d6e82ab5bd61 -->
-`memory-hygiene` — Remember only facts that stay true across sessions; status is derivable, so query it with ``eawf status`` or ``eawf memory digest`` instead of memorizing it. Full text: [docs/rules/memory-hygiene.md](docs/rules/memory-hygiene.md)
-<!-- END EAWF:managed id=memory-hygiene -->
-<!-- BEGIN EAWF:managed id=comment-economy version=1.1 hash=d094cbd2800f756a -->
-`comment-economy` — Comments carry why, not what: document every parameter, return and raise, but no restated signatures, change-log narration, or lifecycle ids. Full text: [docs/rules/comment-economy.md](docs/rules/comment-economy.md)
-<!-- END EAWF:managed id=comment-economy -->
-<!-- BEGIN EAWF:managed id=orchestrator-decision-surface version=1.0 hash=7a31e6bd6d6c497f -->
-`orchestrator-decision-surface` — Surface every consequential choice as an explicit question with visual option previews, never a silent default. Full text: [docs/rules/orchestrator-decision-surface.md](docs/rules/orchestrator-decision-surface.md)
-<!-- END EAWF:managed id=orchestrator-decision-surface -->
-<!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->
-`gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
-<!-- END EAWF:managed id=gate-fire-proof-sunset -->
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.2 hash=df917983dc831b9e -->
-`commit-granularity` — One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
-<!-- END EAWF:managed id=commit-granularity -->
-<!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=d92fc4c83b8d1338 -->
-## Anti-patterns
-
-- Mutating ``state.json`` outside the daemon (or its state-CLI proxy / portalocker direct-write fallback) — see rule 4.
-- Skipping ``extra="forbid"`` on a Pydantic model "just for now".
-- Merging worktree branches instead of cherry-picking.
-- ``--no-verify`` on a failing pre-commit hook.
-- Quoting design-intent docs as authoritative for current behaviour (verify against the source tree).
-- Starting a phase, iter, or wave from a stale feature branch.
-- Adding a runtime dep without checking it's not already pulled in transitively.
-- Using ``Read`` to verify a file you just wrote with ``Write``/``Edit``.
-- Carrying audit citations or decision-round IDs into source comments (rule 25 violation; provenance lives in commit body
-  + ``state.json`` Decision URN).
-
-<!-- END EAWF:managed id=anti-patterns -->
-<!-- BEGIN EAWF:managed id=python-style version=1.1 hash=5cf81845e4add683 -->
-## Python style (python profile)
-
-- f-strings only; no ``%``-style or ``.format()``.
-- Full type hints; ``from __future__ import annotations`` at the top of every module.
-- Library modules use ``logger = logging.getLogger(__name__)``.
-- ``uv run`` for all Python invocations — never ``.venv/bin/python`` or bare ``python``.
-- Pre-commit before commit (``uv run pre-commit run --all-files``).
-- Before adding a runtime dependency, verify it's not already pulled in transitively.
-
-<!-- END EAWF:managed id=python-style -->
-<!-- BEGIN EAWF:managed id=test-discipline version=1.1 hash=b55d3bc3c022fe1b -->
-## Test discipline (python profile)
-
-- ``pytest.approx`` for any float comparison.
-- ``numpy.testing.assert_allclose`` for arrays (when numpy is in use).
-- Public functions MUST have boundary-case AND error-path tests. Boundary: empty, single, off-by-one, max-length. Error: invalid type (``TypeError``), out-of-range (``ValueError``), missing key (``KeyError``), schema mismatch (``ValidationError``).
-- Test names: ``test_<func>_<scenario>`` — no ``test_compute_iv_solver_1``.
-- ``pytest.raises`` for error paths; assert message substring when the message is part of the API contract.
-- Full-suite runs go through ``just test`` (parallel, mirrors CI); targeted runs use ``uv run pytest <path>::<test>`` (single-process, fastest for one test).
-
-<!-- END EAWF:managed id=test-discipline -->
-<!-- BEGIN EAWF:managed id=research-workflow version=1.0 hash=ad116df8903a8f74 -->
-## Research workflow (research profile)
-
-Hypotheses, audits, and decisions are first-class state-resident entities. Every claim about behaviour, performance, or correctness MUST be backed by an audit-recorded artifact (notebook, log, dataset). Hypotheses use the ``H<NN>-<NN>`` symbol; audits link to the hypothesis, the claim, and the supporting artifact id. Decisions reference the audit that justifies them so the evidence chain is reconstructible from ``state.json`` alone.
-
-<!-- END EAWF:managed id=research-workflow -->
-<!-- BEGIN EAWF:managed id=agent-driven-phase-equals-release version=1.1 hash=d8c1eaa922ab8710 -->
-`agent-driven-phase-equals-release` — Every closed phase ships as at least a minor release: the phase-close commit bumps the package version module and the PR merge tags that release. Full text: [docs/rules/agent-driven-phase-equals-release.md](docs/rules/agent-driven-phase-equals-release.md)
-<!-- END EAWF:managed id=agent-driven-phase-equals-release -->
-<!-- BEGIN EAWF:managed id=agent-driven-large-phase-pr version=1.1 hash=4ba41b6fc871fe3e -->
-`agent-driven-large-phase-pr` — Ship one PR per phase however large it grows, keep each wave commit individually bisectable, and merge with rebase rather than squash. Full text: [docs/rules/agent-driven-large-phase-pr.md](docs/rules/agent-driven-large-phase-pr.md)
-<!-- END EAWF:managed id=agent-driven-large-phase-pr -->
-<!-- BEGIN EAWF:managed id=agent-driven-cadence-adr-pointer version=1.1 hash=d2ec04bbfbdff318 -->
-`agent-driven-cadence-adr-pointer` — The phase-equals-release and one-PR-per-phase divergences from small-CL practice are ratified by typed decisions; cite those ids in review and reverse the cadence only by superseding them. Full text: [docs/rules/agent-driven-cadence-adr-pointer.md](docs/rules/agent-driven-cadence-adr-pointer.md)
-<!-- END EAWF:managed id=agent-driven-cadence-adr-pointer -->
-<!-- BEGIN EAWF:managed id=lean-wave-verification version=1.2 hash=49edf4c7a208ab0d -->
-`lean-wave-verification` — Wave success criteria name targeted tests that finish inside 60s; the full suite and one fresh-context audit run once per iter at iter close, not once per wave. Full text: [docs/rules/lean-wave-verification.md](docs/rules/lean-wave-verification.md)
-<!-- END EAWF:managed id=lean-wave-verification -->
-<!-- BEGIN EAWF:managed id=code-craft-dry version=1.1 hash=54d9c8793398c1fd -->
-`code-craft-dry` — Extract shared logic into one named home only once a third use site appears; until then tolerate the duplication. Full text: [docs/rules/code-craft-dry.md](docs/rules/code-craft-dry.md)
-<!-- END EAWF:managed id=code-craft-dry -->
-<!-- BEGIN EAWF:managed id=code-craft-fail-fast version=1.1 hash=9eeca3418f114852 -->
-`code-craft-fail-fast` — Validate inputs at the boundary and raise there, so downstream functions accept already-validated typed objects and never re-check. Full text: [docs/rules/code-craft-fail-fast.md](docs/rules/code-craft-fail-fast.md)
-<!-- END EAWF:managed id=code-craft-fail-fast -->
-<!-- BEGIN EAWF:managed id=code-craft-single-responsibility version=1.1 hash=32aec20367444402 -->
-`code-craft-single-responsibility` — Give each function and class exactly one reason to change, keeping parsing, validation, and execution in separate units. Full text: [docs/rules/code-craft-single-responsibility.md](docs/rules/code-craft-single-responsibility.md)
-<!-- END EAWF:managed id=code-craft-single-responsibility -->
-<!-- BEGIN EAWF:managed id=code-craft-explicit-over-implicit version=1.1 hash=8b487368a5b65462 -->
-`code-craft-explicit-over-implicit` — Pass arguments by keyword at arity three or more, return explicit values rather than ``None``-as-success, and keep behaviour matching the name. Full text: [docs/rules/code-craft-explicit-over-implicit.md](docs/rules/code-craft-explicit-over-implicit.md)
-<!-- END EAWF:managed id=code-craft-explicit-over-implicit -->
+<!-- eawf:projection kind=card graph=sha256:ed4cca7aaae4583865f44c0bda7bbaa2a5e30bb8e0ef4e7122883fcd31865734 body=sha256:7afb59c85127a793d05d988d88435572f7bc8988389b4d0730e416ce7c69f5d5 generated from .ea/rules.yaml by eawf sync; a hand edit fails validation -->
+# Eä Workflow
+
+Eä Workflow — agent-driven development framework
+
+## Project brief
+
+- Project code `EAWF`; domains: framework, workflow, tooling.
+- Stack: Python >=3.14, distributed as the `eawf` package.
+- Default branch: `main`.
+- Rules come from `.ea/rules.yaml`, the only rule source. This card carries every binding rule; the complete agent policy, guidance included, arrives with the installed tool, which renders it into `AGENTS.override.md` on `eawf sync`.
+
+## Constitution
+
+Each rule below binds every session in this repository.
+
+- **Read the current activity from typed state.** Take the current activity from the typed run contract; never ask the operator for it and never infer it from prose.
+- **Enumerate every declared criterion in the terminal report.** In every terminal report, list each declared criterion with exactly one outcome: met, unmet or not attempted. Omitting a criterion is a reporting defect; state "not attempted" rather than eliding it.
+- **Continue on a reasonable default and disclose it.** Continue by default: where a reasonable default exists, select it, record the assumption and proceed. Never ask a question whose answer would not change the work.
+- **Deliver the declared scope, not an adjacent one.** Deliver the declared scope. Silently narrowing it, widening it or substituting an adjacent task is a defect distinct from failing the task, and is reported as such.
+- **Claim pass only with every criterion met and evidenced.** Emit a pass verdict only when every declared criterion is met and evidence is recorded for each; otherwise the verdict is pass-with-followups, fail or blocked. Never round a partial result up to complete.
+- **End every handoff with a typed, append-only agent report.** End every session that reaches a handoff with a typed agent_end report whose verdict is exactly pass, pass-with-followups, fail or blocked; retry by appending a new attempt, never by rewriting an earlier one.
+- **Surface consequential choices to the operator as options.** When two paths would produce materially different work, stop and ask the operator with one option per path, each showing a preview, its cost and what it gives up, and one marked recommended. Settle a choice that changes nothing and state the assumption. Procedure: `docs/rules/orchestrator-decision-surface.md`.
+- **Delete content only when it is recoverable and justified.** Delete code, config or docs only when the content is committed on this branch's history, a verdict recorded in state.json motivates it, and the commit or PR body lists each removed path with its reason. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
+- **Prove each new gate on a real defect and retire idle gates.** Ship a new lint, doctor check or CI gate with a test that reds on a real defect from the repository, and at phase close retire each gate added in the phase that never fired. Procedure: `docs/rules/gate-fire-proof-sunset.md`.
+- **Keep secrets, machine paths and personal data out of commits.** Never stage credentials, keys, tokens, .env contents, machine-specific paths, hostnames, IP addresses, internal URLs, employer or customer names, emails other than the canonical author block, or other personal data; keep document references repo-relative.
+- **Verify a behavioural claim against the code before stating it.** Check every claim about command output, schema fields, exit codes or rendered output against the code path before stating it: resolve the symbol, read the source, find the call sites, inspect the fixtures. When design docs and source disagree, quote the source.
+- **Close iters and phases only after review and CI pass.** Close an iter only after its audit, polish, ship CI and pull request review pass; append follow-up waves to the current iter instead of opening another; close the phase in the last commit before merge, once CI is green on the pushed branch.
+- **Show the rendered wave DAG in plan mode before approval.** In /prep, render the phase's wave DAG and present it in plan mode before asking the operator to approve, edit or cancel through a structured question; a free-text reply is not an approval.
+- **Release on the cadence the repository configures.** Follow the repository's configured release cadence; under the per-phase cadence, close a phase only with a passing release pre-flight covering the changelog section, the version bump, any migration note and the release annotation. Procedure: `docs/rules/release-process.md`.
+- **Ship a phase from its co-closing iter.** Ship in the phase's final iter: open one phase pull request, pass its CI gates, address review by appending waves to that iter, then close and land by fast-forward so every wave commit survives; never squash. Procedure: `docs/rules/ship-process.md`.
+- **Mutate project state only through the daemon.** Change state.json, the layered config, the registry, the event and audit stores and the telemetry database only through the daemon, reached by the eawf state commands; the locked direct write is only for when no daemon runs. Reading needs no daemon.
+- **Commit the project state and profile files.** Commit .ea/state.json and .ea/profile.yaml with the change that produced them, and keep .ea/locks/ and .ea/local/ out of version control.
+- **Change scope only as far as its status allows.** Edit PLANNED scope freely; under an ACTIVE phase only append waves or edit PENDING ones; change CLOSED scope only after reopening it. Procedure: `docs/rules/planned-scope-revisability.md`.
+- **Treat state as reality and specs as intent.** When a spec and state.json disagree, drive the state mutation through its command and let the spec follow; never hand-edit state.json to match a spec.
+- **Confirm the branch is current before opening or resuming scope.** Before opening or resuming a phase, iter or wave, fetch and confirm the branch is based on its intended source; after preserving any dirty work, rebase or fast-forward a stale branch, or record why it stays behind.
+- **Name phase and wave branches by the release symbol.** Name the long-running phase branch feature/<symbol>-v<X.Y> and each wave worktree branch feature/<symbol>-v<X.Y>-pNN-wMM, and delete a wave branch once its commits are cherry-picked.
+- **Land one commit per wave and per deliverable.** Land one commit per wave and per deliverable, carrying the code with its tests; fold follow-ups and wave-close bookkeeping into it by amend, and put a golden refresh in a test commit named for its cause. Procedure: `docs/rules/commit-granularity.md`.
+- **Name the advanced wave in every commit.** Write a wave commit subject as "<type>: <summary>" and name its wave in an "Eawf-Wave: P<NN>-I<NN>-W<NN>" trailer; keep the bracketed [P<NN>] subject prefix for state and phase-scoped docs bookkeeping only. Procedure: `docs/rules/commit-prefix.md`.
+- **Run the pre-commit hooks before every commit.** Run the pre-commit hooks over the change before every commit and root-cause each failure; never skip them with --no-verify.
+- **Branch worktrees from the feature branch and cherry-pick back.** Branch every worktree from the current feature branch HEAD, never from main, and bring its commits back by cherry-pick in order, never by merge; tear the worktree down only after the cherry-pick lands.
+- **Write durable artifacts on the renderer-owned chassis.** Write durable research, audit, decision and incident markdown on the renderer-owned Summary, References, Provenance and Scrub sections, with dense [N] citations backed by typed rows and only repo-relative, URL or URN references. Procedure: `docs/rules/artifact-chassis.md`.
+- **Write rendered markdown one line per paragraph.** Write rendered markdown one line per paragraph and let the viewer wrap it; keep the 72-column wrap for commit messages and leave fenced code as authored.
+- **Keep decision provenance out of committed source.** Keep decision, audit, reviewer and tool provenance out of committed source comments and docstrings; record it in the commit body and the typed decision in state.json.
+- **Spell lifecycle and hypothesis identifiers in the canonical form.** Write phase, iter and wave ids as P<NN>, I<NN> and W<NN> with at least two zero-padded digits, hypothesis ids as H<NN>-<NN>, and project codes as one capital letter followed by 1 to 15 capitals, digits, underscores or hyphens.
+- **Keep the CLI a dispatch layer over the library.** Keep CLI handlers to argument parsing, dispatch and output formatting, put every piece of domain logic in the library, and pass handlers typed config and state objects, never raw dicts.
+- **Use one canonical name per cross-cutting concept.** Give each cross-cutting concept one canonical field, parameter and log-key name, such as agent_role, effort_bucket, evidence_kind, scope_id and output_dir, and rename an outlier to the dominant form before merging instead of adding an adapter. Procedure: `docs/rules/naming-conventions.md`.
+- **Ship every closed phase as at least a minor release.** Close every phase as at least a minor release: the phase-close commit bumps src/eawf/_version.py while pyproject.toml stays dynamically versioned, and the merge of the phase pull request tags that release. Procedure: `docs/rules/agent-driven-phase-equals-release.md`.
+- **Back every research claim with an audit-recorded artifact.** Back every claim about behaviour, performance or correctness with an audit-recorded artifact such as a notebook, log or dataset; link each audit to its hypothesis, claim and artifact id, and have each decision cite the audit that justifies it.
+- **Validate every YAML and JSON input with a closed model.** Parse every YAML or JSON input through a Pydantic v2 model configured with extra="forbid" inside its loader, and hand downstream code only the validated typed object.
+
+## Obligations
+
+Each rule below binds within the scope it names.
+
+- **Give every activity a non-empty rule set.** Keep every activity governed by at least one rule; an activity whose effective rule set is empty is a defect, never a statement that no rules apply. Applies to: design, plan.
+- **Scope conduct rules to the closed activity set.** Scope an activity-bound rule only to research, plan, design, implement, test, review, integrate, commit, release, deploy or operate; a rule scoped to any other activity is refused with the offending value named. Applies to: design, plan.
+- **Block on a question only when proceeding is unsafe.** Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the completed work useless if the assumption proved wrong; resolve every other uncertainty by assumption plus disclosure. Applies to: plan, design, implement.
+- **Name the command and exit status behind a claim.** Back every verification claim with the command executed and its exit status; a green claim whose run cannot be located in the receipt is a fabrication, not an oversight. Applies to: test, review, commit.
+- **Dispatch independent units of work together.** Dispatch independent units of work together rather than in sequence, where neither consumes the other's output; a sequential dispatch of independent units is a recorded miss. Applies to: plan, implement.
+- **Evaluate the practice set at each decision point.** Evaluate the applicable practice set at each decision point rather than recalling it: at least before dispatching work, before presenting a choice to the operator and before emitting a terminal report. Applies to: plan, implement, review.
+- **Stop only at operator-declared checkpoints.** Stop at a checkpoint the operator declared and at no other point; a self-selected pause is a deviation. Applies to: implement, integrate.
+- **Measure projection size against each runtime cap.** Record the projection byte size and each certified runtime's declared cap in the render transaction, and fail the render when the projection is larger than any cap instead of shipping it truncated. Applies to: release.
+- **Record each conduct deviation as a typed local row.** Record every conduct deviation as a typed row bound to the run that produced it and the obligation it breached, with how it was detected, its severity, an evidence reference and its disposition, in the machine-local store and never in the committed surface. Applies to: review, operate.
+- **Expand every abbreviation on first use.** Expand every abbreviation, internal code and lifecycle identifier on first use in an operator-facing surface; write for a competent newcomer, not for the author of the state. Applies to: plan, design, review.
+- **Finish independent parts when one part fails.** When part of the scope cannot be completed, complete every independent remaining part in full, then state plainly what was left undone and why. Applies to: implement, test.
+- **Record the goal before the first mutating action.** Before the first mutating action, record the task as a typed goal bound to the declared success criteria of the entity it serves. Applies to: implement, integrate, release, deploy, operate.
+- **Add a helper only with a present-day caller.** Add a helper, wrapper or indirection only with a production caller in the same change. Tolerate duplication at two call sites and extract at the third; a helper whose only caller is a test fails this rule. Applies to: implement, review.
+- **State the concern once and finish the task.** When a task looks ill-specified, state the concern once, record the assumption you proceed under and complete the work; do not halt and do not silently substitute your own reading. Applies to: plan, design, implement.
+- **Finish independent work before raising a question.** Before raising a question, complete all work that does not depend on its answer, and raise it only where the dependent work begins. Applies to: plan, implement.
+- **Add a parameter or flag only with a consumer.** Add a parameter, configuration leaf, feature flag or extension point only with a consumer in the same change; a knob shipped for a hypothetical future caller is rejected. Applies to: implement, review.
+- **Recommend the option best for the long term.** Mark the option best for the long term as recommended and state why; where the repository configures a value the choice would override, show the configured value beside the recommendation. Applies to: plan, design, review.
+- **Record a runtime cap only as a measured value.** Record a runtime's declared cap as a measured value with its measurement provenance, never as a figure chosen for headroom; report a cap not re-measured against a certified runtime version as stale. Applies to: release, operate.
+- **Deliver every must rule by a deterministic vehicle.** Deliver every must rule through a certified deterministic vehicle, never through a retrieval command a model may decline to run; a retrieval command delivers only should and information rules. Applies to: design, release.
+- **Decide instead of asking when every option is the same work.** Do not ask a question with no consequence: where every option leads to the same work, select one, state the selection and proceed. Applies to: plan, design, review.
+- **Reject abstraction serving a use site that does not exist.** Reject an abstraction introduced for a use site that does not yet exist, whatever its quality: name the missing caller, and have the author supply one or remove the abstraction. Applies to: design, review.
+- **Guard only states reachable on real call paths.** Add no defensive branch, fallback or validation for a state unreachable on the real call paths. Where reachability is genuinely uncertain, record the uncertainty instead of coding around it. Applies to: implement, review.
+- **Keep unrequested refactors out of the delivery.** Carry no unrequested refactor in a change; record improvements found in passing as backlog rows against the touched paths, never in the delivery commit. Applies to: implement, commit.
+- **Record a missed practice as a conduct deviation.** Record a practice whose trigger fired and whose obligation was not met as a conduct deviation, so recall failure is counted per rule and per runtime. Applies to: review, operate.
+- **Retrieve the current practice set in one step.** Retrieve the practice set for the current activity with one query at each decision point instead of remembering which practices apply. Applies to: plan, implement, review.
+- **Give every practice rule an observable trigger.** Declare a trigger for every practice rule: an observable condition that marks the moment it applies, distinct from its activity scope. Applies to: design.
+- **State each claim once across rendered prose.** Hold prose to the same budget as code: a rendered artifact states its claim once, and restating a requirement in a second file is duplicate ownership, not emphasis. Applies to: design, implement, review.
+- **Re-execute only what failed.** After a failure, re-execute only what failed, unless the change is cross-cutting, the artifact is a cross-scope scorecard, or a release gate needs a full pass. Applies to: test.
+- **Deliver the root projection in full to every runtime.** Deliver the root projection in full to every certified runtime. A runtime whose project-document cap is below the rendered size is a packaging failure, never the fault of the agent that then breaches an unreceived rule. Applies to: release, deploy.
+- **Record a scope delta before widening the work.** Record a typed scope delta against the task before any widening work begins; an unrecorded widening fails review even when the added work is correct. Applies to: plan, implement.
+- **Name the runtime, cap and first lost rule on truncation.** Never truncate silently: when a host cap cannot be satisfied, the failure names the runtime, the cap, the rendered size and the first obligation lost past the boundary. Applies to: release, deploy.
+- **Surface a decision as a typed choice with named options.** Surface a decision as a typed choice with named options, never as free text, and give each option a plain-prose description of what happens if it is selected. Applies to: plan, design, review.
+- **Record an open question when running unattended.** In an unattended run, record a typed open question against the entity and continue on the independent remainder; never halt to await an operator who is not present. Applies to: implement, operate.
+- **Validate once at the boundary where data enters.** Validate untyped data once, at the boundary where it enters; downstream functions accept validated typed objects and do not re-check them. Applies to: implement, review.
+- **Verify behavioural claims against the source tree.** Verify behavioural, quantitative and schema claims against the implementation before asserting them. Where a design document and the source disagree, quote the source and report the drift. Applies to: research, design, review.
+- **Render an unresolved view reference as a command.** Render an unresolved detailed-view reference as an actionable message naming the command that generates the view, never as a dangling path. Applies to: integrate, release.
+- **Keep every table row the same shape as its header.** Give every table a header row and a separator row, and give every body row exactly as many cells as the header. Applies to: design, implement, review.
+- **Check the dependency tree before adding a runtime dependency.** Before adding a runtime dependency, confirm it is not already pulled in transitively and name the reason it is needed. Applies to: implement, review.
+- **Interpolate strings with f-strings only.** Build every interpolated string, log messages included, with an f-string; never with %-style formatting or str.format. Applies to: implement, review.
+- **Open every module with postponed annotations.** Start every Python module with "from __future__ import annotations" and give every function full type hints. Applies to: implement, review.
+- **Invoke Python through the project runner.** Invoke every Python command through "uv run", never through a bare interpreter or a path into the virtual environment. Applies to: implement, review, test.
+- **Compare floats and arrays with tolerance helpers.** Compare floats with pytest.approx and arrays with numpy.testing.assert_allclose, never with exact equality. Applies to: test, review.
+- **Cover boundary and error paths of every public function.** Give every public function boundary-case tests (empty, single, off-by-one, max-length) and error-path tests for invalid type, out-of-range value, missing key and schema mismatch. Applies to: test, review.
+
+## Rule modules
+
+Read a module when its trigger applies. Once read, its rules bind for the rest of the activity with the same force as any other rule; they are not advisory.
+
+- `eawf.core.engineering` engineering [] 2 rules; load when: designing or reviewing any change that adds a helper, a parameter, a configuration knob or a new code path; read via: `eawf rules view eawf.core.engineering`
+- `eawf.core.integrity` integrity [] 7 rules; load when: stating a result, deleting content, staging a commit, dispatching a subagent, ending a session or facing a consequential choice; read via: `eawf rules view eawf.core.integrity`
+- `eawf.core.lifecycle` lifecycle [] 8 rules; load when: proposing, activating, closing, shipping or releasing a phase, or writing wave criteria and dispatching waves; read via: `eawf rules view eawf.core.lifecycle`
+- `eawf.core.state` state [] 5 rules; load when: reading or changing phase, iter, wave or decision records, or any file under the .ea directory; read via: `eawf rules view eawf.core.state`
+- `eawf.core.vcs` vcs [] 7 rules; load when: creating a branch or worktree, committing, cherry-picking, opening a pull request or preparing a push; read via: `eawf rules view eawf.core.vcs`
+- `eawf.core.writing` writing [] 7 rules; load when: naming an entity, writing a commit or pull request body, a durable artifact, rendered markdown, or a source comment; read via: `eawf rules view eawf.core.writing`
+- `eawf.craft.code` code [implement, review] 4 rules; load when: writing or reviewing functions, classes, their inputs and their call sites in any language; read via: `eawf rules view eawf.craft.code`
+- `eawf.craft.markdown` markdown [design, implement, review] 4 rules; load when: authoring rendered markdown that contains tables, formulas, reference lists or nested lists; read via: `eawf rules view eawf.craft.markdown`
+- `eawf.craft.python` python [implement, review, test] 5 rules; load when: writing or reviewing Python source, including tests and tooling scripts; read via: `eawf rules view eawf.craft.python`
+- `eawf.craft.test` test [review, test] 4 rules; load when: writing, changing or reviewing automated tests, or choosing which test command to run; read via: `eawf rules view eawf.craft.test`

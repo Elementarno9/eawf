@@ -10,7 +10,7 @@ rules:
     obligation_id: craft.python.string-interpolation
     revision: 1
     title: Interpolate strings with f-strings only
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Build every interpolated string, log messages included, with an f-string; never with %-style formatting or str.format.
@@ -23,7 +23,7 @@ rules:
     obligation_id: craft.python.future-annotations
     revision: 1
     title: Open every module with postponed annotations
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Start every Python module with "from __future__ import annotations" and give every function full type hints.
@@ -49,7 +49,7 @@ rules:
     obligation_id: craft.python.project-runner
     revision: 1
     title: Invoke Python through the project runner
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Invoke every Python command through "uv run", never through a bare interpreter or a path into the virtual environment.
@@ -62,7 +62,7 @@ rules:
     obligation_id: craft.python.dependency-addition
     revision: 1
     title: Check the dependency tree before adding a runtime dependency
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Before adding a runtime dependency, confirm it is not already pulled in transitively and name the reason it is needed.

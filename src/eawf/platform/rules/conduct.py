@@ -45,6 +45,7 @@ from eawf.platform.rules.compile import (
     RuleGraph,
     compile_rule_records,
     registered_enforcement_refs,
+    registered_projection_readers,
 )
 from eawf.platform.rules.records import (
     AuthoredRule,
@@ -134,6 +135,7 @@ def compile_conduct_graph() -> RuleGraph:
         load_conduct_rules(),
         modules=(),
         enforcement_refs=registered_enforcement_refs(),
+        projection_readers=registered_projection_readers(),
     )
 
 

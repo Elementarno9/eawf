@@ -698,6 +698,27 @@ def config_validate(
     emit_json_or_text(payload, text, flags=flags)
 
 
+def _render_rule_projections(repo: Path) -> list[str]:
+    """Re-render the rule-graph projections after a profile change.
+
+    Args:
+        repo: Repository root; a repository without ``.ea/rules.yaml`` keeps
+            the profile renderer and renders nothing here.
+
+    Returns:
+        The projection targets whose bytes changed.
+
+    Raises:
+        ValidationError: The rule source, compilation or render refused.
+    """
+    from eawf.platform.rules.render import refresh_rule_projections
+
+    try:
+        return list(refresh_rule_projections(repo))
+    except ValueError as exc:
+        raise ValidationError(f"rule projection render refused: {exc}") from exc
+
+
 @profile_app.command("enable")
 def profile_enable(
     ctx: typer.Context,
@@ -769,6 +790,12 @@ def profile_enable(
             UserError(f"cannot read or write {target_path}: {exc}", kind="InvalidInput"),
             flags=flags,
         )
+        return  # pragma: no cover
+
+    try:
+        result["projections_changed"] = _render_rule_projections(repo)
+    except ValidationError as exc:
+        emit_error(exc, flags=flags)
         return  # pragma: no cover
 
     text = (

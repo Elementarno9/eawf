@@ -4,7 +4,8 @@ The Claude Code plugin tree emitted by
 :func:`eawf.runtime.runtimes.claude.plugin_package.package_plugin` carries a
 ``hooks.json`` manifest that subscribes only to **session-level** Claude
 Code events that are also handler-backed (see
-:func:`handler_backed_plugin_hooks`) — today just ``SESSION_END``.
+:func:`handler_backed_plugin_hooks`) — today ``SESSION_START`` and
+``SESSION_END``.
 Workflow-internal lifecycle events (``wave_*``, ``iter_*``, ``phase_*``,
 ``*_audit``) stay fired by explicit ``eawf hook run`` calls from the
 lifecycle surfaces — Claude Code's ``UserPromptSubmit`` matcher cannot
@@ -109,7 +110,8 @@ def _command_path(spec: PluginHookSpec) -> str:
 
 
 # Events with a real runner-registered handler (:data:`HookSpec.has_handler`
-# in :mod:`eawf.surfaces.render.hooks`) — today just ``SESSION_END``. Every
+# in :mod:`eawf.surfaces.render.hooks`) — today ``SESSION_START`` and
+# ``SESSION_END``. Every
 # other :data:`PLUGIN_HOOK_REGISTRY` entry would render an idle wrapper (exit
 # 0, empty result list), so the packaged tree subscribes only this subset;
 # see :func:`handler_backed_plugin_hooks`.

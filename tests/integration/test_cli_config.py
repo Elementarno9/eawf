@@ -28,6 +28,7 @@ import yaml
 from typer.testing import CliRunner
 
 from eawf.kernel.config import layered
+from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV
 from eawf.surfaces.cli.app import app
 
@@ -353,8 +354,30 @@ def test_profile_enable_json_envelope(repo_root: Path) -> None:
         "layer_path",
         "already_enabled",
         "state_keys_materialised",
+        "projections_changed",
     }
     assert body["profile"] == "python"
+    assert body["projections_changed"] == []
+
+
+def test_profile_enable_renders_rule_projections(repo_root: Path) -> None:
+    (repo_root / ".ea" / "rules.yaml").write_text(
+        "schema_version: 1\nmodules: []\nrules: []\n", encoding="utf-8"
+    )
+    result = runner.invoke(app, ["--json", "config", "profile", "enable", "python"])
+    assert result.exit_code == 0, result.output
+    body = json.loads(result.output)
+    assert body["projections_changed"] == [
+        "AGENTS.md",
+        "AGENTS.override.md",
+        "CLAUDE.md",
+        *(carrier_target(role) for role in builtin_carrier_roles()),
+    ]
+    assert (
+        (repo_root / "AGENTS.md")
+        .read_text(encoding="utf-8")
+        .startswith("<!-- eawf:projection kind=card ")
+    )
 
 
 # --- env-layer override visible via config get ------------------------------

@@ -10,7 +10,7 @@ rules:
     obligation_id: craft.test.float-comparison
     revision: 1
     title: Compare floats and arrays with tolerance helpers
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Compare floats with pytest.approx and arrays with numpy.testing.assert_allclose, never with exact equality.
@@ -23,7 +23,7 @@ rules:
     obligation_id: craft.test.boundary-and-error-paths
     revision: 1
     title: Cover boundary and error paths of every public function
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Give every public function boundary-case tests (empty, single, off-by-one, max-length) and error-path tests for invalid type, out-of-range value, missing key and schema mismatch.

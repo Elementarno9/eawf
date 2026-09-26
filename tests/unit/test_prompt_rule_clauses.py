@@ -244,12 +244,12 @@ def test_command_bearing_gotchas_absent_from_executor_body() -> None:
 #: measures only injected profile blocks — so growth past these pins must
 #: be deliberate: re-pin in the same commit that grows the body.
 _BODY_TOKEN_BUDGETS = {
-    # Headroom for W19's "Refuting a prior claim" clause.
-    "_RESEARCHER_BODY": 385,
-    "_PLANNER_BODY": 430,
-    # Headroom for W49's evidence_refs DoD bullet.
-    "_EXECUTOR_BODY": 500,
-    "_AUDITOR_BODY": 330,
+    # Role-bound obligations live in the builtin role rules, delivered by
+    # the role carrier, so these bodies keep only method and output shape.
+    "_RESEARCHER_BODY": 200,
+    "_PLANNER_BODY": 300,
+    "_EXECUTOR_BODY": 260,
+    "_AUDITOR_BODY": 220,
     "_OPERATOR_BODY": 360,
 }
 
@@ -289,16 +289,19 @@ def test_new_clauses_land_on_all_four_rendered_surfaces() -> None:
     )
     assert "dispatch resume" in skill_md  # W40 dispatch-discipline clause
 
+    # The executor's readiness and evidence obligations are embedded in the
+    # Claude agent and the Codex agent alike.
+    readiness = "Start only a wave whose spec is ready to implement."
     claude_agent = (golden / "plugin_install" / "claude" / "agents" / "executor.md").read_text(
         encoding="utf-8"
     )
-    assert "## DoR — refuse the dispatch unless ALL hold" in claude_agent  # W43
-    assert "evidence_refs is REQUIRED" in claude_agent  # W49
+    assert readiness in claude_agent
+    assert "skills:" not in claude_agent.split("\n---\n", 1)[0]
 
     codex_toml = (golden / "plugin_install" / "codex" / "agents" / "executor.toml").read_text(
         encoding="utf-8"
     )
-    assert "DoR" in codex_toml and "evidence_refs is REQUIRED" in codex_toml
+    assert readiness in codex_toml
 
     dispatch_prompt = (golden / "dispatch" / "cc_prep.txt").read_text(encoding="utf-8")
     assert "## Role contract" in dispatch_prompt

@@ -30,7 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import store_kind_for_role
 from eawf.runtime.runtimes.manifest import RuntimeId
-from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec, embed_role_rules
 from eawf.workflow.agents.specs.models import _unwrap_markdown_soft_wraps
 
 logger = logging.getLogger(__name__)
@@ -213,7 +213,7 @@ def _role_spec_from_agent_spec(spec: AgentSpec, role: AgentSessionRole) -> RoleS
     return RoleSpec(
         role=role,
         summary=spec.description,
-        system_prompt=spec.body,
+        system_prompt=embed_role_rules(spec.role, spec.body),
         allowed_tools=list(spec.tools),
         denied_tools=[],
         model=spec.model,

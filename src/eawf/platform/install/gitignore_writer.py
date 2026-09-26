@@ -26,6 +26,14 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     ".opencode/",
     ".mcp.json",
     "opencode.json",
+    # The rendered policy file, its per-runtime views and the role carriers
+    # regenerate from a repository's own .ea/rules.yaml on `eawf sync`, so
+    # committing them would create a second copy of the same content that
+    # drifts from the source -- and for AGENTS.override.md, would commit the
+    # machine-local workspace layer it composes in.
+    "AGENTS.override.md",
+    ".ea/rules/views/",
+    ".claude/skills/eawf-rules-*/",
     ".ea/locks/",
     ".ea/**/*.lock",
     ".ea/local/",

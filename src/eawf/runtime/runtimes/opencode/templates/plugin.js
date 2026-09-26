@@ -34,11 +34,30 @@ function dispatchHook(eventType, payload) {
   return { ok: true, stdout: result.stdout || '' };
 }
 
+// Session start prints a context document whose `additionalContext` is the
+// rule-projection report; surface it so a stale or broken rule render is
+// seen, and hand it back to the caller.
+function withSessionContext(result) {
+  if (!result.ok || !result.stdout.trim()) {
+    return result;
+  }
+  try {
+    const context = JSON.parse(result.stdout).hookSpecificOutput.additionalContext;
+    if (context) {
+      console.warn(context);
+      return { ...result, context };
+    }
+  } catch (_err) {
+    // Not a context document: nothing to surface.
+  }
+  return result;
+}
+
 module.exports = {
   name: 'eawf',
   version: '__EAWF_PLUGIN_VERSION__',
   hooks: {
-    onSessionStart: (ctx) => dispatchHook('session_start', ctx),
+    onSessionStart: (ctx) => withSessionContext(dispatchHook('session_start', ctx)),
     onSessionEnd: (ctx) => dispatchHook('session_end', ctx),
     onPreCommit: (ctx) => dispatchHook('pre_commit', ctx),
     onPostCommit: (ctx) => dispatchHook('post_commit', ctx),

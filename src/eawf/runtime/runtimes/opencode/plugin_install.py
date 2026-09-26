@@ -42,7 +42,7 @@ from typing import Any, Literal
 
 import eawf
 from eawf.surfaces.render._atomic import atomic_write_text
-from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec
+from eawf.surfaces.render.agents import AGENT_REGISTRY, AgentSpec, embed_role_rules
 from eawf.surfaces.render.frontmatter import yaml_scalar
 from eawf.surfaces.render.manifest import (
     Manifest,
@@ -413,7 +413,7 @@ def _render_opencode_agent_md(spec: AgentSpec) -> str:
         [
             "---",
             "",
-            spec.body.rstrip() + "\n",
+            embed_role_rules(spec.role, spec.body).rstrip() + "\n",
         ]
     )
     return "\n".join(lines)

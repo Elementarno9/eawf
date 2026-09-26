@@ -23,7 +23,7 @@ rules:
     obligation_id: craft.plotting.scale
     revision: 1
     title: Declare linear or log scale per metric
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Choose linear or log scale for each metric deliberately, and label a log axis as log.
@@ -36,7 +36,7 @@ rules:
     obligation_id: craft.plotting.units
     revision: 1
     title: Put the unit in every axis label
-    zone: retrievable
+    zone: steering
     force: must
     effectiveness: behavioral
     instruction: Label every axis with the quantity and its unit, such as "latency (ms)".

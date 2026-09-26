@@ -24,7 +24,7 @@ One known gap is asserted with :func:`pytest.xfail`: the matrix marks
 OpenCode's installer does emit per-skill commands, **but** OpenCode emits
 no hook wrappers at all. Codex emits one ``.sh`` for each provider-native
 lifecycle event Eä consumes; Claude emits a wrapper only for handler-backed
-events (``HookSpec.has_handler`` — today just ``SESSION_END``) so it never
+events (``HookSpec.has_handler`` — today ``SESSION_START`` and ``SESSION_END``) so it never
 wires the session to an idle no-op script; OpenCode emits zero. The OpenCode
 hook-parity contract therefore fails today; the xfail documents the gap so
 closing it (an OpenCode hook surface) flips the test to ``XPASS`` and forces a
@@ -229,7 +229,7 @@ def test_claude_installer_emits_only_handler_backed_hooks(tmp_path: Path) -> Non
 
     Every other :class:`HookEventType` would render an idle wrapper (exit 0,
     empty result list), so the installer subscribes only events with a real
-    runner-registered handler — today just ``SESSION_END``.
+    runner-registered handler — today ``SESSION_START`` and ``SESSION_END``.
     """
     paths = _claude_paths(tmp_path)
     emitted = {
@@ -238,7 +238,7 @@ def test_claude_installer_emits_only_handler_backed_hooks(tmp_path: Path) -> Non
         if region.startswith("plugin.claude.hook.")
     }
     assert emitted == _handler_backed_hook_values()
-    assert emitted == {"session_end"}
+    assert emitted == {"session_start", "session_end"}
 
 
 def test_codex_installer_emits_supported_lifecycle_hooks(tmp_path: Path) -> None:

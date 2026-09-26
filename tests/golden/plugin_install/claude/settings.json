@@ -35,8 +35,12 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "4fcb2cc1403d1417",
+    "hash": "319a08a60664754d",
     "hooks": [
+      {
+        "event_type": "session_start",
+        "path": ".claude/hooks/session_start.sh"
+      },
       {
         "event_type": "session_end",
         "path": ".claude/hooks/session_end.sh"
@@ -167,6 +171,17 @@
     "version": "0.7.0.dev3"
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session_start.sh",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
     "Stop": [
       {
         "hooks": [

@@ -155,6 +155,7 @@ COMMAND_PANELS: dict[str, str] = {
     "mcp": "runtime",
     "plugin": "runtime",
     "profile": "runtime",
+    "rules": "runtime",
     "skill": "runtime",
     # ship: PR / wiki / release artifacts and the sync renderer.
     "pr": "ship",

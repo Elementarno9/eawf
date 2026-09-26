@@ -20,6 +20,10 @@ Compilation fails closed, with a typed :class:`RuleCompileError`, when:
 - a non-builtin source claims an identifier in the builtin namespace;
 - a verification or enforcement reference does not resolve against the
   registered gate kinds and lint rules;
+- a ``must`` rule has no delivery: it is neither backed by a registered
+  enforcement reference, a role rule every rendered agent definition of its
+  role embeds, nor rendered into a projection that every supported runtime
+  loads;
 - rule prose grants or widens tools, capabilities, network or filesystem
   reach, model selection, budgets, concurrency, retries or external effects;
   or
@@ -34,17 +38,22 @@ import json
 import logging
 import pkgutil
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from functools import cache
 from pathlib import Path
 from typing import ClassVar, Final
 
+from eawf.kernel.runtime.host_facts import ProjectionKind
 from eawf.kernel.spec.release import Sha256DigestStr
+from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.rules.compose import (
+    COMMITTED_SOURCE_KINDS,
     BuiltinRuleProvider,
     load_rule_layers,
     no_builtin_rules,
     require_committed_inputs,
 )
+from eawf.platform.rules.modules import builtin_rule_modules
 from eawf.platform.rules.records import (
     AuthoredRule,
     QualifiedId,
@@ -159,6 +168,14 @@ _INJECTION: Final[re.Pattern[str]] = re.compile(
 
 _PROSE_FIELDS: Final[tuple[str, ...]] = ("title", "instruction", "rationale")
 
+#: The projections each supported runtime loads at session start.
+ProjectionReaders = Mapping[RuntimeName, frozenset[ProjectionKind]]
+
+# The committed card compiles from committed sources only, so a rule from any
+# other layer reaches the policy projection and never the card.
+_COMMITTED_ROUTES: Final[frozenset[ProjectionKind]] = frozenset({"card", "policy"})
+_LOCAL_ROUTES: Final[frozenset[ProjectionKind]] = frozenset({"policy"})
+
 
 class RuleCompileError(ValueError):
     """Base class for a refusal raised while compiling the rule graph.
@@ -235,6 +252,18 @@ class RuleAuthorityInjectionError(RuleCompileError):
     """Rule prose tries to override the instruction hierarchy."""
 
     code: ClassVar[str] = "rule_authority_injection"
+
+
+class RuleMustUndeliveredError(RuleCompileError):
+    """A ``must`` rule reaches no runtime deterministically, or not every one."""
+
+    code: ClassVar[str] = "rule_must_undelivered"
+
+
+class RuleRoleUndeliveredError(RuleMustUndeliveredError):
+    """A role-scoped ``must`` rule is embedded in no rendered agent definition."""
+
+    code: ClassVar[str] = "rule_role_undelivered"
 
 
 class CompiledRule(RuleModel):
@@ -333,6 +362,40 @@ def registered_enforcement_refs() -> frozenset[str]:
     return frozenset(gates | lints)
 
 
+def registered_projection_readers() -> dict[RuntimeName, frozenset[ProjectionKind]]:
+    """Return which projections each supported runtime loads, from the host facts.
+
+    Returns:
+        Every supported runtime mapped to the projections it reads.
+
+    Raises:
+        HostFactError: When the shipped host-fact record is untrustworthy.
+    """
+    # Imported here because the host-fact loader pulls runtime certification,
+    # which a caller that only reads rule records should not pay for.
+    from eawf.platform.rules.host_facts import load_host_facts
+
+    return {record.runtime: frozenset(record.reads) for record in load_host_facts().records}
+
+
+@cache
+def registered_agent_roles() -> frozenset[str]:
+    """Return every role a rendered agent definition exists for.
+
+    Every runtime's agent definitions and the dispatch role registry are
+    rendered from one agent registry, so it is the set of roles a role rule
+    can reach.
+
+    Returns:
+        The roles of the agent registry.
+    """
+    # Imported here because the agent registry imports the carrier renderer,
+    # which imports this module.
+    from eawf.surfaces.render.agents import AGENT_REGISTRY
+
+    return frozenset(spec.role for spec in AGENT_REGISTRY)
+
+
 def compile_rule_graph(
     repo_root: Path,
     *,
@@ -365,6 +428,7 @@ def compile_rule_graph(
         layers.records(),
         modules=layers.modules,
         enforcement_refs=registered_enforcement_refs(),
+        projection_readers=registered_projection_readers(),
     )
     logger.info(
         f"rule graph compiled digest={graph.digest} rules={len(graph.rules)} "
@@ -401,6 +465,7 @@ def compile_card_graph(
         layers.committed_records(),
         modules=layers.modules,
         enforcement_refs=registered_enforcement_refs(),
+        projection_readers=registered_projection_readers(),
     )
 
 
@@ -409,6 +474,7 @@ def compile_committed_records(
     *,
     modules: Iterable[str],
     enforcement_refs: frozenset[str],
+    projection_readers: ProjectionReaders,
 ) -> RuleGraph:
     """Compile records for a committed projection, refusing machine-local input.
 
@@ -416,6 +482,7 @@ def compile_committed_records(
         records: Records from committed sources only.
         modules: Selected builtin module references.
         enforcement_refs: The resolvable enforcement references.
+        projection_readers: The projections each supported runtime loads.
 
     Returns:
         The effective committed graph.
@@ -429,6 +496,7 @@ def compile_committed_records(
         require_committed_inputs(records),
         modules=modules,
         enforcement_refs=enforcement_refs,
+        projection_readers=projection_readers,
     )
 
 
@@ -437,6 +505,7 @@ def compile_rule_records(
     *,
     modules: Iterable[str],
     enforcement_refs: frozenset[str],
+    projection_readers: ProjectionReaders,
 ) -> RuleGraph:
     """Compile rule records from any mix of layers into the effective graph.
 
@@ -450,11 +519,15 @@ def compile_rule_records(
         enforcement_refs: The references a verification or enforcement may
             resolve against; production passes
             :func:`registered_enforcement_refs`.
+        projection_readers: The projections each supported runtime loads;
+            production passes :func:`registered_projection_readers`.
 
     Returns:
         The effective graph.
 
     Raises:
+        ValueError: When ``projection_readers`` names no runtime, which
+            would let every ``must`` rule pass the delivery check vacuously.
         RuleInterpolationError: When prose carries executable interpolation.
         RuleAuthorityInjectionError: When prose overrides the instruction
             hierarchy.
@@ -470,7 +543,11 @@ def compile_rule_records(
         RuleProtectedError: When a supersession targets a protected rule.
         RuleCompetingWriterError: When two rules supersede one target.
         RuleDuplicateOwnerError: When two effective rules own one obligation.
+        RuleMustUndeliveredError: When an effective ``must`` rule has no
+            delivery to every supported runtime.
     """
+    if not projection_readers:
+        raise ValueError("projection_readers names no runtime; the delivery check needs one")
     compiled = sorted(
         (_compile_one(record, enforcement_refs=enforcement_refs) for record in records),
         key=_canonical_key,
@@ -492,6 +569,8 @@ def compile_rule_records(
         if (rule.record.rule_id, rule.record.revision, rule.digest) not in superseded
     )
     _require_single_owner(effective)
+    for rule in effective:
+        _require_must_delivery(rule.record, projection_readers)
     selected = tuple(sorted(set(modules)))
     digest = _sha256(
         {
@@ -633,6 +712,84 @@ def _check_enforcement(record: RuleRecord, enforcement_refs: frozenset[str]) -> 
         )
 
 
+def _require_must_delivery(record: RuleRecord, readers: ProjectionReaders) -> None:
+    """Refuse a ``must`` rule that some supported runtime never receives.
+
+    A ``must`` rule is delivered when a registered enforcement refuses the
+    violation, when every rendered agent definition of one of its roles
+    embeds it, or when a projection renders it that every supported runtime
+    loads. The card renders every committed non-role ``must`` rule and the
+    policy projection every non-role ``must`` rule; a module view is never a
+    delivery, because it depends on the model electing to read it.
+
+    Args:
+        record: An effective rule.
+        readers: The projections each supported runtime loads.
+
+    Raises:
+        RuleRoleUndeliveredError: When the rule is scoped to roles and no
+            rendered agent definition embeds it.
+        RuleMustUndeliveredError: When the rule has none of those routes.
+    """
+    if record.force != "must" or record.enforcement_ref is not None:
+        return
+    if record.scope.roles:
+        _require_role_delivery(record)
+        return
+    remedy = (
+        "make it an unscoped constitution rule, back it with a registered enforcement_ref, "
+        "scope it to a role (builtin rules only), or lower its force to should"
+    )
+    if record.zone == "retrievable":
+        raise RuleMustUndeliveredError(
+            f"{record.rule_id}: a retrievable must rule reaches a session only through a "
+            f"module view a model may never read; {remedy}"
+        )
+    routes = _COMMITTED_ROUTES if record.source.kind in COMMITTED_SOURCE_KINDS else _LOCAL_ROUTES
+    missed = sorted(runtime for runtime, reads in readers.items() if not reads & routes)
+    if missed:
+        raise RuleMustUndeliveredError(
+            f"{record.rule_id}: a {record.source.kind} must rule is rendered only into "
+            f"{', '.join(sorted(routes))}, which {', '.join(missed)} never loads; {remedy}"
+        )
+
+
+def _require_role_delivery(record: RuleRecord) -> None:
+    """Refuse a role-scoped ``must`` rule no rendered agent definition embeds.
+
+    Agent definitions are rendered without a repository graph, so they embed
+    the role rules of the builtin modules that bind every repository: a
+    catalog module applies only where it is selected, and a workspace or
+    repository rule exists only in the graph of the repository that authors
+    it. The rule must also name a role an agent definition exists for.
+
+    Args:
+        record: An effective role-scoped ``must`` rule without enforcement.
+
+    Raises:
+        RuleRoleUndeliveredError: When the rule is not a builtin rule that
+            binds every repository, or names no role with an agent
+            definition.
+    """
+    remedy = "back it with a registered enforcement_ref or lower its force to should"
+    agent_roles = registered_agent_roles()
+    if not agent_roles.intersection(record.scope.roles):
+        raise RuleRoleUndeliveredError(
+            f"{record.rule_id}: scoped only to {', '.join(record.scope.roles)}, which no "
+            f"rendered agent definition exists for (agents: {', '.join(sorted(agent_roles))}); "
+            f"{remedy}"
+        )
+    module = builtin_rule_modules().get(record.source.locator.partition("@")[0])
+    catalog = module is not None and module.document.kind == "catalog"
+    if record.source.kind != "builtin" or catalog:
+        origin = "a catalog module" if catalog else f"the {record.source.kind} layer"
+        raise RuleRoleUndeliveredError(
+            f"{record.rule_id}: a role-scoped must rule from {origin} is embedded in no "
+            f"agent definition, which carry only the builtin role rules every repository "
+            f"applies; {remedy}"
+        )
+
+
 def _apply_supersessions(
     compiled: list[CompiledRule],
     by_exact: dict[tuple[str, int, str], CompiledRule],
@@ -764,6 +921,7 @@ __all__ = [
     "GATE_REF_NAMESPACE",
     "LINT_REF_NAMESPACE",
     "CompiledRule",
+    "ProjectionReaders",
     "RuleAuthorityInjectionError",
     "RuleAuthorityWideningError",
     "RuleCompetingWriterError",
@@ -774,7 +932,9 @@ __all__ = [
     "RuleGraph",
     "RuleIdentityShadowError",
     "RuleInterpolationError",
+    "RuleMustUndeliveredError",
     "RuleProtectedError",
+    "RuleRoleUndeliveredError",
     "RuleSupersessionError",
     "RuleSupersessionLayerError",
     "SupersessionEdge",
@@ -782,6 +942,8 @@ __all__ = [
     "compile_committed_records",
     "compile_rule_graph",
     "compile_rule_records",
+    "registered_agent_roles",
     "registered_enforcement_refs",
+    "registered_projection_readers",
     "rule_digest",
 ]

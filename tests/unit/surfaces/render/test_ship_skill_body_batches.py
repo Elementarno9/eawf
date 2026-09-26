@@ -6,8 +6,8 @@ push. The squash rewrites commit hashes, so the skill repins wave pins after, an
 work that surfaces after the phase-close commit becomes a wave of the next
 PLANNED or ACTIVE phase because the commit lint rejects a bare subject while one
 exists. The commit-granularity and commit-prefix rules state the same contract,
-their ``docs/rules/`` pages match a fresh render, and AGENTS.md stays under the
-byte cap a Codex consumer truncates at.
+their ``docs/rules/`` pages match a fresh render, and the AGENTS.md card rendered
+from ``.ea/rules.yaml`` stays under the byte cap a Codex consumer truncates at.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import pytest
 from eawf.observability.doctor.checks import CODEX_PROJECT_DOC_BYTE_CAP
 from eawf.platform.profiles import compose, load_profile
 from eawf.platform.profiles.models import RenderBlock
+from eawf.platform.rules.render import CARD_TARGET, plan_rule_projections
 from eawf.surfaces.render.agents_md import reference_file_path, render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 from eawf.surfaces.render.skills.registry import _SHIP_BODY, SKILL_REGISTRY
@@ -195,10 +196,13 @@ def test_rule_page_matches_fresh_render(block_id: str, tmp_path: Path) -> None:
     )
 
 
-def test_agents_md_matches_fresh_render_under_byte_cap(tmp_path: Path) -> None:
-    """The committed AGENTS.md is the current render and fits the Codex cap."""
-    rendered = (_rendered_repo_root(tmp_path) / "AGENTS.md").read_bytes()
-    committed = (_REPO_ROOT / "AGENTS.md").read_bytes()
+def test_agents_md_matches_fresh_render_under_byte_cap() -> None:
+    """The committed AGENTS.md is the current rule-graph card and fits the Codex cap."""
+    plan = plan_rule_projections(_REPO_ROOT)
+    rendered = next(p.text for p in plan.projections if p.record.target == CARD_TARGET)
+    committed = (_REPO_ROOT / CARD_TARGET).read_bytes()
 
-    assert committed == rendered, "AGENTS.md drifted from its profiles; re-run eawf sync"
+    assert committed == rendered.encode("utf-8"), (
+        "AGENTS.md drifted from .ea/rules.yaml; re-run eawf sync"
+    )
     assert len(committed) < CODEX_PROJECT_DOC_BYTE_CAP

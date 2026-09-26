@@ -289,10 +289,17 @@ def _desired_sync_drift(workspace: Path) -> bool:
     from eawf.platform.profiles.compose import compose
     from eawf.platform.profiles.loader import load_profile
     from eawf.platform.profiles.selection import resolve_enabled_profiles
+    from eawf.platform.rules.render import (
+        plan_rule_projections,
+        projection_drift,
+        rule_source_present,
+    )
     from eawf.surfaces.render.agents_md import render_agents_md
     from eawf.surfaces.render.claude_shim import render_claude_md
     from eawf.surfaces.render.manifest import load, save_atomic
 
+    if rule_source_present(workspace):
+        return bool(projection_drift(workspace, plan_rule_projections(workspace)))
     enabled = resolve_enabled_profiles(workspace)
     composed = compose([load_profile(profile_id, workspace=workspace) for profile_id in enabled])
     with tempfile.TemporaryDirectory() as tmp:

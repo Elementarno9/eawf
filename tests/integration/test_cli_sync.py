@@ -12,6 +12,7 @@ multi-call interaction with the manifest writer.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -19,6 +20,7 @@ import yaml
 from typer.testing import CliRunner
 
 from eawf.platform.profiles.discovery import _clear_cache_for_tests
+from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -218,6 +220,69 @@ def test_sync_invalid_profile_in_config_exits_3(tmp_path: Path) -> None:
 
     res = runner.invoke(app, ["sync", "--target", str(tmp_path)])
     assert res.exit_code == 1, res.output
+
+
+_RULE_SOURCE = """schema_version: 1
+modules: []
+rules:
+  - rule_id: repo.changelog
+    obligation_id: demo.changelog
+    revision: 1
+    title: Keep release notes in the changelog
+    zone: constitution
+    force: must
+    effectiveness: behavioral
+    instruction: Keep the release notes in the changelog under the version heading.
+    verification:
+      method: review
+"""
+
+
+def _init_rules(target: Path) -> None:
+    """Init a workspace, then switch its steering files to the rule graph."""
+    _init_core(target)
+    (target / ".ea" / "rules.yaml").write_text(_RULE_SOURCE, encoding="utf-8")
+
+
+def test_sync_renders_rule_projections_when_rule_source_present(tmp_path: Path) -> None:
+    """With ``.ea/rules.yaml`` the card and the policy file replace the profile render."""
+    _init_rules(tmp_path)
+
+    res = runner.invoke(app, ["--json", "sync", "--target", str(tmp_path)])
+
+    assert res.exit_code == 0, res.output
+    card = (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    assert card.startswith("<!-- eawf:projection kind=card ")
+    assert "EAWF:managed" not in card
+    assert (tmp_path / "AGENTS.override.md").is_file()
+    body = json.loads(res.output)
+    assert body["projections_changed"] == [
+        "AGENTS.md",
+        "AGENTS.override.md",
+        "CLAUDE.md",
+        *(carrier_target(role) for role in builtin_carrier_roles()),
+    ]
+    assert body["agents_md_changed"] is True
+    assert body["claude_md_changed"] is True
+    assert (tmp_path / "CLAUDE.md").read_text(encoding="utf-8") == "@AGENTS.override.md\n"
+    again = runner.invoke(app, ["sync", "--target", str(tmp_path), "--check"])
+    assert again.exit_code == 0, again.output
+
+
+def test_sync_check_exits_4_on_hand_edited_card(tmp_path: Path) -> None:
+    """A hand edit to the generated card is drift under ``--check`` and refused on write."""
+    _init_rules(tmp_path)
+    assert runner.invoke(app, ["sync", "--target", str(tmp_path)]).exit_code == 0
+    card = tmp_path / "AGENTS.md"
+    card.write_text(card.read_text(encoding="utf-8") + "- a hand-added rule\n", encoding="utf-8")
+    edited = card.read_bytes()
+
+    check = runner.invoke(app, ["sync", "--target", str(tmp_path), "--check"])
+    assert check.exit_code == 4, check.output
+    write = runner.invoke(app, ["sync", "--target", str(tmp_path)])
+    assert write.exit_code != 0, write.output
+    assert "edited by hand" in write.output
+    assert card.read_bytes() == edited
 
 
 def test_sync_help_lists_flags() -> None:

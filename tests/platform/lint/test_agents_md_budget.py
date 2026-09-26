@@ -192,3 +192,131 @@ def test_main_exits_one_when_synthetic_tier0_exceeds_cap(
     err = capsys.readouterr().err
     assert code == 1
     assert f"exceeds cap={DEFAULT_TIER0_TOKEN_CAP}" in err
+
+
+# ---- check_rendered_projection_budget: the rules-pipeline measurement ------
+
+
+def _seed_rule_source(tmp_path: Path) -> None:
+    """Mark *tmp_path* as authoring ``.ea/rules.yaml`` (content is irrelevant;
+    only its presence gates :func:`agents_md_budget.rule_source_present`)."""
+    (tmp_path / ".ea").mkdir(parents=True, exist_ok=True)
+    (tmp_path / ".ea" / "rules.yaml").write_text("schema_version: 1\nrules: []\n", encoding="utf-8")
+
+
+def test_check_rendered_projection_budget_empty_without_rule_source(tmp_path: Path) -> None:
+    """No ``.ea/rules.yaml`` -> nothing measured, vacuously clean."""
+    (tmp_path / "AGENTS.md").write_text("x", encoding="utf-8")
+
+    report = agents_md_budget.check_rendered_projection_budget(tmp_path)
+
+    assert report.entries == ()
+    assert report.clean
+
+
+def test_check_rendered_projection_budget_empty_when_neither_file_rendered(
+    tmp_path: Path,
+) -> None:
+    """A rule source with neither file rendered yet measures nothing."""
+    _seed_rule_source(tmp_path)
+
+    report = agents_md_budget.check_rendered_projection_budget(tmp_path)
+
+    assert report.entries == ()
+    assert report.clean
+
+
+def test_check_rendered_projection_budget_measures_the_committed_card() -> None:
+    """Against the committed rule source, the card is measured and under cap."""
+    report = agents_md_budget.check_rendered_projection_budget(_REPO_ROOT)
+
+    by_target = {entry.target: entry for entry in report.entries}
+    assert "AGENTS.md" in by_target
+    assert not by_target["AGENTS.md"].over
+    assert report.clean
+
+
+def test_check_rendered_projection_budget_flags_an_oversized_card(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A card past its certified cap reports over, naming the byte counts."""
+    from eawf.platform.rules.host_facts import CertifiedCap
+
+    _seed_rule_source(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("x" * 100, encoding="utf-8")
+    small_cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: small_cap)
+
+    report = agents_md_budget.check_rendered_projection_budget(tmp_path)
+
+    assert not report.clean
+    entry = next(e for e in report.entries if e.target == "AGENTS.md")
+    assert entry.over
+    assert entry.byte_count == 100
+    assert entry.cap_bytes == 10
+
+
+def test_check_rendered_projection_budget_boundary_at_cap_is_not_over(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A card exactly at its cap is clean; one byte over trips it."""
+    from eawf.platform.rules.host_facts import CertifiedCap
+
+    _seed_rule_source(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("x" * 10, encoding="utf-8")
+    cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: cap)
+
+    at_cap = agents_md_budget.check_rendered_projection_budget(tmp_path)
+    assert at_cap.clean
+
+    (tmp_path / "AGENTS.md").write_text("x" * 11, encoding="utf-8")
+    over_cap = agents_md_budget.check_rendered_projection_budget(tmp_path)
+    assert not over_cap.clean
+
+
+def test_check_rendered_projection_budget_skips_a_reader_with_no_certified_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A projection with no certified reader is left unmeasured, not a fail."""
+    _seed_rule_source(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("x", encoding="utf-8")
+    monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: None)
+
+    report = agents_md_budget.check_rendered_projection_budget(tmp_path)
+
+    assert report.entries == ()
+    assert report.clean
+
+
+def test_main_measures_rendered_projections_when_rule_source_present(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``main()`` reports the rendered-projection verdict, not the tier-0 one."""
+    _seed_rule_source(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("x" * 100, encoding="utf-8")
+
+    code = agents_md_budget.main(["--repo-root", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "rendered_projections=" in out
+    assert "tier0_tokens" not in out
+
+
+def test_main_exits_one_when_rendered_projection_exceeds_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An over-cap rendered card drives ``main()`` to exit non-zero."""
+    from eawf.platform.rules.host_facts import CertifiedCap
+
+    _seed_rule_source(tmp_path)
+    (tmp_path / "AGENTS.md").write_text("x" * 100, encoding="utf-8")
+    small_cap = CertifiedCap(runtime="codex", cap_bytes=10, readers=("codex",), uncertified=())
+    monkeypatch.setattr(agents_md_budget, "smallest_certified_cap", lambda *_a, **_k: small_cap)
+
+    code = agents_md_budget.main(["--repo-root", str(tmp_path)])
+
+    err = capsys.readouterr().err
+    assert code == 1
+    assert "AGENTS.md=100B>10B cap" in err

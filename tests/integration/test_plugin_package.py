@@ -70,22 +70,22 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert len(list((target / "skills").iterdir())) == _SKILL_COUNT
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
-    # Only handler-backed hooks are emitted by default -- today just
-    # SESSION_END, so the seven idle no-op wrappers (SessionStart,
-    # PreToolUse/PostToolUse, SubagentStop, PreCompact) are absent.
+    # Only handler-backed hooks are emitted by default -- today
+    # SESSION_START and SESSION_END, so the six idle no-op wrappers
+    # (PreToolUse/PostToolUse, SubagentStop, PreCompact) are absent.
     assert (target / "hooks").exists()
     assert (target / "hooks.json").exists()
     assert (target / "hooks" / "session_end.sh").exists()
-    assert not (target / "hooks" / "session_start.sh").exists()
+    assert (target / "hooks" / "session_start.sh").exists()
     assert not (target / "hooks" / "pre_commit.sh").exists()
     assert not (target / "hooks" / "post_commit.sh").exists()
     assert not (target / "hooks" / "pre_push.sh").exists()
     assert not (target / "hooks" / "post_push.sh").exists()
     assert not (target / "hooks" / "pre_compact.sh").exists()
     assert not (target / "hooks" / "subagent_stop.sh").exists()
-    assert len(list((target / "hooks").iterdir())) == 1
+    assert len(list((target / "hooks").iterdir())) == 2
     hooks_manifest = json.loads((target / "hooks.json").read_text())
-    assert set(hooks_manifest["hooks"].keys()) == {"Stop"}
+    assert set(hooks_manifest["hooks"].keys()) == {"SessionStart", "Stop"}
     # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
     # variable so the manifest installs cleanly regardless of where CC
     # mounts the plugin.

@@ -18,6 +18,7 @@ Public API::
     AGENT_REGISTRY               # frozen tuple of every Eä agent spec
     SERENA_READ_TOOLS            # the read-only symbol triple granted in-registry
     effective_agent_tools(...)   # pure: base allowlist + configured extras
+    embed_role_rules(role, body) # the body every runtime and dispatch prompt carries
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.kernel.config.schema import ALL_ROLES
+from eawf.platform.rules.carriers import builtin_carrier_body
 from eawf.surfaces.render.frontmatter import yaml_scalar
 from eawf.surfaces.render.unwrap import unwrap_markdown_paragraphs
 
@@ -150,6 +152,31 @@ def effective_agent_tools(
         *extra_tools.get(spec.role, ()),
     )
     return tuple(dict.fromkeys(widened))
+
+
+def embed_role_rules(role: str, body: str) -> str:
+    """Return *body* with the rules that bind *role* below its title.
+
+    Every runtime's agent definition and every dispatch prompt carries the
+    role rules in its own text: a pointer to a separate file reaches the
+    model only if it elects to read it, and the rendered carrier file is
+    gitignored, so a fresh clone, a worktree or a repository without a rule
+    source has none.
+
+    Args:
+        role: The agent role.
+        body: The agent body, opening with its title line.
+
+    Returns:
+        *body* unchanged when no builtin rule is scoped to *role*; otherwise
+        *body* with :func:`~eawf.platform.rules.carriers.builtin_carrier_body`
+        as the block after its first line.
+    """
+    rules = builtin_carrier_body(role)
+    if rules is None:
+        return body
+    title, _, rest = body.partition("\n")
+    return f"{title}\n\n{rules.rstrip()}\n{rest}"
 
 
 _BASE_REPORT_BODY: dict[str, Any] = {
@@ -305,7 +332,7 @@ def render_agent_md(ctx: AgentTemplateContext) -> str:
         model=ctx.model,
         color=ctx.color,
         memory=ctx.memory,
-        body=unwrap_markdown_paragraphs(ctx.body).rstrip("\n"),
+        body=embed_role_rules(ctx.role, unwrap_markdown_paragraphs(ctx.body)).rstrip("\n"),
         output_contract=unwrap_markdown_paragraphs(contract).rstrip("\n"),
     )
     if not rendered.endswith("\n"):
@@ -327,11 +354,7 @@ You are read-only. Your job is to reduce uncertainty, not to act on it.
 
 ## v0.4 output contract
 
-You emit a typed `IntentBrief`: every claim carries `evidence_refs`
-(file:line, external URL, or store URN). A brief is promotable iff
-every claim has at least one resolving + entailing reference. Mark
-claims you cannot resolve as `unresolved` and queue them as
-next-research items; never paper over with a weak citation.
+You emit a typed `IntentBrief` whose claims carry `evidence_refs`.
 
 ## Inputs you expect
 
@@ -356,34 +379,10 @@ Structured findings block with `Question / Findings / Alternatives /
 Recommendation / Open questions`. Word budget: ≤500 words unless the
 parent specifies otherwise.
 
-## Refuting a prior claim
-
-A research-campaign round prompt lists the scope's current live claim
-ids for exactly this: when your finding directly contradicts one of
-them, name that claim's id in `refuted_claim_ids`. Leave it empty
-otherwise -- never infer a contradiction from a mere absence of
-support, and never name a claim the prompt did not list.
-
 ## Anti-patterns
 
 - Recommending a path without naming what would change your mind.
 - Burying the recommendation in prose; lead with the verdict.
-
-## Verify-before-claim ladder
-
-(a) Resolve the symbol with the symbol tools; they bind, text search only matches.
-(b) Read the source file.
-(c) Grep for call sites when the target is a string, a config value, or an unknown name.
-(d) Inspect golden fixtures / snapshot tests.
-(e) Only then quote the behaviour.
-Design docs and memory notes are hypotheses to verify, never ground truth;
-when doc and source drift, quote the source.
-
-- Symbol-tool read triple: `mcp__serena__find_symbol`,
-  `mcp__serena__find_referencing_symbols`, `mcp__serena__get_symbols_overview`.
-- Every quantitative or behavioural claim carries file:line, a store URN, or an
-  external URL.
-- Citations are dense [N] markers backed by a References table, never inline path soup.
 """
 
 _PLANNER_BODY = """# Planner
@@ -434,21 +433,6 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
 - A success criterion phrased as "the code looks good".
 - Skipping the structured-flag CLI in favour of free-text YAML
   payloads — keep the output machine-applyable.
-
-## Typed-criteria floor (non-negotiable authoring bar)
-
-- Every wave you emit carries typed criteria (kind != legacy) with a ResponseClause:
-  observe-verb + object + file:line proof locus ("observe X wired at path:line").
-- Give each criterion an honest evidence_kind: deterministic wherever a falsifier exists;
-  attested only for genuinely judgment-bound claims.
-- Attach >=1 gate — usually command_exit_zero over a targeted pytest — policy=block,
-  required=true.
-- Brief-coverage HALT: every enumerated brief deliverable maps to a criterion OR an
-  explicit deferral row (reason + target).
-- An unmapped span HALTS planning — emit verdict=blocked naming the span.
-- Silent thinning is the costliest planning defect on record.
-- Pin stable contracts verbatim in the criterion text (digit/key maps, enum values,
-  schemas); a criterion that names only a chassis is a thinning bug.
 """
 
 _EXECUTOR_BODY = """# Executor
@@ -479,8 +463,6 @@ criterion lacks evidence, surface the gap explicitly in the
    tests.
 3. Run the local gauntlet: pre-commit, mypy, pytest, ruff.
 4. Commit with the spec's commit prefix and a 3-6 bullet body.
-5. In a worktree: branch from the parent feature branch HEAD, never
-   from main.
 
 ## Refuse-conditions
 
@@ -488,32 +470,10 @@ criterion lacks evidence, surface the gap explicitly in the
 - Scope grows beyond the named files.
 - Tests fail and you cannot reproduce locally.
 
-## DoR — refuse the dispatch unless ALL hold
+## Before you emit the close-ready report
 
-- Every success criterion is typed (kind != legacy) and pins the production call site as
-  file:line — "wired at file:line", never "function X exists".
-- The binding-pass disease is validating existence instead of wiring.
-- Waves planned BEFORE the I22 legacy-criteria drain may carry grandfathered kind=legacy rows:
-  do not refuse those — flag each legacy row in `followups` and verify it as written.
-- file_scopes is non-empty and criteria pin contracts verbatim (enum values, key maps,
-  API shapes) — not "adopt X chassis".
-- Each deterministic criterion carries >=1 gate you can run locally.
-
-If any check fails on a post-drain wave, emit verdict=blocked naming the gap.
-Never start work on an unready spec.
-
-## DoD — before you emit the close-ready report
-
-- Cite, per criterion, the file:line where the behaviour is WIRED (a production call site),
-  not where it is defined.
 - Boundary AND error-path tests for every public function touched: empty / single /
   off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
-- files_changed lists the REAL touched paths — the parent syncs wave scopes from it
-  before close.
-- Run NO eawf command in the worktree; the parent closes the wave from your report.
-- evidence_refs is REQUIRED: one entry per success criterion (a gate command plus its
-  exit code, a file:line where the behaviour is wired, or a store URN);
-  an empty list on a criteria-bearing wave refuses close-ready.
 """
 
 _AUDITOR_BODY = """# Auditor
@@ -527,8 +487,7 @@ does not actually support.
 You emit one `EvidenceRecord` per success criterion. Verdicts roll
 into the target wave/iter `CloseReadiness` — if the projection comes
 back `not-ready`, name the missing gate or claim, do not negotiate
-the criterion. Your `RoleSpec` pins fresh-context isolation; never
-read the executor's prior session log.
+the criterion. Your `RoleSpec` pins fresh-context isolation.
 
 ## Inputs you expect
 
@@ -552,20 +511,6 @@ A per-criterion verdict table and an aggregate verdict.
 
 - "Looks good" — every verdict needs evidence.
 - Trusting docstrings over implementation.
-
-## Refuse-broken-artifact self-test
-
-Before trusting your own audit, prove it can fail:
-pick at least one criterion and name the concrete broken input your check would flag;
-for example a wrong constant, a deleted call site, or a reverted edit.
-An audit that cannot name what it would reject is vacuous;
-report verdict=blocked with the untestable criterion named.
-
-- Never accept "the function exists" as evidence for a wired-at-call-site criterion;
-  demand the call-site file:line.
-- A legacy or attested criterion with no falsifier is reported UNVERIFIED, never passed.
-- Prefer running the wave's own gates over re-reading prose; a gate that cannot fail on
-  broken input is itself a finding.
 """
 
 _REVIEWER_BODY = """# Reviewer
@@ -629,11 +574,6 @@ the same way `/audit` and `/review` are.
 2. Apply edits in batches by category (naming, docstrings, log
    fields, error messages, dead code).
 3. After each batch, run `uv run pre-commit run --files <changed>`.
-
-## Hard refuse
-
-- Renaming a public symbol without explicit user confirmation.
-- Touching `state.json` or anything under `.ea/`.
 """
 
 _OPERATOR_BODY = """# Operator
@@ -839,5 +779,6 @@ __all__ = [
     "AgentSpec",
     "AgentTemplateContext",
     "effective_agent_tools",
+    "embed_role_rules",
     "render_agent_md",
 ]

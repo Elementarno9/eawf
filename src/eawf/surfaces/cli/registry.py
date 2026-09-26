@@ -172,6 +172,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     ),
     # Managed-asset re-render.
     CommandRow("sync", "eawf.surfaces.cli.commands.sync", "sync_cmd", None),
+    # Rule views the sync render wrote.
+    GroupRow("rules", "eawf.surfaces.cli.commands.rules", "rules_app"),
     # Hook runner + plugins + harness adapters + skills.
     GroupRow("hook", "eawf.surfaces.cli.commands.hook", "hook_app"),
     GroupRow("plugin", "eawf.surfaces.cli.commands.plugin", "plugin_app"),

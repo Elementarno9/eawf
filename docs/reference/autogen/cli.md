@@ -555,6 +555,14 @@ Roadmap planner (propose / revise / apply / drop / show).
 | `revise` | Edit a PLANNED or ACTIVE phase's wave plan via structured flags. |
 | `show` | Render the PLANNED queue plus the ACTIVE phase summary. |
 
+### `eawf rules`
+
+Read the rule views rendered from .ea/rules.yaml.
+
+| Verb | Summary |
+|---|---|
+| `view` | Print the detailed view of one selected rule module. |
+
 ### `eawf schema`
 
 Dump JSON Schema + reference pages for the canonical models.
