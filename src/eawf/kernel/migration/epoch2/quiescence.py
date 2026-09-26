@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import Counter
 from contextlib import suppress
 from enum import StrEnum
 from pathlib import Path
@@ -77,6 +78,22 @@ class QuiescenceHolderKind(StrEnum):
     HELD_LEASE = "held_lease"
     PENDING_WAL_RECORD = "pending_wal_record"
     MANAGED_WORKTREE = "managed_worktree"
+
+
+#: What clears each holder kind. The refusal names the command so an
+#: operator is not left with the generic validation hint, which re-reads
+#: the schema and clears nothing.
+REMEDIATIONS: Final[dict[QuiescenceHolderKind, str]] = {
+    QuiescenceHolderKind.ACTIVE_SESSION: "close each live session with `eawf session close`",
+    QuiescenceHolderKind.HELD_LEASE: "let the process holding each lease finish, or stop it",
+    QuiescenceHolderKind.PENDING_WAL_RECORD: (
+        "let the daemon drain its write-ahead log, then stop it"
+    ),
+    QuiescenceHolderKind.MANAGED_WORKTREE: (
+        "retire worktree rows whose checkout is gone with `eawf worktree reconcile`, "
+        "and finish or remove the rest"
+    ),
+}
 
 
 class QuiescenceFinding(StrictMigrationModel):
@@ -252,24 +269,33 @@ def require_quiescent(findings: tuple[QuiescenceFinding, ...]) -> None:
 
     Raises:
         MigrationNotQuiescentError: At least one holder is live. The
-            message itemises each one by kind and locator, up to
-            :data:`MAX_NAMED_HOLDERS`, and always reports the true total.
+            message reports the true total and a count per holder kind,
+            itemises holders by kind and locator up to
+            :data:`MAX_NAMED_HOLDERS`, and ends with the remediation for
+            every kind present.
     """
     if not findings:
         return
+    counts = Counter(finding.kind for finding in findings)
+    kinds = [kind for kind in QuiescenceHolderKind if kind in counts]
+    grouped = ", ".join(f"{kind.value}={counts[kind]}" for kind in kinds)
     named = ", ".join(
         f"{finding.kind.value} {finding.locator} ({finding.detail})"
         for finding in findings[:MAX_NAMED_HOLDERS]
     )
-    suffix = "" if len(findings) <= MAX_NAMED_HOLDERS else ", ..."
+    unnamed = len(findings) - MAX_NAMED_HOLDERS
+    suffix = f", ... and {unnamed} more" if unnamed > 0 else ""
+    remediation = "; ".join(REMEDIATIONS[kind] for kind in kinds)
     raise MigrationNotQuiescentError(
-        f"{len(findings)} holders are still live, so the cutover would race them: {named}{suffix}"
+        f"{len(findings)} holders are still live ({grouped}), so the cutover would race "
+        f"them: {named}{suffix}. Remediation: {remediation}"
     )
 
 
 __all__ = [
     "BLOCKING_WAL_STATUSES",
     "MAX_NAMED_HOLDERS",
+    "REMEDIATIONS",
     "QuiescenceFinding",
     "QuiescenceHolderKind",
     "quiescence_findings",

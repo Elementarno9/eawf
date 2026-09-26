@@ -1,13 +1,20 @@
-"""The epoch-1 write fence at the state-write chokepoint and the JSON writer."""
+"""The epoch-1 write fence at the state-write chokepoint, the JSON writer and evidence."""
 
 from __future__ import annotations
 
+import asyncio
+import os
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import orjson
 import pytest
+import typer
 
+from eawf import __version__
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import (
     LEGACY_OPERATION_REMOVED,
     LegacyOperationRemovedError,
@@ -17,6 +24,13 @@ from eawf.kernel.state.io import (
     write_state_unlocked,
 )
 from eawf.kernel.state.writer import atomic_write_json, atomic_write_json_locked
+from eawf.kernel.store.paths import store_path
+from eawf.runtime.daemon import PROTOCOL_VERSION
+from eawf.runtime.daemon.methods import VALIDATION_FAILED, DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.evidence import append as evidence_append
+from eawf.runtime.daemon.server import _process_frame
+from eawf.surfaces.cli.commands import evidence as evidence_cli
+from eawf.surfaces.cli.flags import GlobalFlags
 
 pytestmark = pytest.mark.unit
 
@@ -121,3 +135,191 @@ def test_atomic_write_json_writes_other_files_on_a_marked_tree(ea_dir: Path) -> 
     _mark(ea_dir)
     atomic_write_json(ea_dir / "registry.json", {"b": 1})
     assert orjson.loads((ea_dir / "registry.json").read_bytes()) == {"b": 1}
+
+
+# ---- evidence.append ---------------------------------------------------------
+# The evidence store sits beside state.json and is an epoch-1 surface too: an
+# append that lands after the cut is a second writer the generation never sees.
+
+
+def _evidence_record() -> dict[str, object]:
+    from eawf.kernel.store.kinds.evidence import mint_evidence_id
+
+    return {
+        "id": mint_evidence_id(),
+        "scope_id": "P28-I01-W04",
+        "produced_by": "tool",
+        "evidence_kind": "deterministic",
+        "status": "pass",
+        "summary": "pytest gate green",
+        "refs": [],
+        "created_at": "2026-05-26T12:00:00+00:00",
+    }
+
+
+def _daemon_ctx(state_path: Path) -> MethodContext:
+    return MethodContext(
+        started_at="2026-05-26T00:00:00+00:00",
+        pid=os.getpid(),
+        protocol_version=PROTOCOL_VERSION,
+        version=__version__,
+        shutdown_event=asyncio.Event(),
+        state_path=state_path,
+    )
+
+
+def _evidence_frame(record: dict[str, object]) -> bytes:
+    return orjson.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": "fence-1",
+            "method": "evidence.append",
+            "params": {"record": record},
+        }
+    )
+
+
+def _evidence_bytes(ea_dir: Path) -> bytes | None:
+    path = store_path(ea_dir / "state.json", StoreKind.EVIDENCE)
+    return path.read_bytes() if path.exists() else None
+
+
+@pytest.fixture
+def seeded_evidence(ea_dir: Path) -> Path:
+    """A tree whose evidence store already holds one row before the cut."""
+    asyncio.run(evidence_append(_daemon_ctx(ea_dir / "state.json"), {"record": _evidence_record()}))
+    return ea_dir
+
+
+def test_evidence_append_refused_on_a_marked_tree_emits_minus_32002(
+    seeded_evidence: Path,
+) -> None:
+    _mark(seeded_evidence)
+    before = _evidence_bytes(seeded_evidence)
+    ctx = _daemon_ctx(seeded_evidence / "state.json")
+    response = asyncio.run(_process_frame(_evidence_frame(_evidence_record()), ctx))
+    assert "result" not in response
+    assert response["error"]["code"] == VALIDATION_FAILED == -32002
+    assert LEGACY_OPERATION_REMOVED in response["error"]["message"]
+    assert _evidence_bytes(seeded_evidence) == before
+
+
+def test_evidence_append_method_raises_the_validation_error(seeded_evidence: Path) -> None:
+    _mark(seeded_evidence)
+    before = _evidence_bytes(seeded_evidence)
+    ctx = _daemon_ctx(seeded_evidence / "state.json")
+    with pytest.raises(DaemonValidationError, match=LEGACY_OPERATION_REMOVED):
+        asyncio.run(evidence_append(ctx, {"record": _evidence_record()}))
+    assert _evidence_bytes(seeded_evidence) == before
+
+
+def test_evidence_append_still_appends_on_an_unmarked_tree(seeded_evidence: Path) -> None:
+    ctx = _daemon_ctx(seeded_evidence / "state.json")
+    response = asyncio.run(_process_frame(_evidence_frame(_evidence_record()), ctx))
+    assert "error" not in response, response
+    rows = (_evidence_bytes(seeded_evidence) or b"").splitlines()
+    assert len(rows) == 2
+
+
+class _InProcessDaemon:
+    """A daemon client that serves each call through the real frame dispatcher."""
+
+    state_path: Path
+
+    def __enter__(self) -> _InProcessDaemon:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, object]) -> dict[str, object]:
+        from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+        frame = orjson.dumps({"jsonrpc": "2.0", "id": "cli-1", "method": method, "params": params})
+        response = asyncio.run(_process_frame(frame, _daemon_ctx(self.state_path)))
+        if "error" in response:
+            raise DaemonRpcError(response["error"]["code"], response["error"]["message"])
+        return response["result"]
+
+
+def _attest(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], ea_dir: Path
+) -> tuple[int, str]:
+    """Run ``eawf evidence attest`` in process and return its exit code and output."""
+    monkeypatch.setenv("EA_STATE", str(ea_dir / "state.json"))
+    try:
+        evidence_cli.evidence_attest(
+            cast("typer.Context", SimpleNamespace(obj=GlobalFlags())),
+            scope_id="P28-I01-W04",
+            produced_by="tool",
+            evidence_kind="deterministic",
+            status="pass",
+            summary="pytest green",
+        )
+        code = 0
+    except typer.Exit as exit_:
+        code = exit_.exit_code
+    captured = capsys.readouterr()
+    return code, captured.out + captured.err
+
+
+def _serve_in_process(monkeypatch: pytest.MonkeyPatch, ea_dir: Path) -> None:
+    from eawf.surfaces.cli import _daemon_client
+
+    client = type("_Bound", (_InProcessDaemon,), {"state_path": ea_dir / "state.json"})
+    monkeypatch.setattr(_daemon_client, "DaemonClient", client)
+
+
+def _daemon_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.surfaces.cli import _daemon_client
+
+    class _Down:
+        def __enter__(self) -> _Down:
+            raise OSError("simulated daemon unavailable")
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    monkeypatch.setattr(_daemon_client, "DaemonClient", _Down)
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_ENV, "1")
+    monkeypatch.setenv(evidence_cli.EVIDENCE_DIRECT_WRITE_MODE_ENV, "recovery")
+
+
+def test_cli_attest_through_the_daemon_exits_2_on_a_marked_tree(
+    seeded_evidence: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _mark(seeded_evidence)
+    before = _evidence_bytes(seeded_evidence)
+    _serve_in_process(monkeypatch, seeded_evidence)
+    code, output = _attest(monkeypatch, capsys, seeded_evidence)
+    assert code == 2, output
+    assert LEGACY_OPERATION_REMOVED in output
+    assert _evidence_bytes(seeded_evidence) == before
+
+
+def test_cli_attest_direct_write_exits_2_on_a_marked_tree(
+    seeded_evidence: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _mark(seeded_evidence)
+    before = _evidence_bytes(seeded_evidence)
+    _daemon_down(monkeypatch)
+    code, output = _attest(monkeypatch, capsys, seeded_evidence)
+    assert code == 2, output
+    assert LEGACY_OPERATION_REMOVED in output
+    assert _evidence_bytes(seeded_evidence) == before
+
+
+@pytest.mark.parametrize("route", ["daemon", "direct"])
+def test_cli_attest_still_appends_on_an_unmarked_tree(
+    seeded_evidence: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    route: str,
+) -> None:
+    if route == "daemon":
+        _serve_in_process(monkeypatch, seeded_evidence)
+    else:
+        _daemon_down(monkeypatch)
+    code, output = _attest(monkeypatch, capsys, seeded_evidence)
+    assert code == 0, output
+    assert len((_evidence_bytes(seeded_evidence) or b"").splitlines()) == 2

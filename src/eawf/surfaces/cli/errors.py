@@ -257,6 +257,10 @@ _KIND_HINTS: dict[str, str] = {
     "RuntimeUnavailable": (
         "check runtime preference: `eawf runtime list` and `eawf config get runtime.preference`"
     ),
+    "MigrationNotQuiescent": (
+        "clear every holder the refusal names: `eawf worktree reconcile` retires "
+        "stale worktree rows and `eawf session close` ends a live session; then re-run"
+    ),
     "DaemonMutationIndeterminate": (
         "the mutation may or may not have applied; re-check state "
         "(`eawf state show`) before retrying to avoid a double-apply"

@@ -68,7 +68,13 @@ Enforces:
    ``.ea/artifacts/evidence/<date>-<label>-publication/`` directory, and
    ``.pre-commit-config.yaml`` only beside a staged ``.secrets.baseline``
    (its ``# Baseline-hash:`` comment follows the baseline refresh).
-   Touching anything else is rejected.
+   On an epoch-2 root, where the lifecycle lives in the selected
+   generation, ``.ea/generations/**`` and ``.ea/epoch2-opt-in.json`` are
+   admitted too. Touching anything else is rejected.
+
+   On an epoch-2 root every check that reads lifecycle state reads the
+   selected generation rather than the frozen ``state.json``; see
+   ``epoch2_lifecycle_view.py``.
 
    Bare ``[P##(-I##)?] docs:`` commits are similarly path-gated:
    they MUST touch only ``.ea/artifacts/**`` (promoted documentation
@@ -151,6 +157,7 @@ from coauthor_policy import (
     has_any_coauthor_trailer,
     has_supported_trailer,
 )
+from epoch2_lifecycle_view import epoch2_generation, generation_lifecycle_view
 
 _TYPES = "feat|fix|chore|docs|refactor|test|build|perf|ci|revert|state"
 
@@ -256,6 +263,12 @@ _STATE_ONLY_ALLOWED = (
 # typed. The prefix below still admits it if a repo chooses to track it; this
 # repo does not.
 _STATE_ONLY_PREFIXES = (".ea/store/", ".ea/specs/")
+# After the cutover the lifecycle bookkeeping lands in the selected
+# generation, and the opt-in declaration is committed beside it, so a state
+# commit carries those instead of ``state.json``. They are admitted only on
+# a marked root: before the cut nothing may write a generation.
+_EPOCH2_STATE_PREFIXES = (".ea/generations/",)
+_EPOCH2_STATE_ALLOWED = (".ea/epoch2-opt-in.json",)
 
 # Bare ``[P##(-I##)?] docs:`` commits carry phase/iter-scoped
 # documentation artifacts that no single wave owns (closure audits,
@@ -402,7 +415,18 @@ def _has_wave_trailer(text: str) -> bool:
 
 
 def _load_managed_state(path: Path) -> tuple[dict[str, Any] | None, str | None]:
-    """Load a managed state document, distinguishing absence from corruption."""
+    """Load the lifecycle maps behind *path*, distinguishing absence from corruption.
+
+    On an epoch-2 root ``state.json`` is frozen at the cutover, so the maps
+    are projected from the selected generation instead; see
+    :mod:`epoch2_lifecycle_view`.
+    """
+    generation = epoch2_generation(path.parent)
+    if generation is not None:
+        try:
+            return generation_lifecycle_view(generation), None
+        except (OSError, ValueError) as exc:
+            return None, f"managed state decode failed at {generation.name}: {exc}"
     if not path.is_file():
         return None, None
     try:
@@ -761,17 +785,23 @@ def _docs_bare_strays(staged: list[str]) -> list[str]:
     ]
 
 
-def _state_strays(staged: list[str]) -> list[str]:
+def _is_epoch2_state_path(path: str) -> bool:
+    return path in _EPOCH2_STATE_ALLOWED or path.startswith(_EPOCH2_STATE_PREFIXES)
+
+
+def _state_strays(staged: list[str], *, epoch2: bool) -> list[str]:
     """Return the staged paths a state commit may not carry.
 
     Args:
         staged: Paths staged for the commit.
+        epoch2: Whether the root is marked epoch 2.
 
     Returns:
         Every path off the state-bookkeeping whitelist, except publication
-        evidence under ``.ea/artifacts/evidence/<date>-<label>-publication/``
-        and the pre-commit config
-        when ``.secrets.baseline`` is staged beside it.
+        evidence under ``.ea/artifacts/evidence/<date>-<label>-publication/``,
+        the pre-commit config when ``.secrets.baseline`` is staged beside it,
+        and, on an epoch-2 root, the generations tree and the opt-in
+        declaration.
     """
     refreshes_baseline = ".secrets.baseline" in staged
     return [
@@ -780,11 +810,12 @@ def _state_strays(staged: list[str]) -> list[str]:
         if not _is_state_only_path(path)
         and not _is_publication_evidence_path(path)
         and not (refreshes_baseline and path == _STATE_BASELINE_HASH_COMPANION)
+        and not (epoch2 and _is_epoch2_state_path(path))
     ]
 
 
 def _check_scoped_paths(
-    *, commit_type: str, staged: list[str], is_bare: bool
+    *, commit_type: str, staged: list[str], is_bare: bool, epoch2: bool
 ) -> tuple[int, str] | None:
     """Enforce the per-scope path whitelist for state- and bare-docs commits.
 
@@ -796,16 +827,20 @@ def _check_scoped_paths(
     ``[P##-W##] docs:`` commits are unrestricted (hence the *is_bare* gate on
     the docs branch).
 
+    On an epoch-2 root (*epoch2*) a state commit may also carry
+    ``.ea/generations/**`` and ``.ea/epoch2-opt-in.json``.
+
     Returns a ``(1, diagnostic)`` rejection when a scoped commit strays
     outside its whitelist, else ``None``.
     """
     if commit_type == "state":
-        bad = _state_strays(staged)
+        bad = _state_strays(staged, epoch2=epoch2)
         if bad:
+            epoch2_note = ", .ea/generations/**, .ea/epoch2-opt-in.json" if epoch2 else ""
             return 1, (
                 f"state-type commit touches non-state paths: {bad}\n"
                 "state-scoped commits must mutate only .ea/state.json, "
-                ".ea/store/**, .secrets.baseline, .ea/specs/** or "
+                f".ea/store/**, .secrets.baseline, .ea/specs/**{epoch2_note} or "
                 ".ea/artifacts/evidence/<date>-<label>-publication/**; "
                 ".pre-commit-config.yaml may ride "
                 "along solely beside a staged .secrets.baseline"
@@ -1409,6 +1444,7 @@ def lint(
             commit_type=match.group("type"),
             staged=staged,
             is_bare=is_bare_bracketed,
+            epoch2=state_path is not None and epoch2_generation(state_path.parent) is not None,
         )
         if scoped is not None:
             return scoped
