@@ -112,6 +112,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("decision", "eawf.surfaces.cli.commands.evidence", "decision_app"),
     GroupRow("artifact", "eawf.surfaces.cli.commands.evidence", "artifact_app"),
     GroupRow("backlog", "eawf.surfaces.cli.commands.evidence", "backlog_app"),
+    # Post-cutover ledger records (audit / decision / artifact).
+    GroupRow("record", "eawf.surfaces.cli.commands.domain_legacy", "record_app"),
     GroupRow("evidence", "eawf.surfaces.cli.commands.evidence", "evidence_app"),
     # Estimation nouns.
     GroupRow("estimate", "eawf.surfaces.cli.commands.estimation", "estimate_app"),

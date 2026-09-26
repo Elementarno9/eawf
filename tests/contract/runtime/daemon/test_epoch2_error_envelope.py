@@ -71,6 +71,7 @@ PACKET_CODES = frozenset(
         "legacy_operation_removed",
         "rollback_boundary_crossed",
         "native_authority_required",
+        "legacy_edge_refused",
     }
 )
 

@@ -109,6 +109,7 @@ Delivery-batch lifecycle (activate, ready).
 | Verb | Summary |
 |---|---|
 | `activate` | Move a PLANNED delivery Batch to ACTIVE. |
+| `close-legacy` | Complete an imported ACTIVE Batch (iter) once every Task in it is terminal. |
 | `create` | Admit a new delivery Batch's create document into the addressed tree. |
 | `ready` | Declare an ACTIVE Batch ready to merge. |
 
@@ -410,6 +411,8 @@ Milestone lifecycle (activate, open-review, accept, cancel).
 | `accept` | Accept a Milestone in review against a sealed approval receipt. |
 | `activate` | Move a PLANNED Milestone to ACTIVE under an active Track. |
 | `cancel` | Cancel a Milestone that has not completed. |
+| `cancel-legacy` | Cancel an imported PLANNED Milestone against a recorded decision or artifact. |
+| `close-legacy` | Complete an imported ACTIVE Milestone (phase) against a recorded audit. |
 | `create` | Admit a new Milestone's create document into the addressed tree. |
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
 | `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
@@ -492,6 +495,14 @@ Project-level lifecycle (init).
 | Verb | Summary |
 |---|---|
 | `init` | Create or upgrade a project record at the active state path. |
+
+### `eawf record`
+
+Append audit, decision and artifact records to an epoch-2 tree.
+
+| Verb | Summary |
+|---|---|
+| `append` | Append one audit, decision or artifact to the generation's ledger. |
 
 ### `eawf release`
 
@@ -643,6 +654,7 @@ Task lifecycle (promote, start).
 
 | Verb | Summary |
 |---|---|
+| `advance-legacy` | Move an imported Task (wave or backlog row) along the legacy edge table. |
 | `create` | Admit a new Task's create document into the addressed tree. |
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
 | `start` | Start a CLAIMED Task under the Run the payload binds it to. |

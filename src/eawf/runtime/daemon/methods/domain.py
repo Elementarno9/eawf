@@ -53,6 +53,13 @@ the bundle it was actually given to, so a bundle that is not that one
 digests differently and the acceptance is refused. Who sealed it needs no
 check at all -- the resolver slot of a PendingAction is typed to a human
 principal, so an agent-approved acceptance is a record that cannot exist.
+
+Two further verbs carry the bookkeeping the fenced epoch-1 verbs used to:
+``domain.legacy.advance`` moves a record the cutover imported along its
+closed edge table, and ``domain.record.append`` files an audit, decision or
+artifact in the generation's ledger. Both are thin: the decisions are in
+:mod:`eawf.kernel.migration.epoch2.continuation` and the locked reads,
+gate runs and commits in :mod:`eawf.runtime.daemon.legacy_continuation`.
 """
 
 from __future__ import annotations
@@ -103,6 +110,13 @@ from eawf.runtime.daemon.epoch2_transaction import (
     TransactionRefusedError,
     TransitionRequest,
     run_transaction,
+)
+from eawf.runtime.daemon.legacy_continuation import (
+    CommittedContinuation,
+    LegacyAdvanceRequest,
+    RecordAppendRequest,
+    advance_legacy,
+    append_record,
 )
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.domain_envelope import (
@@ -983,10 +997,102 @@ for _verb in DOMAIN_LIFECYCLE_VERBS:
     _register_verb(_verb)
 
 
+#: The verb that moves an imported Milestone, Batch or Task after the
+#: cutover. An imported row fails every native model, so it cannot take a
+#: per-entity verb; this one takes the closed legacy edge table instead.
+DOMAIN_LEGACY_ADVANCE: Final = "domain.legacy.advance"
+
+#: The verb that files an audit, decision or artifact in the generation's
+#: ledger once the epoch-1 verbs that used to write them are fenced.
+DOMAIN_RECORD_APPEND: Final = "domain.record.append"
+
+
+async def _run_continuation[RequestT: BaseModel, ReceiptT: BaseModel](
+    ctx: MethodContext,
+    params: dict[str, Any],
+    authority: RootAuthority,
+    *,
+    operation: str,
+    model: type[RequestT],
+    runner: Callable[..., CommittedContinuation[ReceiptT]],
+) -> dict[str, Any]:
+    """Parse, run and answer one post-cutover bookkeeping verb.
+
+    Args:
+        ctx: Server context, which owns the per-root native contexts and
+            the subscription bus.
+        params: The request parameters, less the routing key the fence
+            already consumed.
+        authority: The epoch-2 answer the fence resolved for the tree.
+        operation: The verb's dotted name.
+        model: The strict parameter model.
+        runner: The library call that commits the verb.
+
+    Returns:
+        The machine envelope, as a JSON-mode mapping, carrying the
+        runner's receipt on success. An imported row has no revision, so
+        neither revision field is filled.
+    """
+    try:
+        request = model.model_validate(
+            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
+        )
+    except ValidationError as error:
+        return schema_refusal(error, params=params, operation=operation).model_dump(mode="json")
+    context = ctx.native_root_context(authority.root)
+    try:
+        committed = await asyncio.to_thread(runner, context, request, now=datetime.now(UTC))
+    except TransactionRefusedError as refusal:
+        logger.info(f"_run_continuation refused method={operation} code={refusal.code.value}")
+        return refused_envelope(refusal, operation=operation).model_dump(mode="json")
+    degraded = [
+        envelope for envelope in committed.envelopes if not publish_projection(ctx.bus, envelope)
+    ]
+    return DomainEnvelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
+        status=DomainStatus.OK,
+        operation=operation,
+        result=committed.receipt.model_dump(mode="json"),
+        warnings=(PROJECTION_DEGRADED,) if degraded else (),
+    ).model_dump(mode="json")
+
+
+@native_mutator(DOMAIN_LEGACY_ADVANCE)
+async def _domain_legacy_advance(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """Move one imported row along the closed legacy edge table."""
+    return await _run_continuation(
+        ctx,
+        params,
+        authority,
+        operation=DOMAIN_LEGACY_ADVANCE,
+        model=LegacyAdvanceRequest,
+        runner=advance_legacy,
+    )
+
+
+@native_mutator(DOMAIN_RECORD_APPEND)
+async def _domain_record_append(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """Append one audit, decision or artifact to the generation's ledger."""
+    return await _run_continuation(
+        ctx,
+        params,
+        authority,
+        operation=DOMAIN_RECORD_APPEND,
+        model=RecordAppendRequest,
+        runner=append_record,
+    )
+
+
 __all__ = [
+    "DOMAIN_LEGACY_ADVANCE",
     "DOMAIN_LIFECYCLE_METHODS",
     "DOMAIN_LIFECYCLE_PARAMS",
     "DOMAIN_LIFECYCLE_VERBS",
+    "DOMAIN_RECORD_APPEND",
     "GUARD_COMPUTERS",
     "GuardComputer",
     "LifecycleParams",

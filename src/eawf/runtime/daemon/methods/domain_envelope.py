@@ -103,6 +103,7 @@ class DomainErrorCode(StrEnum):
     LEGACY_OPERATION_REMOVED = "legacy_operation_removed"
     ROLLBACK_BOUNDARY_CROSSED = "rollback_boundary_crossed"
     NATIVE_AUTHORITY_REQUIRED = "native_authority_required"
+    LEGACY_EDGE_REFUSED = "legacy_edge_refused"
 
 
 def _compile_refusal_codes() -> Mapping[TransactionRefusalCode, DomainErrorCode]:
