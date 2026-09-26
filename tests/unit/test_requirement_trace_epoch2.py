@@ -18,6 +18,8 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.migration.epoch2.lifecycle import LifecycleSourceIndex, map_wave_row
+from eawf.kernel.migration.epoch2.plan import _wave_criteria
 from eawf.kernel.store.compaction import read_document, write_document
 from tests.integration.kernel.migration._cutover_harness import (
     APPLIED_AT,
@@ -31,7 +33,9 @@ from tools.requirement_trace import (
     Deferral,
     StateView,
     TraceInputError,
+    _imported_wave,
     build_trace,
+    load_catalog,
     load_state,
     load_state_view,
     main,
@@ -40,7 +44,7 @@ from tools.requirement_trace import (
 
 pytestmark = pytest.mark.unit
 
-_TITLES = {f"REQ-{number:03d}": f"Requirement {number}" for number in range(1, 10)}
+_TITLES = {f"REQ-{number:03d}": f"Requirement {number}" for number in range(1, 11)}
 _DEFERRAL = Deferral(decision="D01", release="v0.8", ids=("REQ-007",))
 
 #: One wave per cited field, each owning its own id, plus the shapes that own
@@ -53,6 +57,20 @@ _CITING_WAVES: dict[str, dict[str, Any]] = {
     "P02-I01-W05": {"status": "pending", "criterion": "the gate proves REQ-003"},
     "P02-I01-W06": {"status": "abandoned", "title": "Land REQ-006"},
     "P02-I01-W07": {"status": "failed", "title": "Land REQ-009"},
+    # Only the outcome line of a brief reaches the Task's intent, so the id
+    # cited in the brief's steps is found only if the whole brief is read.
+    "P02-I01-W08": {
+        "status": "closed",
+        "intent": {
+            "desired_outcome": "the brief-shaped wave lands",
+            "evidence_refs": [],
+            "planned_steps": ["wire the gate REQ-010 names"],
+            "priority_rationale": None,
+            "problem": "a brief cites more than its outcome line",
+            "risks": [],
+            "source_brief_ids": [],
+        },
+    },
 }
 _DROPPED_OWNER = "P02-I01-W01"
 
@@ -152,6 +170,7 @@ def test_marked_repository_traces_like_the_epoch1_reader_over_the_same_corpus(
         "REQ-007": ("deferred", ()),
         "REQ-008": ("unowned", ()),
         "REQ-009": ("unowned", ()),
+        "REQ-010": ("owned", ("P02-I01-W08",)),
     }
 
 
@@ -231,3 +250,48 @@ def test_an_unreadable_generation_is_a_trace_input_error(repo: Path) -> None:
     with pytest.raises(TraceInputError, match="cannot read generation"):
         load_state_view(repo)
     assert main(["--repo-root", str(repo), "check"]) == 2
+
+
+def test_a_brief_intent_is_cited_whole_not_by_its_outcome_line(repo: Path) -> None:
+    """Gate-fire: reading only the Task's outcome line loses REQ-010."""
+    view = load_state_view(repo)
+
+    assert "REQ-010" in view.waves["P02-I01-W08"].cited_text()
+    assert _trace(view, repo)["REQ-010"] == ("owned", ("P02-I01-W08",))
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.skipif(
+    not (_REPO_ROOT / STATE_PATH).is_file() or not (_REPO_ROOT / CATALOG_PATH).is_file(),
+    reason="needs this repository's own state and catalog",
+)
+def test_the_repository_corpus_traces_the_same_in_either_epoch(tmp_path: Path) -> None:
+    """Every wave of this repository's document imports to the same owners.
+
+    Each wave goes through the importer's own wave mapper, so a field the
+    importer moves (a brief-shaped intent, say) and the trace does not
+    follow shows up as a changed owner here.
+    """
+    shutil.copyfile(_REPO_ROOT / STATE_PATH, tmp_path / "state.json")
+    document = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    index = LifecycleSourceIndex.build(document, report_rows=())
+    epoch1 = load_state(tmp_path / "state.json")
+    imported = {}
+    for wave_id, row in document["waves"].items():
+        record = map_wave_row(
+            source_id=wave_id, row=row, criteria=_wave_criteria(row), index=index
+        ).model_dump(mode="json")
+        wave = _imported_wave(wave_id, record["target_status"], record)
+        assert wave is not None
+        imported[wave_id] = wave
+    titles = {row.id: row.title for row in load_catalog(_REPO_ROOT / CATALOG_PATH).requirements}
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    def owners(state: StateView) -> dict[str, tuple[str, ...]]:
+        catalog = build_trace(titles=titles, deferrals=(), state=state, repo_root=empty)
+        return {row.id: row.owners for row in catalog.requirements}
+
+    assert owners(StateView(waves=imported)) == owners(StateView(waves=epoch1.waves))

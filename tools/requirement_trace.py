@@ -340,12 +340,15 @@ def _imported_wave(key: str, status: str, body: dict[str, Any]) -> _WaveView | N
         return None
     record = body.get("record") or {}
     legacy = body.get("legacy_refs") or {}
+    # A brief-shaped intent lands on the Task as its outcome line only; the
+    # whole brief, which is what the epoch-1 reader cited, rides the legacy refs.
+    brief = legacy.get("intent")
     return _WaveView(
         id=key,
         status=status,
         title=legacy.get("title") or "",
         description=legacy.get("description"),
-        intent=record.get("intent"),
+        intent=brief if isinstance(brief, dict) else record.get("intent"),
         success_criteria=[{"text": row.get("text")} for row in body.get("criteria") or []],
         outcome=legacy.get("outcome"),
     )
