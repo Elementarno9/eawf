@@ -624,7 +624,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 57,
+  "canonical_sequence": 61,
   "milestone": {
     "MLS-0100": {
       "acceptance_bundle_revision": null,

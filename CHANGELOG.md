@@ -19,7 +19,7 @@ This is the fifth development checkpoint of the v0.7.0 release train, and the pr
 
 - **This repository is cut over to epoch 2.** The live cutover is recorded in `.ea/artifacts/evidence/2026-09-dev5-live-cutover/live-cutover.json`; the re-run selected the same generation and wrote nothing.
 - **Imported records continue after cutover.** Waves imported from epoch 1 are finished through a legacy continuation route, and ledger rows are appended after the cutover rather than rewritten.
-- **Commit lint and the requirement trace read the epoch-2 generation,** and an imported wave cites its whole intent brief in the trace. Commit lint also accepts an `Task: <KEY>` trailer naming a CLAIMED or RUNNING native Task, capped at one commit per Task like a wave, and the trace refuses a satisfied disposition whose commit names a different phase or whose test path does not exist.
+- **Commit lint and the requirement trace read the epoch-2 generation,** and an imported wave cites its whole intent brief in the trace. Commit lint also accepts a `Task: <KEY>` trailer naming a CLAIMED or RUNNING native Task, capped at one commit per Task like a wave, and the trace refuses a satisfied disposition whose commit names a different phase or whose test path does not exist.
 - **The native console runs on this repository's tree,** with run controls committed as patches and a live smoke recorded against it.
 
 ### Fixed

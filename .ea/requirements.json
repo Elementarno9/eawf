@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": "8c62cf5a3eb92f009ed0a6579d4b95025f147a7b",
+  "revision": "8301864e17a577bbfbe31a04c1ebab9ffdec09fa",
   "summary": {
     "total": 1170,
     "owned": 1108,
@@ -452,7 +452,7 @@
     {"id": "CON-080", "title": "The state slot renders exactly one value: one of the nine connection values V07-UI owns, or, before...", "status": "satisfied", "owners": [], "tests": [], "producers": [], "deferral": null, "satisfied_by": "310b16e8dd050099a4c6fe01d07159bccee4ea2e"},
     {"id": "CON-081", "title": "A terminal entity suppresses the connection chip and states that nothing is wrong", "status": "owned", "owners": ["EAWF-0102"], "tests": [], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "CON-082", "title": "Each connection state renders its reads and mutations contract as visible text in the frame body,...", "status": "owned", "owners": ["EAWF-0105"], "tests": [], "producers": [], "deferral": null, "satisfied_by": null},
-    {"id": "CON-083", "title": "Retired 2026-08-25 under the operator ruling that adopts R59 and reverses ruling 3 of 2026-08-13:...", "status": "satisfied", "owners": [], "tests": [], "producers": [], "deferral": null, "satisfied_by": "18e0ab7b8fb90dc2d69d617912fad1bb9bbf92de"},
+    {"id": "CON-083", "title": "Retired 2026-08-25 under the operator ruling that adopts R59 and reverses ruling 3 of 2026-08-13:...", "status": "satisfied", "owners": ["EAWF-0007"], "tests": [], "producers": [], "deferral": null, "satisfied_by": "18e0ab7b8fb90dc2d69d617912fad1bb9bbf92de"},
     {"id": "CON-084", "title": "The frozen phrase nothing needs you belongs to the empty Attention route and to scope home's...", "status": "owned", "owners": ["EAWF-0105"], "tests": [], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "CON-085", "title": "Every count on every surface is labelled as this principal's own (mine) or as all principals...", "status": "owned", "owners": ["EAWF-0105"], "tests": [], "producers": [], "deferral": null, "satisfied_by": null},
     {"id": "CON-086", "title": "The breadcrumb renders the brand Eä outside-left with no leading glyph and never repeated, the...", "status": "owned", "owners": ["EAWF-0103"], "tests": [], "producers": [], "deferral": null, "satisfied_by": null},
