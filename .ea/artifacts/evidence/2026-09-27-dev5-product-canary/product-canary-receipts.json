@@ -1,0 +1,57 @@
+{
+  "receipts": [
+    {
+      "evidence_refs": [
+        "docs/roadmap/v0.7/rc1.json",
+        "docs/roadmap/v0.7/rc2.json",
+        "docs/roadmap/v0.7/stable.json",
+        "tests/integration/workflow/planning/test_plan_revision_apply.py"
+      ],
+      "gate": "plan_revision_approved",
+      "live_refs": [
+        "eawf://EAWF/EAWF/EAWF/pending-action/ACT-0101",
+        "eawf://EAWF/EAWF/EAWF/pending-action/ACT-0201",
+        "eawf://EAWF/EAWF/EAWF/pending-action/ACT-0301"
+      ]
+    },
+    {
+      "evidence_refs": [
+        ".ea/artifacts/evidence/2026-09-27-dev5-product-canary/canary-acceptance-walk.json",
+        "tests/integration/runtime/daemon/test_native_dispatch.py"
+      ],
+      "gate": "parallel_dispatch",
+      "live_refs": []
+    },
+    {
+      "evidence_refs": [
+        "tests/integration/runtime/daemon/test_integrate_seal_real_daemon.py"
+      ],
+      "gate": "exact_head_integration",
+      "live_refs": []
+    },
+    {
+      "evidence_refs": [
+        "tests/integration/workflow/delivery/test_batch_audit_review.py"
+      ],
+      "gate": "real_diff_review",
+      "live_refs": []
+    },
+    {
+      "evidence_refs": [
+        ".ea/artifacts/evidence/2026-09-27-dev5-product-canary/native-canary-evidence.json",
+        "tests/integration/workflow/delivery/test_milestone_acceptance_bundle.py"
+      ],
+      "gate": "milestone_accepted",
+      "live_refs": []
+    },
+    {
+      "evidence_refs": [
+        ".ea/artifacts/evidence/2026-09-dev5-live-cutover/live-cutover.json",
+        "tests/integration/kernel/migration/test_epoch2_live_cutover_record.py"
+      ],
+      "gate": "migration_rerun_identical",
+      "live_refs": []
+    }
+  ],
+  "release_key": "REL-0.7.0.dev5"
+}

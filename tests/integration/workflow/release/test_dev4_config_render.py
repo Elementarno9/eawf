@@ -4,13 +4,12 @@
 own epoch-2 cutover without performing it, so the opted-in product canary
 cannot be run at its cut. The rung therefore repeats the ``native_canary``
 profile ``dev3`` ran under, and the product canary moves one rung up to
-``dev5``, which stays unauthored until its producers exist.
+``dev5``.
 
 These tests pin both halves. The ``dev4`` configuration renders from the
 train template with the fifteen native-canary gates and four targets and
 resolves against a record's membership refs; ``dev5`` sits between it and
-the first release candidate under ``product_canary`` and has no
-configuration to resolve.
+the first release candidate under ``product_canary``.
 """
 
 from __future__ import annotations
@@ -109,9 +108,3 @@ def test_resolve_config_refuses_dev4_without_membership_refs() -> None:
     with pytest.raises(DaemonValidationError) as excinfo:
         resolve_config(DEV4_VERSION)
     assert "invalid_membership_cardinality" in str(excinfo.value)
-
-
-def test_resolve_config_refuses_the_unauthored_dev5_rung() -> None:
-    with pytest.raises(DaemonValidationError) as excinfo:
-        resolve_config(DEV5_VERSION, membership_refs=(MEMBERSHIP_REF,))
-    assert "no release configuration" in str(excinfo.value)

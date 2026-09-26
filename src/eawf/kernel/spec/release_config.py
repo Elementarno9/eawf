@@ -178,6 +178,20 @@ class ReleaseGateName(StrEnum):
             complete and exact.
         CANARY_ISOLATION: The canary-isolation proof command -- a native
             rehearsal leaves the production root byte-identical.
+        PLAN_REVISION_APPROVED: A native plan revision was approved
+            before it was applied.
+        PARALLEL_DISPATCH: Tasks were dispatched into leased worktrees
+            of their own.
+        EXACT_HEAD_INTEGRATION: A candidate was sealed and integrated on
+            the exact head its Run reported.
+        REAL_DIFF_REVIEW: The audit and the review bound the same
+            revision of the real diff.
+        MILESTONE_ACCEPTED: A Milestone was accepted on the exact bundle
+            its sealed approval recorded.
+        MIGRATION_RERUN_IDENTICAL: The live cutover re-ran to the same
+            manifest and changed nothing.
+        RELEASE_TAGGED_OBSERVED: The tagged version is installable from
+            its index. Settled only after the tag is pushed.
     """
 
     VERSION_CONSISTENCY = "version_consistency"
@@ -195,6 +209,13 @@ class ReleaseGateName(StrEnum):
     PROVIDER = "provider"
     MEMBERSHIP = "membership"
     CANARY_ISOLATION = "canary_isolation"
+    PLAN_REVISION_APPROVED = "plan_revision_approved"
+    PARALLEL_DISPATCH = "parallel_dispatch"
+    EXACT_HEAD_INTEGRATION = "exact_head_integration"
+    REAL_DIFF_REVIEW = "real_diff_review"
+    MILESTONE_ACCEPTED = "milestone_accepted"
+    MIGRATION_RERUN_IDENTICAL = "migration_rerun_identical"
+    RELEASE_TAGGED_OBSERVED = "release_tagged_observed"
 
 
 class ReleaseTargetConfig(_StrictModel):

@@ -35,7 +35,7 @@
       }
     ],
     "generated_at": "1970-01-01T00:00:00+00:00",
-    "hash": "ef98a72a447327a1",
+    "hash": "a3476a138e48c545",
     "hooks": [
       {
         "event_type": "session_start",
@@ -128,7 +128,7 @@
         "version": "1.0"
       }
     ],
-    "version": "0.7.0.dev4"
+    "version": "0.7.0.dev5"
   },
   "hooks": {
     "SessionStart": [

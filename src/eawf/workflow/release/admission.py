@@ -42,7 +42,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID
 
-from eawf.kernel.spec.release import Release, ReleaseTrain, validate_release_against_train
+from eawf.kernel.spec.release import (
+    Release,
+    ReleaseGateProfile,
+    ReleaseTrain,
+    validate_release_against_train,
+)
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.state.models import Artifact, State
 from eawf.surfaces.cli.errors import UserError
@@ -56,6 +61,10 @@ from eawf.workflow.evidence.provider_certification import (
     summarise_findings,
 )
 from eawf.workflow.release.advance import draft_release_for
+from eawf.workflow.release.canary_receipts import (
+    CanaryReceiptSet,
+    assert_pre_merge_receipts_bound,
+)
 
 if TYPE_CHECKING:
     from eawf.kernel.spec.release_config import ReleaseConfig
@@ -307,6 +316,7 @@ def create_checkpoint_release(
     uid: UUID,
     membership_refs: Sequence[str] = (),
     canary_evidence: CanaryEvidence | None = None,
+    canary_receipts: CanaryReceiptSet | None = None,
 ) -> Release:
     """Open the DRAFT record of checkpoint *version*, after admission.
 
@@ -323,15 +333,19 @@ def create_checkpoint_release(
             require them.
         canary_evidence: The committed canary export *membership_refs*
             resolve against, or ``None`` when none is committed.
+        canary_receipts: The committed canary-window receipts, read only
+            by a ``product_canary`` rung; ``None`` when none is committed.
 
     Returns:
         The DRAFT :class:`~eawf.kernel.spec.release.Release`.
 
     Raises:
         UserError: ``kind="measured_contract_missing"`` when a required
-            measured contract is not promoted, or
+            measured contract is not promoted,
             ``kind="membership_unresolved"`` when a membership reference
-            names no COMPLETED Milestone bundle.
+            names no COMPLETED Milestone bundle, or
+            ``kind="canary_receipts_unbound"`` when a ``product_canary``
+            rung lacks a pre-merge receipt.
         KeyError: When *train* declares no rung for *version*.
         ValueError: When *version* is not a train version, or the rung
             requires membership bundles the caller did not supply.
@@ -342,6 +356,8 @@ def create_checkpoint_release(
     assert_measured_contracts(state, version)
     if rung.requires_membership:
         assert_membership_resolves(canary_evidence, membership_refs)
+    if rung.gate_profile is ReleaseGateProfile.PRODUCT_CANARY:
+        assert_pre_merge_receipts_bound(rung.release_key, canary_receipts)
     record = draft_release_for(rung, uid=uid, membership_refs=membership_refs)
     validate_release_against_train(record, train)
     logger.info(

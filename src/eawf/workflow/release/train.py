@@ -280,6 +280,16 @@ DEV4_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
     template=V07_CONFIG_TEMPLATE,
 )
 
+#: The ``0.7.0.dev5`` checkpoint configuration: the first rung under
+#: ``product_canary``, so the first whose required list carries the seven
+#: canary-window receipts on top of the fifteen ``native_canary`` gates.
+#: Its four targets are the ones ``dev3`` and ``dev4`` declared, because
+#: the profile adds evidence rather than publication legs.
+DEV5_RELEASE_CONFIG_YAML: Final[str] = render_checkpoint_config(
+    rung=V07_TRAIN.checkpoint_for_version("0.7.0.dev5"),
+    template=V07_CONFIG_TEMPLATE,
+)
+
 #: Checkpoint configurations by version. ``dev1`` is authored -- it was
 #: cut before the template existed and its file is the one the burned
 #: checkpoint was swept against -- and every later rung is rendered, so
@@ -289,6 +299,7 @@ CHECKPOINT_CONFIGS: Final[dict[str, str]] = {
     "0.7.0.dev2": DEV2_RELEASE_CONFIG_YAML,
     "0.7.0.dev3": DEV3_RELEASE_CONFIG_YAML,
     "0.7.0.dev4": DEV4_RELEASE_CONFIG_YAML,
+    "0.7.0.dev5": DEV5_RELEASE_CONFIG_YAML,
 }
 
 #: What each of the eight ``dev1`` gates reads.
@@ -426,13 +437,85 @@ NATIVE_CANARY_GATE_BINDINGS_YAML: Final[str] = (
 """
 )
 
-#: Authored gate binding tables by profile. ``dev1``, ``dev2`` and
-#: ``native_canary`` are authored; the later profiles land with the waves
-#: that build their producers.
+#: What each of the seven canary-window receipts ``product_canary`` adds
+#: on top of ``native_canary`` reads.
+#:
+#: Every one is a proof command, because each is a fact about a run the
+#: native path made rather than about a checkout. The six pre-merge ones
+#: run the suite that drives their producer end to end over a
+#: provisioned canary through the registered daemon verbs: approving and
+#: applying a plan revision, leasing a real worktree per dispatch,
+#: sealing a candidate on the head its Run reported, binding the audit
+#: and the review to one revision, accepting a Milestone on its sealed
+#: bundle, and re-checking the committed live cutover record against the
+#: tree it produced. Which runs on this repository those producers made
+#: is recorded beside the canary export rather than here, because it is
+#: data the operator appends as the runs happen.
+#:
+#: ``release_tagged_observed`` reads the package index for the version
+#: the pinned source declares. The tag's publish jobs upload before the
+#: post-merge walk reaches its receipts step, so the read-back can pass
+#: there; at merge nothing is published and it cannot, which is the
+#: honest state of a receipt only a pushed tag can earn.
+PRODUCT_CANARY_GATE_BINDINGS_YAML: Final[str] = (
+    NATIVE_CANARY_GATE_BINDINGS_YAML
+    + """\
+  - gate: plan_revision_approved
+    kind: proof_command
+    proof:
+      command_id: plan_revision_approved_then_applied
+      argv: [uv, run, pytest, tests/integration/workflow/planning/test_plan_revision_apply.py, -q]
+      timeout_seconds: 1800
+  - gate: parallel_dispatch
+    kind: proof_command
+    proof:
+      command_id: dispatch_leases_a_real_worktree
+      argv: [uv, run, pytest, tests/integration/runtime/daemon/test_native_dispatch.py, -q]
+      timeout_seconds: 1800
+  - gate: exact_head_integration
+    kind: proof_command
+    proof:
+      command_id: integrate_seals_the_reported_head
+      argv: [uv, run, pytest,
+        tests/integration/runtime/daemon/test_integrate_seal_real_daemon.py, -q]
+      timeout_seconds: 1800
+  - gate: real_diff_review
+    kind: proof_command
+    proof:
+      command_id: audit_and_review_bind_one_revision
+      argv: [uv, run, pytest, tests/integration/workflow/delivery/test_batch_audit_review.py, -q]
+      timeout_seconds: 900
+  - gate: milestone_accepted
+    kind: proof_command
+    proof:
+      command_id: milestone_accepted_on_its_sealed_bundle
+      argv: [uv, run, pytest,
+        tests/integration/workflow/delivery/test_milestone_acceptance_bundle.py, -q]
+      timeout_seconds: 900
+  - gate: migration_rerun_identical
+    kind: proof_command
+    proof:
+      command_id: live_cutover_rerun_identical
+      argv: [uv, run, pytest,
+        tests/integration/kernel/migration/test_epoch2_live_cutover_record.py, -q]
+      timeout_seconds: 900
+  - gate: release_tagged_observed
+    kind: proof_command
+    proof:
+      command_id: tagged_version_on_the_index
+      argv: [uv, run, pytest, tests/integration/workflow/release/observe_tagged_release.py, -q]
+      timeout_seconds: 900
+"""
+)
+
+#: Authored gate binding tables by profile. ``dev1`` through
+#: ``product_canary`` are authored; the later profiles land with the
+#: waves that build their producers.
 PROFILE_GATE_BINDINGS: Final[dict[ReleaseGateProfile, str]] = {
     ReleaseGateProfile.DEV1: DEV1_GATE_BINDINGS_YAML,
     ReleaseGateProfile.DEV2: DEV2_GATE_BINDINGS_YAML,
     ReleaseGateProfile.NATIVE_CANARY: NATIVE_CANARY_GATE_BINDINGS_YAML,
+    ReleaseGateProfile.PRODUCT_CANARY: PRODUCT_CANARY_GATE_BINDINGS_YAML,
 }
 
 
@@ -507,7 +590,9 @@ __all__ = [
     "DEV2_RELEASE_CONFIG_YAML",
     "DEV3_RELEASE_CONFIG_YAML",
     "DEV4_RELEASE_CONFIG_YAML",
+    "DEV5_RELEASE_CONFIG_YAML",
     "NATIVE_CANARY_GATE_BINDINGS_YAML",
+    "PRODUCT_CANARY_GATE_BINDINGS_YAML",
     "PROFILE_GATE_BINDINGS",
     "V07_CHECKPOINTS",
     "V07_CONFIG_TEMPLATE",
