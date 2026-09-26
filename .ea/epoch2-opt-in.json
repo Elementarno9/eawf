@@ -1,0 +1,7 @@
+{
+  "opt_in": true,
+  "declared_by": "operator",
+  "purpose": "Cut this repository over to epoch 2 for the 0.7.0.dev5 canary",
+  "backup_ts": "2026-09-26T21-13-41Z",
+  "backup_digest": "3a13abaf9f4f342ff2ce8840ebee1a9cfd4d7c8d2f565e710549a031bd7d21d2"
+}
