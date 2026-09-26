@@ -1,6 +1,6 @@
 """Render Claude Code agent (subagent) markdown files.
 
-Per Phase 4 W05, ``eawf plugin install claude`` emits one
+``eawf plugin install claude`` emits one
 ``.claude/agents/<role>.md`` per Eä subagent role. The output mirrors
 the hand-written ``.claude/agents/<role>.md`` placeholder files: YAML
 frontmatter (``name``/``description``/``tools``/``model``/``color``/
@@ -33,6 +33,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.kernel.config.schema import ALL_ROLES
+from eawf.platform.lint.kind_taxonomy import REPRO_TEST_NAME
 from eawf.platform.rules.carriers import builtin_carrier_body
 from eawf.surfaces.render.frontmatter import yaml_scalar
 from eawf.surfaces.render.unwrap import unwrap_markdown_paragraphs
@@ -439,7 +440,7 @@ eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
   payloads — keep the output machine-applyable.
 """
 
-_EXECUTOR_BODY = """# Executor
+_EXECUTOR_BODY = f"""# Executor
 
 You implement what the planner specified. Stay in scope. Verify before
 claiming.
@@ -480,7 +481,8 @@ criterion lacks evidence, surface the gap explicitly in the
   off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
 - Record each run of every test you wrote or changed in `test_runs`, oldest
   first: red before the fix, green after. Wave close flags a test reported
-  green that never ran red first, and blocks close on a `_repro_` test.
+  green that never ran red first, and blocks close on a repro test named
+  `{REPRO_TEST_NAME.form}`.
 """
 
 _AUDITOR_BODY = """# Auditor

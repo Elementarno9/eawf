@@ -51,15 +51,16 @@ REHEARSAL_EVIDENCE_DIR: Final[tuple[str, ...]] = (
     "rehearsal",
 )
 
-#: The stages a recovery adds to a journal. A journal carrying one is a
-#: journal whose apply did not finish, so they are excluded when deriving
-#: what a clean apply looks like.
+#: The stages no apply writes: those a recovery adds to a journal whose
+#: apply did not finish, and those recorded after activation. They are
+#: excluded when deriving what a clean apply looks like.
 RECOVERY_STAGES: Final[frozenset[CutoverStage]] = frozenset(
     {
         CutoverStage.ROLLBACK_DISCARDED,
         CutoverStage.RESTORE_VERIFIED,
         CutoverStage.SURFACES_RESTORED,
         CutoverStage.ACTIVATION_COMPLETED,
+        CutoverStage.CANARY_WINDOW_CLOSED,
     }
 )
 

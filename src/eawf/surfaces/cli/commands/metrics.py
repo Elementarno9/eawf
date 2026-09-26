@@ -2,8 +2,8 @@
 
 The bare ``eawf metrics`` invocation renders the rolling **workflow**
 metrics (estimation calibration) from ``state.json`` — EU variance, audit
-pass rate, wave elapsed, and the planned-vs-reactive split. This is the
-read-only estimation view shipped in P20-W08.
+pass rate, wave elapsed, and the planned-vs-reactive split. This view is
+read-only: it never writes back to ``state.json``.
 
 The C09 telemetry capstone adds four sub-verbs behind the
 same ``metrics`` command — selected by a leading positional sub-verb so the
@@ -28,7 +28,8 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
   measured-only (manual ``eawf actual start/stop`` segments now, per-wave
   token accounting in v0.4); the variance gauge reads the empty state
   until a measured actual exists. The old wall-clock auto-record +
-  ``backfill-actuals`` derivation were retired in P27-I05-W28.
+  ``backfill-actuals`` derivation were retired because wall-clock time
+  overstated agent effort.
 - ``eawf metrics jury-validation`` — render the cross-vendor jury validated
   against its ground-truth cohort (Fleiss kappa / Brier / ECE /
   unanimous-pass-on-known-bad catch rate) from ``state.json`` plus the

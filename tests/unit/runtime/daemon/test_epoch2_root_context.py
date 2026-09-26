@@ -25,9 +25,13 @@ from typing import Any
 import pytest
 
 from eawf.kernel.identity import IdentityError, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.migration.epoch2.activation import read_seal_fault, seal_fault_path
 from eawf.kernel.migration.epoch2.canary import CANARY_DECLARATION_FILENAME, DisposableTarget
 from eawf.kernel.migration.epoch2.cutover import DOCUMENT_SCHEMA_KEY
-from eawf.kernel.migration.epoch2.errors import MigrationDualAuthorityError
+from eawf.kernel.migration.epoch2.errors import (
+    MigrationActivationSealFailedError,
+    MigrationDualAuthorityError,
+)
 from eawf.kernel.migration.epoch2.generation import (
     GENERATION_DOCUMENT,
     atomic_write_json,
@@ -38,6 +42,7 @@ from eawf.kernel.migration.epoch2.generation import (
 from eawf.kernel.migration.epoch2.manifest import MANIFEST_SCHEMA_VERSION
 from eawf.kernel.state.epoch2.authority import NativeAuthorityRequiredError
 from eawf.platform.install.canary import canary_ref, provision_canary
+from eawf.runtime.daemon import epoch2_root
 from eawf.runtime.daemon.epoch2_root import (
     DOCUMENT_LOCK_NAME,
     Epoch2RootContext,
@@ -398,3 +403,71 @@ def test_method_context_native_root_context_epoch1_refused(tmp_path: Path) -> No
     with pytest.raises(NativeAuthorityRequiredError):
         ctx.native_root_context(tree)
     assert ctx.native_roots == {}
+
+
+# ---- a failed activation seal is a recorded, raised fault ------------------
+
+
+def _failing_seal(target: DisposableTarget, *, observed_at: datetime) -> None:
+    raise OSError("journal unwritable")
+
+
+def test_failed_seal_raises_a_typed_fault_and_records_it(
+    context: Epoch2RootContext, canary: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(epoch2_root, "seal_first_native_mutation", _failing_seal)
+    with (
+        pytest.raises(MigrationActivationSealFailedError, match="mutation committed") as caught,
+        context.session([MILESTONE]),
+    ):
+        pass
+    assert caught.value.code == "activation_seal_failed"
+    assert isinstance(caught.value.__cause__, OSError)
+    fault = read_seal_fault(DisposableTarget.require(canary))
+    assert fault is not None
+    assert fault.error == "OSError"
+
+
+def test_failed_seal_leaves_the_committed_write_in_place(
+    context: Epoch2RootContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(epoch2_root, "seal_first_native_mutation", _failing_seal)
+    with (
+        pytest.raises(MigrationActivationSealFailedError),
+        context.session([MILESTONE]) as session,
+    ):
+        document = session.read_document()
+        document["milestone"] = {"MLS-0001": {"status": "planned"}}
+        session.write_document(document)
+    monkeypatch.undo()
+    with context.session([MILESTONE]) as session:
+        assert session.read_document()["milestone"] == {"MLS-0001": {"status": "planned"}}
+
+
+def test_failed_seal_does_not_mask_the_block_error(
+    context: Epoch2RootContext, canary: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(epoch2_root, "seal_first_native_mutation", _failing_seal)
+    with pytest.raises(KeyError, match="block"), context.session([MILESTONE]):
+        raise KeyError("block")
+    assert read_seal_fault(DisposableTarget.require(canary)) is not None
+
+
+def test_landed_seal_clears_an_earlier_fault(
+    context: Epoch2RootContext, canary: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(epoch2_root, "seal_first_native_mutation", _failing_seal)
+    with pytest.raises(MigrationActivationSealFailedError), context.session([MILESTONE]):
+        pass
+    monkeypatch.undo()
+    with context.session([MILESTONE]):
+        pass
+    target = DisposableTarget.require(canary)
+    assert read_seal_fault(target) is None
+    assert not seal_fault_path(target).exists()
+
+
+def test_clean_session_records_no_fault(context: Epoch2RootContext, canary: Path) -> None:
+    with context.session([MILESTONE]):
+        pass
+    assert read_seal_fault(DisposableTarget.require(canary)) is None

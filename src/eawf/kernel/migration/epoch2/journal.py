@@ -81,6 +81,7 @@ class CutoverStage(StrEnum):
     RESTORE_VERIFIED = "restore_verified"
     SURFACES_RESTORED = "surfaces_restored"
     ACTIVATION_COMPLETED = "activation_completed"
+    CANARY_WINDOW_CLOSED = "canary_window_closed"
 
 
 class ActivationRecord(StrictMigrationModel):

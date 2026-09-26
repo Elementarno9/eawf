@@ -28,12 +28,17 @@ from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.budget.notices import load_notice_ledger, notices_path
 from eawf.runtime.budget.policy import (
     SEALED_BUDGET,
+    BudgetAction,
     BudgetConfig,
     DuplicateCeilingError,
     PromptBudgetCeiling,
     budget_config_from,
 )
-from eawf.runtime.budget.service import TerminationResult, load_budget_config
+from eawf.runtime.budget.service import (
+    TerminationResult,
+    consume_against_ceiling,
+    load_budget_config,
+)
 from eawf.runtime.daemon import dispatch_runner
 from eawf.runtime.daemon.budget_interlock import (
     InFlightBudgetOutcome,
@@ -49,6 +54,11 @@ from eawf.runtime.runtimes.claude.plugin_install import _patch_settings_json
 from eawf.runtime.runtimes.claude.statusline_modules import budget as budget_module
 from eawf.runtime.runtimes.metering import UsageSample
 from eawf.surfaces.render.statusline import budget_segment, budget_unavailable_segment
+from eawf.workflow.lifecycle._claim_guards import (
+    CLAIM_BUDGET_CEILING_REACHED,
+    validate_claim_budget,
+)
+from eawf.workflow.lifecycle._errors import LifecycleGuardError
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
     provision,
@@ -357,3 +367,45 @@ def test_plugin_settings_wire_the_statusline_and_keep_a_foreign_one(tmp_path: Pa
     foreign = tmp_path / "foreign.json"
     foreign.write_text('{"statusLine": {"type": "command", "command": "mine"}}', encoding="utf-8")
     assert b'"command": "mine"' in _patch_settings_json(foreign, {})
+
+
+# ---------- the claim guard and consume agree at the ceiling ----------
+
+
+def budgeted_state(consumed: int = 0) -> State:
+    """Return the accrual fixture with its wave at budget 1000 and *consumed*."""
+    payload = _state_payload(tokens_consumed=consumed)
+    payload["waves"][_WAVE_ID]["token_budget"] = 1000
+    return State.model_validate(payload)
+
+
+def claim_refused(state: State, budget: BudgetConfig) -> bool:
+    """Return whether the claim guard refuses the accrual fixture's wave."""
+    try:
+        validate_claim_budget(state.waves[_WAVE_ID], budget=budget)
+    except LifecycleGuardError as exc:
+        assert exc.code == CLAIM_BUDGET_CEILING_REACHED
+        return True
+    return False
+
+
+@pytest.mark.parametrize("enforce", ["soft", "hard"])
+@pytest.mark.parametrize("consumed", [0, 1499, 1500, 1501, 10**6])
+def test_claim_guard_refuses_exactly_where_consume_halts(enforce: str, consumed: int) -> None:
+    budget = BudgetConfig.model_validate({"enforce": enforce})
+    state = budgeted_state()
+    outcome = consume_against_ceiling(state, _WAVE_ID, consumed, budget=budget)
+    halted = outcome.decision.action is BudgetAction.HALT
+    assert claim_refused(state, budget) is halted
+
+
+def test_soft_ceiling_reached_still_admits_the_claim() -> None:
+    """Soft enforce lets consume run past the ceiling, so the claim must pass too."""
+    state = budgeted_state(1500)
+    assert BudgetConfig().ceiling(1000) == PromptBudgetCeiling(tokens=1500, enforce="soft")
+    assert claim_refused(state, BudgetConfig()) is False
+
+
+def test_hard_ceiling_reached_refuses_the_claim() -> None:
+    state = budgeted_state(1500)
+    assert claim_refused(state, BudgetConfig(enforce="hard")) is True

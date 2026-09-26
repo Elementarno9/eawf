@@ -18,8 +18,10 @@ from eawf.kernel.store.kinds.agent_report import (
     ExecutorTestRun,
     PlannerReportBody,
 )
+from eawf.platform.lint.kind_taxonomy import REPRO_TEST_NAME
 from eawf.runtime.daemon.dispatch_runner import emit_agent_end_report
 from eawf.runtime.daemon.methods import MethodContext
+from eawf.surfaces.render.agents import _EXECUTOR_BODY
 from eawf.workflow.agents.specs.models import SubagentSpec
 from eawf.workflow.verify.dispatch_close import (
     DispatchCloseBlockedError,
@@ -340,3 +342,55 @@ def test_render_headless_executor_asks_for_test_runs() -> None:
     out = spec.render(headless=True)
     assert '"test_runs": [{"test_id"' in out
     assert "never ran red first" in out
+    assert f"`{REPRO_TEST_NAME.form}`" in out
+
+
+# ---- the repro naming convention -------------------------------------------
+
+
+def test_executor_body_renders_the_repro_form_from_the_constant() -> None:
+    assert f"`{REPRO_TEST_NAME.form}`" in _EXECUTOR_BODY
+    assert "`_repro_` test" not in _EXECUTOR_BODY
+
+
+@pytest.mark.parametrize(
+    "test_id",
+    [
+        _REPRO_TEST,
+        "tests/unit/test_x.py::test_repro_7",
+        "tests/unit/test_x.py::test_x_repro_7[case-1]",
+        "tests/unit/test_x.py::TestX::test_x_repro_7",
+    ],
+)
+def test_repro_form_matches_a_repro_function_name(test_id: str) -> None:
+    assert REPRO_TEST_NAME.matches(test_id)
+
+
+@pytest.mark.parametrize(
+    "test_id",
+    [
+        "tests/unit/test_a_repro_1.py::test_b",
+        "tests/unit/test_x.py::TestA_repro_1::test_b",
+        "tests/unit/test_x.py::test_nonrepro_case",
+        "tests/unit/test_x.py::test_x_repro_",
+        "tests/unit/test_x.py::test_x_reproduce_42",
+        "",
+    ],
+)
+def test_repro_form_ignores_ids_that_merely_contain_the_marker(test_id: str) -> None:
+    assert not REPRO_TEST_NAME.matches(test_id)
+
+
+def test_marker_outside_the_function_name_stays_advisory() -> None:
+    """A ``_repro_`` module path no longer turns every test in it into a blocker."""
+    test_id = "tests/unit/test_a_repro_1.py::test_b"
+    (finding,) = red_to_green_close_findings(_report(_run(test_id, "green")))
+    assert finding.blocking is False
+
+
+def test_verify_close_readiness_passes_marker_outside_function_name() -> None:
+    result = verify_close_readiness(
+        _WAVE_ID, _report(_run("tests/unit/test_a_repro_1.py::test_b", "green"))
+    )
+    assert result.passed
+    assert len(result.advisories) == 1

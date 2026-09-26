@@ -13,7 +13,8 @@ slash-bearing branch names) and the ``wave`` layer (transient daemon
 RAM, keyed by ``Wave.id``, reset on wave close — see
 ``set_wave_value`` / ``clear_wave_overlay``).
 
-Algorithm — mirrors the W09 ``state.mutate`` lifecycle for symmetry:
+Algorithm — mirrors the ``state.mutate`` lifecycle so both writers share
+one locking and replay story:
 
 1. Idempotency-cache lookup keyed by ``params['idempotency_key']`` (when
    supplied). Re-emit the cached envelope verbatim with

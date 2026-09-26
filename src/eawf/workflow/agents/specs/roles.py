@@ -55,7 +55,7 @@ _RUNTIME_PLACEMENT: dict[RuntimeId, str] = {
 class RoleSpec(BaseModel):
     """Typed contract for one subagent role across kept runtimes.
 
-    P28-I01-W12 extended this model with the role-level invariants every
+    The model carries the role-level invariants every
     per-role surface (Claude / Codex / OpenCode / dispatch
     :class:`~eawf.workflow.agents.specs.models.SubagentSpec`) consumes:
     ``system_prompt``, ``allowed_tools``, ``denied_tools``, ``model``,
@@ -66,8 +66,8 @@ class RoleSpec(BaseModel):
     body is driven by the role registry rather than a hardcoded constant.
 
     The legacy ``body`` attribute is preserved as a read-only alias of
-    :attr:`system_prompt` so pre-W12 callers continue to work without
-    edits; new callers should read :attr:`system_prompt` directly.
+    :attr:`system_prompt` so callers written before the rename keep working
+    without edits; new callers should read :attr:`system_prompt` directly.
 
     Attributes:
         role: The canonical :class:`~eawf.kernel.state.enums.AgentSessionRole`.
@@ -76,7 +76,7 @@ class RoleSpec(BaseModel):
             :data:`eawf.surfaces.render.agents.AGENT_REGISTRY`).
         system_prompt: The role contract Markdown (method, output
             contract, anti-patterns), reused verbatim from the same
-            registry. Renamed from ``body`` in P28-I01-W12; the legacy
+            registry. Formerly named ``body``; the legacy
             ``body`` attribute remains as a read-only alias.
         allowed_tools: Tool names the role may invoke (e.g.
             ``["Read", "Edit", "Bash"]``). Sourced from
@@ -95,8 +95,8 @@ class RoleSpec(BaseModel):
             today; a future wave may evolve this to a full schema URN
             without touching :attr:`report_store_kind`.
         report_store_kind: Legacy alias of :attr:`report_schema_ref`
-            (preserved for back-compat with the W14 surface that already
-            persisted this name in goldens).
+            (preserved because rendered goldens already persist this
+            name).
         stop_conditions: Conditions under which the role's session
             must stop and report. Empty when the role has no
             role-specific stop conditions beyond the default.
@@ -119,7 +119,7 @@ class RoleSpec(BaseModel):
     def body(self) -> str:
         """Legacy alias for :attr:`system_prompt` (read-only).
 
-        Pre-W12 callers referenced ``RoleSpec.body``; that name is now
+        Older callers referenced ``RoleSpec.body``; that name is now
         :attr:`system_prompt`. The property keeps the old surface usable
         without forcing downstream call sites to migrate in lockstep.
         """
@@ -191,10 +191,10 @@ def _role_spec_from_agent_spec(spec: AgentSpec, role: AgentSessionRole) -> RoleS
     """Project an :class:`AgentSpec` registry row into a :class:`RoleSpec`.
 
     Centralises the AGENT_REGISTRY → RoleSpec mapping so the field set
-    has a single home. P28-I01-W12 widened ``RoleSpec`` with role-level
-    invariants (``allowed_tools``, ``denied_tools``, ``model``, …); the
-    projection wires every one of those off the ``AgentSpec`` row that
-    already carries them.
+    has a single home. ``RoleSpec`` carries role-level invariants
+    (``allowed_tools``, ``denied_tools``, ``model``, …); the projection
+    wires every one of those off the ``AgentSpec`` row that already
+    carries them.
 
     ``stop_conditions`` and ``denied_tools`` are intentionally empty
     here — the seam exists for future waves to fill the

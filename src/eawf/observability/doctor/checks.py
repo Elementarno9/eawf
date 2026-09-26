@@ -965,8 +965,8 @@ def _store_fold_parity(
     """Shared fold-parity core: distinct store base-ids ⊆ state map keys.
 
     The append-only kind stores and the ``state.json`` entity maps are written
-    by the same mutators, but a stale-cache clobber (the INC-P30 incident-map
-    wipe this check was born from) can drop state rows while the store keeps
+    by the same mutators, but a stale-cache clobber (an incident-map wipe is
+    the failure this check was born from) can drop state rows while the store keeps
     the append-only history. Parity broken = state lost a fold the store still
     proves -- a data-loss signal, so the mismatch is ``fail``, not ``warn``.
 
@@ -1202,9 +1202,9 @@ def check_render_output_roundtrip() -> CheckResult:
     but non-trivial envelope, serialises with :func:`to_markdown`, parses
     back with :func:`from_markdown`, and asserts equality. If the envelope
     parser regresses, every skill that emits a JSON envelope is broken — so
-    this check anchors W07's API contract on every doctor run.
+    this check anchors the envelope wire contract on every doctor run.
     """
-    # Phase 4 W01: header + footer are typed; pre-W01 callers passed
+    # Header and footer are typed; older callers passed
     # ``dict`` literals which Pydantic v2 still coerces into the typed
     # models on validation. We use a literal dict here so the doctor
     # smoke check exercises the back-compat path.
@@ -1301,8 +1301,8 @@ def run_all(
     function; it raises :class:`eawf.surfaces.cli.errors.UserError`
     (``kind="InstrumentMissing"``) so the CLI can map it to exit code
     ``6``. Every other check returns a
-    :class:`CheckResult`. W08 adds the manifest-in-sync and
-    render-output-roundtrip checks at the end of the list so the canonical
+    :class:`CheckResult`. The manifest-in-sync and
+    render-output-roundtrip checks run at the end of the list so the canonical
     envelope shape mirrors the order operators see in the doctor table.
 
     Anchor resolution: a plain ``eawf doctor`` (no ``-w``) passes

@@ -348,6 +348,20 @@ class MigrationRollbackBoundaryCrossedError(MigrationRuleError):
     code: ClassVar[str] = "rollback_boundary_crossed"
 
 
+class MigrationActivationSealFailedError(MigrationRuleError):
+    """A native session committed but its activation seal could not be written.
+
+    The mutation is durable, so the refusal does not mean the write failed.
+    It means the journal still lacks the record that closes the simple
+    rollback window, and until a later session writes it only the moved
+    generation digest stands between the tree and a restore that would
+    discard native work. That gap is the operator's to know about, so the
+    fault is raised and recorded rather than logged and forgotten.
+    """
+
+    code: ClassVar[str] = "activation_seal_failed"
+
+
 class MigrationDualAuthorityError(MigrationRuleError):
     """The tree names more than one authority, or names one that is absent.
 

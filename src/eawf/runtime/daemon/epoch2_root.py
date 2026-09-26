@@ -37,7 +37,9 @@ Every native mutation commits inside a session, so the session's close is
 where the first one is noticed: before its locks are released, a session
 over a cut-over tree seals the activation once the published generation
 has moved off its activation digest, which closes the simple rollback
-window for good.
+window for good. A seal that fails is recorded under the tree's local
+directory and raised as a typed fault, so the operator learns that the
+window is held shut only by the moved digest until a later seal lands.
 """
 
 from __future__ import annotations
@@ -54,8 +56,16 @@ from typing import Annotated, Any, Final, Self
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.identity import QualifiedUrn, parse_qualified_urn
-from eawf.kernel.migration.epoch2.activation import seal_first_native_mutation
-from eawf.kernel.migration.epoch2.errors import MigrationDualAuthorityError, MigrationRuleError
+from eawf.kernel.migration.epoch2.activation import (
+    ActivationSealFault,
+    seal_fault_path,
+    seal_first_native_mutation,
+)
+from eawf.kernel.migration.epoch2.errors import (
+    MigrationActivationSealFailedError,
+    MigrationDualAuthorityError,
+    MigrationRuleError,
+)
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT, read_selection
 from eawf.kernel.state.epoch2.authority import RootAuthority, require_native_authority
 from eawf.kernel.store import paths as store_paths
@@ -310,6 +320,9 @@ class Epoch2RootContext:
             ValueError: No entity was named.
             IdentityError: An entity URN does not parse.
             LockTimeout: A lock stayed held past the lock timeout.
+            MigrationActivationSealFailedError: The block finished and its
+                mutation committed, but the activation seal failed; the
+                fault is recorded for the operator.
         """
         authority = self.require_selected_generation()
         order = entity_lock_order(urns)
@@ -327,28 +340,60 @@ class Epoch2RootContext:
                 yield session
             finally:
                 session.closed = True
-                self._seal_activation(authority)
+                fault = self._seal_activation(authority)
+            # Reached only when the block finished; a block that raised keeps
+            # its own error, and the fault is still on disk for the operator.
+            if fault is not None:
+                raise fault
 
-    def _seal_activation(self, authority: RootAuthority) -> None:
+    def _seal_activation(
+        self, authority: RootAuthority
+    ) -> MigrationActivationSealFailedError | None:
         """Seal the tree's activation if this session made its first mutation.
 
-        A failure here is logged rather than raised: the mutation it would
-        report on has already committed, so raising would tell the caller a
-        write failed when it landed. The next session retries the seal, and
-        until it lands a rollback still refuses on the moved generation
-        digest alone.
+        The mutation the seal reports on has already committed, so a failed
+        seal cannot undo it. A log line alone would leave the operator unaware
+        that the simple rollback window is held shut only by the moved
+        generation digest, so the failure is recorded under the tree's local directory
+        and returned as a typed fault for the session to raise. A seal that
+        lands clears any fault an earlier session recorded.
 
         Args:
             authority: The epoch-2 answer the session was opened under.
+
+        Returns:
+            The fault to raise, or ``None`` when the seal landed or had
+            nothing to seal.
         """
         assert authority.target is not None, "an epoch-2 answer always carries its target"
+        target = authority.target
+        fault_path = self.declared_path(seal_fault_path(target))
+        observed_at = datetime.now(UTC)
         try:
-            seal_first_native_mutation(authority.target, observed_at=datetime.now(UTC))
+            seal_first_native_mutation(target, observed_at=observed_at)
         except (MigrationRuleError, LedgerError, OSError, ValueError) as error:
             logger.warning(
-                f"_seal_activation root={self.identity.root_id} deferred=true "
+                f"_seal_activation root={self.identity.root_id} sealed=false "
                 f"error={error.__class__.__name__}"
             )
+            record = ActivationSealFault(observed_at=observed_at, error=error.__class__.__name__)
+            try:
+                fault_path.parent.mkdir(parents=True, exist_ok=True)
+                fault_path.write_text(record.model_dump_json(), encoding="utf-8")
+            except OSError as write_error:
+                logger.error(
+                    f"_seal_activation root={self.identity.root_id} fault_recorded=false "
+                    f"error={write_error.__class__.__name__}"
+                )
+            fault = MigrationActivationSealFailedError(
+                f"the session's mutation committed, but sealing the activation of "
+                f"{target.root.name} failed ({error.__class__.__name__}); a later session "
+                "retries the seal"
+            )
+            fault.__cause__ = error
+            return fault
+        fault_path.unlink(missing_ok=True)
+        return None
 
 
 class RootSession:

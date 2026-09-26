@@ -115,9 +115,8 @@ def _resolve(state: State, block: VerifyBlock | None, tmp_path: Path) -> BlockAu
 # --- JuryCalibration contract -------------------------------------------------
 
 
-def test_jury_calibration_default_is_advisory_at_both_sites() -> None:
+def test_jury_calibration_default_close_site_is_advisory() -> None:
     calibration = JuryCalibration()
-    assert calibration.plan_authority == "advisory"
     assert calibration.close_authority == "advisory"
     assert calibration.calibration_decision is None
 

@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.store.kinds.agent_report import body_class_for_role
+from eawf.platform.lint.kind_taxonomy import REPRO_TEST_NAME
 
 
 class RoleTierBudgetError(ValueError):
@@ -539,7 +540,8 @@ class SubagentSpec(_SpecModel):
                 "arrays of plain strings. `test_runs` records every run of each "
                 "test you wrote or changed, oldest first: run it red before the "
                 "fix, then green after; wave close flags a test reported green "
-                "that never ran red first, and blocks close on a `_repro_` test. "
+                "that never ran red first, and blocks close on a repro test "
+                f"named `{REPRO_TEST_NAME.form}`. "
                 "`commit_sha` is REQUIRED and must name "
                 "the landed commit using at least 7 characters. `evidence_refs` is "
                 "REQUIRED: exactly one "

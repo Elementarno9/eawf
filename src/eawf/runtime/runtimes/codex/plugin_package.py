@@ -1,4 +1,4 @@
-"""Emit a standalone Codex CLI marketplace tree at ``<target>/`` (P14-I02-W01 hotfix).
+"""Emit a standalone Codex CLI marketplace tree at ``<target>/``.
 
 Per the Codex Build-plugin reference, dropping a plugin directly under
 ``~/.codex/plugins/<name>/`` does **not** auto-load it — Codex requires

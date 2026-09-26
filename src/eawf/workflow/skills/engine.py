@@ -23,8 +23,8 @@ Lifecycle:
    override via ``ctx.failure_repair_commands``) and the exception text in
    the body.
 
-This wave defines the contract only. W02/W03 add the six core +
-four meta skill subclasses.
+This module defines the contract only; the concrete skill subclasses live
+beside it and plug into the engine through it.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ class SkillContext:
         instrument_probe: Map of instrument-name → status. Filled in by
             the runtime adapter from the cached probe report.
         args: Free-form CLI args parsed for the skill (Pydantic body
-            models live on the result side, not the input side, in W01).
+            models live on the result side, not the input side).
         failure_repair_commands: Optional override for the engine's
             default ``["see body for traceback"]`` repair command list
             on the action-raised path.

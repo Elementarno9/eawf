@@ -102,11 +102,14 @@ def validate_claim_criteria(wave: Wave) -> None:
 
 
 def validate_claim_budget(wave: Wave, *, budget: BudgetConfig) -> None:
-    """Reject a claim of a wave whose consumption already reached its one ceiling.
+    """Reject a claim of a wave its one ceiling would stop.
 
-    The ceiling is the one the daemon meters, notices and enforces against,
-    so a wave the accrual would stop is never handed out again. A wave with
-    no budget has no ceiling and always passes.
+    The guard asks the ceiling the same question the consume path asks, so
+    a claim is refused exactly when the accrual would halt the wave: at or
+    over a ``hard`` ceiling. Under ``soft`` enforce the consume path only
+    warns and lets the wave run past its ceiling, so refusing the claim
+    there would strand a wave the budget explicitly allows to continue. A
+    wave with no budget has no ceiling and always passes.
 
     Args:
         wave: Wave proposed for claim.
@@ -114,10 +117,12 @@ def validate_claim_budget(wave: Wave, *, budget: BudgetConfig) -> None:
 
     Raises:
         LifecycleGuardError: With ``claim_budget_ceiling_reached`` when the
-            wave's consumption met or crossed its ceiling.
+            wave's consumption met or crossed a hard ceiling.
     """
+    from eawf.runtime.budget.policy import BudgetAction
+
     ceiling = budget.ceiling(wave.token_budget)
-    if ceiling is None or not ceiling.reached(wave.tokens_consumed):
+    if ceiling is None or ceiling.decide(wave.tokens_consumed).action is not BudgetAction.HALT:
         return
     raise LifecycleGuardError(
         CLAIM_BUDGET_CEILING_REACHED,
