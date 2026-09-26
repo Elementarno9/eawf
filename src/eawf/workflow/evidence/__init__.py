@@ -28,7 +28,6 @@ from eawf.workflow.evidence.resolve import (
     resolve,
 )
 from eawf.workflow.evidence.rung2 import (
-    ClaimRung,
     EntailmentScorer,
     LexicalEntailmentScorer,
     Rung2ClaimResult,
@@ -36,8 +35,6 @@ from eawf.workflow.evidence.rung2 import (
     Rung2Verdict,
     classify_probability,
     load_default_scorer,
-    looks_numeric,
-    route_claim_to_rung,
     run_rung2_gate,
     score_claim,
     score_claims,
@@ -60,7 +57,6 @@ from eawf.workflow.evidence.rung4 import (
 __all__ = [
     "BriefPromotionGate",
     "BriefRefOutcome",
-    "ClaimRung",
     "DeferredAspect",
     "EntailmentScorer",
     "EviBoundVerdict",
@@ -76,11 +72,9 @@ __all__ = [
     "criterion_verdict_to_status",
     "dominant_verdict",
     "load_default_scorer",
-    "looks_numeric",
     "render_attested_verdict",
     "require_complete_audit",
     "resolve",
-    "route_claim_to_rung",
     "run_rung1_gate",
     "run_rung2_gate",
     "score_claim",

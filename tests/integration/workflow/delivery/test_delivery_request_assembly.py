@@ -1,13 +1,13 @@
 """Delivery requests are assembled from records, and a dangling record refuses.
 
-The three delivery verbs take a request whose every field used to be the
+The integrate verb takes a request whose every field used to be the
 caller's to fill in. The assembler derives them instead: from the Batch
 record, the Tasks its plan lists, the Run behind each sealed candidate,
 and the typed references it resolves against the same tree. This suite
-builds all three requests from one resolved world, sends two of them to
-their verbs to show the verbs accept what was assembled, and then removes
-one fact at a time -- a planned Task, a Run, an exit, the evidence, the
-base -- to show each refuses before anything is written.
+builds the request from one resolved world, sends it to the verb to show
+the verb accepts what was assembled, and then removes one fact at a time
+-- a planned Task, a Run, an exit, the evidence, the base -- to show each
+refuses before anything is written.
 
 Nothing sleeps, polls or reaches outside ``tmp_path``.
 """
@@ -23,17 +23,13 @@ from typing import Any, Final
 import pytest
 
 from eawf.kernel.delivery.integration import ConflictExitKind
-from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.store.compaction import read_document, write_document
 from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.delivery import (
-    assess_task_completion,
-    integrate_delivery,
-)
+from eawf.runtime.daemon.methods.delivery import integrate_delivery
 from eawf.runtime.daemon.methods.delivery_assembly import (
     DELIVERY_ASSEMBLE_METHOD,
     DeliveryAssembleParams,
@@ -44,9 +40,7 @@ from eawf.workflow.delivery.request_assembly import (
     AssemblyRefusedError,
     BatchPlan,
     DeliveryReferences,
-    assemble_completion_request,
     assemble_integrate_request,
-    assemble_verify_request,
     resolve_batch_plan,
 )
 from tests.integration.workflow.delivery import _completion_fixtures as world
@@ -243,49 +237,6 @@ def test_assembled_integrate_request_clears_the_verb_up_to_its_workspace(
         integrate_delivery(context, request, workspace=None, now=world.AT)
 
 
-def test_assemble_verify_request_names_the_jury_criteria(tmp_path: Path) -> None:
-    """The judgment criteria are the planned Tasks' jury rows, and nothing else."""
-    request = assemble_verify_request(plan(tmp_path), actor=ACTOR)
-    assert str(request.urn) == world.BATCH
-    assert request.judgment_criterion_ids == ("CR-02",)
-    assert request.audits == ()
-    assert request.idempotency_key.startswith("verify-")
-
-
-def test_assemble_completion_request_reads_the_verdict_from_the_seal(tmp_path: Path) -> None:
-    """The verdict is the sealed bundle's, and the gates are exactly the Task's."""
-    request = assemble_completion_request(
-        plan(tmp_path),
-        parse_qualified_urn(world.TASK),
-        actor=ACTOR,
-        gates=(world.gate("CR-02"), world.gate("CR-01")),
-        proof_facts=world.facts(),
-    )
-    assert request.report_verdict is world.bundle().verdict
-    assert [gate.id for gate in request.gates] == ["G-01", "G-02"]
-    assert request.base == world.BASE
-
-
-def test_assembled_completion_request_is_answered_by_the_verb(tmp_path: Path) -> None:
-    """With a generation delivering the Task, the verb answers the assembled request."""
-    context = seeded(tmp_path, task=world.task_row())
-    world.seed_lines(
-        context,
-        world.BATCH,
-        [world.generation_line(world.ledger(world.delivering_generation()).generations[0])],
-    )
-    request = assemble_completion_request(
-        resolve_batch_plan(context, references()),
-        parse_qualified_urn(world.TASK),
-        actor=ACTOR,
-        gates=(world.gate("CR-01"), world.gate("CR-02")),
-        proof_facts=world.facts(),
-    )
-    answer = assess_task_completion(context, request)
-    assert answer.task_ref == world.TASK
-    assert answer.head_generation == 2
-
-
 def test_resolve_batch_plan_refuses_a_dangling_task_reference(tmp_path: Path) -> None:
     """Gate-fire proof: a plan listing a Task no record holds refuses with no write."""
     context = seeded(tmp_path, batch=batch_row(task_refs=(world.TASK, world.OTHER_TASK)))
@@ -385,14 +336,13 @@ def test_assemble_integrate_request_refuses_an_untargeted_batch(tmp_path: Path) 
 
 
 def test_assemble_integrate_request_refuses_an_empty_plan(tmp_path: Path) -> None:
-    """Boundary: a Batch planning no Task has nothing to deliver, but still verifies."""
+    """Boundary: a Batch planning no Task has nothing to deliver."""
     context = seeded(tmp_path, batch=batch_row(task_refs=()), task=world.task_row(batch_ref=None))
     resolved = resolve_batch_plan(context, references())
     assert resolved.tasks == ()
     with pytest.raises(AssemblyRefusedError) as caught:
         assemble_integrate_request(resolved, actor=ACTOR)
     assert caught.value.code is AssemblyRefusal.CANDIDATES_ABSENT
-    assert assemble_verify_request(resolved, actor=ACTOR).judgment_criterion_ids == ()
 
 
 def test_assemble_integrate_request_fits_a_long_intent_to_one_subject(tmp_path: Path) -> None:
@@ -406,58 +356,6 @@ def test_assemble_integrate_request_fits_a_long_intent_to_one_subject(tmp_path: 
     assert len(subject) <= 72
     assert subject.startswith("Publish")
     assert not subject.endswith((".", " "))
-
-
-def test_assemble_completion_request_refuses_an_unsealed_task(tmp_path: Path) -> None:
-    """With no seal there is no verdict on record to present."""
-    resolved = resolve_batch_plan(seeded(tmp_path, seal=False), references())
-    with pytest.raises(AssemblyRefusedError) as caught:
-        assemble_completion_request(
-            resolved,
-            parse_qualified_urn(world.TASK),
-            actor=ACTOR,
-            gates=(world.gate("CR-01"), world.gate("CR-02")),
-            proof_facts=world.facts(),
-        )
-    assert caught.value.code is AssemblyRefusal.TASK_UNSEALED
-
-
-@pytest.mark.parametrize(
-    "gates",
-    [
-        pytest.param(("CR-01",), id="missing"),
-        pytest.param(("CR-01", "CR-02", "stray"), id="stray"),
-    ],
-)
-def test_assemble_completion_request_refuses_gates_the_criteria_do_not_name(
-    tmp_path: Path, gates: tuple[str, ...]
-) -> None:
-    """The gates must be exactly the ones the Task's criteria reference."""
-    given = [world.gate(item) for item in gates if item != "stray"]
-    if "stray" in gates:
-        given.append(world.gate("CR-01").model_copy(update={"id": "G-09"}))
-    with pytest.raises(AssemblyRefusedError) as caught:
-        assemble_completion_request(
-            plan(tmp_path),
-            parse_qualified_urn(world.TASK),
-            actor=ACTOR,
-            gates=given,
-            proof_facts=world.facts(),
-        )
-    assert caught.value.code is AssemblyRefusal.GATE_REFERENCE_UNRESOLVED
-
-
-def test_assemble_completion_request_refuses_a_task_the_plan_omits(tmp_path: Path) -> None:
-    """A Task the Batch does not plan is not judged under it."""
-    with pytest.raises(AssemblyRefusedError) as caught:
-        assemble_completion_request(
-            plan(tmp_path),
-            parse_qualified_urn(world.OTHER_TASK),
-            actor=ACTOR,
-            gates=(world.gate("CR-01"),),
-            proof_facts=world.facts(),
-        )
-    assert caught.value.code is AssemblyRefusal.TASK_REFERENCE_UNRESOLVED
 
 
 def test_delivery_references_reject_an_empty_exit_map() -> None:

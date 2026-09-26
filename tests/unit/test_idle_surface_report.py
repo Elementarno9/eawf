@@ -51,7 +51,17 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: transaction, and ``recover_store_tree``
 #: (``kernel/store/compaction.py``) by the daemon's start-up pass over
 #: every native tree.
-IDLE_CEILING = 221
+#:
+#: 221 dropped to 218: ``assemble_verify_request`` and
+#: ``assemble_completion_request`` (``workflow/delivery/request_assembly.py``)
+#: were test-only surfaces built for a request shape neither ``/verify``
+#: nor the completion path ever adopted, so both were removed rather than
+#: wired to a caller that would have had to invent the fields they need.
+#: ``route_claim_to_rung`` (``workflow/evidence/rung2.py``) lost its only
+#: caller when the idle rung-2-to-rung-3 chain it served was removed; it
+#: was removed alongside it, taking its now-unused ``ClaimRung`` and
+#: ``looks_numeric`` helpers with it.
+IDLE_CEILING = 218
 
 
 def _load_tool() -> Any:

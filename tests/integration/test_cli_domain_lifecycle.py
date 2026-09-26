@@ -148,9 +148,9 @@ def _receipt(*, event_name: str, entity_ref: str, revision_before: int = 3) -> M
     )
 
 
-def _accepted(method: str, entity_ref: str) -> dict[str, Any]:
+def _accepted(method: str, entity_ref: str, *, revision_before: int = 3) -> dict[str, Any]:
     """Return the daemon's own ok envelope, as JSON."""
-    receipt = _receipt(event_name=method, entity_ref=entity_ref)
+    receipt = _receipt(event_name=method, entity_ref=entity_ref, revision_before=revision_before)
     return accepted_envelope(receipt, operation=method).model_dump(mode="json")
 
 
@@ -667,3 +667,584 @@ def test_operator_verb_spelling_of_each_method() -> None:
         "task promote",
         "task start",
     ]
+
+
+# ---- create -------------------------------------------------------------
+
+
+#: Every create command line under test, with the RPC it must forward to.
+#: One row per registered create verb (Run is excluded: it is admitted by
+#: its own lease flow, not by an operator create).
+_CREATE_VERB_ROWS: tuple[tuple[list[str], str, str], ...] = (
+    (["track", "create"], domain_cmd.TRACK_CREATE, _TRACK_URN),
+    (["milestone", "create"], domain_cmd.MILESTONE_CREATE, _MILESTONE_URN),
+    (["batch", "create"], domain_cmd.BATCH_CREATE, _BATCH_URN),
+    (["task", "create"], domain_cmd.TASK_CREATE, _TASK_URN),
+)
+
+
+def _created(method: str, entity_ref: str, *, revision_after: int = 1) -> dict[str, Any]:
+    """Return the daemon's own ok envelope for a create, as JSON."""
+    receipt = MutationReceipt(
+        event_name=method,
+        entity_ref=entity_ref,
+        revision_before=None,
+        revision_after=revision_after,
+        canonical_sequence=1,
+        event_id="evt-0001",
+        idempotency_key="create-0001",
+        occurred_at=datetime(2026, 9, 18, tzinfo=UTC),
+        wal_record_id="wal-0001",
+    )
+    return accepted_envelope(receipt, operation=method).model_dump(mode="json")
+
+
+def test_create_cli_methods_are_a_subset_of_the_registered_create_rpcs() -> None:
+    """Every create verb this module exposes names a registered RPC.
+
+    Run is the one lifecycle kind with no create command here: it is
+    admitted by its own lease flow, so the daemon's own registry names
+    one more create verb than this CLI exposes.
+    """
+    from eawf.runtime.daemon.methods.domain_create import DOMAIN_CREATE_METHODS
+
+    registered = set(DOMAIN_CREATE_METHODS.values())
+    assert set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) < registered
+    assert registered - set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) == {"domain.run.create"}
+
+
+@pytest.mark.parametrize(("verb", "method", "urn"), _CREATE_VERB_ROWS)
+def test_create_verb_forwards_exactly_one_rpc(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    verb: list[str],
+    method: str,
+    urn: str,
+) -> None:
+    """Each create verb sends its own RPC once, with the whole document."""
+    document = {"key": "CANARY-0001", "title": "Canary"}
+    spec = tmp_path / "create.json"
+    spec.write_bytes(orjson.dumps(document))
+    _install(monkeypatch, result=_created(method, urn))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            *verb,
+            urn,
+            "--expected-tree-revision",
+            "0",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(spec),
+        ],
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    assert len(_FakeClient.calls) == 1
+    sent_method, params = _FakeClient.calls[0]
+    assert sent_method == method
+    assert params["urn"] == urn
+    assert params["expected_revision"] == 0
+    assert params["idempotency_key"] == "create-0001"
+    assert params["actor"] == "OPERATOR"
+    assert params["spec"] == document
+    assert params["correlation_id"] is None
+    assert params["repo_root"] == str(tmp_path.resolve())
+
+
+def test_create_zero_tree_revision_is_accepted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Boundary: 0 addresses a tree nothing has committed to yet, and is legal."""
+    spec = tmp_path / "create.json"
+    spec.write_bytes(orjson.dumps({"key": "TRK-CANARY"}))
+    _install(monkeypatch, result=_created(domain_cmd.TRACK_CREATE, _TRACK_URN))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "track",
+            "create",
+            _TRACK_URN,
+            "--expected-tree-revision",
+            "0",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(spec),
+        ],
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+
+
+def test_create_negative_tree_revision_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Boundary: the cursor cannot be negative, unlike a move's revision."""
+    spec = tmp_path / "create.json"
+    spec.write_bytes(orjson.dumps({"key": "TRK-CANARY"}))
+    _install(monkeypatch, result=_created(domain_cmd.TRACK_CREATE, _TRACK_URN))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "track",
+            "create",
+            _TRACK_URN,
+            "--expected-tree-revision",
+            "-1",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(spec),
+        ],
+    )
+    assert result.exit_code == exit_codes.USER_ERROR
+    assert "must not be negative" in result.output
+    assert _FakeClient.calls == []
+
+
+def test_create_missing_from_spec_file_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Error path: an unreadable create document fails at the boundary."""
+    _install(monkeypatch, result=_created(domain_cmd.TRACK_CREATE, _TRACK_URN))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "track",
+            "create",
+            _TRACK_URN,
+            "--expected-tree-revision",
+            "0",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(tmp_path / "absent.json"),
+        ],
+    )
+    assert result.exit_code == exit_codes.USER_ERROR
+    assert "cannot read --from-spec" in result.output
+    assert _FakeClient.calls == []
+
+
+def test_create_from_spec_not_a_json_object_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Boundary: a JSON array or scalar could never be a create document."""
+    spec = tmp_path / "create.json"
+    spec.write_bytes(orjson.dumps(["not", "an", "object"]))
+    _install(monkeypatch, result=_created(domain_cmd.TRACK_CREATE, _TRACK_URN))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "track",
+            "create",
+            _TRACK_URN,
+            "--expected-tree-revision",
+            "0",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(spec),
+        ],
+    )
+    assert result.exit_code == exit_codes.USER_ERROR
+    assert "must be a JSON object" in result.output
+    assert _FakeClient.calls == []
+
+
+def test_create_refusal_surfaces_the_daemon_code_and_exits_nonzero(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A refused create prints the daemon's code, guard and remediation."""
+    spec = tmp_path / "create.json"
+    spec.write_bytes(orjson.dumps({"key": "MLS-0001"}))
+    answer = _refused(
+        domain_cmd.MILESTONE_CREATE,
+        code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+        entity_ref=_MILESTONE_URN,
+    )
+    _install(monkeypatch, result=answer)
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "milestone",
+            "create",
+            _MILESTONE_URN,
+            "--expected-tree-revision",
+            "0",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(spec),
+        ],
+    )
+    assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
+    assert DomainErrorCode.SCHEMA_VALIDATION_FAILED.value in result.output
+
+
+def test_milestone_create_then_activate_reaches_active_through_the_daemon(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """CR-02: create then activate returns the URN and reaches ACTIVE.
+
+    The activate call reads the revision the create left the record at
+    (1), and its own success is the proof of the transition: the daemon
+    answers ``domain.milestone.activate`` -- move a PLANNED Milestone to
+    ACTIVE -- with an ``ok`` envelope only when that move actually lands.
+    """
+    document = {"key": "MLS-0001", "primary_track_ref": _TRACK_URN, "title": "Canary Milestone"}
+    spec = tmp_path / "milestone-create.json"
+    spec.write_bytes(orjson.dumps(document))
+
+    _install(monkeypatch, result=_created(domain_cmd.MILESTONE_CREATE, _MILESTONE_URN))
+    create_result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "--json",
+            "milestone",
+            "create",
+            _MILESTONE_URN,
+            "--expected-tree-revision",
+            "0",
+            "--idempotency-key",
+            "create-0001",
+            "--actor",
+            "OPERATOR",
+            "--from-spec",
+            str(spec),
+        ],
+    )
+    assert create_result.exit_code == exit_codes.OK, create_result.output
+    create_method, create_params = _FakeClient.calls[0]
+    assert create_method == domain_cmd.MILESTONE_CREATE
+    assert create_params["urn"] == _MILESTONE_URN
+    assert create_params["expected_revision"] == 0
+    assert create_params["spec"] == document
+    create_payload = orjson.loads(create_result.stdout)
+    assert create_payload["result"]["entity_ref"] == _MILESTONE_URN
+    assert create_payload["revision_after"] == 1
+
+    _FakeClient.calls = []
+    _install(
+        monkeypatch,
+        result=_accepted(domain_cmd.MILESTONE_ACTIVATE, _MILESTONE_URN, revision_before=1),
+    )
+    activate_result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "milestone",
+            "activate",
+            _MILESTONE_URN,
+            "--expected-milestone-revision",
+            "1",
+            "--idempotency-key",
+            "activate-0001",
+            "--actor",
+            "OPERATOR",
+        ],
+    )
+    assert activate_result.exit_code == exit_codes.OK, activate_result.output
+    activate_method, activate_params = _FakeClient.calls[0]
+    assert activate_method == domain_cmd.MILESTONE_ACTIVATE
+    assert activate_params["urn"] == _MILESTONE_URN
+    assert activate_params["expected_revision"] == 1
+
+
+# ---- seal-approval + submit (non-envelope answer shapes) ---------------------
+
+
+def test_seal_approval_forwards_the_resolver_and_the_answer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The resolver defaults to --actor, and the daemon's answer is printed."""
+    from eawf.runtime.daemon.methods.delivery_approval import ApprovalAnswer
+
+    answer = ApprovalAnswer(
+        action_ref=_APPROVAL_URN,
+        status="sealed",
+        revision=2,
+        bundle_revision=1,
+        bundle_digest="sha256:" + "a" * 64,
+        acceptance_bundle=None,
+        created=False,
+        canonical_sequence=3,
+        reason="every seal check holds",
+    ).model_dump(mode="json")
+    _install(monkeypatch, result=answer)
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "milestone",
+            "seal-approval",
+            _APPROVAL_URN,
+            "--expected-approval-revision",
+            "1",
+            "--idempotency-key",
+            "seal-0001",
+            "--actor",
+            "OPERATOR",
+            "--option-id",
+            "accept",
+            "--receipt-ref",
+            f"{_ROOT}/evidence/EVD-0001",
+        ],
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    method, params = _FakeClient.calls[0]
+    assert method == domain_cmd.DELIVERY_SEAL_APPROVAL
+    assert params["resolver"] == {"principal_kind": "human", "principal_id": "OPERATOR"}
+    assert params["option_id"] == "accept"
+    assert "sealed" in result.output
+    assert "every seal check holds" in result.output
+
+
+def test_seal_approval_non_positive_revision_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Boundary: the pending action's compare-and-swap token is positive."""
+    _install(monkeypatch, result={})
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "milestone",
+            "seal-approval",
+            _APPROVAL_URN,
+            "--expected-approval-revision",
+            "0",
+            "--idempotency-key",
+            "seal-0001",
+            "--actor",
+            "OPERATOR",
+            "--option-id",
+            "accept",
+            "--receipt-ref",
+            f"{_ROOT}/evidence/EVD-0001",
+        ],
+    )
+    assert result.exit_code == exit_codes.USER_ERROR
+    assert "positive revision" in result.output
+    assert _FakeClient.calls == []
+
+
+def test_seal_approval_refusal_renders_the_daemons_code_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A daemon refusal is printed with its own code and exits non-zero.
+
+    ``seal-approval`` answers outside the :class:`DomainEnvelope` shape, so
+    its refusal is a raised JSON-RPC error rather than an ok-shaped result
+    carrying an error row -- the message is still rendered unchanged.
+    """
+    _install(
+        monkeypatch,
+        error=DaemonRpcError(
+            -32002,
+            "validation_failed: acceptance_action_not_waiting: "
+            f"{_APPROVAL_URN} is not waiting for an answer",
+        ),
+    )
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "milestone",
+            "seal-approval",
+            _APPROVAL_URN,
+            "--expected-approval-revision",
+            "1",
+            "--idempotency-key",
+            "seal-0001",
+            "--actor",
+            "OPERATOR",
+            "--option-id",
+            "accept",
+            "--receipt-ref",
+            f"{_ROOT}/evidence/EVD-0001",
+        ],
+    )
+    assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
+    assert "acceptance_action_not_waiting" in result.output
+    assert f"{_APPROVAL_URN} is not waiting for an answer" in result.output
+
+
+def test_seal_approval_unreachable_daemon_is_a_daemon_unreachable_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Error path: a dropped connection is not rendered as a refusal."""
+    _install(monkeypatch, error=TimeoutError("no answer"))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "milestone",
+            "seal-approval",
+            _APPROVAL_URN,
+            "--expected-approval-revision",
+            "1",
+            "--idempotency-key",
+            "seal-0001",
+            "--actor",
+            "OPERATOR",
+            "--option-id",
+            "accept",
+            "--receipt-ref",
+            f"{_ROOT}/evidence/EVD-0001",
+        ],
+    )
+    assert result.exit_code == exit_codes.DAEMON_UNREACHABLE
+    assert "daemon unavailable" in result.output
+
+
+def test_task_submit_forwards_the_changed_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Repeated --changed-path flags land as the wire's changed_paths list."""
+    from eawf.runtime.daemon.methods.candidate import CandidateSubmitAnswer
+
+    answer = CandidateSubmitAnswer(
+        candidate_ref="CND-" + "0" * 32,
+        run_ref=_RUN_URN,
+        replayed=False,
+        report_binding="pending",
+        submission={"candidate_ref": "CND-" + "0" * 32},
+        reason="candidate recorded with its report binding pending",
+    ).model_dump(mode="json")
+    _install(monkeypatch, result=answer)
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "task",
+            "submit",
+            _RUN_URN,
+            "--task-ref",
+            _TASK_URN,
+            "--submission-ref",
+            f"artifact://git/commit/{'a' * 40}",
+            "--changed-path",
+            "src/eawf/one.py",
+            "--changed-path",
+            "src/eawf/two.py",
+            "--resulting-tree-digest",
+            "sha256:" + "b" * 64,
+            "--idempotency-key",
+            "submit-0001",
+            "--actor",
+            "OPERATOR",
+        ],
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    method, params = _FakeClient.calls[0]
+    assert method == domain_cmd.CANDIDATE_SUBMIT
+    assert params["changed_paths"] == ["src/eawf/one.py", "src/eawf/two.py"]
+    assert params["task_ref"] == _TASK_URN
+    assert "candidate recorded" in result.output
+
+
+def test_task_submit_without_a_changed_path_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Boundary: Typer's own required-option gate stops a bare invocation.
+
+    ``--changed-path`` carries no default, so Typer marks it required and
+    refuses an invocation naming none before this module's own body ever
+    runs -- there is no empty-list case left for this module to check.
+    """
+    _install(monkeypatch, result={})
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "task",
+            "submit",
+            _RUN_URN,
+            "--task-ref",
+            _TASK_URN,
+            "--submission-ref",
+            f"artifact://git/commit/{'a' * 40}",
+            "--resulting-tree-digest",
+            "sha256:" + "b" * 64,
+            "--idempotency-key",
+            "submit-0001",
+            "--actor",
+            "OPERATOR",
+        ],
+    )
+    assert result.exit_code == 2
+    assert "Missing option" in result.output
+    assert "changed" in result.output and "path" in result.output
+    assert _FakeClient.calls == []
+
+
+def test_task_submit_refusal_renders_the_daemons_code_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A candidate refusal prints the daemon's code unchanged and exits non-zero."""
+    _install(
+        monkeypatch,
+        error=DaemonRpcError(
+            -32002,
+            f"validation_failed: candidate_lease_absent: run {_RUN_URN} holds no active lease",
+        ),
+    )
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            "task",
+            "submit",
+            _RUN_URN,
+            "--task-ref",
+            _TASK_URN,
+            "--submission-ref",
+            f"artifact://git/commit/{'a' * 40}",
+            "--changed-path",
+            "src/eawf/one.py",
+            "--resulting-tree-digest",
+            "sha256:" + "b" * 64,
+            "--idempotency-key",
+            "submit-0001",
+            "--actor",
+            "OPERATOR",
+        ],
+    )
+    assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
+    assert "candidate_lease_absent" in result.output
+    assert f"run {_RUN_URN} holds no active lease" in result.output

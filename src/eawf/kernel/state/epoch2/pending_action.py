@@ -24,11 +24,21 @@ The record is minimal on purpose: what is being asked, the two-to-four
 answers offered, the exact digest the answer is bound to, and the seal.
 Rendering the question, dispatching it to a surface, and filing the
 sealed row are not here.
+
+A second answer. Two principals can each be the one who completes an
+already-sealed question -- a race, not a mistake by either of them -- so
+:meth:`PendingAction.answer` never reports the loser's request as
+rejected. It reports :attr:`AnswerOutcome.SUPERSEDED` and the choice that
+won, and it records the loser's own disposition beside the winner's
+seal, because "who else answered, and with what" is the fact an operator
+needs and a denial does not carry. The identical winning answer retried
+is idempotent and changes nothing.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
 from typing import Annotated, Any, Final, Literal, Self
 
@@ -148,6 +158,20 @@ class OptionEffect(StrEnum):
     REQUEST_REPAIR = "request_repair"
 
 
+class AnswerOutcome(StrEnum):
+    """What one answer to a pending action achieved.
+
+    Distinct from :class:`PendingActionStatus`: the status is the
+    record's own state and stays whatever it already was, while the
+    outcome is what this particular answer, from this particular
+    principal, got out of asking. ``SUPERSEDED`` is never a status and
+    never moves the action; it is the shape of a loss, not a rejection.
+    """
+
+    SEALED = "sealed"
+    SUPERSEDED = "superseded"
+
+
 class PendingActionStatus(StrEnum):
     """The stored states of one queued question.
 
@@ -180,6 +204,44 @@ class PendingActionOption(_FrozenModel):
     effect: OptionEffect
 
 
+class PrincipalDispositionRow(_FrozenModel):
+    """One principal's own outcome of the action, beside its shared status.
+
+    The record keeps one row per principal, replaced whenever that
+    principal answers again, so a principal who answers more than once
+    is represented by their latest disposition rather than a growing
+    history only the ledger that files the action needs to keep.
+    """
+
+    principal_id: PrincipalKey
+    outcome: AnswerOutcome
+    option_id: OptionId
+
+
+@dataclass(frozen=True, slots=True)
+class AnswerResult:
+    """What one answer to a pending action achieved.
+
+    Attributes:
+        action: The record after the answer -- the winning seal one
+            revision on, a losing disposition recorded beside the
+            standing seal, or the same record unchanged when the winning
+            answer itself was retried.
+        outcome: What this particular answer achieved.
+        option_id: The option the record stands sealed with -- the
+            caller's own choice when they won, the winner's choice when
+            they did not.
+        resolution_actor: Who is on file as having resolved the action.
+        receipt_ref: The receipt the resolution is on file with.
+    """
+
+    action: PendingAction
+    outcome: AnswerOutcome
+    option_id: OptionId
+    resolution_actor: HumanPrincipal
+    receipt_ref: EvidenceUrn
+
+
 class PendingAction(_FrozenModel):
     """One queued question, its offered answers, and the seal of the answer given.
 
@@ -202,6 +264,13 @@ class PendingAction(_FrozenModel):
     set it -- :meth:`_urn_defaults_from_subject` derives it from
     ``subject_ref``, which is filed in the same repository -- so an
     older row is still addressable rather than failing to load.
+
+    ``assignee_ref`` names the principal expected to answer. It transfers
+    no authority -- anyone eligible may still answer -- and any
+    resolution clears it, so a sealed action never carries one.
+    ``dispositions`` is the per-principal record beside ``status``: one
+    row per principal who has answered, telling a caller who answered
+    what without exposing the whole answer race as an error.
     """
 
     id: PendingActionKey
@@ -219,6 +288,8 @@ class PendingAction(_FrozenModel):
     resolution_actor: HumanPrincipal | None = None
     selected_option_id: OptionId | None = None
     receipt_ref: EvidenceUrn | None = None
+    assignee_ref: PrincipalKey | None = None
+    dispositions: tuple[PrincipalDispositionRow, ...] = ()
     created_at: UtcDatetime
     updated_at: UtcDatetime
 
@@ -362,6 +433,21 @@ class PendingAction(_FrozenModel):
             raise ValueError("updated_at cannot precede created_at")
         return self
 
+    @model_validator(mode="after")
+    def _dispositions_are_keyed_by_principal(self) -> Self:
+        """Require at most one disposition row per principal.
+
+        Raises:
+            ValueError: Two rows name the same principal. A principal has
+                one current disposition, not a history of them, so a
+                repeated key is a defect in whatever wrote the row rather
+                than a second fact worth keeping.
+        """
+        principals = [item.principal_id for item in self.dispositions]
+        if len(set(principals)) != len(principals):
+            raise ValueError("dispositions holds more than one row for the same principal")
+        return self
+
     def advance(self, to: PendingActionStatus, *, at: UtcDatetime) -> Self:
         """Return the question one status on, without answering it.
 
@@ -428,9 +514,132 @@ class PendingAction(_FrozenModel):
                 "resolution_actor": resolver.model_dump(),
                 "selected_option_id": option_id,
                 "receipt_ref": receipt_ref,
+                "assignee_ref": None,
                 "updated_at": at,
             }
         )
+
+    def answer(
+        self,
+        *,
+        expected_revision: int,
+        resolver: HumanPrincipal,
+        option_id: str,
+        receipt_ref: object,
+        at: UtcDatetime,
+    ) -> AnswerResult:
+        """Return the result of one answer: sealing the action, or losing the race.
+
+        The first answer at the action's current revision seals it,
+        exactly as :meth:`seal` always has. Every answer that reaches an
+        already-sealed action -- a different principal's, the same
+        principal choosing differently the second time, or their own
+        winning answer retried unchanged -- is not a second attempt at a
+        question that is gone: the seal it would have made was already
+        made, by this same call or by somebody else's. The retried
+        winning answer is idempotent and returns the first receipt
+        unchanged; every other one reports :attr:`AnswerOutcome.SUPERSEDED`
+        and the winning choice instead of raising.
+
+        Args:
+            expected_revision: The revision the answer was given against.
+                Checked only while the action is still waiting: an answer
+                that finds it already sealed has necessarily read a stale
+                revision, which is the race this method exists to settle
+                rather than reject.
+            resolver: The person who answered.
+            option_id: The answer they chose.
+            receipt_ref: The evidence row recording the answer, used only
+                when this call is the one that seals the action.
+            at: When the answer was given.
+
+        Returns:
+            The result: what this answer achieved, the record carrying
+            this principal's disposition, and the winning choice.
+
+        Raises:
+            ValueError: The resolver is not a person, the option named is
+                not one the question offers, the action has never been
+                asked (``CREATED``), or a still-waiting action is
+                answered against a revision it is not at.
+        """
+        if not isinstance(resolver, HumanPrincipal):
+            raise ValueError(f"{self.id} is answered by a person, not {type(resolver).__name__}")
+        if option_id not in self.option_ids:
+            raise ValueError(f"{self.id} offers {', '.join(self.option_ids)}, not {option_id!r}")
+        if self.status is PendingActionStatus.SEALED:
+            return self._answer_sealed(resolver=resolver, option_id=option_id)
+        if self.status is not PendingActionStatus.WAITING:
+            raise ValueError(
+                f"{self.id} is {self.status.value}; only a "
+                f"{PendingActionStatus.WAITING.value} question can be answered"
+            )
+        if self.revision != expected_revision:
+            raise ValueError(
+                f"{self.id} is at revision {self.revision}, not the {expected_revision} the "
+                "answer was given against"
+            )
+        sealed = self.seal(resolver=resolver, option_id=option_id, receipt_ref=receipt_ref, at=at)
+        recorded = sealed.with_disposition(
+            principal_id=resolver.principal_id, outcome=AnswerOutcome.SEALED, option_id=option_id
+        )
+        assert recorded.receipt_ref is not None, "seal always sets the receipt"
+        return AnswerResult(
+            action=recorded,
+            outcome=AnswerOutcome.SEALED,
+            option_id=option_id,
+            resolution_actor=resolver,
+            receipt_ref=recorded.receipt_ref,
+        )
+
+    def _answer_sealed(self, *, resolver: HumanPrincipal, option_id: str) -> AnswerResult:
+        """Return the result of an answer that reaches an already-sealed action."""
+        winner = self.resolution_actor
+        choice = self.selected_option_id
+        receipt = self.receipt_ref
+        assert winner is not None, "sealed always carries who resolved it"
+        assert choice is not None, "sealed always carries the chosen option"
+        assert receipt is not None, "sealed always carries its receipt"
+        if resolver.principal_id == winner.principal_id and option_id == choice:
+            return AnswerResult(
+                action=self,
+                outcome=AnswerOutcome.SEALED,
+                option_id=choice,
+                resolution_actor=winner,
+                receipt_ref=receipt,
+            )
+        recorded = self.with_disposition(
+            principal_id=resolver.principal_id,
+            outcome=AnswerOutcome.SUPERSEDED,
+            option_id=option_id,
+        )
+        return AnswerResult(
+            action=recorded,
+            outcome=AnswerOutcome.SUPERSEDED,
+            option_id=choice,
+            resolution_actor=winner,
+            receipt_ref=receipt,
+        )
+
+    def with_disposition(
+        self, *, principal_id: str, outcome: AnswerOutcome, option_id: str
+    ) -> Self:
+        """Return this record with *principal_id*'s disposition row set to this answer.
+
+        Dispositions are a per-principal side record, not part of the
+        compare-and-swap identity a seal is decided against, so recording
+        one does not move ``revision``: a caller that also seals or
+        advances the record in the same call folds this in without
+        spending a second revision on what is one logical answer. Called
+        by :meth:`answer` for both outcomes, and by a daemon method that
+        seals a still-waiting action so the winner's own disposition rides
+        the same commit as the seal.
+        """
+        row = PrincipalDispositionRow(
+            principal_id=principal_id, outcome=outcome, option_id=option_id
+        )
+        kept = tuple(item for item in self.dispositions if item.principal_id != principal_id)
+        return self.model_validate({**self.model_dump(), "dispositions": (*kept, row)})
 
 
 __all__ = [
@@ -441,6 +650,8 @@ __all__ = [
     "UNDEFAULTABLE_KINDS",
     "ActionPrincipal",
     "AgentPrincipal",
+    "AnswerOutcome",
+    "AnswerResult",
     "HumanPrincipal",
     "OptionEffect",
     "OptionId",
@@ -449,4 +660,5 @@ __all__ = [
     "PendingActionKind",
     "PendingActionOption",
     "PendingActionStatus",
+    "PrincipalDispositionRow",
 ]

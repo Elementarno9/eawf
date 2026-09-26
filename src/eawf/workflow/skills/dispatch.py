@@ -21,15 +21,18 @@ than sending a request it would have had to fabricate. An operator who
 has compiled one presents it with ``--run-request`` beside the one Task
 (``--task``) and the Run it runs under (``--run``); the pass then reads
 the Run back and asks the daemon to dispatch exactly that request, and
-the dispatched Task leaves the frontier it reports. The retry arm is
-complete: resuming a Run needs the Run reference and nothing else, so
-``--resume`` reaches the daemon.
+the dispatched Task leaves the frontier it reports. A ``--budget`` named
+on this invocation overrides the presented request's own compiled Run
+token ceiling; omitting it leaves that compiled default untouched. The
+retry arm is complete: resuming a Run needs the Run reference and
+nothing else, so ``--resume`` reaches the daemon.
 """
 
 from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Mapping
 from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -92,7 +95,7 @@ INVOCATION_GRAMMAR: Final = (
     "/dispatch <batch-ref> [--task <ref>...] "
     "[--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] "
     "[--provider <id>] [--resume <run-ref>] [--run <run-ref>] [--run-request <compiled>] "
-    "[--budget <spec>] [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]"
+    "[--budget <tokens>] [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]"
 )
 
 #: What this skill may cause, stated as the boundary it never crosses.
@@ -138,6 +141,21 @@ MANIFEST = SkillManifest(
 )
 
 
+def _budgeted_request(run_request: Mapping[str, Any], budget: int | None) -> dict[str, Any]:
+    """Return *run_request* with its capsule's Run token ceiling set to *budget*.
+
+    The presented request already carries its own compiled
+    ``capsule.token_budget`` -- the configured default. A caller-named
+    ``--budget`` on this invocation overrides it; omitting the flag
+    leaves the compiled request exactly as presented.
+    """
+    if budget is None:
+        return dict(run_request)
+    capsule = dict(run_request.get("capsule") or {})
+    capsule["token_budget"] = budget
+    return {**run_request, "capsule": capsule}
+
+
 class DispatchArgs(BaseModel):
     """The accepted invocation of ``/dispatch``, parsed and validated.
 
@@ -156,7 +174,9 @@ class DispatchArgs(BaseModel):
         run_request: The compiled dispatch request an operator presents
             for that Run: the compile request, provider documents and
             registry, bindings, capsule, base, lease and prompt.
-        budget: The budget spec the pass charges against.
+        budget: The Run token ceiling to seal into the presented request's
+            capsule, overriding whatever it already carries. ``None``
+            leaves the capsule's own compiled value untouched.
         dry_run: Render the plan and record no effect.
         idempotency_key: This request's name; minted when omitted.
         repo_root: The tree to address, when not the daemon's own.
@@ -173,7 +193,7 @@ class DispatchArgs(BaseModel):
     resume: str | None = None
     run: str | None = None
     run_request: dict[str, Any] | None = None
-    budget: str | None = None
+    budget: int | None = Field(default=None, gt=0)
     dry_run: bool = False
     idempotency_key: str | None = None
     repo_root: str | None = None
@@ -290,7 +310,7 @@ class DispatchSkill(Skill):
             RUN_DISPATCH_METHOD,
             {
                 **params,
-                **args.run_request,
+                **_budgeted_request(args.run_request, args.budget),
                 "urn": args.run,
                 "actor": _ACTOR_PRINCIPAL,
                 "idempotency_key": args.idempotency_key or uuid.uuid4().hex,

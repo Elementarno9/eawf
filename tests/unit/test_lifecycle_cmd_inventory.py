@@ -32,9 +32,10 @@ from eawf.surfaces.cli.commands.lifecycle import (
 # verbs to ``wave_app`` on import via ``app.py``; those are NOT owned by this
 # wave, so the wave assertion checks containment (superset), not equality.
 EXPECTED_PROJECT_VERBS = {"init"}
-# ``retire`` is the native epoch-2 verb the ``domain`` sibling attaches to
-# the same app; the three epoch-1 verbs keep their places beside it.
-EXPECTED_TRACK_VERBS = {"add", "switch", "sync", "retire"}
+# ``retire`` and ``create`` are the native epoch-2 verbs the ``domain``
+# sibling attaches to the same app; the three epoch-1 verbs keep their
+# places beside them.
+EXPECTED_TRACK_VERBS = {"add", "switch", "sync", "retire", "create"}
 EXPECTED_PHASE_VERBS = {"open", "close", "activate", "reopen", "prepare-close", "retro"}
 EXPECTED_ITER_VERBS = {"activate", "open", "close", "plan", "candidate-tag"}
 EXPECTED_WAVE_VERBS = {

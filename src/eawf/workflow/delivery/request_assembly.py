@@ -1,22 +1,19 @@
-"""Delivery requests assembled from the records a Batch plan names.
+"""The integrate request assembled from the records a Batch plan names.
 
-The three delivery verbs -- integrate, verify and assess completion --
-each take a request whose halves are partly durable facts and partly
-references. Handing a caller the whole request to fill in is how a
-subject line, an exit or a verdict ends up invented: nothing checks that
-the Task a repair exit names exists, or that the verdict a completion
-presents is the one the Run's sealed report carried.
+The integrate verb takes a request whose halves are partly durable facts
+and partly references. Handing a caller the whole request to fill in is
+how a subject line or an exit ends up invented: nothing would check that
+the Task a repair exit names exists.
 
 This module takes the other road. :func:`resolve_batch_plan` reads the
 Batch record, every Task its plan lists, the Run behind each sealed
 candidate and every record a reference names, in one read-only session,
-and refuses the whole plan when any of them does not resolve. The
-builders then derive every request field from the resolved records: the
-branch from the Batch, each commit subject from its Task's intent, the
-affected and judgment criteria from the Tasks' own criteria, the verdict
-from the sealed bundle. What no record holds -- the observed base
-revision, the exit and diagnostic references, the gates a Task's
-criteria name, the proof runtime -- arrives typed and is checked against
+and refuses the whole plan when any of them does not resolve.
+:func:`assemble_integrate_request` then derives every request field from
+the resolved records: the branch from the Batch, each commit subject
+from its Task's intent, the affected criteria from the Tasks' own
+criteria. What no record holds -- the observed base revision and the
+exit and diagnostic references -- arrives typed and is checked against
 the records rather than trusted, so no field is caller prose.
 
 A refusal happens before any request exists, so it writes nothing.
@@ -27,7 +24,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
-from typing import Any, Final
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,7 +32,6 @@ from eawf.kernel.delivery.integration import EXIT_REF_KINDS, ConflictExitKind
 from eawf.kernel.delivery.receipts import RevisionBinding, canonical_digest
 from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.runtime.candidate import CandidateBundle
-from eawf.kernel.spec.common import GateSpec
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.state.epoch2.batch import DeliveryBatch
 from eawf.kernel.state.epoch2.run import Run, TaskScope
@@ -45,18 +41,10 @@ from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, LEDGER_COLLECTIONS, Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
-from eawf.runtime.daemon.methods.delivery import (
-    BatchVerifyParams,
-    DeliveryIntegrateParams,
-    TaskCompletionParams,
-)
+from eawf.runtime.daemon.methods.delivery import DeliveryIntegrateParams
 from eawf.runtime.integration.commit_policy import MAX_SUBJECT_LENGTH
-from eawf.runtime.verification.receipts import ProofRuntimeFacts
 
 logger = logging.getLogger(__name__)
-
-#: The evidence kind whose criteria only an audit verdict can settle.
-_JUDGMENT_EVIDENCE: Final = "jury"
 
 
 class AssemblyRefusal(StrEnum):
@@ -71,8 +59,6 @@ class AssemblyRefusal(StrEnum):
     DIAGNOSTIC_REFERENCE_UNRESOLVED = "diagnostic_reference_unresolved"
     BASE_UNBOUND = "base_unbound"
     CANDIDATES_ABSENT = "candidates_absent"
-    TASK_UNSEALED = "task_unsealed"
-    GATE_REFERENCE_UNRESOLVED = "gate_reference_unresolved"
 
 
 class AssemblyRefusedError(ValueError):
@@ -413,122 +399,11 @@ def assemble_integrate_request(plan: BatchPlan, *, actor: PrincipalKey) -> Deliv
     )
 
 
-def assemble_verify_request(plan: BatchPlan, *, actor: PrincipalKey) -> BatchVerifyParams:
-    """Build the verify request of a resolved Batch plan.
-
-    The judgment criteria are the planned Tasks' jury criteria, which no
-    deterministic proof can settle and an audit row must therefore cover.
-    No native record holds an audit row yet, so the request presents
-    none; the verb then blocks through the named exit rather than
-    clearing a Batch nobody judged.
-
-    Args:
-        plan: The resolved plan.
-        actor: The principal the request is attributed to.
-
-    Returns:
-        The validated request, every field derived from the plan.
-    """
-    judgment = sorted(
-        {
-            criterion.id
-            for task in plan.tasks
-            for criterion in task.criteria
-            if criterion.evidence_kind == _JUDGMENT_EVIDENCE
-        }
-    )
-    payload: dict[str, Any] = {
-        "urn": str(plan.batch.urn),
-        "actor": actor,
-        "judgment_criterion_ids": judgment,
-        "exit_refs": {kind.value: str(ref) for kind, ref in plan.references.exit_refs.items()},
-    }
-    return BatchVerifyParams.model_validate(
-        {**payload, "idempotency_key": _request_key("verify", payload)}
-    )
-
-
-def _task_gates(task: Task, gates: Sequence[GateSpec]) -> tuple[GateSpec, ...]:
-    """Return exactly the gates *task*'s criteria reference, in id order.
-
-    Raises:
-        AssemblyRefusedError: A criterion references a gate none of
-            *gates* is, or a gate belongs to no criterion of the Task.
-    """
-    by_id = {gate.id: gate for gate in gates}
-    referenced = {gate_id for criterion in task.criteria for gate_id in criterion.gate_ids}
-    criterion_ids = {criterion.id for criterion in task.criteria}
-    missing = sorted(referenced - by_id.keys())
-    stray = sorted(
-        gate.id
-        for gate in gates
-        if gate.id not in referenced or gate.criterion_id not in criterion_ids
-    )
-    if missing or stray:
-        raise AssemblyRefusedError(
-            AssemblyRefusal.GATE_REFERENCE_UNRESOLVED,
-            f"task {task.key} references gate(s) {missing or 'none'} that were not given and "
-            f"was given gate(s) {stray or 'none'} its criteria do not reference",
-        )
-    return tuple(by_id[gate_id] for gate_id in sorted(referenced))
-
-
-def assemble_completion_request(
-    plan: BatchPlan,
-    task_ref: TaskUrn,
-    *,
-    actor: PrincipalKey,
-    gates: Sequence[GateSpec],
-    proof_facts: ProofRuntimeFacts,
-) -> TaskCompletionParams:
-    """Build the completion request of one planned Task.
-
-    The verdict is the one the Task's sealed report carried, read from
-    the bundle rather than asserted by the caller.
-
-    Args:
-        plan: The resolved plan.
-        task_ref: The planned Task to judge.
-        actor: The principal the request is attributed to.
-        gates: The gates the Task's criteria reference, exactly.
-        proof_facts: The runner, environment, selector and policy the
-            proofs run under.
-
-    Returns:
-        The validated request.
-
-    Raises:
-        AssemblyRefusedError: The plan does not list the Task, the Task
-            has sealed no candidate, or the gates do not match the gate
-            references of its criteria.
-    """
-    task = plan.task(task_ref)
-    bundle = plan.bundle_of(task.urn)
-    if bundle is None:
-        raise AssemblyRefusedError(
-            AssemblyRefusal.TASK_UNSEALED,
-            f"task {task.key} has sealed no candidate, so no report verdict is on record",
-        )
-    payload: dict[str, Any] = {
-        "urn": str(task.urn),
-        "actor": actor,
-        "base": plan.references.base.model_dump(mode="json"),
-        "report_verdict": bundle.verdict.value,
-        "gates": [gate.model_dump(mode="json") for gate in _task_gates(task, gates)],
-        "proof_facts": proof_facts.model_dump(mode="json"),
-    }
-    return TaskCompletionParams.model_validate(
-        {**payload, "idempotency_key": _request_key("complete", payload)}
-    )
-
-
 __all__ = [
     "AssemblyRefusal",
     "AssemblyRefusedError",
     "BatchPlan",
     "DeliveryReferences",
-    "assemble_completion_request",
     "assemble_integrate_request",
-    "assemble_verify_request",
     "resolve_batch_plan",
 ]

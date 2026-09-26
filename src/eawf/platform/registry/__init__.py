@@ -47,10 +47,12 @@ from eawf.platform.registry.staleness import (
     repo_state_mtime,
 )
 from eawf.platform.registry.workspace import (
+    CROSS_WORKSPACE_MUTATION_FORBIDDEN,
     WORKSPACE_ALREADY_REGISTERED,
     WORKSPACE_AMBIGUOUS,
     WORKSPACE_NOT_REGISTERED,
     WORKSPACE_REVISION_CONFLICT,
+    QualifiedRow,
     WorkspaceMutationError,
     WorkspaceResolution,
     WorkspaceResolutionError,
@@ -59,11 +61,13 @@ from eawf.platform.registry.workspace import (
     get_workspace,
     list_workspaces,
     project_codes_at_root,
+    qualify_rows,
     resolve_workspace,
     update_membership,
 )
 
 __all__ = [
+    "CROSS_WORKSPACE_MUTATION_FORBIDDEN",
     "EXPLICIT_GROWTH_SURFACES",
     "FORBIDDEN_GROWTH_PATHS",
     "STALE_AFTER",
@@ -72,6 +76,7 @@ __all__ = [
     "WORKSPACE_NOT_REGISTERED",
     "WORKSPACE_REVISION_CONFLICT",
     "ImplicitRegistryGrowthError",
+    "QualifiedRow",
     "Registry",
     "RegistryReadError",
     "RegistryRepoEntry",
@@ -86,6 +91,7 @@ __all__ = [
     "is_stale",
     "list_workspaces",
     "project_codes_at_root",
+    "qualify_rows",
     "read_registry",
     "read_repo_state",
     "registry_mtime",

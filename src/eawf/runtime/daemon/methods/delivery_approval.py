@@ -16,12 +16,16 @@ nothing, so re-verifying the same Batches never files a duplicate.
 
 ``runtime.delivery.seal_acceptance_approval``: the operator answers it.
 
-The answer seals the waiting question at the revision it was given
-against. The resolver is typed a person, and has to be the actor asking,
-so a caller cannot seal on somebody else's behalf. The receipt the answer
-cites is resolved against the evidence ledger. A second seal is refused,
-because the question is no longer waiting; the same seal retried under
-its idempotency key returns the original receipt.
+The first answer seals the waiting question at the revision it was given
+against, and its own disposition rides the same commit as the seal. The
+resolver is typed a person, and has to be the actor asking, so a caller
+cannot seal on somebody else's behalf. The receipt the answer cites is
+resolved against the evidence ledger. Every answer once one already has
+-- a different principal's, the same principal choosing differently, or
+the winning answer retried under a fresh idempotency key -- writes
+nothing and reports the ``superseded`` outcome and the winning choice
+instead of a refusal; the same seal retried under its own idempotency
+key returns the original receipt through the ordinary replay path.
 
 Both commits go through the transaction's
 :func:`~eawf.runtime.daemon.epoch2_transaction._persist` step and the
@@ -67,9 +71,12 @@ from eawf.kernel.state.epoch2.batch import DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone
 from eawf.kernel.state.epoch2.pending_action import (
     ActionPrincipal,
+    AnswerOutcome,
+    AnswerResult,
     HumanPrincipal,
     OptionId,
     PendingAction,
+    PendingActionStatus,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, EvidenceUrn, MilestoneUrn
 from eawf.kernel.state.epoch2.values import ExactRevisionBinding
@@ -241,6 +248,10 @@ class ApprovalAnswer(BaseModel):
         created: Whether this call wrote the row, rather than finding it.
         canonical_sequence: The sequence of the commit, or ``None`` when
             nothing was committed.
+        outcome: What a seal answer achieved --
+            :attr:`~eawf.kernel.state.epoch2.pending_action.AnswerOutcome.SEALED`
+            or ``SUPERSEDED``. ``None`` for an open, which answers no
+            question yet.
         reason: One sentence an operator reads.
     """
 
@@ -254,6 +265,7 @@ class ApprovalAnswer(BaseModel):
     acceptance_bundle: dict[str, Any] | None = None
     created: bool
     canonical_sequence: int | None = None
+    outcome: str | None = None
     reason: str
 
 
@@ -481,6 +493,7 @@ def _answer(
     urn: QualifiedUrn,
     bundle: MilestoneAcceptanceBundle | None,
     receipt: MutationReceipt | None,
+    outcome: AnswerOutcome | None = None,
     reason: str,
 ) -> ApprovalAnswer:
     """Build the answer one open or seal returns."""
@@ -493,6 +506,7 @@ def _answer(
         acceptance_bundle=None if bundle is None else bundle.model_dump(mode="json"),
         created=receipt is not None,
         canonical_sequence=None if receipt is None else receipt.canonical_sequence,
+        outcome=None if outcome is None else outcome.value,
         reason=reason,
     )
 
@@ -698,6 +712,38 @@ def _sealed(action: PendingAction, *, args: ApprovalSealParams, now: datetime) -
         ) from error
 
 
+def _answered_after_seal(
+    action: PendingAction, *, args: ApprovalSealParams, now: datetime
+) -> AnswerResult:
+    """Return the result of an answer that reaches an action the tree already sealed.
+
+    Nothing is written for this call: the seal the answer would have made
+    was already made, by this same request under an earlier idempotency
+    key or by somebody else's, so the race is reported rather than
+    retried or refused.
+
+    Raises:
+        TransactionRefusedError: The option named is not one the question
+            offers.
+    """
+    try:
+        return action.answer(
+            expected_revision=args.expected_revision,
+            resolver=args.resolver,
+            option_id=args.option_id,
+            receipt_ref=args.receipt_ref,
+            at=now,
+        )
+    except ValueError as error:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=f"{action.id} offers {', '.join(action.option_ids)}, not {args.option_id!r}",
+            entity_ref=str(args.urn),
+            remediation="Choose one of the options the question offers.",
+            revision=action.revision,
+        ) from error
+
+
 def seal_acceptance_approval(
     context: Epoch2RootContext, args: ApprovalSealParams, *, now: datetime
 ) -> ApprovalCommit:
@@ -709,16 +755,20 @@ def seal_acceptance_approval(
         now: When the answer was given.
 
     Returns:
-        The sealed question and the row to publish. A retry of a seal this
-        root already committed returns the question as it stands, having
-        written nothing.
+        The sealed question and the row to publish, the winner's own
+        disposition riding the same commit. A retry of a seal this root
+        already committed, and an answer that reaches an action the tree
+        already sealed -- a conflicting one or the winning one retried
+        under a fresh idempotency key -- return the question as it
+        stands, having written nothing; the latter reports the
+        ``superseded`` or ``sealed`` outcome rather than a refusal.
 
     Raises:
-        TransactionRefusedError: The tree holds no such question, it is
-            not waiting (which is what a second seal finds), it moved past
-            the answered revision, the option is not offered, the receipt
-            is not an evidence row the tree holds, or the idempotency key
-            already committed different parameters. Nothing was written.
+        TransactionRefusedError: The tree holds no such question, a
+            still-waiting question moved past the answered revision, the
+            option is not offered, the receipt is not an evidence row the
+            tree holds, or the idempotency key already committed
+            different parameters. Nothing was written.
     """
     request = _seal_request(args)
     with context.session([str(args.urn)]) as session:
@@ -732,7 +782,27 @@ def seal_acceptance_approval(
                     urn=args.urn,
                     bundle=None,
                     receipt=None,
+                    outcome=AnswerOutcome.SEALED,
                     reason=f"{action.id} was already sealed by this request",
+                )
+            )
+        if action.status is PendingActionStatus.SEALED:
+            result = _answered_after_seal(action, args=args, now=now)
+            logger.info(
+                f"seal_acceptance_approval action={action.id} outcome={result.outcome.value} "
+                f"option={args.option_id}"
+            )
+            return ApprovalCommit(
+                answer=_answer(
+                    action,
+                    urn=args.urn,
+                    bundle=None,
+                    receipt=None,
+                    outcome=result.outcome,
+                    reason=(
+                        f"{action.id} is answered {result.option_id!r} by "
+                        f"{result.resolution_actor.principal_id}"
+                    ),
                 )
             )
         if _evidence(session).row(args.receipt_ref.entity_key) is None:
@@ -746,27 +816,33 @@ def seal_acceptance_approval(
                 revision=action.revision,
             )
         sealed = _sealed(action, args=args, now=now)
+        recorded = sealed.with_disposition(
+            principal_id=args.resolver.principal_id,
+            outcome=AnswerOutcome.SEALED,
+            option_id=args.option_id,
+        )
         committed = _commit_action(
             context=context,
             session=session,
             request=request,
             before=action,
-            after=sealed,
+            after=recorded,
             event_name=APPROVAL_SEALED_EVENT,
             now=now,
         )
     assert committed.envelope is not None, "a fresh commit always carries its firehose row"
     logger.info(
-        f"seal_acceptance_approval action={sealed.id} option={args.option_id} "
+        f"seal_acceptance_approval action={recorded.id} option={args.option_id} "
         f"sequence={committed.receipt.canonical_sequence}"
     )
     return ApprovalCommit(
         answer=_answer(
-            sealed,
+            recorded,
             urn=args.urn,
             bundle=None,
             receipt=committed.receipt,
-            reason=f"{sealed.id} was answered {args.option_id!r}",
+            outcome=AnswerOutcome.SEALED,
+            reason=f"{recorded.id} was answered {args.option_id!r}",
         ),
         envelopes=(committed.envelope,),
     )

@@ -29,12 +29,21 @@ what the operator explicitly registered, which is the same rule that
 keeps the registry free of scan-based growth. An unregistered root
 therefore refuses rather than silently resolving to its parent's
 workspace.
+
+Two further rules keep a workspace from reaching outside itself.
+:func:`qualify_rows` tags every aggregated row with the workspace and
+repository that produced it, so two repos minting the same bare id
+never collide once their rows sit in one aggregated view.
+:func:`update_membership` refuses to add a repository that already
+anchors a different workspace, so a mutation issued against one
+workspace can never reach a root another workspace owns; both refusals
+share :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -59,6 +68,11 @@ WORKSPACE_ALREADY_REGISTERED: Final[str] = "workspace_already_registered"
 
 #: Stable error code: a membership mutation lost the compare-and-set.
 WORKSPACE_REVISION_CONFLICT: Final[str] = "workspace_revision_conflict"
+
+#: Stable error code: a mutation named a repository that anchors a
+#: different workspace, which would let this workspace reach a root it
+#: does not own.
+CROSS_WORKSPACE_MUTATION_FORBIDDEN: Final[str] = "cross_workspace_mutation_forbidden"
 
 
 class WorkspaceSource(StrEnum):
@@ -316,6 +330,22 @@ def create_workspace(registry: Registry, *, record: WorkspaceRecord) -> Registry
     return _with_workspaces(registry, workspaces)
 
 
+def _foreign_home_workspace(registry: Registry, code: str, *, excluding: str) -> str | None:
+    """Return the key of the workspace *code* anchors, other than *excluding*.
+
+    A workspace's ``home_project_code`` is the root a mutation against
+    that workspace ultimately reaches. Two workspaces sharing a plain
+    member is ordinary (it is exactly what makes resolution ambiguous),
+    but letting a second workspace claim another workspace's home would
+    let a mutation issued against the second workspace reach a root it
+    does not own.
+    """
+    for other_key, other in registry.workspaces.items():
+        if other_key != excluding and other.home_project_code == code:
+            return other_key
+    return None
+
+
 def update_membership(
     registry: Registry,
     *,
@@ -341,12 +371,25 @@ def update_membership(
 
     Raises:
         WorkspaceMutationError: :data:`WORKSPACE_NOT_REGISTERED` when
-            *key* is absent; :data:`WORKSPACE_REVISION_CONFLICT` when
-            the compare-and-set fails.
+            *key* is absent; :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`
+            when *add* names a repository that anchors a different
+            workspace; :data:`WORKSPACE_REVISION_CONFLICT` when the
+            compare-and-set fails.
         pydantic.ValidationError: When the resulting membership is
             empty or no longer contains the home repo.
     """
     current = get_workspace(registry, key)
+    for code in add:
+        foreign = _foreign_home_workspace(registry, code, excluding=key)
+        if foreign is not None:
+            raise WorkspaceMutationError(
+                code=CROSS_WORKSPACE_MUTATION_FORBIDDEN,
+                message=(
+                    f"repository {code!r} anchors workspace {foreign!r}; "
+                    f"adding it to {key!r} would let a mutation against {key!r} "
+                    f"reach a root outside its workspace"
+                ),
+            )
     if expected_revision is not None and expected_revision != current.revision:
         raise WorkspaceMutationError(
             code=WORKSPACE_REVISION_CONFLICT,
@@ -369,11 +412,80 @@ def update_membership(
     return _with_workspaces(registry, workspaces)
 
 
+class QualifiedRow(BaseModel):
+    """One aggregated row, qualified by workspace and repository.
+
+    Two repositories in the same workspace can each mint the same bare
+    id (both call their active phase ``P01``); aggregating their rows
+    under a bare id alone would collide the two. Tagging every row with
+    the workspace and repository that produced it keeps the aggregated
+    identities distinct even when the bare ids match.
+
+    Attributes:
+        workspace_key: The workspace the row was aggregated under.
+        project_code: The repository that minted the row.
+        bare_id: The row's identifier as its own repository spells it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_key: str
+    project_code: str
+    bare_id: str
+
+    @property
+    def qualified_id(self) -> str:
+        """Return the collision-proof identity: workspace/repo/bare id."""
+        return f"{self.workspace_key}/{self.project_code}/{self.bare_id}"
+
+
+def qualify_rows(
+    resolution: WorkspaceResolution, rows_by_code: Mapping[str, Iterable[str]]
+) -> list[QualifiedRow]:
+    """Qualify bare ids aggregated from a workspace's member repositories.
+
+    Args:
+        resolution: The workspace the rows are aggregated under.
+        rows_by_code: Bare ids grouped by the project code that minted
+            them.
+
+    Returns:
+        One :class:`QualifiedRow` per ``(code, bare_id)`` pair, ordered
+        by project code then bare id.
+
+    Raises:
+        WorkspaceMutationError: :data:`CROSS_WORKSPACE_MUTATION_FORBIDDEN`
+            when *rows_by_code* names a repository that is not a member
+            of *resolution* - aggregating a foreign repository's rows
+            under this workspace's key would misattribute them to a
+            workspace that does not own that root.
+    """
+    for code in rows_by_code:
+        if code not in resolution.record.member_project_codes:
+            raise WorkspaceMutationError(
+                code=CROSS_WORKSPACE_MUTATION_FORBIDDEN,
+                message=(
+                    f"repository {code!r} is not a member of workspace "
+                    f"{resolution.key!r}; its rows cannot be aggregated under "
+                    f"a workspace that does not own that root"
+                ),
+            )
+    rows = [
+        QualifiedRow(workspace_key=resolution.key, project_code=code, bare_id=bare_id)
+        for code, bare_ids in rows_by_code.items()
+        for bare_id in bare_ids
+    ]
+    rows.sort(key=lambda row: (row.project_code, row.bare_id))
+    return rows
+
+
 __all__ = [
+    "CROSS_WORKSPACE_MUTATION_FORBIDDEN",
     "WORKSPACE_ALREADY_REGISTERED",
     "WORKSPACE_AMBIGUOUS",
     "WORKSPACE_NOT_REGISTERED",
     "WORKSPACE_REVISION_CONFLICT",
+    "QualifiedRow",
     "WorkspaceMutationError",
     "WorkspaceResolution",
     "WorkspaceResolutionError",
@@ -382,6 +494,7 @@ __all__ = [
     "get_workspace",
     "list_workspaces",
     "project_codes_at_root",
+    "qualify_rows",
     "resolve_workspace",
     "update_membership",
 ]

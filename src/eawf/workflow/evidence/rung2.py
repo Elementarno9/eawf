@@ -37,16 +37,16 @@ rung-2 never silently certifies. That is the refute-first contract: the
 burden of proof is on entailment, and the default for the grey zone is
 *do not pass*.
 
-Numeric claims are forced to rung-1
------------------------------------
+Numeric claims do not belong here
+----------------------------------
 NLI is an in-distribution model for *prose* entailment; a numeric claim
 ("latency dropped 40%", "coverage >= 0.9") is a deterministic assertion
-about a measured value, not a textual-entailment judgement. Routing a
-numeric claim through an NLI scorer would ask the wrong question. So
-:func:`route_claim_to_rung` classifies any claim whose text carries a
-numeric / comparison assertion (see :func:`looks_numeric`) as
-:data:`ClaimRung.RUNG1` — it belongs to the W08 deterministic gate, not
-to this rung. Only text-shaped claims route to :data:`ClaimRung.RUNG2`.
+about a measured value, not a textual-entailment judgement. Scoring a
+numeric claim through this rung would ask the wrong question -- it
+belongs to the W08 rung-1 deterministic gate instead
+(:func:`eawf.workflow.evidence.evibound.run_rung1_gate`). Keeping a
+numeric claim out of :func:`score_claim` is the caller's precondition;
+this rung scores whatever text it is handed.
 
 Documented escalation threshold (the <0.7 contingency)
 ------------------------------------------------------
@@ -126,16 +126,6 @@ RUNG2_ESCALATION_NOTE: Final[str] = (
     "(iter I03) rather than lowering the threshold."
 )
 
-#: Matches a numeric / comparison assertion in claim text: a bare or
-#: signed decimal, a percentage, or a comparison operator. Used by
-#: :func:`looks_numeric` to force numeric claims onto rung-1. The number
-#: alternative requires the digit run NOT be glued to a leading letter
-#: (so an identifier like ``v2`` / ``utf8`` does not read as numeric)
-#: while still catching ``40%``, ``>= 0.9``, ``3.5x``.
-_NUMERIC_RE: Final[re.Pattern[str]] = re.compile(
-    r"(?<![A-Za-z])[<>]=?|(?<![A-Za-z])\d+(?:\.\d+)?\s*%?",
-)
-
 #: Tokenizer for the lexical-overlap heuristic: runs of word characters,
 #: lower-cased by the caller. Punctuation is dropped so "fast." and
 #: "fast" tokenize identically.
@@ -170,20 +160,6 @@ _STOPWORDS: Final[frozenset[str]] = frozenset(
         "with",
     }
 )
-
-
-class ClaimRung(StrEnum):
-    """The EviBound rung a claim routes to.
-
-    ``RUNG1`` is the W08 deterministic gate (numeric / measured
-    assertions); ``RUNG2`` is this in-process NLI scorer (text
-    entailment). The router never returns rung-3 directly — escalation to
-    the jury is a *verdict* of rung-2 (:attr:`Rung2Verdict.ESCALATE`),
-    not a routing decision.
-    """
-
-    RUNG1 = "rung1"
-    RUNG2 = "rung2"
 
 
 class Rung2Verdict(StrEnum):
@@ -304,49 +280,6 @@ class Rung2ClaimResult:
 def _content_tokens(text: str) -> set[str]:
     """Return the lower-cased non-stop-word tokens of *text*."""
     return {tok for tok in _WORD_RE.findall(text.lower()) if tok not in _STOPWORDS}
-
-
-def looks_numeric(claim: str) -> bool:
-    """Return True when *claim* carries a numeric / comparison assertion.
-
-    A claim like ``"latency dropped 40%"`` or ``"coverage >= 0.9"`` is a
-    deterministic assertion about a measured value, not a prose-entailment
-    judgement, so it belongs to the rung-1 deterministic gate rather than
-    the rung-2 NLI scorer. The detector matches a bare / signed decimal, a
-    percentage, or a comparison operator (``<``, ``>``, ``<=``, ``>=``)
-    while NOT treating a digit glued to a leading letter (an identifier
-    like ``v2``) as numeric.
-
-    Args:
-        claim: The claim text to classify.
-
-    Returns:
-        ``True`` if the claim reads as a numeric / comparison assertion.
-    """
-    return _NUMERIC_RE.search(claim) is not None
-
-
-def route_claim_to_rung(claim: str) -> ClaimRung:
-    """Route *claim* to rung-1 (numeric) or rung-2 (text).
-
-    Numeric / comparison claims are forced to :attr:`ClaimRung.RUNG1` —
-    NLI is text-only (see the module docstring). Everything else routes to
-    :attr:`ClaimRung.RUNG2` for in-process entailment scoring.
-
-    Args:
-        claim: The claim text to route.
-
-    Returns:
-        :attr:`ClaimRung.RUNG1` for a numeric claim, else
-        :attr:`ClaimRung.RUNG2`.
-
-    Raises:
-        ValueError: When *claim* is empty / whitespace-only — an empty
-            claim cannot be routed to any rung.
-    """
-    if not claim.strip():
-        raise ValueError("claim must be non-empty")
-    return ClaimRung.RUNG1 if looks_numeric(claim) else ClaimRung.RUNG2
 
 
 def classify_probability(probability: float) -> tuple[Rung2Verdict, str]:
@@ -512,9 +445,9 @@ def run_rung2_gate(
     probability so a downstream consumer can re-threshold or audit the
     call without re-running the scorer.
 
-    The caller is responsible for the routing precondition: only a text
-    claim (``route_claim_to_rung(claim) is ClaimRung.RUNG2``) belongs
-    here. A numeric claim must go to the W08 rung-1 deterministic gate.
+    The caller is responsible for the routing precondition: only a
+    text-shaped claim belongs here. A numeric claim must go to the W08
+    rung-1 deterministic gate instead.
 
     Args:
         claim: The claim text (NLI hypothesis).
@@ -631,7 +564,6 @@ __all__ = [
     "OPTIONAL_MODEL_EXTRA",
     "REFUTE_THRESHOLD",
     "RUNG2_ESCALATION_NOTE",
-    "ClaimRung",
     "EntailmentScorer",
     "LexicalEntailmentScorer",
     "Rung2ClaimResult",
@@ -639,8 +571,6 @@ __all__ = [
     "Rung2Verdict",
     "classify_probability",
     "load_default_scorer",
-    "looks_numeric",
-    "route_claim_to_rung",
     "run_rung2_gate",
     "score_claim",
     "score_claims",

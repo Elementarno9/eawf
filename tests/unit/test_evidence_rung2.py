@@ -6,9 +6,6 @@ Covers the in-process NLI escalation rung:
   :func:`score_claim`): entail above the floor, refute at/below the
   floor, and the uncertain band collapsing to ESCALATE (never a silent
   pass).
-* Numeric -> rung-1 routing (:func:`route_claim_to_rung` /
-  :func:`looks_numeric`): a numeric / comparison claim is forced to
-  rung-1; a text claim routes to rung-2.
 * Batch scoring (:func:`score_claims`): a multi-claim batch and the
   empty-batch boundary.
 * The pluggable-scorer seam (:func:`load_default_scorer`): the
@@ -33,7 +30,6 @@ from eawf.workflow.evidence.rung2 import (
     OPTIONAL_MODEL_EXTRA,
     REFUTE_THRESHOLD,
     RUNG2_ESCALATION_NOTE,
-    ClaimRung,
     EntailmentScorer,
     LexicalEntailmentScorer,
     Rung2ClaimResult,
@@ -41,8 +37,6 @@ from eawf.workflow.evidence.rung2 import (
     Rung2Verdict,
     classify_probability,
     load_default_scorer,
-    looks_numeric,
-    route_claim_to_rung,
     run_rung2_gate,
     score_claim,
     score_claims,
@@ -128,59 +122,6 @@ def test_verdict_to_status_mapping() -> None:
     assert verdict_to_status(Rung2Verdict.ENTAILED) == "pass"
     assert verdict_to_status(Rung2Verdict.REFUTED) == "fail"
     assert verdict_to_status(Rung2Verdict.ESCALATE) == "blocked"
-
-
-# --------------------------------------------------------------------------- #
-# looks_numeric / route_claim_to_rung: numeric claims forced to rung-1.
-# --------------------------------------------------------------------------- #
-@pytest.mark.parametrize(
-    "claim",
-    [
-        "latency dropped 40%",
-        "coverage >= 0.9",
-        "the speedup is 3.5x",
-        "p99 < 200ms",
-        "throughput rose by 12 requests",
-    ],
-)
-def test_looks_numeric_detects_measured_assertions(claim: str) -> None:
-    """A claim carrying a number / percentage / comparison reads as numeric."""
-    assert looks_numeric(claim) is True
-
-
-@pytest.mark.parametrize(
-    "claim",
-    [
-        "the gate now refutes uncertain claims",
-        "evidence text entails the hypothesis",
-        "the scorer runs in-process with no network egress",
-    ],
-)
-def test_looks_numeric_text_claims_are_not_numeric(claim: str) -> None:
-    """A prose claim with no measured assertion is not numeric."""
-    assert looks_numeric(claim) is False
-
-
-def test_looks_numeric_identifier_with_digit_is_not_numeric() -> None:
-    """A digit glued to a leading letter (an identifier) does not read as numeric."""
-    assert looks_numeric("the v2 schema validates") is False
-    assert looks_numeric("encode as utf8 text") is False
-
-
-def test_route_claim_numeric_forces_rung1() -> None:
-    """A numeric claim is forced to rung-1 (NLI is text-only)."""
-    assert route_claim_to_rung("latency dropped 40%") is ClaimRung.RUNG1
-
-
-def test_route_claim_text_routes_to_rung2() -> None:
-    """A text claim routes to rung-2 for in-process entailment scoring."""
-    assert route_claim_to_rung("the evidence entails the claim") is ClaimRung.RUNG2
-
-
-def test_route_claim_empty_raises() -> None:
-    """An empty / whitespace-only claim cannot be routed and raises ValueError."""
-    with pytest.raises(ValueError, match="non-empty"):
-        route_claim_to_rung("   ")
 
 
 # --------------------------------------------------------------------------- #
@@ -375,6 +316,5 @@ def test_rung2_public_exports() -> None:
 
     assert evidence.run_rung2_gate is run_rung2_gate
     assert evidence.score_claims is score_claims
-    assert evidence.route_claim_to_rung is route_claim_to_rung
     assert evidence.LexicalEntailmentScorer is LexicalEntailmentScorer
     assert evidence.load_default_scorer is load_default_scorer

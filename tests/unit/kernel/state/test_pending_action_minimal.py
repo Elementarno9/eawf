@@ -37,6 +37,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     MIN_OPTIONS,
     PENDING_ACTION_EDGES,
     AgentPrincipal,
+    AnswerOutcome,
     HumanPrincipal,
     OptionEffect,
     PendingAction,
@@ -666,26 +667,49 @@ def test_the_question_is_sealed_through_the_transaction(
     ]
 
 
-def test_a_second_seal_is_refused_with_nothing_written(
+def test_a_second_answer_is_superseded_with_nothing_written(
     tree: tuple[Epoch2RootContext, Path],
 ) -> None:
-    """Nothing leaves SEALED: a second answer under a new key is refused outright."""
+    """Nothing leaves SEALED, but a conflicting second answer is reported, not refused."""
     context, path = tree
     open_acceptance_approval(context, open_params(), now=AT)
     seal_acceptance_approval(context, seal_params(), now=LATER)
     before = path.read_bytes()
 
-    with pytest.raises(TransactionRefusedError) as caught:
-        seal_acceptance_approval(
-            context,
-            seal_params(idempotency_key="req-seal-0002", expected_revision=2, option_id="decline"),
-            now=LATER,
-        )
+    commit = seal_acceptance_approval(
+        context,
+        seal_params(idempotency_key="req-seal-0002", expected_revision=2, option_id="decline"),
+        now=LATER,
+    )
 
-    assert caught.value.code is TransactionRefusalCode.ILLEGAL_TRANSITION
-    assert caught.value.guard == ApprovalRefusal.ACTION_NOT_WAITING.value
+    assert commit.answer.outcome == AnswerOutcome.SUPERSEDED.value
+    assert commit.answer.status == PendingActionStatus.SEALED.value
+    assert commit.envelopes == ()
     assert path.read_bytes() == before
     assert stored(path).selected_option_id == "approve"
+
+
+def test_a_winning_answer_retried_under_a_fresh_key_returns_the_first_receipt(
+    tree: tuple[Epoch2RootContext, Path],
+) -> None:
+    """The identical winning answer under a new idempotency key is not a second seal."""
+    context, path = tree
+    open_acceptance_approval(context, open_params(), now=AT)
+    seal_acceptance_approval(context, seal_params(), now=LATER)
+    before = path.read_bytes()
+
+    commit = seal_acceptance_approval(
+        context,
+        seal_params(idempotency_key="req-seal-0002", expected_revision=2, receipt_ref=EVIDENCE),
+        now=LATER,
+    )
+
+    assert commit.answer.outcome == AnswerOutcome.SEALED.value
+    assert commit.answer.status == PendingActionStatus.SEALED.value
+    assert commit.envelopes == ()
+    assert path.read_bytes() == before
+    assert stored(path).receipt_ref is not None
+    assert stored(path).receipt_ref.entity_key == "EVD-0001"
 
 
 def test_a_retried_seal_returns_the_standing_answer_and_writes_nothing(
