@@ -67,6 +67,10 @@ crash between the two is finished by the replay rather than lost, and
 this module is the only place outside the store that appends a ledger
 line at all.
 
+A row no lifecycle model governs -- an imported record continuing after
+the cutover -- is written through :func:`commit_row_write`, which is the
+same walk with the edge decided by its caller rather than by the registry.
+
 A record is admitted into the tree by
 :func:`~eawf.runtime.daemon.epoch2_create.run_create`, which builds its
 successor from a create document instead of an edge and then commits
@@ -206,6 +210,7 @@ class TransactionRefusalCode(StrEnum):
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
     ILLEGAL_TRANSITION = "illegal_transition"
     TRANSITION_GUARD_FAILED = "transition_guard_failed"
+    LEGACY_EDGE_REFUSED = "legacy_edge_refused"
 
 
 #: Which stable code each registry denial is reported as. The registry's
@@ -669,6 +674,116 @@ def commit_ledger_append(
     return envelope
 
 
+def commit_row_write(
+    session: RootSession,
+    *,
+    collection: Epoch2Collection,
+    record_key: str,
+    row: dict[str, Any],
+    event_name: str,
+    event_fields: Mapping[str, Any],
+    compaction: LedgerRecord | None,
+    now: datetime,
+) -> Envelope:
+    """Commit one document row that no lifecycle model governs, inside *session*.
+
+    An imported lifecycle row does not validate as a native record, so it
+    cannot take the guarded edge of :func:`run_transaction`; its caller has
+    already decided the move. What it still owes is the rest of the seven
+    steps, in the same order: the leak scrub, the sequence drawn inside the
+    commit, one WAL intent around one document write, one firehose row, and
+    the compaction of a row the move made terminal once all of that is
+    durable.
+
+    Args:
+        session: The open session the move was decided under.
+        collection: The collection the row is stored under.
+        record_key: The row's key.
+        row: The whole row to leave in the document.
+        event_name: The dotted name the firehose row carries.
+        event_fields: What the event says about the move, beside the
+            fields every event carries.
+        compaction: The ledger line the row moves into once the write is
+            durable, or ``None`` when it stays in the document.
+        now: When the move happened.
+
+    Returns:
+        The firehose row the commit appended, for a caller that publishes
+        it once the session is released.
+
+    Raises:
+        TransactionRefusedError: The row adds text carrying a leak shape.
+            Nothing was written.
+        ValueError: The document holds a non-integer sequence.
+        RuntimeError: The session is closed.
+        UndeclaredPathError: The commit policy declares no row for the
+            firehose or the ledger.
+    """
+    context = session.context
+    subject = parse_qualified_urn(session.locked_urns[0])
+    document = session.read_document()
+    new_document = copy.deepcopy(document)
+    new_document.setdefault(collection.value, {})[record_key] = row
+    refusal = state_leak_refusal(document, new_document)
+    if refusal is not None:
+        logger.warning(
+            f"epoch2 row write refused for leaks collection={collection.value} key={record_key!r}"
+        )
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,
+            detail=refusal,
+            entity_ref=f"{collection.value}/{record_key}",
+            remediation="Remove the flagged text from the request and retry.",
+        )
+    allocator = CanonicalSequenceAllocator.recover(
+        workspace_key=subject.workspace_key,
+        high_water_mark=_high_water_mark(document),
+    )
+    with allocator.transaction() as sequences:
+        sequence = sequences.allocate()
+        new_document[CANONICAL_SEQUENCE_KEY] = sequence
+        event_id = f"evt-{uuid.uuid4().hex}"
+        envelope = Envelope(
+            id=event_id,
+            kind=StoreKind.EVENT,
+            scope_id=session.locked_urns[0],
+            created_at=now,
+            summary=f"{event_name} {record_key} {row.get('status')}",
+            payload={
+                "schema_version": TRANSITION_EVENT_SCHEMA_VERSION,
+                "name": event_name,
+                "event_id": event_id,
+                "occurred_at": now.isoformat(),
+                "workspace_ref": subject.workspace_key,
+                "project_ref": subject.project_key,
+                "collection": collection.value,
+                "record_key": record_key,
+                "canonical_sequence": sequence,
+                **event_fields,
+            },
+        )
+        wal_record = WalRecord(
+            record_id=uuid.uuid4().hex,
+            envelope=envelope,
+            written_at=now,
+            before_state_version=state_version(document),
+            after_state_version=state_version(new_document),
+            state_path=str(session.document_path),
+        )
+        write_pending(context.wal_dir, wal_record)
+        session.write_document(new_document)
+        mark_applied(context.wal_dir, wal_record.record_id)
+        append_json_line(_firehose_path(context), envelope.model_dump_json())
+        if compaction is not None:
+            _compact(context, document_path=session.document_path, record=compaction)
+        mark_fsynced(context.wal_dir, wal_record.record_id)
+    logger.info(
+        f"epoch2 row write committed root={context.identity.root_id} "
+        f"collection={collection.value} key={record_key!r} sequence={sequence}"
+    )
+    return envelope
+
+
 def _ledger_envelope(
     session: RootSession,
     *,
@@ -1086,5 +1201,6 @@ __all__ = [
     "TransactionRefusedError",
     "TransitionRequest",
     "commit_ledger_append",
+    "commit_row_write",
     "run_transaction",
 ]

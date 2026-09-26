@@ -846,6 +846,7 @@ def _run_mutation(
 # after every shared symbol is defined, so the siblings can import the apps and
 # helpers from this module without a circular-import failure.
 from eawf.surfaces.cli.commands import domain as _domain  # noqa: E402, F401
+from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
 from eawf.surfaces.cli.commands import lifecycle_iter as _lifecycle_iter  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_phase as _lifecycle_phase  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_wave as _lifecycle_wave  # noqa: E402, F401
