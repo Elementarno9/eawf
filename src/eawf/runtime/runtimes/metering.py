@@ -90,7 +90,12 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import MeasurementStatus
 from eawf.observability.telemetry.models import PriceSourceKind
-from eawf.observability.telemetry.pricing import PRICING_VERSION, ModelPricing, lookup_pricing
+from eawf.observability.telemetry.pricing import (
+    PRICING_VERSION,
+    ModelPricing,
+    lookup_pricing,
+    unpriced_model,
+)
 
 if TYPE_CHECKING:
     from eawf.runtime.runtimes.adapter import SpawnResult
@@ -386,7 +391,10 @@ def price_token_counts(
     """
     pricing = lookup_pricing(model)
     if pricing is None:
-        logger.warning(f"price_token_counts model={model!r} pricing=unresolved cost_usd=none")
+        logger.warning(
+            f"price_token_counts model={model!r} pricing=unresolved cost_usd=none "
+            f"reason={_unpriced_reason(model)!r}"
+        )
         return None
     return _sum_token_cost(
         pricing,
@@ -396,6 +404,12 @@ def price_token_counts(
         cache_creation_1h_input_tokens=cache_creation_1h_input_tokens,
         cache_read_input_tokens=cache_read_input_tokens,
     )
+
+
+def _unpriced_reason(model: str) -> str:
+    """Return why *model* resolved to no rate, for the unpriced log line."""
+    entry = unpriced_model(model)
+    return entry.reason if entry is not None else "no rate row matches"
 
 
 def _reasoning_inside_output(result: SpawnResult, *, output_tokens: int) -> int | None:
@@ -475,7 +489,8 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     if pricing is None:
         logger.warning(
             f"price_spawn_result model={model!r} runtime={result.runtime!r} "
-            f"session={result.session_id!r} pricing=unresolved cost_usd=none priced=false"
+            f"session={result.session_id!r} pricing=unresolved cost_usd=none priced=false "
+            f"reason={_unpriced_reason(model)!r}"
         )
         return MeteredCost(
             session_id=result.session_id,

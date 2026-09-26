@@ -14,9 +14,10 @@ rounding change to one rate cannot silently shift the others.
 :func:`lookup_pricing` resolves a model id by exact match first, then by
 longest-prefix fallback (e.g. ``claude-opus-4-7-20260514`` →
 ``claude-opus-4-7``). A model named in :data:`UNPRICED_MODELS` resolves to
-no row even when a shorter family alias would prefix-match it: the
-snapshot has no published rate for it, and pricing it at an older
-generation's rate would record a fabricated list price.
+no row even when a shorter family alias would prefix-match it, and so does
+any Claude id whose generation differs from the one the matched key
+prices: the snapshot has no published rate for it, and pricing it at an
+older generation's rate would record a fabricated list price.
 
 :func:`check_pricing_currency` validates the embedded snapshot's shape and
 internal currency (the stated Anthropic cache multipliers) and returns a
@@ -27,6 +28,7 @@ typed :class:`PricingDriftReport`; the weekly CI gate
 from __future__ import annotations
 
 import logging
+import re
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -40,6 +42,8 @@ __all__ = [
     "CACHE_READ_MULTIPLIER",
     "CACHE_WRITE_1H_MULTIPLIER",
     "CACHE_WRITE_5M_MULTIPLIER",
+    "FAMILY_ALIAS_GENERATION",
+    "NO_CITED_RATE_SOURCE",
     "PRICING",
     "PRICING_FETCHED_AT",
     "PRICING_VERSION",
@@ -47,9 +51,11 @@ __all__ = [
     "ModelPricing",
     "PricingDriftFinding",
     "PricingDriftReport",
+    "UnpricedModel",
     "check_pricing_currency",
     "lookup_pricing",
     "resolve_price_source",
+    "unpriced_model",
 ]
 
 
@@ -354,15 +360,63 @@ PRICING: dict[str, ModelPricing] = {
 }
 
 
-UNPRICED_MODELS: frozenset[str] = frozenset({"claude-opus-5-5", "claude-sonnet-5"})
-"""Model ids eawf dispatches to that have no rate in this snapshot.
+class UnpricedModel(BaseModel):
+    """A model id eawf dispatches to that deliberately resolves to no rate.
+
+    Attributes:
+        model_id: The id, matched as a prefix of the queried model the same
+            way a :data:`PRICING` key is.
+        reason: Why no rate is recorded, carried into the unpriced log line
+            so a null cost says why it is null.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    model_id: str
+    reason: str
+
+
+#: The reason every Claude 5 entry carries until a rate row is sourced.
+NO_CITED_RATE_SOURCE = "no cited published rate source"
+
+UNPRICED_MODELS: dict[str, UnpricedModel] = {
+    model_id: UnpricedModel(model_id=model_id, reason=NO_CITED_RATE_SOURCE)
+    for model_id in ("claude-opus-5-5", "claude-sonnet-5")
+}
+"""Model ids eawf dispatches to that have no rate in this snapshot, by id.
 
 Each id prefix-matches a family alias (``claude-opus`` / ``claude-sonnet``)
 that prices at the 4.x rate. No published rate for these generations is
 recorded in-repo, so they resolve unpriced rather than inheriting a rate
-nobody published; add a real :data:`PRICING` row (and drop the id here)
-once a rate is sourced.
+nobody published; add a real :data:`PRICING` row citing its source (and
+drop the id here) once a rate is sourced.
 """
+
+#: The generation the bare family aliases (``opus``, ``claude-sonnet`` ...)
+#: price at. An alias carries no generation in its key, so the fallback
+#: needs this to tell that it would bill another generation's rate.
+FAMILY_ALIAS_GENERATION = 4
+
+_CLAUDE_GENERATION = re.compile(r"(?:^|/)claude-(?:opus|sonnet|haiku)-(\d+)")
+
+
+def _claude_generation(model_id: str) -> int | None:
+    """Return the Claude major generation *model_id* names, if it names one."""
+    found = _CLAUDE_GENERATION.search(model_id)
+    return int(found.group(1)) if found else None
+
+
+def unpriced_model(model: str) -> UnpricedModel | None:
+    """Return the :data:`UNPRICED_MODELS` entry *model* falls under, if any.
+
+    Args:
+        model: Model identifier, possibly a dated variant of an entry.
+
+    Returns:
+        The entry with the longest id that prefixes *model*, or ``None``.
+    """
+    matches = [entry for key, entry in UNPRICED_MODELS.items() if model.startswith(key)]
+    return max(matches, key=lambda entry: len(entry.model_id), default=None)
 
 
 def lookup_pricing(model: str) -> ModelPricing | None:
@@ -375,8 +429,9 @@ def lookup_pricing(model: str) -> ModelPricing | None:
     Returns:
         The :class:`ModelPricing` row for an exact match; otherwise the row
         whose key is the longest prefix of *model*; otherwise ``None`` when
-        no key matches, or when an :data:`UNPRICED_MODELS` id is a longer
-        prefix of *model* than the best priced key.
+        no key matches, when an :data:`UNPRICED_MODELS` id is a longer
+        prefix of *model* than the best priced key, or when *model* names a
+        Claude generation other than the one the best key prices.
     """
     if model in PRICING:
         return PRICING[model]
@@ -388,7 +443,12 @@ def lookup_pricing(model: str) -> ModelPricing | None:
     if not matches:
         return None
     best_key, best_row = matches[0]
-    if any(model.startswith(u) and len(u) > len(best_key) for u in UNPRICED_MODELS):
+    unpriced = unpriced_model(model)
+    if unpriced is not None and len(unpriced.model_id) > len(best_key):
+        return None
+    generation = _claude_generation(model)
+    key_generation = _claude_generation(best_key) or FAMILY_ALIAS_GENERATION
+    if generation is not None and generation != key_generation:
         return None
     return best_row
 

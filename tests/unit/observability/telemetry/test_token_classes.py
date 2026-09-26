@@ -392,7 +392,7 @@ def test_lookup_pricing_priced_generation_still_resolves() -> None:
 def test_unpriced_models_have_no_pricing_row() -> None:
     from eawf.observability.telemetry.pricing import PRICING
 
-    assert not UNPRICED_MODELS & set(PRICING)
+    assert not set(UNPRICED_MODELS) & set(PRICING)
 
 
 def test_resolve_price_source_priced_and_unpriced() -> None:
