@@ -29560,16 +29560,16 @@
       "title": "Regenerate the shipped skill pages for the new lifecycle grammar"
     },
     "B172": {
-      "closed_at": null,
-      "commit": null,
+      "closed_at": "2026-09-26T18:11:30.634960Z",
+      "commit": "bdfe9cb1",
       "created_at": "2026-09-24T21:17:32.411823Z",
       "description": "W42 merges ledger-held terminal rows only for Milestone; Batch compacts the same way. W27: native frames call header_row with needs=0, so the Attention count is not live. W30: the stuck-migration entry layer renders NOT HELD and exits 4 instead of showing the repair command. W28: help overlay omits native paging.",
       "id": "B172",
       "intent": null,
       "priority": "P2",
-      "resolution": null,
+      "resolution": "Delivered by P35-I04-W12: Batch compaction merge, header needs count and the remaining console read gaps; verified in the P36 research brief (projection.py Batch merge).",
       "scope_id": "P35",
-      "status": "open",
+      "status": "closed",
       "title": "Finish the console read gaps found live"
     },
     "B173": {
@@ -47641,6 +47641,52 @@
       "status": "active",
       "superseded_by": null,
       "title": "Cut 0.7.0.dev4 as native canary and move product canary to dev5"
+    },
+    "D71": {
+      "alternatives": [
+        "Keep P36 as rc1 and add a dev5 phase before it"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-26T18:10:21.655860Z",
+      "description": null,
+      "id": "D71",
+      "obsoleted_at": null,
+      "rationale": "Operator ruling 2026-09-26. P36-I01 ships 0.7.0.dev5 (D70) and one release per phase (D10) forbids also cutting rc1, so P36 is retitled to the live epoch-2 cutover and the dev5 product canary. The rc1 flag-day work (epoch-1 TUI retirement B154, epoch-1 state refusal, LINT dispositions) is authored as a native rc1 Milestone in P36-I01-W04 and ships in the next phase. P36 also consumes B194, B192, B191, B193, B170, B190, B164, B178, B185 and the audit leftovers B176, B179, B181, B182, B184, B186, B187, B189 before the cutover, and closes B172 as delivered. Evidence: .ea/local/research/2026-09-26-p36-post-cutover-and-backlog.md",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Make P36 the epoch-2 cutover and 0.7.0.dev5 phase and move rc1 out"
+    },
+    "D72": {
+      "alternatives": [
+        "A native Task per unowned id",
+        "One blanket deferral of all uncited ids"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-26T18:10:22.599342Z",
+      "description": null,
+      "id": "D72",
+      "obsoleted_at": null,
+      "rationale": "Operator ruling 2026-09-26. The trace finds 593 of 1,170 packet ids unowned, about 477 of them built but cited by no wave text. The trace gains a typed satisfied disposition that cites the closed phase or cluster and commit evidence; only unbuilt ids get native Tasks or D64-style deferrals. Evidence: .ea/local/research/2026-09-26-p36-post-cutover-and-backlog.md",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Own built but uncited requirement ids with a typed satisfied disposition"
+    },
+    "D73": {
+      "alternatives": [
+        "Record caller-supplied gate receipts only"
+      ],
+      "consequences": [],
+      "created_at": "2026-09-26T18:10:23.521167Z",
+      "description": null,
+      "id": "D73",
+      "obsoleted_at": null,
+      "rationale": "Operator ruling 2026-09-26. After the live cut, imported waves move only through a legacy-continuation verb; completing a Task through it runs the Task's decisive gates through the existing gate runner and binds receipts before COMPLETED, so post-cut closes are as trustworthy as epoch-1 wave closes. Evidence: .ea/local/research/2026-09-26-p36-cutover-path.md",
+      "scope_id": "EAWF",
+      "status": "active",
+      "superseded_by": null,
+      "title": "Run a Task's decisive gates in the post-cutover continuation close"
     }
   },
   "dispatch_paused": false,
@@ -65439,7 +65485,7 @@
       "depends_on": [
         "P35"
       ],
-      "description": "Sixth v0.7.0 phase, the rc1 flag day. Epoch-1 state refused with migration guidance, epoch-1 mutators removed, full migration rehearsal with backup restore, daemonless bypass removed, task-trailer commit grammar, coverage grid reconciled, turn cost re-measured. Console frames drawn to packet layouts with token paint, missing capabilities ported, epoch-1 TUI deleted (D63); LINT dispositions (D64). Waves authored at the cutover (D65).",
+      "description": "Sixth v0.7.0 phase, retitled by D71: epoch-2-aware commit lint, trace and legacy-continuation routes (D69, D73), release-path and audit-leftover backlog before the cut, the live epoch-2 cutover of this repository (D62), the console live on this tree (D63), the rc1, rc2 and stable roadmap authored as native plans with typed satisfied dispositions (D65, D72), and 0.7.0.dev5 as the product_canary rung (D70). rc1 moves to the next phase.",
       "id": "P36",
       "intent": null,
       "iter_ids": [
@@ -65447,11 +65493,11 @@
       ],
       "opened_at": "2026-09-03T18:03:30.594095Z",
       "outcome_ids": [],
-      "release": null,
+      "release": "v0.7.0",
       "scope_id": "EAWF",
       "source_brief_ids": [],
       "status": "planned",
-      "title": "Cut the 0.7.0rc1 flag day and retire the epoch-1 surfaces",
+      "title": "Cut this repository over to epoch 2 and ship the 0.7.0.dev5 canary",
       "track_id": null
     },
     "P37": {
@@ -65531,7 +65577,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T17:18:31.280803Z",
+  "updated_at": "2026-09-26T18:11:30.634960Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
