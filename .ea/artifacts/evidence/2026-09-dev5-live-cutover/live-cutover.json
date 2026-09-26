@@ -1,0 +1,50 @@
+{
+  "addressing": {
+    "allowlist": "tests/fixtures/migration/allowed_legacy_symbols.txt",
+    "default_track_key": "TRK-EAWF-CORE",
+    "project_key": "EAWF",
+    "repository_key": "EAWF",
+    "workspace_key": "EAWF"
+  },
+  "apply": {
+    "generation_id": "gen-ca819f3245bf71a8",
+    "journal_rows": 12,
+    "manifest_digest": "ca819f3245bf71a80735285a7dea3168c624c86072ce3ffa6dd6a2e28760d581",
+    "rollback_boundary": "marker_written",
+    "status": "applied",
+    "target_rows": 6015
+  },
+  "backup": {
+    "digest": "3a13abaf9f4f342ff2ce8840ebee1a9cfd4d7c8d2f565e710549a031bd7d21d2",
+    "ts": "2026-09-26T21-13-41Z"
+  },
+  "boundary": {
+    "boundary": "marker_written",
+    "canary_reversible_window": "open",
+    "generation_id": "gen-ca819f3245bf71a8",
+    "simple_rollback_window": "open"
+  },
+  "clone": {
+    "approval_digest": "4c4a91ddb202862dc98f00dbbd503c015bd26cbcfd68c46b0543a7083211a1a9",
+    "idempotence_digest": "de276f3b7127db08c0682e9dd09dacbc9b5e4122695185d228b149a602d280e1",
+    "manifest_digest": "ca819f3245bf71a80735285a7dea3168c624c86072ce3ffa6dd6a2e28760d581",
+    "source_digest": "cee7640d7b00fb428f9042abcb8c1a760ee39f2c6db0fa7250c4f4ff5dcc04de",
+    "target_rows": 6015
+  },
+  "live_plan": {
+    "applicable": true,
+    "approval_digest": "4c4a91ddb202862dc98f00dbbd503c015bd26cbcfd68c46b0543a7083211a1a9",
+    "idempotence_digest": "de276f3b7127db08c0682e9dd09dacbc9b5e4122695185d228b149a602d280e1",
+    "manifest_digest": "ca819f3245bf71a80735285a7dea3168c624c86072ce3ffa6dd6a2e28760d581",
+    "source_digest": "cee7640d7b00fb428f9042abcb8c1a760ee39f2c6db0fa7250c4f4ff5dcc04de",
+    "target_rows": 6015,
+    "unresolved_row_count": 0
+  },
+  "reapply": {
+    "generation_id": "gen-ca819f3245bf71a8",
+    "journal_rows": 0,
+    "manifest_digest": "ca819f3245bf71a80735285a7dea3168c624c86072ce3ffa6dd6a2e28760d581",
+    "status": "already-selected"
+  },
+  "revision": "63b93334efa85c8b93fde3f76568311a9f1838e1"
+}

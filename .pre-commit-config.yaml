@@ -15,11 +15,14 @@ repos:
       - id: check-toml
       - id: check-added-large-files
         args: [--maxkb=1024]
+        # An epoch-2 generation's ledgers are the project state itself and
+        # grow with it, the way the epoch-1 state.json did.
+        exclude: ^\.ea/generations/gen-[0-9a-f]{16}/ledger/
       - id: check-merge-conflict
       - id: debug-statements
 
   - repo: https://github.com/Yelp/detect-secrets
-    # Baseline-hash: 286b43b406fd0ab8 (.secrets.baseline; recompute and bump
+    # Baseline-hash: 6f01a183ec90a426 (.secrets.baseline; recompute and bump
     # this comment when the baseline is edited so the change is re-acknowledged).
     rev: v1.5.0
     hooks:
@@ -70,7 +73,12 @@ repos:
         # The requirement census stamps the git revision it was generated at
         # and rewrites it on every regeneration, the same unsettleable class;
         # its titles are scrubbed for paths and addresses by the extractor.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$'
+        #
+        # An epoch-2 generation's document is the successor of state.json and
+        # carries the same commit SHAs and URNs; the generation markers pin a
+        # manifest digest, the rehearsal goldens' class. The generation's
+        # ledgers stay scanned, like the epoch-1 typed stores.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$|^\.ea/generations/gen-[0-9a-f]{16}/state\.json$|^\.ea/generations/(EPOCH2_ACTIVE|selected)\.json$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0
