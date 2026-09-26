@@ -25037,32 +25037,33 @@
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [
-        "P36-I01-W14"
+        "P36-I01-W14",
+        "P36-I01-W02"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-26T21:11:09.078837Z",
       "id": "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P36-I01",
       "started_at": "2026-09-26T20:14:08.165791Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260926T205652.132997Z-auditor-claude-201e5b9b-5eb2-4c45-8c4f-0d05d66a015b": {
       "agent_principal_id": null,
       "artifact_ids": [],
       "claimed_wave_ids": [],
-      "ended_at": null,
+      "ended_at": "2026-09-26T21:11:09.149305Z",
       "id": "SES-20260926T205652.132997Z-auditor-claude-201e5b9b-5eb2-4c45-8c4f-0d05d66a015b",
       "role": "auditor",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P36-I01-W01",
       "started_at": "2026-09-26T20:56:52.132997Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     },
     "SES-20260926T205721.569598Z-auditor-claude-code-49d60e3e-5a49-473b-a0c0-58f5d6ecf609": {
@@ -46941,11 +46942,10 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c",
-      "SES-20260926T205652.132997Z-auditor-claude-201e5b9b-5eb2-4c45-8c4f-0d05d66a015b"
+    "active_session_ids": [],
+    "active_wave_ids": [
+      "P36-I01-W02"
     ],
-    "active_wave_ids": [],
     "iter_id": "P36-I01",
     "phase_id": "P36",
     "project_code": "EAWF",
@@ -66396,10 +66396,10 @@
       "scope_kind": "wave"
     }
   },
-  "schema_version": "1.19",
+  "schema_version": "1.20",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T21:09:12.267893Z",
+  "updated_at": "2026-09-26T21:11:11.399161Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -69702,6 +69702,116 @@
       "start_fact_ref": "integration:integration-f5882234107120211508bd59",
       "tree_sha": "dafa84214ba4b2ab78260db26231048d104b5ed7",
       "wave_id": "P35-I04-W11"
+    },
+    "P36-I01-W02::P35-I04-W10": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P35-I04-W10",
+      "generation": 3,
+      "integrated_sha": "c77f8464cfbadd79ce1f187b34890e77b4615b2f",
+      "integration_id": "integration-8bb51315697971fd78c9442a",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-8bb51315697971fd78c9442a",
+      "tree_sha": "08c6f91bdfff41d6b857a49f014aaf9f029e5a8e",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W01": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W01",
+      "generation": 1,
+      "integrated_sha": "d8bf262acf51a847d063f7d40b688a2684a21cf3",
+      "integration_id": "integration-16dba364f7954e7836375dd1",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-16dba364f7954e7836375dd1",
+      "tree_sha": "f64fca6634ceb965e1086ff14d4daa86ed4727a4",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W06": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W06",
+      "generation": 1,
+      "integrated_sha": "b0f7f4b33250599688bc30edb7699a8e25019411",
+      "integration_id": "integration-9bafa8b9da1b6435b535d61c",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-9bafa8b9da1b6435b535d61c",
+      "tree_sha": "0ee41be869caf90385e7bfbfe1b4e312c7527e5a",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W07": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W07",
+      "generation": 1,
+      "integrated_sha": "25e419488344b0e4844b0c4d668aa964bab24bd4",
+      "integration_id": "integration-84d6949e0dfe99c282472097",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-84d6949e0dfe99c282472097",
+      "tree_sha": "4c4a3b1381f0aeae7dbe84d59dc2fe34b926ed12",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W08": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W08",
+      "generation": 1,
+      "integrated_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "integration_id": "integration-645f07ce3246a5dc51f0bbfa",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-645f07ce3246a5dc51f0bbfa",
+      "tree_sha": "c27fafc7ea4a2b35d9b44b1a0b8b5489940dc4ec",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W09": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W09",
+      "generation": 1,
+      "integrated_sha": "d791475bb3e19bb0918e1ab8772b614b23dc298b",
+      "integration_id": "integration-6e191368ca059257d4f472e5",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-6e191368ca059257d4f472e5",
+      "tree_sha": "a8a610a1b9791f14b37e2e9d7489fa111ceb714d",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W10": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W10",
+      "generation": 1,
+      "integrated_sha": "586df02cceea248d264e35bec59eee5ead057b3b",
+      "integration_id": "integration-8b7723457c8166f6ebe03f37",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-8b7723457c8166f6ebe03f37",
+      "tree_sha": "6206d272858c5a3983689cd6f11c968a7283fb4a",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W11": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W11",
+      "generation": 1,
+      "integrated_sha": "791ff74394774363216e507603d92de527a57e37",
+      "integration_id": "integration-30398c6190d8dca6b2141f41",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-30398c6190d8dca6b2141f41",
+      "tree_sha": "bf57da6625575f14e9cb7f98e4207d40c8686da8",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W12": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W12",
+      "generation": 1,
+      "integrated_sha": "90577a90db455e211e9066eddd7198ea3c8da87b",
+      "integration_id": "integration-d71fb275760fba5cb279a9a4",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-d71fb275760fba5cb279a9a4",
+      "tree_sha": "d91c3cb354793fb98440b6ea9ca301d22b0035c7",
+      "wave_id": "P36-I01-W02"
+    },
+    "P36-I01-W02::P36-I01-W13": {
+      "bound_at": "2026-09-26T21:10:59.950816Z",
+      "dep_wave_id": "P36-I01-W13",
+      "generation": 1,
+      "integrated_sha": "5e3158e298bab27d85d35d2de64630b6d261bc13",
+      "integration_id": "integration-888165fe3426a3cc7b1261c7",
+      "land_fact_ref": null,
+      "start_fact_ref": "integration:integration-888165fe3426a3cc7b1261c7",
+      "tree_sha": "61944bb0c720d37b36c1ccc1011724b324125da2",
+      "wave_id": "P36-I01-W02"
     },
     "P36-I01-W11::P36-I01-W07": {
       "bound_at": "2026-09-26T19:44:01.980373Z",
@@ -252257,8 +252367,8 @@
         "P36-I01-W04",
         "P36-I01-W03"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T201408.165791Z-operator-claude-f31f88d0-1a17-4311-bd88-ed2b081b431c",
+      "claimed_at": "2026-09-26T21:10:59.951233Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -252328,7 +252438,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -254681,7 +254791,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-flow-p19-i02-ad2a74ba",
       "path": ".claude/worktrees/p19-w13",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P19-I02-W13"
     },
     "WT-P19-I02-W15-1778858364": {
@@ -254692,7 +254802,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-flow-p19-i02-ad2a74ba",
       "path": ".claude/worktrees/p19-w15",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P19-I02-W15"
     },
     "WT-P25-I01-W01-1779221186": {
@@ -254736,7 +254846,7 @@
       "merged_commit": null,
       "owner_session_id": "p25-w04-exec",
       "path": ".ea/worktrees/p25-w04",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P25-I01-W04"
     },
     "WT-P25-I01-W05-1779223318": {
@@ -254747,7 +254857,7 @@
       "merged_commit": null,
       "owner_session_id": "p25-w05-exec",
       "path": ".ea/worktrees/p25-w05",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P25-I01-W05"
     },
     "WT-P25-I01-W06-1779221187": {
@@ -256386,7 +256496,7 @@
       "merged_commit": null,
       "owner_session_id": "polish-P27-I03-W26",
       "path": ".ea/worktrees/p27-w26",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P27-I03-W26"
     },
     "WT-P28-I01-W01-1779821347": {
@@ -256771,7 +256881,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260527T172000Z-operator-codex",
       "path": ".ea/worktrees/p28-w20",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I02-W20"
     },
     "WT-P28-I02-W21-1779846426": {
@@ -256969,7 +257079,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-w14",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I03-W14"
     },
     "WT-P28-I03-W15-1779915891": {
@@ -257101,7 +257211,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w27",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I03-W27"
     },
     "WT-P28-I03-W28-1779919395": {
@@ -257112,7 +257222,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w28",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I03-W28"
     },
     "WT-P28-I03-W29-1779919396": {
@@ -257189,7 +257299,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p28-i03-w35",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P28-I03-W35"
     },
     "WT-P28-I03-W36-1779916889": {
@@ -257541,7 +257651,7 @@
       "merged_commit": null,
       "owner_session_id": "codex-p30-i04-w08",
       "path": ".claude/worktrees/p30-w08",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I04-W08"
     },
     "WT-P30-I04-W10-1781065737": {
@@ -257552,7 +257662,7 @@
       "merged_commit": null,
       "owner_session_id": "codex-p30-i04-w10",
       "path": ".claude/worktrees/p30-w10",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I04-W10"
     },
     "WT-P30-I05-W01-1781068679": {
@@ -258069,7 +258179,7 @@
       "merged_commit": null,
       "owner_session_id": null,
       "path": ".ea/worktrees/p30-w24",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I21-W24"
     },
     "WT-P30-I21-W25-1783093731": {
@@ -258080,7 +258190,7 @@
       "merged_commit": null,
       "owner_session_id": null,
       "path": ".ea/worktrees/p30-w25",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I21-W25"
     },
     "WT-P30-I21-W26-1783093732": {
@@ -258091,7 +258201,7 @@
       "merged_commit": null,
       "owner_session_id": null,
       "path": ".ea/worktrees/p30-w26",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I21-W26"
     },
     "WT-P30-I21-W27-1783093733": {
@@ -258102,7 +258212,7 @@
       "merged_commit": null,
       "owner_session_id": null,
       "path": ".ea/worktrees/p30-w27",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I21-W27"
     },
     "WT-P30-I21-W28-1783096544": {
@@ -258124,7 +258234,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w01",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W01"
     },
     "WT-P30-I24-W02-1783109572": {
@@ -258135,7 +258245,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w02",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W02"
     },
     "WT-P30-I24-W03-1783113754": {
@@ -258146,7 +258256,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w03",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W03"
     },
     "WT-P30-I24-W04-1783117600": {
@@ -258157,7 +258267,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w04",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W04"
     },
     "WT-P30-I24-W05-1783106413": {
@@ -258168,7 +258278,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w05",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W05"
     },
     "WT-P30-I24-W06-1783106414": {
@@ -258179,7 +258289,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w06",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W06"
     },
     "WT-P30-I24-W07-1783109573": {
@@ -258190,7 +258300,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w07",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W07"
     },
     "WT-P30-I24-W08-1783120883": {
@@ -258201,7 +258311,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w08",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W08"
     },
     "WT-P30-I24-W09-1783120884": {
@@ -258212,7 +258322,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w09",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W09"
     },
     "WT-P30-I24-W10-1783120885": {
@@ -258223,7 +258333,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260510T214731Z-operator-claude",
       "path": ".ea/worktrees/p30-w10",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P30-I24-W10"
     },
     "WT-P33-I01-W02-1789658561": {
@@ -258267,7 +258377,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T162059.684055Z-executor-claude-f4002332-c039-45b9-9e9c-f948a8669eb5",
       "path": ".ea/worktrees/p33-w05",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W05"
     },
     "WT-P33-I01-W06-1789658553": {
@@ -258289,7 +258399,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T153637.058506Z-executor-claude-df405acf-d3d4-4d00-bb33-5c61a14881a6",
       "path": ".ea/worktrees/p33-w07",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W07"
     },
     "WT-P33-I01-W08-1789662753": {
@@ -258333,7 +258443,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T163811.609467Z-executor-claude-cd757d8e-650f-423f-b4fc-8bcddfc1b6f6",
       "path": ".ea/worktrees/p33-w12",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W12"
     },
     "WT-P33-I01-W13-1789658559": {
@@ -258366,7 +258476,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T165717.686073Z-executor-claude-614b7bf0-5fc9-4bac-99e5-d311cb5c98c7",
       "path": ".ea/worktrees/p33-w15",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W15"
     },
     "WT-P33-I01-W16-1789662752": {
@@ -258388,7 +258498,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T165721.706923Z-executor-claude-b070a95a-e964-41eb-9b69-d61f46caeff0",
       "path": ".ea/worktrees/p33-w17",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W17"
     },
     "WT-P33-I01-W18-1789662832": {
@@ -258410,7 +258520,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T165623.765523Z-executor-claude-0446f587-6cdd-4b55-af40-c91fd79f6718",
       "path": ".ea/worktrees/p33-w21",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W21"
     },
     "WT-P33-I01-W29-1789658563": {
@@ -258443,7 +258553,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T162619.324247Z-executor-claude-c9959b61-eca2-4d18-9d15-49b6d425384b",
       "path": ".ea/worktrees/p33-w31",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W31"
     },
     "WT-P33-I01-W32-1789660185": {
@@ -258520,7 +258630,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T152151.372743Z-executor-claude-9fec54b6-abb3-4da2-8671-236eb2c0af12",
       "path": ".ea/worktrees/p33-w41",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W41"
     },
     "WT-P33-I01-W42-1789658557": {
@@ -258619,7 +258729,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T161910.779701Z-executor-claude-5eae73b7-2de0-49c7-9ad2-2ba0b746ea84",
       "path": ".ea/worktrees/p33-w54",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W54"
     },
     "WT-P33-I01-W89-1789660778": {
@@ -258652,7 +258762,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T165216.782746Z-executor-claude-d44d3b00-7eaf-4d61-89fd-3abc129cf91b",
       "path": ".ea/worktrees/p33-w92",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W92"
     },
     "WT-P33-I01-W93-1789664186": {
@@ -258663,7 +258773,7 @@
       "merged_commit": null,
       "owner_session_id": "SES-20260917T165621.854297Z-executor-claude-ad57326a-b12b-465b-be79-f76e95744c98",
       "path": ".ea/worktrees/p33-w93",
-      "status": "active",
+      "status": "abandoned",
       "wave_id": "P33-I01-W93"
     }
   }
