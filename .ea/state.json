@@ -1,5 +1,20 @@
 {
   "actuals": {
+    "P01-I01-W01": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "ACT-P01-I01-W01-1790448313264088-3a86",
+      "elapsed_eu": 0.008786735,
+      "harness": null,
+      "id": "ACT-P01-I01-W01",
+      "model": null,
+      "scope_id": "P01-I01-W01",
+      "status": "done",
+      "updated_at": "2026-09-26T18:45:13.264088Z"
+    },
     "P28-I02-W07": {
       "actual_cost_usd": 0.0,
       "actual_tokens": 0,
@@ -17909,6 +17924,36 @@
       "scope_id": "P35-I05-W09",
       "status": "done",
       "updated_at": "2026-09-26T05:25:07.367823Z"
+    },
+    "P36-I01-W08": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P36-I01-W08",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P36-I01-W08",
+      "model": null,
+      "scope_id": "P36-I01-W08",
+      "status": "done",
+      "updated_at": "2026-09-26T18:48:30.501183Z"
+    },
+    "P36-I01-W10": {
+      "actual_cost_usd": 0.0,
+      "actual_tokens": 0,
+      "agent_runtime_eu": null,
+      "attention_eu": null,
+      "calibration_excluded": false,
+      "current_store_record_id": "REC-P36-I01-W10",
+      "elapsed_eu": 0.0,
+      "harness": null,
+      "id": "ACT-P36-I01-W10",
+      "model": null,
+      "scope_id": "P36-I01-W10",
+      "status": "done",
+      "updated_at": "2026-09-26T18:54:42.089009Z"
     }
   },
   "agent_sessions": {
@@ -24795,15 +24840,15 @@
         "P36-I01-W10",
         "P36-I01-W12"
       ],
-      "ended_at": null,
+      "ended_at": "2026-09-26T18:52:24.155437Z",
       "id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
       "role": "operator",
       "runtime": "claude",
       "runtime_session_id": null,
       "scope_id": "P36-I01",
       "started_at": "2026-09-26T18:35:28.478061Z",
-      "status": "active",
-      "summary": null,
+      "status": "stale",
+      "summary": "orphaned by daemon restart",
       "worktree_ids": []
     }
   },
@@ -36146,6 +36191,106 @@
       "wave_id": "P31-I01-W52",
       "wave_revision_digest": "c62b234e85259563da41d869e00a03765e826241eb06becdca0539126e562818"
     },
+    "close-70b20d38c1db1eec59993914": {
+      "apply_event_id": "EV-115af2faff14",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "commit_identity_digest": "sha256:b491ed45d077c1a643c37450442873bf3e082b7c1ded903ceb814aaecae76def",
+      "criteria_digest": "f9db9c66f26f709c8963a000285ddee7c3cee80a0795f6c92e144ac9ff7326d1",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "e30d42ee761602aed82433e02b88e9abd9c550e1eff08cb28d19e26864c7fe9b",
+      "gate_receipt_ids": [
+        "GR-e6743ae8a4561c4dd00002fdd746ae14",
+        "GR-c0a3026393b909c9bf72ac8983a87771"
+      ],
+      "generation": 1,
+      "id": "close-70b20d38c1db1eec59993914",
+      "idempotency_key": "46fe242e16eca2aefe5aed215fcc1ea6c95d0fcef6382bf861fafd6d4247cfaf",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "integration_id": "integration-645f07ce3246a5dc51f0bbfa",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Seal key derived from Run and candidate refs; report-to-seal-to-verify proved over a real daemon",
+      "policy_digest": "8bf45adbecbff1f5bd4cd787752531b7ebe2439175dd4076b9e5f7cadd00222c",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-26T18:47:50.441315Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "f82f5eede57c9efb2d0513e84999e29618b404128efc7fa629e10b95a9fb43ba",
+      "spec_digest": "5ba40457267c8206ed6a065ff20e6b9421a49457b9683fa8afd6435b3c0cb125",
+      "started_at": "2026-09-26T18:47:51.271861Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-26T18:48:33.159355Z",
+      "tokens_consumed": null,
+      "tree_sha": "c27fafc7ea4a2b35d9b44b1a0b8b5489940dc4ec",
+      "updated_at": "2026-09-26T18:48:33.159353Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P36-I01-W08",
+      "wave_revision_digest": "567751e8da77e0da275b91e08dfba180a6efb0a419470e2a11746ed2856ab9ed"
+    },
+    "close-70b413fb38e49d6782b46e87": {
+      "apply_event_id": "EV-0ceb34505210",
+      "artifact_refs": [],
+      "audit_report_id": null,
+      "audit_requirement": "none",
+      "candidate_sha": "586df02cceea248d264e35bec59eee5ead057b3b",
+      "commit_identity_digest": "sha256:d70c1ec92cbe9bcb3b7d7531feda59fbed6fc9e619ada5ec8a4145684b6d9613",
+      "criteria_digest": "315a3098e2ac939b1115d31ad4a97d2dbcb8455e342d16012d3d724fd200861d",
+      "dependency_binding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "failure_detail_ref": null,
+      "failure_kind": null,
+      "gate_manifest_digest": "7c5b8b0ba46b794981adb79bc48dc69065346f6cc7e2f3829003fdd00c4d9c33",
+      "gate_receipt_ids": [
+        "GR-dcb119c87ab167919db64e2084f0ccee",
+        "GR-53fca8c8b019f4e9ac558d7c4faf9452",
+        "GR-08d3f8f3665135a98570fb7b1b3e1820"
+      ],
+      "generation": 1,
+      "id": "close-70b413fb38e49d6782b46e87",
+      "idempotency_key": "3623b0eae791c53d189ff3b4140ec98c84739b544b1355e21ab2746d6fde3615",
+      "infrastructure_retry_budget_remaining": 1,
+      "integrated_sha": "586df02cceea248d264e35bec59eee5ead057b3b",
+      "integration_id": "integration-8b7723457c8166f6ebe03f37",
+      "invalidation_causes": [],
+      "no_runtime_waiver": true,
+      "outcome": "Canary runtime dir re-proved under root; domain refusal exit 3 proved over a real daemon; Claude 5 ids typed unpriced with reason",
+      "policy_digest": "8bf45adbecbff1f5bd4cd787752531b7ebe2439175dd4076b9e5f7cadd00222c",
+      "repair_budget_remaining": 1,
+      "repair_generation": null,
+      "repair_wave_id": null,
+      "requested_at": "2026-09-26T18:54:11.126893Z",
+      "required_gate_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "required_operator_actions": [],
+      "runner_environment_digest": "f82f5eede57c9efb2d0513e84999e29618b404128efc7fa629e10b95a9fb43ba",
+      "spec_digest": "eeed8b159bfac123682e519832f65b4cebc8d9d20fb05cea32cbf1b88d0c0171",
+      "started_at": "2026-09-26T18:54:12.257860Z",
+      "status": "closed",
+      "supersedes_id": null,
+      "terminal_at": "2026-09-26T18:54:43.891867Z",
+      "tokens_consumed": null,
+      "tree_sha": "6206d272858c5a3983689cd6f11c968a7283fb4a",
+      "updated_at": "2026-09-26T18:54:43.891863Z",
+      "usage_receipt_ids": [],
+      "waiver_decision_ids": [],
+      "wave_id": "P36-I01-W10",
+      "wave_revision_digest": "5f68ae15bad1baccca72bf96474d147f86f8963cf827b77a4f00e7e508e84045"
+    },
     "close-7104f7ed33cb9c726e06a8f8": {
       "apply_event_id": "EV-89a738b96db5",
       "artifact_refs": [],
@@ -46155,16 +46300,12 @@
     }
   },
   "current": {
-    "active_session_ids": [
-      "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb"
-    ],
+    "active_session_ids": [],
     "active_wave_ids": [
       "P36-I01-W01",
       "P36-I01-W06",
       "P36-I01-W07",
-      "P36-I01-W08",
       "P36-I01-W09",
-      "P36-I01-W10",
       "P36-I01-W12",
       "P36-I01-W13"
     ],
@@ -47724,7 +47865,7 @@
       "title": "Run a Task's decisive gates in the post-cutover continuation close"
     }
   },
-  "dispatch_paused": false,
+  "dispatch_paused": true,
   "estimates": {
     "P27-I02-W23": {
       "confidence": "low",
@@ -65620,7 +65761,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T18:35:36.505331Z",
+  "updated_at": "2026-09-26T18:54:43.891924Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -71166,6 +71307,22 @@
       "tree_sha": "b850ff141591f57f0c311216bb2a0d63f144f973",
       "wave_id": "P35-I01-W13"
     },
+    "integration-645f07ce3246a5dc51f0bbfa": {
+      "base_sha": "369be998ca390c7ee7598c25ed770d0a44a87d3f",
+      "candidate_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "created_at": "2026-09-26T18:47:46.229277Z",
+      "diff_digest": "4ce748de9336dbeb99c7776b0039e2e5f2abf56a80e87aad8f8059cc487c13f5",
+      "generation": 1,
+      "id": "integration-645f07ce3246a5dc51f0bbfa",
+      "integrated_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "kind": "adopt",
+      "reason": "cherry-picked from wave worktree branch",
+      "spec_digest": "5ba40457267c8206ed6a065ff20e6b9421a49457b9683fa8afd6435b3c0cb125",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "c27fafc7ea4a2b35d9b44b1a0b8b5489940dc4ec",
+      "wave_id": "P36-I01-W08"
+    },
     "integration-656af6c68e4b86f340ce7787": {
       "base_sha": "60bcbc34373011f2f1c36a9660ee16501550d33e",
       "candidate_sha": "28c3df5650a2dc08aba7c0c66abec6f85c9ce6f5",
@@ -71965,6 +72122,22 @@
       "supersedes_id": null,
       "tree_sha": "2de467427608b946b13968b2f2f65e0e34aaeeb6",
       "wave_id": "P33-I01-W06"
+    },
+    "integration-8b7723457c8166f6ebe03f37": {
+      "base_sha": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "candidate_sha": "586df02cceea248d264e35bec59eee5ead057b3b",
+      "created_at": "2026-09-26T18:54:09.328430Z",
+      "diff_digest": "e379c251b50d2fb0f54c57c8d0894585caa543db72fe3b4f8922ea430bf90d88",
+      "generation": 1,
+      "id": "integration-8b7723457c8166f6ebe03f37",
+      "integrated_sha": "586df02cceea248d264e35bec59eee5ead057b3b",
+      "kind": "adopt",
+      "reason": "cherry-picked from wave worktree branch",
+      "spec_digest": "eeed8b159bfac123682e519832f65b4cebc8d9d20fb05cea32cbf1b88d0c0171",
+      "status": "verified",
+      "supersedes_id": null,
+      "tree_sha": "6206d272858c5a3983689cd6f11c968a7283fb4a",
+      "wave_id": "P36-I01-W10"
     },
     "integration-8bb51315697971fd78c9442a": {
       "base_sha": "cd973597223d47f2069194d6b3ac5bcf22703724",
@@ -252248,9 +252421,9 @@
       ],
       "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
       "claimed_at": "2026-09-26T18:35:33.492318Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-26T18:48:30.501183Z",
+      "commit": "96fcf54cc0f622bdb3c4ffcb4743f24ce40d1e42",
+      "commit_identity_digest": "sha256:b491ed45d077c1a643c37450442873bf3e082b7c1ded903ceb814aaecae76def",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "B170 and B179 F21: prove report to seal to verify over a real daemon and derive a deterministic seal idempotency key from refs.",
@@ -252320,13 +252493,13 @@
       },
       "iter_id": "P36-I01",
       "opened_at": "2026-09-26T18:21:44.289223Z",
-      "outcome": null,
+      "outcome": "Seal key derived from Run and candidate refs; report-to-seal-to-verify proved over a real daemon",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -252562,9 +252735,9 @@
       ],
       "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
       "claimed_at": "2026-09-26T18:35:35.504566Z",
-      "closed_at": null,
-      "commit": null,
-      "commit_identity_digest": null,
+      "closed_at": "2026-09-26T18:54:42.089009Z",
+      "commit": "586df02cceea248d264e35bec59eee5ead057b3b",
+      "commit_identity_digest": "sha256:d70c1ec92cbe9bcb3b7d7531feda59fbed6fc9e619ada5ec8a4145684b6d9613",
       "criteria_floor_waiver": null,
       "deps": [],
       "description": "B164, B178 and B185: prove the canary runtime dir stays under the tree root, prove domain refusals exit 3 over a real daemon, and add sourced Claude 5 pricing rows or a typed unpriced-with-reason.",
@@ -252652,13 +252825,13 @@
       },
       "iter_id": "P36-I01",
       "opened_at": "2026-09-26T18:21:46.273049Z",
-      "outcome": null,
+      "outcome": "Canary runtime dir re-proved under root; domain refusal exit 3 proved over a real daemon; Claude 5 ids typed unpriced with reason",
       "runtime_baseline": null,
       "runtime_carry": null,
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "claimed",
+      "status": "closed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
