@@ -12,6 +12,7 @@ from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload
 from eawf.kernel.store.kinds.audit import AuditPayload
 from eawf.kernel.store.kinds.commit_repin import CommitRepinProvenance
+from eawf.kernel.store.kinds.conduct_deviation import ConductDeviation
 from eawf.kernel.store.kinds.config_updated import ConfigUpdatedPayload
 from eawf.kernel.store.kinds.decision import DecisionPayload
 from eawf.kernel.store.kinds.estimate import EstimatePayload
@@ -84,4 +85,7 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     StoreKind.CONFORMANCE_STAGE: ConformanceStageRecord,
     StoreKind.RELEASE_CHECKPOINT_RECEIPT: CheckpointGateReceipt,
     StoreKind.RELEASE_TRAIN_ADVANCE: TrainAdvanceRecord,
+    # Registered like every kind so its envelopes validate on read, but its
+    # rows live in the machine-local tier; see ``local_store_path``.
+    StoreKind.CONDUCT_DEVIATION: ConductDeviation,
 }

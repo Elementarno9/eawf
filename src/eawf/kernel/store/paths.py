@@ -27,9 +27,10 @@ The epoch-2 tiers are siblings of ``store/`` rather than members of it::
     <state_dir>/local/<collection>                local store
     <state_dir>/store/event.jsonl                 firehose
 
-Only the two tiers this module is asked to locate today -- the ledger and
-its derived index -- have resolvers; the local store gains one when
-something writes it.
+The ledger, its derived index and the local store have resolvers; a
+store kind whose rows are machine-local resolves under ``local/`` through
+:func:`local_store_path`, which the commit policy already keeps out of
+version control.
 
 ``ledger/`` is a separate directory because the epoch-1 compactor
 rewrites a whole file in place, and an append-only ledger must be
@@ -53,6 +54,9 @@ LEDGER_DIRNAME: Final = "ledger"
 #: The reserved directory name for regenerable projections.
 INDEX_DIRNAME: Final = "indexes"
 
+#: The directory holding the machine-local store tier; a clone starts empty.
+LOCAL_DIRNAME: Final = "local"
+
 
 def store_dir(state_path: Path) -> Path:
     """Return ``<state_dir>/store/`` (does not create the directory)."""
@@ -62,6 +66,19 @@ def store_dir(state_path: Path) -> Path:
 def store_path(state_path: Path, kind: StoreKind) -> Path:
     """Return the JSONL path for *kind* under ``<state_dir>/store/``."""
     return store_dir(state_path) / f"{kind.value}.jsonl"
+
+
+def local_store_path(state_path: Path, kind: StoreKind) -> Path:
+    """Return the machine-local JSONL path for *kind*.
+
+    Args:
+        state_path: Path to the tree's ``state.json``.
+        kind: A store kind whose rows must never be committed.
+
+    Returns:
+        ``<state_dir>/local/<kind>.jsonl``.
+    """
+    return state_path.parent / LOCAL_DIRNAME / f"{kind.value}.jsonl"
 
 
 def store_paths(state_path: Path) -> dict[StoreKind, Path]:

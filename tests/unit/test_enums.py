@@ -533,6 +533,8 @@ def test_store_kind_values() -> None:
         # One conformance stage per row, filed under the runtime tuple it
         # ran for; the journal a certification's history is read back from.
         "conformance_stage",
+        # Machine-local conduct deviations; never committed.
+        "conduct_deviation",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

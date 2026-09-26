@@ -510,6 +510,35 @@ def _prose_warnings(skill_name: SkillName, body: EnvelopeBody) -> list[EnvelopeW
     return [EnvelopeWarning(code=PROSE_CLARITY_CODE, detail=detail)]
 
 
+def _practice_triggers(
+    skill_name: SkillName, ctx: SkillContext, result: SkillResult
+) -> tuple[list[str], list[EnvelopeWarning]]:
+    """Evaluate the practice triggers at the decision point *result* reaches.
+
+    Fails open like the prose chokepoint: a trigger that cannot be recorded
+    must not cost the run its envelope.
+
+    Args:
+        skill_name: The canonical skill name (logged for attribution only).
+        ctx: The run's context; supplies the scope and the run id.
+        result: The action's terminal result.
+
+    Returns:
+        The trigger event ids and the miss warnings; both empty when no
+        trigger fired or recording raised.
+    """
+    from eawf.platform.rules.triggers import fire_practice_triggers
+
+    try:
+        outcome = fire_practice_triggers(
+            status=result.status, body=result.body, scope_id=ctx.scope, run_id=ctx.session
+        )
+    except Exception:
+        logger.exception(f"_practice_triggers trigger-raised skill={skill_name}")
+        return [], []
+    return list(outcome.records), list(outcome.warnings)
+
+
 def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     """Execute *skill* against *ctx* and return a fully-populated envelope.
 
@@ -526,8 +555,10 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     4. Otherwise → validate a registered dict body against its body model
        (see :func:`_validate_body`), run the advisory prose chokepoint over
        the body (see :func:`_prose_warnings`; a clarity finding folds into a
-       ``prose_clarity`` footer warning but never flips the status), and
-       return an envelope built from the action result. A drifted dict body
+       ``prose_clarity`` footer warning but never flips the status),
+       evaluate the practice triggers at the decision point the result
+       reaches (see :func:`_practice_triggers`), and return an envelope
+       built from the action result. A drifted dict body
        raises before the envelope is built; the probe-fail and action-raised
        paths above are ungated because their bodies are engine-authored
        strings.
@@ -634,6 +665,10 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
     # never flipped to blocked and a prose-lint crash never breaks emit
     # (fail-open, see _prose_warnings).
     combined_warnings.extend(_prose_warnings(skill_name, result.body))
+    # The terminal result is where a run reaches its dispatch, choice or
+    # report decision point, so the practice set is evaluated here.
+    trigger_records, trigger_warnings = _practice_triggers(skill_name, ctx, result)
+    combined_warnings.extend(trigger_warnings)
     return _build_envelope(
         skill_name=skill_name,
         ctx=ctx,
@@ -643,7 +678,7 @@ def run_skill(skill: Skill, ctx: SkillContext) -> OutputEnvelope:
         status=result.status,
         body=result.body,
         persisted_artifacts=result.persisted_artifacts,
-        persisted_store_records=result.persisted_store_records,
+        persisted_store_records=[*result.persisted_store_records, *trigger_records],
         state_mutations=result.state_mutations,
         evidence_refs=result.evidence_refs,
         next_valid_actions=result.next_valid_actions,

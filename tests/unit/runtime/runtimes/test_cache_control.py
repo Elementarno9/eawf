@@ -336,8 +336,14 @@ def test_compress_unknown_runtime_degrades_to_needs_user(state_dir: Path) -> Non
     assert env.header.status == "needs_user"
     body = cast(dict, env.body)
     assert "unknown runtime" in body["reason"]
-    # No event persisted on the degraded path.
-    assert len(env.footer.persisted_store_records) == 0
+    # No compression event on the degraded path; the only record is the
+    # practice trigger the engine evaluates when a run asks the operator.
+    import orjson
+
+    events_path = state_dir / "store" / "event.jsonl"
+    rows = [orjson.loads(line) for line in events_path.read_bytes().splitlines() if line.strip()]
+    assert [r["payload"]["event_type"] for r in rows] == ["practice_trigger"]
+    assert [r["id"] for r in rows] == env.footer.persisted_store_records
 
 
 def test_compress_missing_tokens_before_needs_user(state_dir: Path) -> None:

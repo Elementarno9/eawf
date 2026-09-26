@@ -758,6 +758,7 @@ class StoreKind(StrEnum):
     RELEASE_CHECKPOINT_RECEIPT = "release_checkpoint_receipt"
     RELEASE_TRAIN_ADVANCE = "release_train_advance"
     CONFORMANCE_STAGE = "conformance_stage"
+    CONDUCT_DEVIATION = "conduct_deviation"
 
 
 class ArtifactKind(StrEnum):

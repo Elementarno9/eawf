@@ -1,4 +1,4 @@
-"""Repository rules: typed records, the source loader, builtin modules and the graph compiler."""
+"""Repository rules: records, the source loader, builtin and conduct modules, the compiler."""
 
 from __future__ import annotations
 
@@ -39,6 +39,17 @@ from eawf.platform.rules.compose import (
     no_builtin_rules,
     require_committed_inputs,
     workspace_rule_locator,
+)
+from eawf.platform.rules.conduct import (
+    CONDUCT_MODULE_REF,
+    ConductDeviationRate,
+    ConductModuleDocument,
+    compile_conduct_graph,
+    conduct_deviation_rate,
+    conduct_obligation_ids,
+    load_conduct_rules,
+    read_conduct_deviations,
+    record_conduct_deviation,
 )
 from eawf.platform.rules.loader import (
     RULE_SOURCE_PATH,
@@ -83,10 +94,13 @@ from eawf.platform.rules.records import (
 
 __all__ = [
     "COMMITTED_SOURCE_KINDS",
+    "CONDUCT_MODULE_REF",
     "RULE_SOURCE_PATH",
     "AuthoredRule",
     "BuiltinRuleProvider",
     "CompiledRule",
+    "ConductDeviationRate",
+    "ConductModuleDocument",
     "LoadedRuleSource",
     "RuleAuthorityInjectionError",
     "RuleAuthorityWideningError",
@@ -136,13 +150,19 @@ __all__ = [
     "builtin_rule_modules",
     "compile_card_graph",
     "compile_committed_records",
+    "compile_conduct_graph",
     "compile_rule_graph",
     "compile_rule_records",
+    "conduct_deviation_rate",
+    "conduct_obligation_ids",
+    "load_conduct_rules",
     "load_rule_layers",
     "load_rule_source",
     "load_workspace_rules",
     "no_builtin_rules",
     "parse_rule_module",
+    "read_conduct_deviations",
+    "record_conduct_deviation",
     "registered_enforcement_refs",
     "render_module_index",
     "require_committed_inputs",

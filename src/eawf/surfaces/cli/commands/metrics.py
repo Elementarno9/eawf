@@ -33,6 +33,10 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
   BlockAuthority tier. Under the cohort floor the reducer refuses to score
   and the render is the honest "insufficient signal (n=k)" banner -- it reads
   no telemetry cache, so it is not gated on ``telemetry.enabled``.
+- ``eawf metrics conduct`` — render the conduct deviation rate: deviations
+  per completed wave, per obligation (every compiled conduct obligation,
+  so a never-breached one reads as zero) and per runtime, read from the
+  machine-local deviation store. Not gated on ``telemetry.enabled``.
 
 CLI is dispatch (AGENTS rule 1): every handler resolves the state path,
 reads the typed config, and routes the heavy lifting into
@@ -68,7 +72,9 @@ _TELEMETRY_SUBCOMMANDS = frozenset({"show", "export", "rebuild", "info", "varian
 #: floor. It reads no telemetry cache, so it is not gated on ``telemetry.enabled``.
 _JURY_VALIDATION_SUBCOMMAND = "jury-validation"
 
-_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS | {_JURY_VALIDATION_SUBCOMMAND}
+_CONDUCT_SUBCOMMAND = "conduct"
+
+_KNOWN_SUBCOMMANDS = _TELEMETRY_SUBCOMMANDS | {_JURY_VALIDATION_SUBCOMMAND, _CONDUCT_SUBCOMMAND}
 
 _OPT_IN_NUDGE = (
     "telemetry is disabled — no metrics are collected.\n"
@@ -83,7 +89,7 @@ def metrics_cmd(
     subcommand: Annotated[
         str | None,
         typer.Argument(
-            metavar="[show|export|rebuild|info|variance|jury-validation]",
+            metavar="[show|export|rebuild|info|variance|jury-validation|conduct]",
             help="Metrics sub-verb. Omit for the rolling workflow-metrics view.",
         ),
     ] = None,
@@ -135,6 +141,8 @@ def metrics_cmd(
         _estimate_actual_variance(flags)
     elif subcommand == _JURY_VALIDATION_SUBCOMMAND:
         _jury_validation(flags)
+    elif subcommand == _CONDUCT_SUBCOMMAND:
+        _conduct_deviation_rate(flags)
     else:  # subcommand == "info"
         _telemetry_info(flags)
 
@@ -277,6 +285,55 @@ def _jury_validation(flags: GlobalFlags) -> None:
             f"({ballotless_rows} without recorded ballots, excluded from scoring)"
         )
     emit_json_or_text(payload, text, flags=flags)
+
+
+def _conduct_deviation_rate(flags: GlobalFlags) -> None:
+    """Render the conduct deviation rate from the machine-local store.
+
+    Read-only. A completed task is a CLOSED wave. Failures map to the
+    canonical CLI exit codes: UserError (``kind="NotFound"``, ``exit=1``)
+    when no ``state.json`` resolves, ValidationError (``exit=2``) on a
+    schema mismatch.
+    """
+    from eawf.kernel.state.enums import WaveStatus
+    from eawf.platform.rules.conduct import (
+        conduct_deviation_rate,
+        conduct_obligation_ids,
+        read_conduct_deviations,
+    )
+    from eawf.workflow.evidence._io import load_state
+
+    state_path = _resolve_state_or_emit(flags)
+    if state_path is None:
+        return
+
+    try:
+        state = load_state(state_path)
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return
+
+    rate = conduct_deviation_rate(
+        read_conduct_deviations(state_path),
+        obligations=conduct_obligation_ids(),
+        completed_task_count=sum(
+            1 for wave in state.waves.values() if wave.status == WaveStatus.CLOSED
+        ),
+    )
+    per_task = (
+        "no completed tasks"
+        if rate.rate_per_completed_task is None
+        else f"{rate.rate_per_completed_task:.3f} per completed task"
+    )
+    lines = [
+        f"conduct deviations: {rate.deviation_count} ({per_task}, "
+        f"tasks={rate.completed_task_count})",
+        *(f"  {name}: {count}" for name, count in rate.by_obligation.items() if count),
+        f"  never breached: {sum(1 for count in rate.by_obligation.values() if not count)} "
+        f"of {len(rate.by_obligation)} obligations",
+        *(f"  runtime {name}: {count}" for name, count in rate.by_runtime.items()),
+    ]
+    emit_json_or_text(rate.model_dump(mode="json"), "\n".join(lines), flags=flags)
 
 
 def _block_authority(report: JuryValidationReport) -> str:
