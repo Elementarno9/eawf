@@ -11,7 +11,7 @@ and *new* (what is about to replace it). A fast-forward, where *old* is an
 ancestor of *new*, rewrites nothing and passes without reading any message.
 Otherwise both sides are read from their merge-base, and every wave named by
 a trailer in ``base..old`` must still be named by a trailer in ``base..new``,
-and so must every native Task an ``Task`` trailer names, since that
+and so must every native Task a ``Task`` trailer names, since that
 trailer is the only identity a native Task commit carries.
 
 ``commit_prefix_lint.py`` dispatches here for its ``--check-rewrite OLD NEW``
@@ -50,7 +50,7 @@ def trailer_wave_ids(messages: Iterable[str]) -> set[str]:
 
 
 def trailer_task_keys(messages: Iterable[str]) -> set[str]:
-    """Return every native Task key named on an ``Task`` line of *messages*."""
+    """Return every native Task key named on a ``Task`` line of *messages*."""
     return {
         match.group("key") for message in messages for match in _TASK_TRAILER_RE.finditer(message)
     }

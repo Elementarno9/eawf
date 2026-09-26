@@ -1415,7 +1415,7 @@ def _check_task_scope(
     canonical_state_path: Path | None,
     env: Mapping[str, str],
 ) -> tuple[int, str] | None:
-    """Validate every native Task an ``Task`` trailer names.
+    """Validate every native Task a ``Task`` trailer names.
 
     The proof reads the canonical main worktree's selected generation, as
     the wave proof reads its canonical state, so a worktree cannot prove a
