@@ -24781,6 +24781,30 @@
       "status": "stale",
       "summary": "orphaned by daemon restart",
       "worktree_ids": []
+    },
+    "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb": {
+      "agent_principal_id": null,
+      "artifact_ids": [],
+      "claimed_wave_ids": [
+        "P36-I01-W01",
+        "P36-I01-W13",
+        "P36-I01-W06",
+        "P36-I01-W07",
+        "P36-I01-W08",
+        "P36-I01-W09",
+        "P36-I01-W10",
+        "P36-I01-W12"
+      ],
+      "ended_at": null,
+      "id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "role": "operator",
+      "runtime": "claude",
+      "runtime_session_id": null,
+      "scope_id": "P36-I01",
+      "started_at": "2026-09-26T18:35:28.478061Z",
+      "status": "active",
+      "summary": null,
+      "worktree_ids": []
     }
   },
   "artifacts": {
@@ -46131,10 +46155,21 @@
     }
   },
   "current": {
-    "active_session_ids": [],
-    "active_wave_ids": [],
-    "iter_id": null,
-    "phase_id": null,
+    "active_session_ids": [
+      "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb"
+    ],
+    "active_wave_ids": [
+      "P36-I01-W01",
+      "P36-I01-W06",
+      "P36-I01-W07",
+      "P36-I01-W08",
+      "P36-I01-W09",
+      "P36-I01-W10",
+      "P36-I01-W12",
+      "P36-I01-W13"
+    ],
+    "iter_id": "P36-I01",
+    "phase_id": "P36",
     "project_code": "EAWF",
     "track_id": null
   },
@@ -64086,7 +64121,7 @@
       "intent": null,
       "opened_at": "2026-09-03T18:03:30.594271Z",
       "phase_id": "P36",
-      "status": "planned",
+      "status": "active",
       "title": "Prepare and run the live epoch-2 cutover and retire epoch-1 surfaces",
       "trigger": "none",
       "wave_ids": [
@@ -65504,7 +65539,7 @@
       "release": "v0.7.0",
       "scope_id": "EAWF",
       "source_brief_ids": [],
-      "status": "planned",
+      "status": "active",
       "title": "Cut this repository over to epoch 2 and ship the 0.7.0.dev5 canary",
       "track_id": null
     },
@@ -65585,7 +65620,7 @@
   "schema_version": "1.19",
   "scope_kind": "repo",
   "tracks": null,
-  "updated_at": "2026-09-26T18:22:28.729691Z",
+  "updated_at": "2026-09-26T18:35:36.505331Z",
   "urn": "urn:eawf:v1:state:EAWF",
   "wave_dependency_barriers": {},
   "wave_dependency_bindings": {
@@ -251022,8 +251057,8 @@
       "blocks": [
         "P36-I01-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:29.474931Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -251139,7 +251174,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -251911,8 +251946,8 @@
         "P36-I01-W02",
         "P36-I01-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:31.513202Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -251992,7 +252027,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -252061,8 +252096,8 @@
         "P36-I01-W02",
         "P36-I01-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:32.499444Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -252142,7 +252177,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -252211,8 +252246,8 @@
         "P36-I01-W02",
         "P36-I01-W05"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:33.492318Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -252291,7 +252326,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -252359,8 +252394,8 @@
         "P36-I01-W02",
         "P36-I01-W03"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:34.477706Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -252457,7 +252492,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -252525,8 +252560,8 @@
       "blocks": [
         "P36-I01-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:35.504566Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -252623,7 +252658,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -252989,8 +253024,8 @@
       "blocks": [
         "P36-I01-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:36.504879Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -253127,7 +253162,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
@@ -253249,8 +253284,8 @@
       "blocks": [
         "P36-I01-W02"
       ],
-      "claim_session_id": null,
-      "claimed_at": null,
+      "claim_session_id": "SES-20260926T183528.478061Z-operator-claude-422a3d25-63b8-490b-bac0-4bbca06b05cb",
+      "claimed_at": "2026-09-26T18:35:30.498349Z",
       "closed_at": null,
       "commit": null,
       "commit_identity_digest": null,
@@ -253348,7 +253383,7 @@
       "runtime_latest": null,
       "runtime_preference": null,
       "sessions": {},
-      "status": "pending",
+      "status": "claimed",
       "success_criteria": [
         {
           "acceptance_style": "binary",
