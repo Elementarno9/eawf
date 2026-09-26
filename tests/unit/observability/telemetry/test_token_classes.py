@@ -18,13 +18,17 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.store.kinds.events import DispatchCostPayload
+from eawf.observability import telemetry
+from eawf.observability.telemetry import turn_cost
 from eawf.observability.telemetry.exporter import build_snapshot
 from eawf.observability.telemetry.models import (
+    ObservedSession,
     PriceSourceKind,
     TelemetryDispatchCost,
     TokenClass,
     check_price_source,
     check_token_identity,
+    null_unpriced_zero_cost,
 )
 from eawf.observability.telemetry.pricing import (
     PRICING_VERSION,
@@ -195,22 +199,95 @@ def test_check_price_source_reconstructed_without_version_raises() -> None:
         )
 
 
-def test_check_price_source_unpriced_nonzero_cost_raises() -> None:
-    with pytest.raises(ValueError, match="unpriced row cannot carry"):
+@pytest.mark.parametrize("cost", [Decimal("0.01"), Decimal("0")])
+def test_check_price_source_unpriced_with_any_cost_raises(cost: Decimal) -> None:
+    with pytest.raises(ValueError, match="records a null cost_usd"):
         check_price_source(
-            cost_usd=Decimal("0.01"),
-            price_source=PriceSourceKind.UNPRICED,
-            rate_table_version=None,
+            cost_usd=cost, price_source=PriceSourceKind.UNPRICED, rate_table_version=None
         )
 
 
-def test_check_price_source_unpriced_zero_and_billed_pass() -> None:
+@pytest.mark.parametrize(
+    ("source", "version"),
+    [(PriceSourceKind.BILLED, None), (PriceSourceKind.LIST_RECONSTRUCTED, PRICING_VERSION)],
+)
+def test_check_price_source_priced_without_cost_raises(
+    source: PriceSourceKind, version: str | None
+) -> None:
+    with pytest.raises(ValueError, match="must record its cost_usd"):
+        check_price_source(cost_usd=None, price_source=source, rate_table_version=version)
+
+
+def test_check_price_source_unpriced_null_and_billed_pass() -> None:
     check_price_source(
-        cost_usd=Decimal("0"), price_source=PriceSourceKind.UNPRICED, rate_table_version=None
+        cost_usd=None, price_source=PriceSourceKind.UNPRICED, rate_table_version=None
     )
     check_price_source(
         cost_usd=Decimal("3"), price_source=PriceSourceKind.BILLED, rate_table_version=None
     )
+    check_price_source(
+        cost_usd=Decimal("0"), price_source=PriceSourceKind.BILLED, rate_table_version=None
+    )
+
+
+# -- one price-source type, null cost for unpriced rows ---------------------
+
+
+def test_price_source_is_one_type_across_turn_cost_and_usage_rows() -> None:
+    assert not hasattr(turn_cost, "PriceSource")
+    assert not hasattr(telemetry, "PriceSource")
+    for model in (turn_cost.CompletedUnitRun, TelemetryDispatchCost, ObservedSession):
+        annotation = model.model_fields["price_source"].annotation
+        assert annotation is PriceSourceKind, model.__name__
+
+
+@pytest.mark.parametrize(
+    ("data", "expected"),
+    [
+        ({"price_source": "unpriced", "cost_usd": "0"}, None),
+        ({"price_source": "unpriced", "cost_usd": 0}, None),
+        ({"price_source": PriceSourceKind.UNPRICED, "cost_usd": Decimal("0.000")}, None),
+        ({"price_source": "unpriced", "cost_usd": None}, None),
+        ({"price_source": "unpriced", "cost_usd": "0.5"}, "0.5"),
+        ({"price_source": "unpriced", "cost_usd": "not-a-number"}, "not-a-number"),
+        ({"price_source": "billed", "cost_usd": "0"}, "0"),
+    ],
+)
+def test_null_unpriced_zero_cost_maps_only_a_legacy_unpriced_zero(
+    data: dict[str, Any], expected: object
+) -> None:
+    assert null_unpriced_zero_cost(data)["cost_usd"] == expected  # type: ignore[index]
+
+
+@pytest.mark.parametrize("data", [None, "row", [], {}])
+def test_null_unpriced_zero_cost_passes_other_input_through(data: object) -> None:
+    assert null_unpriced_zero_cost(data) is data
+
+
+def test_telemetry_dispatch_cost_legacy_unpriced_zero_reads_null() -> None:
+    row = TelemetryDispatchCost.model_validate(
+        _row(cost_usd="0", price_source="unpriced", rate_table_version=None)
+    )
+    assert row.cost_usd is None
+
+
+def test_telemetry_dispatch_cost_unpriced_nonzero_raises() -> None:
+    with pytest.raises(ValidationError, match="records a null cost_usd"):
+        TelemetryDispatchCost.model_validate(
+            _row(cost_usd="0.5", price_source="unpriced", rate_table_version=None)
+        )
+
+
+def test_dispatch_cost_payload_legacy_unpriced_zero_reads_null() -> None:
+    payload = DispatchCostPayload.model_validate(
+        _payload(cost_usd="0", total_tokens=1340, price_source="unpriced", rate_table_version=None)
+    )
+    assert payload.cost_usd is None
+
+
+def test_dispatch_cost_payload_pre_split_row_without_cost_raises() -> None:
+    with pytest.raises(ValidationError, match="must record its cost_usd"):
+        DispatchCostPayload.model_validate(_payload(cost_usd=None))
 
 
 def test_price_source_kind_is_closed_three_value_set() -> None:
@@ -340,7 +417,8 @@ def test_price_spawn_result_carries_reasoning_and_source() -> None:
 def test_price_spawn_result_unknown_model_is_unpriced() -> None:
     metered = price_spawn_result(_spawn(runtime="claude-code", model="claude-opus-5-5"))
     assert metered.price_source is PriceSourceKind.UNPRICED
-    assert metered.cost_usd == Decimal("0")
+    assert metered.cost_usd is None
+    assert metered.priced is False
     assert metered.rate_table_version is None
 
 
@@ -389,6 +467,15 @@ def test_emit_dispatch_cost_records_five_classes_and_source(tmp_path: Path) -> N
     assert row.rate_table_version == PRICING_VERSION
 
 
+def test_emit_dispatch_cost_unpriced_spawn_records_null_cost(tmp_path: Path) -> None:
+    ctx, event_path = _ctx(tmp_path)
+    _emit_from_spawn(ctx, _spawn(model="claude-opus-5-5"))
+    assert '"cost_usd":null' in event_path.read_text(encoding="utf-8")
+    (row,) = DispatchCostSessionSource().iter_rows(event_path)
+    assert row.price_source is PriceSourceKind.UNPRICED
+    assert row.cost_usd is None
+
+
 def test_emit_dispatch_cost_unpriced_model_without_source_resolves(tmp_path: Path) -> None:
     ctx, event_path = _ctx(tmp_path)
     emit_dispatch_cost(
@@ -407,7 +494,7 @@ def test_emit_dispatch_cost_unpriced_model_without_source_resolves(tmp_path: Pat
 
 def test_emit_dispatch_cost_nonzero_cost_for_unpriced_model_raises(tmp_path: Path) -> None:
     ctx, _ = _ctx(tmp_path)
-    with pytest.raises(ValidationError, match="unpriced row cannot carry"):
+    with pytest.raises(ValidationError, match="records a null cost_usd"):
         emit_dispatch_cost(
             ctx,
             wave_id=None,

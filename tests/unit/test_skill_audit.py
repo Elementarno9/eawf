@@ -195,8 +195,7 @@ def test_audit_probe_blocked_short_circuits(
 def test_audit_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/audit")
-    assert cls is AuditSkill
+    assert registry.list_registered()["/audit"] is AuditSkill
 
 
 # ---- W14: real checks + fresh-context auditor dispatch ----------------------

@@ -1,5 +1,5 @@
 """Integration tests for ``eawf wave budget set|consume|show`` and the
-``wave claim`` over-budget gate.
+``wave claim`` over-ceiling gate.
 
 Mirrors the harness used by :mod:`tests.integration.test_cli_lifecycle`:
 a temp ``.ea/state.json`` resolved via the ``EA_STATE`` env var.
@@ -26,6 +26,13 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]
     state_path = tmp_path / ".ea" / "state.json"
     monkeypatch.setenv("EA_STATE", str(state_path))
     yield tmp_path
+
+
+def _enforce_hard_at_budget(workspace: Path) -> None:
+    """Make the one ceiling the raw budget, enforced exactly."""
+    (workspace / ".ea" / "config.yaml").write_text(
+        "flow:\n  budget:\n    enforce: hard\n    multiplier: 1.0\n", encoding="utf-8"
+    )
 
 
 def _read_state(workspace: Path) -> dict[str, object]:
@@ -118,8 +125,28 @@ def test_wave_budget_consume_warn_exit_zero(workspace: Path) -> None:
     assert state["waves"]["P01-I01-W01"]["tokens_consumed"] == 750  # type: ignore[index]
 
 
+def test_wave_budget_consume_soft_ceiling_lands_and_notices(workspace: Path) -> None:
+    """Under the default soft table the ceiling is 1.5x the budget: the
+    raw budget is not a limit, and reaching the ceiling records the notice
+    while the delta still lands."""
+    _bootstrap_pending_wave(workspace)
+    assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
+    at_budget = runner.invoke(app, ["--json", "wave", "budget", "consume", "P01-I01-W01", "1000"])
+    assert at_budget.exit_code == 0, at_budget.stdout
+    notices = workspace / ".ea" / "local" / "budget_notices.json"
+    assert not notices.exists()
+    res = runner.invoke(app, ["--json", "wave", "budget", "consume", "P01-I01-W01", "500"])
+    assert res.exit_code == 0, res.stdout
+    payload = json.loads(res.stdout)
+    assert (payload["ceiling"], payload["action"]) == (1500, "warn")
+    assert _read_state(workspace)["waves"]["P01-I01-W01"]["tokens_consumed"] == 1500  # type: ignore[index]
+    [row] = orjson.loads(notices.read_bytes())["notices"].values()
+    assert (row["scope_id"], row["highest_band"]) == ("P01-I01-W01", "limit_reached")
+
+
 def test_wave_budget_consume_block_nonzero_exit(workspace: Path) -> None:
     _bootstrap_pending_wave(workspace)
+    _enforce_hard_at_budget(workspace)
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
     res = runner.invoke(
         app,
@@ -139,8 +166,9 @@ def test_wave_budget_consume_block_surfaces_discarded_delta(workspace: Path) -> 
     and the would-be post-add value so the operator can see what was
     attempted before the transaction rolled back."""
     _bootstrap_pending_wave(workspace)
+    _enforce_hard_at_budget(workspace)
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
-    # First consume lands cleanly (warn: 75 %).
+    # First consume lands cleanly (under the ceiling).
     assert runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code == 0
     # Second consume tips over the cap; transaction rolls back.
     res = runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "500"])
@@ -166,32 +194,20 @@ def test_wave_budget_set_unknown_wave_exits_2(workspace: Path) -> None:
 
 
 def test_wave_claim_refuses_over_budget(workspace: Path) -> None:
-    """Once ``tokens_consumed >= token_budget`` is recorded on disk,
-    ``wave claim`` refuses with exit 4 and the canonical error string."""
+    """Once ``tokens_consumed`` reaches the one ceiling (the budget scaled
+    by ``flow.budget.multiplier``, 1.5 by default), ``wave claim`` refuses
+    with exit 2 and the canonical error string."""
     _bootstrap_pending_wave(workspace)
-    # Seed the wave with a tiny budget and consume up to it via the
-    # service module directly, then re-run the CLI's claim path. To keep
-    # the test pure-CLI, set a budget of 1000 then consume 999, then
-    # bump consumption to 1000 by running consume twice — the second
-    # consume blocks. We need a different approach: set a budget that
-    # leaves the consume at exactly 75 % (warn, exit 0), then run a
-    # second consume at the remaining 25 % which lands at 100 % and
-    # rolls back. So instead use the smallest possible: ``set 100`` then
-    # call ``consume 75`` (warn, persisted), then run another ``consume
-    # 24`` (warn, persisted, 99 %), then run a claim — still under
-    # budget. The cleanest end-to-end gate proof seeds via two consume
-    # calls that together stay under budget, then a claim, then a
-    # *manual* over-budget setup by lowering the budget below the
-    # current consumption with ``set``.
     assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "1000"]).exit_code == 0
     assert runner.invoke(app, ["wave", "budget", "consume", "P01-I01-W01", "750"]).exit_code == 0
-    # Lower the budget to match the existing consumption — wave is now
-    # exactly at 100 % and ``wave claim`` must refuse.
-    assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "750"]).exit_code == 0
+    # Lower the budget so its ceiling (500 x 1.5) equals the existing
+    # consumption -- the wave is now exactly at its ceiling.
+    assert runner.invoke(app, ["wave", "budget", "set", "P01-I01-W01", "500"]).exit_code == 0
 
     res = runner.invoke(app, ["wave", "claim", "P01-I01-W01", "--session", "SES-1"])
     assert res.exit_code == 2, res.stdout
     assert "over token budget" in res.stdout
+    assert "750/750 ceiling" in res.stdout
 
     state = _read_state(workspace)
     # Wave still pending — the gate fired before the claim could land.

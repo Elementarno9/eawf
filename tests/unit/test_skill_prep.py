@@ -287,8 +287,7 @@ def test_prep_explicit_iter_id_honoured(state_dir: Path) -> None:
 def test_prep_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/prep")
-    assert cls is PrepSkill
+    assert registry.list_registered()["/prep"] is PrepSkill
 
 
 # ---- P28-W18: unified plan_view renderer ----------------------------------

@@ -1,0 +1,22 @@
+{
+  "body_keys": [
+    "batch_ref",
+    "dispatched",
+    "frontier",
+    "kind",
+    "outcome",
+    "plan",
+    "reason",
+    "source_cursor",
+    "stopped_on",
+    "user_question"
+  ],
+  "eval_score_threshold": 0.85,
+  "evidence_refs_present": false,
+  "outcome": "frontier_empty",
+  "repair_commands_count": 0,
+  "skill": "/dispatch",
+  "state_mutation_kinds": [],
+  "status": "ok",
+  "warnings_count": 1
+}

@@ -291,6 +291,12 @@ def extract_catalog(packet_dir: Path) -> dict[str, str]:
 def load_state(path: Path) -> StateView:
     """Read the trace's slice of a state document.
 
+    Args:
+        path: The ``state.json`` file.
+
+    Returns:
+        The validated state slice.
+
     Raises:
         TraceInputError: When the file is missing, not JSON, or malformed.
     """
@@ -302,6 +308,12 @@ def load_state(path: Path) -> StateView:
 
 def load_catalog(path: Path) -> Catalog:
     """Read and validate the committed catalog.
+
+    Args:
+        path: The committed requirements catalog file.
+
+    Returns:
+        The validated catalog.
 
     Raises:
         TraceInputError: When the file is missing, not JSON, or malformed.
@@ -451,6 +463,13 @@ def stale_ids(stored: Catalog, fresh: Catalog) -> list[str]:
 
     The revision is provenance and never compared. A changed summary or
     deferral table with no changed row reports ``summary`` or ``deferrals``.
+
+    Args:
+        stored: The committed catalog.
+        fresh: The catalog recomputed from the current tree.
+
+    Returns:
+        The sorted changed requirement ids, plus ``summary`` / ``deferrals``.
     """
     before = {row.id: row for row in stored.requirements}
     after = {row.id: row for row in fresh.requirements}
@@ -463,7 +482,14 @@ def stale_ids(stored: Catalog, fresh: Catalog) -> list[str]:
 
 
 def render(catalog: Catalog) -> str:
-    """Serialise the catalog with one requirement per line for reviewable diffs."""
+    """Serialise the catalog with one requirement per line for reviewable diffs.
+
+    Args:
+        catalog: The catalog to serialise.
+
+    Returns:
+        The JSON text, newline-terminated.
+    """
     head = catalog.model_dump(mode="json", exclude={"requirements"})
     rows = [
         json.dumps(row.model_dump(mode="json"), ensure_ascii=False) for row in catalog.requirements

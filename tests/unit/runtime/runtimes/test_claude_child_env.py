@@ -79,6 +79,16 @@ _SEEDED_ENV: dict[str, str] = {
 #: that the spawn never handed one.
 _PLATFORM_INJECTED: frozenset[str] = frozenset({"__CF_USER_TEXT_ENCODING"})
 
+#: Keys the managed-run isolation lays over the scrubbed env on every spawn:
+#: where the stored login is read from and the two instruction switches.
+_MANAGED_OVERLAY: frozenset[str] = frozenset(
+    {
+        "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+        "CLAUDE_CODE_DISABLE_CLAUDE_MDS",
+        "CLAUDE_CODE_DISABLE_AUTO_MEMORY",
+    }
+)
+
 _RESULT_LINE: dict[str, object] = {
     "type": "result",
     "subtype": "success",
@@ -202,7 +212,12 @@ def test_spawn_session_claude_child_receives_only_scrubbed_env(
     )
 
     recorded = json.loads((tmp_path / "child-env.json").read_text(encoding="utf-8"))
-    child_env = {key: value for key, value in recorded.items() if key not in _PLATFORM_INJECTED}
+    assert set(recorded) >= _MANAGED_OVERLAY
+    child_env = {
+        key: value
+        for key, value in recorded.items()
+        if key not in _PLATFORM_INJECTED | _MANAGED_OVERLAY
+    }
     assert result.session_id == "sess-child"
     assert _outside_allowlist(child_env) == []
     assert _OPERATOR_TOKEN_KEY not in child_env

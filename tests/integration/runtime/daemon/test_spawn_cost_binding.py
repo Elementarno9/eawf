@@ -602,9 +602,9 @@ def test_bare_opus_alias_degrades_honestly_if_row_removed(
         ended_at=_T1,
     )
     metered = price_spawn_result(result)
-    # The cost is $0 ONLY with priced=False -- the honest-degrade observable, not
+    # The cost is null with priced=False -- the honest-degrade observable, not
     # a silent billed zero.
-    assert metered.cost_usd == Decimal("0")
+    assert metered.cost_usd is None
     assert metered.priced is False
 
 

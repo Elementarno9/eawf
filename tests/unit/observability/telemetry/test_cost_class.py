@@ -14,9 +14,9 @@ from eawf.observability.telemetry.cost_class import (
     CostClass,
     classify_cost_class,
 )
+from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
-    PriceSource,
     TurnCostRecord,
     build_turn_cost_record,
 )
@@ -24,7 +24,7 @@ from eawf.observability.telemetry.turn_cost import (
 pytestmark = pytest.mark.unit
 
 _TS = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
-_PRICED = PriceSource(kind="pricing_snapshot", pricing_version="2026.05.17")
+_PRICED = PriceSourceKind.LIST_RECONSTRUCTED
 
 
 def _closed_wave(wave_id: str) -> Wave:

@@ -39,6 +39,7 @@ from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
     ExecutorReportBody,
 )
+from eawf.workflow.verify.red_to_green import red_to_green_close_findings
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State, Wave
@@ -72,11 +73,15 @@ class VerifyResult:
         reasons: One short string per failing check. Empty on a clean
             pass. Reasons stay terse so they fit in a single log line
             and a CLI error message.
+        advisories: One line per non-blocking finding (a test reported
+            green that never ran red first). They never flip
+            :attr:`passed`; the caller surfaces them beside the close.
     """
 
     passed: bool
     verdict: AgentReportVerdict
     reasons: tuple[str, ...] = field(default_factory=tuple)
+    advisories: tuple[str, ...] = field(default_factory=tuple)
 
 
 class DispatchCloseBlockedError(RuntimeError):
@@ -145,7 +150,7 @@ def verify_close_readiness(
 ) -> VerifyResult:
     """Return a :class:`VerifyResult` for *report* against *wave_id*.
 
-    The deterministic check has four rungs, evaluated in order:
+    The deterministic check has five rungs, evaluated in order:
 
     1. The report verdict MUST be a member of
        :data:`_CLOSE_READY_VERDICTS` (``PASS`` or
@@ -172,6 +177,11 @@ def verify_close_readiness(
        ``evidence_refs`` MUST be non-empty — one entry per criterion is
        the contract the executor DoD demands; an empty list on a
        criteria-bearing wave refuses close-ready.
+
+    5. For an :class:`ExecutorReportBody`, every wave-tier test in its
+       ``test_runs`` must have run red before its first green run and
+       ended green. A gap on a defect repro test is a reason; any other
+       gap is an advisory that leaves :attr:`VerifyResult.passed` alone.
 
     Args:
         wave_id: The wave the runner served. Compared against
@@ -215,15 +225,23 @@ def verify_close_readiness(
                 f"with {typed_criteria_count} typed criteria (one per criterion required)"
             )
 
+    advisories: list[str] = []
+    if isinstance(report, ExecutorReportBody):
+        for finding in red_to_green_close_findings(report):
+            (reasons if finding.blocking else advisories).append(finding.render())
+    for advisory in advisories:
+        logger.warning(f"verify_close_readiness wave={wave_id} advisory={advisory!r}")
+
     passed = not reasons
     result = VerifyResult(
         passed=passed,
         verdict=verdict,
         reasons=tuple(reasons),
+        advisories=tuple(advisories),
     )
     logger.info(
         f"verify_close_readiness wave={wave_id} passed={passed} "
-        f"verdict={verdict.value} reasons={len(reasons)}"
+        f"verdict={verdict.value} reasons={len(reasons)} advisories={len(advisories)}"
     )
     return result
 

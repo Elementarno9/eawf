@@ -4,6 +4,10 @@
 accumulating per-step envelopes under :attr:`FlowBody.steps`. The PR-review
 pass remains inside ship.
 
+The skill catalog retires ``/flow`` and four of its steps, so
+:func:`check_flow_runnable` refuses a new run up front and names each
+successor; the controller below stays for inspecting pre-retirement runs.
+
 Short-circuit semantics (the W03 acceptance contract):
 
 - The flow runs each core skill in order.
@@ -82,6 +86,7 @@ from eawf.surfaces.render.envelope import EnvelopeWarning, OutputEnvelope, Skill
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.flow import FlowBody
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.catalog import SKILL_CATALOG, RetiredSkill, SkillRetiredError
 from eawf.workflow.skills.engine import (
     ActionRun,
     Skill,
@@ -119,6 +124,40 @@ _CORE_FLOW_ORDER: tuple[tuple[SkillName, type[Skill]], ...] = (
     ("/polish", PolishSkill),
     ("/ship", ShipSkill),
 )
+
+
+class FlowRetiredError(LookupError):
+    """Raised when a flow run would invoke a retired skill; names every successor.
+
+    Attributes:
+        rows: The catalog retirement rows of ``/flow`` and of each retired step,
+            in flow order.
+    """
+
+    def __init__(self, rows: tuple[RetiredSkill, ...]) -> None:
+        self.rows = rows
+        super().__init__("; ".join(str(SkillRetiredError(row)) for row in rows))
+
+
+def check_flow_runnable() -> None:
+    """Refuse a flow run whose skill or any of whose steps the catalog retired.
+
+    A retired name is refused rather than run so an operator lands on the
+    successor that owns the intent; the refusal names ``/flow``'s successor
+    and each retired step's, so nothing is left to look up.
+
+    Raises:
+        FlowRetiredError: ``/flow`` or a step in :data:`_CORE_FLOW_ORDER` is
+            retired in :data:`SKILL_CATALOG`.
+    """
+    names = ("/flow", *(name for name, _cls in _CORE_FLOW_ORDER))
+    rows = tuple(
+        row
+        for row in (SKILL_CATALOG.retired_row(name.removeprefix("/")) for name in names)
+        if row is not None
+    )
+    if rows:
+        raise FlowRetiredError(rows)
 
 
 # Hard cap per git invocation. ``flow`` is operator-driven so a 5 s
@@ -1027,8 +1066,10 @@ class FlowSkill(SkillAction):
 
 
 __all__ = [
+    "FlowRetiredError",
     "FlowSkill",
     "abort_flow_record",
+    "check_flow_runnable",
     "compute_drift",
     "in_progress_flow_ids",
     "is_safe_step_boundary",

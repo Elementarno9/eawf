@@ -48,5 +48,6 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
 ## Before you emit the close-ready report
 
 - Boundary AND error-path tests for every public function touched: empty / single / off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
+- Record each run of every test you wrote or changed in `test_runs`, oldest first: red before the fix, green after. Wave close flags a test reported green that never ran red first, and blocks close on a `_repro_` test.
 
 On completion emit an `agent_end` report; it persists to the `executor_report` store.

@@ -333,7 +333,8 @@ def _src_root() -> Path:
 
 
 # Files that persist a document OTHER than a project/workspace `state.json`
-# (registry.json, a lease file, a gate claim/receipt, the spec cache...) --
+# (registry.json, a lease file, a gate claim/receipt, the spec cache, the
+# budget notice ledger...) --
 # out of this gate's "state.json writer" scope entirely.
 _NON_STATE_WRITERS = frozenset(
     {
@@ -341,6 +342,7 @@ _NON_STATE_WRITERS = frozenset(
         "platform/install/canary.py",
         "runtime/workspace/lease.py",
         "runtime/verification/progress.py",
+        "runtime/budget/notices.py",
         "runtime/daemon/gate_execution.py",
         "runtime/daemon/methods/registry.py",
         "runtime/daemon/methods/registry_workspace.py",

@@ -287,6 +287,7 @@ def test_three_vendors_emit_identical_spawn_result_shape(monkeypatch: pytest.Mon
         "cache_creation_5m_input_tokens",
         "cache_creation_1h_input_tokens",
         "cache_read_input_tokens",
+        "reasoning_output_tokens",
         "cost_usd_reported",
         "measurement_quality",
         "measurement_status",
@@ -295,6 +296,37 @@ def test_three_vendors_emit_identical_spawn_result_shape(monkeypatch: pytest.Mon
         "ended_at",
     }
     assert field_sets["claude-code"] == expected_fields
+    # The pinned set is the contract: a field added to SpawnResult must be
+    # added here too, so vendor drift on a new class cannot slip past.
+    assert set(SpawnResult.model_fields) == expected_fields
+    # The reasoning class has one type across vendors: a count or unknown.
+    for result in results.values():
+        assert result.reasoning_output_tokens is None or isinstance(
+            result.reasoning_output_tokens, int
+        )
+
+
+def test_three_vendors_report_reasoning_as_output_slice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A disclosed reasoning counter lands as a slice of output on every vendor.
+
+    Codex reports reasoning inside ``output_tokens``; opencode reports it
+    beside ``output``. Both normalise to 42 output of which 12 reasoning;
+    claude discloses no counter and reports unknown, never zero.
+    """
+    codex_events = json.loads(json.dumps(_CODEX_EVENTS))
+    codex_events[-1]["usage"]["reasoning_output_tokens"] = 12
+    opencode_events = json.loads(json.dumps(_OPENCODE_EVENTS))
+    opencode_events[-1]["part"]["tokens"]["output"] = 30
+    opencode_events[-1]["part"]["tokens"]["reasoning"] = 12
+    monkeypatch.setattr(sys.modules[__name__], "_CODEX_EVENTS", codex_events)
+    monkeypatch.setattr(sys.modules[__name__], "_OPENCODE_EVENTS", opencode_events)
+
+    results = {key: outcome[0] for key, outcome in _spawn_each_vendor(monkeypatch).items()}
+
+    assert {r.output_tokens for r in results.values()} == {42}
+    assert results["codex"].reasoning_output_tokens == 12
+    assert results["opencode"].reasoning_output_tokens == 12
+    assert results["claude-code"].reasoning_output_tokens is None
 
 
 def test_three_vendors_metering_fields_match_for_equivalent_spawn(

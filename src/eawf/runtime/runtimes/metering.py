@@ -45,7 +45,7 @@ runtime disclosed the billed model id, falling back to the *requested*
 snapshot's longest-prefix alias fallback. When *neither* id matches any
 pricing row (a genuinely unknown model), the writer does not raise and does
 not silently bill ``$0`` as if priced: it returns a :class:`MeteredCost`
-with ``cost_usd == 0`` and ``priced is False`` and logs a ``WARNING``, so an
+with a null ``cost_usd`` and ``priced is False`` and logs a ``WARNING``, so an
 unpriceable spawn is observable (distinct from a real zero-token spawn,
 which is ``priced is True`` with a genuine ``$0`` cost) and a follow-up can
 add the missing rate row rather than the gap hiding in the ledger.
@@ -277,12 +277,13 @@ class MeteredCost(BaseModel):
             runtime reported a counter, else ``None``.
         cost_usd: Token-derived cost in USD (exact :class:`~decimal.Decimal`).
             ``Decimal("0")`` for a genuine zero-token spawn (``priced`` is
-            ``True``) or an unpriceable model (``priced`` is ``False``).
+            ``True``); ``None`` for an unpriceable model or an unmeasured
+            spawn (``priced`` is ``False``), never a zero that reads billed.
         pricing_version: ``PRICING`` snapshot tag the cost was priced under.
         priced: ``True`` when a pricing row resolved for ``model`` and the
             cost is a real token-derived figure (including a genuine ``$0``
-            for a zero-token spawn). ``False`` when no row matched and the
-            ``$0`` is an unpriced fallback, not a billed zero.
+            for a zero-token spawn). ``False`` when no cost could be
+            derived and ``cost_usd`` is null.
         price_source: ``list-reconstructed`` when ``priced``, else
             ``unpriced``. Metering multiplies measured classes by the
             embedded rate table, so it never produces a ``billed`` cost.
@@ -299,7 +300,7 @@ class MeteredCost(BaseModel):
     cache_creation_input_tokens: int = Field(ge=0)
     cache_read_input_tokens: int = Field(ge=0)
     reasoning_tokens: int | None = Field(default=None, ge=0)
-    cost_usd: Decimal = Field(ge=0)
+    cost_usd: Decimal | None = Field(ge=0)
     pricing_version: str = Field(min_length=1)
     priced: bool
     price_source: PriceSourceKind
@@ -416,7 +417,7 @@ def _reasoning_inside_output(result: SpawnResult, *, output_tokens: int) -> int 
     if reasoning is not None and reasoning > output_tokens:
         logger.warning(
             f"price_spawn_result runtime={result.runtime!r} session={result.session_id!r} "
-            f"reasoning={reasoning} output={output_tokens} reasoning=dropped"
+            f"reasoning={reasoning} output={output_tokens} action=dropped"
         )
         return None
     return reasoning
@@ -435,10 +436,9 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     ``$0`` placeholder.
 
     A genuine zero-token spawn prices to ``Decimal("0")`` with ``priced`` set
-    (a real billed zero). A model that matches no pricing row prices to
-    ``Decimal("0")`` with ``priced`` cleared and a logged ``WARNING`` — the
-    cost cannot be derived, but the writer neither raises nor pretends the
-    ``$0`` is billed.
+    (a real billed zero). A model that matches no pricing row records a null
+    cost with ``priced`` cleared and a logged ``WARNING`` — the cost cannot
+    be derived, so the writer neither raises nor records a zero.
 
     Args:
         result: The transient outcome of one live runtime spawn.
@@ -456,7 +456,7 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     if result.measurement_status is not MeasurementStatus.USAGE_OBSERVED:
         logger.warning(
             f"price_spawn_result model={model!r} runtime={result.runtime!r} "
-            f"session={result.session_id!r} usage=unavailable cost_usd=0 priced=false"
+            f"session={result.session_id!r} usage=unavailable cost_usd=none priced=false"
         )
         return MeteredCost(
             session_id=result.session_id,
@@ -465,7 +465,7 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
             output_tokens=0,
             cache_creation_input_tokens=0,
             cache_read_input_tokens=0,
-            cost_usd=Decimal("0"),
+            cost_usd=None,
             pricing_version=PRICING_VERSION,
             priced=False,
             price_source=PriceSourceKind.UNPRICED,
@@ -475,7 +475,7 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
     if pricing is None:
         logger.warning(
             f"price_spawn_result model={model!r} runtime={result.runtime!r} "
-            f"session={result.session_id!r} pricing=unresolved cost_usd=0 priced=false"
+            f"session={result.session_id!r} pricing=unresolved cost_usd=none priced=false"
         )
         return MeteredCost(
             session_id=result.session_id,
@@ -485,7 +485,7 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
             cache_creation_input_tokens=cache_creation_total,
             cache_read_input_tokens=cache_read,
             reasoning_tokens=reasoning,
-            cost_usd=Decimal("0"),
+            cost_usd=None,
             pricing_version=PRICING_VERSION,
             priced=False,
             price_source=PriceSourceKind.UNPRICED,
@@ -544,8 +544,9 @@ class DispatchCostEmitter(Protocol):
         output_tokens: int,
         cache_creation_input_tokens: int,
         cache_read_input_tokens: int,
-        cost_usd: Decimal,
+        cost_usd: Decimal | None,
         pricing_version: str,
+        price_source: PriceSourceKind,
     ) -> str: ...
 
 
@@ -596,6 +597,7 @@ def meter_and_emit(
         cache_read_input_tokens=metered.cache_read_input_tokens,
         cost_usd=metered.cost_usd,
         pricing_version=metered.pricing_version,
+        price_source=metered.price_source,
     )
     logger.info(
         f"meter_and_emit wave={wave_id} attempt={attempt_id} "

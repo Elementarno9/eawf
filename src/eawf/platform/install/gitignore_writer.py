@@ -35,6 +35,10 @@ GITIGNORE_PATTERNS: tuple[str, ...] = (
     "AGENTS.override.md",
     ".ea/rules/views/",
     ".claude/skills/eawf-rules-*/",
+    # Per-spawn claude config homes: eawf.runtime.runtimes.claude.managed_run
+    # creates one under <cwd>/.eawf-mcp/spawn-<uuid>/ for every headless spawn
+    # and removes it when the spawn ends, so it never belongs in the repo.
+    ".eawf-mcp/",
     ".ea/locks/",
     ".ea/**/*.lock",
     ".ea/local/",

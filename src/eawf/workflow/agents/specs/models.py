@@ -523,6 +523,8 @@ class SubagentSpec(_SpecModel):
                 '"outcome": "1-1000 chars", '
                 '"files_changed": [], '
                 '"tests_run": [], '
+                '"test_runs": [{"test_id": "<tests/...py::test_name>", '
+                '"outcome": "red|green", "revision": "<commit SHA or worktree>"}], '
                 '"commit_sha": "<7+ char commit SHA>", '
                 '"evidence_refs": [{"kind": "artifact", '
                 '"ref": "<file:line or gate cmd>", '
@@ -534,7 +536,11 @@ class SubagentSpec(_SpecModel):
                 "`pass`, `pass-with-followups`, `fail`, `blocked`; `confidence` "
                 "is one of `high`, `medium`, `low`. `summary` and `outcome` are "
                 "required non-empty strings. `files_changed` and `tests_run` are "
-                "arrays of plain strings. `commit_sha` is REQUIRED and must name "
+                "arrays of plain strings. `test_runs` records every run of each "
+                "test you wrote or changed, oldest first: run it red before the "
+                "fix, then green after; wave close flags a test reported green "
+                "that never ran red first, and blocks close on a `_repro_` test. "
+                "`commit_sha` is REQUIRED and must name "
                 "the landed commit using at least 7 characters. `evidence_refs` is "
                 "REQUIRED: exactly one "
                 "object per success criterion, each `{kind, ref, note}` where "

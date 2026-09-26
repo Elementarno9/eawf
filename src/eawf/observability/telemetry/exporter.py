@@ -280,7 +280,10 @@ def _run_cost_family(runs: list[TelemetryDispatchCost], *, scope: str) -> Metric
     """
     totals: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
     for run in runs:
-        totals[(run.price_source.value, run.runtime)] += run.cost_usd
+        # An unpriced run has no cost; it still keeps its labelled sample
+        # present so the exposition shows unpriced runs exist.
+        cost = run.cost_usd if run.cost_usd is not None else Decimal("0")
+        totals[(run.price_source.value, run.runtime)] += cost
     samples = tuple(
         MetricSample(
             labels=(("price_source", source), ("runtime", runtime), ("scope", scope)),

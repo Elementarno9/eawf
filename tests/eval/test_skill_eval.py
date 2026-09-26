@@ -12,6 +12,12 @@ an engine implementation is a case, so a skill that joins the catalog without
 a golden fails here, and a golden left behind by a retired skill fails the
 coverage test. Scoring is a pure structural comparison — no model is called.
 
+The catalog cases run with no arguments, so the lifecycle skills ``/dispatch``,
+``/integrate`` and ``/verify`` land on their empty-request refusal. Each of them
+also has a happy-path case (``golden/happy/<skill_id>.json``): a complete
+invocation answered by a canned transport, so the envelope a real pass returns
+is pinned too, deterministically and without a daemon.
+
 The shape test (``test_skill_envelope_matches_golden``) pins the envelope
 contract exactly. The score test (``test_skill_envelope_score_meets_threshold``)
 checks the weighted :func:`eawf.observability.eval.score_envelope` total against
@@ -20,19 +26,26 @@ the fixture's ``eval_score_threshold`` (default ``0.85``).
 
 from __future__ import annotations
 
+import dataclasses
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
 import eawf.workflow.skills._bootstrap  # noqa: F401  registers every engine skill
 from eawf.observability.eval import score_envelope
+from eawf.surfaces.render.envelope import OutputEnvelope
+from eawf.workflow.skills import dispatch as dispatch_skill
+from eawf.workflow.skills import integrate as integrate_skill
+from eawf.workflow.skills import verify as verify_skill
 from eawf.workflow.skills.catalog import SKILL_CATALOG
 from eawf.workflow.skills.engine import Skill, SkillContext, run_skill
 from eawf.workflow.skills.registry import lookup
 
 _GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
+_HAPPY_GOLDEN_DIR = _GOLDEN_DIR / "happy"
 
 
 def _catalog_cases() -> tuple[tuple[str, type[Skill]], ...]:
@@ -52,6 +65,92 @@ _CASE_IDS = [s for s, _ in _SKILL_CASES]
 
 def _load_golden(slug: str) -> dict[str, object]:
     return cast(dict[str, object], json.loads((_GOLDEN_DIR / f"{slug}.json").read_text("utf-8")))
+
+
+@dataclass(frozen=True)
+class _HappyCase:
+    """One complete lifecycle invocation and the transport answers it gets.
+
+    Attributes:
+        skill_id: The catalog id; also the golden's file stem.
+        args: The invocation arguments, complete enough to reach the verb.
+        answers: Per-method canned results; any other method answers with
+            an empty projection.
+    """
+
+    skill_id: str
+    args: dict[str, Any]
+    answers: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def caller(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
+        """Answer one JSON-RPC call from the canned table."""
+        return dict(self.answers.get(method, {"header": {"source_cursor": 1}, "rows": []}))
+
+
+_HAPPY_CASES: tuple[_HappyCase, ...] = (
+    _HappyCase(
+        skill_id="dispatch",
+        args={
+            "batch_ref": "batch-1",
+            "task": ["task-a"],
+            "run": "run-1",
+            "run_request": {"prompt": "compiled"},
+        },
+        answers={
+            dispatch_skill.TASK_READ_METHOD: {
+                "header": {"source_cursor": 4},
+                "rows": [{"key": "task-a", "status": {"state": "known", "value": "PLANNED"}}],
+            },
+        },
+    ),
+    _HappyCase(
+        skill_id="integrate",
+        args={
+            "action": "apply",
+            "subject_ref": "batch-1",
+            "base": {"head_sha": "a" * 40},
+            "exit": {"repair_task": "task-9", "rebase_task": "task-9"},
+            "diagnostic": "evidence-1",
+        },
+        answers={
+            integrate_skill.DELIVERY_ASSEMBLE_METHOD: {
+                "urn": "batch-1",
+                "actor": "SKILL-INTEGRATE",
+                "idempotency_key": "integrate-eval",
+                "branch": "canary/one",
+                "subjects": {"cand-1": "Deliver the value"},
+            },
+            integrate_skill.DELIVERY_INTEGRATE_METHOD: {
+                "candidates": ["cand-1"],
+                "generation_ids": ["ING-000002"],
+                "delivered": True,
+                "reason": "batch-1 is delivered in 1 generation(s)",
+            },
+        },
+    ),
+    _HappyCase(
+        skill_id="verify",
+        args={"subject_ref": "batch-1", "mode": "audit"},
+        answers={
+            verify_skill.DELIVERY_VERIFY_BATCH_METHOD: {
+                "head_generation": 3,
+                "stage": "CLEARED",
+                "blocking_criterion_ids": [],
+                "settled_criterion_ids": ["CR-01"],
+                "merge_ready": True,
+                "reason": "every required criterion cleared on generation 3",
+            },
+        },
+    ),
+)
+_HAPPY_IDS = [case.skill_id for case in _HAPPY_CASES]
+
+
+def _run_happy(case: _HappyCase, ctx: SkillContext) -> OutputEnvelope:
+    skill_cls = lookup(f"/{case.skill_id}")
+    assert skill_cls is not None, f"/{case.skill_id} has no engine class"
+    skill = skill_cls(caller=case.caller)  # type: ignore[call-arg]
+    return run_skill(skill, dataclasses.replace(ctx, args=dict(case.args)))
 
 
 @pytest.mark.eval
@@ -137,3 +236,36 @@ def test_skill_envelope_score_drifted_golden_below_threshold(
     score = score_envelope(env, drifted)
     assert score.per_dim["body_keys"] == pytest.approx(0.0)
     assert score.total < float(golden.get("eval_score_threshold", 0.85))  # type: ignore[arg-type]
+
+
+@pytest.mark.eval
+def test_skill_eval_happy_cases_cover_happy_goldens() -> None:
+    """Happy goldens exist for exactly the happy cases, each a catalog engine skill."""
+    golden_slugs = sorted(p.stem for p in _HAPPY_GOLDEN_DIR.glob("*.json"))
+    assert golden_slugs == sorted(_HAPPY_IDS)
+    assert set(_HAPPY_IDS) <= set(_CASE_IDS)
+
+
+@pytest.mark.eval
+@pytest.mark.parametrize("case", _HAPPY_CASES, ids=_HAPPY_IDS)
+def test_skill_happy_envelope_matches_golden(
+    case: _HappyCase, eval_state_dir: Path, eval_ctx: SkillContext
+) -> None:
+    """A complete invocation reaches its verb and matches the happy golden."""
+    golden = cast(
+        dict[str, object],
+        json.loads((_HAPPY_GOLDEN_DIR / f"{case.skill_id}.json").read_text("utf-8")),
+    )
+    env = _run_happy(case, eval_ctx)
+
+    assert env.header.status == golden["status"]
+    assert env.header.status == "ok", f"{case.skill_id} happy path did not end ok"
+    assert isinstance(env.body, dict), f"{case.skill_id} happy body is not typed"
+    assert sorted(env.body.keys()) == golden["body_keys"]
+    assert env.body["outcome"] == golden["outcome"]
+    warnings_count = len(env.footer.warnings) if env.footer.warnings else 0
+    repair_count = len(env.footer.repair_commands) if env.footer.repair_commands else 0
+    assert warnings_count == golden["warnings_count"]
+    assert repair_count == golden["repair_commands_count"]
+    score = score_envelope(env, golden)
+    assert score.total >= float(golden.get("eval_score_threshold", 0.85))  # type: ignore[arg-type]

@@ -144,8 +144,7 @@ def test_review_probe_blocked_short_circuits(
 def test_review_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/review")
-    assert cls is ReviewSkill
+    assert registry.list_registered()["/review"] is ReviewSkill
 
 
 # --- P30-I23-W46: runtime options (level / criteria) --------------------------

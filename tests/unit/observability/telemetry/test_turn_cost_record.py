@@ -17,10 +17,9 @@ from pydantic import ValidationError
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
-from eawf.observability.telemetry.models import RuntimeName
+from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
-    PriceSource,
     TurnCostRecord,
     build_turn_cost_record,
 )
@@ -28,7 +27,7 @@ from eawf.observability.telemetry.turn_cost import (
 pytestmark = pytest.mark.unit
 
 _TS = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
-_SNAPSHOT = PriceSource(kind="pricing_snapshot", pricing_version="2026.05.17")
+_SNAPSHOT = PriceSourceKind.LIST_RECONSTRUCTED
 
 
 def _record_kwargs(**overrides: Any) -> dict[str, Any]:
@@ -152,7 +151,7 @@ def test_completed_unit_run_rejects_unknown_field() -> None:
 
 
 def test_completed_unit_run_defaults_are_zero_and_unpriced() -> None:
-    """A minimal run carries no tokens, no cost and no price source."""
+    """A minimal run carries no tokens and is unpriced with a null cost."""
     run = CompletedUnitRun(
         run_id="run-a",
         wave_id="P31-I01-W01",
@@ -163,8 +162,8 @@ def test_completed_unit_run_defaults_are_zero_and_unpriced() -> None:
 
     assert run.role is None
     assert run.reasoning_tokens == 0
-    assert run.cost_usd == Decimal("0")
-    assert run.price_source is None
+    assert run.cost_usd is None
+    assert run.price_source is PriceSourceKind.UNPRICED
 
 
 def test_completed_unit_run_negative_wall_clock_raises() -> None:
@@ -179,17 +178,52 @@ def test_completed_unit_run_negative_wall_clock_raises() -> None:
         )
 
 
-def test_price_source_requires_a_non_empty_kind() -> None:
-    """An empty provenance string is not a price source."""
-    with pytest.raises(ValidationError, match="kind"):
-        PriceSource(kind="")
+def test_completed_unit_run_rejects_a_free_string_price_source() -> None:
+    """Provenance is the closed kind the usage rows carry, not a free string."""
+    with pytest.raises(ValidationError, match="price_source"):
+        CompletedUnitRun(
+            run_id="run-a",
+            wave_id="P31-I01-W01",
+            runtime="claude",
+            model="claude-opus-4-7",
+            wall_clock_ms=0,
+            cost_usd=Decimal("1"),
+            price_source="pricing_snapshot",
+        )
+
+
+def test_completed_unit_run_unpriced_with_a_cost_raises() -> None:
+    """An unpriced run records a null cost, never a figure."""
+    with pytest.raises(ValidationError, match="does not match cost_usd"):
+        CompletedUnitRun(
+            run_id="run-a",
+            wave_id="P31-I01-W01",
+            runtime="claude",
+            model="claude-opus-4-7",
+            wall_clock_ms=0,
+            cost_usd=Decimal("0"),
+            price_source=PriceSourceKind.UNPRICED,
+        )
+
+
+def test_completed_unit_run_priced_without_a_cost_raises() -> None:
+    """A priced run must record its cost."""
+    with pytest.raises(ValidationError, match="does not match cost_usd"):
+        CompletedUnitRun(
+            run_id="run-a",
+            wave_id="P31-I01-W01",
+            runtime="claude",
+            model="claude-opus-4-7",
+            wall_clock_ms=0,
+            price_source=PriceSourceKind.BILLED,
+        )
 
 
 def _run_on(
     run_id: str,
     *,
     runtime: RuntimeName,
-    price_source: PriceSource | None = _SNAPSHOT,
+    price_source: PriceSourceKind = _SNAPSHOT,
 ) -> CompletedUnitRun:
     return CompletedUnitRun(
         run_id=run_id,
@@ -201,7 +235,7 @@ def _run_on(
         input_tokens=100,
         output_tokens=30,
         reasoning_tokens=20,
-        cost_usd=Decimal("0.50"),
+        cost_usd=None if price_source is PriceSourceKind.UNPRICED else Decimal("0.50"),
         price_source=price_source,
     )
 
@@ -263,7 +297,9 @@ def test_every_runtime_sums_the_same_way() -> None:
 
 def test_an_unpriced_row_still_falls_to_the_unpriced_bucket() -> None:
     """With the runtime filter gone, price provenance is the only exclusion."""
-    record = _build([_run_on("run-opencode", runtime="opencode", price_source=None)])
+    record = _build(
+        [_run_on("run-opencode", runtime="opencode", price_source=PriceSourceKind.UNPRICED)]
+    )
 
     assert record.unpriced_run_count == 1
     assert record.reasoning_summand_unsettled_run_count == 0

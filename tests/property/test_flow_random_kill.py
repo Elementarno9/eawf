@@ -144,6 +144,9 @@ def test_random_kill_at_every_step_resume_converges_or_refuses_cleanly(
     # are reset between examples (Hypothesis re-uses the outer
     # ``monkeypatch`` fixture, which would leak state across examples).
     with pytest.MonkeyPatch.context() as monkeypatch:
+        # The catalog retires /flow, so the CLI refuses every run up front.
+        # This property covers the resume machinery behind that refusal.
+        monkeypatch.setattr(flow_module, "check_flow_runnable", lambda: None)
         repo = tmp_path_factory.mktemp("flow-prop-run")
         state_dir = repo / ".ea"
         (state_dir / "store").mkdir(parents=True, exist_ok=True)

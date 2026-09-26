@@ -22,7 +22,8 @@ Honoured args:
 
 - ``verb`` — ``save`` (default) / ``list`` / ``forget``.
 - ``name`` — entry name; required for ``save`` / ``forget`` (a missing
-  name on those verbs degrades to ``status=needs_user``).
+  name on those verbs degrades to ``status=needs_user`` with a typed
+  ``user_question`` whose every option says what it does).
 - ``tier`` — ``working`` (default) / ``archival`` / ``retrieval``.
 """
 
@@ -39,6 +40,8 @@ from eawf.workflow.skills._common import (
     probe_skill_instruments,
     resolve_active_state_path,
 )
+from eawf.workflow.skills.bodies.memory import MemoryBody
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.workflow.skills.registry import register
 
@@ -92,6 +95,44 @@ def _next_action_for(verb: str, name: str | None) -> str:
     return cli
 
 
+def missing_name_question(verb: str) -> UserQuestion:
+    """Return the typed question a named verb asks when it was given no name.
+
+    The operator either supplies the name, looks at the saved entries first,
+    or drops the request; each option says what it does so the choice is
+    made on the option text rather than on a guess.
+
+    Args:
+        verb: A named verb from :data:`_NAMED_VERBS`.
+
+    Returns:
+        A three-option :class:`UserQuestion`.
+
+    Raises:
+        ValueError: *verb* does not operate on a named entry.
+    """
+    if verb not in _NAMED_VERBS:
+        raise ValueError(f"{verb!r} does not take a memory entry name")
+    return UserQuestion(
+        question=f"Which memory entry should /memory {verb} act on?",
+        options=[
+            UserQuestionOption(
+                label="name the entry",
+                description=f"Re-invoke /memory {verb} with name=<entry>; the entry name is "
+                "the title the store keys it by.",
+            ),
+            UserQuestionOption(
+                label="list entries first",
+                description="Run /memory list to see the saved entries, then pick a name.",
+            ),
+            UserQuestionOption(
+                label="cancel",
+                description=f"Drop this {verb} request; the memory store is left unchanged.",
+            ),
+        ],
+    )
+
+
 def _coerce_verb(value: Any) -> str:
     if isinstance(value, str) and value.strip().lower() in _VALID_VERBS:
         return value.strip().lower()
@@ -127,15 +168,18 @@ class MemorySkill(Skill):
         tier = _coerce_tier(args.get("tier"))
 
         if verb in _NAMED_VERBS and not name_str:
-            return SkillResult(
-                status="needs_user",
-                body={
-                    "kind": "memory_operation",
+            body = MemoryBody.model_validate(
+                {
                     "verb": verb,
                     "name": None,
                     "tier": tier.value,
                     "reason": f"{verb!r} requires a memory entry name",
-                },
+                    "user_question": missing_name_question(verb),
+                }
+            )
+            return SkillResult(
+                status="needs_user",
+                body=body.model_dump(mode="json"),
                 next_valid_actions=[_next_action_for(verb, None)],
             )
 
@@ -160,4 +204,4 @@ class MemorySkill(Skill):
         )
 
 
-__all__ = ["MANIFEST", "MemorySkill"]
+__all__ = ["MANIFEST", "MemorySkill", "missing_name_question"]

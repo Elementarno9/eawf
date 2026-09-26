@@ -52,7 +52,8 @@ from eawf.workflow.lifecycle.integration import (
     latest_wave_integration,
     require_land_dependencies,
 )
-from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
+from eawf.workflow.lifecycle.transitions import LifecycleError
+from eawf.workflow.lifecycle.wave_actual import close_wave_recording_actual
 from eawf.workflow.verify import compute as compute_readiness
 from eawf.workflow.verify.models import CloseReadiness
 
@@ -389,8 +390,9 @@ def wave_land(
     closed = not defer_close and (readiness is None or readiness.ready)
     if closed:
         try:
-            close_wave(
+            close_wave_recording_actual(
                 state,
+                state_path=resolve_state_path(repo_root),
                 wave_id=wave_id,
                 outcome=chosen_outcome,
             )

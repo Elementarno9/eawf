@@ -51,6 +51,7 @@ Your `agent_end` report carries an `EvidenceRecord` per success criterion (`evid
 ## Before you emit the close-ready report
 
 - Boundary AND error-path tests for every public function touched: empty / single / off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
+- Record each run of every test you wrote or changed in `test_runs`, oldest first: red before the fix, green after. Wave close flags a test reported green that never ran red first, and blocks close on a `_repro_` test.
 
 ## Typed output envelope
 
@@ -70,6 +71,18 @@ At completion, emit an `agent_end` body matching this JSON shape. Do not include
   ],
   "tests_run": [
     "uv run pytest tests/path -q"
+  ],
+  "test_runs": [
+    {
+      "test_id": "tests/path/test_x.py::test_x",
+      "outcome": "red",
+      "revision": "worktree"
+    },
+    {
+      "test_id": "tests/path/test_x.py::test_x",
+      "outcome": "green",
+      "revision": "abcdef1"
+    }
   ],
   "commit_sha": "abcdef1",
   "outcome": "implementation outcome"

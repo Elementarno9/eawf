@@ -36,6 +36,11 @@ Contract (state mutation):
   never stop the work it describes.
 * :func:`load_budget_config` — read and validate the repo's ``flow.budget``
   table, the one source every ceiling is derived from.
+* :func:`consume_against_ceiling` — accumulate a consumption and decide it
+  against the wave's one ceiling, the verdict every consume path acts on.
+* :func:`emit_termination_notice` — fold a Run's budget-termination receipt
+  into the notice ledger, so a Run's crossing is the same one notice row a
+  wave's crossing is rather than a second kind of notice.
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from eawf.kernel.config.layered import merge_config
+from eawf.kernel.runtime.budget_notice import BudgetNotice
 from eawf.kernel.state.models import State, Wave
 from eawf.runtime.budget.notices import (
     BudgetCrossing,
@@ -61,9 +67,11 @@ from eawf.runtime.budget.notices import (
 )
 from eawf.runtime.budget.policy import (
     BudgetConfig,
+    BudgetDecision,
     PromptBudgetCeiling,
     budget_config_from,
     classify,
+    classify_enforcement,
 )
 from eawf.runtime.lock.portalock import LockTimeout
 
@@ -157,6 +165,9 @@ def load_budget_config(repo: Path) -> BudgetConfig:
     Args:
         repo: The repo root whose ``.ea/`` config layers are merged.
 
+    Returns:
+        The validated table, defaulted when no layer declares one.
+
     Raises:
         eawf.runtime.budget.policy.DuplicateCeilingError: A layer declares a
             second ceiling.
@@ -216,6 +227,79 @@ def emit_budget_notice(
     except (OSError, LockTimeout, ValidationError) as exc:
         logger.warning(f"emit_budget_notice scope={scope_id} failed={exc!r}")
         return None
+
+
+@dataclass(frozen=True, slots=True)
+class ConsumeOutcome:
+    """A consumption recorded on a wave and decided against its one ceiling.
+
+    Attributes:
+        wave: The wave after the consumption was added.
+        tokens_before: The wave's consumption before the addition.
+        ceiling: The wave's one ceiling, or ``None`` when it has no budget.
+        decision: The verdict of the post-add consumption against *ceiling*.
+    """
+
+    wave: Wave
+    tokens_before: int
+    ceiling: PromptBudgetCeiling | None
+    decision: BudgetDecision
+
+
+def consume_against_ceiling(
+    state: State, wave_id: str, tokens: int, *, budget: BudgetConfig
+) -> ConsumeOutcome:
+    """Add *tokens* to *wave_id* and decide the total against its one ceiling.
+
+    Args:
+        state: Live state. Mutated in place.
+        wave_id: Wave to update.
+        tokens: Non-negative consumption delta.
+        budget: The validated ``flow.budget`` table the ceiling derives from.
+
+    Returns:
+        The :class:`ConsumeOutcome`; its decision halts only under ``hard``
+        enforce at or over the ceiling.
+
+    Raises:
+        KeyError: Wave does not exist.
+        ValueError: ``tokens`` is negative.
+    """
+    tokens_before = _get_wave_or_raise(state, wave_id).tokens_consumed
+    wave, _tag = record_consumption(state, wave_id, tokens)
+    ceiling = budget.ceiling(wave.token_budget)
+    decision = (
+        ceiling.decide(wave.tokens_consumed)
+        if ceiling is not None
+        else classify_enforcement(wave.tokens_consumed, None, enforce=budget.enforce)
+    )
+    return ConsumeOutcome(
+        wave=wave, tokens_before=tokens_before, ceiling=ceiling, decision=decision
+    )
+
+
+def emit_termination_notice(notices_file: Path, receipt: BudgetNotice) -> NoticeUpsert | None:
+    """Upsert the one notice a Run's budget termination reports.
+
+    The run-ledger *receipt* anchors the budget control and answers its
+    retries; the notice readers list is the ledger row this writes. A
+    termination only happens at a ``hard`` ceiling, so the row's basis is
+    always ``hard_limit``, and a retried termination folds into the same row.
+
+    Args:
+        notices_file: The notice ledger file.
+        receipt: The termination receipt the run ledger holds.
+
+    Returns:
+        The upsert result, or ``None`` when the ledger could not be written.
+    """
+    return emit_budget_notice(
+        notices_file,
+        scope_id=receipt.run_ref.entity_key,
+        consumed=receipt.observed_tokens,
+        ceiling=PromptBudgetCeiling(tokens=receipt.cap_tokens, enforce="hard"),
+        observed_at=receipt.noticed_at,
+    )
 
 
 class TerminableProcess(Protocol):

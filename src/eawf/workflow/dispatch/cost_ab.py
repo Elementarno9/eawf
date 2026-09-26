@@ -618,8 +618,10 @@ def _load_cost_observations(store: AbstractMetricsStore) -> list[CostObservation
                 model=row.model,
                 tier=tier,
                 wave_id=row.wave_id,
-                cost_usd=row.cost_usd,
-                priced=row.cost_usd > 0,
+                # An unpriced row records a null cost; it rides as an
+                # unpriced zero so it never feeds the priced per-wave figure.
+                cost_usd=row.cost_usd if row.cost_usd is not None else Decimal("0"),
+                priced=row.cost_usd is not None,
             )
         )
     return out

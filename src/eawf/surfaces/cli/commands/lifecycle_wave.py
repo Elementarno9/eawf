@@ -705,11 +705,11 @@ def _close_and_pin(
     """
     from eawf.kernel.state.mutations import Mutation
     from eawf.runtime.daemon.methods.state_close import (
-        append_wave_close_actual,
         enforce_nonzero_runtime_close,
         measure_wave_close_runtime,
     )
-    from eawf.workflow.lifecycle.transitions import LifecycleError, close_wave
+    from eawf.workflow.lifecycle.transitions import LifecycleError
+    from eawf.workflow.lifecycle.wave_actual import close_wave_recording_actual
 
     if wave_id not in state.waves:
         # The runtime gate reads an unknown wave as unmeasured; name the real fault.
@@ -747,9 +747,9 @@ def _close_and_pin(
         enforce_without_profile=False,
     )
     delta = runtime.delta
-    actual_written_auto = wave_id not in (state.actuals or {})
-    wave = close_wave(
+    wave = close_wave_recording_actual(
         state,
+        state_path=state_path,
         wave_id=wave_id,
         outcome=outcome,
         tokens_consumed=delta.actual_tokens if delta is not None else tokens_consumed,
@@ -758,8 +758,6 @@ def _close_and_pin(
         actual_elapsed_eu=runtime.elapsed_eu,
         actual_cost_usd=delta.actual_cost_usd if delta is not None else None,
     )
-    if actual_written_auto:
-        append_wave_close_actual(state, wave_id=wave_id, state_path=state_path)
     if commit_sha is not None:
         wave.commit = commit_sha
         wave.commit_identity_digest = commit_identity_digest
@@ -969,6 +967,9 @@ def wave_claim_cmd(
     ] = False,
 ) -> None:
     """Claim a pending wave for *session*. Exactly-once across concurrent calls."""
+    from eawf.runtime.budget.service import load_budget_config
+    from eawf.workflow.lifecycle._claim_guards import CLAIM_BUDGET_CEILING_REACHED
+    from eawf.workflow.lifecycle._errors import LifecycleGuardError
     from eawf.workflow.lifecycle.transitions import claim_wave
 
     flags: GlobalFlags = ctx.obj
@@ -992,30 +993,27 @@ def wave_claim_cmd(
     committed_claim_session_id: list[str] = []
 
     def _claim_with_budget_gate(state: State) -> None:
-        wave = state.waves.get(wave_id)
-        if (
-            wave is not None
-            and wave.token_budget is not None
-            and wave.tokens_consumed >= wave.token_budget
-        ):
-            raise cli_errors.ValidationError(
-                f"wave {wave_id!r} is over token budget "
-                f"({wave.tokens_consumed}/{wave.token_budget}); raise budget or split work"
-            )
-        claim_wave(
-            state,
-            wave_id=wave_id,
-            session_id=session,
-            out_of_order=out_of_order,
-            max_parallel_waves=resolve_max_parallel_waves(
-                _config_root_for_state_path(resolve_state_path(flags.workspace))
-            ),
-            waiver_mode=_effective_waiver_mode(
+        config_root = _config_root_for_state_path(resolve_state_path(flags.workspace))
+        try:
+            claim_wave(
                 state,
                 wave_id=wave_id,
-                flags=flags,
-            ),
-        )
+                session_id=session,
+                out_of_order=out_of_order,
+                max_parallel_waves=resolve_max_parallel_waves(config_root),
+                waiver_mode=_effective_waiver_mode(
+                    state,
+                    wave_id=wave_id,
+                    flags=flags,
+                ),
+                budget=load_budget_config(config_root),
+            )
+        except LifecycleGuardError as exc:
+            # The daemon surfaces this guard as a validation failure; the
+            # daemon-down fallback keeps the same exit code.
+            if exc.code == CLAIM_BUDGET_CEILING_REACHED:
+                raise cli_errors.ValidationError(str(exc)) from exc
+            raise
         claim_session_id = state.waves[wave_id].claim_session_id
         if claim_session_id is None:  # pragma: no cover - transition guarantees it
             raise RuntimeError(f"claimed wave has no session binding: {wave_id!r}")

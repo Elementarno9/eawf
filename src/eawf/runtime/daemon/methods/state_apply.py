@@ -46,6 +46,8 @@ from eawf.kernel.state.mutations import (
 from eawf.observability.telemetry.join import (
     WaveSessionRollup,
 )
+from eawf.runtime.budget.policy import DEFAULT_BUDGET, BudgetConfig
+from eawf.runtime.budget.service import load_budget_config
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
 )
@@ -96,6 +98,7 @@ def apply_wave_claim(
     mutation: Mutation,
     *,
     max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
+    budget: BudgetConfig = DEFAULT_BUDGET,
 ) -> None:
     """Apply :attr:`MutationKind.WAVE_CLAIM` — delegate to ``claim_wave``."""
     params = mutation.params
@@ -106,6 +109,7 @@ def apply_wave_claim(
         out_of_order=bool(params.get("out_of_order", False)),
         max_parallel_waves=max_parallel_waves,
         waiver_mode=mutation_waiver_mode(mutation),
+        budget=budget,
     )
 
 
@@ -629,6 +633,7 @@ def apply_mutation_under_lock(
                 state,
                 mutation,
                 max_parallel_waves=resolve_max_parallel_waves(repo_anchor),
+                budget=load_budget_config(repo_anchor),
             )
         else:
             apply_func(state, mutation)

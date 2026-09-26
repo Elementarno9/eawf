@@ -42,6 +42,9 @@ from eawf.workflow.skills.flow import (
 
 @pytest.fixture
 def integration_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # The catalog retires /flow, so the CLI refuses every run up front. These
+    # tests exercise the resume machinery behind that refusal, so they lift it.
+    monkeypatch.setattr(flow_module, "check_flow_runnable", lambda: None)
     repo = tmp_path / "repo"
     state_dir = repo / ".ea"
     store_dir = state_dir / "store"

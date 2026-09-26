@@ -58,8 +58,7 @@ def _ctx(args: dict[str, object] | None = None) -> SkillContext:
 def test_flow_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/flow")
-    assert cls is FlowSkill
+    assert registry.list_registered()["/flow"] is FlowSkill
 
 
 def test_flow_runs_current_core_skills_in_order(state_dir: Path) -> None:

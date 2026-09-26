@@ -33,16 +33,30 @@ secure-storage directory defaults to the configuration home.
 directory -- the empty value meaning the default ``~/.claude`` -- so the
 child reads the operator's existing login in place while every other
 configuration read goes to the clean home.
+
+Every ``claude`` child eawf starts is managed: the daemon's jury, research,
+fleet-repair and agent dispatches and the native Run launcher all spawn a
+headless ``claude -p`` turn, and eawf never starts the operator's own
+interactive session. A native Run keeps its home under the Run's root for
+the Run's lifetime; any other spawn gets a per-spawn home from
+:func:`ephemeral_managed_isolation`, which is removed when the turn ends.
+Those spawns carry no per-Run MCP server, so they close MCP with
+``--strict-mcp-config`` and no ``--mcp-config``, which loads none.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import shutil
-from collections.abc import Mapping
+import uuid
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+
+from eawf.runtime.mcp.native_launch import MCP_ARTIFACT_DIRNAME
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +78,12 @@ INSTRUCTION_SUPPRESSION_ENV: Final[Mapping[str, str]] = {
 
 #: The argv that loads no settings file, so no project or user hook runs.
 SETTING_SOURCES_FLAGS: Final[tuple[str, ...]] = ("--setting-sources", "")
+
+#: The flag that drops every MCP server not named by ``--mcp-config``.
+STRICT_MCP_FLAG: Final = "--strict-mcp-config"
+
+#: The prefix of a per-spawn directory under the spawn's working directory.
+EPHEMERAL_RUN_PREFIX: Final = "spawn-"
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,12 +148,51 @@ def prepare_managed_isolation(
     return ManagedClaudeIsolation(config_dir=config_dir, env=env, argv_flags=SETTING_SOURCES_FLAGS)
 
 
+@contextmanager
+def ephemeral_managed_isolation(
+    cwd: Path, *, operator_env: Mapping[str, str]
+) -> Iterator[ManagedClaudeIsolation]:
+    """Isolate one headless spawn that has no Run root of its own.
+
+    The home sits under *cwd* because the working directory is the one
+    place both filesystem jails leave writable to the child, and a
+    per-spawn name keeps concurrent spawns in the same directory (a jury's
+    panelists) from emptying each other's home. The directory is removed
+    when the spawn ends, whether it succeeded or raised.
+
+    Args:
+        cwd: The child's working directory.
+        operator_env: The environment the daemon was started with, read
+            only to locate the operator's stored login.
+
+    Yields:
+        The isolation of :func:`prepare_managed_isolation`, with MCP closed.
+
+    Raises:
+        FileNotFoundError: *cwd* is not an existing directory; the home is
+            not created, so a missing working directory is not made on the
+            child's behalf.
+        OSError: The configuration home could not be created.
+    """
+    if not cwd.is_dir():
+        raise FileNotFoundError(f"spawn working directory is not a directory: {cwd}")
+    run_dir = cwd / MCP_ARTIFACT_DIRNAME / f"{EPHEMERAL_RUN_PREFIX}{uuid.uuid4().hex}"
+    isolation = prepare_managed_isolation(run_dir, operator_env=operator_env)
+    try:
+        yield dataclasses.replace(isolation, argv_flags=(*isolation.argv_flags, STRICT_MCP_FLAG))
+    finally:
+        shutil.rmtree(run_dir, ignore_errors=True)
+
+
 __all__ = [
     "CONFIG_DIR_ENV",
+    "EPHEMERAL_RUN_PREFIX",
     "INSTRUCTION_SUPPRESSION_ENV",
     "MANAGED_CONFIG_DIRNAME",
     "SECURE_STORAGE_ENV",
     "SETTING_SOURCES_FLAGS",
+    "STRICT_MCP_FLAG",
     "ManagedClaudeIsolation",
+    "ephemeral_managed_isolation",
     "prepare_managed_isolation",
 ]

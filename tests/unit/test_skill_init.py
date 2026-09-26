@@ -56,8 +56,7 @@ def _full_answers(target_dir: Path) -> dict[str, object]:
 def test_init_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/init")
-    assert cls is InitSkill
+    assert registry.list_registered()["/init"] is InitSkill
 
 
 def test_init_missing_answers_returns_needs_user(state_dir: Path) -> None:

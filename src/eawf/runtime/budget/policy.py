@@ -139,11 +139,24 @@ class PromptBudgetCeiling(BaseModel):
     enforce: EnforceMode
 
     def reached(self, consumed: int) -> bool:
-        """Return whether *consumed* met or crossed the ceiling."""
+        """Return whether *consumed* met or crossed the ceiling.
+
+        Args:
+            consumed: Tokens consumed so far.
+
+        Returns:
+            ``True`` when *consumed* is at or above the ceiling.
+        """
         return consumed >= self.tokens
 
     def decide(self, consumed: int) -> BudgetDecision:
         """Classify *consumed* against this ceiling.
+
+        Args:
+            consumed: Tokens consumed so far.
+
+        Returns:
+            The enforcement decision under this ceiling's enforce mode.
 
         Raises:
             ValueError: ``consumed`` is negative.
@@ -165,12 +178,22 @@ class BudgetConfig(BaseModel):
     multiplier: float = Field(default=DEFAULT_MULTIPLIER, ge=1.0)
 
     def ceiling(self, budget: int | None) -> PromptBudgetCeiling | None:
-        """Return the ceiling *budget* derives, or ``None`` when no budget is set."""
+        """Return the ceiling *budget* derives, or ``None`` when no budget is set.
+
+        Args:
+            budget: The wave's base token budget, or ``None`` when unset.
+
+        Returns:
+            The scaled ceiling, or ``None`` when *budget* is unset.
+        """
         tokens = effective_cap(budget, self.multiplier)
         if tokens is None:
             return None
         return PromptBudgetCeiling(tokens=tokens, enforce=self.enforce)
 
+
+#: The table a repo without ``flow.budget`` resolves to.
+DEFAULT_BUDGET: Final[BudgetConfig] = BudgetConfig()
 
 #: A sealed capsule ceiling is already the limit, not a baseline to scale,
 #: and it is enforced exactly.

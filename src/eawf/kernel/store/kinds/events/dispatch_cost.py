@@ -26,6 +26,7 @@ from eawf.observability.telemetry.models import (
     PriceSourceKind,
     check_price_source,
     check_token_identity,
+    null_unpriced_zero_cost,
 )
 
 
@@ -49,7 +50,8 @@ class DispatchCostPayload(TracedEventPayload):
             when the runtime reports no reasoning counter.
         total_tokens: Input + output + cache-read + cache-write; ``None``
             only on a row written before the split.
-        cost_usd: Priced cost in USD (``Decimal`` for exact accounting).
+        cost_usd: Priced cost in USD (``Decimal`` for exact accounting), or
+            ``None`` when the row is unpriced.
         price_source: Provenance of ``cost_usd``; ``None`` only on a row
             written before the split.
         rate_table_version: Rate-table revision a list-reconstructed cost
@@ -72,10 +74,16 @@ class DispatchCostPayload(TracedEventPayload):
     cache_read_input_tokens: int
     reasoning_tokens: int | None = None
     total_tokens: int | None = None
-    cost_usd: Decimal
+    cost_usd: Decimal | None
     price_source: PriceSourceKind | None = None
     rate_table_version: str | None = None
     pricing_version: str
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_unpriced_zero(cls, data: object) -> object:
+        """Read an older unpriced row's zero cost as null."""
+        return null_unpriced_zero_cost(data)
 
     @model_validator(mode="after")
     def _usage_reconciles(self) -> Self:
@@ -89,6 +97,8 @@ class DispatchCostPayload(TracedEventPayload):
         """
         if (self.total_tokens is None) != (self.price_source is None):
             raise ValueError("total_tokens and price_source are written together or not at all")
+        if self.price_source is None and self.cost_usd is None:
+            raise ValueError("a row written before the split must record its cost_usd")
         if self.total_tokens is not None:
             check_token_identity(
                 input_tokens=self.input_tokens,

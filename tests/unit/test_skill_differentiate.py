@@ -44,8 +44,7 @@ def _ctx(args: dict[str, object] | None = None) -> SkillContext:
 def test_differentiate_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/differentiate")
-    assert cls is DifferentiateSkill
+    assert registry.list_registered()["/differentiate"] is DifferentiateSkill
 
 
 def test_differentiate_happy_path_status_ok(state_dir: Path) -> None:

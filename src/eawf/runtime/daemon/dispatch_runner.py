@@ -885,7 +885,7 @@ def emit_dispatch_cost(
     runtime: RuntimeTriple,
     model: str,
     tokens: DispatchTokens,
-    cost_usd: Decimal,
+    cost_usd: Decimal | None,
     pricing_version: str,
     price_source: PriceSourceKind | None = None,
     trace_request_id: str | None = None,
@@ -901,7 +901,7 @@ def emit_dispatch_cost(
         runtime: Runtime that incurred the cost.
         model: Model identifier the cost is priced against.
         tokens: Per-invocation token tally.
-        cost_usd: Priced cost in USD.
+        cost_usd: Priced cost in USD, or ``None`` when nothing priced it.
         pricing_version: ``PRICING`` snapshot version used to compute
             ``cost_usd``.
         price_source: Provenance of *cost_usd*. ``None`` means the caller
@@ -915,8 +915,8 @@ def emit_dispatch_cost(
 
     Raises:
         pydantic.ValidationError: When the payload's token classes do not
-            sum to its total, or *cost_usd* is non-zero for a model the
-            rate table cannot price.
+            sum to its total, *cost_usd* is non-zero for a model the rate
+            table cannot price, or a priced source records no cost.
     """
     if price_source is None:
         price_source, _ = resolve_price_source(model)
@@ -1691,7 +1691,7 @@ def run_dispatch(
     pricing_version: str,
     primary_error: RuntimeErrorClass | None,
     tokens: DispatchTokens,
-    cost_usd: Decimal,
+    cost_usd: Decimal | None,
     price_source: PriceSourceKind | None = None,
     trace_request_id: str | None = None,
     session_id: str | None = None,
@@ -1738,7 +1738,8 @@ def run_dispatch(
             the primary runtime fails (triggers a V5 fallback), or ``None``
             when the primary serves the dispatch with no switch.
         tokens: Token tally the serving attempt accrued.
-        cost_usd: Priced cost in USD for the serving attempt.
+        cost_usd: Priced cost in USD for the serving attempt, or ``None``
+            when nothing priced it.
         price_source: Provenance of *cost_usd*, threaded to
             :func:`emit_dispatch_cost` (``None`` resolves it from the rate
             table there).

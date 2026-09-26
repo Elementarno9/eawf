@@ -389,8 +389,7 @@ def test_ship_probe_blocked_short_circuits(
 def test_ship_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/ship")
-    assert cls is ShipSkill
+    assert registry.list_registered()["/ship"] is ShipSkill
 
 
 # ---- C04a: audit-verdict gate ----------------------------------------------

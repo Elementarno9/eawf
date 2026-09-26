@@ -33,7 +33,7 @@ subsystem.
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Final, Literal, Self
 
@@ -64,6 +64,7 @@ __all__ = [
     "ToolCallErrorKind",
     "check_price_source",
     "check_token_identity",
+    "null_unpriced_zero_cost",
 ]
 
 
@@ -136,9 +137,8 @@ class PriceSourceKind(StrEnum):
         LIST_RECONSTRUCTED: eawf multiplied the measured token classes by a
             published rate table; the table revision rides beside the cost
             as ``rate_table_version``.
-        UNPRICED: No rate resolved for the model. The recorded cost is zero
-            only because nothing priced it, so it must never be read as a
-            billed zero.
+        UNPRICED: No rate resolved for the model. The recorded cost is null,
+            never zero, so an unpriced run cannot be summed as a billed zero.
     """
 
     BILLED = "billed"
@@ -190,14 +190,14 @@ def check_token_identity(
 
 def check_price_source(
     *,
-    cost_usd: Decimal,
+    cost_usd: Decimal | None,
     price_source: PriceSourceKind | None,
     rate_table_version: str | None,
 ) -> None:
     """Refuse a cost whose price provenance is missing or inconsistent.
 
     Args:
-        cost_usd: The recorded cost.
+        cost_usd: The recorded cost, or ``None`` when nothing priced it.
         price_source: Where the cost came from, or ``None`` when the row
             names no source.
         rate_table_version: Revision of the rate table a
@@ -205,15 +205,44 @@ def check_price_source(
 
     Raises:
         ValueError: When the row names no *price_source*, when a
-            ``list-reconstructed`` cost names no *rate_table_version*, or
-            when an ``unpriced`` row carries a non-zero cost.
+            ``list-reconstructed`` cost names no *rate_table_version*, when
+            an ``unpriced`` row carries a cost, or when a priced row carries
+            none.
     """
     if price_source is None:
         raise ValueError(f"cost_usd {cost_usd} carries no price_source")
     if price_source is PriceSourceKind.LIST_RECONSTRUCTED and not rate_table_version:
         raise ValueError("a list-reconstructed cost must name its rate_table_version")
-    if price_source is PriceSourceKind.UNPRICED and cost_usd != 0:
-        raise ValueError(f"an unpriced row cannot carry a non-zero cost_usd {cost_usd}")
+    if price_source is PriceSourceKind.UNPRICED and cost_usd is not None:
+        raise ValueError(f"an unpriced row records a null cost_usd, not {cost_usd}")
+    if price_source is not PriceSourceKind.UNPRICED and cost_usd is None:
+        raise ValueError(f"a {price_source.value} row must record its cost_usd")
+
+
+def null_unpriced_zero_cost(data: object) -> object:
+    """Map the zero cost an older unpriced row persisted onto null.
+
+    Rows written before unpriced costs became null recorded them as zero;
+    the event log and the telemetry cache still hold such rows, and they
+    must keep validating. Any other input passes through unchanged.
+
+    Args:
+        data: The raw mapping a row model is validated from.
+
+    Returns:
+        *data* with ``cost_usd`` set to ``None`` when the row is unpriced
+        and records a zero cost; otherwise *data* itself.
+    """
+    if not isinstance(data, dict) or data.get("price_source") != PriceSourceKind.UNPRICED:
+        return data
+    cost = data.get("cost_usd")
+    if cost is None:
+        return data
+    try:
+        is_zero = Decimal(str(cost)) == 0
+    except InvalidOperation:
+        return data
+    return {**data, "cost_usd": None} if is_zero else data
 
 
 class TelemetryProject(BaseModel):
@@ -367,7 +396,8 @@ class TelemetryDispatchCost(BaseModel):
         total_tokens: Input + output + cache-read + cache-write. Validated
             against the classes, so a row cannot publish a total its
             classes do not add up to.
-        cost_usd: Priced cost in USD (``Decimal`` for exact accounting).
+        cost_usd: Priced cost in USD (``Decimal`` for exact accounting), or
+            ``None`` on an unpriced row.
         price_source: Provenance of ``cost_usd``.
         rate_table_version: Rate-table revision a list-reconstructed cost
             was computed from; ``None`` for billed or unpriced rows.
@@ -388,11 +418,17 @@ class TelemetryDispatchCost(BaseModel):
     cache_read_input_tokens: int = 0
     reasoning_tokens: int | None = None
     total_tokens: int
-    cost_usd: Decimal = Field(default=Decimal("0"))
+    cost_usd: Decimal | None = None
     price_source: PriceSourceKind
     rate_table_version: str | None = None
     pricing_version: str
     ts: datetime | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_unpriced_zero(cls, data: object) -> object:
+        """Read an older unpriced row's zero cost as null."""
+        return null_unpriced_zero_cost(data)
 
     @model_validator(mode="after")
     def _usage_reconciles(self) -> Self:
@@ -508,7 +544,7 @@ class ObservedSession(BaseModel):
         reasoning_tokens: Reasoning slice of output, or ``None`` when the
             runtime reports no reasoning counter.
         total_tokens: Input + output + cache-read + cache-write.
-        cost_usd: Priced cost in USD.
+        cost_usd: Priced cost in USD, or ``None`` on an unpriced row.
         price_source: Provenance of ``cost_usd``.
         rate_table_version: Rate-table revision behind a list-reconstructed
             cost.
@@ -530,9 +566,15 @@ class ObservedSession(BaseModel):
     cache_write_tokens: int = Field(default=0, ge=0)
     reasoning_tokens: int | None = Field(default=None, ge=0)
     total_tokens: int = Field(ge=0)
-    cost_usd: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
+    cost_usd: Decimal | None = Field(default=None, ge=Decimal("0"))
     price_source: PriceSourceKind
     rate_table_version: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _legacy_unpriced_zero(cls, data: object) -> object:
+        """Read an older unpriced row's zero cost as null."""
+        return null_unpriced_zero_cost(data)
 
     @model_validator(mode="after")
     def _usage_reconciles(self) -> Self:

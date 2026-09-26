@@ -7,7 +7,6 @@ real home directory is never read (the history root is always injected).
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
@@ -352,7 +351,7 @@ def test_sweep_session_history_price_source_per_model(
     row = _sessions(store)[0]
     assert row.price_source is source
     if source is PriceSourceKind.UNPRICED:
-        assert row.cost_usd == Decimal("0")
+        assert row.cost_usd is None
         assert row.rate_table_version is None
 
 

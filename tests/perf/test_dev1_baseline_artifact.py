@@ -37,9 +37,9 @@ from eawf.observability.bench.turn_cost import (
     TurnCostVerdict,
     compare_turn_cost,
 )
+from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
-    PriceSource,
     TurnCostRecord,
     build_turn_cost_record,
 )
@@ -58,7 +58,7 @@ _EU_MILLISECONDS: Final[Decimal] = Decimal(1_800_000)
 _MICRO_USD: Final[Decimal] = Decimal("0.000001")
 """Quantum the float cost of a state row is rounded onto before summing."""
 
-_PRICE_SOURCE: Final[PriceSource] = PriceSource(kind="session_rollup")
+_PRICE_SOURCE: Final[PriceSourceKind] = PriceSourceKind.LIST_RECONSTRUCTED
 
 
 def _embedded_payloads() -> list[dict[str, Any]]:

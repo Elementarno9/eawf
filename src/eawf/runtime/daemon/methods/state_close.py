@@ -33,7 +33,6 @@ from eawf.kernel.state.mutations import (
 )
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.kinds.actual import ActualPayload
 from eawf.kernel.store.kinds.evidence import EvidenceRecord
 from eawf.kernel.store.paths import store_path
 from eawf.observability.telemetry.join import (
@@ -50,6 +49,9 @@ from eawf.workflow.lifecycle.transitions import (
     LifecycleError,
 )
 from eawf.workflow.lifecycle.wave import RuntimeDelta, compute_runtime_delta
+from eawf.workflow.lifecycle.wave_actual import (
+    append_wave_close_actual as append_wave_close_actual,
+)
 from eawf.workflow.skills.needs_user import retract_wave_pauses
 from eawf.workflow.verify.models import CloseReadiness
 
@@ -873,53 +875,6 @@ def append_close_evidence(
             f"append_close_evidence scope_id={record.scope_id!r} evidence_id={record.id!r} "
             f"evidence_kind={record.evidence_kind!r} status={record.status!r}"
         )
-
-
-def append_wave_close_actual(state: State, *, wave_id: str, state_path: Path) -> None:
-    """Append the ``actual.jsonl`` record a close-created actual summary points at.
-
-    A close that finds no operator-authored actual creates the
-    :class:`~eawf.kernel.state.models.ActualSummary` itself, naming a store
-    record it never wrote. Writing that record through
-    :func:`eawf.kernel.store.append.append_envelope` makes the close-time
-    measurement readable from the actual store the way ``eawf actual stop``
-    records are, so a consumer of the store sees every closed wave's effort.
-    The close records no segments because it tracked none: the figures are the
-    measured runtime totals.
-
-    Args:
-        state: The closed state carrying the close-created summary for
-            *wave_id*.
-        wave_id: The wave the close created the summary for.
-        state_path: Path to ``state.json``; anchors
-            ``<state_dir>/store/actual.jsonl``.
-
-    Raises:
-        KeyError: When *state* carries no actual summary for *wave_id*.
-    """
-    summary = (state.actuals or {})[wave_id]
-    payload = ActualPayload(
-        segments=[],
-        elapsed_eu=summary.elapsed_eu,
-        attention_eu=summary.attention_eu,
-        agent_runtime_eu=summary.agent_runtime_eu,
-        outcome=summary.status.value,
-        idle_policy="wave_close_runtime",
-    )
-    envelope = Envelope(
-        id=summary.current_store_record_id,
-        kind=StoreKind.ACTUAL,
-        scope_id=wave_id,
-        created_at=summary.updated_at,
-        updated_at=summary.updated_at,
-        summary=f"actual recorded at close for {wave_id}",
-        payload=payload.model_dump(mode="json"),
-    )
-    append_envelope(store_path(state_path, StoreKind.ACTUAL), envelope)
-    logger.info(
-        f"append_wave_close_actual wave={wave_id!r} record_id={envelope.id!r} "
-        f"elapsed_eu={summary.elapsed_eu}"
-    )
 
 
 def compute_wave_close_extras(  # noqa: C901

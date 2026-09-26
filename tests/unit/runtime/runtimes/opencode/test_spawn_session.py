@@ -228,7 +228,9 @@ def test_parse_opencode_result_well_formed_stream_parses() -> None:
     # The two text fragments concatenate into the final answer.
     assert result.text == "\n\nok"
     assert result.input_tokens == 30489
-    assert result.output_tokens == 7
+    # opencode reports reasoning beside output; it folds in as a slice.
+    assert result.output_tokens == 7 + 84
+    assert result.reasoning_output_tokens == 84
     assert result.cache_read_input_tokens == 34
     assert result.cache_creation_input_tokens == 12
     assert result.cache_creation_5m_input_tokens == 12

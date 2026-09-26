@@ -4,6 +4,7 @@
     "name",
     "reason",
     "tier",
+    "user_question",
     "verb"
   ],
   "eval_score_threshold": 0.85,
@@ -12,5 +13,5 @@
   "skill": "/memory",
   "state_mutation_kinds": [],
   "status": "needs_user",
-  "warnings_count": 2
+  "warnings_count": 1
 }

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from eawf.kernel.config.schema import EuBasis, VerifyWaiverMode
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
@@ -38,6 +39,7 @@ from eawf.observability.telemetry.join import _duration_ms_to_eu, _tokens_to_eu
 from eawf.workflow.lifecycle._capacity import DEFAULT_MAX_PARALLEL_WAVES
 from eawf.workflow.lifecycle._claim_guards import (
     active_wave_ids,
+    validate_claim_budget,
     validate_claim_capacity,
     validate_claim_criteria,
     validate_claim_parent,
@@ -64,6 +66,9 @@ from eawf.workflow.lifecycle.spec import (
     GuardName,
     validate_transition,
 )
+
+if TYPE_CHECKING:
+    from eawf.runtime.budget.policy import BudgetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -816,6 +821,7 @@ def claim_wave(
     out_of_order: bool = False,
     max_parallel_waves: int = DEFAULT_MAX_PARALLEL_WAVES,
     waiver_mode: VerifyWaiverMode = "B",
+    budget: BudgetConfig | None = None,
 ) -> Wave:
     """Move a pending wave to ``claimed`` and bind it to *session_id*.
 
@@ -868,6 +874,9 @@ def claim_wave(
         out_of_order: Whether to relax lower-ready-sibling ordering only.
         max_parallel_waves: Repository-wide CLAIMED + IN_PROGRESS hard cap.
         waiver_mode: Effective policy for persisted waiver mechanisms.
+        budget: The repo's ``flow.budget`` table; a wave whose consumption
+            reached the one ceiling it derives is refused, re-entry included.
+            ``None`` applies the built-in default table.
 
     Returns:
         The claimed wave row.
@@ -881,13 +890,21 @@ def claim_wave(
             blocks regardless of ``out_of_order``.
         LifecycleGuardError: when a parent row is missing or not executable,
             another sibling iter conflicts with PLANNED autoactivation,
-            criteria are empty, capacity is exhausted, or the claiming session
+            criteria are empty, the budget ceiling is reached, capacity is
+            exhausted, or the claiming session
             is missing, inactive, role-incompatible, or scoped outside the
             wave's own scope chain.
     """
     wave = state.waves.get(wave_id)
     if wave is None:
         raise LifecycleError(f"unknown wave {wave_id!r}")
+    if budget is None:
+        # Deferred: the budget package pulls the layered-config stack, which
+        # must stay off the CLI tree-build import path.
+        from eawf.runtime.budget.policy import DEFAULT_BUDGET
+
+        budget = DEFAULT_BUDGET
+    validate_claim_budget(wave, budget=budget)
     check_disabled_waiver_policy(
         waiver_mode=waiver_mode,
         scope_id=wave_id,

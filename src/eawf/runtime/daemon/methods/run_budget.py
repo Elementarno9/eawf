@@ -61,13 +61,14 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.budget.notices import notices_path
 from eawf.runtime.budget.policy import (
     DEFAULT_ENFORCE,
     DEFAULT_MULTIPLIER,
     SEALED_BUDGET,
     EnforceMode,
 )
-from eawf.runtime.budget.service import TerminationResult
+from eawf.runtime.budget.service import TerminationResult, emit_termination_notice
 from eawf.runtime.control.reducer import decide_control_lease, reduce_run_control
 from eawf.runtime.daemon.budget_interlock import InFlightBudgetOutcome, guard_in_flight_budget
 from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
@@ -90,6 +91,9 @@ RUN_BUDGET_METER_METHOD: Final = "runtime.run.budget.meter"
 #: The ledger-line key a budget notice is filed under, prefixed for the
 #: same reason the contract binding is: one key, one kind of line.
 _NOTICE_KEY_PREFIX: Final = "BGT-"
+
+#: The state file the notice ledger sits beside inside the ``.ea`` tree.
+_STATE_FILENAME: Final = "state.json"
 
 #: The status a budget-notice line records.
 _NOTICE_STATUS: Final = "noticed"
@@ -315,9 +319,16 @@ class _BudgetLedger:
             standing = _notice_of(records, notice.control_request_ref)
             if standing is None:
                 self.envelopes.append(_append_notice(session, notice, now=self._now))
-            self.notice = standing if standing is not None else notice
+            recorded = standing if standing is not None else notice
+            self.notice = recorded
             facts = self._request(session, facts)
             facts, disposition = self._acknowledge(session, facts)
+        # The run-ledger line is the control's receipt; the notice readers
+        # list is the one ledger row it folds into, written outside the entity
+        # lock because the notice ledger holds its own.
+        emit_termination_notice(
+            notices_path(self._context.identity.tree_root / _STATE_FILENAME), recorded
+        )
         self._opened = True
         logger.info(
             f"open budget-termination run={self._args.urn.entity_key!r} "

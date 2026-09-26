@@ -72,8 +72,7 @@ def test_should_auto_invoke_only_when_more_than_one_unknown() -> None:
 def test_blitz_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/blitz")
-    assert cls is BlitzSkill
+    assert registry.list_registered()["/blitz"] is BlitzSkill
 
 
 def test_blitz_skill_returns_followup_research_args(

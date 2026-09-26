@@ -46,10 +46,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
-from eawf.observability.telemetry.models import RuntimeName
+from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
-    PriceSource,
     TurnCostRecord,
     build_turn_cost_record,
 )
@@ -104,17 +103,14 @@ _FIXTURE_OPENED_AT: Final[datetime] = datetime(2026, 1, 1, tzinfo=UTC)
 _FIXTURE_UNIT_COUNT: Final[int] = 10
 _FIXTURE_RUNTIME: Final[RuntimeName] = "claude"
 _FIXTURE_MODEL: Final[str] = "fixture-model-v1"
-_FIXTURE_PRICE_SOURCE: Final[PriceSource] = PriceSource(
-    kind="fixture", pricing_version="fixture-v1"
-)
+_FIXTURE_RATE_TABLE_VERSION: Final[str] = "fixture-v1"
 
-_LIVE_PRICE_SOURCE: Final[PriceSource] = PriceSource(kind="session_rollup")
+_LIVE_PRICE_SOURCE: Final[PriceSourceKind] = PriceSourceKind.LIST_RECONSTRUCTED
 """Provenance stamped on a run sourced from a projected session rollup.
 
-``pricing_version`` stays ``None`` because the session row records the
-projector's priced total without stamping which pricing snapshot produced
-it. The cost is still summable — it was priced — so it is a priced row with
-an unknown snapshot rather than an unpriced one.
+The projector prices the session against the embedded rate table, so the
+cost is list-reconstructed. ``rate_table_version`` stays ``None`` because
+the session row does not stamp which snapshot produced the total.
 """
 
 
@@ -299,8 +295,7 @@ def seed_turn_cost_corpus(fixture_id: str) -> TurnCostCorpus:
             wave_index=1,
             role=AgentSessionRole.EXECUTOR,
             wall_clock_ms=0,
-            cost_usd=Decimal("7.77"),
-            price_source=None,
+            cost_usd=None,
         ),
     ]
     return TurnCostCorpus(
@@ -572,10 +567,14 @@ def _fixture_run(
     wave_index: int,
     role: AgentSessionRole,
     wall_clock_ms: int,
-    cost_usd: Decimal,
-    price_source: PriceSource | None = _FIXTURE_PRICE_SOURCE,
+    cost_usd: Decimal | None,
 ) -> CompletedUnitRun:
-    """Return one fixture run attributed to the *wave_index*-th fixture wave."""
+    """Return one fixture run attributed to the *wave_index*-th fixture wave.
+
+    A run with a cost is list-reconstructed at the fixture rate table; a run
+    with none is unpriced.
+    """
+    priced = cost_usd is not None
     return CompletedUnitRun(
         run_id=run_id,
         wave_id=f"{_FIXTURE_ITER_ID}-W{wave_index:02d}",
@@ -586,7 +585,8 @@ def _fixture_run(
         input_tokens=100 * wave_index,
         output_tokens=10 * wave_index,
         cost_usd=cost_usd,
-        price_source=price_source,
+        price_source=PriceSourceKind.LIST_RECONSTRUCTED if priced else PriceSourceKind.UNPRICED,
+        rate_table_version=_FIXTURE_RATE_TABLE_VERSION if priced else None,
     )
 
 

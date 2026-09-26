@@ -178,13 +178,37 @@ class PlannerReportBody(AgentReportCommonBody):
     risks: list[str] = Field(default_factory=list)
 
 
+class ExecutorTestRun(_StrictModel):
+    """One run of a test the executor named, recorded in the order it ran.
+
+    Wave close reads these per test to check that a test reported green
+    first ran red, so the list is kept oldest first.
+
+    Attributes:
+        test_id: The pytest node id (``tests/...py::test_name``).
+        outcome: ``red`` when the run failed, ``green`` when it passed.
+        revision: The commit the run was taken at, or ``worktree`` for
+            uncommitted edits.
+    """
+
+    test_id: Annotated[str, Field(min_length=1, max_length=500)]
+    outcome: Literal["red", "green"]
+    revision: Annotated[str, Field(min_length=1, max_length=64)]
+
+
 class ExecutorReportBody(AgentReportCommonBody):
-    """Report body emitted by an executor."""
+    """Report body emitted by an executor.
+
+    ``tests_run`` lists the commands the executor ran; ``test_runs`` is the
+    typed per-test red/green evidence. The latter is optional so reports
+    written before it existed still parse.
+    """
 
     role: Literal["executor"] = "executor"
     wave_id: Annotated[str, Field(min_length=1)]
     files_changed: list[str] = Field(default_factory=list)
     tests_run: list[str] = Field(default_factory=list)
+    test_runs: list[ExecutorTestRun] = Field(default_factory=list)
     commit_sha: Annotated[str, Field(min_length=7)] | None = None
     outcome: Annotated[str, Field(min_length=1, max_length=1000)]
 
@@ -377,6 +401,7 @@ __all__ = [
     "CriterionVerdict",
     "DomainSpecialistReportBody",
     "ExecutorReportBody",
+    "ExecutorTestRun",
     "OperatorReportBody",
     "PlannedWaveSummary",
     "PlannerReportBody",

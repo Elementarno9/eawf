@@ -74,7 +74,6 @@ from eawf.kernel.state.enums import (
     Confidence,
     DispatchNote,
     EffortBucket,
-    MeasurementStatus,
     ReportSource,
     StoreKind,
     WaveStatus,
@@ -913,11 +912,8 @@ def _headless_runtime_snapshots(
         measure_version=_HEADLESS_MEASURE_VERSION,
         api_duration_ms=duration_ms,
         total_duration_ms=duration_ms,
-        cost_usd=(
-            float(priced.cost_usd)
-            if spawn_result.measurement_status is MeasurementStatus.USAGE_OBSERVED
-            else None
-        ),
+        # An unpriced spawn has no cost to snapshot: null, as when unmeasured.
+        cost_usd=float(priced.cost_usd) if priced.cost_usd is not None else None,
         input_tokens=spawn_result.input_tokens,
         output_tokens=spawn_result.output_tokens,
         cache_creation_input_tokens=spawn_result.cache_creation_input_tokens,
@@ -1023,6 +1019,7 @@ def _persist_live_session_attempt(
             note = DispatchNote.FRESH_DISPATCH
             runtime_from = None
         now = datetime.now(UTC)
+        attempt_cost = price_spawn_result(spawn_result).cost_usd
         annotation = DispatchAnnotation(
             attempt=attempt,
             note=note,
@@ -1049,11 +1046,8 @@ def _persist_live_session_attempt(
             # Stamp THIS attempt's own priced cost so a wave with several
             # genuine dispatch attempts surfaces per-attempt cost, not just the
             # single wave-level runtime snapshot (which credits one spawn).
-            cost_usd=(
-                float(price_spawn_result(spawn_result).cost_usd)
-                if spawn_result.measurement_status is MeasurementStatus.USAGE_OBSERVED
-                else None
-            ),
+            # Unmeasured and unpriced spawns both price to a null cost.
+            cost_usd=float(attempt_cost) if attempt_cost is not None else None,
             measurement_quality=spawn_result.measurement_quality,
             measurement_status=spawn_result.measurement_status,
             measurement_reason=spawn_result.measurement_reason,
@@ -1375,6 +1369,7 @@ def _claim_live_session(
             out_of_order=out_of_order,
             max_parallel_waves=resolve_max_parallel_waves(state_path.parent.parent),
             waiver_mode=waiver_mode,
+            budget=_resolve_budget_config(state_path),
         )
         validate_spawn_wave(state, wave_id)
         state.updated_at = datetime.now(UTC)

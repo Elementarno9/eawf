@@ -10,6 +10,7 @@ subprocess outcomes.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import logging
 import os
@@ -45,6 +46,7 @@ from eawf.runtime.runtimes.adapter import (
 from eawf.runtime.runtimes.cache_control import inject_cache_control
 from eawf.runtime.runtimes.claude.managed_run import (
     ManagedClaudeIsolation,
+    ephemeral_managed_isolation,
     prepare_managed_isolation,
 )
 from eawf.runtime.runtimes.metering import UsageSample
@@ -431,6 +433,8 @@ def _parse_claude_result(
         cache_creation_5m_input_tokens=cache_write_5m,
         cache_creation_1h_input_tokens=cache_write_1h,
         cache_read_input_tokens=int(usage.get("cache_read_input_tokens", 0) or 0),
+        # The claude envelope reports no reasoning counter: unknown, not zero.
+        reasoning_output_tokens=None,
         cost_usd_reported=(Decimal(str(cost_reported)) if cost_reported is not None else None),
         started_at=started_at,
         ended_at=ended_at,
@@ -755,8 +759,10 @@ class ClaudeAdapter:
                 suppression and settings-source flags of a managed Run.
                 Its flags precede *extra_args* and its variables are laid
                 over the scrubbed environment, so the child never reads
-                the operator's configuration home. ``None`` spawns against
-                whatever configuration home the scrubbed environment names.
+                the operator's configuration home. ``None`` isolates the
+                spawn in a per-spawn home under *cwd* with MCP closed,
+                removed when the turn ends: every child eawf starts is a
+                managed one, so no spawn inherits the operator's home.
 
         Returns:
             The validated :class:`SpawnResult` for the completed call.
@@ -766,8 +772,45 @@ class ClaudeAdapter:
                 already saturated (raised before any subprocess is forked).
             RuntimeSpawnError: the spawn timed out, exited non-zero, or
                 returned an unparseable / error result envelope.
+            OSError: The per-spawn configuration home could not be created.
         """
+        spawn = functools.partial(
+            self._spawn_isolated,
+            prompt,
+            model=model,
+            cwd=cwd,
+            extra_args=extra_args,
+            denied_tools=denied_tools,
+            timeout=timeout,
+            on_spawn=on_spawn,
+            on_pgid=on_pgid,
+            on_chunk=on_chunk,
+            session=session,
+            enforcement_sink=enforcement_sink,
+        )
+        if isolation is not None:
+            return await spawn(isolation=isolation)
+        spawn_dir = Path(cwd) if cwd is not None else Path.cwd()
+        with ephemeral_managed_isolation(spawn_dir, operator_env=os.environ) as own:
+            return await spawn(isolation=own)
 
+    async def _spawn_isolated(
+        self,
+        prompt: str,
+        *,
+        model: str,
+        cwd: str | None,
+        extra_args: Sequence[str],
+        denied_tools: Sequence[str],
+        timeout: float | None,
+        on_spawn: Callable[[int], None] | None,
+        on_pgid: Callable[[int], None] | None,
+        on_chunk: Callable[[str], Awaitable[None]] | None,
+        session: str,
+        enforcement_sink: EnforcementSink | None,
+        isolation: ManagedClaudeIsolation,
+    ) -> SpawnResult:
+        """Run the spawn :meth:`spawn_session` describes against *isolation*."""
         deny_flag: list[str] = []
         if denied_tools:
             # Map the per-wave deny-list to the claude deny flag. Sorted +
@@ -808,7 +851,7 @@ class ClaudeAdapter:
             "--model",
             model,
             *deny_flag,
-            *(isolation.argv_flags if isolation is not None else ()),
+            *isolation.argv_flags,
             *extra_args,
         ]
         # Prefix the OS filesystem jail (bubblewrap / seatbelt) when the
@@ -824,8 +867,7 @@ class ClaudeAdapter:
         # credential-bearing families were dropped) onto the denial timeline.
         child_env = build_child_env(self.id, extra_path_dir=resolve_binary_dir(self.cli_binary))
         self._record_env_scrub(child_env, session=session, sink=enforcement_sink)
-        if isolation is not None:
-            child_env.update(isolation.env)
+        child_env.update(isolation.env)
 
         # The concurrent-spawn cap is the LAST gate before the fork so the
         # slot is held only for the real subprocess lifetime; it is released

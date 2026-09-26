@@ -3,7 +3,8 @@
 Mirrors the dict body emitted by :class:`eawf.workflow.skills.memory.MemorySkill`:
 a single ``save|list|forget`` memory operation intent plus the target
 tier. A named verb (``save`` / ``forget``) without a ``name`` degrades to
-``needs_user`` and carries a ``reason``.
+``needs_user`` and carries a ``reason`` plus the typed question it puts to
+the operator.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from __future__ import annotations
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
+
+from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 MemoryVerb = Literal["save", "list", "forget"]
 MemoryTierName = Literal["working", "archival", "retrieval"]
@@ -26,6 +29,7 @@ class MemoryBody(BaseModel):
     name: str | None = None
     tier: MemoryTierName
     reason: str | None = None
+    user_question: UserQuestion | None = None
 
 
 __all__ = ["MemoryBody", "MemoryTierName", "MemoryVerb"]

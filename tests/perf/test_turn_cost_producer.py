@@ -16,10 +16,9 @@ import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
-from eawf.observability.telemetry.models import RuntimeName
+from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
-    PriceSource,
     TurnCostRecord,
     build_turn_cost_record,
 )
@@ -27,7 +26,7 @@ from eawf.observability.telemetry.turn_cost import (
 pytestmark = pytest.mark.unit
 
 _TS = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
-_PRICED = PriceSource(kind="pricing_snapshot", pricing_version="2026.05.17")
+_PRICED = PriceSourceKind.LIST_RECONSTRUCTED
 
 
 def _wave(wave_id: str, *, status: WaveStatus = WaveStatus.CLOSED) -> Wave:
@@ -50,7 +49,7 @@ def _run(
     input_tokens: int = 0,
     output_tokens: int = 0,
     cost_usd: str = "0",
-    price_source: PriceSource | None = _PRICED,
+    price_source: PriceSourceKind = _PRICED,
 ) -> CompletedUnitRun:
     return CompletedUnitRun(
         run_id=run_id,
@@ -61,7 +60,7 @@ def _run(
         wall_clock_ms=wall_clock_ms,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        cost_usd=Decimal(cost_usd),
+        cost_usd=None if price_source is PriceSourceKind.UNPRICED else Decimal(cost_usd),
         price_source=price_source,
     )
 

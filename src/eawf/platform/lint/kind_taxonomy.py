@@ -188,12 +188,25 @@ KIND_GATE_TIERS: Mapping[TestKind, GateTier] = {
 
 
 def tier_rank(tier: GateTier) -> int:
-    """Return ``tier``'s 0-based position on the ladder (``wave`` is 0)."""
+    """Return ``tier``'s 0-based position on the ladder (``wave`` is 0).
+
+    Args:
+        tier: The gate tier to rank.
+
+    Returns:
+        The tier's index in ladder order.
+    """
     return list(GateTier).index(tier)
 
 
 def gate_tier_for_kind(kind: TestKind) -> GateTier:
     """Return the one gate tier ``kind`` runs at.
+
+    Args:
+        kind: The test kind to look up.
+
+    Returns:
+        The gate tier bound to *kind*.
 
     Raises:
         TypeError: ``kind`` is not a :class:`TestKind`.

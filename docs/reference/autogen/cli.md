@@ -263,12 +263,12 @@ Attest verify-spine evidence (attest).
 
 ### `eawf flow`
 
-Operator surface for the /flow skill (run, status, abort).
+Operator surface for the retired /flow skill (run refuses; status, abort).
 
 | Verb | Summary |
 |---|---|
 | `abort` | Abort a flow run by appending an ``abandoned`` flow_record. |
-| `run` | Run the ``/flow`` skill (fresh or resumed). |
+| `run` | Run the ``/flow`` skill (fresh or resumed), unless the catalog retired it. |
 | `status` | Print structured status for a flow run (read-only). |
 
 ### `eawf goal`

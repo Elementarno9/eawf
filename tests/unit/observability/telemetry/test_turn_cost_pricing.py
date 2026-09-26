@@ -18,10 +18,9 @@ import pytest
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
-from eawf.observability.telemetry.models import RuntimeName
+from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 from eawf.observability.telemetry.turn_cost import (
     CompletedUnitRun,
-    PriceSource,
     TurnCostRecord,
     build_turn_cost_record,
 )
@@ -29,8 +28,8 @@ from eawf.observability.telemetry.turn_cost import (
 pytestmark = pytest.mark.unit
 
 _TS = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
-_SNAPSHOT = PriceSource(kind="pricing_snapshot", pricing_version="2026.05.17")
-_VENDOR = PriceSource(kind="vendor_reported")
+_SNAPSHOT = PriceSourceKind.LIST_RECONSTRUCTED
+_VENDOR = PriceSourceKind.BILLED
 
 
 def _closed_wave(wave_id: str) -> Wave:
@@ -48,7 +47,7 @@ def _run(
     *,
     runtime: RuntimeName = "claude",
     cost_usd: str = "0",
-    price_source: PriceSource | None = _SNAPSHOT,
+    price_source: PriceSourceKind = _SNAPSHOT,
     input_tokens: int = 0,
     output_tokens: int = 0,
     cache_read_tokens: int = 0,
@@ -67,7 +66,7 @@ def _run(
         cache_read_tokens=cache_read_tokens,
         cache_write_tokens=cache_write_tokens,
         reasoning_tokens=reasoning_tokens,
-        cost_usd=Decimal(cost_usd),
+        cost_usd=None if price_source is PriceSourceKind.UNPRICED else Decimal(cost_usd),
         price_source=price_source,
     )
 
@@ -88,7 +87,7 @@ def test_unpriced_rows_are_counted_and_never_summed() -> None:
     record = _build(
         [
             _run("run-priced", cost_usd="0.40"),
-            _run("run-unpriced", cost_usd="9.99", price_source=None),
+            _run("run-unpriced", cost_usd="9.99", price_source=PriceSourceKind.UNPRICED),
         ]
     )
 
@@ -98,7 +97,7 @@ def test_unpriced_rows_are_counted_and_never_summed() -> None:
 
 def test_unpriced_row_does_not_dilute_the_cost_percentiles() -> None:
     """Excluding an unpriced run leaves the priced unit cost intact."""
-    record = _build([_run("run-unpriced", cost_usd="9.99", price_source=None)])
+    record = _build([_run("run-unpriced", cost_usd="9.99", price_source=PriceSourceKind.UNPRICED)])
 
     assert record.p50_cost_usd == Decimal("0")
     assert record.p90_cost_usd == Decimal("0")
@@ -107,7 +106,7 @@ def test_unpriced_row_does_not_dilute_the_cost_percentiles() -> None:
 
 
 @pytest.mark.parametrize("source", [_SNAPSHOT, _VENDOR])
-def test_every_price_source_kind_is_summable(source: PriceSource) -> None:
+def test_every_price_source_kind_is_summable(source: PriceSourceKind) -> None:
     """Both provenance kinds carry a price, so both rows sum."""
     record = _build([_run("run-priced", cost_usd="0.40", price_source=source)])
 
@@ -176,7 +175,9 @@ def test_unpriced_codex_row_is_counted_as_unpriced() -> None:
     record = _build(
         [
             _run("run-claude", cost_usd="0.40"),
-            _run("run-codex", runtime="codex", cost_usd="5.00", price_source=None),
+            _run(
+                "run-codex", runtime="codex", cost_usd="5.00", price_source=PriceSourceKind.UNPRICED
+            ),
         ]
     )
 

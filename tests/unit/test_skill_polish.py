@@ -130,8 +130,7 @@ def test_polish_probe_blocked_short_circuits(
 def test_polish_skill_registered_with_canonical_name() -> None:
     from eawf.workflow.skills import registry
 
-    cls = registry.lookup("/polish")
-    assert cls is PolishSkill
+    assert registry.list_registered()["/polish"] is PolishSkill
 
 
 # --- P30-I23-W46: runtime options (auto_apply_safe / category) ----------------

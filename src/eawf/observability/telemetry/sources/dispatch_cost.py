@@ -134,7 +134,8 @@ class DispatchCostSessionSource:
         output_tokens = _int_or_zero(payload.get("output_tokens"))
         cache_write = _int_or_zero(payload.get("cache_creation_input_tokens"))
         cache_read = _int_or_zero(payload.get("cache_read_input_tokens"))
-        cost_usd = _decimal_or_zero(payload.get("cost_usd"))
+        raw_cost = payload.get("cost_usd")
+        cost_usd = None if raw_cost is None else _decimal_or_zero(raw_cost)
         raw_total = payload.get("total_tokens")
         total_tokens = (
             _int_or_zero(raw_total)
@@ -178,7 +179,7 @@ class DispatchCostSessionSource:
 
 
 def _price_source_of(
-    payload: dict[str, Any], cost_usd: Decimal, pricing_version: str
+    payload: dict[str, Any], cost_usd: Decimal | None, pricing_version: str
 ) -> tuple[PriceSourceKind | None, str | None]:
     """Return the price provenance a ``dispatch_cost`` payload carries.
 
@@ -190,7 +191,7 @@ def _price_source_of(
 
     Args:
         payload: The decoded ``dispatch_cost`` payload.
-        cost_usd: The row's coerced cost.
+        cost_usd: The row's coerced cost, or ``None`` when it records none.
         pricing_version: The row's rate-table snapshot tag.
 
     Returns:
@@ -199,7 +200,7 @@ def _price_source_of(
     """
     raw = payload.get("price_source")
     if raw is None:
-        if cost_usd > 0:
+        if cost_usd is not None and cost_usd > 0:
             return PriceSourceKind.LIST_RECONSTRUCTED, pricing_version
         return PriceSourceKind.UNPRICED, None
     try:

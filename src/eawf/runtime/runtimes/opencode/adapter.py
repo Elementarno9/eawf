@@ -245,9 +245,11 @@ class _StreamFields:
         session_id: First non-empty ``sessionID`` seen (``""`` when none).
         text: Concatenated ``text`` event fragments.
         input_tokens: Billed non-cached input tokens.
-        output_tokens: Billed output tokens.
+        output_tokens: Billed output tokens, reasoning included.
         cache_read: Prompt-cache read tokens.
         cache_write: Prompt-cache write tokens.
+        reasoning_tokens: Reasoning slice of ``output_tokens``, or ``None``
+            when the stream carries no reasoning counter.
         cost_reported: Runtime self-reported cost, or ``None`` when absent.
     """
 
@@ -257,6 +259,7 @@ class _StreamFields:
     output_tokens: int
     cache_read: int
     cache_write: int
+    reasoning_tokens: int | None
     cost_reported: Decimal | None
 
 
@@ -337,31 +340,43 @@ def _opencode_stream_error_detail(stdout: bytes) -> str:
     return ""
 
 
-def _accumulate_step_finish(part: dict[str, object]) -> tuple[int, int, int, int, Decimal | None]:
-    """Extract ``(input, output, cache_read, cache_write, cost)`` from a step.
+def _accumulate_step_finish(
+    part: dict[str, object],
+) -> tuple[int, int, int, int, int | None, Decimal | None]:
+    """Extract ``(input, output, cache_read, cache_write, reasoning, cost)``.
+
+    opencode reports ``reasoning`` disjoint from ``output`` (its ``total`` is
+    ``input + output + reasoning``) while billing reasoning at the output
+    rate. The shared spawn contract treats reasoning as a slice of output, so
+    the reasoning count is folded into the returned output tally.
 
     Args:
         part: The ``part`` map of a ``step_finish`` event.
 
     Returns:
-        The token counts (defaulting to 0 when undisclosed) and the
+        The token counts (defaulting to 0 when undisclosed), the reasoning
+        count (``None`` when the step carries no reasoning counter) and the
         self-reported cost (``None`` when absent).
     """
     input_tokens = 0
     output_tokens = 0
     cache_read = 0
     cache_write = 0
+    reasoning: int | None = None
     tokens = part.get("tokens")
     if isinstance(tokens, dict):
         input_tokens = int(tokens.get("input", 0) or 0)
         output_tokens = int(tokens.get("output", 0) or 0)
+        if tokens.get("reasoning") is not None:
+            reasoning = int(tokens.get("reasoning", 0) or 0)
+            output_tokens += reasoning
         cache = tokens.get("cache")
         if isinstance(cache, dict):
             cache_read = int(cache.get("read", 0) or 0)
             cache_write = int(cache.get("write", 0) or 0)
     cost_field = part.get("cost")
     cost = Decimal(str(cost_field)) if cost_field is not None else None
-    return input_tokens, output_tokens, cache_read, cache_write, cost
+    return input_tokens, output_tokens, cache_read, cache_write, reasoning, cost
 
 
 def _collect_stream_fields(events: list[dict[str, object]]) -> _StreamFields:
@@ -381,6 +396,7 @@ def _collect_stream_fields(events: list[dict[str, object]]) -> _StreamFields:
     session_id = ""
     text_parts: list[str] = []
     input_tokens = output_tokens = cache_read = cache_write = 0
+    reasoning_tokens: int | None = None
     cost_reported: Decimal | None = None
     for event in events:
         sid = event.get("sessionID")
@@ -395,9 +411,14 @@ def _collect_stream_fields(events: list[dict[str, object]]) -> _StreamFields:
             if isinstance(fragment, str):
                 text_parts.append(fragment)
         elif event_type == "step_finish":
-            input_tokens, output_tokens, cache_read, cache_write, cost_reported = (
-                _accumulate_step_finish(part)
-            )
+            (
+                input_tokens,
+                output_tokens,
+                cache_read,
+                cache_write,
+                reasoning_tokens,
+                cost_reported,
+            ) = _accumulate_step_finish(part)
     return _StreamFields(
         session_id=session_id,
         text="".join(text_parts),
@@ -405,6 +426,7 @@ def _collect_stream_fields(events: list[dict[str, object]]) -> _StreamFields:
         output_tokens=output_tokens,
         cache_read=cache_read,
         cache_write=cache_write,
+        reasoning_tokens=reasoning_tokens,
         cost_reported=cost_reported,
     )
 
@@ -525,6 +547,7 @@ def _parse_opencode_result(
         cache_creation_5m_input_tokens=fields.cache_write,
         cache_creation_1h_input_tokens=0,
         cache_read_input_tokens=fields.cache_read,
+        reasoning_output_tokens=fields.reasoning_tokens,
         cost_usd_reported=fields.cost_reported,
         started_at=started_at,
         ended_at=ended_at,

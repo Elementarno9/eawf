@@ -9,6 +9,10 @@ The distinction matters because the notice is written on the path that
 reaps a live process group: a notice that could be constructed blocking
 would be a notice that could stall the reap it exists to explain.
 
+On the Run's ledger this record is the budget control's receipt; the one
+notice a reader lists is the ``BudgetThresholdNotice`` row it folds into in
+the budget notice ledger (:mod:`eawf.runtime.budget.notices`).
+
 Which control a budget termination opens is decided here rather than left
 to each caller. ``cancel`` is reused rather than a ninth control kind
 added:
@@ -75,6 +79,13 @@ BUDGET_TERMINATION_STATUS: Final[RunStatus] = RunStatus.CANCELLED
 
 class BudgetNotice(RuntimeRecord):
     """One reading that crossed a Run's cap, as the run ledger records it.
+
+    This line is the budget control's receipt on the Run's ledger: it anchors
+    the control facts and answers a retried termination. It is not a second
+    notice. The one notice a crossing produces is the non-blocking
+    ``BudgetThresholdNotice`` row of the budget notice ledger, which this
+    receipt is folded into when it is written, so a reader that lists
+    notices reads that ledger and never counts the receipt beside it.
 
     Attributes:
         payload_kind: The discriminator separating a notice line from a

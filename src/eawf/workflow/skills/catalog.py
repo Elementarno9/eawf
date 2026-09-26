@@ -257,15 +257,36 @@ class SkillCatalog(BaseModel):
         return self
 
     def entry(self, skill_id: str) -> SkillCatalogEntry | None:
-        """Return the entry for bare *skill_id*, or ``None`` when absent."""
+        """Return the entry for bare *skill_id*, or ``None`` when absent.
+
+        Args:
+            skill_id: The bare skill id, without a namespace prefix.
+
+        Returns:
+            The matching catalog entry, or ``None``.
+        """
         return next((e for e in self.entries if e.skill_id == skill_id), None)
 
     def retired_row(self, skill_id: str) -> RetiredSkill | None:
-        """Return the retirement row for bare *skill_id*, or ``None``."""
+        """Return the retirement row for bare *skill_id*, or ``None``.
+
+        Args:
+            skill_id: The bare skill id, without a namespace prefix.
+
+        Returns:
+            The matching retirement row, or ``None`` when not retired.
+        """
         return next((r for r in self.retired if r.skill_id == skill_id), None)
 
     def replaced_by(self, skill_id: str) -> tuple[str, ...]:
-        """Return the retired names whose successors include *skill_id*."""
+        """Return the retired names whose successors include *skill_id*.
+
+        Args:
+            skill_id: The bare id of a live catalog skill.
+
+        Returns:
+            The retired skill ids *skill_id* succeeds, in catalog order.
+        """
         return tuple(r.skill_id for r in self.retired if skill_id in r.successors)
 
 

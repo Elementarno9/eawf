@@ -16,6 +16,9 @@ Contract:
 - The registry refuses to register two classes for the same name; a
   collision raises :class:`ValueError` so a duplicate ``register``
   decorator does not silently shadow an earlier registration.
+- :func:`lookup` refuses a name the skill catalog retired, naming its
+  successor, so a retired class that is still imported (and therefore
+  registered) cannot be dispatched by name.
 
 This module is intentionally small. It is not meant to evolve into a
 plugin loader; the runtime adapter handles loading by importing
@@ -28,6 +31,7 @@ import logging
 from collections.abc import Mapping
 
 from eawf.surfaces.render.envelope import SkillName
+from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillRetiredError
 from eawf.workflow.skills.engine import Skill
 
 logger = logging.getLogger(__name__)
@@ -84,7 +88,21 @@ def list_registered() -> Mapping[SkillName, type[Skill]]:
 
 
 def lookup(name: SkillName) -> type[Skill] | None:
-    """Return the registered class for *name*, or ``None`` if missing."""
+    """Return the registered class for *name*, or ``None`` if missing.
+
+    Args:
+        name: The slashed skill name (``/research``).
+
+    Returns:
+        The registered class, or ``None`` when no class registered *name*.
+
+    Raises:
+        SkillRetiredError: The catalog retired *name*; the message names the
+            successor. Raised whether or not a class is registered.
+    """
+    retired = SKILL_CATALOG.retired_row(name.removeprefix("/"))
+    if retired is not None:
+        raise SkillRetiredError(retired)
     return _REGISTRY.get(name)
 
 

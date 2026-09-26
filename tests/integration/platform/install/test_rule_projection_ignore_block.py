@@ -121,6 +121,42 @@ def test_managed_block_reds_when_the_views_pattern_is_dropped(tmp_path: Path) ->
     assert _is_ignored(target, target / "AGENTS.override.md")
 
 
+def test_managed_block_ignores_per_spawn_claude_config_homes(tmp_path: Path) -> None:
+    """``eawf.runtime.runtimes.claude.managed_run`` writes per-spawn homes.
+
+    Each headless spawn creates ``<cwd>/.eawf-mcp/spawn-<uuid>/claude-config/``;
+    a child running ``git add`` in a downstream repo must never stage them.
+    """
+    target = tmp_path / "repo"
+    _seed_rule_source_repo(target)
+    spawn_history = target / ".eawf-mcp" / "spawn-x" / "claude-config" / "history.jsonl"
+    spawn_history.parent.mkdir(parents=True, exist_ok=True)
+    spawn_history.write_text("{}\n", encoding="utf-8")
+
+    write_gitignore(target)
+
+    assert _is_ignored(target, spawn_history)
+
+
+def test_managed_block_reds_when_the_mcp_artifact_pattern_is_dropped(tmp_path: Path) -> None:
+    """Revert-check: dropping ``.eawf-mcp/`` un-ignores a per-spawn config home.
+
+    Nothing else in the managed block covers this directory, so removing
+    the pattern is the regression this gate must catch.
+    """
+    target = tmp_path / "repo"
+    _seed_rule_source_repo(target)
+    spawn_history = target / ".eawf-mcp" / "spawn-x" / "claude-config" / "history.jsonl"
+    spawn_history.parent.mkdir(parents=True, exist_ok=True)
+    spawn_history.write_text("{}\n", encoding="utf-8")
+    reverted = tuple(p for p in GITIGNORE_PATTERNS if p != ".eawf-mcp/")
+    assert len(reverted) == len(GITIGNORE_PATTERNS) - 1
+    _write_managed_block(target, reverted)
+
+    assert not _is_ignored(target, spawn_history)
+    assert _is_ignored(target, target / "AGENTS.override.md")
+
+
 def _write_managed_block(target: Path, patterns: tuple[str, ...]) -> None:
     """Write a managed block carrying exactly *patterns*, bypassing the writer.
 

@@ -3,18 +3,17 @@
 A thin end-to-end sweep over the C04 + C05 surface deliverables (waves
 W02-W14) that asserts each contract boundary still holds: the CLI help
 surface, the daemonless ``config validate`` deprecation-clean output, the
-0..5 exit-code surface, the ``ErrorEnvelope`` strict shape, the 17-skill
-registry, the ``SkillManifest`` invariants (BOT-06), the per-runtime
+0..5 exit-code surface, the ``ErrorEnvelope`` strict shape, the catalog-backed
+skill registry, the ``SkillManifest`` invariants (BOT-06), the per-runtime
 cache-control injection gate, and the skill -> adapter handshake reject.
 
 Each assertion exercises the real symbol path (no mocks of the unit
 under test) so a regression in any surface fails here fast, independent
 of the deeper per-wave unit suites.
 
-W26 added the user-facing catalog-parity assertion below: the six C04b
-skills were registered in the runtime registry (17) but absent from the
-user-facing catalog (11); W26 closed the gap so ``CANONICAL_SKILL_NAMES``
-and the runtime registry agree at 17, proving catalog/registry parity.
+The catalog-parity assertion below pins that every skill a lookup can
+dispatch is a catalog skill; a retired class may stay registered but its
+lookup refuses.
 
 W25 added the daemonless-rejection-breadth assertion below: the
 mutating-verb daemon-escalation rejection now fires at the shared
@@ -45,11 +44,11 @@ from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.errors import ErrorEnvelope
-from eawf.surfaces.render.envelope import CANONICAL_SKILL_NAMES
 from eawf.workflow.skills import (
     _bootstrap as _skills_bootstrap,  # noqa: F401 — registers all skills
 )
 from eawf.workflow.skills import registry
+from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillRetiredError
 
 runner = CliRunner()
 
@@ -151,36 +150,39 @@ def test_error_envelope_accepts_real_fields() -> None:
     assert env.data["kind"] == "LockConflict"
 
 
-# --- assertion 5: full skill registry after bootstrap ----------------
+# --- assertion 5: catalog skills registered after bootstrap -----------
+
+#: Catalog skills that ship an engine class; the bootstrap registers these.
+_CATALOG_SKILL_CLASSES = frozenset({"/dispatch", "/integrate", "/memory", "/research", "/verify"})
 
 
-def test_skill_registry_holds_every_canonical_skill_after_bootstrap() -> None:
-    registered = registry.list_registered()
-    assert len(registered) == len(CANONICAL_SKILL_NAMES)
+def test_skill_registry_holds_every_catalog_skill_class_after_bootstrap() -> None:
+    registered = set(registry.list_registered())
+    assert registered >= _CATALOG_SKILL_CLASSES
+    for name in _CATALOG_SKILL_CLASSES:
+        assert registry.lookup(name) is registry.list_registered()[name]
 
 
-# --- assertion 5b: user-facing catalog == runtime registry -----------
+# --- assertion 5b: user-facing catalog == dispatchable registry -------
 
 
 def test_user_facing_catalog_matches_runtime_registry() -> None:
-    """Catalog/registry parity: ``CANONICAL_SKILL_NAMES`` == ``list_registered``.
+    """Catalog/registry parity: every dispatchable registered skill is a catalog skill.
 
-    The six C04b skills were registered in the runtime registry but
-    absent from the user-facing catalog (``eawf skill list`` read
-    ``CANONICAL_SKILL_NAMES``, frozen at 11). W26 extended the catalog to
-    17 so both surfaces agree, and the three lifecycle skills took it to
-    20. The names — not just the counts — must match so a skill
-    registered without a catalog row (or vice versa) is caught here.
+    A registered class is dispatchable only through :func:`registry.lookup`,
+    which refuses a name the catalog retired. So the names a lookup resolves
+    are exactly the registered catalog skills, and any other registered name
+    must be a retired one.
     """
-    catalog = set(CANONICAL_SKILL_NAMES)
+    catalog = {entry.invocation_name for entry in SKILL_CATALOG.entries}
+    retired = {f"/{row.skill_id}" for row in SKILL_CATALOG.retired}
     registered = set(registry.list_registered())
-    assert len(catalog) == len(CANONICAL_SKILL_NAMES)
-    assert len(registered) == len(CANONICAL_SKILL_NAMES)
-    assert catalog == registered, (
-        "catalog/registry drift: "
-        f"catalog-only={sorted(catalog - registered)} "
-        f"registry-only={sorted(registered - catalog)}"
+    assert registered <= catalog | retired, (
+        f"registered skills outside the catalog: {sorted(registered - catalog - retired)}"
     )
+    for name in registered & retired:
+        with pytest.raises(SkillRetiredError):
+            registry.lookup(name)
 
 
 # --- assertion 6: SkillManifest invariants / BOT-06 ------------------

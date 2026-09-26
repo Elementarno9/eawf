@@ -115,10 +115,10 @@ from eawf.workflow.lifecycle._claim_guards import CLAIM_PARALLEL_LIMIT_REACHED
 from eawf.workflow.lifecycle._errors import LifecycleError, LifecycleGuardError
 from eawf.workflow.lifecycle.spec import WAVE_TRANSITIONS, validate_transition
 from eawf.workflow.lifecycle.wave import (
-    close_wave,
     compute_runtime_delta,
     fail_wave,
 )
+from eawf.workflow.lifecycle.wave_actual import close_wave_recording_actual
 from eawf.workflow.verify.dispatch_close import (
     CloseGateResult,
     FloorFailureClass,
@@ -2572,8 +2572,9 @@ class _Loop:
                 eu_minutes=DEFAULT_EU_MINUTES,
                 eu_basis=EuBasis.API_DURATION,
             )
-            close_wave(
+            close_wave_recording_actual(
                 state,
+                state_path=state_path,
                 wave_id=wave_id,
                 outcome=(
                     outcome_override
@@ -3872,7 +3873,9 @@ def resolve_fork(
         if fork is None:
             raise LifecycleError(f"no fork queued for wave: {wave_id!r} attempt={attempt}")
         if resolution is FleetForkResolution.APPROVE_CLOSE:
-            close_wave(state, wave_id=wave_id, outcome="fork approve-close")
+            close_wave_recording_actual(
+                state, state_path=state_path, wave_id=wave_id, outcome="fork approve-close"
+            )
             run.forks.remove(fork)
             run.counters.forks_resolved += 1
         elif resolution is FleetForkResolution.RE_DISPATCH:

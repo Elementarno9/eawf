@@ -1776,8 +1776,10 @@ def test_persist_live_session_attempt_persists_when_wave_active(
     wave = load_state(state_path).waves[_WAVE_ID]
     assert set(wave.sessions) == {1}
     assert wave.sessions[1].session_id == hash_vendor_session_id("sess-late-xyz789")
-    # The persisted attempt's cost matches the returned session-attempt row.
-    assert wave.sessions[1].cost_usd == pytest.approx(float(session_attempt.cost_usd))
+    # The persisted attempt's cost matches the returned session-attempt row;
+    # the model under test is unpriced, so both record a null cost.
+    assert session_attempt.cost_usd is None
+    assert wave.sessions[1].cost_usd is None
     # A headless runtime fires no runtime.capture RPC, so the persist credits
     # its priced snapshot onto the wave (proving the non-terminal path ran).
     assert wave.runtime_baseline is not None

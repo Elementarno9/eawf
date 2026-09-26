@@ -167,14 +167,13 @@ def test_close_preflight_calls_compute_before_close_wave(
     seed_active_session_on_disk(state_path, session_id="SES-1")
     assert runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", "SES-1"]).exit_code == 0
 
-    # Patch the two functions in the CLI handler module (their import
-    # site, not the source module — lazy imports inside the function
-    # body bind the names against the handler module's namespace).
-    import eawf.workflow.lifecycle.transitions as transitions_mod
+    # Patch each function where its caller resolves it: the close runs
+    # through the actual-recording wrapper, which binds close_wave at import.
+    import eawf.workflow.lifecycle.wave_actual as wave_actual_mod
     import eawf.workflow.verify as verify_pkg
 
     call_log: list[str] = []
-    original_close = transitions_mod.close_wave
+    original_close = wave_actual_mod.close_wave
 
     def fake_close_wave(
         state_arg: State,
@@ -197,7 +196,7 @@ def test_close_preflight_calls_compute_before_close_wave(
         call_log.append(f"compute:{scope_id}")
         return CloseReadiness(ready=True, criteria=[], warnings=[], waived_gate_ids=[])
 
-    monkeypatch.setattr(transitions_mod, "close_wave", fake_close_wave)
+    monkeypatch.setattr(wave_actual_mod, "close_wave", fake_close_wave)
     monkeypatch.setattr(verify_pkg, "compute", fake_compute)
 
     result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])

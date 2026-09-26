@@ -51,6 +51,7 @@ LifecycleGuardCode = Literal[
     "claim_active_iter_conflict",
     "claim_criteria_empty",
     "claim_parallel_limit_reached",
+    "claim_budget_ceiling_reached",
     "spawn_wave_not_claimed",
     "waiver_mode_disabled",
     "audit_not_found",

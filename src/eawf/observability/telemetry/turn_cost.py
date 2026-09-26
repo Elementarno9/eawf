@@ -16,9 +16,10 @@ Two exclusion rules apply to the runs inside a unit, in this order:
    :class:`~eawf.observability.telemetry.cost_class.CostClass` is counted and
    dropped from both cost sums. A run with no role at all raises instead
    of being charged to execution.
-2. A run with no ``price_source`` is counted as unpriced and dropped. It is
-   never summed as zero, because a zero-cost row and an unpriced row are
-   different facts and averaging them together understates real spend.
+2. A run whose ``price_source`` is ``unpriced`` carries a null cost; it is
+   counted as unpriced and dropped. It is never summed as zero, because a
+   zero-cost row and an unpriced row are different facts and averaging them
+   together understates real spend.
 
 Every supported runtime reports reasoning tokens inside its output total,
 so no run is ever excluded for unsettled token accounting. The record
@@ -40,40 +41,20 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import AgentSessionRole, WaveStatus
 from eawf.kernel.state.models import Wave
 from eawf.observability.telemetry.cost_class import CostClass, classify_cost_class
-from eawf.observability.telemetry.models import RuntimeName
+from eawf.observability.telemetry.models import PriceSourceKind, RuntimeName
 
 __all__ = [
     "CompletedUnitRun",
-    "PriceSource",
     "TurnCostRecord",
     "build_turn_cost_record",
 ]
-
-
-class PriceSource(BaseModel):
-    """Provenance of the price applied to one run's cost.
-
-    A cost is summable only when it carries a source. The model is a row
-    rather than a bare string so a future source can add its own fields
-    without re-typing every consumer.
-
-    Attributes:
-        kind: Where the rate came from (a vendor-reported charge or a
-            local pricing snapshot).
-        pricing_version: Version stamp of the rate table that priced the
-            run, or ``None`` when the vendor reported the charge directly.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    kind: str = Field(min_length=1)
-    pricing_version: str | None = None
 
 
 class CompletedUnitRun(BaseModel):
@@ -93,8 +74,11 @@ class CompletedUnitRun(BaseModel):
         cache_write_tokens: Tokens written to the prompt cache.
         reasoning_tokens: Reasoning tokens reported separately. Never a
             summand of the token total.
-        cost_usd: Priced cost of the run.
-        price_source: Price provenance, or ``None`` for an unpriced run.
+        cost_usd: Priced cost of the run, or ``None`` when unpriced.
+        price_source: Price provenance, the same closed kind the Run usage
+            rows carry.
+        rate_table_version: Rate-table revision behind a list-reconstructed
+            cost, or ``None`` when the source does not name one.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -110,8 +94,23 @@ class CompletedUnitRun(BaseModel):
     cache_read_tokens: int = Field(default=0, ge=0)
     cache_write_tokens: int = Field(default=0, ge=0)
     reasoning_tokens: int = Field(default=0, ge=0)
-    cost_usd: Decimal = Field(default=Decimal("0"), ge=Decimal("0"))
-    price_source: PriceSource | None = None
+    cost_usd: Decimal | None = Field(default=None, ge=Decimal("0"))
+    price_source: PriceSourceKind = PriceSourceKind.UNPRICED
+    rate_table_version: str | None = None
+
+    @model_validator(mode="after")
+    def _cost_matches_source(self) -> Self:
+        """Hold the cost to its source: null when unpriced, set otherwise.
+
+        Raises:
+            ValueError: When an unpriced run carries a cost or a priced run
+                carries none.
+        """
+        if (self.price_source is PriceSourceKind.UNPRICED) != (self.cost_usd is None):
+            raise ValueError(
+                f"price_source {self.price_source.value} does not match cost_usd {self.cost_usd}"
+            )
+        return self
 
 
 class TurnCostRecord(BaseModel):
@@ -137,7 +136,7 @@ class TurnCostRecord(BaseModel):
         token_total: Sum of input, output, cache-read and cache-write
             tokens over summed runs. Reasoning tokens are never included.
         unattributed_run_count: Runs excluded as unattributed.
-        unpriced_run_count: Runs excluded for carrying no price source.
+        unpriced_run_count: Runs excluded as unpriced.
         reasoning_summand_unsettled: Always false; kept so a persisted
             baseline artifact still validates against this model.
         reasoning_summand_unsettled_run_count: Always zero, for the same
@@ -292,7 +291,7 @@ def _fold_run(fold: _CostFold, run: CompletedUnitRun) -> Decimal:
     if cost_class is CostClass.UNATTRIBUTED:
         fold.unattributed_run_count += 1
         return Decimal("0")
-    if run.price_source is None:
+    if run.cost_usd is None:
         fold.unpriced_run_count += 1
         return Decimal("0")
     fold.token_total += _four_class_tokens(run)

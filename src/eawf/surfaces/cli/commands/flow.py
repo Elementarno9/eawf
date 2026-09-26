@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 flow_app = typer.Typer(
     name="flow",
-    help="Operator surface for the /flow skill (run, status, abort).",
+    help="Operator surface for the retired /flow skill (run refuses; status, abort).",
     no_args_is_help=True,
 )
 
@@ -180,7 +180,12 @@ def run_cmd(
         ),
     ] = "urn:eawf:v1:store:cli/sessions/SES-flow-run",
 ) -> None:
-    """Run the ``/flow`` skill (fresh or resumed).
+    """Run the ``/flow`` skill (fresh or resumed), unless the catalog retired it.
+
+    The catalog retires ``/flow`` and four of its steps, so today every run
+    (fresh or resumed) refuses with ``INVALID_INPUT`` naming each successor
+    before any step runs; ``status`` and ``abort`` stay available so a flow
+    started before the retirement can still be inspected and abandoned.
 
     Without ``--resume``: starts a fresh run with a new ``FL-<uuid12>``
     id and optional ``--topic`` / ``--stop-after``.
@@ -197,9 +202,20 @@ def run_cmd(
     )
     from eawf.workflow.skills._common import resolve_active_state_path
     from eawf.workflow.skills.engine import SkillContext, run_skill
-    from eawf.workflow.skills.flow import FlowSkill, load_latest_safe_checkpoint
+    from eawf.workflow.skills.flow import (
+        FlowRetiredError,
+        FlowSkill,
+        check_flow_runnable,
+        load_latest_safe_checkpoint,
+    )
 
     flags: GlobalFlags = ctx.obj
+
+    try:
+        check_flow_runnable()
+    except FlowRetiredError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
+        return
 
     try:
         # Skip stdin on a TTY so interactive runs don't block on EOF.

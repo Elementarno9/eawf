@@ -1,8 +1,8 @@
-"""Parent, criteria, and repo-wide capacity guards for wave claims."""
+"""Parent, criteria, budget, and repo-wide capacity guards for wave claims."""
 
 from __future__ import annotations
 
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from eawf.kernel.state.enums import IterStatus, PhaseStatus, WaveStatus
 from eawf.kernel.state.ids import natural_key
@@ -14,6 +14,9 @@ from eawf.workflow.lifecycle._errors import (
 )
 from eawf.workflow.lifecycle.iter_ import _validate_iter_activation
 
+if TYPE_CHECKING:
+    from eawf.runtime.budget.policy import BudgetConfig
+
 CLAIM_PARENT_ITER_MISSING: Final[LifecycleGuardCode] = "claim_parent_iter_missing"
 CLAIM_PARENT_PHASE_MISSING: Final[LifecycleGuardCode] = "claim_parent_phase_missing"
 CLAIM_PARENT_PHASE_NOT_ACTIVE: Final[LifecycleGuardCode] = "claim_parent_phase_not_active"
@@ -21,6 +24,7 @@ CLAIM_PARENT_ITER_TERMINAL: Final[LifecycleGuardCode] = "claim_parent_iter_termi
 CLAIM_ACTIVE_ITER_CONFLICT: Final[LifecycleGuardCode] = "claim_active_iter_conflict"
 CLAIM_CRITERIA_EMPTY: Final[LifecycleGuardCode] = "claim_criteria_empty"
 CLAIM_PARALLEL_LIMIT_REACHED: Final[LifecycleGuardCode] = "claim_parallel_limit_reached"
+CLAIM_BUDGET_CEILING_REACHED: Final[LifecycleGuardCode] = "claim_budget_ceiling_reached"
 SPAWN_WAVE_NOT_CLAIMED: Final[LifecycleGuardCode] = "spawn_wave_not_claimed"
 
 ACTIVE_WAVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
@@ -97,6 +101,33 @@ def validate_claim_criteria(wave: Wave) -> None:
     )
 
 
+def validate_claim_budget(wave: Wave, *, budget: BudgetConfig) -> None:
+    """Reject a claim of a wave whose consumption already reached its one ceiling.
+
+    The ceiling is the one the daemon meters, notices and enforces against,
+    so a wave the accrual would stop is never handed out again. A wave with
+    no budget has no ceiling and always passes.
+
+    Args:
+        wave: Wave proposed for claim.
+        budget: The validated ``flow.budget`` table the ceiling derives from.
+
+    Raises:
+        LifecycleGuardError: With ``claim_budget_ceiling_reached`` when the
+            wave's consumption met or crossed its ceiling.
+    """
+    ceiling = budget.ceiling(wave.token_budget)
+    if ceiling is None or not ceiling.reached(wave.tokens_consumed):
+        return
+    raise LifecycleGuardError(
+        CLAIM_BUDGET_CEILING_REACHED,
+        wave.id,
+        f"wave {wave.id!r} is over token budget "
+        f"({wave.tokens_consumed}/{ceiling.tokens} ceiling of budget {wave.token_budget}); "
+        "raise budget or split work",
+    )
+
+
 def active_wave_ids(state: State) -> list[str]:
     """Return repo-wide CLAIMED/IN_PROGRESS ids from authoritative statuses."""
     return sorted(
@@ -167,6 +198,7 @@ def validate_spawn_wave(state: State, wave_id: str) -> Wave:
 __all__ = [
     "ACTIVE_WAVE_STATUSES",
     "CLAIM_ACTIVE_ITER_CONFLICT",
+    "CLAIM_BUDGET_CEILING_REACHED",
     "CLAIM_CRITERIA_EMPTY",
     "CLAIM_PARALLEL_LIMIT_REACHED",
     "CLAIM_PARENT_ITER_MISSING",
@@ -175,6 +207,7 @@ __all__ = [
     "CLAIM_PARENT_PHASE_NOT_ACTIVE",
     "SPAWN_WAVE_NOT_CLAIMED",
     "active_wave_ids",
+    "validate_claim_budget",
     "validate_claim_capacity",
     "validate_claim_criteria",
     "validate_claim_parent",

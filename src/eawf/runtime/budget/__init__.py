@@ -12,8 +12,12 @@ Public API:
 * :func:`service.set_budget` — assign a budget to a wave.
 * :func:`service.record_consumption` — accumulate tokens and classify.
 * :func:`service.check_budget` — read-only classify of the current wave state.
+* :func:`service.consume_against_ceiling` — accumulate tokens and decide them
+  against the wave's one ceiling.
 * :func:`service.emit_budget_notice` — upsert the scope's non-blocking
   threshold notice (:mod:`eawf.runtime.budget.notices`).
+* :func:`service.emit_termination_notice` — fold a Run's budget-termination
+  receipt into that same notice ledger.
 * :func:`service.terminate_with_grace` — SIGTERM -> grace -> SIGKILL
   process-termination ladder used by ``hard`` budget enforcement.
 
@@ -44,10 +48,13 @@ from eawf.runtime.budget.policy import (
 )
 from eawf.runtime.budget.service import (
     DEFAULT_GRACE_SECONDS,
+    ConsumeOutcome,
     TerminableProcess,
     TerminationResult,
     check_budget,
+    consume_against_ceiling,
     emit_budget_notice,
+    emit_termination_notice,
     load_budget_config,
     record_consumption,
     set_budget,
@@ -64,6 +71,7 @@ __all__ = [
     "BudgetAction",
     "BudgetConfig",
     "BudgetDecision",
+    "ConsumeOutcome",
     "DuplicateCeilingError",
     "EnforceMode",
     "PromptBudgetCeiling",
@@ -73,8 +81,10 @@ __all__ = [
     "check_budget",
     "classify",
     "classify_enforcement",
+    "consume_against_ceiling",
     "effective_cap",
     "emit_budget_notice",
+    "emit_termination_notice",
     "load_budget_config",
     "record_consumption",
     "set_budget",

@@ -266,7 +266,12 @@ class ParsedTranscript:
                 self.durations.setdefault(key, []).append(elapsed_ms)
 
     def fold(self, record: dict[str, Any], *, fallback_session_id: str) -> None:
-        """Fold one transcript record into the running statistics."""
+        """Fold one transcript record into the running statistics.
+
+        Args:
+            record: One decoded transcript line.
+            fallback_session_id: Session id to use when no record names one.
+        """
         if self.session_id is None:
             raw_id = record.get("sessionId")
             self.session_id = raw_id if isinstance(raw_id, str) and raw_id else fallback_session_id
@@ -390,13 +395,16 @@ def observed_rows(
     return session, durations
 
 
-def _price(parsed: ParsedTranscript) -> tuple[Decimal, PriceSourceKind, str | None]:
-    """Price the parsed token classes against the embedded rate table."""
+def _price(parsed: ParsedTranscript) -> tuple[Decimal | None, PriceSourceKind, str | None]:
+    """Price the parsed token classes against the embedded rate table.
+
+    An unpriced session records a null cost, never a zero.
+    """
     if parsed.model is None:
-        return Decimal("0"), PriceSourceKind.UNPRICED, None
+        return None, PriceSourceKind.UNPRICED, None
     source, version = resolve_price_source(parsed.model)
     if source is PriceSourceKind.UNPRICED:
-        return Decimal("0"), source, None
+        return None, source, None
     cost = price_token_counts(
         parsed.model,
         input_tokens=parsed.input_tokens,
@@ -406,5 +414,5 @@ def _price(parsed: ParsedTranscript) -> tuple[Decimal, PriceSourceKind, str | No
         cache_read_input_tokens=parsed.cache_read_tokens,
     )
     if cost is None:
-        return Decimal("0"), PriceSourceKind.UNPRICED, None
+        return None, PriceSourceKind.UNPRICED, None
     return cost, source, version

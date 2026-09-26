@@ -20,6 +20,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
+from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.pricing import PRICING_VERSION, lookup_pricing
 from eawf.runtime.runtimes.adapter import SpawnResult
 from eawf.runtime.runtimes.metering import (
@@ -196,17 +197,18 @@ def test_price_spawn_result_zero_tokens_is_genuine_zero_cost() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Error path: unknown model -> $0 fallback, priced=False, no raise.
+# Error path: unknown model -> null cost, priced=False, no raise.
 # --------------------------------------------------------------------------- #
 
 
-def test_price_spawn_result_unknown_model_falls_back_to_unpriced_zero() -> None:
-    """An unpriceable model yields cost 0 with priced=False (no raise)."""
+def test_price_spawn_result_unknown_model_records_null_cost() -> None:
+    """An unpriceable model yields a null cost with priced=False (no raise)."""
     # A model id that matches no PRICING key nor any prefix alias.
     assert lookup_pricing("totally-unknown-model-xyz") is None
     result = _spawn_result(model="totally-unknown-model-xyz", resolved_model=None)
     metered = price_spawn_result(result)
-    assert metered.cost_usd == Decimal("0")
+    assert metered.cost_usd is None
+    assert metered.price_source is PriceSourceKind.UNPRICED
     assert metered.priced is False
     # The snapshot tag is still stamped so the row pins a known version.
     assert metered.pricing_version == PRICING_VERSION
@@ -282,13 +284,13 @@ def test_price_spawn_result_unknown_codex_model_still_degrades_honestly() -> Non
     """Error path: an unknown OpenAI id (no tier row) degrades to priced=False.
 
     The honest-degrade contract holds for the cross-vendor lane too: a model id
-    that matches no pricing row yields cost 0 with priced=False (no raise, no
+    that matches no pricing row yields a null cost with priced=False (no raise, no
     pretend-billed zero), distinct from a real codex spawn that now prices.
     """
     assert lookup_pricing("gpt-4o") is None
     result = _spawn_result(runtime="codex", model="gpt-4o", resolved_model=None)
     metered = price_spawn_result(result)
-    assert metered.cost_usd == Decimal("0")
+    assert metered.cost_usd is None
     assert metered.priced is False
 
 
@@ -313,6 +315,7 @@ def test_meter_and_emit_emits_real_nonzero_cost() -> None:
     emitter = _RecordingEmitter()
     result = _spawn_result()
     expected = price_spawn_result(result).cost_usd
+    assert expected is not None
     assert expected > Decimal("0")
 
     metered = meter_and_emit(

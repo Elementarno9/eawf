@@ -389,6 +389,9 @@ def test_in_progress_flow_ids_multiple_in_progress(tmp_path: Path) -> None:
 
 @pytest.fixture
 def cli_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    # The catalog retires /flow, so the CLI refuses every run up front. These
+    # tests exercise the resume machinery behind that refusal, so they lift it.
+    monkeypatch.setattr(flow_module, "check_flow_runnable", lambda: None)
     state_dir = tmp_path / ".ea"
     (state_dir / "store").mkdir(parents=True, exist_ok=True)
     state_path = state_dir / "state.json"

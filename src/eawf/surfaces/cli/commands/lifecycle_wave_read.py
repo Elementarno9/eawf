@@ -1142,20 +1142,25 @@ def wave_budget_consume_cmd(
     wave_id: Annotated[str, typer.Argument(help="Wave ID accumulating consumption.")],
     tokens: Annotated[int, typer.Argument(help="Non-negative token delta to add.")],
 ) -> None:
-    """Add *tokens* to ``Wave.tokens_consumed`` and surface the policy verdict.
+    """Add *tokens* to ``Wave.tokens_consumed`` and decide it against the one ceiling.
 
-    Exits ``VALIDATION_FAILED`` (4) when the post-add classification is
-    ``block:over-budget``. A ``warn:75-percent`` classification prints a
-    stderr warning but exits zero.
-
-    On the block path the transaction is rolled back — the on-disk
-    ``tokens_consumed`` keeps its pre-call value, and the rejected delta
-    is named explicitly in the error message (``would consume X+N=Y``)
-    so the operator can see what was attempted before deciding to raise
-    the budget or split the work.
+    The ceiling is the one the daemon meters, notices and enforces against
+    (``flow.budget``). Reaching it records the wave's budget notice. Under
+    ``soft`` enforce the delta lands and a warning is logged; under ``hard``
+    the transaction rolls back, exits ``VALIDATION_FAILED``, and names the
+    discarded delta (``would consume X+N=Y``).
     """
-    from eawf.runtime.budget.policy import BLOCK_TAG, WARN_TAG
-    from eawf.runtime.budget.service import record_consumption as budget_record
+    from datetime import UTC, datetime
+
+    from eawf.runtime.budget.notices import notices_path
+    from eawf.runtime.budget.policy import BudgetAction
+    from eawf.runtime.budget.service import (
+        ConsumeOutcome,
+        consume_against_ceiling,
+        emit_budget_notice,
+        load_budget_config,
+    )
+    from eawf.runtime.daemon.methods.state_context import config_root_for_state_path
 
     flags: GlobalFlags = ctx.obj
     if not is_wave_id(wave_id):
@@ -1173,25 +1178,21 @@ def wave_budget_consume_cmd(
         )
         return
 
-    result: dict[str, Any] = {}
+    result: list[ConsumeOutcome] = []
 
     def _mutator(state: State) -> None:
-        wave_before = state.waves.get(wave_id)
-        if wave_before is None:
+        if wave_id not in state.waves:
             raise cli_errors.UserError(f"unknown wave {wave_id!r}", kind="NotFound")
-        tokens_before = wave_before.tokens_consumed
-        # ``budget_record`` raises ``KeyError`` only when *wave_id* is
-        # absent — the pre-check above already filtered that, so no
-        # further catch is needed here.
-        wave, tag = budget_record(state, wave_id, tokens)
-        result["classification"] = tag
-        result["tokens_consumed"] = wave.tokens_consumed
-        result["token_budget"] = wave.token_budget
-        if tag == BLOCK_TAG:
+        # A malformed ``flow.budget`` table raises ValueError here, which the
+        # transaction reports as invalid input instead of a traceback.
+        budget = load_budget_config(config_root_for_state_path(resolve_state_path(flags.workspace)))
+        outcome = consume_against_ceiling(state, wave_id, tokens, budget=budget)
+        result[:] = [outcome]
+        if outcome.decision.action is BudgetAction.HALT:
             raise cli_errors.ValidationError(
                 f"wave {wave_id!r} would be over token budget "
-                f"(would consume {tokens_before}+{tokens}={wave.tokens_consumed}, "
-                f"budget {wave.token_budget}); "
+                f"(would consume {outcome.tokens_before}+{tokens}="
+                f"{outcome.wave.tokens_consumed}, ceiling {outcome.decision.cap}); "
                 f"delta of {tokens} discarded — raise budget or split work"
             )
 
@@ -1204,23 +1205,26 @@ def wave_budget_consume_cmd(
         envelope=lambda: {
             "wave": wave_id,
             "delta": tokens,
-            "tokens_consumed": result.get("tokens_consumed"),
-            "token_budget": result.get("token_budget"),
-            "classification": result.get("classification"),
+            "tokens_consumed": result[0].wave.tokens_consumed,
+            "token_budget": result[0].wave.token_budget,
+            "ceiling": result[0].decision.cap,
+            "action": result[0].decision.action.value,
         },
         mutate=_mutator,
     )
-
-    if result.get("classification") == WARN_TAG:
-        consumed = result.get("tokens_consumed")
-        budget_val = result.get("token_budget")
+    # Every failed transaction has exited above, so the consumption is on file.
+    outcome = result[0]
+    emit_budget_notice(
+        notices_path(resolve_state_path(flags.workspace)),
+        scope_id=wave_id,
+        consumed=outcome.wave.tokens_consumed,
+        ceiling=outcome.ceiling,
+        observed_at=datetime.now(UTC),
+    )
+    if outcome.decision.action is BudgetAction.WARN:
         logger.warning(
-            f"wave_budget_consume_cmd wave={wave_id!r} pct=75 "
-            f"consumed={consumed} budget={budget_val}"
-        )
-        print(
-            f"warn: wave {wave_id!r} at 75% of token budget ({consumed}/{budget_val})",
-            file=sys.stderr,
+            f"wave_budget_consume_cmd wave={wave_id!r} consumed={outcome.wave.tokens_consumed} "
+            f"ceiling={outcome.decision.cap}"
         )
 
 

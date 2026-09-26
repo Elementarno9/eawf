@@ -87,7 +87,15 @@ def notice_key_for(*, scope_id: str, axis: BudgetAxis, basis: NoticeBasis) -> st
 
 
 def severity_for(basis: NoticeBasis, band: NoticeBand) -> NoticeSeverity:
-    """Return the severity a notice of *basis* carries at *band*."""
+    """Return the severity a notice of *basis* carries at *band*.
+
+    Args:
+        basis: What the budget was set on.
+        band: The threshold band the crossing reached.
+
+    Returns:
+        The notice severity for that basis and band.
+    """
     return _SEVERITY[(basis, band)]
 
 
@@ -285,12 +293,24 @@ def notices_path(state_path: Path) -> Path:
 
     The ledger lives under the gitignored local directory: notices are
     runtime observations, not committed project state.
+
+    Args:
+        state_path: The repo's ``state.json`` path.
+
+    Returns:
+        The ``budget_notices.json`` path under the sibling ``local`` directory.
     """
     return state_path.parent / "local" / "budget_notices.json"
 
 
 def load_notice_ledger(path: Path) -> BudgetNoticeLedger:
     """Read the notice ledger at *path*; an absent file is an empty ledger.
+
+    Args:
+        path: The notice ledger file.
+
+    Returns:
+        The validated ledger, empty when the file does not exist.
 
     Raises:
         pydantic.ValidationError: The file on disk is not a valid ledger.

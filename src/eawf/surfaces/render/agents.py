@@ -217,6 +217,10 @@ _ROLE_REPORT_EXAMPLES: dict[str, dict[str, Any]] = {
         "wave_id": "P00-I01-W01",
         "files_changed": ["repo/relative/path.py"],
         "tests_run": ["uv run pytest tests/path -q"],
+        "test_runs": [
+            {"test_id": "tests/path/test_x.py::test_x", "outcome": "red", "revision": "worktree"},
+            {"test_id": "tests/path/test_x.py::test_x", "outcome": "green", "revision": "abcdef1"},
+        ],
         "commit_sha": "abcdef1",
         "outcome": "implementation outcome",
     },
@@ -474,6 +478,9 @@ criterion lacks evidence, surface the gap explicitly in the
 
 - Boundary AND error-path tests for every public function touched: empty / single /
   off-by-one / max-length; TypeError / ValueError / KeyError / ValidationError.
+- Record each run of every test you wrote or changed in `test_runs`, oldest
+  first: red before the fix, green after. Wave close flags a test reported
+  green that never ran red first, and blocks close on a `_repro_` test.
 """
 
 _AUDITOR_BODY = """# Auditor

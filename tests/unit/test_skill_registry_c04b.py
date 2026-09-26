@@ -81,7 +81,16 @@ def _ctx() -> SkillContext:
 
 
 def test_registry_holds_all_seventeen_skills() -> None:
-    """C00 17-skill catalog drift closed (D-b4): 11 original + 6 new."""
+    """Each of the 17 legacy engine classes registers when its module loads.
+
+    The bootstrap imports only catalog skills, so the legacy modules are
+    imported here; their lookups refuse retired names, which the flow
+    retirement contract test pins.
+    """
+    import importlib
+
+    for name in _ORIGINAL_SKILLS | set(_C04B_SKILLS):
+        importlib.import_module(f"eawf.workflow.skills.{name[1:].replace('-', '_')}")
     registered = set(registry.list_registered())
     expected = _ORIGINAL_SKILLS | set(_C04B_SKILLS)
     assert len(expected) == 17
@@ -90,7 +99,7 @@ def test_registry_holds_all_seventeen_skills() -> None:
 
 @pytest.mark.parametrize("name", sorted(_C04B_SKILLS))
 def test_c04b_skill_registered_under_canonical_name(name: str) -> None:
-    assert registry.lookup(name) is _C04B_SKILLS[name]
+    assert registry.list_registered()[name] is _C04B_SKILLS[name]
 
 
 @pytest.mark.parametrize("name", sorted(_C04B_SKILLS))
