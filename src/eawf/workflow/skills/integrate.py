@@ -26,8 +26,8 @@ halves were invented.
 
 from __future__ import annotations
 
+import hashlib
 import logging
-import uuid
 from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -182,7 +182,8 @@ class IntegrateArgs(BaseModel):
         verdict: The verdict the accepted report carried, the same.
         resulting_tree_digest: The tree the accepted report was about.
         expected_revision: The Batch revision the caller read.
-        idempotency_key: This request's name; minted when omitted.
+        idempotency_key: This request's name; derived from the Run and the
+            candidate when omitted.
         repo_root: The tree to address, when not the daemon's own.
         output: The rendering the caller wants.
     """
@@ -315,6 +316,10 @@ class IntegrateSkill(Skill):
                     "always needs"
                 ),
             )
+        # Derived rather than minted: the same Run and candidate name one
+        # seal, so presenting them again replays the standing binding
+        # instead of reading as a second request.
+        derived_key = hashlib.sha256(f"{args.run}\n{args.subject_ref}".encode()).hexdigest()
         answer = RPC_SCOPE.call(
             caller,
             CANDIDATE_REPORT_BIND_METHOD,
@@ -322,7 +327,7 @@ class IntegrateSkill(Skill):
                 **params,
                 "urn": args.run,
                 "actor": _ACTOR_PRINCIPAL,
-                "idempotency_key": args.idempotency_key or uuid.uuid4().hex,
+                "idempotency_key": args.idempotency_key or f"seal-{derived_key}",
                 "candidate_ref": args.subject_ref,
                 "report_schema_ref": args.report_schema_ref,
                 "report_digest": args.report_digest,
