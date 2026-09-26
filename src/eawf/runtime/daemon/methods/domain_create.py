@@ -1,5 +1,10 @@
 """The per-entity create verbs of a Track, a Milestone, a Batch, a Task and a Run.
 
+``domain.repository.create`` sits beside them. A repository has no
+lifecycle machine, so it is admitted through
+:func:`~eawf.runtime.daemon.epoch2_create.run_repository_create`, which
+reads the head a plan binds from git rather than from the request.
+
 Each verb is ``domain.<entity>.create`` and admits one record of its own
 kind through :func:`~eawf.runtime.daemon.epoch2_create.run_create`. The
 verb is fixed per kind for the same reason the lifecycle verbs are: the
@@ -25,7 +30,11 @@ from pydantic import ValidationError
 
 from eawf.kernel.identity import EntityKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.runtime.daemon.epoch2_create import CreateRequest, run_create
+from eawf.runtime.daemon.epoch2_create import (
+    CreateRequest,
+    run_create,
+    run_repository_create,
+)
 from eawf.runtime.daemon.epoch2_recovery import PROJECTION_DEGRADED, publish_projection
 from eawf.runtime.daemon.epoch2_transaction import (
     LIFECYCLE_ENTITIES,
@@ -49,6 +58,9 @@ logger = logging.getLogger(__name__)
 DOMAIN_CREATE_METHODS: Final[dict[EntityKind, str]] = {
     kind: f"domain.{kind.value}.create" for kind in LIFECYCLE_ENTITIES
 }
+
+#: The create verb of a repository row, which no lifecycle machine governs.
+REPOSITORY_CREATE_METHOD: Final = f"domain.{EntityKind.REPOSITORY.value}.create"
 
 
 def _kind_refusal(method: str, *, kind: EntityKind, request: CreateRequest) -> dict[str, Any]:
@@ -96,7 +108,7 @@ async def _create(
         ``ok`` and carries the ``projection_degraded`` warning. A retry the
         transaction answered from its receipt store publishes nothing.
     """
-    method = DOMAIN_CREATE_METHODS[kind]
+    method = DOMAIN_CREATE_METHODS.get(kind, REPOSITORY_CREATE_METHOD)
     try:
         request = CreateRequest.model_validate(
             {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
@@ -106,9 +118,10 @@ async def _create(
     if request.urn.kind is not kind:
         return _kind_refusal(method, kind=kind, request=request)
     context = ctx.native_root_context(authority.root)
+    admit = run_repository_create if kind is EntityKind.REPOSITORY else run_create
     try:
         committed = await asyncio.to_thread(
-            run_create, context=context, request=request, now=datetime.now(UTC)
+            admit, context=context, request=request, now=datetime.now(UTC)
         )
     except TransactionRefusedError as refusal:
         logger.info(f"_create refused method={method} code={refusal.code.value}")
@@ -130,7 +143,7 @@ def _register(kind: EntityKind) -> None:
     Raises:
         ValueError: The name is already registered.
     """
-    method = DOMAIN_CREATE_METHODS[kind]
+    method = DOMAIN_CREATE_METHODS.get(kind, REPOSITORY_CREATE_METHOD)
 
     async def handler(
         ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
@@ -142,8 +155,8 @@ def _register(kind: EntityKind) -> None:
     native_mutator(method)(handler)
 
 
-for _kind in DOMAIN_CREATE_METHODS:
+for _kind in (*DOMAIN_CREATE_METHODS, EntityKind.REPOSITORY):
     _register(_kind)
 
 
-__all__ = ["DOMAIN_CREATE_METHODS"]
+__all__ = ["DOMAIN_CREATE_METHODS", "REPOSITORY_CREATE_METHOD"]

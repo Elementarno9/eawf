@@ -544,6 +544,14 @@ Repo-scoped init + workspace linkage.
 | `register` | Explicitly add/register a repo to the user-scope registry. |
 | `remove` | Drop the entry whose ``code == <code>`` from the registry. |
 
+### `eawf repository`
+
+Repository rows a plan binds its head to (create).
+
+| Verb | Summary |
+|---|---|
+| `create` | Admit a repository row at the head its git history holds now. |
+
 ### `eawf research`
 
 Show and promote research briefs.
