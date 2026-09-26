@@ -119,6 +119,7 @@ from eawf.runtime.daemon.methods.state_apply import (
 from eawf.runtime.daemon.methods.state_close import (
     WaveCloseRefusalError,
     append_close_evidence,
+    append_wave_close_actual,
     build_close_attempt_hooks,
     compute_wave_close_extras,
     compute_wave_close_readiness,
@@ -1340,6 +1341,8 @@ async def _mutate_wave_close(
                 after_state_version=after_version,
                 state_path=str(state_path),
             )
+            if actual_written_auto:
+                append_wave_close_actual(state, wave_id=wave_id, state_path=state_path)
             wal.write_pending(wal_path, record)
             atomic_write_json_locked(state_path, new_payload)
             ctx.note_state_written(state_path, updated_at=state.updated_at)

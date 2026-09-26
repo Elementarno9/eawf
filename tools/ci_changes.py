@@ -5,16 +5,18 @@ exactly as it was when CI last went green, so re-running the test matrix
 and the twice-green job on it spends half an hour proving nothing new.
 This tool compares the checked-out tree with the last green ``ci.yaml``
 run on the same ref and writes ``code=false`` to ``$GITHUB_OUTPUT`` only
-when every changed path is that one bookkeeping file (an identical tree
-changes no path at all). Any other path writes ``code=true``, including
-``.ea/state.json`` and the ``.ea/store/`` ledgers: the ``.ea/``
-commit-policy census (``tests/lint/test_ea_commit_census.py``, via
-:func:`eawf.kernel.store.commit_census.run_census`) reads exactly those
-paths on every run to prove the tree matches its commit declaration, so a
-push that only touches them still has to run the suite that carries that
-census -- a state-only push is exactly the case where a path could land
-there misdeclared with nothing else to catch it. The workflow gates the
-heavy jobs on the ``code`` output. The ``green`` output names the green
+when every change is bookkeeping (an identical tree changes no path at
+all). Bookkeeping is any change to that one file, plus a pure content
+edit (diff status ``M``) of ``.ea/state.json`` or a ``.ea/store/`` ledger.
+The ``.ea/`` commit-policy census
+(``tests/lint/test_ea_commit_census.py``, via
+:func:`eawf.kernel.store.commit_census.run_census`) checks which ``.ea/``
+paths are tracked against their commit declaration, so an added, deleted
+or type-changed path there writes ``code=true`` and runs the suite that
+carries the census, while an edit to a path already tracked cannot change
+the census verdict and keeps every ``state:`` push off the matrix. Any
+other path writes ``code=true``. The workflow gates the heavy jobs on the
+``code`` output. The ``green`` output names the green
 commit the tree was compared with, so a skipped run can record which
 green tree it inherits; it is empty when no baseline was established.
 
@@ -32,9 +34,10 @@ the base tip it merged, so the base side is every path touched by a base
 commit the green head does not contain: a superset of the real base diff,
 which can only turn a skip into a run.
 
-Paths are listed with ``--no-renames``: rename detection reports only the
-destination, so a code file moved under ``.ea/store/`` would otherwise
-read as a bookkeeping-only change.
+Changes are listed with ``--no-renames``: rename detection reports one
+``R`` row for the destination, so a code file moved under ``.ea/store/``
+would lose its source-side deletion. Without it the move reads as a
+``D`` plus an ``A``, and both run the matrix.
 
 A ``schedule`` or ``workflow_dispatch`` run has no push or pull request to
 diff: it exists to re-prove the whole tree, so it writes ``code=true``
@@ -78,6 +81,14 @@ from pathlib import Path
 #: exercise or what the ``.ea/`` commit-policy census checks.
 BOOKKEEPING_FILES: frozenset[str] = frozenset({".secrets.baseline"})
 
+#: The state paths whose pure content edits the census cannot see: it
+#: checks which ``.ea/`` paths are tracked, never what they hold.
+STATE_FILE = ".ea/state.json"
+STATE_STORE_PREFIX = ".ea/store/"
+
+#: The diff status of an in-place content edit of an already-tracked path.
+_MODIFIED = "M"
+
 #: Events that run the heavy jobs unconditionally: a nightly or hand-started
 #: run carries no diff and exists to re-prove the whole tree.
 FULL_RUN_EVENTS: frozenset[str] = frozenset({"schedule", "workflow_dispatch"})
@@ -100,6 +111,9 @@ _SHA_RE = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 _SHOWN_PATHS = 5
 
 GitRunner = Callable[[Sequence[str]], str]
+
+#: One ``(status, path)`` row of ``git diff --name-status``.
+Change = tuple[str, str]
 FetchJson = Callable[[str], object]
 
 
@@ -145,6 +159,23 @@ def is_bookkeeping(path: str) -> bool:
         including the ``.ea/`` paths the commit-policy census reads.
     """
     return path in BOOKKEEPING_FILES
+
+
+def is_state_content_edit(status: str, path: str) -> bool:
+    """Return whether a change only rewrites a tracked state file in place.
+
+    Args:
+        status: The ``git diff --name-status`` letter for *path*.
+        path: A repo-relative, slash-separated path as git lists it.
+
+    Returns:
+        True for a modification (``M``) of ``.ea/state.json`` or of a path
+        under ``.ea/store/``; False for an addition, deletion or type change
+        there (the census must see those) and for every other path.
+    """
+    if status != _MODIFIED:
+        return False
+    return path == STATE_FILE or path.startswith(STATE_STORE_PREFIX)
 
 
 def runs_url(*, api_url: str, repository: str, branch: str, event: str) -> str:
@@ -208,8 +239,8 @@ def classify(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Ver
         fetch: GETs an API URL and returns the decoded JSON body.
 
     Returns:
-        ``code=False`` only when every path changed since the green tree is
-        bookkeeping; ``code=True`` otherwise, for every scheduled or
+        ``code=False`` only when every change since the green tree is
+        bookkeeping or a pure state content edit; ``code=True`` otherwise, for every scheduled or
         dispatched run, and whenever the baseline cannot be established.
     """
     try:
@@ -234,7 +265,7 @@ def _classify_push(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) 
     """Compare the pushed commit with the last green push on its branch."""
     green = _green_sha(env, fetch=fetch, branch=_require(env, "GITHUB_REF_NAME"), event="push")
     where = f"the push since green {green[:12]}"
-    return _verdict(_code_paths(diff_paths(git, green, "HEAD")), where=where, green=green)
+    return _verdict(_code_paths(diff_changes(git, green, "HEAD")), where=where, green=green)
 
 
 def _classify_pull_request(env: Mapping[str, str], *, git: GitRunner, fetch: FetchJson) -> Verdict:
@@ -252,16 +283,16 @@ def _classify_pull_request(env: Mapping[str, str], *, git: GitRunner, fetch: Fet
     )
     base = _rev_parse(git, "HEAD^1")
     head = _rev_parse(git, "HEAD^2")
-    head_code = _code_paths(diff_paths(git, green, head))
+    head_code = _code_paths(diff_changes(git, green, head))
     if head_code:
         return _verdict(head_code, where=f"the head since green {green[:12]}", green=green)
-    base_code = _code_paths(base_paths_since(git, green, base))
+    base_code = _code_paths(base_changes_since(git, green, base))
     where = f"the head and base branch since green {green[:12]}"
     return _verdict(base_code, where=where, green=green)
 
 
-def diff_paths(git: GitRunner, old: str, new: str) -> list[str]:
-    """Return every path whose content differs between two commits.
+def diff_changes(git: GitRunner, old: str, new: str) -> list[Change]:
+    """Return every path that differs between two commits, with its diff status.
 
     Args:
         git: The git runner.
@@ -269,16 +300,17 @@ def diff_paths(git: GitRunner, old: str, new: str) -> list[str]:
         new: The commit under test.
 
     Returns:
-        The changed paths; empty when the two trees are identical.
+        The ``(status, path)`` rows; empty when the two trees are identical.
 
     Raises:
-        BaselineError: git cannot compare the two commits.
+        BaselineError: git cannot compare the two commits, or lists a
+            malformed row.
     """
-    return _nul_split(git(["diff", "--name-only", "--no-renames", "-z", old, new]))
+    return _status_pairs(git(["diff", "--name-status", "--no-renames", "-z", old, new]))
 
 
-def base_paths_since(git: GitRunner, green_head: str, base: str) -> list[str]:
-    """Return every path a base commit absent from *green_head* touched.
+def base_changes_since(git: GitRunner, green_head: str, base: str) -> list[Change]:
+    """Return every change a base commit absent from *green_head* made.
 
     Merge commits are diffed against each parent (``-m``) so a conflict
     resolution made in the merge itself is listed too.
@@ -289,13 +321,22 @@ def base_paths_since(git: GitRunner, green_head: str, base: str) -> list[str]:
         base: The base-branch tip merged into the tree under test.
 
     Returns:
-        The union of touched paths, possibly with repeats.
+        The ``(status, path)`` rows of every commit, possibly with repeats;
+        a path added in one commit and edited in the next lists both.
 
     Raises:
-        BaselineError: git cannot walk the range.
+        BaselineError: git cannot walk the range, or lists a malformed row.
     """
-    argv = ["log", "--format=", "--name-only", "--no-renames", "-m", "-z", f"{green_head}..{base}"]
-    return _nul_split(git(argv))
+    argv = [
+        "log",
+        "--format=",
+        "--name-status",
+        "--no-renames",
+        "-m",
+        "-z",
+        f"{green_head}..{base}",
+    ]
+    return _status_pairs(git(argv))
 
 
 def run_git(args: Sequence[str]) -> str:
@@ -422,14 +463,24 @@ def _dig(value: object, *keys: str) -> object:
     return value
 
 
-def _nul_split(output: str) -> list[str]:
-    """Split ``-z`` git output into its non-empty entries."""
-    return [entry for entry in output.split("\0") if entry]
+def _status_pairs(output: str) -> list[Change]:
+    """Pair ``--name-status -z`` output into ``(status, path)`` rows."""
+    entries = [entry.strip("\n") for entry in output.split("\0")]
+    entries = [entry for entry in entries if entry]
+    if len(entries) % 2:
+        raise BaselineError(f"git listed {len(entries)} name-status fields, not pairs")
+    return list(zip(entries[::2], entries[1::2], strict=True))
 
 
-def _code_paths(paths: Iterable[str]) -> list[str]:
-    """Return the sorted distinct paths that are not bookkeeping."""
-    return sorted({path for path in paths if not is_bookkeeping(path)})
+def _code_paths(changes: Iterable[Change]) -> list[str]:
+    """Return the sorted distinct paths whose change is not bookkeeping."""
+    return sorted(
+        {
+            path
+            for status, path in changes
+            if not is_bookkeeping(path) and not is_state_content_edit(status, path)
+        }
+    )
 
 
 def _verdict(code_paths: Sequence[str], *, where: str, green: str) -> Verdict:

@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 #: Pinned projection schema version (C09 §5.9.3). Stamped into
 #: ``telemetry_schema_meta`` by :meth:`AbstractMetricsStore.init_schema`.
-SCHEMA_VERSION: Final[str] = "1"
+SCHEMA_VERSION: Final[str] = "2"
 
 StoreBackend = Literal["sqlite", "duckdb"]
 """Closed set of metrics-store backend identifiers."""
@@ -303,15 +303,44 @@ class AbstractMetricsStore(ABC):
         Idempotent: the DDL uses ``CREATE TABLE IF NOT EXISTS`` (generated
         from the row models via :func:`render_ddl`), and the schema-version
         stamp is an upsert, so a second call mutates nothing.
+
+        A table created by an older row model lacks the model's newer
+        columns, and ``CREATE TABLE IF NOT EXISTS`` would leave it that way.
+        Such a table is dropped and recreated, and every scan cursor is
+        cleared, so the next rebuild re-projects its rows from the source
+        logs instead of reading rows the current model cannot validate.
         """
 
         for statement in render_ddl():
             self._execute(statement)
+        if self._recreate_drifted_tables():
+            self._execute("DELETE FROM telemetry_file_meta")
         self.upsert(
             "telemetry_schema_meta",
             TelemetrySchemaMeta(key="telemetry_schema_version", value=SCHEMA_VERSION),
         )
         self.commit()
+
+    def _recreate_drifted_tables(self) -> bool:
+        """Drop and recreate every table missing a column its model declares.
+
+        Returns:
+            ``True`` when at least one table was recreated.
+        """
+
+        recreated = False
+        for spec in TABLES:
+            existing = {row[1] for row in self._query(f"PRAGMA table_info('{spec.name}')")}
+            if set(column_names(spec.model)) <= existing:
+                continue
+            logger.warning(
+                f"init_schema table={spec.name!r} missing_columns="
+                f"{sorted(set(column_names(spec.model)) - existing)} recreated"
+            )
+            self._execute(f"DROP TABLE {spec.name}")
+            self._execute(render_create_table(spec))
+            recreated = True
+        return recreated
 
     # -- row plumbing --------------------------------------------------
 

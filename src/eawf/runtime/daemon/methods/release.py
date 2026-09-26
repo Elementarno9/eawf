@@ -1268,7 +1268,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 
     Three things gate the open. Every measured contract the checkpoint
     asserts over must be promoted and resolvable, every membership
-    reference must name an accepted Milestone bundle in the committed
+    reference must name a COMPLETED Milestone bundle in the committed
     canary export, and the rung below must
     be recorded and finished with, so two records never claim one line at
     once and the reply can name the predecessor the new record
@@ -1302,7 +1302,7 @@ async def create(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         DaemonValidationError: With ``measured_contract_missing`` when a
             required contract is not promoted, with
             ``membership_unresolved`` when a membership reference names
-            no accepted Milestone bundle in the committed canary export,
+            no COMPLETED Milestone bundle in the committed canary export,
             with
             ``predecessor_unrecorded`` / ``predecessor_live`` /
             ``predecessor_not_advanced`` when the rung below has not

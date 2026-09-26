@@ -422,3 +422,79 @@ def test_rereceipt_single_gate_wave_binds_one_receipt(tmp_path: Path) -> None:
     assert len(bindings) == 1
     assert len(bindings[0].gates) == 1
     assert len(bindings[0].receipt_ids) == 1
+
+
+def _land_fix_for_failing_probe(repo: Path) -> str:
+    """Commit a fix that turns the failing probe green; return the fix SHA."""
+    (repo / _FAIL_MODULE).write_text(_PASS_BODY, encoding="utf-8")
+    git(repo, "add", _FAIL_MODULE)
+    git(repo, "commit", "-m", "test: fix the failing probe")
+    return git(repo, "rev-parse", "HEAD")
+
+
+def test_rereceipt_at_rebinds_receipts_to_the_given_commit(tmp_path: Path) -> None:
+    """A gate red at its landed commit passes when re-bound to the fix commit."""
+    repo, landed = build_repo(tmp_path)
+    fix = _land_fix_for_failing_probe(repo)
+    state_path = write_state(
+        repo,
+        build_state_payload(
+            commit=landed,
+            criteria=[criterion(1)],
+            gates=[gate(1, _FAIL_MODULE)],
+        ),
+    )
+    ctx = build_ctx(tmp_path, state_path)
+    expected = frozen_wave_fingerprint(load_wave(state_path))
+
+    async def body() -> None:
+        result = await rereceipt(
+            ctx,
+            {"wave_id": _WAVE_ID, "repo_root": str(repo), "at": fix[:12]},
+        )
+        assert result["landed_sha"] == landed
+        assert result["bound_sha"] == fix
+        assert result["passed_count"] == 1, result["gates"]
+
+    run(body)
+
+    (binding,) = read_bindings(state_path)
+    assert binding.landed_sha == landed
+    assert binding.landed_tree_sha == git(repo, "rev-parse", f"{landed}^{{tree}}")
+    assert binding.bound_sha == fix
+    assert binding.bound_tree_sha == git(repo, "rev-parse", f"{fix}^{{tree}}")
+    (receipt_id,) = binding.receipt_ids
+    receipt = read_receipts(state_path)[receipt_id]
+    assert receipt.result.value == "pass"
+    assert receipt.integrated_sha == fix
+    assert receipt.tree_sha == binding.bound_tree_sha
+    assert frozen_wave_fingerprint(load_wave(state_path)) == expected
+
+
+def test_rereceipt_at_the_landed_commit_records_no_rebind(tmp_path: Path) -> None:
+    """Boundary: ``at`` equal to the landed commit is a plain landed run."""
+    repo, landed = build_repo(tmp_path)
+    state_path = write_state(
+        repo,
+        build_state_payload(
+            commit=landed,
+            criteria=[criterion(1)],
+            gates=[gate(1, _PASS_MODULE)],
+        ),
+    )
+    ctx = build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        result = await rereceipt(
+            ctx,
+            {"wave_id": _WAVE_ID, "repo_root": str(repo), "at": landed},
+        )
+        assert result["bound_sha"] is None
+        assert result["passed_count"] == 1
+
+    run(body)
+
+    (binding,) = read_bindings(state_path)
+    assert binding.bound_sha is None
+    assert binding.bound_tree_sha is None
+    assert read_receipts(state_path)[binding.receipt_ids[0]].integrated_sha == landed

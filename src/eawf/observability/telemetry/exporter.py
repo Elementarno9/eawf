@@ -40,7 +40,12 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.observability.telemetry.aggregator import percentile_ms, session_durations_ms
-from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.models import (
+    TelemetryDispatchCost,
+    TelemetryIncident,
+    TelemetrySession,
+    TokenClass,
+)
 from eawf.observability.telemetry.store.base import AbstractMetricsStore
 
 logger = logging.getLogger(__name__)
@@ -164,6 +169,11 @@ def build_snapshot(store: AbstractMetricsStore, *, scope: str) -> MetricsSnapsho
         for row in store.fetch_all("telemetry_incidents", TelemetryIncident)
         if isinstance(row, TelemetryIncident)
     ]
+    runs = [
+        row
+        for row in store.fetch_all("telemetry_dispatch_costs", TelemetryDispatchCost)
+        if isinstance(row, TelemetryDispatchCost)
+    ]
     families: list[MetricFamily] = [
         _tokens_family(sessions, scope=scope),
         _cost_family(sessions, scope=scope),
@@ -172,11 +182,13 @@ def build_snapshot(store: AbstractMetricsStore, *, scope: str) -> MetricsSnapsho
         _subagent_dispatch_family(sessions),
         _compaction_family(sessions),
         _incidents_family(incidents),
+        _run_tokens_family(runs, scope=scope),
+        _run_cost_family(runs, scope=scope),
     ]
     snapshot = MetricsSnapshot(scope=scope, families=tuple(families))
     logger.info(
         f"build_snapshot scope={scope!r} sessions={len(sessions)} "
-        f"incidents={len(incidents)} families={len(families)}"
+        f"incidents={len(incidents)} runs={len(runs)} families={len(families)}"
     )
     return snapshot
 
@@ -219,6 +231,61 @@ def _cost_family(sessions: list[TelemetrySession], *, scope: str) -> MetricFamil
     return MetricFamily(
         name="eawf_cost_usd_total",
         help_text="Cumulative cost in USD.",
+        metric_type=MetricType.COUNTER,
+        samples=samples,
+    )
+
+
+def _run_tokens_family(runs: list[TelemetryDispatchCost], *, scope: str) -> MetricFamily:
+    """Build the ``eawf_run_tokens_total`` counter, split by token class + runtime.
+
+    The four summed classes always emit. The reasoning class emits only for
+    a runtime where at least one run reported a reasoning counter: a
+    runtime that reports none has an unknown reasoning volume, and a zero
+    sample would claim it reasoned not at all.
+    """
+    totals: dict[tuple[TokenClass, str], int] = defaultdict(int)
+    for run in runs:
+        totals[(TokenClass.INPUT, run.runtime)] += run.input_tokens
+        totals[(TokenClass.OUTPUT, run.runtime)] += run.output_tokens
+        totals[(TokenClass.CACHE_READ, run.runtime)] += run.cache_read_input_tokens
+        totals[(TokenClass.CACHE_WRITE, run.runtime)] += run.cache_creation_input_tokens
+        if run.reasoning_tokens is not None:
+            totals[(TokenClass.REASONING, run.runtime)] += run.reasoning_tokens
+    samples = tuple(
+        MetricSample(
+            labels=(("runtime", runtime), ("scope", scope), ("token_class", token_class.value)),
+            value=Decimal(count),
+        )
+        for (token_class, runtime), count in totals.items()
+    )
+    return MetricFamily(
+        name="eawf_run_tokens_total",
+        help_text="Run token usage by class; reasoning is a subset of output.",
+        metric_type=MetricType.COUNTER,
+        samples=samples,
+    )
+
+
+def _run_cost_family(runs: list[TelemetryDispatchCost], *, scope: str) -> MetricFamily:
+    """Build the ``eawf_run_cost_usd_total`` counter, split by price source + runtime.
+
+    Keeping the price source as a label means a reconstructed list price is
+    never summed into the same sample as a billed charge.
+    """
+    totals: dict[tuple[str, str], Decimal] = defaultdict(lambda: Decimal("0"))
+    for run in runs:
+        totals[(run.price_source.value, run.runtime)] += run.cost_usd
+    samples = tuple(
+        MetricSample(
+            labels=(("price_source", source), ("runtime", runtime), ("scope", scope)),
+            value=_quantise_cost(total),
+        )
+        for (source, runtime), total in totals.items()
+    )
+    return MetricFamily(
+        name="eawf_run_cost_usd_total",
+        help_text="Run cost in USD by price source.",
         metric_type=MetricType.COUNTER,
         samples=samples,
     )

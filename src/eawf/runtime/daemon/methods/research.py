@@ -1694,6 +1694,7 @@ async def _spawn_researcher_agent_end(
         output_tokens=metered.output_tokens,
         cache_creation_input_tokens=metered.cache_creation_input_tokens,
         cache_read_input_tokens=metered.cache_read_input_tokens,
+        reasoning_tokens=metered.reasoning_tokens,
     )
     pid = captured_pid[-1] if captured_pid else spawn_result.subprocess_pid
     try:
@@ -1707,6 +1708,7 @@ async def _spawn_researcher_agent_end(
             primary_error=None,
             tokens=tokens,
             cost_usd=metered.cost_usd,
+            price_source=metered.price_source,
             session_id=session_id,
             report_body=body,
             pgid=pid,

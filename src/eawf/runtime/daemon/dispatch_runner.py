@@ -94,7 +94,8 @@ from eawf.kernel.store.kinds.events.base import (
     TracedEventPayload,
     runtime_triple_label,
 )
-from eawf.observability.telemetry.models import EndMarker, RuntimeErrorClass
+from eawf.observability.telemetry.models import EndMarker, PriceSourceKind, RuntimeErrorClass
+from eawf.observability.telemetry.pricing import resolve_price_source
 from eawf.runtime.budget.policy import DEFAULT_ENFORCE, DEFAULT_MULTIPLIER, EnforceMode
 from eawf.runtime.budget.service import record_consumption
 from eawf.runtime.daemon.budget_interlock import InterlockOutcome, enforce_token_cap
@@ -130,12 +131,16 @@ class DispatchTokens:
         output_tokens: Output tokens billed.
         cache_creation_input_tokens: Tokens written to the prompt cache.
         cache_read_input_tokens: Tokens served from the prompt cache.
+        reasoning_tokens: Reasoning slice of ``output_tokens`` when the
+            runtime reported a counter, else ``None``. Never part of
+            :attr:`total`.
     """
 
     input_tokens: int
     output_tokens: int
     cache_creation_input_tokens: int
     cache_read_input_tokens: int
+    reasoning_tokens: int | None = None
 
     @property
     def total(self) -> int:
@@ -881,6 +886,7 @@ def emit_dispatch_cost(
     tokens: DispatchTokens,
     cost_usd: Decimal,
     pricing_version: str,
+    price_source: PriceSourceKind | None = None,
     trace_request_id: str | None = None,
 ) -> str:
     """Emit a ``dispatch_cost`` event after a dispatch attempt completes.
@@ -897,12 +903,25 @@ def emit_dispatch_cost(
         cost_usd: Priced cost in USD.
         pricing_version: ``PRICING`` snapshot version used to compute
             ``cost_usd``.
+        price_source: Provenance of *cost_usd*. ``None`` means the caller
+            priced it from the embedded rate table, so the source is
+            resolved from *model* against that table.
         trace_request_id: Optional daemon RPC request id for the §5.8
             correlation chain.
 
     Returns:
         The id of the appended envelope.
+
+    Raises:
+        pydantic.ValidationError: When the payload's token classes do not
+            sum to its total, or *cost_usd* is non-zero for a model the
+            rate table cannot price.
     """
+    if price_source is None:
+        price_source, _ = resolve_price_source(model)
+    rate_table_version = (
+        pricing_version if price_source is PriceSourceKind.LIST_RECONSTRUCTED else None
+    )
     payload = DispatchCostPayload(
         timestamp=datetime.now(UTC),
         wave_id=wave_id,
@@ -913,7 +932,11 @@ def emit_dispatch_cost(
         output_tokens=tokens.output_tokens,
         cache_creation_input_tokens=tokens.cache_creation_input_tokens,
         cache_read_input_tokens=tokens.cache_read_input_tokens,
+        reasoning_tokens=tokens.reasoning_tokens,
+        total_tokens=tokens.total,
         cost_usd=cost_usd,
+        price_source=price_source,
+        rate_table_version=rate_table_version,
         pricing_version=pricing_version,
         trace_request_id=trace_request_id,
         trace_wave_id=wave_id,
@@ -1655,6 +1678,7 @@ def run_dispatch(
     primary_error: RuntimeErrorClass | None,
     tokens: DispatchTokens,
     cost_usd: Decimal,
+    price_source: PriceSourceKind | None = None,
     trace_request_id: str | None = None,
     session_id: str | None = None,
     commit_sha: str | None = None,
@@ -1701,6 +1725,9 @@ def run_dispatch(
             when the primary serves the dispatch with no switch.
         tokens: Token tally the serving attempt accrued.
         cost_usd: Priced cost in USD for the serving attempt.
+        price_source: Provenance of *cost_usd*, threaded to
+            :func:`emit_dispatch_cost` (``None`` resolves it from the rate
+            table there).
         trace_request_id: Optional daemon RPC request id.
         session_id: Id of the executor session that ran the dispatch. When
             supplied (and ``ctx.state_path`` is configured) the runner
@@ -1788,6 +1815,7 @@ def run_dispatch(
             tokens=tokens,
             cost_usd=cost_usd,
             pricing_version=pricing_version,
+            price_source=price_source,
             trace_request_id=trace_request_id,
         )
     )

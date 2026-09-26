@@ -29,7 +29,7 @@ legible.
 from __future__ import annotations
 
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -143,6 +143,161 @@ GRANDFATHERED_MARKER_CONFLICTS: frozenset[str] = frozenset(
 #: Every kind marker name, for membership tests against an item's own
 #: declared markers.
 KIND_MARKERS: frozenset[str] = frozenset(kind.value for kind in TestKind)
+
+
+class GateTier(StrEnum):
+    """The gate cadence a test kind is run at, cheapest first.
+
+    ``wave`` is the per-wave targeted run, ``iter`` the batch run at iter
+    close, and ``release`` the phase/release-candidate run. Declaration
+    order is the ladder order, so :func:`tier_rank` needs no side table.
+    """
+
+    WAVE = "wave"
+    ITER = "iter"
+    RELEASE = "release"
+
+
+#: Wall-clock ceiling, in seconds, of one tier's run. The wave budget is
+#: the targeted-run bound wave criteria are held to; the iter budget is
+#: the local batch run at iter close; the release budget is the CI test
+#: job's timeout, so a release-tier kind still has to fit one CI job.
+TIER_RUNTIME_BUDGET_SECONDS: Mapping[GateTier, int] = {
+    GateTier.WAVE: 60,
+    GateTier.ITER: 600,
+    GateTier.RELEASE: 2700,
+}
+
+#: The one tier each kind is gated at. A kind sits at the cheapest tier
+#: whose budget and environment it fits: in-process kinds run every
+#: wave; kinds needing a mounted terminal, pinned frames, or a certified
+#: runtime run at iter close; kinds needing a real host or a timing
+#: harness run only at release.
+KIND_GATE_TIERS: Mapping[TestKind, GateTier] = {
+    TestKind.UNIT: GateTier.WAVE,
+    TestKind.CONTRACT: GateTier.WAVE,
+    TestKind.INTEGRATION: GateTier.WAVE,
+    TestKind.PROPERTY: GateTier.WAVE,
+    TestKind.METAMORPHIC: GateTier.WAVE,
+    TestKind.GOLDEN: GateTier.ITER,
+    TestKind.TUI: GateTier.ITER,
+    TestKind.CONFORMANCE: GateTier.ITER,
+    TestKind.E2E: GateTier.RELEASE,
+    TestKind.PERF: GateTier.RELEASE,
+}
+
+
+def tier_rank(tier: GateTier) -> int:
+    """Return ``tier``'s 0-based position on the ladder (``wave`` is 0)."""
+    return list(GateTier).index(tier)
+
+
+def gate_tier_for_kind(kind: TestKind) -> GateTier:
+    """Return the one gate tier ``kind`` runs at.
+
+    Raises:
+        TypeError: ``kind`` is not a :class:`TestKind`.
+        KeyError: ``kind`` has no tier row (taxonomy drift).
+    """
+    if not isinstance(kind, TestKind):
+        raise TypeError(f"expected a TestKind, got {type(kind).__name__}")
+    return KIND_GATE_TIERS[kind]
+
+
+def gate_tier_for_test_path(path: str) -> GateTier | None:
+    """Return the tier of the kind directory ``path`` lives under, or ``None``.
+
+    Args:
+        path: A candidate test path, absolute or repo-relative.
+
+    Returns:
+        The directory kind's :class:`GateTier`, or ``None`` when ``path``
+        is outside every kind directory.
+    """
+    kind = kind_for_test_path(path)
+    return None if kind is None else gate_tier_for_kind(kind)
+
+
+class RunOutcome(StrEnum):
+    """The observed outcome of one run of a task's named test."""
+
+    RED = "red"
+    GREEN = "green"
+
+
+@dataclass(frozen=True)
+class TaskTestRun:
+    """One run of the named test inside a task, in chronological order.
+
+    Attributes:
+        test_id: The pytest node id the task's protocol names.
+        outcome: Whether that run failed (red) or passed (green).
+        revision: The revision the run was taken at.
+    """
+
+    test_id: str
+    outcome: RunOutcome
+    revision: str
+
+
+@dataclass(frozen=True)
+class RedToGreenFinding:
+    """A task whose named test lacks a red-then-green pair.
+
+    The finding proves only that the pair is missing; a present pair says
+    nothing about whether the test was weakened between the two runs.
+
+    Attributes:
+        test_id: The test the task named (empty when no run was recorded).
+        reason: Which half of the pair is missing.
+    """
+
+    test_id: str
+    reason: str
+
+    def render(self) -> str:
+        """Return a one-line explanation naming the test and the gap."""
+        subject = self.test_id or "<no test>"
+        return f"red-to-green: {subject}: {self.reason}"
+
+
+def red_to_green_finding(runs: Sequence[TaskTestRun]) -> RedToGreenFinding | None:
+    """Return the red-to-green finding for one task's test runs, or ``None``.
+
+    The task boundary passes when the named test ran red at least once
+    before its first green run and the last recorded run is green.
+
+    Args:
+        runs: Every recorded run of the task's named test, oldest first.
+
+    Returns:
+        ``None`` when the red-then-green pair holds, else a finding naming
+        the missing half: no run at all, no green run, a first green with
+        no earlier red, or a final run that went red again.
+
+    Raises:
+        ValueError: ``runs`` mixes more than one test id.
+    """
+    if not runs:
+        return RedToGreenFinding(test_id="", reason="no run of the named test was recorded")
+    test_ids = {run.test_id for run in runs}
+    if len(test_ids) > 1:
+        raise ValueError(f"one task names one test; got {sorted(test_ids)}")
+    test_id = runs[0].test_id
+    outcomes = [run.outcome for run in runs]
+    if RunOutcome.GREEN not in outcomes:
+        return RedToGreenFinding(test_id=test_id, reason="the test never ran green")
+    if RunOutcome.RED not in outcomes[: outcomes.index(RunOutcome.GREEN)]:
+        return RedToGreenFinding(
+            test_id=test_id,
+            reason=f"first green at {runs[outcomes.index(RunOutcome.GREEN)].revision} "
+            "has no earlier red run",
+        )
+    if outcomes[-1] is not RunOutcome.GREEN:
+        return RedToGreenFinding(
+            test_id=test_id, reason=f"the last run at {runs[-1].revision} is red"
+        )
+    return None
 
 
 def kind_directory(kind: TestKind) -> str:
@@ -368,6 +523,29 @@ def _locus_drift(proof_loci: Mapping[TestKind, ProofLocus]) -> list[str]:
     return drift
 
 
+def _tier_drift(
+    kind_tiers: Mapping[TestKind, GateTier], budgets: Mapping[GateTier, int]
+) -> list[str]:
+    """Return drift between the kind -> gate-tier ladder and the enum."""
+    mapped = {str(key) for key in kind_tiers}
+    drift = [
+        f"gate-tier mapping declares kind {name!r}, which is not a TestKind"
+        for name in sorted(mapped - KIND_MARKERS)
+    ]
+    drift.extend(f"kind {name!r} has no gate tier" for name in sorted(KIND_MARKERS - mapped))
+    drift.extend(
+        f"kind {str(key)!r} maps to {value!r}, which is not a GateTier"
+        for key, value in sorted(kind_tiers.items(), key=lambda row: str(row[0]))
+        if not isinstance(value, GateTier)
+    )
+    drift.extend(
+        f"gate tier {tier.value!r} has no positive runtime budget"
+        for tier in GateTier
+        if budgets.get(tier, 0) <= 0
+    )
+    return drift
+
+
 def taxonomy_drift(
     *,
     markers: frozenset[str],
@@ -377,10 +555,12 @@ def taxonomy_drift(
     non_kind_markers: frozenset[str] = NON_KIND_MARKERS,
     non_kind_dirs: frozenset[str] = NON_KIND_TEST_DIRS,
     lanes: frozenset[str] = QUALITY_LANES,
+    kind_tiers: Mapping[TestKind, GateTier] = KIND_GATE_TIERS,
+    tier_budgets: Mapping[GateTier, int] = TIER_RUNTIME_BUDGET_SECONDS,
 ) -> list[str]:
     """Return every disagreement between :class:`TestKind` and its projections.
 
-    All four surfaces are checked as one unit: a kind present in any one
+    All surfaces are checked as one unit: a kind present in any one
     of them but absent from the enum is drift, and so is an enum member
     that a surface has no row for.
 
@@ -393,10 +573,12 @@ def taxonomy_drift(
         non_kind_dirs: ``tests/`` sub-directories that partition by
             subsystem rather than by kind.
         lanes: The permitted quality-lane vocabulary.
+        kind_tiers: The kind -> :class:`GateTier` ladder.
+        tier_budgets: The per-tier runtime budget in seconds.
 
     Returns:
         One human-readable line per disagreement, marker drift first,
-        then directory, gate, and proof-locus drift. Empty when the four
+        then directory, gate, proof-locus, and gate-tier drift. Empty when the four
         surfaces agree with the enum.
     """
     return [
@@ -404,4 +586,5 @@ def taxonomy_drift(
         *_directory_drift(directories, non_kind_dirs),
         *_gate_drift(kind_gates, lanes),
         *_locus_drift(proof_loci),
+        *_tier_drift(kind_tiers, tier_budgets),
     ]

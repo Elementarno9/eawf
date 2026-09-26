@@ -184,6 +184,116 @@
         }
       ],
       "type": "counter"
+    },
+    {
+      "help": "Run token usage by class; reasoning is a subset of output.",
+      "name": "eawf_run_tokens_total",
+      "samples": [
+        {
+          "labels": {
+            "runtime": "claude",
+            "scope": "repo/eawf",
+            "token_class": "cache_read"
+          },
+          "value": "20000"
+        },
+        {
+          "labels": {
+            "runtime": "claude",
+            "scope": "repo/eawf",
+            "token_class": "cache_write"
+          },
+          "value": "5000"
+        },
+        {
+          "labels": {
+            "runtime": "claude",
+            "scope": "repo/eawf",
+            "token_class": "input"
+          },
+          "value": "210"
+        },
+        {
+          "labels": {
+            "runtime": "claude",
+            "scope": "repo/eawf",
+            "token_class": "output"
+          },
+          "value": "105"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf",
+            "token_class": "cache_read"
+          },
+          "value": "3000"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf",
+            "token_class": "cache_write"
+          },
+          "value": "0"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf",
+            "token_class": "input"
+          },
+          "value": "1000"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf",
+            "token_class": "output"
+          },
+          "value": "400"
+        },
+        {
+          "labels": {
+            "runtime": "codex",
+            "scope": "repo/eawf",
+            "token_class": "reasoning"
+          },
+          "value": "150"
+        }
+      ],
+      "type": "counter"
+    },
+    {
+      "help": "Run cost in USD by price source.",
+      "name": "eawf_run_cost_usd_total",
+      "samples": [
+        {
+          "labels": {
+            "price_source": "list-reconstructed",
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "0.05"
+        },
+        {
+          "labels": {
+            "price_source": "list-reconstructed",
+            "runtime": "codex",
+            "scope": "repo/eawf"
+          },
+          "value": "0.01"
+        },
+        {
+          "labels": {
+            "price_source": "unpriced",
+            "runtime": "claude",
+            "scope": "repo/eawf"
+          },
+          "value": "0"
+        }
+      ],
+      "type": "counter"
     }
   ],
   "schema_version": 1,

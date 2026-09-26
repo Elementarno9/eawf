@@ -61,12 +61,13 @@ jobs:
     name: ${{ matrix.os }} / py${{ matrix.python }}
     needs: changes
     # Skipped only when the changes job concluded successfully and proved
-    # the code tree is the one the last green run tested; always() keeps
+    # the code tree is the one the last green run tested; !cancelled() keeps
     # this condition evaluating (instead of the default auto-skip-on-
     # dependency-failure) when the changes job itself failed, so a
     # classifier crash runs the full matrix rather than reading as a
     # passing required check.
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
+    if: >-
+      !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.code == 'true')
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -231,6 +232,30 @@ jobs:
       - name: Snapshot pairing gate
         run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
 
+  requirement-trace:
+    name: Requirement trace census (value-fresh)
+    # Recomputes the per-id requirement trace from the committed catalog,
+    # state and source, and fails when the stored census differs in value.
+    # The proposal packet the ids come from is not committed, so this job
+    # never re-extracts; the catalog is its input.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Sync (frozen)
+        run: uv sync --frozen
+
+      - name: Requirement trace check
+        run: uv run python tools/requirement_trace.py check
+
   linux-jail:
     name: Linux jail real-bwrap launch
     # The `test` matrix runs on hosts WITHOUT bubblewrap, so every real-jail
@@ -295,7 +320,7 @@ jobs:
     # caught a defect the first run missed, so a flake it finds now
     # surfaces after merge and holds the release gate until fixed. A push
     # still skips it when the changes job concluded successfully and proved
-    # the code tree already went green; always() keeps this condition
+    # the code tree already went green; !cancelled() keeps this condition
     # evaluating when the changes job itself failed, so a classifier crash
     # runs the rerun rather than reading as a passing required check. A
     # scheduled or dispatched run has no diff to classify and exists to
@@ -303,7 +328,7 @@ jobs:
     # it always runs.
     needs: changes
     if: >-
-      always() && ((github.event_name == 'push' &&
+      !cancelled() && ((github.event_name == 'push' &&
       (needs.changes.result != 'success' || needs.changes.outputs.code == 'true'))
       || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-24.04
@@ -476,6 +501,7 @@ jobs:
         test,
         tool-install-smoke,
         snapshot-pairing,
+        requirement-trace,
         linux-jail,
         twice-green,
         prose-gate,

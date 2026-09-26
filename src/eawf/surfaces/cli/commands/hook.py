@@ -1552,17 +1552,17 @@ def eawf023_artifact_placement(
     )
 
 
-def _git_tracked_unit_tests(*, cwd: Path) -> list[str]:
-    """Return git-tracked ``tests/unit/**/*.py`` paths under ``cwd``.
+def _git_tracked_tests(*, cwd: Path) -> list[str]:
+    """Return git-tracked ``tests/**/*.py`` paths under ``cwd``.
 
-    The EAWF024 test-tier gate scans the whole tracked unit-test tree
-    (not a staged delta) so a mislabeled unit test reds CI regardless of
-    which files the commit touched. A failed git invocation yields an
+    The EAWF024 test-tier gate scans the whole tracked test tree (not a
+    staged delta) so a mislabeled or mis-tiered test reds CI regardless
+    of which files the commit touched. A failed git invocation yields an
     empty list (fail-open) -- the authoritative backstop is the same gate
     on the next clean run.
     """
     proc = subprocess.run(
-        ["git", "ls-files", "tests/unit/**/*.py", "tests/unit/*.py"],
+        ["git", "ls-files", "tests/**/*.py", "tests/*.py"],
         cwd=cwd,
         check=False,
         capture_output=True,
@@ -1579,26 +1579,38 @@ def eawf024_test_tier_contract(
     ctx: typer.Context,
     files: _FilesArg = None,
 ) -> None:
-    """Reject non-unit imports in the ``tests/unit/`` tier.
+    """Reject non-unit imports in ``tests/unit/`` and mis-tiered kind markers.
 
-    Walks the git-tracked ``tests/unit/**/*.py`` set (or an explicit file
-    list, for tests) and runs the EAWF024 rule: a unit-tier test must not
+    Walks the git-tracked ``tests/**/*.py`` set (or an explicit file list,
+    for tests) and runs both EAWF024 rules: a unit-tier test must not
     import ``subprocess``, ``textual``, or ``CliRunner`` (each marks a
-    slower integration/TUI test mislabeled into the unit tier). An
-    offending import may carry a line-level ``# noqa: EAWF024`` waiver for
-    a deliberate fixture. The scan covers the whole tracked unit tree (not
-    a staged delta) so a mislabeled test reds CI regardless of which files
-    the commit touched. Exits 1 on a violation, 0 when clean.
+    slower integration/TUI test mislabeled into the unit tier), and a file
+    under a ``tests/<kind>/`` directory must not declare a kind marker
+    whose gate tier differs from its directory's. An offending line may
+    carry a ``# noqa: EAWF024`` waiver for a deliberate fixture. The scan
+    covers the whole tracked tree (not a staged delta) so a violation reds
+    CI regardless of which files the commit touched. Exits 1 on a
+    violation, 0 when clean.
     """
-    from eawf.platform.lint.eawf024_test_tier_contract import check_source, is_unit_tier_path
+    from eawf.platform.lint.eawf024_test_tier_contract import (
+        check_source,
+        check_tier_ladder,
+        is_unit_tier_path,
+    )
+    from eawf.platform.lint.kind_taxonomy import kind_for_test_path
+
+    def check(src: str, rel: str) -> list[_Renderable]:
+        # The import rule binds the unit tier only; the ladder binds every kind directory.
+        imports = check_source(src, filename=rel) if is_unit_tier_path(rel) else []
+        return [*imports, *check_tier_ladder(src, path=rel)]
 
     flags: GlobalFlags = ctx.obj
     cwd = (flags.workspace or Path.cwd()).resolve()
-    paths = files if files else _git_tracked_unit_tests(cwd=cwd)
-    unit_paths = [rel for rel in paths if is_unit_tier_path(rel)]
-    rows, scanned = _scan_python_rows(
-        unit_paths, cwd=cwd, check=lambda src, rel: check_source(src, filename=rel)
-    )
+    paths = files if files else _git_tracked_tests(cwd=cwd)
+    tiered_paths = [
+        rel for rel in paths if is_unit_tier_path(rel) or kind_for_test_path(rel) is not None
+    ]
+    rows, scanned = _scan_python_rows(tiered_paths, cwd=cwd, check=check)
     _emit_static_lint_result(
         hook_name="eawf024-test-tier-contract",
         rows=rows,

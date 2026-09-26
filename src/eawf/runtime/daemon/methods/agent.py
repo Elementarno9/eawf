@@ -109,6 +109,7 @@ from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
 from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.invariants import check_agent_report_invariants
+from eawf.kernel.validate.strict import validate_state
 from eawf.observability.telemetry.models import RuntimeErrorClass
 from eawf.observability.telemetry.pricing import PRICING_VERSION
 from eawf.platform.scrub.scan import rewrite_text
@@ -935,6 +936,34 @@ def _headless_runtime_snapshots(
     return baseline, latest
 
 
+def _validated_state_payload(state: State, *, writer: str) -> dict[str, Any]:
+    """Dump *state* and refuse it unless it passes the schema and every invariant.
+
+    Every daemon writer re-validates its post-mutation state before touching
+    disk, so a mutation that breaks an invariant fails loudly here instead of
+    landing a ``state.json`` the next reader rejects.
+
+    Args:
+        state: The mutated in-memory state about to be written.
+        writer: The calling writer's name, carried into the refusal message.
+
+    Returns:
+        The JSON-mode payload, safe to hand to ``write_state_unlocked``.
+
+    Raises:
+        DaemonValidationError: The payload fails the schema or an invariant;
+            nothing is written.
+    """
+    payload = state.model_dump(mode="json")
+    report = validate_state(payload, strict_optional=False)
+    if report.state is None or report.violations:
+        details = [*report.schema_errors[:3], *(v.code for v in report.violations[:3])]
+        raise DaemonValidationError(
+            f"validation_failed: {writer} post-mutation state invalid: {'; '.join(details)}"
+        )
+    return payload
+
+
 def _persist_live_session_attempt(
     ctx: MethodContext,
     *,
@@ -1056,7 +1085,10 @@ def _persist_live_session_attempt(
         wave.runtime_baseline = baseline
         wave.runtime_latest = latest
         state.updated_at = now
-        write_state_unlocked(state_path, state.model_dump(mode="json"))
+        write_state_unlocked(
+            state_path,
+            _validated_state_payload(state, writer="_persist_live_session_attempt"),
+        )
     logger.info(
         f"_persist_live_session_attempt wave={wave_id} attempt={attempt} "
         f"runtime={serving_runtime!r}"
@@ -1206,7 +1238,9 @@ def _reassert_dispatch_state(
             changed = True
         if changed:
             state.updated_at = datetime.now(UTC)
-            write_state_unlocked(state_path, state.model_dump(mode="json"))
+            write_state_unlocked(
+                state_path, _validated_state_payload(state, writer="_reassert_dispatch_state")
+            )
             logger.warning(
                 f"_reassert_dispatch_state wave={wave_id} session={session_id!r} "
                 f"restored=reverted-dispatch-rows"
@@ -1350,7 +1384,7 @@ def _claim_live_session(
         )
         validate_spawn_wave(state, wave_id)
         state.updated_at = datetime.now(UTC)
-        new_payload = state.model_dump(mode="json")
+        new_payload = _validated_state_payload(state, writer="_claim_live_session")
         after_version = state_version(new_payload)
         claimed_at = state.waves[wave_id].claimed_at or datetime.now(UTC)
         claim_event = build_event(
@@ -2007,6 +2041,7 @@ async def _spawn_and_dispatch(
         output_tokens=metered.output_tokens,
         cache_creation_input_tokens=metered.cache_creation_input_tokens,
         cache_read_input_tokens=metered.cache_read_input_tokens,
+        reasoning_tokens=metered.reasoning_tokens,
     )
 
     # 7. Bind the spawned agent's OWN output to its validated role report body
@@ -2115,6 +2150,7 @@ async def _spawn_and_dispatch(
         primary_error=None,
         tokens=tokens,
         cost_usd=metered.cost_usd,
+        price_source=metered.price_source,
         trace_request_id=trace_request_id,
         session_id=session_id,
         report_body=report_body,
@@ -2425,7 +2461,7 @@ def _set_dispatch_paused(ctx: MethodContext, *, paused: bool, repo_root: str | N
         before_version = state_version(state.model_dump(mode="json"))
         state.dispatch_paused = paused
         state.updated_at = datetime.now(UTC)
-        new_payload = state.model_dump(mode="json")
+        new_payload = _validated_state_payload(state, writer=command)
         after_version = state_version(new_payload)
         write_state_unlocked(state_path, new_payload)
         ctx.note_state_written(state_path, updated_at=state.updated_at)

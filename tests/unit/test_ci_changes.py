@@ -1,11 +1,13 @@
 """Unit tests for ``tools/ci_changes.py``, the CI heavy-job classifier.
 
 The classifier decides whether a run may skip the test matrix and the
-twice-green job: only when every path changed since the last green
-``ci.yaml`` tree is ``.secrets.baseline`` -- the one path the ``.ea/``
-commit-policy census never reads. Git and the GitHub API are both
-injected, so no test spawns git or touches the network; the two default
-adapters are exercised through patched ``subprocess.run`` / ``urlopen``.
+twice-green job: only when every change since the last green ``ci.yaml``
+tree is ``.secrets.baseline`` or an in-place edit of ``.ea/state.json`` or a
+``.ea/store/`` ledger -- the ``.ea/`` commit-policy census reads which
+paths are tracked, so only an added or removed path there must run it.
+Git and the GitHub API are both injected, so no test spawns git or
+touches the network; the two default adapters are exercised through
+patched ``subprocess.run`` / ``urlopen``.
 ``tools/`` is not a package, so the module is loaded by path.
 """
 
@@ -84,19 +86,20 @@ def _runs(*runs: dict[str, Any]) -> dict[str, Any]:
 
 
 def _diff_key(old: str, new: str) -> tuple[str, ...]:
-    return ("diff", "--name-only", "--no-renames", "-z", old, new)
+    return ("diff", "--name-status", "--no-renames", "-z", old, new)
 
 
 def _log_key(green: str, base: str) -> tuple[str, ...]:
-    return ("log", "--format=", "--name-only", "--no-renames", "-m", "-z", f"{green}..{base}")
+    return ("log", "--format=", "--name-status", "--no-renames", "-m", "-z", f"{green}..{base}")
 
 
 def _rev_key(revision: str) -> tuple[str, ...]:
     return ("rev-parse", "--verify", f"{revision}^{{commit}}")
 
 
-def _z(*paths: str) -> str:
-    return "".join(f"{path}\0" for path in paths)
+def _z(*paths: str, status: str = "M") -> str:
+    """Render ``--name-status -z`` output listing every path under one status."""
+    return "".join(f"{status}\0{path}\0" for path in paths)
 
 
 def _push_env(tmp_path: Path) -> dict[str, str]:
@@ -187,23 +190,72 @@ def test_classify_push_secrets_baseline_only_diff_reports_no_code(
     assert verdict.green == _GREEN
 
 
-def test_classify_push_census_read_state_paths_report_code(mod: ModuleType, tmp_path: Path) -> None:
-    """A push touching only the paths the ``.ea/`` census reads still runs
-    the suite that carries it, even though nothing under ``src/`` changed.
+@pytest.mark.parametrize("status", ["A", "D", "T"])
+def test_classify_push_added_or_removed_state_paths_report_code(
+    mod: ModuleType, tmp_path: Path, status: str
+) -> None:
+    """An added, removed or retyped ``.ea/`` path changes what the census
+    sees, so the push runs the suite that carries it even with no code change.
     """
-    git = FakeGit(
-        mod,
-        {
-            _diff_key(_GREEN, "HEAD"): _z(
-                ".ea/state.json", ".ea/store/gate.jsonl", ".secrets.baseline"
-            )
-        },
-    )
+    diff = _z(".ea/state.json", ".ea/store/gate.jsonl", status=status) + _z(".secrets.baseline")
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): diff})
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
     assert ".ea/state.json" in verdict.reason
     assert ".ea/store/gate.jsonl" in verdict.reason
     assert ".secrets.baseline" not in verdict.reason
+
+
+def test_classify_push_pure_state_content_edit_reports_no_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    """A ``state:`` push only rewrites tracked state files, which the census
+    cannot tell apart, so it keeps the skip instead of the full matrix.
+    """
+    diff = _z(".ea/state.json", ".ea/store/gate.jsonl", ".ea/store/nested/row.jsonl")
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): diff})
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is False
+    assert "only state bookkeeping" in verdict.reason
+
+
+def test_classify_push_single_added_store_path_reports_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): _z(".ea/store/new.jsonl", status="A")})
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is True
+    assert ".ea/store/new.jsonl" in verdict.reason
+
+
+def test_classify_push_malformed_name_status_reports_code(mod: ModuleType, tmp_path: Path) -> None:
+    """An odd field count cannot be paired, so the classifier fails open."""
+    git = FakeGit(mod, {_diff_key(_GREEN, "HEAD"): "M\0.ea/state.json\0A\0"})
+    verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is True
+    assert "not pairs" in verdict.reason
+
+
+@pytest.mark.parametrize(
+    ("status", "path", "expected"),
+    [
+        ("M", ".ea/state.json", True),
+        ("M", ".ea/store/evidence.jsonl", True),
+        ("A", ".ea/store/evidence.jsonl", False),
+        ("D", ".ea/state.json", False),
+        ("T", ".ea/state.json", False),
+        ("M", ".ea/store", False),
+        ("M", ".ea/storefront/row.jsonl", False),
+        ("M", ".ea/state.json.bak", False),
+        ("M", ".ea/config.yaml", False),
+        ("M", "docs/.ea/state.json", False),
+        ("M", "", False),
+    ],
+)
+def test_is_state_content_edit_matches_only_in_place_state_edits(
+    mod: ModuleType, status: str, path: str, expected: bool
+) -> None:
+    assert mod.is_state_content_edit(status, path) is expected
 
 
 def test_classify_push_identical_tree_reports_no_code(mod: ModuleType, tmp_path: Path) -> None:
@@ -217,7 +269,7 @@ def test_classify_push_code_diff_reports_code(mod: ModuleType, tmp_path: Path) -
     verdict = mod.classify(_push_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True
     assert "src/eawf/cli.py" in verdict.reason
-    assert ".ea/state.json" in verdict.reason
+    assert ".ea/state.json" not in verdict.reason
 
 
 def test_classify_push_non_state_ea_path_reports_code(mod: ModuleType, tmp_path: Path) -> None:
@@ -387,6 +439,17 @@ def test_classify_pull_request_state_only_head_and_base_reports_no_code(
     assert verdict.green == _GREEN
 
 
+def test_classify_pull_request_base_state_path_added_then_edited_reports_code(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    """The base log lists every commit, so a later edit cannot hide the add."""
+    base_log = _z(".ea/store/new.jsonl", status="A") + _z(".ea/store/new.jsonl")
+    git = _pr_git(mod, head_diff=_z(".ea/state.json"), base_log=base_log)
+    verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
+    assert verdict.code is True
+    assert ".ea/store/new.jsonl" in verdict.reason
+
+
 def test_classify_pull_request_unchanged_head_and_base_reports_no_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
@@ -410,7 +473,9 @@ def test_classify_pull_request_base_code_change_reports_code(
     mod: ModuleType, tmp_path: Path
 ) -> None:
     git = _pr_git(
-        mod, head_diff=_z(".secrets.baseline"), base_log=_z(".ea/state.json", "src/eawf/app.py")
+        mod,
+        head_diff=_z(".secrets.baseline"),
+        base_log=_z(".ea/state.json") + _z("src/eawf/app.py", status="A"),
     )
     verdict = mod.classify(_pr_env(tmp_path), git=git, fetch=FakeFetch(_runs(_run(_GREEN))))
     assert verdict.code is True

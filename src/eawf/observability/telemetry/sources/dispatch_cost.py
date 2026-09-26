@@ -42,7 +42,11 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events.base import runtime_triple_label
 from eawf.kernel.store.paths import store_path
-from eawf.observability.telemetry.models import RuntimeName, TelemetryDispatchCost
+from eawf.observability.telemetry.models import (
+    PriceSourceKind,
+    RuntimeName,
+    TelemetryDispatchCost,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -126,20 +130,83 @@ class DispatchCostSessionSource:
                 f"malformed dispatch_cost; row skipped"
             )
             return None
-        return TelemetryDispatchCost(
-            envelope_id=envelope.id,
-            wave_id=_str_or_none(payload.get("wave_id")),
-            attempt_id=_str_or_none(payload.get("attempt_id")),
-            runtime=runtime,
-            model=model,
-            input_tokens=_int_or_zero(payload.get("input_tokens")),
-            output_tokens=_int_or_zero(payload.get("output_tokens")),
-            cache_creation_input_tokens=_int_or_zero(payload.get("cache_creation_input_tokens")),
-            cache_read_input_tokens=_int_or_zero(payload.get("cache_read_input_tokens")),
-            cost_usd=_decimal_or_zero(payload.get("cost_usd")),
-            pricing_version=pricing_version,
-            ts=envelope.created_at,
+        input_tokens = _int_or_zero(payload.get("input_tokens"))
+        output_tokens = _int_or_zero(payload.get("output_tokens"))
+        cache_write = _int_or_zero(payload.get("cache_creation_input_tokens"))
+        cache_read = _int_or_zero(payload.get("cache_read_input_tokens"))
+        cost_usd = _decimal_or_zero(payload.get("cost_usd"))
+        raw_total = payload.get("total_tokens")
+        total_tokens = (
+            _int_or_zero(raw_total)
+            if raw_total is not None
+            else input_tokens + output_tokens + cache_write + cache_read
         )
+        price_source, rate_table_version = _price_source_of(payload, cost_usd, pricing_version)
+        if price_source is None:
+            logger.warning(
+                f"_row_from_envelope source={self.source_name} path={str(path)!r} "
+                f"line={line_no} envelope={envelope.id!r} "
+                f"price_source={payload.get('price_source')!r} unknown; row skipped"
+            )
+            return None
+        try:
+            return TelemetryDispatchCost(
+                envelope_id=envelope.id,
+                wave_id=_str_or_none(payload.get("wave_id")),
+                attempt_id=_str_or_none(payload.get("attempt_id")),
+                runtime=runtime,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_creation_input_tokens=cache_write,
+                cache_read_input_tokens=cache_read,
+                reasoning_tokens=_int_or_none(payload.get("reasoning_tokens")),
+                total_tokens=total_tokens,
+                cost_usd=cost_usd,
+                price_source=price_source,
+                rate_table_version=rate_table_version,
+                pricing_version=pricing_version,
+                ts=envelope.created_at,
+            )
+        except ValidationError as exc:
+            logger.warning(
+                f"_row_from_envelope source={self.source_name} path={str(path)!r} "
+                f"line={line_no} envelope={envelope.id!r} errors={exc.error_count()} "
+                f"dispatch_cost usage does not reconcile; row skipped"
+            )
+            return None
+
+
+def _price_source_of(
+    payload: dict[str, Any], cost_usd: Decimal, pricing_version: str
+) -> tuple[PriceSourceKind | None, str | None]:
+    """Return the price provenance a ``dispatch_cost`` payload carries.
+
+    A row written after the five-class split names its own source. A row
+    written before it names none; every such row was priced by eawf's own
+    rate table, so a non-zero cost is list-reconstructed at the row's
+    ``pricing_version`` and a zero cost is unpriced, because a legacy zero
+    cannot be told apart from a spawn nothing priced.
+
+    Args:
+        payload: The decoded ``dispatch_cost`` payload.
+        cost_usd: The row's coerced cost.
+        pricing_version: The row's rate-table snapshot tag.
+
+    Returns:
+        ``(price_source, rate_table_version)``. An unknown source string
+        yields ``(None, None)`` and the caller skips the row.
+    """
+    raw = payload.get("price_source")
+    if raw is None:
+        if cost_usd > 0:
+            return PriceSourceKind.LIST_RECONSTRUCTED, pricing_version
+        return PriceSourceKind.UNPRICED, None
+    try:
+        source = PriceSourceKind(raw)
+    except ValueError:
+        return None, None
+    return source, _str_or_none(payload.get("rate_table_version"))
 
 
 def _runtime_or_none(raw: Any) -> RuntimeName | None:
@@ -173,6 +240,13 @@ def _int_or_zero(raw: Any) -> int:
     if isinstance(raw, int):
         return raw
     return 0
+
+
+def _int_or_none(raw: Any) -> int | None:
+    """Return *raw* as an ``int`` when it is a non-bool integer, else ``None``."""
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return None
+    return raw
 
 
 def _decimal_or_zero(raw: Any) -> Decimal:

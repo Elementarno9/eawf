@@ -674,7 +674,8 @@ def _close_and_pin(
     silent ``elapsed_eu=0.0`` is refused before the close lands: an unmeasured
     actual would pass the zero-runtime gate without ever running it. A
     transport-fallback close takes the same gate, skipping only the daemonless
-    bypass door.
+    bypass door. A close that creates the wave's actual summary also appends
+    the ``actual.jsonl`` record it points at, as the daemon close does.
 
     Args:
         state: State under the lock; mutated in place.
@@ -704,6 +705,7 @@ def _close_and_pin(
     """
     from eawf.kernel.state.mutations import Mutation
     from eawf.runtime.daemon.methods.state_close import (
+        append_wave_close_actual,
         enforce_nonzero_runtime_close,
         measure_wave_close_runtime,
     )
@@ -745,6 +747,7 @@ def _close_and_pin(
         enforce_without_profile=False,
     )
     delta = runtime.delta
+    actual_written_auto = wave_id not in (state.actuals or {})
     wave = close_wave(
         state,
         wave_id=wave_id,
@@ -755,6 +758,8 @@ def _close_and_pin(
         actual_elapsed_eu=runtime.elapsed_eu,
         actual_cost_usd=delta.actual_cost_usd if delta is not None else None,
     )
+    if actual_written_auto:
+        append_wave_close_actual(state, wave_id=wave_id, state_path=state_path)
     if commit_sha is not None:
         wave.commit = commit_sha
         wave.commit_identity_digest = commit_identity_digest

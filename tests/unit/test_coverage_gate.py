@@ -18,8 +18,11 @@ Covers the standalone gate in ``tools/coverage_gate.py``:
   contract;
 - ``coverage_xml_is_stale`` and ``head_commit_time`` decide HEAD freshness,
   including outside a git work tree;
-- ``main`` refuses a missing report and one older than HEAD or than the newest
-  source file it measures (``stale_report_reason``).
+- ``main`` refuses a missing report, one older than HEAD or than the newest
+  source file it measures (``stale_report_reason``), and any report on a tree
+  whose HEAD commit time it cannot read (fail closed without git);
+- the idle-contract freshness probe reds a ``main`` that computes the
+  staleness reason but ignores it.
 
 ``tools/`` is excluded from the package, so the gate is loaded via
 :mod:`importlib`. The aggregation + evaluation helpers take injected config +
@@ -34,7 +37,7 @@ import sys
 import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -453,18 +456,18 @@ def _run_main(root: Path, coverage_xml: Path) -> int:
 
 
 @pytest.fixture()
-def _no_head(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin HEAD time to unavailable so only the source-mtime leg decides."""
-    monkeypatch.setattr(_GATE, "head_commit_time", lambda _root: None)
+def _old_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pin HEAD to a commit older than every seeded mtime so only the source leg decides."""
+    monkeypatch.setattr(_GATE, "head_commit_time", lambda _root: 0)
 
 
-@pytest.mark.usefixtures("_no_head")
+@pytest.mark.usefixtures("_old_head")
 def test_main_passes_a_report_newer_than_its_sources(tmp_path: Path) -> None:
     coverage_xml = _seed_tree(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
     assert _run_main(tmp_path, coverage_xml) == 0
 
 
-@pytest.mark.usefixtures("_no_head")
+@pytest.mark.usefixtures("_old_head")
 def test_main_refuses_a_report_older_than_a_measured_source(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -475,7 +478,7 @@ def test_main_refuses_a_report_older_than_a_measured_source(
     assert "older than src/pkg/a.py" in err
 
 
-@pytest.mark.usefixtures("_no_head")
+@pytest.mark.usefixtures("_old_head")
 def test_main_passes_a_report_written_in_the_source_instant(tmp_path: Path) -> None:
     # Boundary: equal mtimes are fresh; only a strictly newer source is stale.
     coverage_xml = _seed_tree(tmp_path, source_mtime=1_500.0, report_mtime=1_500.0)
@@ -491,7 +494,7 @@ def test_main_refuses_a_report_written_before_head(
     assert "before the HEAD commit" in capsys.readouterr().err
 
 
-@pytest.mark.usefixtures("_no_head")
+@pytest.mark.usefixtures("_old_head")
 def test_main_refuses_a_missing_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     (tmp_path / "pyproject.toml").write_text(_PASSING_PYPROJECT, encoding="utf-8")
     assert _run_main(tmp_path, tmp_path / "coverage.xml") == 1
@@ -516,3 +519,130 @@ def test_newest_measured_source_is_none_without_existing_files(tmp_path: Path) -
 def test_stale_report_reason_raises_for_a_missing_report(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         _GATE.stale_report_reason(tmp_path / "coverage.xml", classes=[], repo_root=tmp_path)
+
+
+def test_stale_report_reason_refuses_when_head_time_is_unreadable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    coverage_xml = _seed_tree(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
+    monkeypatch.setattr(_GATE, "head_commit_time", lambda _root: None)
+    classes = ET.parse(coverage_xml).getroot().findall(".//class")
+    reason = _GATE.stale_report_reason(coverage_xml, classes=classes, repo_root=tmp_path)
+    assert reason is not None
+    assert "cannot read the HEAD commit time" in reason
+
+
+def test_stale_report_reason_names_a_stale_source_before_the_head_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The source-mtime leg needs no git, so it still names the real defect when
+    # HEAD is unreadable.
+    coverage_xml = _seed_tree(tmp_path, source_mtime=2_000.0, report_mtime=1_000.0)
+    monkeypatch.setattr(_GATE, "head_commit_time", lambda _root: None)
+    classes = ET.parse(coverage_xml).getroot().findall(".//class")
+    reason = _GATE.stale_report_reason(coverage_xml, classes=classes, repo_root=tmp_path)
+    assert reason == "coverage.xml is older than src/pkg/a.py, a source file it measures"
+
+
+def test_main_refuses_a_fresh_report_without_a_git_binary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    coverage_xml = _seed_tree(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
+    monkeypatch.setenv("PATH", str(tmp_path / "no-bin"))
+    assert _run_main(tmp_path, coverage_xml) == 1
+    err = capsys.readouterr().err
+    assert "REFUSED" in err
+    assert "cannot read the HEAD commit time" in err
+
+
+def test_main_refuses_a_fresh_report_outside_a_work_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    coverage_xml = _seed_tree(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    monkeypatch.delenv("GIT_DIR", raising=False)
+    monkeypatch.delenv("GIT_WORK_TREE", raising=False)
+    assert _run_main(tmp_path, coverage_xml) == 1
+    assert "cannot read the HEAD commit time" in capsys.readouterr().err
+
+
+# --------------------------------------------------------------------------- #
+# The idle-contract freshness probe checks what main DOES with the reason.
+# --------------------------------------------------------------------------- #
+
+
+def _load_idle_gate() -> ModuleType:
+    """Load ``tools/idle_contract_gate.py`` by path (it re-exports the probe)."""
+    path = _GATE_PATH.parent / "idle_contract_gate.py"
+    spec = importlib.util.spec_from_file_location("idle_contract_gate", path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["idle_contract_gate"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_IDLE = _load_idle_gate()
+
+
+def _main_ignoring_freshness(argv: list[str]) -> int:
+    """A ``main`` that computes the staleness reason and then judges the floors anyway."""
+    coverage_xml, repo_root = Path(argv[1]), Path(argv[3])
+    classes = ET.parse(coverage_xml).getroot().findall(".//class")
+    _GATE.stale_report_reason(coverage_xml, classes=classes, repo_root=repo_root)
+    outcome = _GATE.run_gate(coverage_xml, repo_root / "pyproject.toml", repo_root)
+    return 0 if outcome.passed else 1
+
+
+def _seeded_gate(main: object) -> SimpleNamespace:
+    return SimpleNamespace(
+        evaluate_package_gates=_GATE.evaluate_package_gates,
+        head_commit_time=_GATE.head_commit_time,
+        main=main,
+    )
+
+
+def test_check_coverage_gate_helpers_wired_passes_on_the_live_gate() -> None:
+    result = _IDLE.check_coverage_gate_helpers_wired()
+    assert result.passed is True
+    assert result.failure is None
+
+
+def test_check_coverage_gate_helpers_wired_reds_when_main_ignores_the_result() -> None:
+    result = _IDLE.check_coverage_gate_helpers_wired(
+        gate_module=_seeded_gate(_main_ignoring_freshness)
+    )
+    assert result.passed is False
+    assert result.failure is _IDLE.GateFailure.COVERAGE_GATE_IDLE
+    assert "refuses_stale=False" in result.message
+    assert "passes_fresh=True" in result.message
+
+
+def test_check_coverage_gate_helpers_wired_reds_when_main_refuses_every_report() -> None:
+    result = _IDLE.check_coverage_gate_helpers_wired(gate_module=_seeded_gate(lambda _argv: 1))
+    assert result.passed is False
+    assert "refuses_stale=True" in result.message
+    assert "passes_fresh=False" in result.message
+
+
+def test_check_coverage_gate_helpers_wired_restores_head_commit_time() -> None:
+    seeded = _seeded_gate(_GATE.main)
+    original = seeded.head_commit_time
+    _IDLE.check_coverage_gate_helpers_wired(gate_module=seeded)
+    assert seeded.head_commit_time is original
+
+
+def test_check_coverage_gate_helpers_wired_leaves_no_pin_on_a_gate_without_one() -> None:
+    # Boundary: a module with no head_commit_time gets the pin only for the probe.
+    seeded = SimpleNamespace(
+        evaluate_package_gates=_GATE.evaluate_package_gates, main=lambda _argv: 0
+    )
+    result = _IDLE.check_coverage_gate_helpers_wired(gate_module=seeded)
+    assert result.passed is False
+    assert not hasattr(seeded, "head_commit_time")
+
+
+def test_check_coverage_gate_helpers_wired_raises_when_main_is_missing() -> None:
+    seeded = SimpleNamespace(evaluate_package_gates=_GATE.evaluate_package_gates)
+    with pytest.raises(AttributeError):
+        _IDLE.check_coverage_gate_helpers_wired(gate_module=seeded)

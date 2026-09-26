@@ -13,7 +13,10 @@ rounding change to one rate cannot silently shift the others.
 
 :func:`lookup_pricing` resolves a model id by exact match first, then by
 longest-prefix fallback (e.g. ``claude-opus-4-7-20260514`` →
-``claude-opus-4-7``).
+``claude-opus-4-7``). A model named in :data:`UNPRICED_MODELS` resolves to
+no row even when a shorter family alias would prefix-match it: the
+snapshot has no published rate for it, and pricing it at an older
+generation's rate would record a fabricated list price.
 
 :func:`check_pricing_currency` validates the embedded snapshot's shape and
 internal currency (the stated Anthropic cache multipliers) and returns a
@@ -29,6 +32,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.observability.telemetry.models import PriceSourceKind
+
 logger = logging.getLogger(__name__)
 
 __all__ = [
@@ -38,11 +43,13 @@ __all__ = [
     "PRICING",
     "PRICING_FETCHED_AT",
     "PRICING_VERSION",
+    "UNPRICED_MODELS",
     "ModelPricing",
     "PricingDriftFinding",
     "PricingDriftReport",
     "check_pricing_currency",
     "lookup_pricing",
+    "resolve_price_source",
 ]
 
 
@@ -347,6 +354,17 @@ PRICING: dict[str, ModelPricing] = {
 }
 
 
+UNPRICED_MODELS: frozenset[str] = frozenset({"claude-opus-5-5", "claude-sonnet-5"})
+"""Model ids eawf dispatches to that have no rate in this snapshot.
+
+Each id prefix-matches a family alias (``claude-opus`` / ``claude-sonnet``)
+that prices at the 4.x rate. No published rate for these generations is
+recorded in-repo, so they resolve unpriced rather than inheriting a rate
+nobody published; add a real :data:`PRICING` row (and drop the id here)
+once a rate is sourced.
+"""
+
+
 def lookup_pricing(model: str) -> ModelPricing | None:
     """Look up pricing by exact model id, then longest-prefix fallback.
 
@@ -357,7 +375,8 @@ def lookup_pricing(model: str) -> ModelPricing | None:
     Returns:
         The :class:`ModelPricing` row for an exact match; otherwise the row
         whose key is the longest prefix of *model*; otherwise ``None`` when
-        no key matches.
+        no key matches, or when an :data:`UNPRICED_MODELS` id is a longer
+        prefix of *model* than the best priced key.
     """
     if model in PRICING:
         return PRICING[model]
@@ -366,7 +385,28 @@ def lookup_pricing(model: str) -> ModelPricing | None:
         key=lambda kv: len(kv[0]),
         reverse=True,
     )
-    return matches[0][1] if matches else None
+    if not matches:
+        return None
+    best_key, best_row = matches[0]
+    if any(model.startswith(u) and len(u) > len(best_key) for u in UNPRICED_MODELS):
+        return None
+    return best_row
+
+
+def resolve_price_source(model: str) -> tuple[PriceSourceKind, str | None]:
+    """Return the price provenance a cost priced for *model* carries.
+
+    Args:
+        model: Model id the cost is priced against.
+
+    Returns:
+        ``(LIST_RECONSTRUCTED, <rate-table version>)`` when a rate row
+        resolves for *model*; ``(UNPRICED, None)`` when none does.
+    """
+    row = lookup_pricing(model)
+    if row is None:
+        return PriceSourceKind.UNPRICED, None
+    return PriceSourceKind.LIST_RECONSTRUCTED, row.pricing_version
 
 
 class PricingDriftFinding(BaseModel):

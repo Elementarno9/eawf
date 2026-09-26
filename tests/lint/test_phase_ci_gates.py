@@ -452,14 +452,14 @@ _CLASSIFIER_SAYS_RUN = "(needs.changes.result != 'success' || needs.changes.outp
 
 #: The one job-level condition the test matrix carries: skip only when the
 #: changes job concluded successfully and proved the code tree is the one
-#: the last green run tested; always() keeps the condition evaluating
+#: the last green run tested; !cancelled() keeps the condition evaluating
 #: instead of auto-skipping when the changes job itself failed.
-_CHANGES_CONDITION = f"always() && {_CLASSIFIER_SAYS_RUN}"
+_CHANGES_CONDITION = f"!cancelled() && {_CLASSIFIER_SAYS_RUN}"
 
 #: The one job-level condition twice-green carries: a push runs it under the
 #: changes gate, a scheduled or dispatched run always, a pull request never.
 _TWICE_GREEN_CONDITION = (
-    f"always() && ((github.event_name == 'push' && {_CLASSIFIER_SAYS_RUN})"
+    f"!cancelled() && ((github.event_name == 'push' && {_CLASSIFIER_SAYS_RUN})"
     " || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')"
 )
 
@@ -871,7 +871,7 @@ def changes_gate_violations(workflow: dict[str, Any]) -> list[str]:
 
     The heavy jobs skip only when the changes job concluded successfully
     and said the tree is already green: each job's own condition also
-    fails open, via ``always()`` plus a check on the classifier job's own
+    fails open, via ``!cancelled()`` plus a check on the classifier job's own
     result, so a crashed or cancelled classifier runs the matrix instead of
     silently skipping a required check that would otherwise read as
     passing. The cheap jobs must never see the classifier at all.

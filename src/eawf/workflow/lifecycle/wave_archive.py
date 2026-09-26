@@ -44,6 +44,11 @@ _REF_TIMEOUT_SECONDS: float = 20.0
 # archive state: the release branch and the npm/plugin publish branch.
 _PROTECTED_BRANCHES = ("main", "plugins-dist")
 
+# The long-running phase branch (``feature/<symbol>-v<X.Y>``, optionally
+# phase-suffixed ``-pNN``) carries every cherry-picked wave until the phase
+# PR merges, so a prune never deletes one even from another checkout.
+_PHASE_BRANCH_RE = re.compile(r"^feature/[^/]+-v\d+(?:\.\d+)+(?:-p\d{2,})?$", re.IGNORECASE)
+
 ArchiveOutcome = Literal["created", "advanced", "unchanged"]
 
 
@@ -382,6 +387,20 @@ class PruneResult:
     dry_run: bool
 
 
+class WaveBranchMovedError(WaveArchiveError):
+    """A selected branch no longer points at the head its archive ref preserves.
+
+    Attributes:
+        moved: The ``(branch, expected_head)`` pairs whose tip moved after
+            selection; the delete transaction left every branch in place.
+    """
+
+    def __init__(self, moved: list[tuple[str, str]]) -> None:
+        self.moved = moved
+        names = ", ".join(f"{branch} (expected {head[:12]})" for branch, head in moved)
+        super().__init__(f"prune refused, no branch deleted: branch tip moved: {names}")
+
+
 class WaveBranchPruneRefusedError(WaveArchiveError):
     """A candidate branch head has no archive ref (or a mismatched one).
 
@@ -403,6 +422,8 @@ def _skip_reason(branch: str, *, current: str | None, checked_out: set[str]) -> 
         return "checked out (current branch)"
     if branch in _PROTECTED_BRANCHES:
         return "protected"
+    if _PHASE_BRANCH_RE.match(branch):
+        return "phase branch"
     if branch in checked_out:
         return "checked out in a worktree"
     return None
@@ -437,12 +458,46 @@ def _prunable_worktrees(*, repo_root: Path | None) -> list[str]:
     ]
 
 
+def _delete_branches_at_expected_heads(
+    candidates: list[PruneCandidate], *, repo_root: Path | None
+) -> None:
+    """Delete every candidate branch in one transaction guarded by its expected head.
+
+    Each ``delete <ref> <old>`` line makes git refuse the whole batch when a
+    branch moved after selection, so a commit made on it since archiving is
+    never orphaned.
+
+    Raises:
+        WaveBranchMovedError: A candidate's tip no longer matches its head.
+        WaveArchiveError: git refused the transaction for another reason.
+    """
+    commands = [f"delete refs/heads/{c.branch} {c.head}" for c in candidates]
+    try:
+        _run_git_mutation(
+            ["update-ref", "--stdin"],
+            repo_root=repo_root,
+            input_text="\n".join(commands) + "\n",
+            label="branch delete",
+        )
+    except WaveArchiveError:
+        heads = _refs("refs/heads", repo_root=repo_root)
+        moved = [
+            (c.branch, c.head)
+            for c in candidates
+            if heads.get(f"refs/heads/{c.branch}", c.head) != c.head
+        ]
+        if moved:
+            raise WaveBranchMovedError(moved) from None
+        raise
+
+
 def prune_branches(*, repo_root: Path | None = None, dry_run: bool = False) -> PruneResult:
     """Delete local branches whose head an archive ref already preserves.
 
     Selection walks every local branch except ``main``, ``plugins-dist``,
-    the checked-out branch, and any branch checked out in another worktree
-    (those are reported in ``skipped``, never deleted). A selected branch's
+    any long-running phase branch (checked out or not), the checked-out
+    branch, and any branch checked out in another worktree (those are
+    reported in ``skipped``, never deleted). A selected branch's
     archive ref is the wave path (:func:`archive_ref_for_branch`) for a
     ``-pNN-wMM`` branch, else the misc path
     (:func:`misc_archive_ref_for_branch`). If ANY selected branch's archive
@@ -450,7 +505,9 @@ def prune_branches(*, repo_root: Path | None = None, dry_run: bool = False) -> P
     single branch is deleted -- the same all-or-nothing semantics
     :func:`archive_wave_branches` uses for writes. Also removes worktree
     registrations whose directory no longer exists on disk (the outcome
-    ``git worktree prune`` produces).
+    ``git worktree prune`` produces). The deletes run as one ref
+    transaction that names each branch's selected head, so a branch whose
+    tip moves after selection refuses the batch instead of being deleted.
 
     Args:
         repo_root: Repository working directory; defaults to the process cwd.
@@ -464,6 +521,7 @@ def prune_branches(*, repo_root: Path | None = None, dry_run: bool = False) -> P
     Raises:
         WaveBranchPruneRefusedError: A selected branch has no matching
             archive ref.
+        WaveBranchMovedError: A selected branch moved before the delete.
         WaveArchiveError: git failed to list refs, list worktrees, delete a
             branch, or prune a worktree.
     """
@@ -495,12 +553,8 @@ def prune_branches(*, repo_root: Path | None = None, dry_run: bool = False) -> P
             deleted=candidates, skipped=skipped, pruned_worktrees=prunable, dry_run=True
         )
 
-    for candidate in candidates:
-        _run_git_mutation(
-            ["branch", "-D", candidate.branch],
-            repo_root=repo_root,
-            label=f"branch delete {candidate.branch}",
-        )
+    if candidates:
+        _delete_branches_at_expected_heads(candidates, repo_root=repo_root)
     if prunable:
         _run_git_mutation(["worktree", "prune"], repo_root=repo_root, label="worktree prune")
     logger.info(

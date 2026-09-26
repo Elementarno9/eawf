@@ -20,12 +20,11 @@ import typer
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands.plugin import (
-    _ALL_SYNC_RUNTIMES,
     _VALID_SCOPES,
     Scope,
     _default_package_target,
     _install_conflict_clear,
-    _normalise_sync_runtimes,
+    _normalise_runtime_flags,
     _resolve_target,
     _scope_tip_banner,
     _validate_plugin_root,
@@ -77,8 +76,10 @@ def _install_codex(
     """Run + report the codex ``plugin install`` arm.
 
     Raises:
-        typer.Exit: via :func:`emit_error` on an integrity violation.
+        typer.Exit: via :func:`emit_error` on an integrity violation or a
+            ``config.toml`` whose managed markers are damaged.
     """
+    from eawf.platform.install.managed_block import ManagedBlockError
     from eawf.runtime.runtimes.codex import install_plugin as codex_install_plugin
     from eawf.runtime.runtimes.codex.plugin_install import (
         IntegrityViolation as CodexIntegrityViolation,
@@ -97,6 +98,9 @@ def _install_codex(
             cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
             flags=flags,
         )
+        return
+    except ManagedBlockError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
         return
     emit_json_or_text(
         _codex_install_payload(codex_result),
@@ -221,7 +225,8 @@ def install_cmd(
         cli_errors.emit_error(err, flags=flags)
         return
     target = _resolve_target(flags)
-    if not _install_conflict_clear(runtime=runtime, scope=scope, flags=flags, force=force):
+    runtime_set = _normalise_runtime_flags([runtime])
+    if not _install_conflict_clear(runtime_set=runtime_set, scope=scope, flags=flags, force=force):
         return
     scope_lit = cast(Scope, scope)
     if runtime == "codex":
@@ -731,6 +736,7 @@ def sync_cmd(
     shared inputs (frozen timestamp, pass-through force / dry_run); the
     result aggregates per-file deltas under a single envelope.
     """
+    from eawf.platform.install.managed_block import ManagedBlockError
     from eawf.runtime.runtimes.plugin_sync import PluginSyncIntegrityError, sync_plugins
 
     flags: GlobalFlags = ctx.obj
@@ -744,36 +750,27 @@ def sync_cmd(
         )
         return
     try:
-        canonical = _normalise_sync_runtimes(runtimes or [])
+        runtime_set = _normalise_runtime_flags(runtimes or [])
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
     # Same conflict gate `install` runs. Sync re-renders the identical trees,
     # so without this it silently recreates a project-local duplicate of a
     # plugin the user already has installed — the exact state install refuses
-    # to create. A dry run writes nothing, so it needs no gate.
-    #
-    # Gate the runtimes sync will actually write, not the flags it was given:
-    # an empty `canonical` means "no --runtime", which downstream expands to
-    # all three, so gating the empty list would gate nothing.
-    if not dry_run:
-        for runtime in canonical or _ALL_SYNC_RUNTIMES:
-            if not _install_conflict_clear(runtime=runtime, scope=scope, flags=flags, force=force):
-                return
+    # to create. A dry run writes nothing, so it needs no gate. The set is
+    # already expanded, so a bare sync gates every runtime it will write.
+    if not dry_run and not _install_conflict_clear(
+        runtime_set=runtime_set, scope=scope, flags=flags, force=force
+    ):
+        return
 
     target = _resolve_target(flags)
     scope_lit = cast(Literal["project", "user"], scope)
     try:
-        # The Sequence[RuntimeId] cast is structural — canonical is
-        # built from the closed alias map above so the strings are
-        # already one of the three canonical ids.
-        from eawf.runtime.runtimes.manifest import RuntimeId
-
-        typed_runtimes = cast(list[RuntimeId], canonical)
         result = sync_plugins(
             target,
             scope=scope_lit,
-            runtimes=typed_runtimes or None,
+            runtimes=runtime_set,
             force=force,
             dry_run=dry_run,
         )
@@ -782,6 +779,9 @@ def sync_cmd(
             cli_errors.StateConflict(str(exc), kind="IntegrityViolation"),
             flags=flags,
         )
+        return
+    except ManagedBlockError as exc:
+        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="InvalidInput"), flags=flags)
         return
 
     emit_json_or_text(_sync_payload(result), _sync_text(result), flags=flags)

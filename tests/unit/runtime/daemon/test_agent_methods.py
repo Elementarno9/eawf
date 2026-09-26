@@ -125,8 +125,28 @@ def _build_state_payload(
         },
         "current": {"project_code": "QR"},
         "workspace": None,
-        "phases": {},
-        "iters": {},
+        # The parent rows keep the fixture invariant-valid: the agent writers
+        # re-validate the whole state before every write.
+        "phases": {
+            "P24": {
+                "id": "P24",
+                "scope_id": "QR",
+                "title": "agent-dispatch-test",
+                "status": "active",
+                "iter_ids": ["P24-I01"],
+                "opened_at": _now().isoformat(),
+            }
+        },
+        "iters": {
+            "P24-I01": {
+                "id": "P24-I01",
+                "phase_id": "P24",
+                "title": "agent-dispatch-test",
+                "status": "active",
+                "wave_ids": [wave_id],
+                "opened_at": _now().isoformat(),
+            }
+        },
         "waves": {wave_id: wave.model_dump(mode="json")},
         "artifacts": {},
         "agent_sessions": {},

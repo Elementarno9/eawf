@@ -48,6 +48,17 @@ _SCOPE_ID = "P32-I01-W29"
 _OTHER_SCOPE_ID = "P32-I01-W28"
 
 
+@pytest.fixture(autouse=True)
+def _drop_inherited_state_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let the ``-w`` workspace, not an inherited ``EA_STATE``, pick the ledger.
+
+    A close or re-receipt gate runs this suite in a sandbox that exports
+    ``EA_STATE`` at a copy of the live ledger, and ``EA_STATE`` outranks
+    ``-w``, so every forward would otherwise land in that copy.
+    """
+    monkeypatch.delenv("EA_STATE", raising=False)
+
+
 def _workspace_with_external_session(tmp_path: Path) -> Path:
     """Build a workspace whose only session was created by an external orchestrator."""
     workspace = tmp_path / "ws"

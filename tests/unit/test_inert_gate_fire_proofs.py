@@ -143,7 +143,7 @@ def test_coverage_liveness_reds_when_main_skips_the_freshness_refusal() -> None:
     result = _IDLE.check_coverage_gate_helpers_wired(gate_module=seeded)
     assert result.passed is False
     assert result.failure is _IDLE.GateFailure.COVERAGE_GATE_IDLE
-    assert "freshness_wired=False" in result.message
+    assert "refuses_stale=False" in result.message
 
 
 def test_coverage_liveness_reds_when_the_ratchet_never_fails() -> None:
@@ -250,18 +250,18 @@ def _seed(root: Path, *, source_mtime: float, report_mtime: float) -> Path:
 
 
 @pytest.fixture()
-def _no_head(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(_COVERAGE, "head_commit_time", lambda _root: None)
+def _old_head(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_COVERAGE, "head_commit_time", lambda _root: 0)
 
 
-@pytest.mark.usefixtures("_no_head")
+@pytest.mark.usefixtures("_old_head")
 def test_coverage_gate_passes_a_fresh_report(tmp_path: Path) -> None:
     coverage_xml = _seed(tmp_path, source_mtime=1_000.0, report_mtime=2_000.0)
     argv = ["--coverage-xml", str(coverage_xml), "--repo-root", str(tmp_path)]
     assert _COVERAGE.main(argv) == 0
 
 
-@pytest.mark.usefixtures("_no_head")
+@pytest.mark.usefixtures("_old_head")
 def test_coverage_gate_reds_on_a_report_older_than_its_source(tmp_path: Path) -> None:
     coverage_xml = _seed(tmp_path, source_mtime=2_000.0, report_mtime=1_000.0)
     argv = ["--coverage-xml", str(coverage_xml), "--repo-root", str(tmp_path)]

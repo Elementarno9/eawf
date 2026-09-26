@@ -355,3 +355,33 @@ def test_doctor_without_marketplace_still_reports_missing(
     res = runner.invoke(app, ["-w", str(tmp_path), "plugin", "doctor", "claude"])
     assert res.exit_code != 0, res.output
     assert "mode=marketplace" not in res.output
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["plugin", "install", "claude"],
+        ["plugin", "sync", "--runtime", "claude"],
+        ["plugin", "sync", "--runtime", "claude-code"],
+        ["plugin", "sync"],
+    ],
+    ids=["install-alias", "sync-alias", "sync-canonical", "sync-bare"],
+)
+def test_install_conflict_clear_refuses_every_spelling_before_any_write(
+    tmp_path: Path, fake_conflict: CCPluginConflict, argv: list[str]
+) -> None:
+    """Every verb gates the normalized set, so no spelling or bare call slips past."""
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    res = runner.invoke(app, ["--no-input", "-w", str(workspace), *argv])
+    assert res.exit_code != 0, res.output
+    assert str(fake_conflict.plugin_dir) in res.output + (res.stderr or "")
+    assert list(workspace.iterdir()) == []
+
+
+def test_sync_unknown_runtime_is_invalid_input(tmp_path: Path, no_conflict: None) -> None:
+    res = runner.invoke(
+        app, ["--no-input", "-w", str(tmp_path), "plugin", "sync", "--runtime", "gemini"]
+    )
+    assert res.exit_code != 0
+    assert "unknown runtime 'gemini'" in res.output + (res.stderr or "")

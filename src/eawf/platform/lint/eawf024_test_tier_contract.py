@@ -19,12 +19,19 @@ as non-unit:
 3. ``CliRunner`` imported by name (``from typer.testing import
    CliRunner``) — a unit test does not drive the CLI app.
 
+A second check binds the kind taxonomy to the gate tier ladder: every
+file under a ``tests/<kind>/`` directory runs at that kind's gate tier
+(wave, iter, or release), so a file there that declares a kind marker
+whose tier differs -- an ``e2e`` marker under ``tests/unit/`` -- sits on
+the wrong rung and is flagged by :func:`check_tier_ladder`.
+
 The check walks a module AST and inspects every ``import`` /
 ``from ... import`` statement, so a string literal that merely mentions
 ``subprocess`` never false-fires. A single misplaced import can carry a
 line-level ``# noqa: EAWF024`` waiver (e.g. a deliberate lint-test
-fixture) which this check honors. The dispatcher scopes the scan to the
-git-tracked ``tests/unit/`` tree; the check itself is content-only, so
+fixture) which this check honors. The dispatcher scans the git-tracked
+``tests/`` tree and applies the import rule to ``tests/unit/`` files
+only; :func:`check_source` is content-only, so
 the idle-contract gate can prove it flags a bad snippet and clears a
 clean one without touching the filesystem.
 """
@@ -34,6 +41,17 @@ from __future__ import annotations
 import ast
 import re
 from dataclasses import dataclass
+
+from eawf.platform.lint.kind_taxonomy import (
+    GRANDFATHERED_MARKER_CONFLICTS,
+    KIND_MARKERS,
+    TIER_RUNTIME_BUDGET_SECONDS,
+    GateTier,
+    TestKind,
+    gate_tier_for_kind,
+    kind_for_test_path,
+    repo_relative_test_path,
+)
 
 RULE_CODE = "EAWF024"
 
@@ -173,5 +191,111 @@ def check_source(source: str, *, filename: str = "<unknown>") -> list[TierViolat
                     imported=token,
                 )
             )
+    violations.sort(key=lambda violation: (violation.lineno, violation.col_offset))
+    return violations
+
+
+@dataclass(frozen=True)
+class TierLadderViolation:
+    """One EAWF024 finding: a kind marker on the wrong gate-tier rung.
+
+    Attributes:
+        lineno: 1-based line of the offending marker.
+        col_offset: 0-based column of the marker node.
+        directory_kind: The kind the file's directory places it under.
+        declared_kind: The kind the marker declares.
+    """
+
+    lineno: int
+    col_offset: int
+    directory_kind: TestKind
+    declared_kind: TestKind
+
+    @property
+    def code(self) -> str:
+        """Return the rule code (``EAWF024``)."""
+        return RULE_CODE
+
+    def render(self) -> str:
+        """Return a ``line:col: CODE reason`` one-liner naming both rungs."""
+        placed = gate_tier_for_kind(self.directory_kind)
+        needed = gate_tier_for_kind(self.declared_kind)
+        reason = (
+            f"{self.declared_kind.value!r} test runs at the {needed.value} tier "
+            f"({TIER_RUNTIME_BUDGET_SECONDS[needed]}s budget) but tests/"
+            f"{self.directory_kind.value}/ is the {placed.value} tier "
+            f"({TIER_RUNTIME_BUDGET_SECONDS[placed]}s budget); move it under "
+            f"tests/{self.declared_kind.value}/"
+        )
+        return f"{self.lineno}:{self.col_offset}: {RULE_CODE} {reason}"
+
+
+def _declared_kind(node: ast.Attribute) -> TestKind | None:
+    """Return the kind a ``pytest.mark.<kind>`` or ``mark.<kind>`` node declares, or ``None``."""
+    if node.attr not in KIND_MARKERS:
+        return None
+    owner = node.value
+    is_mark = (
+        isinstance(owner, ast.Attribute)
+        and owner.attr == "mark"
+        and isinstance(owner.value, ast.Name)
+        and owner.value.id == "pytest"
+    ) or (isinstance(owner, ast.Name) and owner.id == "mark")
+    return TestKind(node.attr) if is_mark else None
+
+
+def check_tier_ladder(
+    source: str,
+    *,
+    path: str,
+    grandfather: frozenset[str] = GRANDFATHERED_MARKER_CONFLICTS,
+) -> list[TierLadderViolation]:
+    """Return tier-ladder violations for the test file at ``path``.
+
+    A file under a kind directory runs at that kind's gate tier. Every
+    ``pytest.mark.<kind>`` (or ``mark.<kind>``) it carries whose kind maps
+    to a different tier is a violation; a same-tier kind marker is left to
+    the collection-time marker-conflict check.
+
+    Args:
+        source: Python source text of the file.
+        path: The file's path, absolute or repo-relative; it decides the
+            directory kind and hence the tier.
+        grandfather: Repo-relative paths exempt from the contract.
+
+    Returns:
+        Violations sorted by ``(lineno, col_offset)``; empty for a file
+        outside every kind directory, a grandfathered file, or a file
+        whose markers all sit on its own rung. A marker whose line carries
+        ``# noqa: EAWF024`` is exempt.
+
+    Raises:
+        SyntaxError: if ``source`` is not parseable Python.
+    """
+    directory_kind = kind_for_test_path(path)
+    if directory_kind is None or repo_relative_test_path(path) in grandfather:
+        return []
+    placed: GateTier = gate_tier_for_kind(directory_kind)
+    tree = ast.parse(source, filename=path)
+    source_lines = source.splitlines()
+    violations: list[TierLadderViolation] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute):
+            continue
+        declared = _declared_kind(node)
+        if declared is None or gate_tier_for_kind(declared) is placed:
+            continue
+        if 0 < node.lineno <= len(source_lines) and _WAIVER_PATTERN.search(
+            source_lines[node.lineno - 1]
+        ):
+            continue
+        violations.append(
+            TierLadderViolation(
+                lineno=node.lineno,
+                col_offset=node.col_offset,
+                directory_kind=directory_kind,
+                declared_kind=declared,
+            )
+        )
     violations.sort(key=lambda violation: (violation.lineno, violation.col_offset))
     return violations

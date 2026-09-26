@@ -34,7 +34,12 @@ from eawf.observability.telemetry.exporter import (
     build_snapshot,
     render,
 )
-from eawf.observability.telemetry.models import TelemetryIncident, TelemetrySession
+from eawf.observability.telemetry.models import (
+    PriceSourceKind,
+    TelemetryDispatchCost,
+    TelemetryIncident,
+    TelemetrySession,
+)
 from eawf.observability.telemetry.store import SqliteMetricsStore
 
 _GOLDEN_DIR = Path(__file__).resolve().parent.parent / "golden" / "metrics_export"
@@ -55,6 +60,8 @@ def _seed_store(db_path: Path) -> SqliteMetricsStore:
         store.upsert("telemetry_sessions", session)
     for incident in _fixture_incidents():
         store.upsert("telemetry_incidents", incident)
+    for run in _fixture_runs():
+        store.upsert("telemetry_dispatch_costs", run)
     store.commit()
     return store
 
@@ -131,6 +138,56 @@ def _fixture_incidents() -> list[TelemetryIncident]:
             cause=IncidentCause.RUNTIME_AUTH_ERROR,
             ts=_TS,
             summary="auth failure",
+        ),
+    ]
+
+
+def _fixture_runs() -> list[TelemetryDispatchCost]:
+    """Two priced runs (one with a reasoning counter) and one unpriced run."""
+    return [
+        TelemetryDispatchCost(
+            envelope_id="e1",
+            wave_id="P27-I01-W16",
+            attempt_id="a1",
+            runtime="codex",
+            model="gpt-5",
+            input_tokens=1000,
+            output_tokens=400,
+            cache_creation_input_tokens=0,
+            cache_read_input_tokens=3000,
+            reasoning_tokens=150,
+            total_tokens=4400,
+            cost_usd=Decimal("0.0099"),
+            price_source=PriceSourceKind.LIST_RECONSTRUCTED,
+            rate_table_version="2026.05.17",
+            pricing_version="2026.05.17",
+            ts=_TS,
+        ),
+        TelemetryDispatchCost(
+            envelope_id="e2",
+            runtime="claude",
+            model="claude-opus-4-7",
+            input_tokens=200,
+            output_tokens=100,
+            cache_creation_input_tokens=5000,
+            cache_read_input_tokens=20000,
+            total_tokens=25300,
+            cost_usd=Decimal("0.0453"),
+            price_source=PriceSourceKind.LIST_RECONSTRUCTED,
+            rate_table_version="2026.05.17",
+            pricing_version="2026.05.17",
+            ts=_TS,
+        ),
+        TelemetryDispatchCost(
+            envelope_id="e3",
+            runtime="claude",
+            model="claude-opus-5-5",
+            input_tokens=10,
+            output_tokens=5,
+            total_tokens=15,
+            price_source=PriceSourceKind.UNPRICED,
+            pricing_version="2026.05.17",
+            ts=_TS,
         ),
     ]
 

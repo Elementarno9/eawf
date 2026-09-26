@@ -344,6 +344,18 @@ def test_spawn_dated_opus_4_8_emits_nonzero_priced_dispatch_cost(
     # The dispatch_cost event records the resolved (priced-against) id.
     assert costs[0]["model"] == resolved
     assert costs[0]["pricing_version"] == "2026.05.17"
+    # The live spawn path records the price source and the total identity.
+    assert costs[0]["price_source"] == "list-reconstructed"
+    assert costs[0]["rate_table_version"] == "2026.05.17"
+    assert costs[0]["total_tokens"] == sum(
+        costs[0][key]
+        for key in (
+            "input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+            "cache_read_input_tokens",
+        )
+    )
 
 
 def test_headless_spawn_stamps_wave_runtime_latest_with_priced_cost(

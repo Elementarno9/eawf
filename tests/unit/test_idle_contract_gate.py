@@ -12,7 +12,9 @@ spec-jury QC gate against the B091 idle-verifier regression:
 - it FAILS with :attr:`GateFailure.BAND_ENFORCES_GLOBALLY` when the resolver
   is stubbed to enforce for a non-UI wave -- the fleet-wide-flip detection;
 - the happy path (producer wired + band present + band-scoped resolver) passes
-  explicitly.
+  explicitly;
+- the split gate modules and the doctor checks stay under the EAWF010 cap, and
+  the ``eu_capture`` dynamic leg counts the actual row a wave close writes.
 
 It also covers the :func:`detect_idle_contracts` meta-gate that generalizes
 the B091 lesson: parse the contract-family symbols a diff adds, then flag any
@@ -35,8 +37,11 @@ from pathlib import Path
 
 import pytest
 
-from eawf.kernel.state.models import Wave
+from eawf.kernel.state.enums import ActualStatus
+from eawf.kernel.state.models import ActualSummary, State, Wave
+from eawf.platform.lint import eawf010
 from eawf.platform.profiles.models import ProfileBody, VerifyBlock
+from eawf.runtime.daemon.methods.state_close import append_wave_close_actual
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _GATE_PATH = _REPO_ROOT / "tools" / "idle_contract_gate.py"
@@ -846,3 +851,118 @@ def test_ast_references_symbol_tolerates_unparseable_source(mod) -> None:
     # A file that does not parse cannot be shown to reference the symbol, so the
     # probe returns False rather than raising and crashing the gate.
     assert mod._ast_references_symbol("def broken(:\n", "anything") is False
+
+
+# --------------------------------------------------------------------------- #
+# Module length: the split gate and the doctor checks fit the EAWF010 cap.
+# --------------------------------------------------------------------------- #
+
+_CAPPED_MODULES = (
+    "tools/idle_contract_gate.py",
+    "tools/idle_contract_common.py",
+    "tools/idle_contract_probes.py",
+    "tools/idle_contract_wiring.py",
+    "tools/idle_contract_meta.py",
+    "src/eawf/observability/doctor/checks.py",
+)
+
+
+@pytest.mark.parametrize("relpath", _CAPPED_MODULES)
+def test_check_source_passes_the_split_gate_modules(relpath: str) -> None:
+    source = (_REPO_ROOT / relpath).read_text(encoding="utf-8")
+    assert eawf010.check_source(source, max_loc=1400) == []
+    assert eawf010.find_waiver(source) is None
+
+
+def test_check_source_reds_one_line_past_the_cap() -> None:
+    # Off-by-one boundary for the cap the modules above are held to.
+    assert eawf010.check_source("x = 1\n" * 1400, max_loc=1400) == []
+    assert len(eawf010.check_source("x = 1\n" * 1401, max_loc=1400)) == 1
+
+
+def test_split_modules_keep_the_gate_surface(mod) -> None:
+    # The re-exported names resolve to the sibling definitions, not copies.
+    probes = sys.modules["idle_contract_probes"]
+    wiring = sys.modules["idle_contract_wiring"]
+    meta = sys.modules["idle_contract_meta"]
+    assert mod.check_skill_body_binding is probes.check_skill_body_binding
+    assert mod.check_coverage_gate_helpers_wired is wiring.check_coverage_gate_helpers_wired
+    assert mod.detect_idle_contracts is meta.detect_idle_contracts
+    assert mod.GateFailure is wiring.GateFailure
+    assert mod.MissingDischarge is meta.MissingDischarge
+
+
+# --------------------------------------------------------------------------- #
+# eu_capture: a wave close writes the actual row the dynamic leg counts.
+# --------------------------------------------------------------------------- #
+
+
+def _eu_capture(mod):
+    return [c for c in mod._I22_BOUND_CONTRACTS if c.name == "eu_capture"]
+
+
+def _close_written_actual(root: Path, *, wave_id: str, elapsed_eu: float) -> None:
+    """Append the actual row a close writes for a close-created summary under *root*."""
+    state_path = root / ".ea" / "state.json"
+    state = State.model_construct(
+        actuals={
+            wave_id: ActualSummary(
+                id=f"ACT-{wave_id}",
+                scope_id=wave_id,
+                status=ActualStatus.DONE,
+                elapsed_eu=elapsed_eu,
+                current_store_record_id=f"REC-{wave_id}",
+                updated_at=datetime(2026, 9, 1, tzinfo=UTC),
+            )
+        }
+    )
+    append_wave_close_actual(state, wave_id=wave_id, state_path=state_path)
+
+
+def test_check_contract_exercised_passes_eu_capture_after_a_wave_close(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    _close_written_actual(tmp_path, wave_id="P01-I01-W01", elapsed_eu=0.5)
+    monkeypatch.setattr(mod, "_REPO_ROOT", tmp_path)
+    findings = mod.check_contract_exercised(
+        store_rows_fn=mod._default_store_rows,
+        jury_convened_fn=lambda: False,
+        contracts=_eu_capture(mod),
+    )
+    assert findings == []
+
+
+def test_check_contract_exercised_reds_eu_capture_before_any_wave_close(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(mod, "_REPO_ROOT", tmp_path)
+    findings = mod.check_contract_exercised(
+        store_rows_fn=mod._default_store_rows,
+        jury_convened_fn=lambda: False,
+        contracts=_eu_capture(mod),
+    )
+    assert [finding.symbol for finding in findings] == ["eu_capture"]
+
+
+def test_check_contract_exercised_reds_eu_capture_on_a_zero_eu_close(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    # Boundary: an honest zero-EU close is written but measured nothing.
+    _close_written_actual(tmp_path, wave_id="P01-I01-W01", elapsed_eu=0.0)
+    monkeypatch.setattr(mod, "_REPO_ROOT", tmp_path)
+    findings = mod.check_contract_exercised(
+        store_rows_fn=mod._default_store_rows,
+        jury_convened_fn=lambda: False,
+        contracts=_eu_capture(mod),
+    )
+    assert [finding.missing for finding in findings] == [mod.MissingDischarge.NO_RUNTIME_OUTPUT]
+
+
+def test_append_wave_close_actual_raises_without_a_summary(tmp_path: Path) -> None:
+    with pytest.raises(KeyError):
+        append_wave_close_actual(
+            State.model_construct(actuals={}),
+            wave_id="P01-I01-W01",
+            state_path=tmp_path / ".ea" / "state.json",
+        )
+    assert not (tmp_path / ".ea" / "store" / "actual.jsonl").exists()

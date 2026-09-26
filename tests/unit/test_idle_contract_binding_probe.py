@@ -248,6 +248,21 @@ def test_check_contract_exercised_skips_ballot_until_jury_convenes(mod: Any) -> 
     assert flagged[0].missing is mod.MissingDischarge.NO_RUNTIME_OUTPUT
 
 
+def test_default_jury_convened_matches_only_findingset_rows(mod: Any) -> None:
+    """Only a spec-jury FindingSet evidence row proves the jury convened.
+
+    A gold-label event names the jury but records no convening; it must not
+    ungate the ballot contract. An empty store is the not-convened boundary.
+    """
+    assert mod._default_jury_convened(_fixed_store({})) is False
+    unrelated = _fixed_store(
+        {"evidence": [{"event_type": "jury_gold_label"}], "event": [{"event_type": "jury.x"}]}
+    )
+    assert mod._default_jury_convened(unrelated) is False
+    convened = _fixed_store({"evidence": [{"event_type": "spec_jury_findingset"}]})
+    assert mod._default_jury_convened(convened) is True
+
+
 def test_i22_bound_contracts_exclude_the_ballot(mod: Any) -> None:
     """The enforced I22 set is the three bound contracts; the ballot is excluded."""
     stems = {c.store_stem for c in mod._I22_BOUND_CONTRACTS}

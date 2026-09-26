@@ -89,6 +89,7 @@ from typing import TYPE_CHECKING, Protocol, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import MeasurementStatus
+from eawf.observability.telemetry.models import PriceSourceKind
 from eawf.observability.telemetry.pricing import PRICING_VERSION, ModelPricing, lookup_pricing
 
 if TYPE_CHECKING:
@@ -272,6 +273,8 @@ class MeteredCost(BaseModel):
             both TTL tiers (the figure the payload records). The *cost*
             honours the per-tier 5m / 1h split; this scalar does not.
         cache_read_input_tokens: Prompt-cache read tokens billed this spawn.
+        reasoning_tokens: Reasoning slice of ``output_tokens`` when the
+            runtime reported a counter, else ``None``.
         cost_usd: Token-derived cost in USD (exact :class:`~decimal.Decimal`).
             ``Decimal("0")`` for a genuine zero-token spawn (``priced`` is
             ``True``) or an unpriceable model (``priced`` is ``False``).
@@ -280,6 +283,11 @@ class MeteredCost(BaseModel):
             cost is a real token-derived figure (including a genuine ``$0``
             for a zero-token spawn). ``False`` when no row matched and the
             ``$0`` is an unpriced fallback, not a billed zero.
+        price_source: ``list-reconstructed`` when ``priced``, else
+            ``unpriced``. Metering multiplies measured classes by the
+            embedded rate table, so it never produces a ``billed`` cost.
+        rate_table_version: The rate-table revision behind a
+            list-reconstructed cost; ``None`` when unpriced.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -290,9 +298,12 @@ class MeteredCost(BaseModel):
     output_tokens: int = Field(ge=0)
     cache_creation_input_tokens: int = Field(ge=0)
     cache_read_input_tokens: int = Field(ge=0)
+    reasoning_tokens: int | None = Field(default=None, ge=0)
     cost_usd: Decimal = Field(ge=0)
     pricing_version: str = Field(min_length=1)
     priced: bool
+    price_source: PriceSourceKind
+    rate_table_version: str | None = None
 
 
 def _price_tokens(result: SpawnResult, pricing: ModelPricing) -> Decimal:
@@ -386,6 +397,31 @@ def price_token_counts(
     )
 
 
+def _reasoning_inside_output(result: SpawnResult, *, output_tokens: int) -> int | None:
+    """Return the spawn's reasoning counter when it lies inside its output.
+
+    A counter larger than the output it is a slice of can only come from a
+    source that added reasoning to output a second time; recording it would
+    fail the usage row's identity check at emit, so it is dropped to
+    unknown instead of sinking the dispatch.
+
+    Args:
+        result: The completed spawn.
+        output_tokens: The spawn's output tally.
+
+    Returns:
+        The reasoning counter, or ``None`` when absent or inconsistent.
+    """
+    reasoning = result.reasoning_output_tokens
+    if reasoning is not None and reasoning > output_tokens:
+        logger.warning(
+            f"price_spawn_result runtime={result.runtime!r} session={result.session_id!r} "
+            f"reasoning={reasoning} output={output_tokens} reasoning=dropped"
+        )
+        return None
+    return reasoning
+
+
 def price_spawn_result(result: SpawnResult) -> MeteredCost:
     """Price a completed :class:`SpawnResult` into a :class:`MeteredCost`.
 
@@ -432,7 +468,9 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
             cost_usd=Decimal("0"),
             pricing_version=PRICING_VERSION,
             priced=False,
+            price_source=PriceSourceKind.UNPRICED,
         )
+    reasoning = _reasoning_inside_output(result, output_tokens=output_tokens)
     pricing = lookup_pricing(model)
     if pricing is None:
         logger.warning(
@@ -446,9 +484,11 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
             output_tokens=output_tokens,
             cache_creation_input_tokens=cache_creation_total,
             cache_read_input_tokens=cache_read,
+            reasoning_tokens=reasoning,
             cost_usd=Decimal("0"),
             pricing_version=PRICING_VERSION,
             priced=False,
+            price_source=PriceSourceKind.UNPRICED,
         )
     cost_usd = _price_tokens(result, pricing)
     logger.info(
@@ -463,9 +503,12 @@ def price_spawn_result(result: SpawnResult) -> MeteredCost:
         output_tokens=output_tokens,
         cache_creation_input_tokens=cache_creation_total,
         cache_read_input_tokens=cache_read,
+        reasoning_tokens=reasoning,
         cost_usd=cost_usd,
         pricing_version=pricing.pricing_version,
         priced=True,
+        price_source=PriceSourceKind.LIST_RECONSTRUCTED,
+        rate_table_version=pricing.pricing_version,
     )
 
 

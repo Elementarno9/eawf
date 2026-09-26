@@ -24,7 +24,7 @@ from eawf.kernel.state.models import SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.events.dispatch_cost import DispatchCostPayload
 from eawf.kernel.store.paths import store_path
-from eawf.observability.telemetry.models import TelemetryDispatchCost
+from eawf.observability.telemetry.models import PriceSourceKind, TelemetryDispatchCost
 from eawf.observability.telemetry.projector import RebuildMode, SourceSpec, rebuild
 from eawf.observability.telemetry.sources import (
     DispatchCostSessionSource,
@@ -389,7 +389,11 @@ def test_dispatch_cost_row_round_trips_through_store(tmp_path: Path) -> None:
         output_tokens=340,
         cache_creation_input_tokens=1500,
         cache_read_input_tokens=17100,
+        reasoning_tokens=None,
+        total_tokens=20140,
         cost_usd=Decimal("0.4231"),
+        price_source=PriceSourceKind.LIST_RECONSTRUCTED,
+        rate_table_version="2026-05-01",
         pricing_version="2026-05-01",
         ts=datetime(2026, 5, 30, 12, 0, tzinfo=UTC),
     )

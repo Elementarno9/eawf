@@ -63,14 +63,12 @@ from eawf.runtime.runtimes.helpers import DEFAULT_TIMESTAMP, FileDelta
 from eawf.runtime.runtimes.manifest import RuntimeId
 from eawf.runtime.runtimes.opencode.plugin_install import IntegrityViolation as OpencodeIntegrity
 from eawf.runtime.runtimes.opencode.plugin_install import install_plugin as install_opencode_plugin
+from eawf.runtime.runtimes.runtime_set import normalize_runtime_set
 
 logger = logging.getLogger(__name__)
 
 
 SyncScope = Literal["project", "user"]
-
-
-_ALL_RUNTIMES: tuple[RuntimeId, ...] = ("claude-code", "codex", "opencode")
 
 
 class PluginSyncIntegrityError(Exception):
@@ -121,23 +119,6 @@ class SyncResult:
     results: list[RuntimeSyncResult] = field(default_factory=list)
     skipped: list[RuntimeId] = field(default_factory=list)
     dry_run: bool = False
-
-
-def _normalise_runtimes(runtimes: Sequence[RuntimeId] | None) -> tuple[RuntimeId, ...]:
-    """Return the canonical-order runtime tuple to drive.
-
-    Args:
-        runtimes: Caller-requested subset, or ``None`` for "all".
-
-    Returns:
-        Canonical-order tuple — Claude first, then Codex, then
-        OpenCode — restricted to the requested subset when one
-        was supplied.
-    """
-    if not runtimes:
-        return _ALL_RUNTIMES
-    requested = set(runtimes)
-    return tuple(r for r in _ALL_RUNTIMES if r in requested)
 
 
 def _flatten_claude(result: object) -> list[FileDelta]:
@@ -240,9 +221,12 @@ def sync_plugins(
         PluginSyncIntegrityError: One of the per-runtime
             renderers refused due to a hand-edit. The original
             per-runtime exception is chained via ``__cause__``.
+        ValueError: A requested runtime is not a known runtime id.
+        ManagedBlockError: The Codex ``config.toml`` carries damaged
+            managed markers.
     """
     target_dir = Path(target_dir).resolve()
-    requested = _normalise_runtimes(runtimes)
+    requested = normalize_runtime_set(runtimes or ())
     ts = timestamp or DEFAULT_TIMESTAMP
     results: list[RuntimeSyncResult] = []
     skipped: list[RuntimeId] = []

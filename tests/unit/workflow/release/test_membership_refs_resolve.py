@@ -144,6 +144,8 @@ def test_create_checkpoint_release_refuses_an_unfinished_milestone(status: str) 
         open_dev3((ACCEPTED_REF,), evidence({"status": status}))
 
     assert "milestone_incomplete" in str(excinfo.value)
+    # The refusal names the status the admission actually requires.
+    assert "COMPLETED Milestone" in str(excinfo.value)
 
 
 def test_create_checkpoint_release_refuses_a_milestone_outside_a_declared_canary() -> None:

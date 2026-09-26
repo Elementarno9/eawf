@@ -12,6 +12,11 @@ and the two manifest digests (criteria and gates) that fix which version
 of the wave's verification contract was replayed. The row is append-only
 and the wave row is never touched, so a re-run adds evidence and can
 never rewrite a recorded verdict.
+
+A gate can be red at its landed commit for a reason a later commit fixed
+(a test that leaked host state, say). Such a run is re-bound to that later
+commit, and the row then carries both SHAs: ``landed_sha`` keeps saying
+where the wave landed, ``bound_sha`` says where its gates re-ran.
 """
 
 from __future__ import annotations
@@ -70,7 +75,12 @@ class GateRereceiptOutcome(BaseModel):
 
 
 class GateRereceiptBinding(BaseModel):
-    """One re-run of a CLOSED wave's required gates at its landed commit."""
+    """One re-run of a CLOSED wave's required gates.
+
+    ``bound_sha`` / ``bound_tree_sha`` are ``None`` when the gates ran at
+    ``landed_sha``; otherwise they name the later commit, on the landed
+    commit's descendant history, that the run and its receipts bind to.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -85,6 +95,8 @@ class GateRereceiptBinding(BaseModel):
     receipt_ids: list[GateReceiptIdStr] = Field(default_factory=list)
     gates: Annotated[list[GateRereceiptOutcome], Field(min_length=1)]
     ran_at: UtcDatetime
+    bound_sha: ShaStr | None = None
+    bound_tree_sha: ShaStr | None = None
 
     @model_validator(mode="after")
     def _receipt_ids_match_gates(self) -> GateRereceiptBinding:
@@ -102,6 +114,10 @@ class GateRereceiptBinding(BaseModel):
             raise ValueError("receipt_ids must not repeat a receipt")
         if len({gate.gate_id for gate in self.gates}) != len(self.gates):
             raise ValueError("gates must not repeat a gate id")
+        if (self.bound_sha is None) != (self.bound_tree_sha is None):
+            raise ValueError("bound_sha and bound_tree_sha must be set together")
+        if self.bound_sha is not None and self.bound_sha == self.landed_sha:
+            raise ValueError("bound_sha must differ from landed_sha; omit it for a landed run")
         return self
 
 

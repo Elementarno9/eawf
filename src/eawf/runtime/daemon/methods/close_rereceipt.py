@@ -17,6 +17,11 @@ describe a verification contract that no longer exists.
 A failing gate is evidence too. It lands as a ``fail`` receipt inside the
 binding and the wave stays CLOSED: this verb adds proof, it never revises
 a recorded verdict.
+
+When a gate is red at the landed commit for a reason a later commit fixed,
+``at`` re-binds the run to that later commit. It must descend from the
+landed commit and be reachable from ``HEAD``, so the receipts still prove
+the wave's own history; the binding row records both SHAs.
 """
 
 from __future__ import annotations
@@ -75,12 +80,15 @@ class CloseRereceiptParams(BaseModel):
         wave_id: The CLOSED wave whose recorded gates are replayed.
         repo_root: Optional absolute repo working-tree path (default: the
             daemon's own anchor).
+        at: Optional commit-ish to run the gates at instead of the landed
+            commit; ``None`` runs them where the wave landed.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     wave_id: str = Field(min_length=1)
     repo_root: str | None = None
+    at: str | None = Field(default=None, min_length=1)
 
 
 class CloseRereceiptResult(BaseModel):
@@ -91,6 +99,7 @@ class CloseRereceiptResult(BaseModel):
     operation: str
     wave_id: str
     landed_sha: str
+    bound_sha: str | None
     binding_id: str
     receipt_ids: list[str]
     gates: list[dict[str, Any]]
@@ -203,6 +212,60 @@ def _require_landed_revision(repo_root: Path, *, wave: Wave) -> tuple[str, str]:
     return commit_sha, tree.stdout.strip()
 
 
+def _require_rebound_revision(
+    repo_root: Path,
+    *,
+    wave: Wave,
+    landed_sha: str,
+    at: str,
+) -> tuple[str, str]:
+    """Return the commit and tree a re-bound re-receipt runs at.
+
+    The commit must sit between the landed commit and ``HEAD``: anything
+    older predates the wave's work, and anything off ``HEAD`` never landed,
+    so a pass there would prove nothing about this wave.
+
+    Args:
+        repo_root: Repository holding the landed history.
+        wave: The closed wave being re-receipted.
+        landed_sha: The wave's resolved landed commit.
+        at: The operator-supplied commit-ish.
+
+    Returns:
+        ``(commit_sha, tree_sha)`` for the re-bound revision.
+
+    Raises:
+        DaemonValidationError: *at* does not resolve, does not descend
+            from the landed commit, or is not an ancestor of ``HEAD``.
+    """
+    resolved = _git(repo_root, "rev-parse", "--verify", "--end-of-options", f"{at}^{{commit}}")
+    if resolved.returncode != 0:
+        raise DaemonValidationError(
+            f"validation_failed: wave {wave.id!r} re-bind commit {at!r} does not resolve "
+            "in this repository"
+        )
+    commit_sha = resolved.stdout.strip()
+    descends = _git(repo_root, "merge-base", "--is-ancestor", landed_sha, commit_sha)
+    if descends.returncode != 0:
+        raise DaemonValidationError(
+            f"validation_failed: wave {wave.id!r} re-bind commit {commit_sha} does not "
+            f"descend from its landed commit {landed_sha}"
+        )
+    ancestry = _git(repo_root, "merge-base", "--is-ancestor", commit_sha, "HEAD")
+    if ancestry.returncode != 0:
+        raise DaemonValidationError(
+            f"validation_failed: wave {wave.id!r} re-bind commit {commit_sha} is not an "
+            "ancestor of HEAD; a receipt bound to unreachable history proves nothing"
+        )
+    tree = _git(repo_root, "rev-parse", "--verify", f"{commit_sha}^{{tree}}")
+    if tree.returncode != 0:
+        raise DaemonValidationError(
+            f"validation_failed: wave {wave.id!r} re-bind commit {commit_sha} has no "
+            "resolvable tree"
+        )
+    return commit_sha, tree.stdout.strip()
+
+
 def _verification_facts(
     state: State,
     *,
@@ -238,8 +301,8 @@ def _gate_freshness(
     wave: Wave,
     gate: GateSpec,
     binding_id: str,
-    landed_sha: str,
-    landed_tree_sha: str,
+    run_sha: str,
+    run_tree_sha: str,
     facts: _WaveVerificationFacts,
 ) -> GateFreshnessInput:
     """Return the frozen facts one re-run gate claims and receipts under.
@@ -253,8 +316,8 @@ def _gate_freshness(
         scope_id=wave.id,
         criterion_id=gate.criterion_id,
         integration_id=binding_id,
-        integrated_commit=landed_sha,
-        tree_digest=landed_tree_sha,
+        integrated_commit=run_sha,
+        tree_digest=run_tree_sha,
         contract_digest=facts.contract_digest,
         criteria_digest=facts.criteria_digest,
         gate_manifest_digest=facts.gate_manifest_digest,
@@ -393,19 +456,19 @@ def _run_wave_gates(
     state_path: Path,
     wave: Wave,
     binding_id: str,
-    landed_sha: str,
-    landed_tree_sha: str,
+    run_sha: str,
+    run_tree_sha: str,
     facts: _WaveVerificationFacts,
 ) -> list[GateRereceiptOutcome]:
-    """Replay every recorded gate at the landed revision.
+    """Replay every recorded gate at the run revision.
 
     Args:
         repo_root: Repository owning the landed history.
         state_path: Anchor for the receipt store and gate claims.
         wave: The CLOSED wave being re-receipted.
         binding_id: Id of the binding row this run will write.
-        landed_sha: The commit the gates run at.
-        landed_tree_sha: That commit's tree.
+        run_sha: The commit the gates run at (landed or re-bound).
+        run_tree_sha: That commit's tree.
         facts: The digests every produced receipt binds to.
 
     Returns:
@@ -420,8 +483,8 @@ def _run_wave_gates(
         workspace = prepare_close_workspace(
             repo_root,
             attempt_id=binding_id,
-            commit_ref=landed_sha,
-            expected_tree_sha=landed_tree_sha,
+            commit_ref=run_sha,
+            expected_tree_sha=run_tree_sha,
         )
     except CloseWorkspaceError as exc:
         raise DaemonValidationError(
@@ -436,8 +499,8 @@ def _run_wave_gates(
                 workspace_path=workspace.path,
                 wave=wave,
                 binding_id=binding_id,
-                landed_sha=landed_sha,
-                landed_tree_sha=landed_tree_sha,
+                run_sha=run_sha,
+                run_tree_sha=run_tree_sha,
                 facts=facts,
             )
             for gate in wave.gates
@@ -454,8 +517,8 @@ def _rerun_gate_row(
     workspace_path: Path,
     wave: Wave,
     binding_id: str,
-    landed_sha: str,
-    landed_tree_sha: str,
+    run_sha: str,
+    run_tree_sha: str,
     facts: _WaveVerificationFacts,
 ) -> GateRereceiptOutcome:
     """Replay one recorded gate and turn its result into a binding row entry."""
@@ -466,8 +529,8 @@ def _rerun_gate_row(
         criterion_id=gate.criterion_id,
         gate_id=gate.id,
         integration_id=binding_id,
-        integrated_sha=landed_sha,
-        tree_sha=landed_tree_sha,
+        integrated_sha=run_sha,
+        tree_sha=run_tree_sha,
         contract_digest=facts.contract_digest,
         criteria_digest=facts.criteria_digest,
         gate_manifest_digest=facts.gate_manifest_digest,
@@ -493,8 +556,8 @@ def _rerun_gate_row(
             wave=wave,
             gate=gate,
             binding_id=binding_id,
-            landed_sha=landed_sha,
-            landed_tree_sha=landed_tree_sha,
+            run_sha=run_sha,
+            run_tree_sha=run_tree_sha,
             facts=facts,
         ),
     )
@@ -523,13 +586,14 @@ def _rerun_gate_row(
 def _binding_envelope(binding: GateRereceiptBinding) -> Envelope:
     """Wrap one binding row in its canonical store envelope."""
     passed = sum(1 for gate in binding.gates if gate.result == GateReceiptResult.PASS)
+    rebound = f" bound {binding.bound_sha[:12]}" if binding.bound_sha is not None else ""
     return Envelope(
         id=binding.id,
         kind=StoreKind.GATE_RERECEIPT,
         scope_id=binding.wave_id,
         created_at=binding.ran_at,
         summary=(
-            f"re-receipt {binding.wave_id} at {binding.landed_sha[:12]} "
+            f"re-receipt {binding.wave_id} at {binding.landed_sha[:12]}{rebound} "
             f"passed={passed}/{len(binding.gates)}"
         ),
         payload=binding.model_dump(mode="json"),
@@ -542,10 +606,13 @@ def _build_binding(
     wave: Wave,
     landed_sha: str,
     landed_tree_sha: str,
+    run_sha: str,
+    run_tree_sha: str,
     facts: _WaveVerificationFacts,
     outcomes: list[GateRereceiptOutcome],
 ) -> GateRereceiptBinding:
     """Assemble the append-only row that binds this run to the wave."""
+    rebound = run_sha != landed_sha
     return GateRereceiptBinding(
         id=binding_id,
         wave_id=wave.id,
@@ -557,6 +624,8 @@ def _build_binding(
         receipt_ids=[gate.receipt_id for gate in outcomes if gate.receipt_id is not None],
         gates=outcomes,
         ran_at=datetime.now(UTC),
+        bound_sha=run_sha if rebound else None,
+        bound_tree_sha=run_tree_sha if rebound else None,
     )
 
 
@@ -593,8 +662,9 @@ async def rereceipt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     Raises:
         ValueError: The params do not validate (mapped to ``-32602``).
         DaemonValidationError: The wave is unknown, not CLOSED, carries no
-            gates, has no landed commit reachable from ``HEAD``, or moved
-            while its gates ran (mapped to ``-32002``).
+            gates, has no landed commit reachable from ``HEAD``, names an
+            ``at`` commit outside landed..HEAD, or moved while its gates
+            ran (mapped to ``-32002``).
     """
     from eawf.runtime.daemon.methods.close import resolve_repo_root
     from eawf.runtime.daemon.methods.state_context import read_state
@@ -609,6 +679,11 @@ async def rereceipt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     state, _payload = read_state(state_path)
     wave = _require_closed_wave(state, wave_id=args.wave_id)
     landed_sha, landed_tree_sha = _require_landed_revision(repo_root, wave=wave)
+    run_sha, run_tree_sha = (
+        (landed_sha, landed_tree_sha)
+        if args.at is None
+        else _require_rebound_revision(repo_root, wave=wave, landed_sha=landed_sha, at=args.at)
+    )
     fingerprint = frozen_wave_fingerprint(wave)
     facts = _verification_facts(state, repo_root=repo_root, wave=wave)
     binding_id = f"GRR-{uuid.uuid4().hex[:12]}"
@@ -619,8 +694,8 @@ async def rereceipt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
         state_path=state_path,
         wave=wave,
         binding_id=binding_id,
-        landed_sha=landed_sha,
-        landed_tree_sha=landed_tree_sha,
+        run_sha=run_sha,
+        run_tree_sha=run_tree_sha,
         facts=facts,
     )
     bound_wave = _require_unmoved_wave(state_path, wave_id=args.wave_id, fingerprint=fingerprint)
@@ -629,6 +704,8 @@ async def rereceipt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
         wave=bound_wave,
         landed_sha=landed_sha,
         landed_tree_sha=landed_tree_sha,
+        run_sha=run_sha,
+        run_tree_sha=run_tree_sha,
         facts=facts,
         outcomes=outcomes,
     )
@@ -636,12 +713,13 @@ async def rereceipt(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any
     passed = sum(1 for gate in outcomes if gate.result == GateReceiptResult.PASS)
     logger.info(
         f"close_rereceipt ok wave={args.wave_id} binding={binding_id} "
-        f"commit={landed_sha} passed={passed} gates={len(outcomes)}"
+        f"commit={landed_sha} run_commit={run_sha} passed={passed} gates={len(outcomes)}"
     )
     return CloseRereceiptResult(
         operation="rereceipt",
         wave_id=args.wave_id,
         landed_sha=landed_sha,
+        bound_sha=binding.bound_sha,
         binding_id=binding_id,
         receipt_ids=list(binding.receipt_ids),
         gates=[gate.model_dump(mode="json") for gate in outcomes],

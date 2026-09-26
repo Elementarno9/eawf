@@ -20,7 +20,9 @@ tests can drive it with injected config + fixture trees without touching the rea
 coverage.xml. ``main`` is the CLI shim CI invokes; before judging any floor it
 refuses a report that no longer measures the checked-out tree
 (``stale_report_reason``): one written before the HEAD commit or before the
-newest source file it measures was last edited.
+newest source file it measures was last edited. A tree whose HEAD commit time
+cannot be read (no ``git``, no work tree, no commit) is refused too: freshness
+that cannot be proven is not assumed.
 
 Invocation:
 
@@ -272,8 +274,7 @@ def head_commit_time(repo_root: Path) -> int | None:
     Returns:
         The HEAD committer timestamp, or ``None`` when *repo_root* is not in a
         git work tree, the repository has no commit yet, or ``git`` is not
-        installed, so a caller on an exported source tree can skip instead of
-        failing.
+        installed.
     """
     try:
         completed = subprocess.run(
@@ -343,7 +344,8 @@ def stale_report_reason(
 
     A report written before HEAD was committed, or before a source file it
     measures was last edited, describes older code; judging the floors against
-    it passes or fails by accident.
+    it passes or fails by accident. When the HEAD commit time cannot be read the
+    report is refused as well, because its freshness against HEAD is unproven.
 
     Args:
         coverage_xml: Path to an existing Cobertura ``coverage.xml``.
@@ -357,14 +359,14 @@ def stale_report_reason(
         FileNotFoundError: When *coverage_xml* does not exist.
     """
     report_mtime = coverage_xml.stat().st_mtime
-    head_committed_at = head_commit_time(repo_root)
-    if head_committed_at is not None and coverage_xml_is_stale(
-        coverage_xml, head_committed_at=head_committed_at
-    ):
-        return f"{coverage_xml.name} was written before the HEAD commit"
     newest = newest_measured_source(classes, repo_root)
     if newest is not None and newest[1] > report_mtime:
         return f"{coverage_xml.name} is older than {newest[0]}, a source file it measures"
+    head_committed_at = head_commit_time(repo_root)
+    if head_committed_at is None:
+        return f"cannot read the HEAD commit time under {repo_root} (no git work tree)"
+    if coverage_xml_is_stale(coverage_xml, head_committed_at=head_committed_at):
+        return f"{coverage_xml.name} was written before the HEAD commit"
     return None
 
 

@@ -40,7 +40,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -50,6 +49,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import eawf
+from eawf.platform.install.managed_block import render_managed_block, splice_managed_block
 from eawf.runtime.runtimes.codex.hook_map import (
     CODEX_HOOK_EVENT_TYPES,
     codex_hook_event_name,
@@ -258,10 +258,8 @@ def _write_sidecar(plugin_root: Path, ts: str, *, force: bool, dry_run: bool) ->
     return FileDelta(path=sidecar_path, action=action)
 
 
-def _write_config(target_dir: Path, *, scope: Scope, home: Path | None, dry_run: bool) -> FileDelta:
-    """Patch + write the Codex ``config.toml`` block (no integrity guard)."""
-    config_path = _config_target(target_dir, scope=scope, home=home)
-    config_bytes = _patch_config_toml(config_path)
+def _write_config(config_path: Path, config_bytes: bytes, *, dry_run: bool) -> FileDelta:
+    """Write the already-patched Codex ``config.toml`` (no integrity guard)."""
     action = _classify(config_path, config_bytes)
     if not dry_run:
         _ensure_dir(config_path.parent)
@@ -541,42 +539,34 @@ def _sidecar_fingerprint(payload: bytes) -> str:
     return hashlib.blake2b(body, digest_size=8).hexdigest()
 
 
-_MANAGED_BLOCK_RE = re.compile(
-    rf"(?ms)^# ---- {re.escape(_MANAGED_TABLE)} begin ----"
-    rf".*?^# ---- {re.escape(_MANAGED_TABLE)} end ----\n?"
-)
 _BEGIN_MARKER: str = f"# ---- {_MANAGED_TABLE} begin ----"
 _END_MARKER: str = f"# ---- {_MANAGED_TABLE} end ----"
 
 
-def _render_enabled_block() -> str:
+def _render_enabled_block() -> bytes:
     """Render the marker-wrapped ``[plugins.eawf]`` enabled block."""
-    lines: list[str] = [
-        _BEGIN_MARKER,
-        f"[plugins.{_PLUGIN_NAME}]",
-        "enabled = true",
-        _END_MARKER,
-    ]
-    return "\n".join(lines) + "\n"
+    return render_managed_block(
+        begin=_BEGIN_MARKER,
+        end=_END_MARKER,
+        body_lines=(f"[plugins.{_PLUGIN_NAME}]", "enabled = true"),
+    )
 
 
 def _patch_config_toml(target_path: Path) -> bytes:
     """Return rewritten ``config.toml`` bytes with the managed block patched in.
 
-    User-authored TOML outside the ``__eawf_managed begin/end`` markers
-    is preserved verbatim. When the file does not yet exist, the
-    managed block is the entire file body.
+    Only the lines between the ``__eawf_managed begin/end`` markers change;
+    every byte outside them, line endings included, is kept. A file with no
+    block gets one appended, and a missing file is the block alone.
+
+    Raises:
+        ManagedBlockError: When the existing file's markers are not exactly
+            one ordered pair.
     """
-    rendered_block = _render_enabled_block()
-    if target_path.exists():
-        existing = target_path.read_text(encoding="utf-8")
-        if _BEGIN_MARKER in existing and _END_MARKER in existing:
-            replaced = _MANAGED_BLOCK_RE.sub(rendered_block, existing, count=1)
-            return replaced.encode("utf-8")
-        prefix = existing.rstrip("\n")
-        joined = (prefix + "\n\n" + rendered_block) if prefix else rendered_block
-        return joined.encode("utf-8")
-    return rendered_block.encode("utf-8")
+    existing = target_path.read_bytes() if target_path.exists() else b""
+    return splice_managed_block(
+        existing, begin=_BEGIN_MARKER, end=_END_MARKER, block=_render_enabled_block()
+    )
 
 
 def _ensure_dir(path: Path) -> None:
@@ -752,6 +742,8 @@ def install_plugin(
     Raises:
         IntegrityViolation: when a managed file under the plugin root
             has been hand-edited and ``force`` is not set.
+        ManagedBlockError: when ``config.toml`` carries damaged managed
+            markers; nothing is written.
     """
     target_dir = Path(target_dir).resolve()
     ts = timestamp or _DEFAULT_TIMESTAMP
@@ -761,6 +753,10 @@ def install_plugin(
         home=home,
         plugin_root=plugin_root,
     )
+    # Patched before any byte lands so a config.toml whose managed markers
+    # are damaged refuses the whole install instead of half of it.
+    config_path = _config_target(target_dir, scope=scope, home=home)
+    config_bytes = _patch_config_toml(config_path)
 
     skill_deltas = [
         _write_managed_file(
@@ -801,7 +797,7 @@ def install_plugin(
         _manifest_target(plugin_root), _render_manifest(), force=force, dry_run=dry_run
     )
     sidecar_delta = _write_sidecar(plugin_root, ts, force=force, dry_run=dry_run)
-    config_delta = _write_config(target_dir, scope=scope, home=home, dry_run=dry_run)
+    config_delta = _write_config(config_path, config_bytes, dry_run=dry_run)
 
     if not dry_run:
         _persist_manifest(target_dir, scope=scope, timestamp=ts, plugin_root=plugin_root, home=home)

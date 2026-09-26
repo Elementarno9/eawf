@@ -39,10 +39,12 @@ def wave_prune_branches_cmd(
     match -- unarchived, or archived at a different commit -- the whole
     batch is refused and nothing is deleted; run ``wave archive-refs``
     first (add ``--include-misc`` to cover non-wave branches too).
-    ``main``, ``plugins-dist``, the current branch, and any branch checked
-    out in another worktree are never candidates; they are reported under
-    ``skipped``. Also removes worktree registrations whose directory no
-    longer exists on disk (the outcome ``git worktree prune`` produces).
+    ``main``, ``plugins-dist``, any long-running phase branch, the current
+    branch, and any branch checked out in another worktree are never
+    candidates; they are reported under ``skipped``. A branch whose tip
+    moves between selection and delete refuses the batch. Also removes
+    worktree registrations whose directory no longer exists on disk (the
+    outcome ``git worktree prune`` produces).
 
     ``--dry-run`` computes the same selection and worktree-prune list and
     prints it, without deleting or pruning anything.

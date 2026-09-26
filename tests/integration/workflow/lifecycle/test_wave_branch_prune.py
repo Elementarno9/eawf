@@ -21,8 +21,10 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli import exit_codes
+from eawf.workflow.lifecycle import wave_archive
 from eawf.workflow.lifecycle.wave_archive import (
     WaveArchiveError,
+    WaveBranchMovedError,
     list_misc_branches,
     misc_archive_ref_for_branch,
     prune_branches,
@@ -244,6 +246,42 @@ def test_drift_and_pin_reachability_unchanged_after_prune(
     # The pruned branches are gone, but the archive refs kept both objects alive.
     assert _object_exists(root, pins["W01"])
     assert _object_exists(root, pins["W06"])
+
+
+def test_prune_branches_keeps_a_branch_that_moved_after_selection(
+    repo: tuple[Path, dict[str, str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real git refuses the guarded delete transaction, so nothing is deleted."""
+    root, pins = repo
+    assert _invoke("wave", "archive-refs", "--include-misc")[0] == 0
+    scan = wave_archive._prunable_worktrees
+
+    def move_then_scan(*, repo_root: Path | None) -> list[str]:
+        _git(root, "update-ref", "refs/heads/feature/zz-v1.0-p28-w01", pins["W06"])
+        return scan(repo_root=repo_root)
+
+    monkeypatch.setattr(wave_archive, "_prunable_worktrees", move_then_scan)
+    before = _local_branches(root)
+
+    with pytest.raises(WaveBranchMovedError) as excinfo:
+        prune_branches(repo_root=root)
+
+    assert excinfo.value.moved == [("feature/zz-v1.0-p28-w01", pins["W01"])]
+    assert _local_branches(root) == before
+    assert _git(root, "rev-parse", "feature/zz-v1.0-p28-w01") == pins["W06"]
+
+
+def test_prune_branches_keeps_the_phase_branch_when_not_checked_out(
+    repo: tuple[Path, dict[str, str]],
+) -> None:
+    root, _pins = repo
+    _git(root, "switch", "-q", "main")
+    assert _invoke("wave", "archive-refs", "--include-misc")[0] == 0
+
+    result = prune_branches(repo_root=root)
+
+    assert ("feature/zz-v1.0", "phase branch") in result.skipped
+    assert _local_branches(root) == set(PROTECTED)
 
 
 def test_prune_branches_outside_a_repository_raises(tmp_path: Path) -> None:

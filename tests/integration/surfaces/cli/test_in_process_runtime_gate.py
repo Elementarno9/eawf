@@ -284,6 +284,23 @@ def test_close_and_pin_transport_fallback_records_measured_elapsed_eu(
     )
 
 
+def test_close_and_pin_appends_the_auto_created_actual_record(workspace: Path) -> None:
+    """The daemonless close writes the actual.jsonl record its summary points at."""
+    _enable_profile(workspace, enforce=True)
+    _seed_captured_runtime(workspace)
+
+    state, _holder = _pin_in_process(workspace, transport_fallback=False)
+
+    summary = (state.actuals or {})[_WAVE_ID]
+    actual_store = _state_path(workspace).parent / "store" / "actual.jsonl"
+    lines = actual_store.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    record = orjson.loads(lines[0])
+    assert record["id"] == summary.current_store_record_id
+    assert record["payload"]["elapsed_eu"] == pytest.approx(summary.elapsed_eu)
+    assert record["payload"]["elapsed_eu"] > 0.0
+
+
 def test_close_and_pin_rejects_unknown_wave(workspace: Path) -> None:
     """Error path: an unknown wave is named as such, not as a missing runtime."""
     _enable_profile(workspace, enforce=True)

@@ -66,7 +66,11 @@ repos:
         # artifacts' real sha256 digests. They are trimmed to the fields the
         # readers read, which test_observe_adapters enforces, so nothing but
         # names, URLs and digests can land in them.
-        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$'
+        #
+        # The requirement census stamps the git revision it was generated at
+        # and rewrites it on every regeneration, the same unsettleable class;
+        # its titles are scrubbed for paths and addresses by the extractor.
+        exclude: 'uv\.lock|\.gitignore|^\.ea/state\.json$|^tests/golden/plugin_install/claude/settings\.json$|^tests/fixtures/migration/cutover-faults/pending-wal/locks/wal/wal-canary-0001\.pending\.json$|^tests/fixtures/migration/epoch1-full/backlog_corpus\.json$|^tests/fixtures/migration/epoch2/complete-manifest\.json$|^tests/fixtures/migration/live-cutover/corpus-pin\.json$|^tests/fixtures/migration/p30-i26-history/provenance\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/document\.json$|^tests/fixtures/migration/p30-i26-history/snapshot/store/audit\.jsonl$|^tests/golden/kernel/migration/rehearsal/[a-z0-9-]+\.json$|^tests/fixtures/release/observations/[a-z_]+-dev2\.json$|^\.ea/requirements\.json$'
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v2.0.0

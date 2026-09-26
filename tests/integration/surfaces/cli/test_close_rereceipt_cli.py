@@ -209,3 +209,63 @@ def test_close_rereceipt_refuses_when_the_daemon_is_unreachable(
 
     assert result.exit_code != 0
     assert "daemon unavailable" in result.output
+
+
+def test_close_rereceipt_omits_at_when_not_given(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Without --at the params are unchanged, so the daemon runs at the landed commit."""
+    _install(monkeypatch, result=_result(receipt_ids=_RECEIPT_IDS))
+
+    result = runner.invoke(
+        app,
+        ["--workspace", str(tmp_path), "close", "rereceipt", _WAVE_ID],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert _FakeClient.last_params is not None
+    assert "at" not in _FakeClient.last_params
+    assert " bound " not in result.output
+
+
+def test_close_rereceipt_forwards_at_and_renders_the_bound_commit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """--at reaches the daemon verbatim and the summary names both commits."""
+    rebound = {**_result(receipt_ids=_RECEIPT_IDS), "bound_sha": "d" * 40}
+    _install(monkeypatch, result=rebound)
+
+    result = runner.invoke(
+        app,
+        ["--workspace", str(tmp_path), "close", "rereceipt", _WAVE_ID, "--at", "HEAD~1"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert _FakeClient.last_params is not None
+    assert _FakeClient.last_params["at"] == "HEAD~1"
+    assert f"at {'c' * 12} bound {'d' * 12}" in result.output
+
+
+def test_close_rereceipt_surfaces_an_at_refusal_non_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Error path: a refused --at exits non-zero with the daemon's text."""
+    message = (
+        f"validation_failed: wave {_WAVE_ID!r} re-bind commit {'e' * 40} does not "
+        f"descend from its landed commit {'c' * 40}"
+    )
+    _install(
+        monkeypatch,
+        error=DaemonRpcError(code=RPC_VALIDATION_FAILED, message=message),
+    )
+
+    result = runner.invoke(
+        app,
+        ["--workspace", str(tmp_path), "close", "rereceipt", _WAVE_ID, "--at", "e" * 40],
+    )
+
+    assert result.exit_code != 0
+    assert "does not descend from its landed commit" in result.output

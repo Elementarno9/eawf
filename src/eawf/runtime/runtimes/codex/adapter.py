@@ -733,6 +733,7 @@ def _parse_codex_result(
     input_total = _usage_int(usage, "input_tokens") if usage is not None else None
     output_tokens = _usage_int(usage, "output_tokens") if usage is not None else None
     cache_read = _usage_int(usage, "cached_input_tokens", missing=0) if usage is not None else None
+    reasoning = _usage_int(usage, "reasoning_output_tokens") if usage is not None else None
     usage_observed = (
         input_total is not None and output_tokens is not None and cache_read is not None
     )
@@ -760,6 +761,7 @@ def _parse_codex_result(
         cache_creation_5m_input_tokens=0 if usage_observed else None,
         cache_creation_1h_input_tokens=0 if usage_observed else None,
         cache_read_input_tokens=cache_read,
+        reasoning_output_tokens=reasoning if usage_observed else None,
         cost_usd_reported=None,
         measurement_quality=(
             MeasurementQuality.EXACT if usage_observed else MeasurementQuality.UNAVAILABLE

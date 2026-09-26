@@ -310,9 +310,11 @@ def close_resume_cmd(
 
 def render_rereceipt(result: dict[str, Any]) -> str:
     """Render one compact human-readable re-receipt summary."""
+    bound_sha = result.get("bound_sha")
+    rebound = f" bound {bound_sha[:12]}" if bound_sha else ""
     lines = [
         (
-            f"rereceipt {result['wave_id']} at {result['landed_sha'][:12]} "
+            f"rereceipt {result['wave_id']} at {result['landed_sha'][:12]}{rebound} "
             f"binding={result['binding_id']}"
         ),
         (f"gates passed={result['passed_count']} failed={result['failed_count']}"),
@@ -336,13 +338,26 @@ def render_rereceipt(result: dict[str, Any]) -> str:
 def close_rereceipt_cmd(
     ctx: typer.Context,
     wave_id: Annotated[str, typer.Argument(help="CLOSED wave whose gates are re-run.")],
+    at: Annotated[
+        str | None,
+        typer.Option(
+            "--at",
+            help=(
+                "Re-bind: run the gates at this commit instead. It must descend "
+                "from the landed commit and be an ancestor of HEAD."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Re-run a closed wave's gates at its landed commit and bind receipts."""
     flags: GlobalFlags = ctx.obj
+    params: dict[str, Any] = {"wave_id": wave_id}
+    if at is not None:
+        params["at"] = at
     try:
         result = call_close_rpc(
             method="close.rereceipt",
-            params={"wave_id": wave_id},
+            params=params,
             flags=flags,
         )
     except cli_errors.CliError as exc:

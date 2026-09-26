@@ -221,8 +221,8 @@ def test_green_tree_gate_reds_on_a_partial_needs_list(tool: ModuleType) -> None:
     workflow = _load(_CI)
     workflow["jobs"][_GREEN_TREE_JOB]["needs"] = ["changes", "test", "twice-green"]
     assert green_tree_violations(workflow, heavy_jobs=tool.HEAVY_JOBS) == [
-        "the green-tree job does not need tool-install-smoke, snapshot-pairing, linux-jail, "
-        "prose-gate, windows, so a red run of one of them can still record the tree"
+        "the green-tree job does not need tool-install-smoke, snapshot-pairing, requirement-trace, "
+        "linux-jail, prose-gate, windows, so a red run of one of them can still record the tree"
     ]
 
 

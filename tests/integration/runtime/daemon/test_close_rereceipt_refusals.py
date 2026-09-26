@@ -13,6 +13,8 @@ Coverage:
   wave, a wave with no gates, a wave with no ``Wave.commit``, a pin that
   does not resolve, a pin that is not an ancestor of ``HEAD``, and a wave
   row that moved between the gate run and the bind;
+* ``at`` refusals: a re-bind commit that does not resolve, does not
+  descend from the landed commit, or is off ``HEAD``;
 * params: an unknown key is an invalid-params ``ValueError``, not a
   validation refusal;
 * recorded failure: a failing gate binds a ``fail`` receipt and leaves the
@@ -71,13 +73,17 @@ def _expect_refusal(
     repo: Path,
     state_path: Path,
     match: str,
+    at: str | None = None,
 ) -> None:
     """Assert the re-receipt is refused and leaves the store empty."""
     ctx = build_ctx(tmp_path, state_path)
+    params: dict[str, Any] = {"wave_id": _WAVE_ID, "repo_root": str(repo)}
+    if at is not None:
+        params["at"] = at
 
     async def body() -> None:
         with pytest.raises(DaemonValidationError, match=match):
-            await rereceipt(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo)})
+            await rereceipt(ctx, params)
 
     run(body)
     assert read_bindings(state_path) == []
@@ -303,6 +309,81 @@ def test_rereceipt_records_a_failing_gate_and_leaves_the_wave_closed(tmp_path: P
     assert wave.outcome == "ok"
 
 
+def _single_gate_state(repo: Path, commit: str) -> Path:
+    """Write a one-passing-gate wave landed at *commit*; return its ledger."""
+    return write_state(
+        repo,
+        build_state_payload(
+            commit=commit,
+            criteria=[criterion(1)],
+            gates=[gate(1, _PASS_MODULE)],
+        ),
+    )
+
+
+def test_rereceipt_at_refuses_a_commit_that_does_not_descend_from_the_landed_one(
+    tmp_path: Path,
+) -> None:
+    """Error path: re-binding to history older than the landed commit is refused."""
+    repo, landed = build_repo(tmp_path)
+    head = git(repo, "rev-parse", "HEAD")
+    state_path = _single_gate_state(repo, head)
+    _expect_refusal(
+        tmp_path=tmp_path,
+        repo=repo,
+        state_path=state_path,
+        match="does not descend from its landed commit",
+        at=landed,
+    )
+
+
+def test_rereceipt_at_refuses_a_commit_that_is_not_on_the_branch(tmp_path: Path) -> None:
+    """Error path: a descendant that never reached HEAD is refused."""
+    repo, landed = build_repo(tmp_path)
+    git(repo, "checkout", "-b", "side", landed)
+    (repo / "side.txt").write_text("side\n", encoding="utf-8")
+    git(repo, "add", "side.txt")
+    git(repo, "commit", "-m", "test: fix that never merged")
+    off_branch = git(repo, "rev-parse", "HEAD")
+    git(repo, "checkout", "main")
+    state_path = _single_gate_state(repo, landed)
+    _expect_refusal(
+        tmp_path=tmp_path,
+        repo=repo,
+        state_path=state_path,
+        match="re-bind commit .* is not an ancestor of HEAD",
+        at=off_branch,
+    )
+
+
+@pytest.mark.parametrize("at", ["0" * 40, "no-such-ref", "--help"])
+def test_rereceipt_at_refuses_an_unresolvable_commit(tmp_path: Path, at: str) -> None:
+    """Error path: an ``at`` that names no commit is refused, options included."""
+    repo, landed = build_repo(tmp_path)
+    state_path = _single_gate_state(repo, landed)
+    _expect_refusal(
+        tmp_path=tmp_path,
+        repo=repo,
+        state_path=state_path,
+        match="re-bind commit .* does not resolve",
+        at=at,
+    )
+
+
+def test_rereceipt_at_rejects_an_empty_commit(tmp_path: Path) -> None:
+    """Boundary: an empty ``at`` is invalid params, not a landed run."""
+    repo, landed = build_repo(tmp_path)
+    state_path = _single_gate_state(repo, landed)
+    ctx = build_ctx(tmp_path, state_path)
+
+    async def body() -> None:
+        with pytest.raises(ValueError, match="validation_failed"):
+            await rereceipt(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo), "at": ""})
+
+    run(body)
+    assert read_bindings(state_path) == []
+
+
 def _outcome(gate_id: str, receipt_id: str | None) -> GateRereceiptOutcome:
     """One passing outcome row for the binding-model invariants."""
     return GateRereceiptOutcome(
@@ -350,3 +431,28 @@ def test_binding_rejects_an_empty_gate_list() -> None:
     """CR-02 boundary: a run that touched no gate is not a binding."""
     with pytest.raises(ValidationError):
         GateRereceiptBinding.model_validate(_binding_kwargs([], []))
+
+
+def test_binding_parses_a_row_written_before_rebinding() -> None:
+    """Boundary: a pre-rebind row with no bound fields still parses."""
+    binding = GateRereceiptBinding.model_validate(
+        _binding_kwargs([_outcome("GATE-01", "GR-" + "a" * 32)], ["GR-" + "a" * 32]),
+    )
+    assert binding.bound_sha is None
+    assert binding.bound_tree_sha is None
+
+
+def test_binding_rejects_a_bound_sha_without_its_tree() -> None:
+    """Error path: a re-bound row must name the tree its gates ran on."""
+    kwargs = _binding_kwargs([_outcome("GATE-01", "GR-" + "a" * 32)], ["GR-" + "a" * 32])
+    with pytest.raises(ValidationError, match="must be set together"):
+        GateRereceiptBinding.model_validate({**kwargs, "bound_sha": "f" * 40})
+
+
+def test_binding_rejects_a_bound_sha_equal_to_the_landed_one() -> None:
+    """Error path: re-binding to the landed commit is not a re-bind."""
+    kwargs = _binding_kwargs([_outcome("GATE-01", "GR-" + "a" * 32)], ["GR-" + "a" * 32])
+    with pytest.raises(ValidationError, match="must differ from landed_sha"):
+        GateRereceiptBinding.model_validate(
+            {**kwargs, "bound_sha": "a" * 40, "bound_tree_sha": "b" * 40},
+        )

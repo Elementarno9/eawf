@@ -17,6 +17,11 @@ alongside the rows that consume them:
 - :class:`RuntimeErrorClass` — 5-class runtime-fallback cause enum (C07a
   §5.5). :class:`~eawf.kernel.store.kinds.events.runtime_switched.RuntimeSwitchedPayload`
   carries ``cause`` as a typed member of this enum.
+- :class:`TokenClass` / :class:`PriceSourceKind` — the five token classes a
+  run's usage splits into and the closed provenance of the price applied to
+  it. :func:`check_token_identity` and :func:`check_price_source` are the
+  shared invariants every usage row (the ``dispatch_cost`` event payload
+  and its projected :class:`TelemetryDispatchCost` row) enforces.
 
 :class:`~eawf.kernel.state.enums.IncidentSeverity` and
 :class:`~eawf.kernel.state.enums.IncidentCause` already live in
@@ -30,14 +35,15 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.state.enums import IncidentCause, IncidentSeverity
 
 __all__ = [
     "EndMarker",
+    "PriceSourceKind",
     "RuntimeErrorClass",
     "TelemetryCompaction",
     "TelemetryDispatchCost",
@@ -49,7 +55,10 @@ __all__ = [
     "TelemetrySession",
     "TelemetryToolCall",
     "TelemetryTurn",
+    "TokenClass",
     "ToolCallErrorKind",
+    "check_price_source",
+    "check_token_identity",
 ]
 
 
@@ -97,6 +106,109 @@ class RuntimeErrorClass(StrEnum):
     RUNTIME_TIMEOUT = "RUNTIME_TIMEOUT"
     RUNTIME_API_ERROR = "RUNTIME_API_ERROR"
     RUNTIME_AUTH_ERROR = "RUNTIME_AUTH_ERROR"
+
+
+class TokenClass(StrEnum):
+    """The five classes one run's token usage splits into.
+
+    ``REASONING`` is a subset of ``OUTPUT`` on every supported runtime (one
+    reports it as a counter, the other not at all), so it is a descriptive
+    sub-metric and never a summand of the token total.
+    """
+
+    INPUT = "input"
+    OUTPUT = "output"
+    CACHE_READ = "cache_read"
+    CACHE_WRITE = "cache_write"
+    REASONING = "reasoning"
+
+
+class PriceSourceKind(StrEnum):
+    """Closed provenance of the cost recorded on one run's usage.
+
+    Values:
+        BILLED: The provider reported the charge itself.
+        LIST_RECONSTRUCTED: eawf multiplied the measured token classes by a
+            published rate table; the table revision rides beside the cost
+            as ``rate_table_version``.
+        UNPRICED: No rate resolved for the model. The recorded cost is zero
+            only because nothing priced it, so it must never be read as a
+            billed zero.
+    """
+
+    BILLED = "billed"
+    LIST_RECONSTRUCTED = "list-reconstructed"
+    UNPRICED = "unpriced"
+
+
+def check_token_identity(
+    *,
+    input_tokens: int,
+    output_tokens: int,
+    cache_read_tokens: int,
+    cache_write_tokens: int,
+    reasoning_tokens: int | None,
+    total_tokens: int,
+) -> None:
+    """Refuse a usage row whose token classes do not reconcile.
+
+    The total is exactly input + output + cache-read + cache-write.
+    Reasoning is excluded because it already lies inside output; a row
+    that added it a second time would publish an inflated total.
+
+    Args:
+        input_tokens: Non-cached input tokens.
+        output_tokens: Output tokens, reasoning included.
+        cache_read_tokens: Prompt-cache read tokens.
+        cache_write_tokens: Prompt-cache write tokens.
+        reasoning_tokens: The reasoning slice of *output_tokens*, or
+            ``None`` when the runtime reports no reasoning counter.
+        total_tokens: The row's declared token total.
+
+    Raises:
+        ValueError: When the four summed classes differ from
+            *total_tokens*, or when *reasoning_tokens* exceeds
+            *output_tokens*.
+    """
+    summed = input_tokens + output_tokens + cache_read_tokens + cache_write_tokens
+    if summed != total_tokens:
+        raise ValueError(
+            f"total_tokens {total_tokens} != input + output + cache_read + cache_write "
+            f"({summed}); reasoning is never a summand"
+        )
+    if reasoning_tokens is not None and reasoning_tokens > output_tokens:
+        raise ValueError(
+            f"reasoning_tokens {reasoning_tokens} exceeds output_tokens {output_tokens}; "
+            "reasoning is a subset of output"
+        )
+
+
+def check_price_source(
+    *,
+    cost_usd: Decimal,
+    price_source: PriceSourceKind | None,
+    rate_table_version: str | None,
+) -> None:
+    """Refuse a cost whose price provenance is missing or inconsistent.
+
+    Args:
+        cost_usd: The recorded cost.
+        price_source: Where the cost came from, or ``None`` when the row
+            names no source.
+        rate_table_version: Revision of the rate table a
+            list-reconstructed cost was computed from.
+
+    Raises:
+        ValueError: When the row names no *price_source*, when a
+            ``list-reconstructed`` cost names no *rate_table_version*, or
+            when an ``unpriced`` row carries a non-zero cost.
+    """
+    if price_source is None:
+        raise ValueError(f"cost_usd {cost_usd} carries no price_source")
+    if price_source is PriceSourceKind.LIST_RECONSTRUCTED and not rate_table_version:
+        raise ValueError("a list-reconstructed cost must name its rate_table_version")
+    if price_source is PriceSourceKind.UNPRICED and cost_usd != 0:
+        raise ValueError(f"an unpriced row cannot carry a non-zero cost_usd {cost_usd}")
 
 
 class TelemetryProject(BaseModel):
@@ -244,7 +356,16 @@ class TelemetryDispatchCost(BaseModel):
         output_tokens: Output tokens billed.
         cache_creation_input_tokens: Tokens written to the prompt cache.
         cache_read_input_tokens: Tokens served from the prompt cache.
+        reasoning_tokens: Reasoning slice of ``output_tokens``, or ``None``
+            when the runtime reports no reasoning counter (unknown, not
+            zero).
+        total_tokens: Input + output + cache-read + cache-write. Validated
+            against the classes, so a row cannot publish a total its
+            classes do not add up to.
         cost_usd: Priced cost in USD (``Decimal`` for exact accounting).
+        price_source: Provenance of ``cost_usd``.
+        rate_table_version: Rate-table revision a list-reconstructed cost
+            was computed from; ``None`` for billed or unpriced rows.
         pricing_version: ``PRICING`` snapshot version that priced the cost.
         ts: When the cost was projected (post-dispatch).
     """
@@ -260,9 +381,36 @@ class TelemetryDispatchCost(BaseModel):
     output_tokens: int = 0
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+    reasoning_tokens: int | None = None
+    total_tokens: int
     cost_usd: Decimal = Field(default=Decimal("0"))
+    price_source: PriceSourceKind
+    rate_table_version: str | None = None
     pricing_version: str
     ts: datetime | None = None
+
+    @model_validator(mode="after")
+    def _usage_reconciles(self) -> Self:
+        """Enforce the token-total identity and the price-source contract.
+
+        Raises:
+            ValueError: Propagated from :func:`check_token_identity` or
+                :func:`check_price_source`.
+        """
+        check_token_identity(
+            input_tokens=self.input_tokens,
+            output_tokens=self.output_tokens,
+            cache_read_tokens=self.cache_read_input_tokens,
+            cache_write_tokens=self.cache_creation_input_tokens,
+            reasoning_tokens=self.reasoning_tokens,
+            total_tokens=self.total_tokens,
+        )
+        check_price_source(
+            cost_usd=self.cost_usd,
+            price_source=self.price_source,
+            rate_table_version=self.rate_table_version,
+        )
+        return self
 
 
 class TelemetryIncident(BaseModel):

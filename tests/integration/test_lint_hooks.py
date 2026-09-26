@@ -793,6 +793,42 @@ def test_eawf024_test_tier_cli_ignores_non_unit_path(tmp_path: Path) -> None:
     assert result.exit_code == 0, result.stdout
 
 
+def test_eawf024_test_tier_cli_blocks_a_release_kind_in_the_wave_tier(tmp_path: Path) -> None:
+    planted = tmp_path / "tests" / "unit" / "test_mis_tiered.py"
+    planted.parent.mkdir(parents=True)
+    planted.write_text("import pytest\n\npytestmark = pytest.mark.e2e\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "hook",
+            "eawf024-test-tier-contract",
+            "tests/unit/test_mis_tiered.py",
+        ],
+    )
+    assert result.exit_code == 1, result.stdout
+    assert "release tier" in result.stdout
+
+
+def test_eawf024_test_tier_cli_scans_non_unit_kind_directories(tmp_path: Path) -> None:
+    planted = tmp_path / "tests" / "golden" / "test_mis_tiered.py"
+    planted.parent.mkdir(parents=True)
+    planted.write_text("import pytest\n\npytestmark = pytest.mark.perf\n", encoding="utf-8")
+    result = runner.invoke(
+        app,
+        [
+            "-w",
+            str(tmp_path),
+            "hook",
+            "eawf024-test-tier-contract",
+            "tests/golden/test_mis_tiered.py",
+        ],
+    )
+    assert result.exit_code == 1, result.stdout
+    assert "EAWF024" in result.stdout
+
+
 def test_plugin_doctor_drift_reports_marketplace_mode(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -240,7 +240,19 @@ def _write_state(tmp_path: Path, **kwargs: Any) -> Path:
     """Serialise a valid :class:`State` to ``<tmp>/.ea/state.json``."""
     from eawf.kernel.state.models import State
 
-    state = State.model_validate(_state_payload(**kwargs))
+    payload = _state_payload(**kwargs)
+    # Every wave a policy scopes to must exist: the daemon re-validates the
+    # whole state, reference invariants included, before it writes a claim.
+    for policy in (kwargs.get("sandbox_policies") or {}).values():
+        wave_id = policy["scope_id"]
+        if policy["scope_kind"] == "wave" and wave_id not in payload["waves"]:
+            payload["waves"][wave_id] = {
+                **payload["waves"][_WAVE_ID],
+                "id": wave_id,
+                "title": "Sibling wave",
+            }
+            payload["iters"]["P29-I04"]["wave_ids"].append(wave_id)
+    state = State.model_validate(payload)
     state_dir = tmp_path / ".ea"
     state_dir.mkdir()
     path = state_dir / "state.json"

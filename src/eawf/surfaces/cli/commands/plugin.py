@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import typer
 
@@ -56,7 +56,9 @@ if TYPE_CHECKING:
     # (and its jinja2/yaml transitive deps).
     from eawf.runtime.runtimes.claude.plugin_conflict import CCPluginConflict
     from eawf.runtime.runtimes.codex.plugin_conflict import CodexUserPluginConflict
+    from eawf.runtime.runtimes.manifest import RuntimeId
     from eawf.runtime.runtimes.opencode.plugin_conflict import OpenCodeUserPluginConflict
+    from eawf.runtime.runtimes.runtime_set import ClaimDetector, RuntimeSetConflictError
 
 logger = logging.getLogger(__name__)
 
@@ -91,19 +93,6 @@ def opencode_detect_user_install() -> OpenCodeUserPluginConflict | None:
 
 
 Scope = Literal["project", "user"]
-
-
-_SYNC_RUNTIME_IDS: dict[str, str] = {
-    "claude": "claude-code",
-    "claude-code": "claude-code",
-    "codex": "codex",
-    "opencode": "opencode",
-}
-
-#: The runtimes a bare ``plugin sync`` writes. Derived from the alias map so
-#: the two cannot drift; callers that must reason about "all runtimes" (the
-#: conflict gate) read this rather than re-listing the ids.
-_ALL_SYNC_RUNTIMES: tuple[str, ...] = tuple(sorted(set(_SYNC_RUNTIME_IDS.values())))
 
 
 plugin_app = typer.Typer(
@@ -157,145 +146,84 @@ def _validate_plugin_root(runtime: str | None, plugin_root: Path | None) -> None
         )
 
 
-def _claude_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
-    """Return ``True`` when no CC-marketplace conflict blocks ``install claude``.
+def _claim_detectors() -> dict[RuntimeId, ClaimDetector]:
+    """Adapt the detector wrappers above to the runtime-set guard's detector shape.
 
-    Detects an existing eawf install under ``~/.claude/plugins/``. When found:
-
-    - ``--force`` overrides the gate (caller is acknowledging the duplicate
-      render).
-    - ``--no-input`` mode refuses the install with a :exc:`UserError`
-      (``kind="InvalidInput"``) so the operator can pick a path before
-      retrying.
-    - Otherwise prompts via :mod:`questionary` for confirmation; a ``No``
-      answer aborts cleanly.
+    Each adapter looks its wrapper up by module-global name at call time, so a
+    test that monkeypatches the wrapper is seen by the guard.
     """
-    conflict = detect_marketplace_install()
-    if conflict is None:
-        return True
-    if force:
-        logger.info(f"_claude_conflict_clear force-bypass plugin_dir={conflict.plugin_dir}")
-        return True
-    message = (
-        f"detected CC marketplace plugin at {conflict.plugin_dir}; "
-        f"installing the project-local .claude/ tree alongside it will cause "
-        f"Claude Code to see every skill/agent/hook twice"
-    )
-    if flags.no_input:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"{message}. Rerun without --no-input to confirm, pass --force "
-                "to acknowledge, or `/plugin uninstall eawf@eawf` inside "
-                "Claude Code first.",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
-        return False
-    import questionary
 
-    proceed = questionary.confirm(
-        f"{message}.\nProceed with project-local install anyway?",
-        default=False,
-    ).ask()
-    if not proceed:
-        print("plugin install claude: aborted (conflict not acknowledged)")
-        return False
-    return True
+    def _claude() -> Path | None:
+        conflict = detect_marketplace_install()
+        return None if conflict is None else conflict.plugin_dir
+
+    def _codex() -> Path | None:
+        conflict = codex_detect_user_install()
+        return None if conflict is None else conflict.plugin_dir
+
+    def _opencode() -> Path | None:
+        conflict = opencode_detect_user_install()
+        return None if conflict is None else conflict.plugin_file
+
+    return {"claude-code": _claude, "codex": _codex, "opencode": _opencode}
 
 
-def _codex_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
-    """Warn when a user-scope codex install of ``eawf`` exists during project install."""
-    conflict = codex_detect_user_install()
-    if conflict is None:
-        return True
-    if force:
-        logger.info(f"_codex_user_conflict_clear force-bypass plugin_dir={conflict.plugin_dir}")
-        return True
-    message = (
-        f"detected user-scope codex eawf install at {conflict.plugin_dir}; "
-        f"running a project-scope install alongside it will cause Codex to "
-        f"resolve two 'eawf' plugins with undefined precedence"
-    )
-    if flags.no_input:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"{message}. Rerun without --no-input to confirm, pass --force "
-                "to acknowledge, or remove the user-scope install first.",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
-        return False
-    import questionary
+def _confirm_runtime_conflict(conflict: RuntimeSetConflictError, *, flags: GlobalFlags) -> bool:
+    """Return ``True`` when the operator acknowledges *conflict* at the prompt.
 
-    proceed = questionary.confirm(
-        f"{message}.\nProceed with project-scope install anyway?",
-        default=False,
-    ).ask()
-    if not proceed:
-        print("plugin install codex: aborted (conflict not acknowledged)")
-        return False
-    return True
-
-
-def _opencode_user_conflict_clear(*, flags: GlobalFlags, force: bool) -> bool:
-    """Warn when a user-scope opencode install of ``eawf.js`` exists during project install."""
-    conflict = opencode_detect_user_install()
-    if conflict is None:
-        return True
-    if force:
-        logger.info(
-            f"_opencode_user_conflict_clear force-bypass plugin_file={conflict.plugin_file}"
-        )
-        return True
-    message = (
-        f"detected user-scope opencode eawf install at {conflict.plugin_file}; "
-        f"running a project-scope install alongside it will cause OpenCode to "
-        f"auto-load two 'eawf' plugins with undefined precedence"
-    )
-    if flags.no_input:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"{message}. Rerun without --no-input to confirm, pass --force "
-                "to acknowledge, or remove the user-scope install first.",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
-        return False
-    import questionary
-
-    proceed = questionary.confirm(
-        f"{message}.\nProceed with project-scope install anyway?",
-        default=False,
-    ).ask()
-    if not proceed:
-        print("plugin install opencode: aborted (conflict not acknowledged)")
-        return False
-    return True
-
-
-def _install_conflict_clear(*, runtime: str, scope: str, flags: GlobalFlags, force: bool) -> bool:
-    """Dispatch conflict-gate detection to the runtime-specific helper.
-
-    For claude: always probe (claude is project-only). For
-    ``codex`` / ``opencode``: probe only on a project-scope install,
-    detecting a clashing user-scope install of the same plugin name.
-
-    Both spellings of the claude runtime are accepted: ``install`` takes the
-    operator-facing alias ``claude`` while ``sync`` normalises to the
-    canonical ``claude-code``. Matching one spelling let the gate fall
-    through to ``True`` for every sync.
+    ``--no-input`` refuses with a :exc:`UserError` (``kind="InvalidInput"``)
+    so the operator can pick one install before retrying; otherwise a
+    :mod:`questionary` confirmation decides, and ``No`` aborts cleanly.
     """
-    if runtime in {"claude", "claude-code"}:
-        return _claude_conflict_clear(flags=flags, force=force)
-    if scope != "project":
-        return True
-    if runtime == "codex":
-        return _codex_user_conflict_clear(flags=flags, force=force)
-    if runtime == "opencode":
-        return _opencode_user_conflict_clear(flags=flags, force=force)
+    claude_claimed = any(claim.runtime == "claude-code" for claim in conflict.claims)
+    remedy = (
+        "`/plugin uninstall eawf@eawf` inside Claude Code first"
+        if claude_claimed
+        else "remove the user-scope install first"
+    )
+    if flags.no_input:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"{conflict}. Rerun without --no-input to confirm, pass --force "
+                f"to acknowledge, or {remedy}.",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return False
+    import questionary
+
+    proceed = questionary.confirm(
+        f"{conflict}.\nProceed with the project-local install anyway?",
+        default=False,
+    ).ask()
+    if not proceed:
+        runtimes = ", ".join(claim.runtime for claim in conflict.claims)
+        print(f"plugin install {runtimes}: aborted (conflict not acknowledged)")
+        return False
+    return True
+
+
+def _install_conflict_clear(
+    *, runtime_set: tuple[RuntimeId, ...], scope: str, flags: GlobalFlags, force: bool
+) -> bool:
+    """Return ``True`` when no installed plugin claims a runtime in *runtime_set*.
+
+    *runtime_set* is the already-normalized, fully expanded set the verb will
+    write, from :func:`~eawf.runtime.runtimes.runtime_set.normalize_runtime_set`,
+    so every verb gates the same canonical ids. ``--force`` bypasses the gate.
+    """
+    from eawf.runtime.runtimes.runtime_set import RuntimeSetConflictError, guard_runtime_set
+
+    try:
+        guard_runtime_set(
+            runtime_set,
+            scope=cast(Scope, scope),
+            detectors=_claim_detectors(),
+            force=force,
+        )
+    except RuntimeSetConflictError as conflict:
+        return _confirm_runtime_conflict(conflict, flags=flags)
     return True
 
 
@@ -330,23 +258,18 @@ def _scope_tip_banner(*, runtime: str, scope: str, result_path: Path) -> str | N
     return f"tip: --scope user installs cross-project (alongside or in lieu of {result_path})"
 
 
-def _normalise_sync_runtimes(values: list[str]) -> list[str]:
-    """Map operator-facing aliases (``claude``) to canonical ids (``claude-code``).
+def _normalise_runtime_flags(values: list[str]) -> tuple[RuntimeId, ...]:
+    """Return the canonical, fully expanded runtime set for *values*.
 
     Raises:
-        UserError: when a value is not a recognised alias (``kind="InvalidInput"``).
+        UserError: when a value is not a recognised spelling (``kind="InvalidInput"``).
     """
-    canonical: list[str] = []
-    for value in values:
-        canonical_id = _SYNC_RUNTIME_IDS.get(value)
-        if canonical_id is None:
-            raise cli_errors.UserError(
-                f"unknown runtime {value!r}; expected one of "
-                f"{sorted(set(_SYNC_RUNTIME_IDS.values()))}",
-                kind="InvalidInput",
-            )
-        canonical.append(canonical_id)
-    return canonical
+    from eawf.runtime.runtimes.runtime_set import normalize_runtime_set
+
+    try:
+        return normalize_runtime_set(values)
+    except ValueError as exc:
+        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
 
 
 # ---- command registration ---------------------------------------------------
@@ -372,9 +295,9 @@ def detect_cross_scope_duplicates(workspace: Path) -> list[str]:
     see two grants of the same plugin region with undefined
     precedence — the operator needs to pick one and uninstall the
     other. The detector is the cross-scope twin of the in-runtime
-    drift-and-conflict gates (``_codex_user_conflict_clear`` /
-    ``_opencode_user_conflict_clear``): those run at install-time and
-    block; this one runs on demand and reports.
+    install-time runtime-set guard (``_install_conflict_clear``): that
+    one runs at install time and blocks; this one runs on demand and
+    reports.
 
     Returns:
         Sorted list of duplicate region_ids. Empty when the manifest

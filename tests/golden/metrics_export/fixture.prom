@@ -37,3 +37,21 @@ eawf_compaction_total{runtime="codex"} 1
 # TYPE eawf_incidents_total counter
 eawf_incidents_total{cause="runtime_auth_error",severity="critical"} 1
 eawf_incidents_total{cause="runtime_timeout",severity="medium"} 1
+
+# HELP eawf_run_tokens_total Run token usage by class; reasoning is a subset of output.
+# TYPE eawf_run_tokens_total counter
+eawf_run_tokens_total{runtime="claude",scope="repo/eawf",token_class="cache_read"} 20000
+eawf_run_tokens_total{runtime="claude",scope="repo/eawf",token_class="cache_write"} 5000
+eawf_run_tokens_total{runtime="claude",scope="repo/eawf",token_class="input"} 210
+eawf_run_tokens_total{runtime="claude",scope="repo/eawf",token_class="output"} 105
+eawf_run_tokens_total{runtime="codex",scope="repo/eawf",token_class="cache_read"} 3000
+eawf_run_tokens_total{runtime="codex",scope="repo/eawf",token_class="cache_write"} 0
+eawf_run_tokens_total{runtime="codex",scope="repo/eawf",token_class="input"} 1000
+eawf_run_tokens_total{runtime="codex",scope="repo/eawf",token_class="output"} 400
+eawf_run_tokens_total{runtime="codex",scope="repo/eawf",token_class="reasoning"} 150
+
+# HELP eawf_run_cost_usd_total Run cost in USD by price source.
+# TYPE eawf_run_cost_usd_total counter
+eawf_run_cost_usd_total{price_source="list-reconstructed",runtime="claude",scope="repo/eawf"} 0.05
+eawf_run_cost_usd_total{price_source="list-reconstructed",runtime="codex",scope="repo/eawf"} 0.01
+eawf_run_cost_usd_total{price_source="unpriced",runtime="claude",scope="repo/eawf"} 0

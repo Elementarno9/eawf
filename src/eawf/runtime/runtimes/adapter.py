@@ -397,6 +397,9 @@ class SpawnResult(BaseModel):
         cache_creation_1h_input_tokens: Cache-write tokens at the 1-hour
             TTL.
         cache_read_input_tokens: Prompt-cache read tokens.
+        reasoning_output_tokens: Reasoning slice of ``output_tokens`` when
+            the runtime reports a reasoning counter; ``None`` when it does
+            not (unknown, not zero).
         cost_usd_reported: Runtime self-reported cost when the envelope
             carries one (claude ``total_cost_usd``). A later metering
             writer prices independently via the Decimal ledger; this is a
@@ -423,6 +426,7 @@ class SpawnResult(BaseModel):
     cache_creation_5m_input_tokens: Annotated[int, Field(ge=0)] | None = 0
     cache_creation_1h_input_tokens: Annotated[int, Field(ge=0)] | None = 0
     cache_read_input_tokens: Annotated[int, Field(ge=0)] | None = 0
+    reasoning_output_tokens: Annotated[int, Field(ge=0)] | None = None
     cost_usd_reported: Decimal | None = None
     measurement_quality: MeasurementQuality = MeasurementQuality.EXACT
     measurement_status: MeasurementStatus = MeasurementStatus.USAGE_OBSERVED

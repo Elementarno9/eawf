@@ -170,7 +170,7 @@ def assert_membership_resolves(
     evidence: CanaryEvidence | None,
     membership_refs: Sequence[str],
 ) -> None:
-    """Refuse unless every reference names an accepted Milestone bundle.
+    """Refuse unless every reference names a COMPLETED Milestone bundle.
 
     The same resolution the preflight ``membership`` row applies, asked
     at the open instead. Answering it only at preflight let an invented
@@ -208,13 +208,13 @@ def assert_membership_resolves(
         )
         raise UserError(
             f"{len(unresolved)} of {len(membership_refs)} membership reference(s) do not "
-            f"resolve to an accepted Milestone bundle -- {summarise_findings(findings)}",
+            f"resolve to a COMPLETED Milestone bundle -- {summarise_findings(findings)}",
             kind="membership_unresolved",
         )
 
 
 def committed_membership_refs(repo_root: Path, release_key: str) -> tuple[str, ...]:
-    """Return the accepted Milestone refs the committed canary export names for *release_key*.
+    """Return the COMPLETED Milestone refs the committed canary export names for *release_key*.
 
     ``release tag`` and ``release preflight`` run before ``release
     create`` opens a record, so there is no stored ``membership_refs``
@@ -242,7 +242,7 @@ def committed_membership_refs(repo_root: Path, release_key: str) -> tuple[str, .
     Returns:
         The Milestone references, in export order; empty when no export
         is committed, the committed export names a different release
-        key, or it records no Milestone accepted in a declared canary.
+        key, or it records no COMPLETED Milestone in a declared canary.
 
     Raises:
         ValueError: When an export is committed but does not load.
@@ -330,7 +330,7 @@ def create_checkpoint_release(
         UserError: ``kind="measured_contract_missing"`` when a required
             measured contract is not promoted, or
             ``kind="membership_unresolved"`` when a membership reference
-            names no accepted Milestone bundle.
+            names no COMPLETED Milestone bundle.
         KeyError: When *train* declares no rung for *version*.
         ValueError: When *version* is not a train version, or the rung
             requires membership bundles the caller did not supply.

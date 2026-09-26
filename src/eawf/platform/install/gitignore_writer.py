@@ -14,6 +14,7 @@ from pathlib import Path
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import fallback_wal_dir
 from eawf.kernel.store.paths import store_path
+from eawf.platform.install.managed_block import render_managed_block, splice_managed_block
 from eawf.runtime.lock import sibling
 
 _BEGIN = "# BEGIN EAWF:gitignore"
@@ -135,41 +136,6 @@ def _dynamic_patterns(target_dir: Path, state_path: Path | None) -> tuple[str, .
     return tuple(dict.fromkeys(patterns))
 
 
-def _managed_block(patterns: tuple[str, ...]) -> str:
-    lines = [_BEGIN, *patterns, _END]
-    return "\n".join(lines) + "\n"
-
-
-def _managed_span(existing: bytes) -> tuple[int, int] | None:
-    """Return byte offsets covering the first complete managed line span."""
-    begin_marker = _BEGIN.encode("utf-8")
-    end_marker = _END.encode("utf-8")
-    begin_offset: int | None = None
-    offset = 0
-    for line in existing.splitlines(keepends=True):
-        if line.endswith(b"\r\n"):
-            body = line[:-2]
-        elif line.endswith((b"\n", b"\r")):
-            body = line[:-1]
-        else:
-            body = line
-        if begin_offset is None and body == begin_marker:
-            begin_offset = offset
-        elif begin_offset is not None and body == end_marker:
-            return begin_offset, offset + len(line)
-        offset += len(line)
-    return None
-
-
-def _append_separator(existing: bytes) -> bytes:
-    """Return spacing needed before a newly appended managed block."""
-    if not existing or existing.endswith((b"\n\n", b"\r\n\r\n")):
-        return b""
-    if existing.endswith((b"\n", b"\r")):
-        return b"\n"
-    return b"\n\n"
-
-
 def write_gitignore(
     target_dir: Path,
     *,
@@ -187,6 +153,10 @@ def write_gitignore(
     Returns:
         :class:`GitignoreWriteResult` with the target path and the exact
         managed pattern tuple.
+
+    Raises:
+        ManagedBlockError: When the existing file's markers are not exactly
+            one ordered pair; the file is left untouched.
     """
     target_dir = target_dir.resolve()
     patterns = tuple(
@@ -200,14 +170,8 @@ def write_gitignore(
     path = (target_dir / ".gitignore").resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     existing = path.read_bytes() if path.exists() else b""
-    block = _managed_block(patterns).encode("utf-8")
-    span = _managed_span(existing)
-    if span is not None:
-        start, end = span
-        new_content = existing[:start] + block + existing[end:]
-    else:
-        new_content = existing + _append_separator(existing) + block
-    path.write_bytes(new_content)
+    block = render_managed_block(begin=_BEGIN, end=_END, body_lines=patterns)
+    path.write_bytes(splice_managed_block(existing, begin=_BEGIN, end=_END, block=block))
     return GitignoreWriteResult(path=path, patterns=patterns)
 
 

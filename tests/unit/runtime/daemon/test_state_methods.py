@@ -907,6 +907,59 @@ def test_mutate_wave_close_uses_runtime_delta_when_captured(tmp_path: Path) -> N
     _run(body)
 
 
+def _wave_close_mutation(wave_id: str = "P24-I01-W09") -> Mutation:
+    return Mutation(
+        kind=MutationKind.WAVE_CLOSE,
+        scope_id=wave_id,
+        mutation_id=uuid.uuid4().hex,
+        params={"wave_id": wave_id, "outcome": "ok"},
+    )
+
+
+def test_mutate_wave_close_appends_the_auto_created_actual_record(tmp_path: Path) -> None:
+    """The close writes the actual.jsonl record its auto-created summary points at."""
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path)
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": _wave_close_mutation().model_dump(mode="json")})
+        summary = orjson.loads(state_path.read_bytes())["actuals"]["P24-I01-W09"]
+        lines = store_path(state_path, StoreKind.ACTUAL).read_text(encoding="utf-8").splitlines()
+        assert len(lines) == 1
+        record = orjson.loads(lines[0])
+        assert record["kind"] == "actual"
+        assert record["id"] == summary["current_store_record_id"] == "REC-P24-I01-W09"
+        assert record["scope_id"] == "P24-I01-W09"
+        assert record["payload"]["elapsed_eu"] == pytest.approx(summary["elapsed_eu"])
+        assert record["payload"]["elapsed_eu"] > 0.0
+        assert record["payload"]["outcome"] == "done"
+        assert record["payload"]["segments"] == []
+
+    _run(body)
+
+
+def test_mutate_wave_close_keeps_an_operator_actual_out_of_the_store(tmp_path: Path) -> None:
+    """An operator-authored actual already has its store record; the close adds none."""
+    payload = _build_state_payload()
+    _add_runtime_delta(payload)
+    payload["actuals"] = {
+        "P24-I01-W09": {
+            "id": "ACT-P24-I01-W09",
+            "scope_id": "P24-I01-W09",
+            "status": "active",
+            "elapsed_eu": 0.5,
+            "current_store_record_id": "ACT-P24-I01-W09-1",
+            "updated_at": _now().isoformat(),
+        }
+    }
+    ctx, state_path, _event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
+
+    async def body() -> None:
+        await mutate(ctx, {"mutation": _wave_close_mutation().model_dump(mode="json")})
+        assert not store_path(state_path, StoreKind.ACTUAL).exists()
+
+    _run(body)
+
+
 def test_mutate_wave_close_uses_configured_token_basis(tmp_path: Path) -> None:
     """``estimation.eu_basis=tokens`` derives elapsed EU from token delta."""
     _write_eu_basis_config(tmp_path, eu_basis="tokens")
