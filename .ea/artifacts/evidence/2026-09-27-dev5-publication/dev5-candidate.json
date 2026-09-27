@@ -1,0 +1,24 @@
+{
+  "adoption": null,
+  "approval_ref": null,
+  "authority_epoch": 2,
+  "channel": "dev",
+  "key": "REL-0.7.0.dev5",
+  "last_invalidation": null,
+  "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+  "manifest_ref": "manifest://REL-0.7.0.dev5/sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+  "membership_refs": [
+    "eawf://WSP-W37CANARY/PRJ-W37CANARY/REP-W37CANARY/milestone/MLS-0001#MAB-0001-MLS-0001"
+  ],
+  "policy_revision": 1,
+  "publication_operation_ref": null,
+  "revision": 1,
+  "schema_version": "release/v2",
+  "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+  "source_tree_sha": "8d8ea3986f1299f69dcda22ec3dacc52482fec25",
+  "status": "candidate",
+  "supersedes_release_ref": "REL-0.7.0.dev4",
+  "target_statuses": {},
+  "uid": "bbb7b9f2-1a88-47d6-a405-41dd65d7df53",
+  "version": "0.7.0.dev5"
+}

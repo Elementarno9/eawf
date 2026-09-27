@@ -1,0 +1,376 @@
+{
+  "channel": "dev",
+  "computed_at": "2026-09-27T19:00:05.134317Z",
+  "gate_profile": "product_canary",
+  "gates": [
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "version_consistency",
+      "gate": "version_consistency",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "changelog",
+      "gate": "changelog_entry",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal_component",
+      "evidence_ref": "dependencies.inventory",
+      "gate": "dependency_inventory",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "artifacts",
+      "gate": "artifact_reproducibility",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal_component",
+      "evidence_ref": "dependencies.vulnerability",
+      "gate": "security_review",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:epoch1_stabilization_suite",
+      "gate": "epoch1_stabilization",
+      "remediation": "gate 'epoch1_stabilization' is settled by proof command 'epoch1_stabilization_suite'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:telemetry_turn_cost_record",
+      "gate": "telemetry_producer",
+      "remediation": "gate 'telemetry_producer' is settled by proof command 'telemetry_turn_cost_record'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:front_door_install_smoke",
+      "gate": "front_door_journey",
+      "remediation": "gate 'front_door_journey' is settled by proof command 'front_door_install_smoke'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "migration",
+      "gate": "migration",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:hosted_close_runs_the_gates",
+      "gate": "hosted_gate_runner",
+      "remediation": "gate 'hosted_gate_runner' is settled by proof command 'hosted_close_runs_the_gates'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:epoch2_strictness_census",
+      "gate": "schema_strictness",
+      "remediation": "gate 'schema_strictness' is settled by proof command 'epoch2_strictness_census'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "waiver_block",
+      "evidence_ref": "readiness:waivers",
+      "gate": "waiver_count",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "provider",
+      "gate": "provider",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "signal",
+      "evidence_ref": "membership",
+      "gate": "membership",
+      "remediation": "",
+      "required": true,
+      "status": "pass"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:canary_leaves_production_untouched",
+      "gate": "canary_isolation",
+      "remediation": "gate 'canary_isolation' is settled by proof command 'canary_leaves_production_untouched'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:plan_revision_approved_then_applied",
+      "gate": "plan_revision_approved",
+      "remediation": "gate 'plan_revision_approved' is settled by proof command 'plan_revision_approved_then_applied'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:dispatch_leases_a_real_worktree",
+      "gate": "parallel_dispatch",
+      "remediation": "gate 'parallel_dispatch' is settled by proof command 'dispatch_leases_a_real_worktree'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:integrate_seals_the_reported_head",
+      "gate": "exact_head_integration",
+      "remediation": "gate 'exact_head_integration' is settled by proof command 'integrate_seals_the_reported_head'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:audit_and_review_bind_one_revision",
+      "gate": "real_diff_review",
+      "remediation": "gate 'real_diff_review' is settled by proof command 'audit_and_review_bind_one_revision'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:milestone_accepted_on_its_sealed_bundle",
+      "gate": "milestone_accepted",
+      "remediation": "gate 'milestone_accepted' is settled by proof command 'milestone_accepted_on_its_sealed_bundle'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:live_cutover_rerun_identical",
+      "gate": "migration_rerun_identical",
+      "remediation": "gate 'migration_rerun_identical' is settled by proof command 'live_cutover_rerun_identical'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    },
+    {
+      "evidence_kind": "proof_command",
+      "evidence_ref": "proof:tagged_version_on_the_index",
+      "gate": "release_tagged_observed",
+      "remediation": "gate 'release_tagged_observed' is settled by proof command 'tagged_version_on_the_index'; run it at the pinned source revision through the gate runner and attach the receipt",
+      "required": true,
+      "status": "unavailable"
+    }
+  ],
+  "ready": true,
+  "release_key": "REL-0.7.0.dev5",
+  "required_signals": [
+    "version_consistency",
+    "changelog",
+    "ancestry",
+    "tree_cleanliness",
+    "membership",
+    "migration",
+    "artifacts",
+    "dependencies",
+    "provider"
+  ],
+  "schema_version": "release-readiness/v1",
+  "signals": [
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "version:0.7.0.dev5",
+        "npm-version:0.7.0-dev.5"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "version_consistency",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "CHANGELOG.md:0.7.0.dev5"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "changelog",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "ancestor-of:origin/main"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "ancestry",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "git-status:clean"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "tree_cleanliness",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "milestone:W37CANARY:MLS-0001:sha256:04089db82d05d098c29e7aa1606d60ab71c0dd6933fcef566ae070fece455771"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "membership",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "rehearsal:empty-repository:imports",
+        "rehearsal:minimal-active:imports",
+        "rehearsal:all-terminal:imports",
+        "rehearsal:multi-root-workspace:imports",
+        "rehearsal:interrupted-close:imports",
+        "rehearsal:open-attention:imports",
+        "rehearsal:corrupt-reference:refuses",
+        "rehearsal:unknown-extension-field:refuses",
+        "rehearsal:p30-i26-history:imports",
+        "rehearsal:largest-supported-state:imports"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "migration",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "source_sha:61c75efc4d9416b666b2a4c661c764bd63711d5b",
+        "source_date_epoch:1790516879",
+        "artifact:eawf-0.7.0.dev5-py3-none-any.whl:c0a7220ebee36d9de4f16b47b5305747ad9f9bdea64de05cb37474dadf7920c1",
+        "artifact:eawf-0.7.0.dev5.tar.gz:2240599d4e3a93b43c05cfc47cf2f64bb8e82ddd3b8198198a678b634be93539"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "artifacts",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "lock_digest:sha256:556bb948fab6e68b73aed30c908461c4bdba8e7e88d1bf2783940c53dd18299c",
+        "locked_packages:50",
+        "undeclared_license:babel",
+        "undeclared_license:backrefs",
+        "undeclared_license:colorama",
+        "undeclared_license:ghp-import",
+        "undeclared_license:markdown",
+        "undeclared_license:mergedeep",
+        "undeclared_license:mkdocs",
+        "undeclared_license:mkdocs-get-deps",
+        "undeclared_license:mkdocs-material",
+        "undeclared_license:mkdocs-material-extensions",
+        "undeclared_license:paginate",
+        "undeclared_license:pymdown-extensions",
+        "undeclared_license:python-dateutil",
+        "undeclared_license:pywin32",
+        "undeclared_license:pyyaml-env-tag",
+        "undeclared_license:six",
+        "undeclared_license:watchdog",
+        "lock_digest:sha256:556bb948fab6e68b73aed30c908461c4bdba8e7e88d1bf2783940c53dd18299c"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "dependencies",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "ci://eawf/.github/workflows/ci.yaml#linux-jail"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "platform",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [
+        "certification://claude-code/2026-09-18"
+      ],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": null,
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "",
+      "signal": "provider",
+      "status": "pass"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": "perfect_realization_failed",
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "module_length_exclusion: all 11 EAWF010 exemption(s) are within their grant, but the remaining realization assertions have no producer at this checkpoint; register one or drop the requirement",
+      "signal": "perfect_realization",
+      "status": "unavailable"
+    },
+    {
+      "computed_at": "2026-09-27T19:00:05.134317Z",
+      "evidence_refs": [],
+      "expires_at": "2026-09-27T20:00:05.134317Z",
+      "failure_code": "credential_unavailable",
+      "observed_revision": "61c75efc4d9416b666b2a4c661c764bd63711d5b",
+      "remediation": "no producer is registered for the 'credentials' signal at this checkpoint; register a probe or drop the requirement",
+      "signal": "credentials",
+      "status": "unavailable"
+    }
+  ],
+  "version": "0.7.0.dev5",
+  "waiver_acknowledgements": [],
+  "waiver_count": 0,
+  "waiver_disposition": "none",
+  "waivers": []
+}

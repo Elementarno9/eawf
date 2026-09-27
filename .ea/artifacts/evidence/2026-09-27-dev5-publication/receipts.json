@@ -1,0 +1,206 @@
+{
+  "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+  "receipts": [
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "version_consistency",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/version_consistency/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "changelog_entry",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/changelog_entry/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "dependency_inventory",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/dependency_inventory/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "artifact_reproducibility",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/artifact_reproducibility/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "security_review",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/security_review/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:08.050228Z",
+      "gate": "epoch1_stabilization",
+      "issued_at": "2026-09-27T18:59:08.050228Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/epoch1_stabilization/20260927T185908.050228Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:08.712275Z",
+      "gate": "telemetry_producer",
+      "issued_at": "2026-09-27T18:59:08.712275Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/telemetry_producer/20260927T185908.712275Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:13.960737Z",
+      "gate": "front_door_journey",
+      "issued_at": "2026-09-27T18:59:13.960737Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/front_door_journey/20260927T185913.960737Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "migration",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/migration/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:42.613991Z",
+      "gate": "hosted_gate_runner",
+      "issued_at": "2026-09-27T18:59:42.613991Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/hosted_gate_runner/20260927T185942.613991Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:43.600209Z",
+      "gate": "schema_strictness",
+      "issued_at": "2026-09-27T18:59:43.600209Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/schema_strictness/20260927T185943.600209Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "waiver_count",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/waiver_count/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "provider",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/provider/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:20:59.021241Z",
+      "gate": "membership",
+      "issued_at": "2026-09-27T18:20:59.021241Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/membership/20260927T182059.021241Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:44.265487Z",
+      "gate": "canary_isolation",
+      "issued_at": "2026-09-27T18:59:44.265487Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/canary_isolation/20260927T185944.265487Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:46.455203Z",
+      "gate": "plan_revision_approved",
+      "issued_at": "2026-09-27T18:59:46.455203Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/plan_revision_approved/20260927T185946.455203Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:54.690938Z",
+      "gate": "parallel_dispatch",
+      "issued_at": "2026-09-27T18:59:54.690938Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/parallel_dispatch/20260927T185954.690938Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:57.888786Z",
+      "gate": "exact_head_integration",
+      "issued_at": "2026-09-27T18:59:57.888786Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/exact_head_integration/20260927T185957.888786Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T18:59:59.478821Z",
+      "gate": "real_diff_review",
+      "issued_at": "2026-09-27T18:59:59.478821Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/real_diff_review/20260927T185959.478821Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T19:00:02.072459Z",
+      "gate": "milestone_accepted",
+      "issued_at": "2026-09-27T19:00:02.072459Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/milestone_accepted/20260927T190002.072459Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T19:00:02.968404Z",
+      "gate": "migration_rerun_identical",
+      "issued_at": "2026-09-27T19:00:02.968404Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/migration_rerun_identical/20260927T190002.968404Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    },
+    {
+      "expires_at": "2026-09-28T19:00:03.664562Z",
+      "gate": "release_tagged_observed",
+      "issued_at": "2026-09-27T19:00:03.664562Z",
+      "manifest_digest": "sha256:8706319d615c3a319ef6803c84b4eccc172fe3712a2da8aeb672ff6eada4d083",
+      "receipt_ref": "checkpoint-receipt://REL-0.7.0.dev5/release_tagged_observed/20260927T190003.664562Z",
+      "release_key": "REL-0.7.0.dev5",
+      "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+    }
+  ],
+  "refused": [],
+  "release_key": "REL-0.7.0.dev5",
+  "source_sha": "61c75efc4d9416b666b2a4c661c764bd63711d5b"
+}
