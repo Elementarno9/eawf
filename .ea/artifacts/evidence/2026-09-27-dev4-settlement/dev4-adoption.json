@@ -1,0 +1,35 @@
+{
+  "adopted_at": "2026-09-27T17:45:00Z",
+  "incident_ref": ".ea/artifacts/incidents/2026-09-27-dev4-record-stranded-at-candidate.md",
+  "observations": [
+    {
+      "detail": "eawf@0.7.0.dev4 exposes the frozen artifact set (adapter package_index, code matched, compared against frozen manifest sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b); raw read-back in pypi-eawf-0.7.0.dev4.json",
+      "evidence_ref": ".ea/artifacts/evidence/2026-09-27-dev4-settlement/dev4-observations.json#pypi",
+      "observed_at": "2026-09-27T17:36:29.066320Z",
+      "observed_status": "observed_success",
+      "target_id": "pypi"
+    },
+    {
+      "detail": "@elementarno/eawf@0.7.0-dev.4 exposes the frozen artifact set (adapter npm_registry, code matched, compared against frozen manifest sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b); raw read-back in npm-elementarno-eawf-0.7.0-dev.4.json",
+      "evidence_ref": ".ea/artifacts/evidence/2026-09-27-dev4-settlement/dev4-observations.json#npm",
+      "observed_at": "2026-09-27T17:36:29.225933Z",
+      "observed_status": "observed_success",
+      "target_id": "npm"
+    },
+    {
+      "detail": "Elementarno9/eawf@v0.7.0.dev4 exposes the frozen artifact set (adapter source_host_release, code matched, compared against frozen manifest sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b); raw read-back in github-release-v0.7.0.dev4.json",
+      "evidence_ref": ".ea/artifacts/evidence/2026-09-27-dev4-settlement/dev4-observations.json#github",
+      "observed_at": "2026-09-27T17:36:29.425250Z",
+      "observed_status": "observed_success",
+      "target_id": "github"
+    },
+    {
+      "detail": "Elementarno9/eawf@refs/heads/plugins-dist exposes the frozen tree (adapter git_ref, code matched, compared against frozen manifest sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b); raw read-back in dev4-observations.json",
+      "evidence_ref": ".ea/artifacts/evidence/2026-09-27-dev4-settlement/dev4-observations.json#plugins-dist",
+      "observed_at": "2026-09-27T17:36:29.826069Z",
+      "observed_status": "observed_success",
+      "target_id": "plugins-dist"
+    }
+  ],
+  "reason": "0.7.0.dev4 was tagged and published to all four targets on 2026-09-26, but its record stayed at candidate because the serial epoch1_stabilization proof can never be receipted at the pinned source 9b59f041 (test-isolation bug B192, fixed after it); approval follows the tag, so the publication ran outside the approved path (B194). Every target matches the frozen manifest; the version is spent and is superseded by 0.7.0.dev5"
+}

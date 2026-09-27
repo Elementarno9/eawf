@@ -1,0 +1,73 @@
+[
+  {
+    "adapter": "package_index",
+    "adapter_digest": "sha256:93d972568ca8b6fc77c2fd5d2a2e6f0a452b24bd62794bbc35efb27eb37da7da",
+    "code": "matched",
+    "detail": "eawf@0.7.0.dev4 exposes the frozen artifact set",
+    "evidence_ref": "observation://package_index/pypi/eawf@0.7.0.dev4#sha256:93d972568ca8b6fc77c2fd5d2a2e6f0a452b24bd62794bbc35efb27eb37da7da",
+    "manifest_digest": "sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b",
+    "observed_at": "2026-09-27T17:36:29.066320Z",
+    "observed_digests": {
+      "eawf-0.7.0.dev4-py3-none-any.whl": "sha256:0d409f30037178c54a2a0620c0c9fa47a1b9505575c45865c79bde7d05dc2695",
+      "eawf-0.7.0.dev4.tar.gz": "sha256:0dfeb6113cb81f7ae6f8164859bbc631570b3c6193abe474dc18c068e330619d"
+    },
+    "queried_identity": "eawf",
+    "result": "match",
+    "schema_version": "publication-observation/v1",
+    "target_id": "pypi",
+    "version": "0.7.0.dev4"
+  },
+  {
+    "adapter": "npm_registry",
+    "adapter_digest": "sha256:c42fdd59f33aca0491c2d83ee9d4476b77891af6a891aa8e496b9e3eecf46a8f",
+    "code": "matched",
+    "detail": "@elementarno/eawf@0.7.0-dev.4 exposes the frozen artifact set",
+    "evidence_ref": "observation://npm_registry/npm/@elementarno/eawf@0.7.0.dev4#sha256:c42fdd59f33aca0491c2d83ee9d4476b77891af6a891aa8e496b9e3eecf46a8f",
+    "manifest_digest": "sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b",
+    "observed_at": "2026-09-27T17:36:29.225933Z",
+    "observed_digests": {
+      "elementarno-eawf-0.7.0-dev.4.tgz": "sha256:77f1e9a3c382b44b2d2d0c409849f65d8f00fde14e2b49683e706e9ebef3c958"
+    },
+    "queried_identity": "@elementarno/eawf",
+    "result": "match",
+    "schema_version": "publication-observation/v1",
+    "target_id": "npm",
+    "version": "0.7.0.dev4"
+  },
+  {
+    "adapter": "source_host_release",
+    "adapter_digest": "sha256:cf7d9fcfb253c181dbb112866c8501e116b8c8c5484223c595c7b0c394365436",
+    "code": "matched",
+    "detail": "Elementarno9/eawf@v0.7.0.dev4 exposes the frozen artifact set",
+    "evidence_ref": "observation://source_host_release/github/Elementarno9/eawf@0.7.0.dev4#sha256:cf7d9fcfb253c181dbb112866c8501e116b8c8c5484223c595c7b0c394365436",
+    "manifest_digest": "sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b",
+    "observed_at": "2026-09-27T17:36:29.425250Z",
+    "observed_digests": {
+      "RELEASE_NOTES.md": "sha256:8f6a42cd7338b47bdfd32ea091319f1d2a4c461844ed9a2607d1e76d8139db8b",
+      "SHA256SUMS": "sha256:fd68e00650f6d5b4415e50202c591d3542442d35f0449eeb4d7e381b054a2869",
+      "eawf-plugin-0.7.0.dev4.tar.gz": "sha256:1ec32944ebe570248d0fc8c5db740bde6845a2b2e44e7787d05ab4bee3608251"
+    },
+    "queried_identity": "Elementarno9/eawf",
+    "result": "match",
+    "schema_version": "publication-observation/v1",
+    "target_id": "github",
+    "version": "0.7.0.dev4"
+  },
+  {
+    "adapter": "git_ref",
+    "adapter_digest": "sha256:53404af2a9b290dee2679e90382f3d4ad968c4bb40a93567d145ea2f1ce4f2f6",
+    "code": "matched",
+    "detail": "Elementarno9/eawf@refs/heads/plugins-dist exposes the frozen tree",
+    "evidence_ref": "observation://git_ref/plugins-dist/Elementarno9/eawf@0.7.0.dev4#sha256:53404af2a9b290dee2679e90382f3d4ad968c4bb40a93567d145ea2f1ce4f2f6",
+    "manifest_digest": "sha256:11c56460f8de6775b500e6003104577ceca0f19a5a1da799d5d0680619b7da6b",
+    "observed_at": "2026-09-27T17:36:29.826069Z",
+    "observed_digests": {
+      "versions/0.7.0.dev4/plugins/eawf": "sha256:92868cb5d6c0b2edd92f47a8144ab45a73453b2108366ae6078b168c8129ae15"
+    },
+    "queried_identity": "Elementarno9/eawf",
+    "result": "match",
+    "schema_version": "publication-observation/v1",
+    "target_id": "plugins-dist",
+    "version": "0.7.0.dev4"
+  }
+]
