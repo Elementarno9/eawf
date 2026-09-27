@@ -443,76 +443,6 @@
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/EAWF/EAWF/batch/BAT-0304"
     },
-    "P36-I01": {
-      "payload": {
-        "annotations": [],
-        "criteria": [],
-        "deferred_fields": [
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "repository_ref"
-          },
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "target_branch"
-          }
-        ],
-        "ledger_annotations": [],
-        "legacy_refs": {
-          "audit_id": null,
-          "candidate_tag": null,
-          "closed_at": null,
-          "description": "Pre-cut prerequisites (epoch-2-aware commit lint and requirement trace, native close and bookkeeping routes, B188 apply guard against uncommitted live state), then the live cutover of this repository, the console live smoke, the rc1-to-stable roadmap as native plans and dev4 release readiness, moved from P35-I04 by D69.",
-          "estimate_id": null,
-          "intent": null,
-          "title": "Prepare and run the live epoch-2 cutover and retire epoch-1 surfaces",
-          "trigger": "none"
-        },
-        "legacy_session_ref": null,
-        "lifecycle": "iter",
-        "minted_runs": [],
-        "obsolete": false,
-        "origin": {
-          "confidence": "supported",
-          "kind": "legacy",
-          "mapping_basis": "mechanical",
-          "source_digest": "sha256:5c49c4d20ddb4bb824828dd406b4391498446e74f75a24faa5b973faa120cf0b",
-          "source_id": "P36-I01",
-          "source_kind": "iters",
-          "source_schema_version": "1.20",
-          "source_urn": null
-        },
-        "record": {
-          "created_at": "2026-09-03T18:03:30.594271Z",
-          "milestone_ref": "P36",
-          "status": "ACTIVE",
-          "task_refs": [
-            "P36-I01-W01",
-            "P36-I01-W02",
-            "P36-I01-W03",
-            "P36-I01-W04",
-            "P36-I01-W05",
-            "P36-I01-W06",
-            "P36-I01-W07",
-            "P36-I01-W08",
-            "P36-I01-W09",
-            "P36-I01-W10",
-            "P36-I01-W11",
-            "P36-I01-W12",
-            "P36-I01-W13",
-            "P36-I01-W14"
-          ]
-        },
-        "resolution": null,
-        "source_collection": "iters",
-        "target": "batch",
-        "target_status": "ACTIVE"
-      },
-      "recorded_at": "2026-09-26T21:14:53.351831+00:00",
-      "status": "ACTIVE"
-    },
     "P37-I01": {
       "payload": {
         "annotations": [],
@@ -624,7 +554,7 @@
       "status": "PLANNED"
     }
   },
-  "canonical_sequence": 61,
+  "canonical_sequence": 63,
   "milestone": {
     "MLS-0100": {
       "acceptance_bundle_revision": null,
@@ -858,83 +788,6 @@
       "uid": "7358605e-255e-5241-8977-fc17c38a4984",
       "updated_at": "2026-09-26T22:44:59.432404Z",
       "urn": "eawf://EAWF/EAWF/EAWF/milestone/MLS-0103"
-    },
-    "P36": {
-      "payload": {
-        "annotations": [
-          "track_unassigned_no_unique_source_candidate"
-        ],
-        "criteria": [],
-        "deferred_fields": [
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "outcome"
-          },
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "appetite"
-          },
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "exclusions"
-          },
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "acceptance_journey"
-          },
-          {
-            "candidates": [],
-            "reason": "source_has_no_field",
-            "target_field": "primary_track_ref"
-          }
-        ],
-        "ledger_annotations": [],
-        "legacy_refs": {
-          "audit_id": null,
-          "closed_at": null,
-          "depends_on": [
-            "P35"
-          ],
-          "intent": null,
-          "outcome_ids": [],
-          "release": "v0.7.0",
-          "scope_id": "EAWF",
-          "source_brief_ids": []
-        },
-        "legacy_session_ref": null,
-        "lifecycle": "phase",
-        "minted_runs": [],
-        "obsolete": false,
-        "origin": {
-          "confidence": "supported",
-          "kind": "legacy",
-          "mapping_basis": "mechanical",
-          "source_digest": "sha256:e6230fdf84bd5201d2c5bf3a8f6e16ff89ba1e32ef114c902bb943eae0e5e9a4",
-          "source_id": "P36",
-          "source_kind": "phases",
-          "source_schema_version": "1.20",
-          "source_urn": null
-        },
-        "record": {
-          "created_at": "2026-09-03T18:03:30.594095Z",
-          "description": "Sixth v0.7.0 phase, retitled by D71: epoch-2-aware commit lint, trace and legacy-continuation routes (D69, D73), release-path and audit-leftover backlog before the cut, the live epoch-2 cutover of this repository (D62), the console live on this tree (D63), the rc1, rc2 and stable roadmap authored as native plans with typed satisfied dispositions (D65, D72), and 0.7.0.dev5 as the product_canary rung (D70). rc1 moves to the next phase.",
-          "required_batch_refs": [
-            "P36-I01"
-          ],
-          "status": "ACTIVE",
-          "title": "Cut this repository over to epoch 2 and ship the 0.7.0.dev5 canary"
-        },
-        "resolution": null,
-        "source_collection": "phases",
-        "target": "milestone",
-        "target_status": "ACTIVE"
-      },
-      "recorded_at": "2026-09-26T21:14:53.351831+00:00",
-      "status": "ACTIVE"
     },
     "P37": {
       "payload": {
