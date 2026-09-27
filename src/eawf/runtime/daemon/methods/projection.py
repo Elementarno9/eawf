@@ -67,7 +67,11 @@ from eawf.kernel.projection.connection import (
     ReconnectDisposition,
     negotiate_reconnect,
 )
-from eawf.kernel.projection.settings import SETTINGS_ROUTE, SettingsView, build_settings_view
+from eawf.kernel.projection.settings import (
+    SETTINGS_ROUTE,
+    EffectiveSettingsView,
+    build_settings_view,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictNonNegativeInt
@@ -262,7 +266,7 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
         ) from error
 
 
-def _read_settings(*, authority: RootAuthority) -> SettingsView:
+def _read_settings(*, authority: RootAuthority) -> EffectiveSettingsView:
     """Build the effective-settings read model for a fence-cleared tree.
 
     The tree's root is both the workspace and the repo anchor, which is the call shape

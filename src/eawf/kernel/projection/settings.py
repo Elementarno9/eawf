@@ -1,4 +1,4 @@
-"""The effective-settings read model: every leaf, its layer, and the layers it overrode.
+"""The effective-settings read model: every catalog key, its layer, and the layers it overrode.
 
 An operator looking at a setting asks two questions -- what is in force, and who set it
 -- and the second one is the whole reason the stack exists: a value shown without its
@@ -8,9 +8,14 @@ place editing it has an effect.
 The merge is not repeated here. :func:`~eawf.kernel.config.layered.merge_config` is the
 one engine that composes the layers, so the effective value and the winning layer are
 taken from its answer; this module reads each layer's own overlay a second time only to
-say which lower layers also stated the leaf and lost. Nothing is written: every path is
+say which lower layers also stated the key and lost. Nothing is written: every path is
 a read, which is what lets the console open the surface without touching an operator's
 config.
+
+The rows are the leaf catalog's keys, because the catalog is what the daemon lets a
+layer write: a key the merge holds no value for is still a key an operator can set. A
+merged leaf no catalog key covers is kept too, under no section, so the view never drops
+a value that is in force.
 
 The view carries the same header shape a route projection does, so a console holds one
 kind of answer. Its digest deliberately does not cover the cursor: config is not ordered
@@ -23,15 +28,20 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Final, Literal
 
 from pydantic import ConfigDict
 
+from eawf.kernel.config.defaults import built_in_defaults
 from eawf.kernel.config.layered import (
     LAYER_ORDER,
+    WRITABLE_LAYERS,
+    Layer,
     branch_config_path,
     detect_current_branch,
     global_config_path,
@@ -41,6 +51,8 @@ from eawf.kernel.config.layered import (
     workspace_config_path,
 )
 from eawf.kernel.config.loader import load_yaml_layer
+from eawf.kernel.config.registry.leaf_catalog import LEAF_KEY_REGISTRY
+from eawf.kernel.config.registry.leaf_keys import LeafKey, LeafKeyType
 from eawf.kernel.projection.compute import (
     PROJECTION_POLICY_REVISION,
     PROJECTION_SCHEMA_VERSION,
@@ -82,10 +94,69 @@ SETTINGS_PRODUCER: Final = "eawf.kernel.config.layered"
 #: a leaf with an empty value, and the console draws the difference.
 UNSET_TEXT: Final = "unset"
 
-#: Why an effective value reads as unknown. Only a leaf the merge engine placed with no
-#: layer behind it can reach this, which is a defect in the source map rather than a
-#: configuration an operator wrote.
+#: Why an effective value reads as unknown: no layer states the key, not even the
+#: built-in defaults, so there is no value in force to show.
 UNSOURCED_REASON: Final = "no layer states this leaf"
+
+#: The layers the lens cycles and a console edit may target, in precedence order: the
+#: file layers between the built-in defaults and the runtime layers.
+LENS_LAYERS: Final[tuple[Layer, ...]] = tuple(Layer(layer) for layer in WRITABLE_LAYERS)
+
+#: The six orientation categories of the settings rail and the catalog sections each
+#: holds. Nothing is configured at the category level; the table only files every
+#: catalog section under exactly one heading, alphabetical at both levels.
+SETTINGS_CATEGORIES: Final[tuple[tuple[str, tuple[str, ...]], ...]] = (
+    # agents configures who performs work, so it is filed with execution
+    (
+        "execution",
+        (
+            "agents",
+            "dispatch",
+            "flow",
+            "planning",
+            "prep",
+            "research",
+            "runtime",
+            "ship",
+            "worktrees",
+        ),
+    ),
+    ("identity", ("preferences", "profiles", "project", "workspace")),
+    ("interface", ("cli", "commands", "docs", "statusline", "ui")),
+    ("quality", ("audit", "estimation", "polish", "prose", "review", "verify")),
+    ("safety", ("acceptance", "hooks", "mcp", "security")),
+    (
+        "system",
+        ("config", "daemon", "language", "memory", "state_schema", "storage", "telemetry", "vcs"),
+    ),
+)
+
+
+class LayerKind(StrEnum):
+    """What kind of place a config layer is: shipped, a file, or the running process."""
+
+    READ_ONLY = "read-only"
+    FILE = "file"
+    RUNTIME = "runtime"
+
+
+#: Where each layer lives, as a template or a runtime name and never a machine path, so a
+#: frame that shows it names the same place on every machine.
+LAYER_PLACES: Final[Mapping[Layer, tuple[LayerKind, str]]] = MappingProxyType(
+    {
+        Layer.BUILT_IN: (LayerKind.READ_ONLY, "compiled defaults"),
+        Layer.GLOBAL: (LayerKind.FILE, "~/.config/eawf/config.yaml"),
+        Layer.WORKSPACE: (LayerKind.FILE, "<workspace>/.ea/config.yaml"),
+        Layer.REPO: (LayerKind.FILE, "<repo>/.ea/config.yaml"),
+        Layer.BRANCH: (LayerKind.FILE, "<repo>/.ea/branches/<branch>.yaml"),
+        Layer.LOCAL: (LayerKind.FILE, "<repo>/.ea/local/config.yaml"),
+        Layer.WAVE: (LayerKind.RUNTIME, "daemon memory · dropped on wave close"),
+        Layer.ENV: (LayerKind.RUNTIME, "EAWF_SECTION__KEY"),
+        Layer.CLI: (LayerKind.RUNTIME, "--flag on the invocation"),
+    }
+)
+
+_ABSENT: Any = object()
 
 
 class _SettingsModel(Epoch2Model):
@@ -95,44 +166,82 @@ class _SettingsModel(Epoch2Model):
 
 
 class SettingsLayerEntry(_SettingsModel):
-    """One layer's statement about one leaf.
+    """One layer's statement about one key.
 
     Attributes:
-        layer: The canonical layer label, one of
-            :data:`~eawf.kernel.config.layered.LAYER_ORDER`.
-        value: What the layer states for the leaf, as the console prints it.
+        layer: The layer that states the key.
+        value: What the layer states for the key, as the console prints it.
         wins: Whether this is the layer whose value is in force. Exactly one entry of a
-            leaf's stack wins; every other entry is a layer the winner overrode.
+            key's stack wins; every other entry is a layer the winner overrode.
     """
 
-    layer: NonEmptyStr
+    layer: Layer
     value: NonEmptyStr
     wins: bool
 
 
 class SettingsLeaf(_SettingsModel):
-    """One configuration leaf, with the layer that set it and the layers it overrode.
+    """One configuration key, with the layer that set it and the layers it overrode.
 
     Attributes:
         key: The dotted key, as ``eawf config get`` addresses it.
-        effective: The value in force, as a truth field so a leaf with no layer behind
-            it reads as unknown rather than as a blank the console would draw as empty.
-        winning_layer: The layer whose value is in force.
-        stack: Every layer that states the leaf, lowest precedence first, so the winner
+        section: The catalog section the key is filed under; ``None`` for a merged leaf
+            no catalog key covers, which no layer write can address.
+        effective: The value in force, as a truth field so a key no layer states reads
+            as unknown rather than as a blank the console would draw as empty.
+        source_layer: The layer whose value is in force; ``None`` when no layer states
+            the key.
+        override_chain: The layers that state the key and lose to ``source_layer``,
+            lowest precedence first.
+        editable_at: The layers a write may target for this key, in precedence order;
+            empty for a locked, reserved or uncatalogued key.
+        stack: Every layer that states the key, lowest precedence first, so the winner
             is the last entry and the entries before it are what it overrode.
+        value_type: The catalog's value shape for the key; ``None`` outside the catalog.
+        meaning: The catalog's one-line description; empty when it states none.
+        allowed: The values the catalog admits for a literal key; empty otherwise.
+        deny_chain: The policies that deny the key, innermost first.
+        constraint_chain: The policies that constrain the key's value, innermost first.
+        capability_requirement: The capability the key needs to take effect.
+        certification_state: Whether that capability is certified on this runtime.
+        secret_ref: The typed reference of a secret value; the value itself never
+            reaches a read model.
     """
 
     key: NonEmptyStr
+    section: NonEmptyStr | None
     effective: TruthField[str]
-    winning_layer: NonEmptyStr
+    source_layer: Layer | None
+    override_chain: tuple[Layer, ...]
+    editable_at: tuple[Layer, ...]
     stack: tuple[SettingsLayerEntry, ...]
+    value_type: LeafKeyType | None = None
+    meaning: str = ""
+    allowed: tuple[str, ...] = ()
+    deny_chain: tuple[NonEmptyStr, ...] = ()
+    constraint_chain: tuple[NonEmptyStr, ...] = ()
+    capability_requirement: NonEmptyStr | None = None
+    certification_state: NonEmptyStr | None = None
+    secret_ref: NonEmptyStr | None = None
 
-    def overridden(self) -> tuple[str, ...]:
-        """Return the layers that state the leaf and lose, lowest precedence first."""
-        return tuple(entry.layer for entry in self.stack if not entry.wins)
+    def stated_at(self, layer: Layer) -> str | None:
+        """Return what ``layer`` states for the key, or ``None`` when it states nothing."""
+        return next((entry.value for entry in self.stack if entry.layer is layer), None)
 
 
-class SettingsView(_SettingsModel):
+class SettingsCategory(_SettingsModel):
+    """One rail heading and the catalog sections filed under it, alphabetical.
+
+    Attributes:
+        name: The category word; never selectable, because nothing is set at its level.
+        sections: The catalog sections under it that the view holds keys for.
+    """
+
+    name: NonEmptyStr
+    sections: tuple[NonEmptyStr, ...]
+
+
+class EffectiveSettingsView(_SettingsModel):
     """The whole effective-settings read model, as the console draws it.
 
     Attributes:
@@ -143,21 +252,26 @@ class SettingsView(_SettingsModel):
             carried so one frame can state one cursor for everything it shows.
         digest: The digest two surfaces compare on. It covers the route and the leaves
             and deliberately not the cursor, because config changes without the tree.
-        leaves: Every leaf the merge placed, by dotted key.
+        branch: The branch whose layer was read, which is the one a ``branch`` edit
+            writes; ``None`` when the tree has no current branch.
+        rail: The six categories and the sections each holds, in rail order.
+        leaves: Every catalog key, then every merged leaf outside the catalog, by key.
     """
 
     schema_version: Literal["1.0"]
     route: NonEmptyStr
     header: ProjectionHeader
     digest: Sha256DigestStr
+    branch: NonEmptyStr | None
+    rail: tuple[SettingsCategory, ...]
     leaves: tuple[SettingsLeaf, ...]
 
     def leaf(self, key: str) -> SettingsLeaf:
         """Return the leaf ``key`` addresses.
 
         Raises:
-            KeyError: The merge placed no leaf under ``key``, so the view never stated
-                one; a console asking for it is addressing a key that does not exist.
+            KeyError: The view states no leaf under ``key``; a console asking for it is
+                addressing a key that does not exist.
         """
         for leaf in self.leaves:
             if leaf.key == key:
@@ -165,11 +279,42 @@ class SettingsView(_SettingsModel):
         raise KeyError(key)
 
     def sections(self) -> tuple[str, ...]:
-        """Return the first segment of every leaf key, in first-seen order."""
-        seen: dict[str, None] = {}
-        for leaf in self.leaves:
-            seen.setdefault(leaf.key.split(".", 1)[0], None)
-        return tuple(seen)
+        """Return every rail section, in rail order: the order Tab cycles them in."""
+        return tuple(section for category in self.rail for section in category.sections)
+
+    def keys_of(self, section: str) -> tuple[SettingsLeaf, ...]:
+        """Return the leaves filed under ``section``, by key; empty for an unknown one."""
+        return tuple(leaf for leaf in self.leaves if leaf.section == section)
+
+    def category_of(self, section: str) -> str:
+        """Return the category ``section`` is filed under; empty for an unknown one."""
+        return next((c.name for c in self.rail if section in c.sections), "")
+
+    def uncatalogued(self) -> tuple[SettingsLeaf, ...]:
+        """Return the merged leaves no catalog key covers."""
+        return tuple(leaf for leaf in self.leaves if leaf.section is None)
+
+
+def category_assignment_defects(sections: Iterable[str]) -> tuple[str, ...]:
+    """Return every way the category table fails to file ``sections`` exactly once.
+
+    Args:
+        sections: The catalog's sections.
+
+    Returns:
+        One message per section the table does not file, files twice, or files although
+        the catalog has no such section; empty when the assignment is total.
+    """
+    filed = [section for _name, members in SETTINGS_CATEGORIES for section in members]
+    wanted = set(sections)
+    defects = [f"section {s!r} is filed under no category" for s in sorted(wanted - set(filed))]
+    defects += [
+        f"section {s!r} is filed twice" for s in sorted({s for s in filed if filed.count(s) > 1})
+    ]
+    defects += [
+        f"category table files {s!r}, which the catalog lacks" for s in sorted(set(filed) - wanted)
+    ]
+    return tuple(defects)
 
 
 def render_value(value: Any) -> str:
@@ -188,7 +333,7 @@ def render_value(value: Any) -> str:
         return "null"
     if isinstance(value, str):
         return value if value else '""'
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple)):
         return "[" + ", ".join(render_value(item) for item in value) + "]" if value else "[]"
     if isinstance(value, dict):
         return "{" + ", ".join(sorted(value)) + "}" if value else "{}"
@@ -205,6 +350,30 @@ def _flatten(mapping: Mapping[str, Any], prefix: str = "") -> dict[str, Any]:
         else:
             flat[dotted] = value
     return flat
+
+
+def _value_at(flat: Mapping[str, Any], key: str) -> Any:
+    """Return what ``flat`` states at ``key``: the leaf, the subtree under it, or absent.
+
+    A mapping-typed catalog key is stated by the leaves beneath it, so its value is the
+    subtree those leaves rebuild.
+    """
+    if key in flat:
+        return flat[key]
+    prefix = f"{key}."
+    below = {
+        dotted[len(prefix) :]: value for dotted, value in flat.items() if dotted.startswith(prefix)
+    }
+    if not below:
+        return _ABSENT
+    tree: dict[str, Any] = {}
+    for dotted, value in below.items():
+        node = tree
+        *parents, last = dotted.split(".")
+        for part in parents:
+            node = node.setdefault(part, {})
+        node[last] = value
+    return tree
 
 
 def layer_overlays(
@@ -249,16 +418,27 @@ def layer_overlays(
     return {layer: overlays[layer] for layer in paths if layer in overlays}
 
 
+def _winner(key: str, sources: Mapping[str, str]) -> Layer | None:
+    """Return the highest layer the merge credits with ``key`` or any leaf beneath it."""
+    prefix = f"{key}."
+    credited = [
+        layer for dotted, layer in sources.items() if dotted == key or dotted.startswith(prefix)
+    ]
+    if not credited:
+        return None
+    return Layer(max(credited, key=LAYER_ORDER.index))
+
+
 def _stack_for(
     *,
     key: str,
-    winner: str,
+    winner: Layer,
     winning_value: Any,
     overlays: Mapping[str, Mapping[str, Any]],
 ) -> tuple[SettingsLayerEntry, ...]:
-    """Return one leaf's stack: every layer that states it, lowest precedence first.
+    """Return one key's stack: every layer that states it, lowest precedence first.
 
-    A layer above the winner is never in the stack, because a layer that stated the leaf
+    A layer above the winner is never in the stack, because a layer that stated the key
     and sits above the winner would be the winner.
     """
     entries: list[SettingsLayerEntry] = []
@@ -266,16 +446,17 @@ def _stack_for(
         if layer == winner:
             break
         overlay = overlays.get(layer)
-        if overlay is not None and key in overlay:
+        stated = _ABSENT if overlay is None else _value_at(overlay, key)
+        if stated is not _ABSENT:
             entries.append(
-                SettingsLayerEntry(layer=layer, value=render_value(overlay[key]), wins=False)
+                SettingsLayerEntry(layer=Layer(layer), value=render_value(stated), wins=False)
             )
     entries.append(SettingsLayerEntry(layer=winner, value=render_value(winning_value), wins=True))
     return tuple(entries)
 
 
-def _effective_field(*, key: str, value: Any, winner: str | None) -> TruthField[str]:
-    """Return a leaf's effective value as a truth field, known or honestly missing."""
+def _effective_field(*, key: str, value: Any, winner: Layer | None) -> TruthField[str]:
+    """Return a key's effective value as a truth field, known or honestly missing."""
     stated = winner is not None
     return TruthField[str](
         value=render_value(value) if stated else None,
@@ -293,6 +474,46 @@ def _effective_field(*, key: str, value: Any, winner: str | None) -> TruthField[
     )
 
 
+def _leaf(
+    *,
+    key: str,
+    entry: LeafKey | None,
+    merged: Mapping[str, Any],
+    sources: Mapping[str, str],
+    overlays: Mapping[str, Mapping[str, Any]],
+) -> SettingsLeaf:
+    """Return one key's leaf: its value in force, its stack and what the catalog says of it."""
+    value = _value_at(merged, key)
+    winner = _winner(key, sources) if value is not _ABSENT else None
+    stack = (
+        _stack_for(key=key, winner=winner, winning_value=value, overlays=overlays)
+        if winner is not None
+        else ()
+    )
+    writable = () if entry is None or entry.reserved else entry.writable_layers
+    return SettingsLeaf(
+        key=key,
+        section=entry.domain if entry is not None else None,
+        effective=_effective_field(key=key, value=value, winner=winner),
+        source_layer=winner,
+        override_chain=tuple(item.layer for item in stack if not item.wins),
+        editable_at=tuple(Layer(layer) for layer in LAYER_ORDER if layer in writable),
+        stack=stack,
+        value_type=entry.type if entry is not None else None,
+        meaning=entry.description if entry is not None else "",
+        allowed=(entry.choices or ()) if entry is not None else (),
+    )
+
+
+def _rail(sections: Iterable[str]) -> tuple[SettingsCategory, ...]:
+    """Return the six categories, each holding the table's sections the view has keys for."""
+    held = set(sections)
+    return tuple(
+        SettingsCategory(name=name, sections=tuple(s for s in sorted(members) if s in held))
+        for name, members in SETTINGS_CATEGORIES
+    )
+
+
 def build_settings_view(
     *,
     workspace: Path | None,
@@ -302,8 +523,8 @@ def build_settings_view(
     generated_at: datetime,
     env: Mapping[str, str] | None = None,
     branch: str | None = None,
-) -> SettingsView:
-    """Return the effective settings with the layer behind every leaf.
+) -> EffectiveSettingsView:
+    """Return the effective settings with the layer behind every catalog key.
 
     Args:
         workspace: The workspace root the layers are composed against.
@@ -317,36 +538,44 @@ def build_settings_view(
         branch: The branch whose layer to read; resolved from the repo when ``None``.
 
     Returns:
-        Every leaf the merge placed, sorted by dotted key, each with the layer that set
-        it and the layers it overrode.
+        Every catalog key, sorted, then every merged leaf outside the catalog, each with
+        the layer that set it, the layers it overrode and the layers it may be edited at.
 
     Raises:
         ValueError: The cursor is negative, so it is not a committed ordinal.
     """
     if cursor < 0:
         raise ValueError(f"a projection cursor is a committed canonical_sequence, never {cursor}")
-    merged, sources = merge_config(workspace=workspace, repo=repo, env=env, branch=branch)
-    overlays = layer_overlays(workspace=workspace, repo=repo, branch=branch)
-    leaves: list[SettingsLeaf] = []
-    for key, value in sorted(_flatten(merged).items()):
-        winner = sources.get(key)
-        leaves.append(
-            SettingsLeaf(
-                key=key,
-                effective=_effective_field(key=key, value=value, winner=winner),
-                # a leaf the source map does not name is one no layer claims; it keeps
-                # the built-in label so the row still addresses a layer an operator knows
-                winning_layer=winner or LAYER_ORDER[0],
-                stack=_stack_for(
-                    key=key,
-                    winner=winner or LAYER_ORDER[0],
-                    winning_value=value,
-                    overlays=overlays,
-                ),
-            )
+    named = branch if branch is not None or repo is None else detect_current_branch(repo)
+    merged_tree, sources = merge_config(workspace=workspace, repo=repo, env=env, branch=named)
+    merged = _flatten(merged_tree)
+    overlays = {
+        Layer.BUILT_IN.value: _flatten(built_in_defaults()),
+        **layer_overlays(workspace=workspace, repo=repo, branch=named),
+    }
+    catalog = sorted(LEAF_KEY_REGISTRY)
+    leaves = [
+        _leaf(
+            key=key, entry=LEAF_KEY_REGISTRY[key], merged=merged, sources=sources, overlays=overlays
         )
-    logger.debug(f"build_settings_view leaves={len(leaves)} layers={len(overlays)}")
-    return SettingsView(
+        for key in catalog
+    ]
+    # a merged leaf is covered when it is a catalog key, sits under one, or is the empty
+    # parent of catalog keys that nothing has set yet
+    covered = [
+        dotted
+        for dotted in sorted(merged)
+        if not any(
+            dotted == key or dotted.startswith(f"{key}.") or key.startswith(f"{dotted}.")
+            for key in catalog
+        )
+    ]
+    leaves += [
+        _leaf(key=dotted, entry=None, merged=merged, sources=sources, overlays=overlays)
+        for dotted in covered
+    ]
+    logger.debug(f"build_settings_view leaves={len(leaves)} uncatalogued={len(covered)}")
+    return EffectiveSettingsView(
         schema_version=PROJECTION_SCHEMA_VERSION,
         route=SETTINGS_ROUTE,
         header=ProjectionHeader(
@@ -364,6 +593,8 @@ def build_settings_view(
             policy_revision=PROJECTION_POLICY_REVISION,
         ),
         digest=_digest(leaves),
+        branch=named or None,
+        rail=_rail(leaf.section for leaf in leaves if leaf.section is not None),
         leaves=tuple(leaves),
     )
 
@@ -382,16 +613,22 @@ def _digest(leaves: list[SettingsLeaf]) -> str:
 
 
 __all__ = [
+    "LAYER_PLACES",
+    "LENS_LAYERS",
+    "SETTINGS_CATEGORIES",
     "SETTINGS_PRODUCER",
     "SETTINGS_ROUTE",
     "SETTINGS_ROUTES",
     "SETTINGS_STACK_ROUTE",
     "UNSET_TEXT",
     "UNSOURCED_REASON",
+    "EffectiveSettingsView",
+    "LayerKind",
+    "SettingsCategory",
     "SettingsLayerEntry",
     "SettingsLeaf",
-    "SettingsView",
     "build_settings_view",
+    "category_assignment_defects",
     "layer_overlays",
     "render_value",
 ]

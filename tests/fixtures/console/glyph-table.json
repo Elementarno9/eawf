@@ -1,0 +1,690 @@
+{
+  "spec": "CON-121",
+  "measured": "2026-08-25, Unicode east_asian_width under the narrow policy",
+  "rows": [
+    {
+      "glyph": "?",
+      "code_point": "U+003F",
+      "eaw": "Na",
+      "roles": {
+        "value": "truth unknown"
+      },
+      "twins": {
+        "value": "?"
+      }
+    },
+    {
+      "glyph": "∅",
+      "code_point": "U+2205",
+      "eaw": "N",
+      "roles": {
+        "value": "truth unavailable"
+      },
+      "twins": {
+        "value": "-"
+      }
+    },
+    {
+      "glyph": "⊘",
+      "code_point": "U+2298",
+      "eaw": "N",
+      "roles": {
+        "value": "truth denied"
+      },
+      "twins": {
+        "value": "x"
+      }
+    },
+    {
+      "glyph": "✗",
+      "code_point": "U+2717",
+      "eaw": "N",
+      "roles": {
+        "value": "truth purged"
+      },
+      "twins": {
+        "value": "X"
+      }
+    },
+    {
+      "glyph": "!",
+      "code_point": "U+0021",
+      "eaw": "Na",
+      "roles": {
+        "value": "truth invalidated",
+        "state slot": "header attention count !N NEEDS YOU",
+        "kind": "event ! error"
+      },
+      "twins": {
+        "value": "!",
+        "state slot": "!",
+        "kind": "!"
+      }
+    },
+    {
+      "glyph": "0",
+      "code_point": "U+0030",
+      "eaw": "Na",
+      "roles": {
+        "value": "a real zero"
+      },
+      "twins": {
+        "value": "0"
+      }
+    },
+    {
+      "glyph": "~",
+      "code_point": "U+007E",
+      "eaw": "Na",
+      "roles": {
+        "value": "quality derived; typical duration ~5m",
+        "kind": "event ~ heartbeat"
+      },
+      "twins": {
+        "value": "~",
+        "kind": "~"
+      }
+    },
+    {
+      "glyph": "≈",
+      "code_point": "U+2248",
+      "eaw": "A",
+      "roles": {
+        "value": "quality estimated"
+      },
+      "twins": {
+        "value": "^"
+      }
+    },
+    {
+      "glyph": "–",
+      "code_point": "U+2013",
+      "eaw": "A",
+      "roles": {
+        "value": "no value by design (due –)",
+        "provenance": "settings key not set anywhere"
+      },
+      "twins": {
+        "value": "_",
+        "provenance": "_"
+      }
+    },
+    {
+      "glyph": "●",
+      "code_point": "U+25CF",
+      "eaw": "A",
+      "roles": {
+        "state slot": "● LIVE",
+        "cursor": "dated roadmap marker; enum option selected"
+      },
+      "twins": {
+        "state slot": "*",
+        "cursor": "*"
+      }
+    },
+    {
+      "glyph": "◑",
+      "code_point": "U+25D1",
+      "eaw": "A",
+      "roles": {
+        "state slot": "◑ LIVE / PARTIAL"
+      },
+      "twins": {
+        "state slot": "+"
+      }
+    },
+    {
+      "glyph": "◐",
+      "code_point": "U+25D0",
+      "eaw": "A",
+      "roles": {
+        "state slot": "◐ DEGRADED"
+      },
+      "twins": {
+        "state slot": "%"
+      }
+    },
+    {
+      "glyph": "◌",
+      "code_point": "U+25CC",
+      "eaw": "N",
+      "roles": {
+        "state slot": "◌ DISCONNECTED; entry ◌ NOT ATTACHED"
+      },
+      "twins": {
+        "state slot": "o"
+      }
+    },
+    {
+      "glyph": "►",
+      "code_point": "U+25BA",
+      "eaw": "N",
+      "roles": {
+        "state slot": "► REPLAYING"
+      },
+      "twins": {
+        "state slot": ">"
+      }
+    },
+    {
+      "glyph": "▲",
+      "code_point": "U+25B2",
+      "eaw": "A",
+      "roles": {
+        "state slot": "▲ GAP DETECTED; entry ▲ MIGRATION REQUIRED, ▲ SCHEMA UNSUPPORTED"
+      },
+      "twins": {
+        "state slot": "^"
+      }
+    },
+    {
+      "glyph": "◈",
+      "code_point": "U+25C8",
+      "eaw": "A",
+      "roles": {
+        "state slot": "◈ SNAPSHOT LOADING; entry ◈ RESOLVING, ◈ FIRST RUN"
+      },
+      "twins": {
+        "state slot": "~"
+      }
+    },
+    {
+      "glyph": "◇",
+      "code_point": "U+25C7",
+      "eaw": "A",
+      "roles": {
+        "state slot": "◇ SNAPSHOT REQUIRED"
+      },
+      "twins": {
+        "state slot": "<"
+      }
+    },
+    {
+      "glyph": "▪",
+      "code_point": "U+25AA",
+      "eaw": "N",
+      "roles": {
+        "state slot": "▪ OFFLINE SNAPSHOT, connection value and entry frame alike"
+      },
+      "twins": {
+        "state slot": "#"
+      }
+    },
+    {
+      "glyph": "¶",
+      "code_point": "U+00B6",
+      "eaw": "A",
+      "roles": {
+        "kind": "¶ message"
+      },
+      "twins": {
+        "kind": "\""
+      }
+    },
+    {
+      "glyph": "›",
+      "code_point": "U+203A",
+      "eaw": "N",
+      "roles": {
+        "kind": "› tool",
+        "structure": "bucket strip overflow 7›; layer chain global › workspace"
+      },
+      "twins": {
+        "kind": ">",
+        "structure": ">"
+      }
+    },
+    {
+      "glyph": "‹",
+      "code_point": "U+2039",
+      "eaw": "N",
+      "roles": {
+        "structure": "bucket strip overflow ‹2"
+      },
+      "twins": {
+        "structure": "<"
+      }
+    },
+    {
+      "glyph": "±",
+      "code_point": "U+00B1",
+      "eaw": "A",
+      "roles": {
+        "kind": "± file"
+      },
+      "twins": {
+        "kind": "+"
+      }
+    },
+    {
+      "glyph": "°",
+      "code_point": "U+00B0",
+      "eaw": "A",
+      "roles": {
+        "kind": "° thinking"
+      },
+      "twins": {
+        "kind": "*"
+      }
+    },
+    {
+      "glyph": "»",
+      "code_point": "U+00BB",
+      "eaw": "N",
+      "roles": {
+        "kind": "» subagent, » background"
+      },
+      "twins": {
+        "kind": "}"
+      }
+    },
+    {
+      "glyph": "⋯",
+      "code_point": "U+22EF",
+      "eaw": "N",
+      "roles": {
+        "kind": "⋯ running",
+        "cursor": "campaign step in progress"
+      },
+      "twins": {
+        "kind": ".",
+        "cursor": "."
+      }
+    },
+    {
+      "glyph": "=",
+      "code_point": "U+003D",
+      "eaw": "Na",
+      "roles": {
+        "provenance": "settings set here and in force"
+      },
+      "twins": {
+        "provenance": "="
+      }
+    },
+    {
+      "glyph": "≠",
+      "code_point": "U+2260",
+      "eaw": "A",
+      "roles": {
+        "provenance": "settings set here and shadowed"
+      },
+      "twins": {
+        "provenance": "#"
+      }
+    },
+    {
+      "glyph": "·",
+      "code_point": "U+00B7",
+      "eaw": "A",
+      "roles": {
+        "structure": "row separator (4 mine · 4 known)",
+        "provenance": "settings inherited"
+      },
+      "twins": {
+        "structure": "-",
+        "provenance": "."
+      }
+    },
+    {
+      "glyph": "…",
+      "code_point": "U+2026",
+      "eaw": "A",
+      "roles": {
+        "value": "word-boundary truncation resume or…",
+        "structure": "window counts … 11 above; breadcrumb elision"
+      },
+      "twins": {
+        "value": ";",
+        "structure": ";"
+      }
+    },
+    {
+      "glyph": "▸",
+      "code_point": "U+25B8",
+      "eaw": "N",
+      "roles": {
+        "cursor": "selection cursor; fold closed ▸ 3 lines; chosen bucket",
+        "structure": "breadcrumb separator"
+      },
+      "twins": {
+        "cursor": ">",
+        "structure": ">"
+      }
+    },
+    {
+      "glyph": "▾",
+      "code_point": "U+25BE",
+      "eaw": "N",
+      "roles": {
+        "cursor": "fold open ▾ 3 lines"
+      },
+      "twins": {
+        "cursor": "v"
+      }
+    },
+    {
+      "glyph": "○",
+      "code_point": "U+25CB",
+      "eaw": "A",
+      "roles": {
+        "cursor": "forecast roadmap marker; enum option unselected; campaign step pending"
+      },
+      "twins": {
+        "cursor": "o"
+      }
+    },
+    {
+      "glyph": "▣",
+      "code_point": "U+25A3",
+      "eaw": "A",
+      "roles": {
+        "cursor": "roadmap release marker ▣ REL-0001"
+      },
+      "twins": {
+        "cursor": "["
+      }
+    },
+    {
+      "glyph": "┼",
+      "code_point": "U+253C",
+      "eaw": "A",
+      "roles": {
+        "structure": "roadmap today marker"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "┄",
+      "code_point": "U+2504",
+      "eaw": "A",
+      "roles": {
+        "structure": "roadmap forecast lane"
+      },
+      "twins": {
+        "structure": "."
+      }
+    },
+    {
+      "glyph": "┊",
+      "code_point": "U+250A",
+      "eaw": "A",
+      "roles": {
+        "structure": "dependency note between lanes"
+      },
+      "twins": {
+        "structure": ":"
+      }
+    },
+    {
+      "glyph": "─",
+      "code_point": "U+2500",
+      "eaw": "A",
+      "roles": {
+        "structure": "single rule"
+      },
+      "twins": {
+        "structure": "-"
+      }
+    },
+    {
+      "glyph": "═",
+      "code_point": "U+2550",
+      "eaw": "A",
+      "roles": {
+        "structure": "header rule"
+      },
+      "twins": {
+        "structure": "="
+      }
+    },
+    {
+      "glyph": "│",
+      "code_point": "U+2502",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane, toast and rail border"
+      },
+      "twins": {
+        "structure": "|"
+      }
+    },
+    {
+      "glyph": "┌",
+      "code_point": "U+250C",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane, toast and rail corner"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "┐",
+      "code_point": "U+2510",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane, toast and rail corner"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "└",
+      "code_point": "U+2514",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane, toast and rail corner"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "┘",
+      "code_point": "U+2518",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane, toast and rail corner"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "├",
+      "code_point": "U+251C",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane and rail junction"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "┤",
+      "code_point": "U+2524",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane and rail junction"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "┬",
+      "code_point": "U+252C",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane and rail junction"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "┴",
+      "code_point": "U+2534",
+      "eaw": "A",
+      "roles": {
+        "structure": "pane and rail junction"
+      },
+      "twins": {
+        "structure": "+"
+      }
+    },
+    {
+      "glyph": "█",
+      "code_point": "U+2588",
+      "eaw": "A",
+      "roles": {
+        "structure": "scrollbar"
+      },
+      "twins": {
+        "structure": "#"
+      }
+    },
+    {
+      "glyph": "▏",
+      "code_point": "U+258F",
+      "eaw": "A",
+      "roles": {
+        "structure": "palette input caret"
+      },
+      "twins": {
+        "structure": "|"
+      }
+    },
+    {
+      "glyph": "↑",
+      "code_point": "U+2191",
+      "eaw": "A",
+      "roles": {
+        "structure": "keybar ↑↓ row"
+      },
+      "twins": {
+        "structure": "^"
+      }
+    },
+    {
+      "glyph": "↓",
+      "code_point": "U+2193",
+      "eaw": "A",
+      "roles": {
+        "structure": "keybar ↑↓ row"
+      },
+      "twins": {
+        "structure": "v"
+      }
+    },
+    {
+      "glyph": "←",
+      "code_point": "U+2190",
+      "eaw": "A",
+      "roles": {
+        "structure": "keybar ←→",
+        "value": "backward transition 41,208 ← 40,980"
+      },
+      "twins": {
+        "structure": "<",
+        "value": "<"
+      }
+    },
+    {
+      "glyph": "→",
+      "code_point": "U+2192",
+      "eaw": "A",
+      "roles": {
+        "structure": "keybar ←→; campaign graph arrow",
+        "value": "transition 40,980 → 41,208"
+      },
+      "twins": {
+        "structure": ">",
+        "value": ">"
+      }
+    },
+    {
+      "glyph": "↳",
+      "code_point": "U+21B3",
+      "eaw": "N",
+      "roles": {
+        "structure": "sub-bucket ↳ permission 1"
+      },
+      "twins": {
+        "structure": "L"
+      }
+    },
+    {
+      "glyph": "×",
+      "code_point": "U+00D7",
+      "eaw": "A",
+      "roles": {
+        "kind": "coalescing progress ×212 · 29s"
+      },
+      "twins": {
+        "kind": "*"
+      }
+    },
+    {
+      "glyph": "≤",
+      "code_point": "U+2264",
+      "eaw": "A",
+      "roles": {
+        "value": "campaign bound ≤20 runs"
+      },
+      "twins": {
+        "value": "<"
+      }
+    },
+    {
+      "glyph": "−",
+      "code_point": "U+2212",
+      "eaw": "N",
+      "roles": {
+        "value": "diff stat minus +18 −4"
+      },
+      "twins": {
+        "value": "-"
+      }
+    },
+    {
+      "glyph": "•",
+      "code_point": "U+2022",
+      "eaw": "A",
+      "roles": {
+        "structure": "bullet inside a rendered markdown artifact"
+      },
+      "twins": {
+        "structure": "*"
+      }
+    },
+    {
+      "glyph": "✓",
+      "code_point": "U+2713",
+      "eaw": "N",
+      "roles": {
+        "cursor": "campaign step done ✓ done; gate passed"
+      },
+      "twins": {
+        "cursor": "+"
+      }
+    },
+    {
+      "glyph": "ä",
+      "code_point": "U+00E4",
+      "eaw": "N",
+      "roles": {
+        "structure": "brand Eä"
+      },
+      "twins": {
+        "structure": "a"
+      }
+    }
+  ]
+}

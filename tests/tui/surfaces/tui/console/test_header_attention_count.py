@@ -50,6 +50,7 @@ from eawf.kernel.store.ledger import LedgerRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS
+from eawf.surfaces.tui.console.attach import interrupted_state, with_entry_state
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
@@ -59,9 +60,9 @@ from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import route_keys
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.overlays import render_overlay
+from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.launch import repair_lines, with_repair_lines
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import AT as TXN_AT
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
@@ -240,9 +241,11 @@ def test_the_activity_frame_prints_the_derived_bucket_counts() -> None:
     """Every bucket on the frame is one the read model derived."""
     register = _register("activity")
     rows = render_route(_view(register, route="activity", attention=None))
-    buckets = next(row for row in rows if row.startswith(" BUCKETS"))
+    # at 120 columns the buckets are the route's rail, one bucket per rail row
+    rail = [row.split("│ ", 1)[1] for row in rows if "│ " in row]
+    assert rail[0].startswith("BUCKETS")
     for name, count in register.status_counts().items():
-        assert re.search(rf"\b{name} {count}\b", buckets), buckets
+        assert any(re.search(rf"^ {name}\s+{count}\b", line) for line in rail), rail
     assert "cursor 41,208" in rows[1]
 
 
@@ -356,7 +359,11 @@ def _chrome_fixture() -> Fixture:
 
 
 def _native_view(route: str, *, attention: RegisterView | None) -> View:
-    """Return a live-console view on native ``route`` holding ``attention``."""
+    """Return a live-console view on native ``route`` holding ``attention``.
+
+    The session sits on the registry id and the projection is served under the port key,
+    which differ for the one route the normalisation map renames.
+    """
     session = Session()
     session.route = route
     return View(
@@ -364,12 +371,12 @@ def _native_view(route: str, *, attention: RegisterView | None) -> View:
         fixture=_chrome_fixture(),
         w=120,
         h=24,
-        projection=build_spine_view(_projection(route, document={})),
+        projection=build_spine_view(_projection(REGISTRY.by_id[route].key, document={})),
         attention=attention,
     )
 
 
-@pytest.mark.parametrize("route", ["track", "roadmap"])
+@pytest.mark.parametrize("route", ["track", "timeline"])
 def test_native_frame_header_prints_two_open_attention_items(route: str) -> None:
     """A native frame reads the same register the prototype frames read."""
     rows = render_route(_native_view(route, attention=_written_attention(2)))
@@ -465,31 +472,33 @@ def test_native_route_rows_hold_no_batch_when_the_ledger_is_empty(tmp_path: Path
 # ---------- the stuck-migration entry layer shows the repair command ----------
 
 
-@pytest.mark.parametrize("state_id", ["migration", "interrupted"])
-def test_stuck_migration_entry_shows_the_repair_command(tmp_path: Path, state_id: str) -> None:
+def test_stuck_migration_entry_shows_the_repair_command(tmp_path: Path) -> None:
     """The entry layer draws from the chrome, so a live console shows the command."""
-    chrome = with_repair_lines(load_chrome(), state_id, repair_lines(tmp_path))
+    chrome = load_chrome()
+    state = interrupted_state(chrome, tmp_path, (), why="the epoch marker does not parse")
+    chrome = with_entry_state(chrome, state)
     session = Session()
     session.route = "entry"
-    session.entry_sel = next(i for i, s in enumerate(chrome.entry) if s.id == state_id)
+    session.entry_sel = next(i for i, s in enumerate(chrome.entry) if s.id == "interrupted")
     view = View(session=session, fixture=Fixture.from_chrome(chrome), w=240, h=30)
 
     rows = render_route(view)
 
     assert not any("NOT HELD" in row for row in rows)
-    assert any(f"eawf migrate epoch2 --recover --target-root {tmp_path}" in r for r in rows)
+    assert state.commands[0] == f"eawf migrate epoch2 --recover --target-root {tmp_path}"
     assert "MIGRATION REQUIRED" in rows[0]
 
 
-def test_repair_lines_quote_a_target_root_holding_a_space(tmp_path: Path) -> None:
+def test_repair_commands_quote_a_target_root_holding_a_space(tmp_path: Path) -> None:
     """A path the shell would split is quoted, so the shown command runs as printed."""
     root = tmp_path / "a tree"
-    lines = repair_lines(root)
-    assert lines[1].endswith(f"--target-root '{root}'")
-    assert lines[-1].endswith(f"--rollback --target-root '{root}'")
+    state = interrupted_state(load_chrome(), root, (), why="stopped")
+    assert state.commands[0].endswith(f"--recover --target-root '{root}'")
+    assert state.commands[-1].endswith(f"--rollback --target-root '{root}'")
 
 
-def test_with_repair_lines_refuses_an_unknown_entry_state() -> None:
-    """Replacing the tail of a state the chrome does not carry is refused."""
+def test_with_entry_state_refuses_an_unknown_entry_state() -> None:
+    """Replacing a state the chrome does not carry is refused."""
+    state = load_chrome().entry[0].model_copy(update={"id": "not-a-state"})
     with pytest.raises(ValueError, match="no entry state"):
-        with_repair_lines(load_chrome(), "not-a-state", ("x",))
+        with_entry_state(load_chrome(), state)

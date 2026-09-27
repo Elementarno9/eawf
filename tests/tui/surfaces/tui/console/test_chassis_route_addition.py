@@ -21,7 +21,8 @@ from eawf.surfaces.tui.console.registry import (
     ROUTES,
     Door,
     DoorKind,
-    RouteFamily,
+    Escape,
+    RouteGroup,
     RouteRegistry,
     RouteSpec,
     kind_of,
@@ -47,17 +48,27 @@ EPOCH1_SELECTORS = (
     ".feed-empty {",
 )
 
+HOME = Escape(route="scope.home")
+
 TRIVIAL = RouteSpec(
     id="spike.trivial",
-    family=RouteFamily.DIAGNOSTICS,
+    group=RouteGroup.DIAGNOSTICS,
+    question="Does a trivial row reach every index?",
+    needs="nothing",
+    escape=HOME,
     palette_visible=True,
     go_letter="z",
     step_leaf="Trivial",
     via_leaf="Trivial",
-    parent=("scope.home", None),
     tab_owner="rows",
     word="trivial",
 )
+
+
+def _row(route: str, group: RouteGroup, **columns: object) -> RouteSpec:
+    """Return a probe row: ``columns`` over a stated question and a root Escape parent."""
+    base: dict[str, object] = {"question": "probe?", "needs": "nothing", "escape": HOME}
+    return RouteSpec(id=route, group=group, **{**base, **columns})  # type: ignore[arg-type]
 
 
 def _shared_digest() -> dict[str, str]:
@@ -83,7 +94,7 @@ def _indexes(reg: RouteRegistry) -> dict[str, Index]:
         "route_list": reg.route_list,
         "step_leaves": dict(reg.step_leaves),
         "via_leaves": dict(reg.via_leaves),
-        "parents": dict(reg.parents),
+        "escapes": dict(reg.escapes),
         "tab_owners": dict(reg.tab_owners),
         "overlay_routes": tuple(sorted(reg.overlay_routes)),
         "words": {r: reg.route_word(r) for r in reg.ids},
@@ -117,7 +128,7 @@ def test_route_registry_trivial_row_reaches_every_index() -> None:
     assert extended.step_leaf("spike.trivial", None) == "Trivial"
     assert extended.step_leaf("spike.trivial", "RUN-1") == "RUN-1"
     assert extended.via_leaves["spike.trivial"] == "Trivial"
-    assert extended.parents["spike.trivial"] == ("scope.home", None)
+    assert extended.escapes["spike.trivial"] == HOME
     assert extended.tab_owners["spike.trivial"] == "rows"
     assert extended.route_word("spike.trivial") == "trivial"
     assert extended.doors("spike.trivial") == (
@@ -153,7 +164,7 @@ def test_route_registry_roadmap_keyed() -> None:
     spec = REGISTRY.by_key["roadmap"]
     assert spec.id == "timeline"
     assert "timeline" not in REGISTRY.by_key
-    assert spec.family == RouteFamily.PLANNING
+    assert spec.group == RouteGroup.PLANNING
     assert REGISTRY.go_map["t"] == "timeline"
     assert "timeline" in REGISTRY.route_list
     assert all(s.key == s.id for s in ROUTES if s.id != "timeline")
@@ -161,10 +172,11 @@ def test_route_registry_roadmap_keyed() -> None:
 
 def test_route_registry_notifications_global() -> None:
     spec = REGISTRY.by_key["notifications"]
-    assert spec.family == RouteFamily.DIAGNOSTICS
+    assert spec.group == RouteGroup.DIAGNOSTICS
     assert not spec.subject_required
     assert spec.fixed_subject is None
-    assert spec.parent is None
+    assert spec.sub_surface_of is None
+    assert spec.escape == HOME
     assert REGISTRY.subj_now("notifications", None) is None
     doors = REGISTRY.doors("notifications")
     assert Door(kind=DoorKind.GO, key="i") in doors
@@ -176,19 +188,19 @@ def test_route_registry_notifications_global() -> None:
 def test_route_registry_corrections_match_normalisation_map() -> None:
     entries = json.loads(NORMALISATION_MAP.read_text(encoding="utf-8"))["entries"]
     corrections = {
-        e["route_id"]: (e["route_key"], e["route_family"]) for e in entries if e.get("route_id")
+        e["route_id"]: (e["route_key"], e["route_group"]) for e in entries if e.get("route_id")
     }
     assert corrections == {
         "timeline": ("roadmap", "planning"),
         "notifications": ("notifications", "diagnostics"),
     }
-    for route_id, (key, family) in corrections.items():
+    for route_id, (key, group) in corrections.items():
         spec = REGISTRY.by_id[route_id]
-        assert (spec.key, spec.family) == (key, family)
+        assert (spec.key, spec.group) == (key, group)
 
 
 def test_unreachable_routes_doorless_row_reported() -> None:
-    doorless = RouteSpec(id="spike.doorless", family=RouteFamily.DIAGNOSTICS)
+    doorless = _row("spike.doorless", RouteGroup.DIAGNOSTICS)
     assert unreachable_routes((*ROUTES, doorless)) == ("spike.doorless",)
     with pytest.raises(ValueError, match=re.escape("routes with no door: spike.doorless")):
         RouteRegistry((*ROUTES, doorless))
@@ -198,30 +210,27 @@ def test_unreachable_routes_doorless_row_reported() -> None:
     ("row", "message"),
     [
         (
-            RouteSpec(id="entry", family=RouteFamily.SPINE, palette_visible=True),
+            _row("entry", RouteGroup.SPINE, palette_visible=True),
             "id registered twice: entry",
         ),
         (
-            RouteSpec(id="spike.a", key="roadmap", family=RouteFamily.SPINE, palette_visible=True),
+            _row("spike.a", RouteGroup.SPINE, key="roadmap", palette_visible=True),
             "key registered twice: roadmap",
         ),
         (
-            RouteSpec(id="spike.a", family=RouteFamily.SPINE, go_letter="h"),
+            _row("spike.a", RouteGroup.SPINE, go_letter="h"),
             "g letter registered twice: h",
         ),
         (
-            RouteSpec(
-                id="spike.a",
-                family=RouteFamily.SPINE,
-                palette_visible=True,
-                parent=("spike.gone", None),
+            _row(
+                "spike.a", RouteGroup.SPINE, palette_visible=True, escape=Escape(route="spike.gone")
             ),
             "unregistered routes: spike.gone",
         ),
         (
-            RouteSpec(
-                id="spike.a",
-                family=RouteFamily.SPINE,
+            _row(
+                "spike.a",
+                RouteGroup.SPINE,
                 doors=(Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="spike.gone"),),
             ),
             "unregistered routes: spike.gone",
@@ -258,11 +267,11 @@ def test_door_global_kind_with_origin_raises_value_error(kind: DoorKind) -> None
 
 def test_route_spec_declared_global_door_raises_value_error() -> None:
     with pytest.raises(ValueError, match="declares go doors"):
-        RouteSpec(id="spike.a", family=RouteFamily.SPINE, doors=(Door(kind=DoorKind.GO, key="q"),))
+        _row("spike.a", RouteGroup.SPINE, doors=(Door(kind=DoorKind.GO, key="q"),))
 
 
 def test_route_spec_key_defaults_to_id() -> None:
-    assert RouteSpec(id="spike.a", family=RouteFamily.SPINE).key == "spike.a"
+    assert _row("spike.a", RouteGroup.SPINE).key == "spike.a"
 
 
 @pytest.mark.parametrize(
@@ -350,8 +359,8 @@ def test_kind_of_names_the_entity_kind(entity_id: str | None, expected: str) -> 
 def test_route_registry_matches_the_test_only_chassis() -> None:
     # parity holds only while both copies exist; the skip marks the chassis' removal
     theirs = pytest.importorskip(CHASSIS_REGISTRY, exc_type=ModuleNotFoundError)
-    columns = ("id", "key", "family", "subject_required", "palette_visible", "go_letter")
-    columns += ("step_leaf", "parent", "tab_owner", "via_leaf")
+    columns = ("id", "key", "group", "subject_required", "palette_visible", "go_letter")
+    columns += ("step_leaf", "escape", "tab_owner", "via_leaf")
     assert [tuple(getattr(s, c) for c in columns) for s in ROUTES] == [
         tuple(getattr(s, c) for c in columns) for s in theirs.ROUTES
     ]
@@ -359,7 +368,7 @@ def test_route_registry_matches_the_test_only_chassis() -> None:
     assert REGISTRY.route_list == theirs.ROUTE_LIST
     assert dict(REGISTRY.step_leaves) == theirs.STEP_LEAF
     assert dict(REGISTRY.via_leaves) == theirs.VIA_LEAF
-    assert dict(REGISTRY.parents) == theirs.PARENT_ROUTE
+    assert dict(REGISTRY.escapes) == theirs.PARENT_ROUTE
     assert dict(REGISTRY.tab_owners) == theirs.TAB_OWNER
     assert REGISTRY.overlay_routes == set(theirs.OVERLAY_ROUTES)
     for route in REGISTRY.ids:

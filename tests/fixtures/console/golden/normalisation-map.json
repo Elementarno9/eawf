@@ -10,7 +10,7 @@
       "rulings": ["S2-38", "S6-20"],
       "route_id": "timeline",
       "route_key": "roadmap",
-      "route_family": "planning"
+      "route_group": "planning"
     },
     {
       "entry": "onboarding header",
@@ -86,8 +86,8 @@
       "entry": "campaign step glyph",
       "pack": "► on a running step",
       "port": "⋯",
-      "golden_ids": ["route/campaign@*"],
-      "rulings": ["X-14"]
+      "golden_ids": ["route/campaign@*", "card/step-running@*", "J23"],
+      "rulings": ["X-14", "CON-167"]
     },
     {
       "entry": "window indicator",
@@ -135,8 +135,8 @@
       "entry": "absent deadline",
       "pack": "— on the notice row",
       "port": "due –; never-acted is the empty cell",
-      "golden_ids": ["route/attention@80"],
-      "rulings": ["X-14", "X-11"]
+      "golden_ids": ["route/attention@*", "conn/*/attention", "J3", "J4", "J5", "J25"],
+      "rulings": ["X-14", "X-11", "CON-166"]
     },
     {
       "entry": "notifications body",
@@ -153,7 +153,7 @@
       "rulings": ["CON-143"],
       "route_id": "notifications",
       "route_key": "notifications",
-      "route_family": "diagnostics"
+      "route_group": "diagnostics"
     },
     {
       "entry": "release golden",
@@ -180,7 +180,7 @@
       "entry": "unattended progress",
       "pack": "~ 62%; key table and keybar disagree; shown without of total",
       "port": "a named numerator with its marker; keybar from the key table; shown of total",
-      "golden_ids": ["route/unattended@*"],
+      "golden_ids": ["route/unattended@*", "J3", "J19"],
       "rulings": ["X-14"]
     },
     {
@@ -226,11 +226,46 @@
       "rulings": ["X-04", "S6-22", "S9-02"]
     },
     {
+      "entry": "quality prefix",
+      "pack": "a quality marker set apart from its numeral by a space: ~ 41.20, ≈ 4s, ~ 62%",
+      "port": "the marker against the numeral it qualifies, ~41.20, ≈4s, ~62%; the space moves into the column padding so no column shifts",
+      "golden_ids": ["route/cost.ceiling@*", "route/crash.recovery@*", "route/export@*", "route/history.diff@*", "route/trust@*", "route/unattended@*", "card/step-running@*", "J3", "J19"],
+      "rulings": ["CON-064"]
+    },
+    {
+      "entry": "verification time basis",
+      "pack": "the checking phase states a remaining time, ≈6m left",
+      "port": "the typical duration of the phase, typical ~6m, derived and never a countdown",
+      "golden_ids": ["J24"],
+      "rulings": ["CON-077"]
+    },
+    {
+      "entry": "error toast glyph",
+      "pack": "an error toast titled with the purged token, ✗ refused",
+      "port": "the error kind glyph, ! refused; a warning toast carries no glyph",
+      "golden_ids": ["toast/three@*", "toast/cap@*"],
+      "rulings": ["CON-167"]
+    },
+    {
       "entry": "byte-identical alias frames",
       "pack": "nineteen byte-identical groups over twenty redundant frames with nothing marking which is which, so a frame that records the wrong state passes as an alias",
       "port": "every byte-identical group names the id each member aliases and why, so an unmarked byte-identical pair fails the replay instead of passing as an alias",
       "golden_ids": ["pane/go@*", "timeline/marker@*", "conn/LIVE/*", "route/entry@*", "palette/top@*", "marker-card/inert@*", "card/artifact@160"],
       "rulings": ["S9-03", "S6-31"]
+    },
+    {
+      "entry": "acceptance evidence overlay",
+      "pack": "the milestone's receipts recorded as setup.overlay = evidence, crumbed evidence and drawn with a Claim's ladder state rows",
+      "port": "the acceptance evidence overlay, a second overlay over the sealed bundle: setup.overlay = acceptance, crumbed acceptance evidence, with no ladder rows",
+      "golden_ids": ["overlay/evidence@*"],
+      "rulings": ["CON-091"]
+    },
+    {
+      "entry": "cursor overlay foot",
+      "pack": "a cursor overlay draws its caret and names no row",
+      "port": "the row after the overlay's body names the row the cursor is on, of how many",
+      "golden_ids": ["overlay/evidence@*", "overlay/readiness@*", "overlay/draft@*"],
+      "rulings": ["CON-141"]
     }
   ]
 }

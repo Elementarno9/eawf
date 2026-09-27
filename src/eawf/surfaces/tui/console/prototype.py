@@ -53,7 +53,7 @@ STOPPED_RUNS: tuple[tuple[str, str, str], ...] = (
 EXPORT_RUN = RUN_PARENT
 EXPORT_PARTS: tuple[tuple[str, str, str, str], ...] = (
     ("timeline", "yes", "41,208 events", "Every event this Run recorded, in order."),
-    ("usage and cost", "yes", "~ 4.62 · derived", "Derived from the events, not from a bill."),
+    ("usage and cost", "yes", "~4.62 · derived", "Derived from the events, not from a bill."),
     ("transcript", "yes", "6,102 lines known", "What the runner said, quoted exactly."),
     ("secrets", "never", "∅ redacted by policy", "Policy redacts these; no export can carry them."),
     (
@@ -67,8 +67,8 @@ EXPORT_PARTS: tuple[tuple[str, str, str, str], ...] = (
 #: Unattended: the queue's Runs with their Task, state chip and progress, then the Run a
 #: queue request names.
 QUEUE: tuple[tuple[str, str, str, str, str], ...] = (
-    ("RUN-538453eb", "EAWF-0042", "ok", "RUNNING", "~ 62%"),
-    ("RUN-7b0e4d31", "EAWF-0044", "ok", "RUNNING", "~ 18%"),
+    ("RUN-538453eb", "EAWF-0042", "ok", "RUNNING", "~5 of 8 steps"),
+    ("RUN-7b0e4d31", "EAWF-0044", "ok", "RUNNING", "~2 of 11 steps"),
     ("RUN-1c93af08", "EAWF-0051", "info", "QUEUED", ""),
     ("RUN-4e2b6c77", "EAWF-0052", "info", "QUEUED", ""),
 )

@@ -30,6 +30,7 @@ from eawf.runtime.daemon.methods.domain import (
     DOMAIN_LIFECYCLE_PARAMS,
     LifecycleParams,
     MilestoneAcceptParams,
+    TaskCompleteParams,
 )
 
 #: Four levels up from this file lands on ``tests/``.
@@ -195,7 +196,7 @@ def test_the_base_params_refuse_the_approval_reference() -> None:
 
 def test_every_registered_verb_declares_a_params_model() -> None:
     assert tuple(DOMAIN_LIFECYCLE_PARAMS) == DOMAIN_LIFECYCLE_METHODS
-    assert set(DOMAIN_LIFECYCLE_PARAMS.values()) <= set(PARAMS_MODELS)
+    assert set(DOMAIN_LIFECYCLE_PARAMS.values()) <= {*PARAMS_MODELS, TaskCompleteParams}
 
 
 def test_only_milestone_accept_parses_through_the_approval_model() -> None:
@@ -206,3 +207,81 @@ def test_only_milestone_accept_parses_through_the_approval_model() -> None:
     ]
 
     assert approving == ["domain.milestone.accept"]
+
+
+TASK_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/task/EAWF-0042"
+
+
+def _assessment() -> dict[str, Any]:
+    """Return the smallest assessment the completion model admits."""
+    from tests.integration.runtime.daemon._delivery_verb_fixtures import completion_params
+
+    assessment: dict[str, Any] = completion_params()["assessment"]
+    return assessment
+
+
+def _complete(**overrides: Any) -> dict[str, Any]:
+    """Return a complete ``domain.task.complete`` payload with *overrides*."""
+    payload = _params(urn=TASK_URN, integrated_commit="a" * 40, assessment=_assessment())
+    payload.update(overrides)
+    return payload
+
+
+def test_only_task_complete_parses_through_the_completion_model() -> None:
+    completing = [
+        method for method, model in DOMAIN_LIFECYCLE_PARAMS.items() if model is TaskCompleteParams
+    ]
+
+    assert completing == ["domain.task.complete"]
+
+
+def test_complete_params_admit_a_full_request() -> None:
+    parsed = TaskCompleteParams.model_validate(_complete())
+
+    assert parsed.integrated_commit == "a" * 40
+    assert len(parsed.assessment.gates) == 2
+
+
+@pytest.mark.parametrize("missing", ["integrated_commit", "assessment"])
+def test_complete_params_require_the_commit_and_the_assessment(missing: str) -> None:
+    payload = _complete()
+    payload.pop(missing)
+
+    with pytest.raises(ValidationError, match=missing):
+        TaskCompleteParams.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "commit",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("a" * 39, id="one-short"),
+        pytest.param("z" * 40, id="not-hex"),
+        pytest.param(7, id="non-string"),
+    ],
+)
+def test_complete_params_reject_a_commit_that_is_not_a_sha(commit: Any) -> None:
+    with pytest.raises(ValidationError, match="integrated_commit"):
+        TaskCompleteParams.model_validate(_complete(integrated_commit=commit))
+
+
+def test_complete_params_reject_an_unknown_assessment_field() -> None:
+    assessment = _assessment()
+    assessment["integrated_binding"] = {}
+
+    with pytest.raises(ValidationError, match="integrated_binding"):
+        TaskCompleteParams.model_validate(_complete(assessment=assessment))
+
+
+def test_complete_params_reject_an_assessment_with_no_gate() -> None:
+    assessment = _assessment()
+    assessment["gates"] = []
+
+    with pytest.raises(ValidationError, match="gates"):
+        TaskCompleteParams.model_validate(_complete(assessment=assessment))
+
+
+def test_the_base_params_refuse_the_completion_fields() -> None:
+    """Only the completion verb names a commit; the others forbid the key."""
+    with pytest.raises(ValidationError, match="integrated_commit"):
+        LifecycleParams.model_validate(_params(integrated_commit="a" * 40))

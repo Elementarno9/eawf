@@ -71,6 +71,18 @@
       "fg": "#5ce8bb",
       "bg": "#0c0e11"
     },
+    "caret": {
+      "channel": "color",
+      "token": "accent",
+      "fg": "#16b384",
+      "bg": "#0c0e11"
+    },
+    "cursor": {
+      "channel": "background",
+      "token": "panel-2",
+      "fg": "#c2c9d1",
+      "bg": "#171c22"
+    },
     "ok": {
       "channel": "color",
       "token": "ok",

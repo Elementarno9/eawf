@@ -2,16 +2,34 @@
 
 A Run other than the fixture's own renders its record from the register or states the
 absence.
+
+The native frame draws one Run -- the session's subject, else the Run under the cursor --
+as the packet's labelled facts: its state, the Task it runs, its provider, its usage, its
+controls and its lineage, then its timeline. The register states the Run's status and its
+Task; every other fact belongs to a producer the console does not read yet, so it wears
+the unknown token with the reason rather than a blank. A Run whose lifecycle has ended
+says so, and offers no lifecycle verb.
 """
 
 from __future__ import annotations
 
+from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
+from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.renderers.spine import held, native_frame
+from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
+from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    counts,
+    label,
+    more,
+    native_head,
+    route_crumb,
+)
+from eawf.surfaces.tui.console.renderers.spine import finished_rows, finished_subject, held, restore
 from eawf.surfaces.tui.console.width import cell_len
 
 OWN = pt.OWN_RUN
@@ -52,6 +70,62 @@ def _facts(view: View, rid: str) -> str:
     return dv.subj_facts(fx, rid, facts) or "∅ provider and state unavailable"
 
 
+def _subject(view: View, spine: SpineView) -> SpineRow | None:
+    """Return the Run the frame is about: the session's subject, else the Run under the cursor."""
+    found = spine.index_of(view.session.subj_id)
+    if found is not None:
+        return spine.rows[found]
+    return spine.rows[restore(view.session, spine)] if spine.rows else None
+
+
+def native_frame(view: View, spine: SpineView) -> list[str]:
+    """Return the Run frame drawn from the read model the daemon served.
+
+    Args:
+        view: The render being built; its session names the Run.
+        spine: The Run register at the committed cursor.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    s, w = view.session, view.w
+    run = _subject(view, spine)
+    key = run.key if run is not None else "no run"
+    state = value_cell(run.field("status")).slot if run is not None else UNKNOWN_WORD
+    finished = finished_subject(s, spine)
+    top = native_head(
+        view,
+        spine,
+        crumb_text=route_crumb(spine, *([run.parent_key] if run and run.parent_key else []), key),
+        summary=f"Run {key} · {state} · {counts(spine)}",
+        attached_line=finished is None,
+    )
+    rows = list(top)
+    if finished is not None:
+        rows += [*finished_rows(s.route, finished), thin(w)]
+    if run is None:
+        rows.append(label("RUN", "∅ this scope holds no Run"))
+    else:
+        provider = value_cell(run.field("provider")).full
+        rows += [
+            label("STATE", state),
+            label("TASK", run.parent_key or f"{NO_VALUE} the Run states no Task"),
+            label("PROVIDER", provider),
+            label("USAGE", f"elapsed {UNKNOWN_WORD} · cost {UNKNOWN_WORD}"),
+            more("no usage producer feeds this frame yet"),
+            label("CONTROLS", "no control sent from this console"),
+            label("LINEAGE", f"attempt {UNKNOWN_WORD} · retries and forks are not read yet"),
+        ]
+    rows += [
+        thin(w),
+        tl_header(w),
+        f"   {UNKNOWN_WORD} · the Run's events are read on its transcript route",
+    ]
+    # a finished Run has no lifecycle left, so the lifecycle menu is not offered
+    keys = [e for e in native_keys(s.route) if finished is None or e != KEY["actions"]]
+    return build(view, rows, route_keys_bar(view, keys))
+
+
 def render(view: View) -> list[str]:
     """Return the Run frame, native when a read model is held.
 
@@ -81,8 +155,9 @@ def render(view: View) -> list[str]:
     rows.extend(
         [
             thin(w),
-            " USAGE     elapsed 18m 04s of 60m · ≈41m left · cost ~4.62 of 20.00",
-            "           tokens out 128,410 · peak rss ∅ probe uncertified",
+            " USAGE     elapsed 18m 04s of 60m · typical ~22m · tokens out 128,410",
+            "           cost ~4.62 of 20.00 · ≈15.38 left",
+            "           peak rss ∅ unavailable · probe uncertified",
             thin(w),
             " CONTROLS  no control outstanding · last confirmed 10:01:12",
             " LINEAGE   attempt 1 of 1 · no retry · no fork",

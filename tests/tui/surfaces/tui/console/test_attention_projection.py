@@ -177,7 +177,8 @@ def test_a_document_row_of_an_unwritten_register_is_not_drawn_as_a_count() -> No
 def test_the_attention_frame_shows_the_unknown_token_for_action_rows() -> None:
     """The frame prints the truth token where the action count would be, and says why."""
     rows, _session = _frame(_register(ATTENTION_ROUTE))
-    mine = next(row for row in rows if row.startswith(" MINE"))
+    mine = rows[1]
+    assert mine.startswith(" mine ")
     assert truth_cell("unknown") in mine
     assert "0" not in mine.split("·")[0]
     assert any(UNWRITTEN_REASON in row for row in rows)

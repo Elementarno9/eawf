@@ -22,6 +22,13 @@ The decision is filed under a key derived from the Batch, its pinned head
 and the outcome, so the same observation presented twice is one standing
 line rather than a growing pile of identical answers.
 
+``runtime.delivery.record_evidence``: file one observation an acceptance cites.
+
+An acceptance step and a sealed answer each cite ``EVD-####`` rows, and
+the evidence ledger is only ever read. This verb files one row under the
+next free key. Filing the same observation twice finds the standing row
+rather than a second one, so a retried request cites the same key.
+
 ``runtime.delivery.request_acceptance_repair``: the operator asked for changes.
 
 The verb reads the sealed PendingAction and the Milestone's bundle
@@ -50,12 +57,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eawf.kernel.delivery.acceptance import (
     AcceptanceBundleLedger,
     AcceptanceStepOutcome,
+    EvidenceRow,
     EvidenceView,
     MilestoneAcceptanceBundle,
 )
 from eawf.kernel.delivery.integration import IdempotencyKey
+from eawf.kernel.spec.common import EvidenceKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey
 from eawf.kernel.state.epoch2.batch import DeliveryBatch
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, BatchUrn, MilestoneUrn
@@ -92,6 +101,13 @@ logger = logging.getLogger(__name__)
 
 #: The verb that decides what a read-back of the target branch established.
 DELIVERY_RECONCILE_MERGE_METHOD: Final = "runtime.delivery.reconcile_merge"
+
+#: The verb that files one evidence row an acceptance may cite.
+DELIVERY_RECORD_EVIDENCE_METHOD: Final = "runtime.delivery.record_evidence"
+
+#: The evidence-ledger key prefix, and the status every filed row records.
+EVIDENCE_KEY_PREFIX: Final = "EVD-"
+EVIDENCE_STATUS: Final = "recorded"
 
 #: The verb that opens the successor revision a repair request earns.
 DELIVERY_ACCEPTANCE_REPAIR_METHOD: Final = "runtime.delivery.request_acceptance_repair"
@@ -346,6 +362,100 @@ async def _reconcile_merge(
     return answer.model_dump(mode="json")
 
 
+class RecordEvidenceParams(BaseModel):
+    """Params of :data:`DELIVERY_RECORD_EVIDENCE_METHOD`.
+
+    Attributes:
+        urn: The record the evidence is about; its container is the one the
+            evidence row is addressed under.
+        actor: Who asked.
+        idempotency_key: The client's name for this request.
+        kind: What kind of record the evidence is.
+        summary: What it shows, including the ids it points at.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    urn: AnyEntityUrn
+    actor: PrincipalKey
+    idempotency_key: IdempotencyKey
+    kind: EvidenceKind
+    summary: NonEmptyStr
+
+
+class RecordEvidenceAnswer(BaseModel):
+    """What one evidence filing answers with.
+
+    Attributes:
+        evidence_ref: The URN an acceptance step or answer cites.
+        created: Whether this call filed the row, rather than finding it.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    evidence_ref: str
+    created: bool
+
+
+def record_evidence(
+    context: Epoch2RootContext, args: RecordEvidenceParams, *, now: datetime
+) -> RecordEvidenceAnswer:
+    """File one evidence row under the next free ``EVD-####``.
+
+    Args:
+        context: The native context of the tree the evidence belongs to.
+        args: The validated request.
+        now: When it was recorded.
+
+    Returns:
+        The row's URN, and whether this call filed it.
+
+    Raises:
+        DaemonValidationError: The evidence ledger does not read back.
+    """
+    container = str(args.urn).rsplit("/", 2)[0]
+    with context.session([str(args.urn)]) as session:
+        view = _read_evidence(session.ledger_path(Epoch2Collection.EVIDENCE))
+        standing = next(
+            (row for row in view.rows if (row.kind, row.summary) == (args.kind, args.summary)),
+            None,
+        )
+        if standing is not None:
+            return RecordEvidenceAnswer(
+                evidence_ref=f"{container}/evidence/{standing.id}", created=False
+            )
+        ordinal = max((int(key.removeprefix(EVIDENCE_KEY_PREFIX)) for key in view.keys), default=0)
+        row = EvidenceRow(
+            id=f"{EVIDENCE_KEY_PREFIX}{ordinal + 1:04d}",
+            kind=args.kind,
+            summary=args.summary,
+            recorded_at=now,
+        )
+        commit_ledger_append(
+            session,
+            LedgerRecord(
+                collection=Epoch2Collection.EVIDENCE,
+                record_key=row.id,
+                status=EVIDENCE_STATUS,
+                recorded_at=now,
+                payload=row.model_dump(mode="json"),
+            ),
+        )
+    logger.info(f"record_evidence key={row.id} kind={args.kind}")
+    return RecordEvidenceAnswer(evidence_ref=f"{container}/evidence/{row.id}", created=True)
+
+
+@native_mutator(DELIVERY_RECORD_EVIDENCE_METHOD)
+async def _record_evidence(
+    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
+) -> dict[str, Any]:
+    """File one evidence row an acceptance may cite."""
+    args = _validated(RecordEvidenceParams, params)
+    context = ctx.native_root_context(authority.root)
+    answer = await asyncio.to_thread(record_evidence, context, args, now=datetime.now(UTC))
+    return answer.model_dump(mode="json")
+
+
 def _bundle_record_key(milestone_ref: MilestoneUrn, revision: int) -> str:
     """Return the Milestone-ledger key one bundle revision is filed under."""
     return f"{BUNDLE_KEY_PREFIX}{revision:04d}-{milestone_ref.entity_key}"
@@ -516,11 +626,16 @@ __all__ = [
     "BUNDLE_KEY_PREFIX",
     "DELIVERY_ACCEPTANCE_REPAIR_METHOD",
     "DELIVERY_RECONCILE_MERGE_METHOD",
+    "DELIVERY_RECORD_EVIDENCE_METHOD",
+    "EVIDENCE_KEY_PREFIX",
     "RECONCILIATION_UNRESOLVED",
     "AcceptanceRepairAnswer",
     "AcceptanceRepairParams",
     "MergeReconcileAnswer",
     "MergeReconcileParams",
+    "RecordEvidenceAnswer",
+    "RecordEvidenceParams",
     "open_acceptance_repair",
     "reconcile_batch_merge",
+    "record_evidence",
 ]

@@ -104,14 +104,20 @@ Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when pres
 
 ### `eawf batch`
 
-Delivery-batch lifecycle (activate, ready).
+Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, reconcile, observe-merge, complete).
 
 | Verb | Summary |
 |---|---|
 | `activate` | Move a PLANNED delivery Batch to ACTIVE. |
+| `adopt-landed` | Adopt work that already landed on the Batch's target branch. |
 | `close-legacy` | Complete an imported ACTIVE Batch (iter) once every Task in it is terminal. |
+| `complete` | Complete a merged Batch whose landed commit matches the head it pinned. |
 | `create` | Admit a new delivery Batch's create document into the addressed tree. |
+| `integrate` | Integrate a Batch's sealed candidates into its next generation. |
+| `merge` | Authorise the merge of a READY_TO_MERGE Batch at the head it pinned. |
+| `observe-merge` | Record that the host landed a MERGING Batch, on a filed landed read-back. |
 | `ready` | Declare an ACTIVE Batch ready to merge. |
+| `reconcile` | File what a read-back of a MERGING Batch's target branch found. |
 
 ### `eawf bench`
 
@@ -404,7 +410,7 @@ Migrate state.json across schema versions (v1.0 -> v1.1 chain).
 
 ### `eawf milestone`
 
-Milestone lifecycle (activate, open-review, accept, cancel).
+Milestone lifecycle (activate, open-review, open-approval, accept, cancel).
 
 | Verb | Summary |
 |---|---|
@@ -414,6 +420,7 @@ Milestone lifecycle (activate, open-review, accept, cancel).
 | `cancel-legacy` | Cancel an imported PLANNED Milestone against a recorded decision or artifact. |
 | `close-legacy` | Complete an imported ACTIVE Milestone (phase) against a recorded audit. |
 | `create` | Admit a new Milestone's create document into the addressed tree. |
+| `open-approval` | Ask the operator to accept a Milestone in review on its acceptance bundle. |
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
 | `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
 
@@ -503,6 +510,7 @@ Append audit, decision and artifact records to an epoch-2 tree.
 | Verb | Summary |
 |---|---|
 | `append` | Append one audit, decision or artifact to the generation's ledger. |
+| `evidence` | File one evidence row an acceptance step or answer may cite. |
 
 ### `eawf release`
 
@@ -582,6 +590,17 @@ Read the rule views rendered from .ea/rules.yaml.
 |---|---|
 | `view` | Print the detailed view of one selected rule module. |
 
+### `eawf run`
+
+Run lifecycle (create, start, finish, fail).
+
+| Verb | Summary |
+|---|---|
+| `create` | Admit a QUEUED Run against the scope its create document names. |
+| `fail` | Fail a RUNNING Run; the payload carries the reason, ended_at and failure. |
+| `finish` | Complete a RUNNING Run once its report is bound; updates carry ended_at. |
+| `start` | Start a QUEUED Run; the payload's updates carry started_at. |
+
 ### `eawf schema`
 
 Dump JSON Schema + reference pages for the canonical models.
@@ -658,13 +677,19 @@ JSONL store maintenance (compact, ...).
 
 ### `eawf task`
 
-Task lifecycle (promote, start).
+Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, complete).
 
 | Verb | Summary |
 |---|---|
 | `advance-legacy` | Move an imported Task (wave or backlog row) along the legacy edge table. |
+| `assess` | Judge a Task for completion and print the document task complete needs. |
+| `claim` | Claim a PLANNED Task for the actor that will run it. |
+| `complete` | Complete a Task on the Batch head its passing assessment proves. |
 | `create` | Admit a new Task's create document into the addressed tree. |
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
+| `prove` | Run a Task's gates at the generation each leg binds and file the receipts. |
+| `ready` | Declare a RUNNING Task ready to integrate on its bound report and evidence. |
+| `seal` | Bind a Run's accepted report to its candidate and attempt the seal. |
 | `start` | Start a CLAIMED Task under the Run the payload binds it to. |
 | `submit` | File one Run's claim that its leased workspace is ready to integrate. |
 

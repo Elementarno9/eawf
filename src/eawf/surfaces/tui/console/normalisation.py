@@ -10,7 +10,7 @@ failure. An entry the port has not realised yet rewrites nothing, and the pack's
 compared as recorded.
 
 Two entries also carry a classification correction that the route registry binds, so the
-map is the one place a corrected route key or family is written.
+map is the one place a corrected route key or route group is written.
 """
 
 from __future__ import annotations
@@ -26,7 +26,8 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from eawf.surfaces.tui.console.keybar import KEY, Pair, keybar
 from eawf.surfaces.tui.console.keymap import ATTACH_LATER
-from eawf.surfaces.tui.console.tokens import CONNECTION
+from eawf.surfaces.tui.console.session import SessionSetup
+from eawf.surfaces.tui.console.tokens import CONNECTION, RULE_THIN
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 
@@ -42,7 +43,7 @@ class NormalisationEntry(BaseModel):
         route_id: The pack route id this entry reclassifies, for a classification
             correction.
         route_key: The port's canonical key for ``route_id``.
-        route_family: The port's family for ``route_id``.
+        route_group: The port's route group for ``route_id``.
 
     Raises:
         pydantic.ValidationError: a field is unknown, the entry names no golden id or no
@@ -58,7 +59,7 @@ class NormalisationEntry(BaseModel):
     rulings: tuple[str, ...]
     route_id: str | None = None
     route_key: str | None = None
-    route_family: str | None = None
+    route_group: str | None = None
 
     @model_validator(mode="after")
     def _check(self) -> NormalisationEntry:
@@ -67,11 +68,11 @@ class NormalisationEntry(BaseModel):
             raise ValueError(f"entry {self.entry!r} names no golden id")
         if not self.rulings:
             raise ValueError(f"entry {self.entry!r} names no ruling")
-        parts = (self.route_id, self.route_key, self.route_family)
+        parts = (self.route_id, self.route_key, self.route_group)
         if any(p is not None for p in parts) and not all(p is not None for p in parts):
             raise ValueError(
                 f"entry {self.entry!r} is a half-written route correction: "
-                "route_id, route_key and route_family stand or fall together"
+                "route_id, route_key and route_group stand or fall together"
             )
         return self
 
@@ -81,12 +82,12 @@ class NormalisationEntry(BaseModel):
 
 
 class RouteCorrection(BaseModel):
-    """The port's key and family for one pack route id."""
+    """The port's key and route group for one pack route id."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     key: str
-    family: str
+    group: str
 
 
 class NormalisationMap(BaseModel):
@@ -117,9 +118,9 @@ class NormalisationMap(BaseModel):
     def route_corrections(self) -> dict[str, RouteCorrection]:
         """Return the classification correction per pack route id."""
         return {
-            e.route_id: RouteCorrection(key=e.route_key, family=e.route_family)
+            e.route_id: RouteCorrection(key=e.route_key, group=e.route_group)
             for e in self.entries
-            if e.route_id is not None and e.route_key is not None and e.route_family is not None
+            if e.route_id is not None and e.route_key is not None and e.route_group is not None
         }
 
     def by_name(self, name: str) -> NormalisationEntry:
@@ -190,11 +191,14 @@ class Rewrite:
         rows: Turns the pack's rows into the port's rows.
         keys: Keys the pack pressed that the port has no binding for; the replay performs
             them as harness actions instead of keystrokes, for the entry's ids only.
+        overlays: Overlays the pack's setup names that the port opens under another
+            name, pack name to port name, for the entry's ids only.
     """
 
     entry: str
     rows: RowsRewrite | None = None
     keys: frozenset[str] = field(default_factory=frozenset)
+    overlays: Mapping[str, str] = field(default_factory=dict)
 
 
 _GAP = "   "
@@ -340,6 +344,151 @@ def _unslashed_keys(frame: PackFrame) -> list[str]:
     return _renamed_pairs(frame, {"↑/↓": "↑↓", "J/K": "J K"})
 
 
+# A quality marker the pack sets apart from its numeral, and the numeral it qualifies.
+_SPACED_MARKER = re.compile(r"(?<![\w.])(?P<marker>[~≈]) (?P<numeral>\d[\d,.]*(?:%|[a-z]+\b)?)")
+
+
+def _joined_marker(row: str) -> str:
+    """Return ``row`` with each quality marker against its numeral, every column kept.
+
+    The space the marker loses is given back at the next run of padding, so a value in a
+    padded column keeps the next column where it was and a trailing value keeps the row
+    its width.
+    """
+    found = _SPACED_MARKER.search(row)
+    while found is not None:
+        joined = found.group("marker") + found.group("numeral")
+        row = row[: found.start()] + joined + row[found.end() :]
+        end = found.start() + len(joined)
+        gap = row.find("  ", end)
+        row = row[:gap] + " " + row[gap:] if gap >= 0 else row + " "
+        found = _SPACED_MARKER.search(row, end)
+    return row
+
+
+def _quality_prefix(frame: PackFrame) -> list[str]:
+    """Set every quality marker against the numeral it qualifies, with no space between."""
+    return [_joined_marker(row) for row in frame.rows]
+
+
+# The pack's bare queue percentages and the named numerators the port's queue states.
+_QUEUE_PROGRESS: Mapping[str, str] = {"~62%": "~5 of 8 steps", "~18%": "~2 of 11 steps"}
+_QUEUE_ROW = re.compile(r"RUNNING\s+(?P<progress>~\d+%)\s*$")
+
+
+def _named_progress(frame: PackFrame) -> list[str]:
+    """Replace a queue row's bare percentage with the named numerator the port renders."""
+    rows = list(frame.rows)
+    for i, row in enumerate(rows):
+        found = _QUEUE_ROW.search(row)
+        if found is not None and found.group("progress") in _QUEUE_PROGRESS:
+            named = _QUEUE_PROGRESS[found.group("progress")]
+            rows[i] = pad(row[: found.start("progress")] + named, frame.w)
+    return rows
+
+
+_REMAINING_CHECK = "≈6m left"
+_TYPICAL_CHECK = "typical ~6m"
+
+
+def _typical_not_remaining(frame: PackFrame) -> list[str]:
+    """Replace the checking phase's remaining time with the typical duration of the phase."""
+    return [
+        pad(row.replace(_REMAINING_CHECK, _TYPICAL_CHECK).rstrip(), frame.w)
+        if _REMAINING_CHECK in row
+        else row
+        for row in frame.rows
+    ]
+
+
+_REPLAYING = "► "
+_RUNNING = "⋯ "
+
+
+def _running_step(frame: PackFrame) -> list[str]:
+    """Draw a running campaign step with the running mark; ``►`` belongs to the state slot."""
+    head, *body = frame.rows
+    return [head, *(row.replace(_REPLAYING, _RUNNING) for row in body)]
+
+
+# The notice row's em dash and the four spaces the declared no-value phrase takes from it.
+_NOTICE_DUE = re.compile(r"(?<=OPEN {6})— {4}")
+_NO_DEADLINE = "due –"  # noqa: RUF001
+
+
+def _absent_deadline(frame: PackFrame) -> list[str]:
+    """Write a notice row's absent deadline the way every other row writes its no-value."""
+    return [_NOTICE_DUE.sub(_NO_DEADLINE, row) for row in frame.rows]
+
+
+_PURGED_TITLE = "┌─ ✗ "
+_ERROR_TITLE = "┌─ ! "
+
+
+def _error_toast(frame: PackFrame) -> list[str]:
+    """Lead an error toast's title with the error kind's ``!`` instead of the purged token."""
+    return [row.replace(_PURGED_TITLE, _ERROR_TITLE) for row in frame.rows]
+
+
+# The row a pack overlay splices its state model into, just above its keybar.
+_STATE_ROW = re.compile(r"^ (?:STATE      |ENDS WHEN  |IMPOSSIBLE )")
+_PACK_EVIDENCE = " Eä ▸ evidence · "
+_PORT_ACCEPTANCE = " Eä ▸ acceptance evidence · "
+
+
+def _recrumb(row: str, old: str, new: str) -> str:
+    """Return header ``row`` with crumb ``old`` renamed ``new``, the right side kept in place."""
+    grown = row.replace(old, new, 1)
+    extra = cell_len(grown) - cell_len(row)
+    gap = grown.find(" " * (extra + 2), len(new))
+    return grown[:gap] + grown[gap + extra :] if gap >= 0 else pad(grown, cell_len(row))
+
+
+def _acceptance_evidence(frame: PackFrame) -> list[str]:
+    """Name the milestone's evidence as the acceptance evidence overlay, with no claim ladder.
+
+    The ladder's state rows are a Claim's, so the bundle's own overlay does not draw them.
+    """
+    rows = list(frame.rows)
+    rows[0] = _recrumb(rows[0], _PACK_EVIDENCE, _PORT_ACCEPTANCE)
+    return [" " * frame.w if _STATE_ROW.match(row) else row for row in rows]
+
+
+# Each cursor overlay the pack recorded: its ids, its table's head and what its foot calls
+# one of the rows the cursor walks.
+_CURSOR_TABLES: tuple[tuple[str, str, str], ...] = (
+    ("overlay/evidence@*", "EVIDENCE   RECEIPT", "RECEIPT"),
+    ("overlay/readiness@*", "READINESS SIGNAL", "SIGNAL"),
+    ("overlay/draft@*", "WHAT IT ANSWERS", "FIELD"),
+)
+_FOOT_LABEL = 9
+
+
+def _cursor_foot(frame: PackFrame) -> list[str]:
+    """Name the row a cursor overlay's cursor is on, of how many, in the row after its body.
+
+    Raises:
+        StopIteration: the frame is none of the cursor overlays, or it draws no cursor.
+    """
+    rows = list(frame.rows)
+    head, label = next(
+        (head, label)
+        for pattern, head, label in _CURSOR_TABLES
+        if fnmatch.fnmatchcase(frame.contract_id, pattern)
+    )
+    at = next(i for i, row in enumerate(rows) if head in row)
+    table: list[str] = []
+    for row in rows[at + 1 :]:
+        if row.startswith(RULE_THIN):
+            break
+        table.append(row)
+    n = next(i for i, row in enumerate(table) if "▸" in row) + 1
+    body = range(1, len(rows) - 1)
+    last = max(i for i in body if rows[i].strip() and not _STATE_ROW.match(rows[i]))
+    rows[last + 1] = pad(f" {pad(label, _FOOT_LABEL)} {n} of {len(table)}", frame.w)
+    return rows
+
+
 REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="entry simulator pair", rows=_entry_without_simulator, keys=frozenset("[]")),
     Rewrite(entry="help simulator row", rows=_help_without_simulator, keys=frozenset("w")),
@@ -347,6 +496,18 @@ REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="window indicator", rows=_edge_markers),
     Rewrite(entry="activity keybar and rail", rows=_full_page_keys),
     Rewrite(entry="settings editor keybar", rows=_unslashed_keys),
+    Rewrite(entry="quality prefix", rows=_quality_prefix),
+    Rewrite(entry="unattended progress", rows=_named_progress),
+    Rewrite(entry="verification time basis", rows=_typical_not_remaining),
+    Rewrite(entry="campaign step glyph", rows=_running_step),
+    Rewrite(entry="absent deadline", rows=_absent_deadline),
+    Rewrite(entry="error toast glyph", rows=_error_toast),
+    Rewrite(
+        entry="acceptance evidence overlay",
+        rows=_acceptance_evidence,
+        overlays={"evidence": "acceptance"},
+    ),
+    Rewrite(entry="cursor overlay foot", rows=_cursor_foot),
 )
 
 
@@ -420,6 +581,14 @@ class Normaliser:
             if entry.selects(contract_id):
                 keys |= rewrite.keys
         return frozenset(keys)
+
+    def setup(self, contract_id: str, setup: SessionSetup) -> SessionSetup:
+        """Return the setup the port replays for ``contract_id``: its overlay renamed as mapped."""
+        overlay = setup.overlay
+        for entry, rewrite in self._rewrites:
+            if overlay is not None and overlay in rewrite.overlays and entry.selects(contract_id):
+                overlay = rewrite.overlays[overlay]
+        return setup if overlay == setup.overlay else setup.model_copy(update={"overlay": overlay})
 
     def expected(self, contract_id: str, frame: str) -> str:
         """Return the port's expected frame: the pack frame through each rewrite selecting it."""

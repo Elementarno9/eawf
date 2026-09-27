@@ -2,12 +2,20 @@
 
 The counts derive from the action register and stay fleet-wide whatever the bucket filter
 shows.
+
+The native frame draws the same shape from the Attention register: the ``mine`` and
+fleet-wide counts under the crumb, the actions grouped by the status they state, and the
+buckets as a strip at 80 columns and the route's declared rail wider. A register nothing
+writes yet states no count at all, so both counts and the list say so rather than drawing
+an empty register as ``nothing needs you``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 
+from eawf.kernel.projection.registers import UNWRITTEN_REASON, RegisterView, attention_mine
+from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.attention import (
     NEEDS,
@@ -19,7 +27,9 @@ from eawf.surfaces.tui.console.attention import (
     top_bucket,
     verbs_for,
 )
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Action
+from eawf.surfaces.tui.console.format import group as group_n
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
@@ -29,10 +39,20 @@ from eawf.surfaces.tui.console.frame import (
     header,
     route_keys_bar,
     thin,
+    window_rows,
 )
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry
-from eawf.surfaces.tui.console.reads import attn_cell, can_mutate, prototype_attached, reads
-from eawf.surfaces.tui.console.renderers.registers import native_frame
+from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.reads import can_mutate, prototype_attached, reads
+from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.renderers.activity import beside, bucket_items, rail_lines
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    counts,
+    native_head,
+    route_crumb,
+)
+from eawf.surfaces.tui.console.renderers.registers import UNWRITTEN_ROW, restore
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 RAIL_W = 29
@@ -139,6 +159,71 @@ def _keys(view: View, shown: Sequence[Action]) -> list[KeyEntry]:
     return [KEY["up"], KEY["tab"], KEY["actions"], escape]
 
 
+def counts_line(register: RegisterView) -> str:
+    """Return the line under the crumb: this principal's count, the fleet-wide count.
+
+    Both counts are the one Attention register's, which the header's ``!N`` also reads, so
+    none of the three can disagree; a register nothing writes states neither.
+    """
+    mine = attention_mine(register)
+    if mine.state is not TruthState.KNOWN or mine.value is None:
+        return f"mine {UNKNOWN_WORD} · fleet-wide {UNKNOWN_WORD} · nothing here opened itself"
+    n = group_n(int(mine.value))
+    return f"{n} mine · {group_n(len(register.rows))} fleet-wide · nothing here opened itself"
+
+
+def native_frame(view: View, register: RegisterView) -> list[str]:
+    """Return the Attention frame drawn from the register the daemon served.
+
+    Args:
+        view: The render being built.
+        register: The Attention register at the committed cursor.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    s, w = view.session, view.w
+    cursor = restore(s, register)
+    wide = REGISTRY.rail_at(s.route, w) is not None
+    col = w - RAIL_W - 1 if wide else w
+    top = native_head(
+        view,
+        register,
+        crumb_text=route_crumb(register, "Needs you"),
+        summary=f"{counts_line(register)} · {counts(register)}",
+    )
+    if not wide:
+        top.append(dv.strip_row(s, bucket_items(register), w))
+    table = Table([9, max(30, col - 32), 10, 0], 2)
+    body: list[str] = []
+    if register.withheld:
+        body.append(f" ACTIONS    {UNKNOWN_WORD} · {UNWRITTEN_REASON}")
+    elif not register.rows:
+        body.append("   nothing in this bucket needs you")
+    win = window_rows(view, total=len(register.rows), cursor=cursor, chrome=len(top) + 4)
+    last: str | None = None
+    for index in range(win.start, win.stop):
+        row = register.rows[index]
+        status = value_cell(row.status).slot
+        if status != last:
+            body.append(f" {status}  {register.status_counts().get(status, 0)}")
+            last = status
+        body.append(
+            table.row([row.key, row.title or row.urn, status, UNKNOWN_WORD], index == cursor)
+        )
+    if wide:
+        body = beside(body, rail_lines(register), col, w)
+    rows = [*top, *body]
+    if register.withheld:
+        rows += [
+            thin(w),
+            UNWRITTEN_ROW
+            + " "
+            + " · ".join(f"{name} {UNKNOWN_WORD}" for name in register.withheld),
+        ]
+    return build(view, rows, route_keys_bar(view, native_keys(s.route)))
+
+
 def render(view: View) -> list[str]:
     """Return the Attention frame."""
     if view.register is not None:
@@ -149,14 +234,14 @@ def render(view: View) -> list[str]:
     shown = attn_list(s, fx)
     head = [
         header(view, f" Eä ▸ {fx.proto.scope} ▸ Needs you"),
-        f" {attn_cell(s, n)} mine · {attn_cell(s, n)}"
+        f" {n} mine · {n}"
         + (" fleet-wide" if rd.complete else " known")
         + " · nothing here opened itself",
         bar(w),
     ]
     if not rd.complete:
         head.extend([f" ATTACHED  {prototype_attached(rd, fx)}", thin(w)])
-    wide = w >= 120
+    wide = REGISTRY.rail_at("attention", w) is not None
     col = w - RAIL_W - 1
     bw = col if wide else w
     items = _items(view)

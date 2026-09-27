@@ -1,4 +1,7 @@
-"""Integrating a Batch, judging a Task on the result, and verifying the Batch.
+"""Integrating a Batch and verifying the result.
+
+Judging a Task on the result lives in
+:mod:`eawf.runtime.daemon.methods.delivery_completion`.
 
 ``runtime.delivery.integrate``: one Batch's sealed work, one delivery.
 
@@ -24,21 +27,6 @@ its submission pinned, so the daemon reproduces the worker's tree from
 its own ref rather than from anything the caller names. Which workspace
 a call gets is decided by :data:`INTEGRATION_WORKSPACE_FACTORY`, per
 call and per root, because the repository it runs in is the root's.
-
-``runtime.delivery.assess_completion``: whether one Task is finished.
-
-The verb reads the durable half from the tree -- the Task, whether any of
-its candidates sealed, and the Batch's generation history -- and is handed
-the half no native record holds: the gates its criteria reference, the
-proof receipts taken for them, and the runner and environment those
-proofs ran under. No native record holds a proof receipt yet, so
-presenting them is the only way to ask the question at all; a presented
-receipt buys nothing unless its freshness key is the one the decision
-computes from the ledger, which the caller does not get to choose.
-
-It answers and does not move the Task. Performing the move belongs to the
-lifecycle machine, which has no Task completion verb yet, so this is the
-proof edge that verb will consult rather than a second way to write one.
 
 ``runtime.delivery.verify_batch``: whether the Batch may be merged.
 
@@ -87,15 +75,13 @@ from eawf.kernel.delivery.integration import (
     IntegrationGeneration,
     IntegrationGenerationLedger,
 )
-from eawf.kernel.delivery.receipts import ProofReceipt, RevisionBinding, canonical_digest
+from eawf.kernel.delivery.receipts import RevisionBinding, canonical_digest
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.candidate import CandidateBundle, CandidateId
-from eawf.kernel.spec.common import GateSpec
-from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import BranchName, PrincipalKey, StrictNonNegativeInt
 from eawf.kernel.state.epoch2.task import Task
-from eawf.kernel.state.epoch2.urns import AnyEntityUrn, BatchUrn, EvidenceUrn, TaskUrn
+from eawf.kernel.state.epoch2.urns import AnyEntityUrn, BatchUrn, EvidenceUrn
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.kinds.gate_receipt import GateIdentityStr
 from eawf.kernel.store.ledger import (
@@ -126,17 +112,9 @@ from eawf.runtime.integration.recovery import (
     plan_deliveries,
 )
 from eawf.runtime.vcs.coauthor import VcsConfig
-from eawf.runtime.verification.receipts import ProofRuntimeFacts
 from eawf.workflow.delivery.completion import (
     CompletionRefusal,
     CompletionRefusedError,
-    decide_task_completion,
-)
-from eawf.workflow.delivery.criteria import (
-    CriteriaAuthoring,
-    CriteriaAuthoringError,
-    ExecutionContractSet,
-    compile_execution_contracts,
 )
 from eawf.workflow.delivery.verification_cycle import (
     BatchVerificationDecision,
@@ -152,9 +130,6 @@ logger = logging.getLogger(__name__)
 
 #: The verb that turns a Batch's sealed candidates into one delivery.
 DELIVERY_INTEGRATE_METHOD: Final = "runtime.delivery.integrate"
-
-#: The verb that judges whether one Task is finished on the Batch head.
-DELIVERY_ASSESS_COMPLETION_METHOD: Final = "runtime.delivery.assess_completion"
 
 #: The verb that walks one Batch's verification cycle on its exact head.
 DELIVERY_VERIFY_BATCH_METHOD: Final = "runtime.delivery.verify_batch"
@@ -282,7 +257,7 @@ def _vcs_config(tree_root: Path) -> VcsConfig:
     return VcsConfig.model_validate(merged.get("vcs", {}))
 
 
-def _tasks(session: RootSession) -> tuple[Task, ...]:
+def stored_tasks(session: RootSession) -> tuple[Task, ...]:
     """Return every Task the tree holds, from both storage tiers.
 
     A Task that has terminated is compacted out of the document into the
@@ -293,8 +268,12 @@ def _tasks(session: RootSession) -> tuple[Task, ...]:
     rows = document_rows(session.read_document(), Epoch2Collection.TASK)
     lines = read_ledger_records(session.ledger_path(Epoch2Collection.TASK))
     payloads = [*rows.values(), *(item.payload for item in effective_records(lines))]
+    # A row the cutover imported names no URN: it wraps the epoch-1 record
+    # and moves only along the legacy continuation, never through delivery.
     return tuple(
-        Task.model_validate(payload) for payload in payloads if "payload_kind" not in payload
+        Task.model_validate(payload)
+        for payload in payloads
+        if "payload_kind" not in payload and "urn" in payload
     )
 
 
@@ -302,7 +281,7 @@ def _batch_of_task(session: RootSession) -> Mapping[str, str]:
     """Return which Batch each Task is placed in, by Task key."""
     return {
         task.urn.entity_key: str(task.batch_ref)
-        for task in _tasks(session)
+        for task in stored_tasks(session)
         if task.batch_ref is not None
     }
 
@@ -390,7 +369,7 @@ class _LedgerGenerationStore:
     def read(self) -> IntegrationGenerationLedger:
         """Return the Batch's generation history as the ledger holds it."""
         ledger = self._session().ledger_path(Epoch2Collection.BATCH)
-        return _read_generation_ledger(ledger, self._batch_ref)
+        return read_generation_ledger(ledger, self._batch_ref)
 
     def write(self, ledger: IntegrationGenerationLedger) -> None:
         """Append the new head; the lines already written are history."""
@@ -399,7 +378,7 @@ class _LedgerGenerationStore:
         _append_generation(self._session(), head)
 
 
-def _read_generation_ledger(path: Path, batch_ref: BatchUrn) -> IntegrationGenerationLedger:
+def read_generation_ledger(path: Path, batch_ref: BatchUrn) -> IntegrationGenerationLedger:
     """Return one Batch's generation history from the Batch ledger.
 
     The selection flag is taken from position rather than from the line:
@@ -715,228 +694,6 @@ def _integrate_in_workspace(
         return integrate_delivery(context, args, workspace=workspace, now=datetime.now(UTC))
 
 
-class TaskCompletionParams(BaseModel):
-    """Params of :data:`DELIVERY_ASSESS_COMPLETION_METHOD`.
-
-    Attributes:
-        urn: The Task being judged.
-        actor: Who asked.
-        idempotency_key: The client's name for this request.
-        base: The revision the Batch starts from, which is the ordinal no
-            integration produced.
-        report_verdict: The verdict the Run's terminal report carried.
-        gates: The gates the Task's criteria reference. Named by the
-            caller because a Task record carries its criteria and not the
-            gates they are proved by.
-        receipts: The proof receipts held for the Task. Presented rather
-            than read because no native record holds one yet; a receipt
-            counts only where its freshness key is the one the decision
-            derives from the ledger.
-        proof_facts: The runner, environment, selector and policy those
-            proofs ran under.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    urn: TaskUrn
-    actor: PrincipalKey
-    idempotency_key: IdempotencyKey
-    base: RevisionBinding
-    report_verdict: AgentReportVerdict
-    gates: tuple[GateSpec, ...] = Field(min_length=1)
-    receipts: tuple[ProofReceipt, ...] = ()
-    proof_facts: ProofRuntimeFacts
-
-
-class TaskCompletionAnswer(BaseModel):
-    """What one completion assessment answers with.
-
-    Attributes:
-        task_ref: The Task that was judged.
-        batch_ref: The Batch it is being completed on.
-        head_generation: The ordinal that is the Batch head.
-        delivering_generation: The ordinal whose work carried this Task.
-        affected_criterion_ids: The criteria the integrations since that
-            generation invalidated.
-        rerun_gate_ids: The gates that must run again at the head.
-        reused_gate_ids: The gates a fresh receipt already answers.
-        unavailable_gate_ids: The judgment gates this path cannot settle.
-        completable: Whether every required leg is already proved.
-        reason: One sentence an operator reads.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    task_ref: str
-    batch_ref: str
-    head_generation: int
-    delivering_generation: int
-    affected_criterion_ids: tuple[str, ...] = ()
-    rerun_gate_ids: tuple[str, ...] = ()
-    reused_gate_ids: tuple[str, ...] = ()
-    unavailable_gate_ids: tuple[str, ...] = ()
-    completable: bool
-    reason: str
-
-
-def _completion_params(params: dict[str, Any]) -> TaskCompletionParams:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return TaskCompletionParams.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
-
-
-def _task_of(session: RootSession, urn: TaskUrn) -> Task:
-    """Return the Task *urn* names, from whichever tier holds it.
-
-    Raises:
-        DaemonValidationError: No Task of that key lives in this tree.
-    """
-    wanted = str(urn)
-    for task in _tasks(session):
-        if str(task.urn) == wanted:
-            return task
-    raise DaemonValidationError(
-        f"validation_failed: task_absent: no task {urn.entity_key} lives in this tree"
-    )
-
-
-def _sealed_bundle(records: Sequence[LedgerRecord], *, task_ref: TaskUrn) -> CandidateBundle | None:
-    """Return the sealed candidate of *task_ref*, or ``None`` when none sealed.
-
-    A candidate's identity is derived from its Task and the tree it
-    produced, so a Task that resubmitted the same tree has one bundle
-    however many Runs produced it. Where two trees did seal, the newest
-    line is the one the Batch integrated.
-
-    Raises:
-        ValidationError: A line claims to be a bundle and does not
-            validate as one, which means the ledger is corrupt.
-    """
-    wanted = str(task_ref)
-    sealed = [
-        bundle
-        for item in records
-        if item.payload.get("payload_kind") == "candidate_bundle"
-        and str((bundle := CandidateBundle.model_validate(item.payload)).task_ref) == wanted
-    ]
-    return sealed[-1] if sealed else None
-
-
-def _contracts(task: Task, gates: Sequence[GateSpec]) -> ExecutionContractSet:
-    """Compile the Task's own criteria against the gates the request names.
-
-    Raises:
-        DaemonValidationError: The criteria and gates do not clear the
-            authoring floor, so nothing could be proved about them.
-    """
-    try:
-        return compile_execution_contracts(
-            CriteriaAuthoring(
-                scope_id=task.urn.entity_key, criteria=task.criteria, gates=tuple(gates)
-            )
-        )
-    except CriteriaAuthoringError as error:
-        raise _refused(
-            CompletionRefusal.CRITERIA_UNCOVERED,
-            f"the criteria of task {task.urn.entity_key} and the gates named for them do not "
-            f"compile: {error}",
-        ) from error
-
-
-def assess_task_completion(
-    context: Epoch2RootContext, args: TaskCompletionParams
-) -> TaskCompletionAnswer:
-    """Judge whether one Task is finished on the Batch head it sits under.
-
-    Args:
-        context: The native context of the tree the Task lives in.
-        args: The validated request.
-
-    Returns:
-        Which gates carry, which must run again at the head, and whether
-        the Task may complete at all.
-
-    Raises:
-        DaemonValidationError: The Task is absent or unplaced, its
-            criteria and gates do not compile, its reported success is
-            unsealed, its Batch has selected no generation, no generation
-            carries its work, or a presented proof is anchored to a
-            generation the Batch line does not record.
-    """
-    with context.session([str(args.urn)]) as session:
-        task = _task_of(session, args.urn)
-        if task.batch_ref is None:
-            raise _refused(
-                CompletionRefusal.TASK_UNDELIVERED,
-                f"task {task.urn.entity_key} is unplaced, so no Batch carries its work",
-            )
-        bundle = _sealed_bundle(read_ledger_records(run_ledger(session)), task_ref=task.urn)
-        ledger = _read_generation_ledger(
-            session.ledger_path(Epoch2Collection.BATCH), task.batch_ref
-        )
-    try:
-        decision = decide_task_completion(
-            task,
-            report_verdict=args.report_verdict,
-            bundle=bundle,
-            ledger=ledger,
-            base=args.base,
-            contracts=_contracts(task, args.gates),
-            receipts=args.receipts,
-            facts=args.proof_facts,
-        )
-    except CompletionRefusedError as error:
-        raise DaemonValidationError(f"validation_failed: {error}") from error
-    reason = (
-        f"task {task.urn.entity_key} is proved on generation {decision.head_generation}"
-        if decision.completable
-        else (
-            f"task {task.urn.entity_key} needs {len(decision.rerun_gate_ids)} gate(s) proved on "
-            f"generation {decision.head_generation} before it completes"
-        )
-    )
-    logger.info(
-        f"assess_task_completion task={task.urn.entity_key} head={decision.head_generation} "
-        f"completable={decision.completable}"
-    )
-    return TaskCompletionAnswer(
-        task_ref=decision.task_ref,
-        batch_ref=decision.batch_ref,
-        head_generation=decision.head_generation,
-        delivering_generation=decision.delivering_generation,
-        affected_criterion_ids=decision.affected_criterion_ids,
-        rerun_gate_ids=decision.rerun_gate_ids,
-        reused_gate_ids=decision.reused_gate_ids,
-        unavailable_gate_ids=decision.unavailable_gate_ids,
-        completable=decision.completable,
-        reason=reason,
-    )
-
-
-@native_mutator(DELIVERY_ASSESS_COMPLETION_METHOD)
-async def _assess_task_completion(
-    ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
-) -> dict[str, Any]:
-    """Judge whether one Task may move to COMPLETED on its Batch head."""
-    args = _completion_params(params)
-    context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(assess_task_completion, context, args)
-    return answer.model_dump(mode="json")
-
-
 class BatchVerifyParams(BaseModel):
     """Params of :data:`DELIVERY_VERIFY_BATCH_METHOD`.
 
@@ -1203,7 +960,7 @@ def verify_batch(
         placement = _batch_of_task(session)
         runs = read_ledger_records(run_ledger(session))
         batch_ledger = session.ledger_path(Epoch2Collection.BATCH)
-        ledger = _read_generation_ledger(batch_ledger, args.urn)
+        ledger = read_generation_ledger(batch_ledger, args.urn)
         stored = _read_cycle(batch_ledger, args.urn)
     head = ledger.head
     if head is None:
@@ -1249,16 +1006,12 @@ async def _verify_batch(
 
 
 __all__ = [
-    "DELIVERY_ASSESS_COMPLETION_METHOD",
     "DELIVERY_INTEGRATE_METHOD",
     "DELIVERY_VERIFY_BATCH_METHOD",
     "BatchVerifyAnswer",
     "BatchVerifyParams",
     "DeliveryIntegrateAnswer",
     "DeliveryIntegrateParams",
-    "TaskCompletionAnswer",
-    "TaskCompletionParams",
-    "assess_task_completion",
     "integrate_delivery",
     "sealed_bundles",
     "verify_batch",

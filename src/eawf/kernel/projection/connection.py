@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Collection, Iterable, Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import MappingProxyType
@@ -42,6 +43,7 @@ from eawf.kernel.projection.compute import (
     KeyedPatch,
     RouteProjection,
     build_route_projection,
+    row_document,
 )
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND
 from eawf.kernel.projection.truth import Completeness, ConnectionState
@@ -491,6 +493,45 @@ def negotiate_reconnect(
     )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReplayNote:
+    """What a replaying console knows about the facts it has not reached yet.
+
+    A client replaying toward the head knows the head, so a frame drawn mid-replay can
+    say that later facts exist without showing any of them.
+
+    Attributes:
+        replaying_from_sequence: The ordinal the client last acknowledged, where the replay
+            starts.
+        head_sequence: The daemon's cursor, which the replay is heading toward.
+        findings_promoted_after_cursor: How many findings a promoting event past the
+            replay cursor promoted; ``None`` while no producer counts promotions, which a
+            frame states as unknown rather than as none.
+    """
+
+    replaying_from_sequence: int
+    head_sequence: int
+    findings_promoted_after_cursor: int | None = None
+
+
+def replay_note(negotiation: ReconnectNegotiation) -> ReplayNote | None:
+    """Return the note a replay negotiated, or ``None`` when the answer is not a replay.
+
+    Args:
+        negotiation: The daemon's answer to one reconnecting client.
+
+    Returns:
+        The replay's start and the head it heads toward; ``None`` for a client that is
+        current or must snapshot, which replays nothing.
+    """
+    if negotiation.disposition is not ReconnectDisposition.REPLAY:
+        return None
+    return ReplayNote(
+        replaying_from_sequence=negotiation.client_cursor,
+        head_sequence=negotiation.server_cursor,
+    )
+
+
 def apply_patches(
     projection: RouteProjection,
     patches: Iterable[KeyedPatch],
@@ -520,12 +561,9 @@ def apply_patches(
             past the cursor the replay claims to close at.
     """
     rows: dict[str, dict[str, Any]] = {}
+    held = {(row.collection, row.key): row for row in projection.rows}
     for row in projection.rows:
-        rows.setdefault(row.collection.value, {})[row.key] = {
-            "urn": row.urn,
-            "revision": row.revision,
-            "status": row.status.value,
-        }
+        rows.setdefault(row.collection.value, {})[row.key] = row_document(row)
     for patch in sorted(patches, key=lambda item: item.canonical_sequence):
         if projection.route not in patch.routes:
             raise ValueError(
@@ -536,11 +574,12 @@ def apply_patches(
                 f"patch at {patch.canonical_sequence} is past the cursor {cursor} the replay closes"
             )
         for entry in patch.entries:
-            rows.setdefault(entry.collection.value, {})[entry.key] = {
-                "urn": entry.urn,
-                "revision": entry.revision,
-                "status": entry.status,
-            }
+            # a transition moves the status and the revision; the title and the record the
+            # row is filed under are carried from the row the client already held
+            before = held.get((entry.collection, entry.key))
+            stored = row_document(before) if before is not None else {}
+            stored.update({"urn": entry.urn, "revision": entry.revision, "status": entry.status})
+            rows.setdefault(entry.collection.value, {})[entry.key] = stored
     return build_route_projection(
         route=projection.route,
         document=dict(rows),
@@ -560,6 +599,7 @@ __all__ = [
     "GapRange",
     "ReconnectDisposition",
     "ReconnectNegotiation",
+    "ReplayNote",
     "RetentionWindow",
     "StalenessClass",
     "apply_patches",
@@ -567,6 +607,7 @@ __all__ = [
     "connection_value",
     "negotiate_reconnect",
     "projection_now",
+    "replay_note",
     "retention_window",
     "staleness_target_seconds",
     "vouches_for_counts",

@@ -23,14 +23,18 @@ from eawf.kernel.projection.read_models import (
 from eawf.surfaces.tui.console.registry import (
     REGISTRY,
     ROUTES,
-    RouteFamily,
+    Escape,
+    RouteGroup,
     RouteRegistry,
     RouteSpec,
 )
 
 HOLE = RouteSpec(
     id="spike.hole",
-    family=RouteFamily.DIAGNOSTICS,
+    group=RouteGroup.DIAGNOSTICS,
+    question="What does a hole answer?",
+    needs="nothing a read model declares",
+    escape=Escape(route="scope.home"),
     palette_visible=True,
     step_leaf="Hole",
 )
@@ -104,13 +108,14 @@ def test_route_registry_read_models_entry_layer_has_no_projection() -> None:
 
 def test_route_registry_read_models_sub_surface_uses_parent_sub_model() -> None:
     checked = 0
-    for spec in ROUTES:
-        if spec.family is not RouteFamily.ENTITY_SUB_SURFACES or spec.parent is None:
+    for route, parent in REGISTRY.sub_surfaces.items():
+        # a receipt is its own immutable record, opened from a Task or a bundle alike
+        if route == "receipt":
             continue
-        parent_model = REGISTRY.read_models[spec.parent[0]]
-        assert READ_MODEL_BY_KIND[REGISTRY.read_models[spec.id]].parent is parent_model
+        parent_model = REGISTRY.read_models[parent]
+        assert READ_MODEL_BY_KIND[REGISTRY.read_models[route]].parent is parent_model
         checked += 1
-    assert checked == 3
+    assert checked == len(REGISTRY.sub_surfaces) - 1
 
 
 def test_route_registry_read_model_holes_lists_unbound_row() -> None:

@@ -1,7 +1,7 @@
 """The operator surface of the native per-entity lifecycle verbs.
 
 The daemon registers one JSON-RPC verb per lifecycle move a Track, a
-Milestone, a Batch or a Task can make. Until this module there was no way
+Milestone, a Batch, a Task or a Run can make. Until this module there was no way
 to drive one of them except by hand-writing a JSON-RPC frame, which makes
 the canary milestone reachable only by a client nobody ships. Each verb
 here is the operator's spelling of exactly one of those RPCs.
@@ -41,14 +41,10 @@ of a move is a reviewable artifact rather than a shell line. A refused
 envelope still prints in full and then exits :data:`DOMAIN_REFUSAL_EXIT`,
 so a script can branch on the exit status without losing the code.
 
-``milestone seal-approval`` and ``task submit`` are two verbs beside these:
-they forward to ``runtime.delivery.seal_acceptance_approval`` and
-``runtime.candidate.submit``, which answer with their own typed shape
-rather than a :class:`DomainEnvelope` and raise their refusal as a
-JSON-RPC error rather than returning one. That is the daemon's own answer
-contract for those two verbs, not a second CLI convention -- a refusal
-still prints the daemon's code and detail unchanged, and still exits
-:data:`DOMAIN_REFUSAL_EXIT`.
+The verbs that answer outside the :class:`DomainEnvelope` shape -- the
+candidate, integration, proof, approval and evidence verbs -- live in
+:mod:`eawf.surfaces.cli.commands.domain_integration` and reach the daemon
+through :func:`_call_native_rpc`.
 """
 
 from __future__ import annotations
@@ -65,7 +61,11 @@ from pydantic import ValidationError as PydanticValidationError
 
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
-from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
+from eawf.surfaces.cli._daemon_client import (
+    DEFAULT_CALL_TIMEOUT_SECONDS,
+    DaemonClient,
+    DaemonRpcError,
+)
 from eawf.surfaces.cli.commands.lifecycle import (
     batch_app,
     milestone_app,
@@ -93,10 +93,22 @@ MILESTONE_ACCEPT: Final = "domain.milestone.accept"
 MILESTONE_CANCEL: Final = "domain.milestone.cancel"
 BATCH_ACTIVATE: Final = "domain.batch.activate"
 BATCH_READY: Final = "domain.batch.ready"
+BATCH_MERGE: Final = "domain.batch.merge"
+BATCH_OBSERVE_MERGE: Final = "domain.batch.observe_merge"
+BATCH_COMPLETE: Final = "domain.batch.complete"
 TASK_PROMOTE: Final = "domain.task.promote"
+TASK_CLAIM: Final = "domain.task.claim"
 TASK_START: Final = "domain.task.start"
+TASK_READY: Final = "domain.task.ready"
+TASK_COMPLETE: Final = "domain.task.complete"
+RUN_START: Final = "domain.run.start"
+RUN_FINISH: Final = "domain.run.finish"
+RUN_FAIL: Final = "domain.run.fail"
 
-#: Every lifecycle-move verb this module exposes, in registration order.
+#: Every lifecycle-move verb the CLI exposes, in registration order. The
+#: Task, Run and Batch delivery commands live in the sibling
+#: ``domain_delivery`` module; their names are listed here so one table
+#: is asserted against the daemon's.
 DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     TRACK_RETIRE,
     MILESTONE_ACTIVATE,
@@ -105,17 +117,25 @@ DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     MILESTONE_CANCEL,
     BATCH_ACTIVATE,
     BATCH_READY,
+    BATCH_MERGE,
+    BATCH_OBSERVE_MERGE,
+    BATCH_COMPLETE,
     TASK_PROMOTE,
+    TASK_CLAIM,
     TASK_START,
+    TASK_READY,
+    TASK_COMPLETE,
+    RUN_START,
+    RUN_FINISH,
+    RUN_FAIL,
 )
 
-#: The dotted JSON-RPC name each create command forwards to. A Run is
-#: admitted by its own lease flow rather than by an operator create, so
-#: only the four kinds an operator places directly get one here.
+#: The dotted JSON-RPC name each create command forwards to.
 TRACK_CREATE: Final = "domain.track.create"
 MILESTONE_CREATE: Final = "domain.milestone.create"
 BATCH_CREATE: Final = "domain.batch.create"
 TASK_CREATE: Final = "domain.task.create"
+RUN_CREATE: Final = "domain.run.create"
 #: A repository row is not a lifecycle record, but a plan cannot be
 #: submitted until one records the head it binds, so it is created here too.
 REPOSITORY_CREATE: Final = "domain.repository.create"
@@ -126,6 +146,7 @@ DOMAIN_CREATE_CLI_METHODS: Final[tuple[str, ...]] = (
     MILESTONE_CREATE,
     BATCH_CREATE,
     TASK_CREATE,
+    RUN_CREATE,
     REPOSITORY_CREATE,
 )
 
@@ -160,6 +181,10 @@ _KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt.
 _ACTOR_HELP: Final = "Principal key the move is attributed to."
 _SPEC_HELP: Final = "JSON file carrying updates, observations, reason_code, binding_refs."
 _APPROVAL_HELP: Final = "URN of the sealed PendingAction receipt the acceptance was approved by."
+_BUNDLE_HELP: Final = (
+    "JSON file carrying the acceptance bundle the approval was sealed against, as "
+    "milestone open-approval printed it."
+)
 _CREATE_URN_HELP: Final = "URN of the record to admit."
 _TREE_REVISION_HELP: Final = (
     "The tree's committed canonical sequence the caller read; 0 for a tree "
@@ -167,19 +192,6 @@ _TREE_REVISION_HELP: Final = (
 )
 _CREATE_SPEC_HELP: Final = "JSON file carrying the entity's whole create document."
 _CORRELATION_HELP: Final = "Caller's thread of related requests."
-_APPROVAL_URN_HELP: Final = "URN of the PendingAction acceptance question."
-_APPROVAL_REVISION_HELP: Final = "Revision the pending action was read at (compare-and-swap token)."
-_RESOLVER_HELP: Final = (
-    "Human principal who resolved the question; defaults to --actor, which the "
-    "daemon requires it to equal."
-)
-_OPTION_HELP: Final = "The answer option the resolver chose."
-_RECEIPT_HELP: Final = "Evidence URN recording how the answer was reached."
-_RUN_URN_HELP: Final = "URN of the Run submitting the work."
-_TASK_REF_HELP: Final = "The Task the submitted work was done for."
-_SUBMISSION_REF_HELP: Final = "Artifact URN of the commit carrying the work."
-_CHANGED_PATH_HELP: Final = "Repository-relative path the work touched (repeatable)."
-_TREE_DIGEST_HELP: Final = "Digest of the tree the submission produced."
 
 
 class DomainVerbSpec(BaseModel):
@@ -197,7 +209,8 @@ class DomainVerbSpec(BaseModel):
 
     Attributes:
         updates: Field values the target status makes facts.
-        observations: Facts about the outside world the caller presents.
+        observations: Facts about the outside world the caller presents,
+            each the name of an observed fact such as ``run_report_bound``.
         reason_code: The stable reason the move happened.
         binding_refs: The exact proofs the move was taken against.
         correlation_id: The caller's thread of related requests.
@@ -206,7 +219,7 @@ class DomainVerbSpec(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     updates: dict[str, Any] = Field(default_factory=dict)
-    observations: tuple[dict[str, Any], ...] = ()
+    observations: tuple[str, ...] = ()
     reason_code: str | None = None
     binding_refs: tuple[str, ...] = ()
     correlation_id: str | None = None
@@ -225,6 +238,9 @@ class DomainVerbRequest:
         spec: The payload half of the request.
         approval_receipt_ref: The sealed approval reference, for the one
             verb that requires one; ``None`` everywhere else.
+        extra_params: Wire fields one verb declares beyond the shared
+            shape, such as the commit and assessment a Task completion
+            carries; empty everywhere else.
     """
 
     method: str
@@ -234,6 +250,7 @@ class DomainVerbRequest:
     actor: str
     spec: DomainVerbSpec = field(default_factory=DomainVerbSpec)
     approval_receipt_ref: str | None = None
+    extra_params: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,6 +341,7 @@ def _build_request(
     actor: str,
     from_spec: Path | None,
     approval_receipt_ref: str | None = None,
+    extra_params: dict[str, Any] | None = None,
 ) -> DomainVerbRequest:
     """Return the typed request one command's flags stand for.
 
@@ -335,6 +353,7 @@ def _build_request(
         actor: The principal the move is attributed to.
         from_spec: The payload file, or ``None``.
         approval_receipt_ref: The sealed approval reference, or ``None``.
+        extra_params: The verb's own wire fields, or ``None``.
 
     Returns:
         The request to dispatch.
@@ -358,6 +377,7 @@ def _build_request(
         actor=actor,
         spec=_load_spec(from_spec),
         approval_receipt_ref=approval_receipt_ref,
+        extra_params=dict(extra_params or {}),
     )
 
 
@@ -466,6 +486,7 @@ def _rpc_params(request: DomainVerbRequest, *, repo_root: str) -> dict[str, Any]
     }
     if request.approval_receipt_ref is not None:
         params["approval_receipt_ref"] = request.approval_receipt_ref
+    params.update(request.extra_params)
     return params
 
 
@@ -719,6 +740,7 @@ def _run_verb(
     actor: str,
     from_spec: Path | None,
     approval_receipt_ref: str | None = None,
+    extra_params: dict[str, Any] | None = None,
 ) -> None:
     """Dispatch one native lifecycle verb and render its answer.
 
@@ -734,6 +756,7 @@ def _run_verb(
         actor: The principal the move is attributed to.
         from_spec: The payload file, or ``None``.
         approval_receipt_ref: The sealed approval reference, or ``None``.
+        extra_params: The verb's own wire fields, or ``None``.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -745,6 +768,7 @@ def _run_verb(
             actor=actor,
             from_spec=from_spec,
             approval_receipt_ref=approval_receipt_ref,
+            extra_params=extra_params,
         )
         envelope = _call_domain_verb(request, flags=flags)
     except cli_errors.CliError as exc:
@@ -801,7 +825,12 @@ def _run_create_verb(
 
 
 def _call_native_rpc(
-    method: str, params: dict[str, Any], *, flags: GlobalFlags, verb_text: str
+    method: str,
+    params: dict[str, Any],
+    *,
+    flags: GlobalFlags,
+    verb_text: str,
+    gated: bool = False,
 ) -> dict[str, Any]:
     """Send one non-envelope native RPC and return its raw answer.
 
@@ -817,6 +846,8 @@ def _call_native_rpc(
         flags: Resolved global flags.
         verb_text: The command spelling an operator typed, used only for
             the ``--daemonless`` rejection message.
+        gated: Whether the verb runs gates inside the request, so the wire
+            waits as long as the daemon lets a gated mutation run.
 
     Returns:
         The daemon's answer, as a JSON-mode mapping.
@@ -834,9 +865,17 @@ def _call_native_rpc(
 
     repo_root = str((flags.workspace or Path.cwd()).resolve())
     wire_params = {"repo_root": repo_root, **params}
+    timeout = DEFAULT_CALL_TIMEOUT_SECONDS
+    if gated:
+        from eawf.runtime.daemon.limits import (
+            cli_mutation_timeout_for,
+            configured_juror_wall_clock,
+        )
+
+        timeout = cli_mutation_timeout_for(configured_juror_wall_clock(Path(repo_root)))
     try:
         _dispatch.escalate_mutation(verb_text, flags=flags)
-        with DaemonClient() as client:
+        with DaemonClient(call_timeout_seconds=timeout) as client:
             return client.call(method, wire_params)
     except DaemonRpcError as exc:
         if exc.code == cli_errors.RPC_VALIDATION_FAILED:
@@ -987,14 +1026,26 @@ def milestone_accept_cmd(
     approval_receipt_ref: Annotated[
         str | None, typer.Option("--approval-receipt-ref", help=_APPROVAL_HELP)
     ] = None,
+    acceptance_bundle: Annotated[
+        Path | None, typer.Option("--acceptance-bundle", help=_BUNDLE_HELP)
+    ] = None,
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
 ) -> None:
     """Accept a Milestone in review against a sealed approval receipt.
 
-    The reference is forwarded as given. A request that carries none, or
-    one addressing anything other than a PendingAction, is refused by the
-    daemon with ``protected_approval_required`` and nothing moves.
+    The reference and the bundle are forwarded as given. A request that
+    carries no reference, one addressing anything other than a
+    PendingAction, or no bundle the approval was sealed against is refused
+    by the daemon with ``protected_approval_required`` and nothing moves.
     """
+    flags: GlobalFlags = ctx.obj
+    extra: dict[str, Any] = {}
+    if acceptance_bundle is not None:
+        try:
+            extra["acceptance_bundle"] = _load_create_document(acceptance_bundle)
+        except cli_errors.CliError as exc:
+            cli_errors.emit_error(exc, flags=flags)
+            return
     _run_verb(
         ctx,
         method=MILESTONE_ACCEPT,
@@ -1004,6 +1055,7 @@ def milestone_accept_cmd(
         actor=actor,
         from_spec=from_spec,
         approval_receipt_ref=approval_receipt_ref,
+        extra_params=extra,
     )
 
 
@@ -1055,73 +1107,6 @@ def milestone_create_cmd(
         from_spec=from_spec,
         correlation_id=correlation_id,
     )
-
-
-@milestone_app.command("seal-approval")
-def milestone_seal_approval_cmd(
-    ctx: typer.Context,
-    urn: Annotated[str, typer.Argument(help=_APPROVAL_URN_HELP)],
-    expected_revision: Annotated[
-        int, typer.Option("--expected-approval-revision", help=_APPROVAL_REVISION_HELP)
-    ],
-    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
-    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
-    option_id: Annotated[str, typer.Option("--option-id", help=_OPTION_HELP)],
-    receipt_ref: Annotated[str, typer.Option("--receipt-ref", help=_RECEIPT_HELP)],
-    resolver: Annotated[str | None, typer.Option("--resolver", help=_RESOLVER_HELP)] = None,
-    correlation_id: Annotated[
-        str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
-    ] = None,
-) -> None:
-    """Seal the operator's answer onto a waiting acceptance question.
-
-    The verify stage opens the question once every Batch of a Milestone in
-    review stands on a verified head; this is the operator's reply, which
-    ``domain.milestone.accept`` then requires by reference. The resolver
-    defaults to ``--actor``, which the daemon requires it to equal.
-    """
-    flags: GlobalFlags = ctx.obj
-    if expected_revision <= 0:
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"--expected-approval-revision must be a positive revision, "
-                f"got {expected_revision}",
-                kind="InvalidInput",
-            ),
-            flags=flags,
-        )
-        return
-    try:
-        _check_idempotency_key(idempotency_key)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    params: dict[str, Any] = {
-        "urn": urn,
-        "expected_revision": expected_revision,
-        "idempotency_key": idempotency_key,
-        "actor": actor,
-        "resolver": {
-            "principal_kind": "human",
-            "principal_id": resolver if resolver is not None else actor,
-        },
-        "option_id": option_id,
-        "receipt_ref": receipt_ref,
-        "correlation_id": correlation_id,
-    }
-    try:
-        answer = _call_native_rpc(
-            DELIVERY_SEAL_APPROVAL, params, flags=flags, verb_text="milestone seal-approval"
-        )
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    text = (
-        f"{DELIVERY_SEAL_APPROVAL} ok {answer['action_ref']} "
-        f"status {answer['status']} revision {answer['revision']}\n"
-        f"  {answer['reason']}"
-    )
-    emit_json_or_text(answer, text, flags=flags)
 
 
 # ---- Batch ------------------------------------------------------------------
@@ -1276,52 +1261,6 @@ def task_create_cmd(
     )
 
 
-@task_app.command("submit")
-def task_submit_cmd(
-    ctx: typer.Context,
-    urn: Annotated[str, typer.Argument(help=_RUN_URN_HELP)],
-    task_ref: Annotated[str, typer.Option("--task-ref", help=_TASK_REF_HELP)],
-    submission_ref: Annotated[str, typer.Option("--submission-ref", help=_SUBMISSION_REF_HELP)],
-    changed_path: Annotated[list[str], typer.Option("--changed-path", help=_CHANGED_PATH_HELP)],
-    resulting_tree_digest: Annotated[
-        str, typer.Option("--resulting-tree-digest", help=_TREE_DIGEST_HELP)
-    ],
-    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
-    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
-) -> None:
-    """File one Run's claim that its leased workspace is ready to integrate.
-
-    Nothing is checked against a report here and nothing is sealed: the
-    claim is recorded as made, exactly as the daemon's own verb promises.
-    """
-    flags: GlobalFlags = ctx.obj
-    try:
-        _check_idempotency_key(idempotency_key)
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    params: dict[str, Any] = {
-        "urn": urn,
-        "actor": actor,
-        "idempotency_key": idempotency_key,
-        "task_ref": task_ref,
-        "submission_ref": submission_ref,
-        "changed_paths": list(changed_path),
-        "resulting_tree_digest": resulting_tree_digest,
-    }
-    try:
-        answer = _call_native_rpc(CANDIDATE_SUBMIT, params, flags=flags, verb_text="task submit")
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    text = (
-        f"{CANDIDATE_SUBMIT} ok {answer['candidate_ref']} run {answer['run_ref']} "
-        f"replayed={answer['replayed']}\n"
-        f"  {answer['reason']}"
-    )
-    emit_json_or_text(answer, text, flags=flags)
-
-
 __all__ = [
     "CANDIDATE_SUBMIT",
     "DELIVERY_SEAL_APPROVAL",
@@ -1340,12 +1279,10 @@ __all__ = [
     "milestone_cancel_cmd",
     "milestone_create_cmd",
     "milestone_open_review_cmd",
-    "milestone_seal_approval_cmd",
     "repository_create_cmd",
     "task_create_cmd",
     "task_promote_cmd",
     "task_start_cmd",
-    "task_submit_cmd",
     "track_create_cmd",
     "track_retire_cmd",
 ]

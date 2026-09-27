@@ -24,6 +24,7 @@ from eawf.kernel.migration.epoch2.canary import (
     MARKER_FILENAME,
 )
 from eawf.kernel.state.epoch2.authority import AuthorityGap, resolve_authority
+from eawf.surfaces.tui.console.chrome import load_chrome
 
 
 def _declare_canary(root: Path) -> None:
@@ -152,10 +153,10 @@ def test_tui_epoch1_tree_keeps_epoch1_app(
 
 
 @pytest.mark.parametrize(
-    ("break_marker", "expected_gap", "expected_state"),
+    ("break_marker", "expected_gap", "expected_command"),
     [
-        (False, AuthorityGap.MARKER_ABSENT, "migration"),
-        (True, AuthorityGap.MARKER_UNREADABLE, "interrupted"),
+        (False, AuthorityGap.MARKER_ABSENT, "--rollback"),
+        (True, AuthorityGap.MARKER_UNREADABLE, "--recover"),
     ],
     ids=["marker-absent", "marker-unreadable"],
 )
@@ -166,7 +167,7 @@ def test_tui_migration_required_exits_4_off_tty(
     *,
     break_marker: bool,
     expected_gap: AuthorityGap,
-    expected_state: str,
+    expected_command: str,
 ) -> None:
     _declare_canary(tmp_path / ".ea")
     if break_marker:
@@ -176,7 +177,6 @@ def test_tui_migration_required_exits_4_off_tty(
 
     authority = resolve_authority(tmp_path / ".ea")
     assert authority.gap is expected_gap
-    assert launch.entry_state_id_for(authority) == expected_state
 
     called = {"n": 0}
     monkeypatch.setattr(launch, "_run_console", lambda app, seam: called.__setitem__("n", 1) or 0)
@@ -190,9 +190,8 @@ def test_tui_migration_required_exits_4_off_tty(
     assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
     assert rc == 4
     assert called["n"] == 0
-    assert (
-        f"eawf migrate epoch2 --recover --target-root {tmp_path / '.ea'}" in capsys.readouterr().err
-    )
+    err = capsys.readouterr().err
+    assert f"eawf migrate epoch2 {expected_command} --target-root {tmp_path / '.ea'}" in err
 
 
 def test_tui_migration_required_builds_entry_session_on_a_held_tty(
@@ -219,12 +218,11 @@ def test_tui_migration_required_builds_entry_session_on_a_held_tty(
     assert rc == launch.TERMINAL_ENTRY_EXIT_CODE
     assert len(apps) == 1
     app = apps[0]
-    from eawf.surfaces.tui.console.chrome import load_chrome
 
     assert app.session.route == "entry"
     assert app.session.entry_sel == launch._entry_sel(load_chrome(), "migration")
-    tail = app.fixture.proto.entry[app.session.entry_sel].tail
-    assert f"  eawf migrate epoch2 --recover --target-root {tmp_path / '.ea'}" in tail
+    commands = app.fixture.proto.entry[app.session.entry_sel].commands
+    assert f"eawf migrate epoch2 --rollback --target-root {tmp_path / '.ea'}" in commands
 
 
 # --------------------------------------------------------------------------
@@ -232,19 +230,52 @@ def test_tui_migration_required_builds_entry_session_on_a_held_tty(
 # --------------------------------------------------------------------------
 
 
-def test_entry_state_id_for_epoch2_is_none(tmp_path: Path) -> None:
-    """Epoch 2 has no pre-session layer to name -- the launcher opens the console."""
-    _activate_epoch2(tmp_path)
-    authority = resolve_authority(tmp_path)
-    assert authority.epoch == 2
-    assert launch.entry_state_id_for(authority) is None
+def test_an_epoch2_tree_named_outright_opens_on_the_resolving_layer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The console's chrome carries the resolving trace the launch actually ran."""
+    _activate_epoch2(tmp_path / ".ea")
+    monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
+    _set_isatty(monkeypatch, value=True)
+    from eawf.surfaces.tui.console.app import ConsoleApp
+
+    apps: list[ConsoleApp] = []
+
+    def _caught(app: ConsoleApp, _seam: object) -> int:
+        apps.append(app)
+        return 0
+
+    monkeypatch.setattr(launch, "_run_console", _caught)
+
+    launch.launch_tui(workspace=None, no_input=False, plain=False)
+
+    (app,) = apps
+    resolving = app.fixture.proto.entry[0]
+    assert resolving.id == "resolving"
+    assert resolving.panes is not None
+    assert resolving.panes[0][1].endswith("named outright · EA_STATE")
 
 
-def test_entry_state_id_for_undeclared_epoch1_is_none(tmp_path: Path) -> None:
-    """An ordinary, never-declared epoch-1 tree is not a stuck migration."""
-    authority = resolve_authority(tmp_path)
-    assert authority.gap is AuthorityGap.UNDECLARED
-    assert launch.entry_state_id_for(authority) is None
+def test_an_undeclared_epoch1_tree_is_not_resolved_through_the_registry(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An ordinary epoch-1 tree keeps the classic app, whatever the registry holds."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("EA_STATE", raising=False)
+    _set_isatty(monkeypatch, value=True)
+    monkeypatch.setattr(launch, "_launch_epoch1", lambda **_kwargs: 0)
+    monkeypatch.setattr(launch, "_run_console", lambda app, seam: 1 / 0)
+
+    assert launch.launch_tui(workspace=None, no_input=False, plain=False) == 0
+
+
+def test_hand_over_names_the_title_and_skips_an_empty_command() -> None:
+    state = load_chrome().entry[2].model_copy(update={"commands": ("eawf workspace list", "")})
+    assert launch.hand_over(state).splitlines() == [
+        f"eawf tui: {state.title}",
+        "  eawf workspace list",
+    ]
 
 
 def test_entry_sel_raises_for_an_unknown_state_id() -> None:

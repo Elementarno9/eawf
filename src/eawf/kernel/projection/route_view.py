@@ -97,6 +97,8 @@ class RouteRecord:
         collection: The document collection the record was read from.
         revision: The record's compare-and-swap token when the projection was built.
         fields: Every field the route declares, by name, each a truth field.
+        title: The record's own title, when it states one.
+        parent_key: The key of the record it is filed under, when it names one.
     """
 
     key: str
@@ -104,6 +106,8 @@ class RouteRecord:
     collection: Epoch2Collection
     revision: int
     fields: Mapping[str, TruthField[str]]
+    title: str | None = None
+    parent_key: str | None = None
 
     def field(self, name: str) -> TruthField[str]:
         """Return the named field.
@@ -291,6 +295,8 @@ def build_route_read_model(
             urn=row.urn,
             collection=row.collection,
             revision=row.revision,
+            title=row.title,
+            parent_key=row.parent_key,
             fields=MappingProxyType(
                 {
                     spec.name: (

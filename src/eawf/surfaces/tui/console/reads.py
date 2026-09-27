@@ -102,7 +102,9 @@ def mut_reason(session: Session, fixture: Fixture) -> str:
 
 
 def attn_cell(session: Session, n: int) -> str:
-    """Return an attention count, unknown rather than zero when the reads cannot vouch for it."""
-    if reads(session).complete:
-        return str(n)
-    return str(n) if n else "–"  # noqa: RUF001
+    """Return an attention count, labelled ``known`` when the reads cannot vouch for it.
+
+    A count is never the no-value dash: the dash means a value that does not exist by
+    design, and an unvouched count exists and is a floor.
+    """
+    return str(n) if reads(session).complete else f"{n} known"

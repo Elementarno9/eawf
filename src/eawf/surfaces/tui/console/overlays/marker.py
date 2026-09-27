@@ -62,7 +62,12 @@ def render(view: View) -> list[str]:
         _card_row("TRACK", lane),
     ]
     if record:
+        # the record body lands a cursor as a record frame does, the first time it is shown;
+        # the card moves no cursor, so it lands afresh on every render and the route row
+        # beneath keeps its own
+        sel, seen = s.sel, None if s.rec_seen is None else dict(s.rec_seen)
         body = dv.record_body(s, fx, record, entity_id=mid, subject=rows[1])
+        s.sel, s.rec_seen = sel, seen
         rows.extend(_recast(r) for r in body if not _TRACK_ROW.match(r))
     else:
         rows.extend(

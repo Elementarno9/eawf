@@ -128,16 +128,16 @@ def test_residual_diff_is_empty(replay: dict[str, Result]) -> None:
 
 def test_roadmap_is_the_planning_route_key() -> None:
     spec = registry.REGISTRY.by_key["roadmap"]
-    assert spec.family == registry.RouteFamily.PLANNING
+    assert spec.group == registry.RouteGroup.PLANNING
     assert spec.id == "timeline"
     assert "timeline" not in registry.REGISTRY.by_key
 
 
 def test_notifications_is_a_global_diagnostics_route() -> None:
     spec = registry.REGISTRY.by_key["notifications"]
-    assert spec.family == registry.RouteFamily.DIAGNOSTICS
+    assert spec.group == registry.RouteGroup.DIAGNOSTICS
     assert not spec.subject_required
-    assert spec.family != registry.RouteFamily.ENTITY_SUB_SURFACES
+    assert spec.sub_surface_of is None
 
 
 def test_every_route_correction_is_bound_in_the_port_registry() -> None:
@@ -146,7 +146,7 @@ def test_every_route_correction_is_bound_in_the_port_registry() -> None:
     for route_id, correction in corrections.items():
         spec = registry.REGISTRY.by_id[route_id]
         assert spec.key == correction.key
-        assert spec.family == correction.family
+        assert spec.group == correction.group
 
 
 def test_uncorrected_routes_keep_the_pack_id_as_their_key() -> None:

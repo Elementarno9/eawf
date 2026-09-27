@@ -664,6 +664,43 @@ def test_run_post_merge_pipeline_refuses_unsettled_wave_pins(
     assert "P35-I01-W01" in refused.value.detail
 
 
+@pytest.mark.parametrize("outcome", ["unique_trailer", "ambiguous"])
+def test_run_post_merge_pipeline_skips_wave_pins_acknowledged_as_drift(
+    world: World, monkeypatch: pytest.MonkeyPatch, outcome: str
+) -> None:
+    """A pin the repository acknowledged as drifted is not a pending repin.
+
+    `doctor` honours `.eawf/drift-acks.json` and so offers no repair for such a
+    wave; the release must not refuse over a repin nothing will ever apply.
+    """
+
+    def moved(pins: Mapping[str, str], *, target_ref: str, repo_root: Path) -> list[TrailerRepin]:
+        new = OTHER if outcome == "unique_trailer" else None
+        return [TrailerRepin("P35-I01-W01", WAVE_PIN, new, outcome)]  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pipeline_module, "resolve_trailer_repins", moved)
+    acks = world.root / ".eawf" / "drift-acks.json"
+    acks.parent.mkdir()
+    acks.write_text(json.dumps({"acked_wave_ids": ["P35-I01-W01"]}), encoding="utf-8")
+    world.run()
+    assert PipelineStep.REPIN in world.journal_steps()
+
+
+def test_run_post_merge_pipeline_still_refuses_a_drifted_pin_acked_for_another_wave(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def moved(pins: Mapping[str, str], *, target_ref: str, repo_root: Path) -> list[TrailerRepin]:
+        return [TrailerRepin("P35-I01-W01", WAVE_PIN, OTHER, "unique_trailer")]
+
+    monkeypatch.setattr(pipeline_module, "resolve_trailer_repins", moved)
+    acks = world.root / ".eawf" / "drift-acks.json"
+    acks.parent.mkdir()
+    acks.write_text(json.dumps({"acked_wave_ids": ["P35-I01-W02"]}), encoding="utf-8")
+    with pytest.raises(PipelineRefusal) as refused:
+        world.run()
+    assert refused.value.code is PipelineRefusalCode.TRAILER_REPIN_PENDING
+
+
 def test_run_post_merge_pipeline_refuses_a_phase_with_no_wave_pins(world: World) -> None:
     """A well-formed but mistyped phase id reads no pins; verifying zero pins is no check."""
     world.host.pins = {}

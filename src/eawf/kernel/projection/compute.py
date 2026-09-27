@@ -34,11 +34,12 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, ValidationError
 
 from eawf.kernel.identity import IdentityError, QualifiedUrn, parse_qualified_urn
 from eawf.kernel.migration.epoch2.continuation import entity_ref, read_legacy_row
 from eawf.kernel.migration.epoch2.cutover import ROW_PAYLOAD_FIELD
+from eawf.kernel.migration.epoch2.native_records import ImportedNativeRecord
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
 from eawf.kernel.projection.truth import (
     Completeness,
@@ -80,6 +81,31 @@ MISSING_STATUS_REASON: Final = "the stored row states no status"
 #: Spelled the same as the document's high-water-mark key and separate from it: one
 #: is what a single event was stamped with, the other is what the tree has reached.
 CANONICAL_SEQUENCE_FIELD: Final = "canonical_sequence"
+
+
+#: The payload field that marks a row the cutover converted whole into a native
+#: collection, as opposed to an imported lifecycle record that continues its lifecycle.
+_NATIVE_IMPORT_KEY: Final = "record_key"
+
+#: The one revision a converted native record stands at: the import wrote it once and no
+#: lifecycle verb moves it.
+_IMPORT_REVISION: Final = 1
+
+#: The fields a record's title is read from, in preference order, where they are not
+#: simply ``title``.
+_TITLE_FIELDS: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
+    {Epoch2Collection.TASK: ("title", "intent")}
+)
+
+#: Where each record names the record it is filed under, as a path into the stored row.
+_PARENT_FIELD: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
+    {
+        Epoch2Collection.MILESTONE: ("primary_track_ref",),
+        Epoch2Collection.BATCH: ("milestone_ref",),
+        Epoch2Collection.TASK: ("batch_ref",),
+        Epoch2Collection.RUN: ("scope", "task_ref"),
+    }
+)
 
 
 class _ProjectionViewModel(Epoch2Model):
@@ -146,7 +172,9 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
         "roadmap": (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
         "run.detail": (Epoch2Collection.RUN,),
         "sandbox.log": (Epoch2Collection.SANDBOX_POLICY,),
-        "scope.home": (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE),
+        # home nests each Milestone under its Track and counts the Batches cut under
+        # each Milestone, so its progress is read off rows it holds rather than guessed
+        "scope.home": (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
         "search": DIAGNOSTICS_CORPUS,
         "task.detail": (Epoch2Collection.TASK,),
         "track": (Epoch2Collection.TRACK,),
@@ -207,6 +235,11 @@ class ProjectionRow(_ProjectionViewModel):
         revision: The record's compare-and-swap token when it was read.
         status: The record's lifecycle status as a truth field, so a row that states
             none renders as unknown rather than as a blank.
+        title: The record's own title as the document stores it; ``None`` when the
+            record states none, which a frame draws as the key alone.
+        parent_key: The key of the record this one is filed under -- a Milestone's
+            Track, a Batch's Milestone, a Task's Batch, a Run's Task -- so a frame can
+            nest rows without reading the document; ``None`` when none is stated.
     """
 
     key: NonEmptyStr
@@ -214,6 +247,8 @@ class ProjectionRow(_ProjectionViewModel):
     collection: Epoch2Collection
     revision: StrictPositiveInt
     status: TruthField[str]
+    title: NonEmptyStr | None = None
+    parent_key: NonEmptyStr | None = None
 
 
 class RouteProjection(_ProjectionViewModel):
@@ -514,6 +549,9 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
     if not isinstance(row, dict):
         raise ValueError(f"{collection.value} row {key!r} is a {type(row).__name__}, not an object")
     if "urn" not in row and ROW_PAYLOAD_FIELD in row:
+        payload = row[ROW_PAYLOAD_FIELD]
+        if isinstance(payload, dict) and _NATIVE_IMPORT_KEY in payload:
+            return _native_import_row(key=key, row=row, collection=collection)
         legacy = read_legacy_row(collection, key, row)
         legacy_urn, legacy_revision = entity_ref(collection, key), 1 + len(legacy.continuation)
         return ProjectionRow(
@@ -522,6 +560,8 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
             collection=collection,
             revision=legacy_revision,
             status=_status_field(status=legacy.status, urn=legacy_urn, revision=legacy_revision),
+            title=_title_of(collection, legacy.record.record),
+            parent_key=_parent_key_of(collection, legacy.record.record),
         )
     urn, revision = row.get("urn"), row.get("revision")
     if not isinstance(urn, str) or not urn.strip():
@@ -534,7 +574,89 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
         collection=collection,
         revision=revision,
         status=_status_field(status=row.get("status"), urn=urn, revision=revision),
+        title=_title_of(collection, row),
+        parent_key=_parent_key_of(collection, row),
     )
+
+
+def _native_import_row(
+    *, key: str, row: dict[str, Any], collection: Epoch2Collection
+) -> ProjectionRow:
+    """Return a row the cutover converted into a native collection rather than a lifecycle.
+
+    A sandbox policy or a decision is imported whole as an
+    :class:`~eawf.kernel.migration.epoch2.native_records.ImportedNativeRecord`: it has no
+    lifecycle to continue, so it is addressed by the legacy name and stands at the one
+    revision the import wrote.
+
+    Raises:
+        ValueError: The payload does not validate as a converted record of this collection.
+    """
+    try:
+        record = ImportedNativeRecord.model_validate(row[ROW_PAYLOAD_FIELD])
+    except ValidationError as error:
+        raise ValueError(
+            f"{entity_ref(collection, key)} does not validate as an imported native record"
+        ) from error
+    if record.target is not collection:
+        raise ValueError(f"{entity_ref(collection, key)} is not a {collection.value} record")
+    urn = entity_ref(collection, key)
+    return ProjectionRow(
+        key=key,
+        urn=urn,
+        collection=collection,
+        revision=_IMPORT_REVISION,
+        status=_status_field(status=row.get("status"), urn=urn, revision=_IMPORT_REVISION),
+    )
+
+
+def _title_of(collection: Epoch2Collection, fields: Mapping[str, Any]) -> str | None:
+    """Return the title a stored record states, or ``None`` when it states none.
+
+    A Task names itself by its intent rather than a title, so its intent is its title.
+    """
+    for name in _TITLE_FIELDS.get(collection, ("title",)):
+        value = fields.get(name)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _parent_key_of(collection: Epoch2Collection, fields: Mapping[str, Any]) -> str | None:
+    """Return the key of the record ``fields`` is filed under, or ``None`` when none is stated.
+
+    The reference is a URN whose last path segment is the entity key, which is the key the
+    parent's own row is stored under.
+    """
+    path = _PARENT_FIELD.get(collection)
+    if path is None:
+        return None
+    value: Any = fields
+    for name in path:
+        value = value.get(name) if isinstance(value, dict) else None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.rstrip("/").rsplit("/", 1)[-1] or None
+
+
+def row_document(row: ProjectionRow) -> dict[str, Any]:
+    """Return ``row`` spelled as the stored row it would be projected from again.
+
+    A replay rebuilds a projection from the rows it already holds, so what a row carries
+    beyond its status -- its title and the record it is filed under -- has to be written
+    back in the fields :func:`build_route_projection` reads them from, or a patch would
+    strip them.
+    """
+    stored: dict[str, Any] = {"urn": row.urn, "revision": row.revision, "status": row.status.value}
+    if row.title is not None:
+        stored[_TITLE_FIELDS.get(row.collection, ("title",))[0]] = row.title
+    path = _PARENT_FIELD.get(row.collection)
+    if path is not None and row.parent_key is not None:
+        nested = stored
+        for name in path[:-1]:
+            nested = nested.setdefault(name, {})
+        nested[path[-1]] = row.parent_key
+    return stored
 
 
 def _status_field(*, status: Any, urn: str, revision: int) -> TruthField[str]:
@@ -590,4 +712,5 @@ __all__ = [
     "RouteProjection",
     "build_route_projection",
     "patches_for_event",
+    "row_document",
 ]

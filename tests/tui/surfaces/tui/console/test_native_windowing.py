@@ -107,9 +107,14 @@ def home_view(session: Session, n: int = ROWS) -> View:
 
 
 def read_model_view(session: Session, n: int = ROWS) -> View:
-    """Return a view of the native crash-recovery read model over ``n`` Runs."""
-    session.route = "crash.recovery"
-    model = build_operations_view(_projection("crash.recovery", {"run": _runs(n)}))
+    """Return a view of the native dispatch queue over ``n`` Runs, none of them ended.
+
+    The queue lists only Runs whose lifecycle has not ended, so every Run here is one it
+    holds and the row keys line up with the rows drawn.
+    """
+    session.route = "unattended"
+    runs = {key: {**row, "status": "RUNNING"} for key, row in _runs(n).items()}
+    model = build_operations_view(_projection("unattended", {"run": runs}))
     return View(session=session, fixture=_fixture(), w=W, h=H, projection=model)
 
 
@@ -296,7 +301,12 @@ def test_an_empty_table_states_a_zero_window(family: str) -> None:
 # ---------- the keybar ----------
 
 
-@pytest.mark.parametrize("family", FAMILIES)
+#: The families whose keybar is the native table's, paging included. The dispatch queue
+#: draws the keybar its packet row states verbatim, which names no paging key.
+PAGED_BARS: tuple[str, ...] = tuple(family for family in FAMILIES if family != "read_model")
+
+
+@pytest.mark.parametrize("family", PAGED_BARS)
 def test_the_native_keybar_advertises_paging_by_full_key_names(family: str) -> None:
     """The bar spells the arrows as glyphs and the paging keys in full."""
     view = FAMILIES[family](Session())
@@ -370,11 +380,11 @@ def test_window_rows_one_row_over() -> None:
     assert (win.start, win.stop) == (1, 15)
 
 
-def test_window_rows_keeps_one_row_on_a_frame_with_no_room() -> None:
-    """A frame whose chrome fills it still shows the cursor's row."""
+def test_window_rows_keeps_three_rows_on_a_frame_with_no_room() -> None:
+    """A frame whose chrome fills it still shows the smallest windowable region (CON-162)."""
     view = _bare(6)
     win = window_rows(view, total=100, cursor=40, chrome=10)
-    assert (win.start, win.stop, view.session.visible) == (40, 41, 1)
+    assert (win.start, win.stop, view.session.visible) == (38, 41, 3)
 
 
 def test_window_rows_leaves_the_rack_its_rows() -> None:

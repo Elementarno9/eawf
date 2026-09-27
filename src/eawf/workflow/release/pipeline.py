@@ -55,6 +55,7 @@ from eawf.kernel.spec.release import (
 )
 from eawf.kernel.state.types import UtcDatetime
 from eawf.runtime.lock import portalock
+from eawf.workflow.lifecycle.wave_sha import load_drift_acks
 from eawf.workflow.lifecycle.wave_trailer_repin import TrailerRepinError, resolve_trailer_repins
 from eawf.workflow.release.advance import TrainAdvanceRecord
 from eawf.workflow.release.pipeline_files import baseline_evidence, flatten_artifacts
@@ -1133,7 +1134,12 @@ class _PipelineRun:
                 detail=str(exc),
                 remedy=f"fetch {self.options.remote} and rerun",
             ) from exc
-        undecided = [f"{row.wave_id}={row.outcome}" for row in rows if row.new_commit is None]
+        # A wave the repository acknowledged as drifted keeps its stale pin on
+        # purpose; `doctor` honours the same acknowledgement, so the release
+        # must not demand a repin that no repair will ever offer.
+        acked = load_drift_acks(self.host.repo_root)
+        checked = [row for row in rows if row.wave_id not in acked]
+        undecided = [f"{row.wave_id}={row.outcome}" for row in checked if row.new_commit is None]
         if undecided:
             raise PipelineRefusal(
                 step,
@@ -1141,7 +1147,7 @@ class _PipelineRun:
                 detail=f"no single landed commit for {', '.join(undecided)}",
                 remedy="repin those waves by hand with `eawf wave close --commit`",
             )
-        moved = [row.wave_id for row in rows if row.outcome != "unchanged"]
+        moved = [row.wave_id for row in checked if row.outcome != "unchanged"]
         if moved:
             raise PipelineRefusal(
                 step,
@@ -1149,7 +1155,7 @@ class _PipelineRun:
                 detail=f"main rewrote the commits of {', '.join(moved)}",
                 remedy="apply the commits.repin repair with `eawf doctor --fix`, then rerun",
             )
-        return {"pins": str(len(rows))}
+        return {"pins": str(len(rows)), "acked": str(len(rows) - len(checked))}
 
     def _evidence(self, step: PipelineStep) -> dict[str, str]:
         staged = sorted(self.layout.staged.glob("*.json"))

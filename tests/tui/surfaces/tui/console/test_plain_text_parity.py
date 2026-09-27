@@ -80,11 +80,14 @@ def _twin_golden(normaliser: Normaliser, state: FrameState) -> list[str]:
     return plain_rows(normaliser.expected(state.id, state.frame).split("\n"))
 
 
-def _render(fixture: Fixture, state: FrameState) -> list[str]:
-    """Render ``state`` in plain mode under the connection value it recorded."""
+def _render(fixture: Fixture, state: FrameState, normaliser: Normaliser) -> list[str]:
+    """Render ``state`` in plain mode under the connection value it recorded.
+
+    The setup is the port's: an overlay the map renames is opened by its port name.
+    """
     return render_plain(
         fixture,
-        state.setup,
+        normaliser.setup(state.id, state.setup),
         keys=state.keys,
         conn=state.setup.conn or "LIVE",
         verbose=state.kind == "verbose",
@@ -105,7 +108,7 @@ def test_plain_mode_matches_the_ascii_twin_goldens(
     failed: list[str] = []
     for state in parity_states:
         want = _twin_golden(normaliser, state)
-        got = _render(fixture, state)
+        got = _render(fixture, state, normaliser)
         if want == got:
             continue
         row = next((i for i, (a, b) in enumerate(zip(want, got, strict=False)) if a != b), -1)
@@ -114,12 +117,12 @@ def test_plain_mode_matches_the_ascii_twin_goldens(
 
 
 def test_plain_mode_returns_the_recorded_rows_of_the_recorded_width(
-    fixture: Fixture, parity_states: tuple[FrameState, ...]
+    fixture: Fixture, normaliser: Normaliser, parity_states: tuple[FrameState, ...]
 ) -> None:
     off_grid: list[str] = []
     for state in parity_states:
         w, h = SIZES[state.setup.size]
-        rows = _render(fixture, state)
+        rows = _render(fixture, state, normaliser)
         if len(rows) != h:
             off_grid.append(f"{state.id}: {len(rows)} rows, not {h}")
         off_grid += [
@@ -131,10 +134,10 @@ def test_plain_mode_returns_the_recorded_rows_of_the_recorded_width(
 
 
 def test_plain_mode_carries_no_escape_sequence_and_no_wide_glyph(
-    fixture: Fixture, parity_states: tuple[FrameState, ...]
+    fixture: Fixture, normaliser: Normaliser, parity_states: tuple[FrameState, ...]
 ) -> None:
     for state in parity_states[:20]:
-        rows = _render(fixture, state)
+        rows = _render(fixture, state, normaliser)
         assert all(ESCAPE not in row for row in rows)
         assert all(row.isascii() for row in rows)
 

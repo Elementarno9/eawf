@@ -68,6 +68,10 @@ def render(view: View) -> list[str]:
 
 
 def copy(session: Session, fixture: Fixture) -> str:
-    """Return the rung's stable URN."""
+    """Return the rung's address: its claim's URN with the #rung-<n> fragment.
+
+    The fragment selects one rung record of the claim, so the copied text opens the
+    same card anywhere a claim URN resolves.
+    """
     n = str(rung_of(session, fixture)["n"]).split(" ")[0]
-    return f"urn:eawf:{fixture.scope}:CLM-0004:rung:{n}"
+    return f"eawf://{fixture.scope}/{fixture.scope}/_/claim/CLM-0004#rung-{n}"

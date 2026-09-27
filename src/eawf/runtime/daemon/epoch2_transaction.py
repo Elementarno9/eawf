@@ -93,16 +93,19 @@ from typing import TYPE_CHECKING, Annotated, Any, Final, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.identity import EntityKind, IdentityError, QualifiedUrn, parse_qualified_urn
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
+from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.task import TaskStatus
 from eawf.kernel.state.epoch2.transitions import (
     ENTITY_STATUS_ENUM,
     DenialCode,
     LifecycleEntity,
     LifecycleStatus,
     ObservedFact,
+    TransitionGuard,
     is_terminal,
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn
@@ -234,6 +237,11 @@ LIFECYCLE_ENTITIES: Final[Mapping[EntityKind, LifecycleEntity]] = {
     EntityKind.TASK: LifecycleEntity.TASK,
     EntityKind.RUN: LifecycleEntity.RUN,
 }
+
+#: The Batch statuses a promoted Task may still join. Past ``ACTIVE`` the
+#: Batch has claimed its Task list is settled, so a late joiner would ride
+#: a merge nobody checked it against.
+_OPEN_BATCH_STATUSES: Final = frozenset({BatchStatus.PLANNED, BatchStatus.ACTIVE})
 
 #: Which model each entity's stored rows validate through, derived from the
 #: reducer's own table so the two cannot name different classes.
@@ -456,7 +464,9 @@ def run_transaction(
     entity = _entity_for(request.urn)
     target = _target_status(entity, request)
     collection = ENTITY_COLLECTIONS[request.urn.kind]
-    with context.session([request.urn]) as session:
+    joined = _joined_batch_ref(entity, target, request)
+    locks = [request.urn] if joined is None else [request.urn, joined]
+    with context.session(locks) as session:
         replayed = _replayed_receipt(context, request=request)
         if replayed is not None:
             logger.info(
@@ -480,6 +490,11 @@ def run_transaction(
         )
         if isinstance(outcome, TransitionDenied):
             raise _denied(outcome, request=request, revision=record.revision)
+        membership = (
+            _batch_membership(document, batch_ref=joined, record=record, request=request, now=now)
+            if joined is not None and record.status is TaskStatus.DRAFT
+            else None
+        )
         allocator = CanonicalSequenceAllocator.recover(
             workspace_key=request.urn.workspace_key,
             high_water_mark=_high_water_mark(document),
@@ -495,6 +510,7 @@ def run_transaction(
                 sequence=sequences.allocate(),
                 request=request,
                 now=now,
+                membership=membership,
             )
             receipt = _persist(
                 context=context, session=session, plan=plan, request=request, now=now
@@ -950,6 +966,94 @@ def _replayed_receipt(
     return receipt
 
 
+def _joined_batch_ref(
+    entity: LifecycleEntity, target: LifecycleStatus, request: TransitionRequest
+) -> QualifiedUrn | None:
+    """Return the Batch a Task promotion places the Task into, if it names one.
+
+    Decided before the session opens, because the Batch row the promotion
+    appends to has to be locked beside the Task rather than read unlocked.
+    A reference that does not parse as a Batch URN is left to the reducer,
+    whose model validation refuses it with the field named.
+
+    Args:
+        entity: The lifecycle machine the request addresses.
+        target: The status the request moves to.
+        request: The already-validated request parameters.
+
+    Returns:
+        The Batch URN, or ``None`` when the move places the Task nowhere.
+    """
+    if entity is not LifecycleEntity.TASK or target is not TaskStatus.PLANNED:
+        return None
+    named = request.updates.get("batch_ref")
+    if not isinstance(named, str):
+        return None
+    try:
+        parsed = parse_qualified_urn(named)
+    except IdentityError:
+        return None
+    return parsed if parsed.kind is EntityKind.BATCH else None
+
+
+def _batch_membership(
+    document: dict[str, Any],
+    *,
+    batch_ref: QualifiedUrn,
+    record: LifecycleRecord,
+    request: TransitionRequest,
+    now: datetime,
+) -> tuple[str, dict[str, Any]] | None:
+    """Return the Batch row a promotion appends its Task to, or ``None``.
+
+    A Batch decides readiness from the Tasks it lists, so a promotion that
+    placed a Task without listing it would let the Batch merge around it.
+    The append rides the promotion's own commit, and the Batch's revision
+    moves with it, because a reader holding the old revision holds a Task
+    list that is no longer true.
+
+    Args:
+        document: The locked document.
+        batch_ref: The Batch the promotion names.
+        record: The Task as the document holds it.
+        request: The already-validated request parameters.
+        now: When the promotion happened.
+
+    Returns:
+        The Batch key and its successor row, or ``None`` when the document
+        holds no native Batch under that key or the Task is listed already.
+
+    Raises:
+        TransactionRefusedError: The Batch has moved past ``ACTIVE``, so a
+            Task joining it now would not be part of what it merges.
+    """
+    row = document_rows(document, Epoch2Collection.BATCH).get(batch_ref.entity_key)
+    if row is None:
+        return None
+    try:
+        batch = DeliveryBatch.model_validate(row)
+    except ValueError:
+        return None
+    if batch.status not in _OPEN_BATCH_STATUSES:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.TRANSITION_GUARD_FAILED,
+            detail=f"batch {batch.key} is {batch.status.value}; a Task joins only a PLANNED or "
+            "ACTIVE Batch",
+            entity_ref=str(request.urn),
+            guard=TransitionGuard.PROMOTION_CONTRACT_COMPLETE.value,
+            remediation="Promote the Task into a Batch that is still PLANNED or ACTIVE.",
+            revision=record.revision,
+        )
+    task_ref = str(request.urn)
+    if any(str(ref) == task_ref for ref in batch.task_refs):
+        return None
+    successor = batch.model_dump(mode="json")
+    successor["task_refs"] = [*successor["task_refs"], task_ref]
+    successor["revision"] = batch.revision + 1
+    successor["updated_at"] = now
+    return batch.key, DeliveryBatch.model_validate(successor).model_dump(mode="json")
+
+
 def _entity_for(urn: QualifiedUrn) -> LifecycleEntity:
     """Return the lifecycle machine that governs the record *urn* addresses.
 
@@ -1076,12 +1180,16 @@ def _plan_commit(
     sequence: int,
     request: TransitionRequest,
     now: datetime,
+    membership: tuple[str, dict[str, Any]] | None = None,
 ) -> _CommitPlan:
     """Return the whole commit, decided but not yet written anywhere.
 
     The document is deep-copied rather than edited, because the leak scrub
     diffs the two payloads and an in-place edit would leave it comparing
     one payload with itself.
+
+    A promotion's Batch membership, when it has one, is written in the same
+    document so the Task and the Batch listing it can never disagree.
 
     The successor is written into the document even when it is terminal
     and about to be compacted out of it. That is what puts its new free
@@ -1091,6 +1199,9 @@ def _plan_commit(
     new_document = copy.deepcopy(document)
     rows = new_document.setdefault(collection.value, {})
     rows[record.key] = successor.model_dump(mode="json")
+    if membership is not None:
+        batch_key, batch_row = membership
+        new_document.setdefault(Epoch2Collection.BATCH.value, {})[batch_key] = batch_row
     new_document[CANONICAL_SEQUENCE_KEY] = sequence
     return _CommitPlan(
         record=record,

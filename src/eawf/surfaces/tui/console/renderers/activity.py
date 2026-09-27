@@ -1,11 +1,19 @@
 """activity: the fleet table with the bucket strip at 80 columns and a bucket rail wider.
 
 The window follows the cursor and always says what is off screen.
+
+The native frame draws the same table from the Run register: each Run with the Task it
+runs and its stored status, the buckets being the statuses the rows state, counted off
+those rows. A Run's reason and the instant it was last read are not in the register, so
+those two columns wear the unknown token rather than a blank. The rail is the route's
+declared rail, so it folds into a strip exactly where the registry says it does.
 """
 
 from __future__ import annotations
 
+from eawf.kernel.projection.registers import RegisterView
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.fixture import FleetRow
 from eawf.surfaces.tui.console.frame import (
     Fixed,
@@ -19,8 +27,16 @@ from eawf.surfaces.tui.console.frame import (
     window_rows,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.reads import prototype_attached, reads
-from eawf.surfaces.tui.console.renderers.registers import native_frame
+from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    counts,
+    native_head,
+    route_crumb,
+)
+from eawf.surfaces.tui.console.renderers.registers import restore
 from eawf.surfaces.tui.console.width import pad
 
 RAIL_W = 29
@@ -88,6 +104,76 @@ def _with_rail(view: View, body: list[str], col: int) -> list[str]:
     return out
 
 
+def bucket_items(register: RegisterView) -> list[dv.StripItem]:
+    """Return ``all`` then one bucket per stated status, each counted off the rows."""
+    stated = [dv.StripItem(name, name, n) for name, n in register.status_counts().items()]
+    return [dv.StripItem(None, "all", len(register.rows)), *stated]
+
+
+def rail_lines(register: RegisterView) -> list[str]:
+    """Return the bucket rail: its head, then one bucket per stated status."""
+    return ["BUCKETS", *(f" {pad(x.label, 24)}{x.n}" for x in bucket_items(register)[1:])]
+
+
+def beside(body: list[str], rail: list[str], col: int, w: int) -> list[str]:
+    """Return ``body`` set in ``col`` cells with ``rail`` drawn beside it past a rule."""
+    return [
+        Fixed(
+            pad(
+                pad(body[i] if i < len(body) else "", col)
+                + "│ "
+                + (rail[i] if i < len(rail) else ""),
+                w,
+            )
+        )
+        for i in range(max(len(body), len(rail)))
+    ]
+
+
+def native_frame(view: View, register: RegisterView) -> list[str]:
+    """Return the Activity frame drawn from the Run register the daemon served.
+
+    Args:
+        view: The render being built.
+        register: The Run register at the committed cursor.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    s, w = view.session, view.w
+    cursor = restore(s, register)
+    wide = REGISTRY.rail_at(s.route, w) is not None
+    col = w - RAIL_W - 1 if wide else w
+    top = native_head(
+        view, register, crumb_text=route_crumb(register, "Activity"), summary=counts(register)
+    )
+    if not wide:
+        top.append(dv.strip_row(s, bucket_items(register), w))
+    unstated = register.unstated_rows()
+    if unstated:
+        top.append(f" UNBUCKETED {unstated} in no bucket · the row states no status")
+    cols = [16, 14, 12, max(12, col - 16 - 14 - 12 - 12)]
+    table = Table([cols[0] - 3, cols[1], cols[2], cols[3], 0], 2)
+    body: list[str] = [table.head(["RUN", "TASK", "STATE", "REASON", "AS OF"])]
+    win = window_rows(view, total=len(register.rows), cursor=cursor, chrome=len(top) + 1 + _FOOTER)
+    for index in range(win.start, win.stop):
+        row = register.rows[index]
+        cells = [
+            row.key,
+            row.parent_key or NO_VALUE,
+            value_cell(row.status).slot,
+            UNKNOWN_WORD,
+            UNKNOWN_WORD,
+        ]
+        body.append(table.row(cells, index == cursor))
+    if not register.rows:
+        body.append("   this scope holds no record the Run register renders")
+    if wide:
+        body = beside(body, rail_lines(register), col, w)
+    rows = [*top, *body, thin(w), win.line(complete=register.complete)]
+    return build(view, rows, route_keys_bar(view, native_keys(s.route)))
+
+
 def render(view: View) -> list[str]:
     """Return the Activity frame."""
     if view.register is not None:
@@ -96,7 +182,7 @@ def render(view: View) -> list[str]:
     rows_all = _rows(view)
     if s.sel >= len(rows_all):
         s.sel = max(0, len(rows_all) - 1)
-    wide = w >= 120
+    wide = REGISTRY.rail_at("activity", w) is not None
     col = w - RAIL_W - 1
     rd = reads(s)
     head_rows = _head(view, wide)

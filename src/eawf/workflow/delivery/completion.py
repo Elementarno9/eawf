@@ -40,6 +40,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from eawf.kernel.delivery.adoption import LandedAdoption
 from eawf.kernel.delivery.integration import (
     IntegrationGeneration,
     IntegrationGenerationLedger,
@@ -213,22 +214,29 @@ def _delivering_generation(
 
 
 def _require_seal(
-    task: Task, *, report_verdict: AgentReportVerdict, bundle: CandidateBundle | None
-) -> CandidateBundle:
-    """Return the sealed bundle a reported success must stand on.
+    task: Task,
+    *,
+    report_verdict: AgentReportVerdict,
+    bundle: CandidateBundle | LandedAdoption | None,
+) -> CandidateBundle | LandedAdoption:
+    """Return the sealed bundle, or the adoption, a reported success must stand on.
+
+    An adoption stands in for the seal only for work that landed outside
+    the native loop, where no lease existed to seal against; it names the
+    Tasks it carries, so it is held to the same "about this Task" rule.
 
     Args:
         task: The Task being completed.
         report_verdict: The verdict the Run's terminal report carried.
-        bundle: The Task's sealed candidate, when one exists.
+        bundle: The Task's sealed candidate or adoption, when one exists.
 
     Returns:
-        The sealed bundle.
+        The sealed bundle or the adoption.
 
     Raises:
         CompletionRefusedError: The report does not propose the work for
-            delivery, nothing sealed it, or the seal offered is about
-            another Task.
+            delivery, nothing sealed or adopted it, or what is offered is
+            about another Task.
     """
     if report_verdict not in DELIVERABLE_VERDICTS:
         raise CompletionRefusedError(
@@ -242,6 +250,13 @@ def _require_seal(
             f"the Run reported {report_verdict.value} but no candidate of task "
             f"{task.urn.entity_key} is sealed, so the report is a claim about a workspace",
         )
+    if isinstance(bundle, LandedAdoption):
+        if not bundle.carries(str(task.urn)):
+            raise CompletionRefusedError(
+                CompletionRefusal.BUNDLE_UNSEALED,
+                f"the adoption offered for task {task.urn.entity_key} does not carry it",
+            )
+        return bundle
     if str(bundle.task_ref) != str(task.urn):
         raise CompletionRefusedError(
             CompletionRefusal.BUNDLE_UNSEALED,
@@ -341,7 +356,7 @@ def decide_task_completion(
     task: Task,
     *,
     report_verdict: AgentReportVerdict,
-    bundle: CandidateBundle | None,
+    bundle: CandidateBundle | LandedAdoption | None,
     ledger: IntegrationGenerationLedger,
     base: RevisionBinding,
     contracts: ExecutionContractSet,
@@ -355,7 +370,8 @@ def decide_task_completion(
     Args:
         task: The Task being completed.
         report_verdict: The verdict the Run's terminal report carried.
-        bundle: The Task's sealed candidate, when one exists.
+        bundle: The Task's sealed candidate, or the adoption of its landed
+            work, when one exists.
         ledger: The Batch's generation history.
         base: The Batch base binding, at the ordinal no integration made.
         contracts: The Task's criteria, compiled against their gates.
@@ -393,9 +409,58 @@ def decide_task_completion(
         raise CompletionRefusedError(
             CompletionRefusal.GENERATION_UNSELECTED,
             f"batch {task.batch_ref.entity_key} has selected no integration generation, so the "
-            f"tree that carries candidate {sealed.candidate_ref} is not the delivered one",
+            f"tree that carries {_proposal_name(sealed)} is not the delivered one",
         )
     _refuse_superseded(receipts, line=selected_line(ledger, base=base), batch_ref=batch_ref)
+    legs, delivering, affected = completion_legs(
+        task, ledger=ledger, contracts=contracts, facts=facts
+    )
+    return _decision(
+        task,
+        legs=legs,
+        receipts=receipts,
+        head=head,
+        delivering=delivering,
+        affected=affected,
+        now=now,
+        max_age=max_age,
+    )
+
+
+def completion_legs(
+    task: Task,
+    *,
+    ledger: IntegrationGenerationLedger,
+    contracts: ExecutionContractSet,
+    facts: ProofRuntimeFacts,
+) -> tuple[list[VerificationLeg], IntegrationGeneration, frozenset[str]]:
+    """Return the legs a Task must be proved on, and where each binds.
+
+    A leg binds the generation that delivered the Task unless a later
+    integration named one of its criteria affected, in which case it binds
+    the head. The proof runner and the completion decision both read this
+    one answer, so a proof is taken at exactly the binding it is judged at.
+
+    Args:
+        task: The Task being completed.
+        ledger: The Batch's generation history, with a selected head.
+        contracts: The Task's criteria, compiled against their gates.
+        facts: The runtime half of every freshness key.
+
+    Returns:
+        The legs in contract order, the delivering generation, and the
+        criteria integrations since it invalidated.
+
+    Raises:
+        CompletionRefusedError: No generation carries the Task, or a
+            generation's affected set is unbound from its key.
+    """
+    head = ledger.head
+    if head is None:
+        raise CompletionRefusedError(
+            CompletionRefusal.GENERATION_UNSELECTED,
+            f"batch {ledger.batch_ref.entity_key} has selected no integration generation",
+        )
     delivering = _delivering_generation(ledger, task_ref=str(task.urn))
     affected: frozenset[str] = frozenset()
     for item in ledger.generations:
@@ -413,16 +478,14 @@ def decide_task_completion(
         )
         for contract in contracts.contracts
     ]
-    return _decision(
-        task,
-        legs=legs,
-        receipts=receipts,
-        head=head,
-        delivering=delivering,
-        affected=affected,
-        now=now,
-        max_age=max_age,
-    )
+    return legs, delivering, affected
+
+
+def _proposal_name(proposal: CandidateBundle | LandedAdoption) -> str:
+    """Return how a refusal names the proposal a Task stands on."""
+    if isinstance(proposal, LandedAdoption):
+        return f"the adoption of {proposal.head_sha}"
+    return f"candidate {proposal.candidate_ref}"
 
 
 def _decision(
@@ -460,6 +523,7 @@ __all__ = [
     "CompletionRefusedError",
     "TaskCompletionDecision",
     "affected_criterion_ids",
+    "completion_legs",
     "decide_task_completion",
     "selected_line",
 ]

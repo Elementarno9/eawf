@@ -7,14 +7,18 @@ console surface names the one theme variable that paints it and the style proper
 paints, so a styled capture has an addressable subject for every token and a palette drift
 reds on the surface it moves. A row whose surface has no packet class is product-authored.
 
-Pure data plus one renderer. Nothing here imports Textual; the rendered rules resolve
-against whichever registered theme is active.
+This is the one file that decides which colour a console surface takes: the console app
+loads :func:`render_css` of this table as its whole stylesheet, and the row painter may
+only name a surface this table declares. Pure data plus one renderer. Nothing here imports
+Textual; the rendered rules resolve against whichever registered theme is active.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from types import MappingProxyType
 
 
 class Channel(StrEnum):
@@ -68,6 +72,8 @@ class SurfaceToken:
 
 # Chrome first, then the severity vocabulary, then the lifecycle tints. The keybar and
 # header hints take muted rather than the packet's faint: faint misses 4.5:1 on the band.
+# The cursor row sits on the raised panel rather than the packet's accent-dim selection
+# fill, which no theme binds, so the selection stays one neutral lift on every theme.
 TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("canvas", Channel.BACKGROUND, "surface", ".screen"),
     SurfaceToken("text", Channel.COLOR, "foreground", ".canvas"),
@@ -80,6 +86,8 @@ TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("dim", Channel.COLOR, "faint", ".canvas .dm"),
     SurfaceToken("frame", Channel.BORDER, "border", ".blk"),
     SurfaceToken("focus", Channel.BORDER, "primary", None),
+    SurfaceToken("caret", Channel.COLOR, "accent", ".canvas .br"),
+    SurfaceToken("cursor", Channel.BACKGROUND, "panel-2", None),
     SurfaceToken("ok", Channel.COLOR, "ok", ".ok"),
     SurfaceToken("info", Channel.COLOR, "status-claimed", ".info"),
     SurfaceToken("warn", Channel.COLOR, "warn", ".canvas .wn"),
@@ -90,6 +98,10 @@ TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("closed", Channel.COLOR, "status-closed", None),
     SurfaceToken("failed", Channel.COLOR, "status-failed", None),
 )
+
+
+#: Each surface's row, by surface name: what a painter may ask a run to be drawn as.
+SURFACES: Mapping[str, SurfaceToken] = MappingProxyType({row.surface: row for row in TOKEN_MAP})
 
 
 def render_css(rows: tuple[SurfaceToken, ...]) -> str:

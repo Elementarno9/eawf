@@ -11,7 +11,14 @@ from __future__ import annotations
 import pytest
 
 from eawf.surfaces.tui.console.frame import RowWindow, View
-from eawf.surfaces.tui.console.renderers import read_model, registers, spine
+from eawf.surfaces.tui.console.renderers import (
+    activity,
+    read_model,
+    registers,
+    scope_home,
+    spine,
+    unattended,
+)
 from eawf.surfaces.tui.console.session import Session
 from tests.tui.surfaces.tui.console.test_native_windowing import FAMILIES, journey
 
@@ -25,7 +32,7 @@ def _whole_table(view: View, *, total: int, cursor: int, chrome: int) -> RowWind
 @pytest.fixture
 def unwindowed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Draw every native table whole, as the frames did before they were windowed."""
-    for module in (registers, spine, read_model):
+    for module in (registers, spine, read_model, activity, scope_home, unattended):
         monkeypatch.setattr(module, "window_rows", _whole_table)
 
 

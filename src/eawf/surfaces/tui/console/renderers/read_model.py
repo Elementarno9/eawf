@@ -32,12 +32,13 @@ opens against the prototype registers, and the tracked golden contract is that m
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 
 from eawf.kernel.projection.route_view import RouteReadModel
-from eawf.kernel.projection.truth import TruthField, TruthState
+from eawf.kernel.projection.truth import TruthField
 from eawf.kernel.projection.verification import HealthReadModel, RuntimeTupleRow
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
@@ -46,12 +47,14 @@ from eawf.surfaces.tui.console.frame import (
     View,
     bar,
     build,
+    g_row,
     needs_count,
     route_keys_bar,
     thin,
     window_rows,
 )
 from eawf.surfaces.tui.console.header import header_row
+from eawf.surfaces.tui.console.keybar import Pair, keybar
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
@@ -66,24 +69,21 @@ UNAVAILABLE = "∅ unavailable"
 #: The label a count carries while the projection cannot claim it holds every row.
 KNOWN = "known"
 
+#: What a declared column no producer states shows beside its name: the unknown token
+#: with its state word, so the column reads as silent without a legend.
+UNKNOWN_WORD = f"{truth_cell('unknown')} unknown"
+
 #: What the tuple section says when no conformance verdict is held. An empty section is
 #: an absence of evidence, never a healthy tuple.
 NO_VERDICT = "∅ no conformance verdict is held · nothing here claims a tuple is in service"
 
+#: The gutter a labelled section row sets its label in, the leading space excluded: the
+#: text of every labelled row starts at one column whatever the label.
+LABEL_W = 13
+
 _ROWS = Table([34, 12, 0], 2)
 _TUPLES = Table([28, 8, 11, 24, 0], 2)
 _EMPTY = "   this scope holds no record the read model renders"
-
-# The console's token vocabulary carries three absences, and the truth states carry five.
-# A purged or invalidated value is one the store no longer holds, which reads as
-# unavailable rather than as a value the projection simply never learned.
-_TOKEN_OF_STATE: dict[TruthState, str] = {
-    TruthState.UNKNOWN: "unknown",
-    TruthState.UNAVAILABLE: "unavailable",
-    TruthState.DENIED: "denied",
-    TruthState.PURGED: "unavailable",
-    TruthState.INVALIDATED: "unavailable",
-}
 
 
 class Projected(Protocol):
@@ -128,6 +128,11 @@ def crumb(view: View, model: Projected) -> str:
     return " " + CRUMB_SEP.join(steps)
 
 
+def noun(n: int, word: str) -> str:
+    """Return ``n word`` in the plural a register name takes: ``16 batches``, ``13 runs``."""
+    return plural(n, word, "es" if word.endswith(("ch", "sh", "s", "x")) else "s")
+
+
 def counts(model: Projected) -> str:
     """Return the derived count of every register the route binds, in binding order.
 
@@ -137,7 +142,7 @@ def counts(model: Projected) -> str:
     Returns:
         The counts and the cursor, as the row under the header prints them.
     """
-    parts = [plural(count, name) for name, count in model.counts.items()]
+    parts = [noun(count, name) for name, count in model.counts.items()]
     if not parts:
         parts = [UNAVAILABLE]
     elif not model.complete:
@@ -157,7 +162,7 @@ def unstated_rows(model: RouteReadModel) -> list[str]:
     Returns:
         One or more rows, never an empty list: a route with nothing silent says so.
     """
-    token = truth_cell("unknown")
+    token = UNKNOWN_WORD
     plain = [spec.name for spec in model.unproduced() if spec.missing_producer is None]
     rows = [" UNSTATED  " + " · ".join(f"{name} {token}" for name in plain)] if plain else []
     named: dict[str, list[str]] = {}
@@ -171,10 +176,12 @@ def unstated_rows(model: RouteReadModel) -> list[str]:
 
 
 def cell(field: TruthField[str]) -> str:
-    """Return one truth field as a frame cell: its value, or the token naming its absence."""
-    if field.state is TruthState.KNOWN and field.value:
-        return field.value
-    return truth_cell(_TOKEN_OF_STATE[field.state])
+    """Return one truth field as a frame cell: its slot, then its reason when it wears a mark.
+
+    Each of the five absences keeps its own token, so a purged or invalidated value never
+    reads as an unavailable one.
+    """
+    return value_cell(field).full
 
 
 def restore(session: Session, model: RouteReadModel) -> int:
@@ -194,6 +201,85 @@ def restore(session: Session, model: RouteReadModel) -> int:
     session.sel = index
     session.sel_id = model.rows[index].key if model.rows else None
     return index
+
+
+def label(name: str, text: str = "") -> str:
+    """Return a labelled row: ``name`` in the gutter the packet frames share, then ``text``."""
+    return f" {name:<{LABEL_W}}{text}"
+
+
+def more(text: str) -> str:
+    """Return a continuation row: ``text`` under the text of the labelled row above it."""
+    return " " * (LABEL_W + 1) + text
+
+
+def route_crumb(model: Projected, *steps: str) -> str:
+    """Return a crumb from the projection's scope through ``steps``, with its leading gutter."""
+    return " " + CRUMB_SEP.join([BRAND, model.scope_id, *steps])
+
+
+def native_head(
+    view: View, model: Projected, *, crumb_text: str, summary: str, attached_line: bool = True
+) -> list[str]:
+    """Return a native frame's head: header, summary line, heavy rule, and the reads line.
+
+    Every packet frame opens the same way -- its crumb, one line saying what the frame is
+    about, the heavy rule -- and a connection that cannot vouch for the rows adds the
+    ``ATTACHED`` line under the rule, so a frame drawn from an old read says so before any
+    row does.
+
+    Args:
+        view: The render being built.
+        model: The read model the frame draws; its scope and cursor head the frame.
+        crumb_text: The crumb, with its leading gutter.
+        summary: The line under the header, without its leading gutter.
+        attached_line: Whether the reads line is drawn. A frame about an entity whose
+            lifecycle has ended states that instead, because a finished record does not
+            age with the link.
+
+    Returns:
+        The head rows, the rule under them last.
+    """
+    session, w = view.session, view.w
+    rd = reads(session)
+    line = f" {summary}" + ("" if rd.complete else f" · {rd.label}")
+    rows: list[str] = [
+        header_row(session, crumb=crumb_text, scope=model.scope_id, needs=needs_count(view), w=w),
+        Fixed(pad(line, w)),
+        bar(w),
+    ]
+    if attached_line and not rd.complete:
+        revision = group(int(model.source_cursor))
+        rows.extend([f" ATTACHED  {attached(rd, revision=revision)}", thin(w)])
+    return rows
+
+
+def finish(
+    view: View,
+    top: Sequence[str],
+    body: Sequence[str],
+    keys: Sequence[Pair],
+    *,
+    foot: Sequence[str] = (),
+) -> list[str]:
+    """Return the frame: ``top``, ``body``, ``foot`` docked above the keybar, the keybar last.
+
+    A readout that follows the cursor is docked at the foot rather than floated under a
+    list, so it stays where the eye expects it however long the list grows.
+
+    Args:
+        view: The render being built.
+        top: The rows :func:`native_head` returned.
+        body: The frame's sections; a row not yet :class:`Fixed` is laid out here.
+        keys: The keybar pairs, in the order the packet lists them.
+        foot: The docked readout, drawn last above the keybar; empty docks nothing.
+    """
+    w = view.w
+    laid = [row if isinstance(row, Fixed) else g_row(row, w) for row in body]
+    gap = view.h - 1 - len(top) - len(laid) - len(foot)
+    filler = [Fixed(" " * w)] * max(0, gap) if foot else []
+    tail = [row if isinstance(row, Fixed) else g_row(row, w) for row in foot]
+    return build(view, [*top, *laid, *filler, *tail], keybar(list(keys), w))
 
 
 def record_rows(
@@ -231,7 +317,7 @@ def record_rows(
     return rows
 
 
-def _tuple_rows(tuples: tuple[RuntimeTupleRow, ...], w: int) -> list[str]:
+def tuple_rows(tuples: tuple[RuntimeTupleRow, ...], w: int) -> list[str]:
     """Return the runtime-tuple section: one line per verdict, or the honest absence."""
     quarantined = sum(1 for row in tuples if row.quarantined)
     head = f" TUPLES    {plural(len(tuples), 'runtime tuple')}"
@@ -287,7 +373,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     if regions:
         rows.append(" REGIONS   " + " · ".join(regions))
         rows.append(thin(w))
-    below = [thin(w), *_tuple_rows(model.tuples, w)] if isinstance(model, HealthReadModel) else []
+    below = [thin(w), *tuple_rows(model.tuples, w)] if isinstance(model, HealthReadModel) else []
     below += [thin(w), *unstated_rows(model)]
     rows.extend(record_rows(view, model, cursor, above=len(rows), below=len(below)))
     rows.extend(below)

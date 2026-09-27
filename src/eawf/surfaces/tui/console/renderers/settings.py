@@ -19,7 +19,7 @@ from typing import Any
 from eawf.surfaces.tui.console.chrome import SettingsCatalog
 from eawf.surfaces.tui.console.frame import Fixed, View, g_frame, g_pad, rule_n
 from eawf.surfaces.tui.console.navigation import Ctx, go
-from eawf.surfaces.tui.console.renderers.provenance import list_frame
+from eawf.surfaces.tui.console.renderers.provenance import native_seam, settings_frame
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import cell_len
 
@@ -542,7 +542,7 @@ def _keys(view: View, name: str, k: Key | None) -> list[tuple[str, str]]:
 def render(view: View) -> list[str]:
     """Return the Settings frame, native when the effective-settings view is held."""
     if view.settings is not None:
-        return list_frame(view, view.settings)
+        return settings_frame(view, view.settings)
     s, cfg = view.session, view.fixture.settings
     name = sec(s, cfg)
     keys = section_keys(s, cfg)
@@ -888,6 +888,8 @@ def _seam_value(ctx: Ctx, key: str) -> bool:
 
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Handle the route's keys: the editor first, then the filter, then browsing."""
+    if ctx.settings is not None:
+        return native_seam(ctx, ctx.settings, key, shift)
     s = ctx.s
     if s.overlay:
         return False

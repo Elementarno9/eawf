@@ -7,21 +7,21 @@ render time, so a terminal resize re-lays the frame on the next render. A held c
 registers no timer; a live clock sweeps the rack and the go prefix four times a second
 through the app's one interval.
 
-A console holding no prototype rows keeps only the chrome overlays and the go drawer:
-every other overlay and drawer still draws its rows from the prototype registers, so it
-shows the unknown frame instead.
+An overlay or drawer holds the frame on any console. An overlay that has read nothing it
+draws shows its own crumb and says its subject is not held; a drawer keeps the route frame
+above it, which is the route's unknown frame only when the route itself is unheld.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from rich.segment import Segment
 from rich.style import Style
 from textual.app import App, ComposeResult
-from textual.events import Key, Resize
+from textual.events import Click, Key, Resize
 from textual.strip import Strip
 from textual.widget import Widget
 
@@ -38,7 +38,7 @@ from eawf.kernel.projection.registers import (
     build_register_view,
 )
 from eawf.kernel.projection.route_view import RouteReadModel
-from eawf.kernel.projection.settings import SETTINGS_ROUTES, SettingsView
+from eawf.kernel.projection.settings import SETTINGS_ROUTES, EffectiveSettingsView
 from eawf.kernel.projection.spine import NATIVE_ROUTES, SpineView, build_spine_view
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, build_transcript_view
 from eawf.kernel.projection.verification import (
@@ -47,6 +47,7 @@ from eawf.kernel.projection.verification import (
     build_verification_view,
 )
 from eawf.kernel.runtime.events import RunEventRecord
+from eawf.surfaces.tui.chassis.theme import EA_DARK, EA_THEMES
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
@@ -57,10 +58,11 @@ from eawf.surfaces.tui.console.clock import (
     quit_step,
     sweep_toasts,
 )
-from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, thin, unheld
+from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
 from eawf.surfaces.tui.console.navigation import Ctx
@@ -71,9 +73,11 @@ from eawf.surfaces.tui.console.operations import (
     VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
+from eawf.surfaces.tui.console.paint import Part, Stroke, paint
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.renderers import render_route, unknown_frame
+from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn_label
+from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
 from eawf.workflow.delivery.acceptance import AcceptanceApproval
@@ -92,6 +96,8 @@ SEAM_WORKERS = "seam"
 WRITE_WORKERS = "writes"
 # The key-log key a daemon answer to a sent verb is recorded under.
 DAEMON_KEY = "daemon"
+# The style-metadata key a painted span's mark travels under.
+MARK_META = "mark"
 # How each settled write is announced: toast title and severity.
 _WRITE_TOASTS: Mapping[OperationStatus, tuple[str, Severity]] = MappingProxyType(
     {
@@ -101,8 +107,6 @@ _WRITE_TOASTS: Mapping[OperationStatus, tuple[str, Severity]] = MappingProxyType
         OperationStatus.OUTSTANDING: ("unknown", Severity.WARN),
     }
 )
-# The overlays that draw chrome alone: the keymap and the palette's route list.
-CHROME_OVERLAYS: frozenset[str] = frozenset({"help", "palette"})
 # The toolkit's key names that differ from the dispatcher's.
 TOOLKIT_KEYS: Mapping[str, str] = MappingProxyType(
     {
@@ -193,8 +197,6 @@ def compose_frame(view: View) -> list[str]:
     overlay = s.overlay
     if s.prefix == "g":
         rows = _drawer_frame(view, GO_DRAWER)
-    elif overlay is not None and not view.fixture.prototype and overlay not in CHROME_OVERLAYS:
-        rows = unknown_frame(view)
     elif overlay is not None and overlay in DRAWERS and overlay != GO_DRAWER:
         rows = _drawer_frame(view, overlay)
     elif overlay is not None and is_overlay(overlay):
@@ -209,18 +211,27 @@ def compose_frame(view: View) -> list[str]:
     return rows
 
 
+def _classes(*surfaces: str) -> str:
+    """Return the stylesheet classes that give a widget these surfaces' colours."""
+    return " ".join(SURFACES[surface].css_class for surface in surfaces)
+
+
 class RowsWidget(Widget):
     """A widget that paints precomposed rows verbatim, one strip per line.
 
     A row is never wrapped and never parsed as markup, and nothing here takes focus: the
-    app dispatches every key itself.
+    app dispatches every key itself. Each run of a row is drawn as the surface the row
+    painter reads off its words, in the colour the token map's stylesheet gives that
+    surface under the active theme.
     """
 
     can_focus = False
     DEFAULT_CSS = """
     RowsWidget { padding: 0; margin: 0; border: none; }
     """
+    COMPONENT_CLASSES: ClassVar[set[str]] = {row.css_class for row in TOKEN_MAP}
     ROW_STYLE = Style()
+    PART: ClassVar[Part] = Part.BODY
 
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
@@ -232,17 +243,52 @@ class RowsWidget(Widget):
         self.refresh()
 
     def render_line(self, y: int) -> Strip:
-        """Return row ``y`` as one strip of the widget's width."""
+        """Return row ``y`` as one strip of the widget's width, one segment per span.
+
+        A marked span carries its mark in the segment's style metadata under
+        :data:`MARK_META`, so the theme that colours a token reads what the cell is rather
+        than guessing it from the glyph.
+        """
         text = self.rows[y] if y < len(self.rows) else ""
-        return Strip([Segment(text, self.ROW_STYLE)]).adjust_cell_length(self.size.width)
+        base = self.rich_style + self.ROW_STYLE
+        segments = [
+            Segment(stroke.text, self._stroke_style(base, stroke))
+            for stroke in paint(text, self.PART)
+        ]
+        return Strip(segments).adjust_cell_length(self.size.width)
+
+    def _stroke_style(self, base: Style, stroke: Stroke) -> Style:
+        """Return the style one run is drawn in: the band's, then its surfaces over it."""
+        style = base
+        for surface in (stroke.ground, stroke.surface):
+            if surface is not None:
+                style += self.get_component_rich_style(SURFACES[surface].css_class, partial=True)
+        if stroke.bold or stroke.underline:
+            style += Style(bold=stroke.bold or None, underline=stroke.underline or None)
+        if stroke.mark is not None:
+            style += Style(meta={MARK_META: stroke.mark.value})
+        return style
 
 
 class ProjectionHeader(RowsWidget):
-    """The header row."""
+    """The header row: the row painter styles its typed crumb runs, and a click walks them.
+
+    The styling rides on the segments only, so the row's text is the frame's text, and a
+    click on a linked step walks the breadcrumb to it.
+    """
 
     DEFAULT_CSS = """
     ProjectionHeader { height: 1; dock: top; }
     """
+    DEFAULT_CLASSES = _classes("band", "text")
+    PART = Part.HEADER
+
+    def on_click(self, event: Click) -> None:
+        """Walk the breadcrumb to the step under the pointer, if it is a link."""
+        if isinstance(self.app, ConsoleApp) and self.rows:
+            step = crumb_at(self.rows[0], event.x)
+            if step is not None:
+                self.app.activate_crumb(step)
 
 
 class Body(RowsWidget):
@@ -251,6 +297,7 @@ class Body(RowsWidget):
     DEFAULT_CSS = """
     Body { height: 1fr; }
     """
+    DEFAULT_CLASSES = _classes("canvas", "text")
 
 
 class KeybarRow(RowsWidget):
@@ -259,11 +306,15 @@ class KeybarRow(RowsWidget):
     DEFAULT_CSS = """
     KeybarRow { height: 1; dock: bottom; }
     """
-    ROW_STYLE = Style(bold=True)
+    DEFAULT_CLASSES = _classes("band", "text")
+    PART = Part.KEYBAR
 
 
 class ConsoleApp(App[None]):
     """The operator console over the packaged chrome, or over one prototype fixture.
+
+    The console registers the themes bound from the design packet's palette and opens on
+    the dark one; ``NO_COLOR`` still reduces every cell to grey through the toolkit.
 
     Args:
         fixture: The prototype registers the golden contract replays. A console given
@@ -301,9 +352,8 @@ class ConsoleApp(App[None]):
         ValueError: both a fixture and a chrome were given.
     """
 
-    CSS = """
-    Screen { background: $background; }
-    """
+    # The whole stylesheet is the token map rendered: no colour is chosen in this file.
+    CSS = render_css(TOKEN_MAP)
 
     def __init__(
         self,
@@ -324,6 +374,9 @@ class ConsoleApp(App[None]):
         if fixture is not None and chrome is not None:
             raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
         super().__init__()
+        for theme in EA_THEMES:
+            self.register_theme(theme)
+        self.theme = EA_DARK.name
         self.fixture = fixture or Fixture.from_chrome(chrome or load_chrome())
         self.console_clock: Clock = clock or Clock()
         self.verbose = verbose
@@ -493,7 +546,7 @@ class ConsoleApp(App[None]):
             return None
         return build_register_view(projection)
 
-    def settings_view(self) -> SettingsView | None:
+    def settings_view(self) -> EffectiveSettingsView | None:
         """Return the effective-settings view the settings routes draw from.
 
         Config is not read per route, so this one answer serves the settings list and the
@@ -534,6 +587,7 @@ class ConsoleApp(App[None]):
             settings=self.settings_view(),
             linked=self.seam is not None,
             principal_refusal=self.principal_refusal(),
+            replay=self.seam.replay_note if self.seam is not None else None,
         )
 
     def principal_refusal(self) -> str:
@@ -576,10 +630,10 @@ class ConsoleApp(App[None]):
         if expire_prefix(self.session, self.console_clock) or changed:
             self.render_frame()
 
-    def press_key(self, key: str, *, shift: bool = False) -> None:
-        """Dispatch one key by its dispatcher name and repaint."""
+    def _ctx(self) -> Ctx:
+        """Return the context one keystroke or pointer activation acts in."""
         view = self.view()
-        ctx = Ctx(
+        return Ctx(
             session=self.session,
             fixture=self.fixture,
             host=self,
@@ -591,8 +645,18 @@ class ConsoleApp(App[None]):
             send=self.send,
             attention=self.seam.projection_for(ATTENTION_ROUTE) if self.seam else None,
             principal_refusal=view.principal_refusal,
+            settings=view.settings,
         )
-        dispatch(ctx, key, shift)
+
+    def press_key(self, key: str, *, shift: bool = False) -> None:
+        """Dispatch one key by its dispatcher name and repaint."""
+        dispatch(self._ctx(), key, shift)
+        self._follow_route()
+        self.render_frame()
+
+    def activate_crumb(self, step: CrumbRun) -> None:
+        """Walk the breadcrumb to ``step`` and repaint."""
+        activate_crumb(self._ctx(), step)
         self._follow_route()
         self.render_frame()
 

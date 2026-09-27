@@ -1,7 +1,8 @@
 """The key tables beside the route tables: overlays, drawers, the entry layer and help.
 
 The route tables live in :mod:`~eawf.surfaces.tui.console.keybar`. An overlay accepts only
-its own keys (``-`` always passes), a drawer owns its keys while it is open, and the entry
+its own keys and a drawer owns its keys while it is open; ``-`` clears the rack under
+either, because the rack is the console's rather than theirs. The entry
 layer lets its state's keys through with a short allowlist. Keys are named the way the
 dispatcher matches them (``ArrowDown``, ``Escape``, ``.``, ``Y``).
 """
@@ -29,6 +30,7 @@ OVERLAY_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
         "question": ("1", "2", "3", "x", "Escape"),
         "pause": ("n", "c", "Escape"),
         "evidence": ("ArrowUp", "ArrowDown", "k", "j", "y", "Escape"),
+        "acceptance": ("ArrowUp", "ArrowDown", "k", "j", "y", "Escape"),
         "readiness": ("ArrowUp", "ArrowDown", "k", "j", "Escape"),
         "resolution": ("Y", "Escape"),
         "draft": ("ArrowUp", "ArrowDown", "k", "j", "Enter", "p", "x", "Escape"),
@@ -39,8 +41,8 @@ DRAWER_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "go": (*REGISTRY.go_map, "Escape"),
         "actions": ("Escape", ".", *"abcdefghijklmnopqrstuvwxyz*"),
-        "inspect": ("y", "Escape", "Enter"),
-        "raw": ("y", "Escape", "Enter"),
+        "inspect": ("y", "Escape"),
+        "raw": ("y", "Escape"),
     }
 )
 DRAWER_PAIRS: Mapping[str, tuple[Pair, ...]] = MappingProxyType(
@@ -112,7 +114,7 @@ def allowlist(session: Session, fixture: Fixture) -> frozenset[str]:
         if overlay in OVERLAY_KEYS:
             return frozenset(OVERLAY_KEYS[overlay]) | {DISMISS}
         if overlay in DRAWER_KEYS:
-            return frozenset(DRAWER_KEYS[overlay])
+            return frozenset(DRAWER_KEYS[overlay]) | {DISMISS}
     if session.prefix == "g":
         return frozenset(DRAWER_KEYS["go"])
     keys: set[str] = {key for entry in route_keys(session, fixture) for key in entry.keys}

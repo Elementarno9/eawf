@@ -7,12 +7,13 @@ the write under, so sending the same operation twice is one write: that is what 
 reconnect reconcile an operation whose answer was lost by simply asking again under the
 same id, instead of guessing whether it landed.
 
-Two daemon mutators are bound. An answer to a pending action goes to the approval seal,
-which reports a later conflicting answer as superseded rather than refusing it; and a Run
+Three daemon mutators are bound. An answer to a pending action goes to the approval seal,
+which reports a later conflicting answer as superseded rather than refusing it; a Run
 control goes to the control-request verb, which records that a principal asked and moves
-the Run not at all. Every other writing verb stays listed and refused with its reason,
-because a verb that looked like it worked while the daemon never heard of it is the one
-thing a console must not draw.
+the Run not at all; and a settings edit goes to the layered-config verbs, which write one
+layer file under the daemon's lock. Every other writing verb stays listed and refused
+with its reason, because a verb that looked like it worked while the daemon never heard
+of it is the one thing a console must not draw.
 """
 
 from __future__ import annotations
@@ -37,6 +38,15 @@ SEAL_METHOD: Final = "runtime.delivery.seal_acceptance_approval"
 
 #: The daemon verb that records a principal's request for a Run control.
 CONTROL_METHOD: Final = "runtime.run.control.request"
+
+#: The daemon verbs a settings edit writes and removes one layer's value through. The
+#: console never writes a layer file itself: the daemon holds the file lock and checks the
+#: key against the leaf catalog before it writes.
+SETTING_SET_METHOD: Final = "config.set_layer_value"
+SETTING_UNSET_METHOD: Final = "config.unset_layer_value"
+
+#: The layers a settings edit may target: the five file layers the lens cycles.
+SETTING_LAYERS: Final = frozenset({"global", "workspace", "repo", "branch", "local"})
 
 #: The route whose verbs answer pending actions.
 ATTENTION_ROUTE: Final = "attention"
@@ -135,7 +145,42 @@ class ControlRequest:
     control: ControlKind
 
 
-VerbRequest = AnswerRequest | ControlRequest
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SettingRequest:
+    """An operator's edit of one settings key at one layer, before it is addressed.
+
+    Attributes:
+        target: The dotted key, as the catalog names it.
+        layer: The file layer the edit writes to: the lens it was made under.
+        value: The typed value to write; ignored when ``unset``.
+        unset: Whether the edit removes the layer's value instead of writing one.
+        branch: The branch whose layer a ``branch`` edit writes; ``None`` for the others.
+    """
+
+    target: str
+    layer: str
+    value: Any = None
+    unset: bool = False
+    branch: str | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse an edit no layer write could carry.
+
+        Raises:
+            ValueError: ``layer`` is not a file layer, ``target`` names no key, or a
+                ``branch`` edit names no branch.
+        """
+        if self.layer not in SETTING_LAYERS:
+            raise ValueError(
+                f"layer {self.layer!r} is not one of {', '.join(sorted(SETTING_LAYERS))}"
+            )
+        if not self.target.strip(".") or ".." in self.target:
+            raise ValueError(f"{self.target!r} is not a dotted settings key")
+        if self.layer == "branch" and not self.branch:
+            raise ValueError("a branch edit needs the branch whose layer it writes")
+
+
+VerbRequest = AnswerRequest | ControlRequest | SettingRequest
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -205,8 +250,39 @@ def _minted(prefix: str) -> str:
     return f"{prefix}-{secrets.token_hex(_ID_BYTES)}"
 
 
+def address_setting(request: SettingRequest) -> ConsoleOperation:
+    """Return the layered-config write ``request`` is sent as.
+
+    Config carries no record revision, so a setting is addressed by its key and layer
+    alone; the operation id doubles as the daemon's idempotency key, so the reconnect
+    asking again under it replays the first write rather than making a second.
+
+    Args:
+        request: The edit the operator confirmed.
+
+    Returns:
+        The addressed set or unset operation under a freshly minted id.
+    """
+    key = _minted("CFG")
+    params: dict[str, Any] = {
+        "layer": request.layer,
+        "key_path": request.target.split("."),
+        "idempotency_key": key,
+    }
+    if not request.unset:
+        params["value"] = request.value
+    if request.branch is not None:
+        params["branch"] = request.branch
+    return ConsoleOperation(
+        operation_id=key,
+        method=SETTING_UNSET_METHOD if request.unset else SETTING_SET_METHOD,
+        params=MappingProxyType(params),
+        target=request.target,
+    )
+
+
 def address(
-    request: VerbRequest, *, urn: str, revision: int, operator: Operator
+    request: AnswerRequest | ControlRequest, *, urn: str, revision: int, operator: Operator
 ) -> ConsoleOperation | OperationResult:
     """Return the operation ``request`` is sent as, or why it cannot be sent.
 
@@ -274,6 +350,13 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
     Returns:
         A superseded result when the seal says so, otherwise an applied one.
     """
+    if operation.method in (SETTING_SET_METHOD, SETTING_UNSET_METHOD):
+        return OperationResult(
+            operation_id=operation.operation_id,
+            target=operation.target,
+            status=OperationStatus.APPLIED,
+            detail=_setting_detail(operation, answer),
+        )
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
         return OperationResult(
             operation_id=operation.operation_id,
@@ -288,6 +371,16 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
         status=OperationStatus.APPLIED,
         detail=f"{operation.target} · {stated}",
     )
+
+
+def _setting_detail(operation: ConsoleOperation, answer: Mapping[str, Any]) -> str:
+    """Return what a layered-config answer says was written, in the operator's words."""
+    layer = answer.get("layer", operation.params.get("layer"))
+    if operation.method == SETTING_UNSET_METHOD:
+        if answer.get("removed") is False:
+            return f"{operation.target} was not set at {layer} · nothing was written"
+        return f"{operation.target} unset at {layer} · settings re-read"
+    return f"{operation.target} written at {layer} · settings re-read"
 
 
 def refused(operation: ConsoleOperation, message: str) -> OperationResult:
@@ -376,6 +469,9 @@ __all__ = [
     "RUN_CONTROLS",
     "RUN_KINDS",
     "SEAL_METHOD",
+    "SETTING_LAYERS",
+    "SETTING_SET_METHOD",
+    "SETTING_UNSET_METHOD",
     "UNBOUND_REASON",
     "AnswerRequest",
     "ConsoleOperation",
@@ -384,8 +480,10 @@ __all__ = [
     "OperationResult",
     "OperationStatus",
     "Operator",
+    "SettingRequest",
     "VerbRequest",
     "address",
+    "address_setting",
     "binding_refusal",
     "refused",
     "settled",

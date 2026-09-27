@@ -523,6 +523,8 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
     root_id = RootIdentity.of(REPO_ROOT / ".ea").root_id
     before = authority_digests(REPO_ROOT)
 
+    held: set[str] = set()
+
     async def body() -> tuple[dict[str, str], dict[str, str]]:
         frames: dict[str, str] = {}
         images: dict[str, str] = {}
@@ -538,8 +540,12 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
                     label = f"{route}@{w}x{h}"
                     errors = grid_errors(text, (w, h), capture_cells(app))
                     assert not errors, f"{label}: {'; '.join(errors)}"
-                    if seam.projection_for(route) is not None:
+                    projection = seam.projection_for(route)
+                    if projection is not None:
                         assert root_id in text.splitlines()[0], f"{label} names another tree"
+                        # a row names the record it is filed under, so both are the tree's
+                        held.update(r.key for r in projection.rows)
+                        held.update(r.parent_key for r in projection.rows if r.parent_key)
                     frames[label] = text
                     images[label] = app.export_screenshot(title=label)
             home = seam.projection_for("scope.home")
@@ -552,7 +558,7 @@ def test_console_live_journeys_serve_this_repository_read_only(tmp_path: Path) -
 
     frames, images = asyncio.run(body())
 
-    assert_no_fixture_literal(frames)
+    assert_no_fixture_literal(frames, held=frozenset(held))
     assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the authority tree"
 
     if os.environ.get(RECORD_EVIDENCE_ENV) == "1":
@@ -579,15 +585,21 @@ def test_planted_prototype_register_reds_this_repositorys_frame_check(tmp_path: 
 
     require_epoch2_repository()
 
+    held: set[str] = set()
+
     async def body() -> tuple[dict[str, str], dict[str, str]]:
         live: dict[str, str] = {}
         planted: dict[str, str] = {}
         async with (
-            live_console(REPO_ROOT, tmp_path / "runtime") as (app, _seam),
+            live_console(REPO_ROOT, tmp_path / "runtime") as (app, seam),
             app.run_test(size=SIZES[0]) as pilot,
         ):
             for route in JOURNEYS:
                 live[route] = await render_setup(app, pilot, SessionSetup(route=route))
+                projection = seam.projection_for(route)
+                if projection is not None:
+                    held.update(r.key for r in projection.rows)
+                    held.update(r.parent_key for r in projection.rows if r.parent_key)
             app.fixture = load_fixture(FIXTURE_DIR)
             app.seam = None
             for route in JOURNEYS:
@@ -596,7 +608,7 @@ def test_planted_prototype_register_reds_this_repositorys_frame_check(tmp_path: 
 
     live, planted = asyncio.run(body())
 
-    assert_no_fixture_literal(live)
+    assert_no_fixture_literal(live, held=frozenset(held))
     for route, text in planted.items():
         with pytest.raises(AssertionError, match="fixture literal"):
             assert_no_fixture_literal({route: text})

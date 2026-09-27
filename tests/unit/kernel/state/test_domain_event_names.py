@@ -179,3 +179,32 @@ def test_domain_event_refuses_a_zero_revision() -> None:
             occurred_at=AT,
             revision=0,
         )
+
+
+# ---- the events the delivery verbs emit -------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "domain.task.claimed",
+        "domain.task.ready",
+        "domain.task.completed",
+        "domain.run.started",
+        "domain.run.completed",
+        "domain.run.failed",
+        "domain.batch.merge_started",
+        "domain.batch.merge_observed",
+        "domain.batch.completed",
+    ],
+)
+def test_each_delivery_verb_emits_a_registered_event(name: str) -> None:
+    assert validate_domain_event_name(name) == name
+
+
+@pytest.mark.parametrize("verb_name", ["domain.run.finished", "domain.batch.merged"])
+def test_a_command_spelling_is_not_an_event_name(verb_name: str) -> None:
+    """The CLI says ``run finish``; the event is what happened, ``completed``."""
+    with pytest.raises(DomainEventNameError) as excinfo:
+        validate_domain_event_name(verb_name)
+    assert excinfo.value.reason is DomainEventRejection.UNKNOWN_VERB

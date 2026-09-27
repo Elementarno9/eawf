@@ -15,19 +15,11 @@ non-observation guard to satisfied, which means the entity-agnostic path
 admits an edge whose computable predicate is false: a Milestone activates
 under a retired Track, a Track retires with open Milestones under it, a
 Batch declares itself mergeable with Tasks still running. Those
-predicates are computed here, against the document the mutation would
-land in, and an unmet one refuses the request with the same
-``transition_guard_failed`` code and the same guard name the registry
-would have reported had it been able to evaluate it.
-
-A predicate about a sibling record reads the ledgers as well as the
-document. A Batch that completes is compacted out of the document into
-its append-only ledger, so a Milestone asking whether its required
-Batches have closed would find nothing where they used to be and shut the
-edge their completion is supposed to open. The lookup therefore falls
-through to the collection's standing ledger lines, and a ledger it cannot
-read answers nothing at all -- which shuts the edge, exactly as an absent
-row does.
+predicates are computed by :mod:`eawf.runtime.daemon.methods.domain_guards`,
+against the document the mutation would land in, and an unmet one refuses
+the request with the same ``transition_guard_failed`` code and the same
+guard name the registry would have reported had it been able to evaluate
+it.
 
 A refusal decided here writes nothing at all. It is taken before the
 transaction opens its own session, so there is no WAL intent, no document
@@ -54,6 +46,15 @@ digests differently and the acceptance is refused. Who sealed it needs no
 check at all -- the resolver slot of a PendingAction is typed to a human
 principal, so an agent-approved acceptance is a record that cannot exist.
 
+Task completion is the other verb with a requirement of its own. The
+integrated binding a completed Task records is derived, never presented:
+``domain.task.complete`` runs the completion assessment the caller's
+proofs are judged by, refuses unless every leg is proved on the Batch
+head, and binds exactly that head. A Batch's merge is three moves on
+three facts -- ``merge`` records the authorisation, ``observe_merge``
+needs a landed read-back filed by the reconciliation verb, and
+``complete`` needs that read-back to match the head the Batch pinned.
+
 Two further verbs carry the bookkeeping the fenced epoch-1 verbs used to:
 ``domain.legacy.advance`` moves a record the cutover imported along its
 closed edge table, and ``domain.record.append`` files an audit, decision or
@@ -67,7 +68,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final
@@ -75,14 +76,15 @@ from typing import Annotated, Any, Final
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
 
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
-from eawf.kernel.identity import EntityKind, IdentityError, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
-from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.base import PrincipalKey, ShaStr, SlugStr, StrictPositiveInt
+from eawf.kernel.state.epoch2.batch import BatchStatus
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.pending_action import PendingAction
-from eawf.kernel.state.epoch2.task import Task, TaskStatus
-from eawf.kernel.state.epoch2.track import Track, TrackStatus
+from eawf.kernel.state.epoch2.run import RunStatus
+from eawf.kernel.state.epoch2.task import TaskStatus
+from eawf.kernel.state.epoch2.track import TrackStatus
 from eawf.kernel.state.epoch2.transitions import (
     DENIAL_REMEDIATION,
     GUARD_DENIALS,
@@ -94,8 +96,6 @@ from eawf.kernel.state.epoch2.transitions import (
 )
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn
 from eawf.kernel.store.compaction import document_rows
-from eawf.kernel.store.ledger import LedgerError, effective_records, read_ledger_records
-from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection
 from eawf.runtime.daemon.epoch2_recovery import (
     PROJECTION_DEGRADED,
@@ -118,7 +118,12 @@ from eawf.runtime.daemon.legacy_continuation import (
     advance_legacy,
     append_record,
 )
-from eawf.runtime.daemon.methods import MethodContext
+from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.delivery_completion import (
+    TaskCompletionInputs,
+    TaskCompletionParams,
+    completion_binding,
+)
 from eawf.runtime.daemon.methods.domain_envelope import (
     ENVELOPE_SCHEMA_VERSION,
     DomainEnvelope,
@@ -129,38 +134,12 @@ from eawf.runtime.daemon.methods.domain_envelope import (
     refused_envelope,
     schema_refusal,
 )
+from eawf.runtime.daemon.methods.domain_guards import GUARD_COMPUTERS, GuardInputs
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
 from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 logger = logging.getLogger(__name__)
-
-
-#: The Milestone statuses that stop a Track from counting it as open. The
-#: pair is spelled out rather than read off the terminal set because the
-#: remediation an operator is handed says "complete or cancel", and a
-#: Milestone that reached neither is still work under the Track.
-_CLOSED_MILESTONE_STATUSES: Final[frozenset[str]] = frozenset(
-    {MilestoneStatus.COMPLETED.value, MilestoneStatus.CANCELLED.value}
-)
-
-#: The Batch statuses that satisfy a Milestone's required-Batch guard. A
-#: failed Batch is terminal and is not a completed one, so acceptance
-#: review stays shut until it is redriven or cancelled.
-_CLOSED_BATCH_STATUSES: Final[frozenset[str]] = frozenset(
-    {BatchStatus.COMPLETED.value, BatchStatus.CANCELLED.value}
-)
-
-#: The Task statuses that let a Batch claim every Task in it is settled.
-#: A failed Task is not settled: the Batch that carries it is not ready to
-#: merge until the failure is replanned or the Task is cancelled.
-_SETTLED_TASK_STATUSES: Final[frozenset[str]] = frozenset(
-    {
-        TaskStatus.READY_TO_INTEGRATE.value,
-        TaskStatus.COMPLETED.value,
-        TaskStatus.CANCELLED.value,
-    }
-)
 
 
 class LifecycleParams(BaseModel):
@@ -214,6 +193,27 @@ class MilestoneAcceptParams(LifecycleParams):
     acceptance_bundle: MilestoneAcceptanceBundle | None = None
 
 
+class TaskCompleteParams(LifecycleParams):
+    """The parameters of the one verb that declares a Task delivered.
+
+    The integrated binding is absent by construction: the daemon derives
+    it from the completion assessment, so a caller names the commit it
+    believes carries the Task and the judgment that commit must pass,
+    never the proof itself.
+
+    Attributes:
+        integrated_commit: The commit the caller says the Batch head
+            delivers. Refused unless it is the head the Batch's selected
+            generation stands on.
+        assessment: The half of the completion judgment no native record
+            holds -- the base, the report verdict, the gates, the proof
+            receipts and the runtime facts they ran under.
+    """
+
+    integrated_commit: ShaStr
+    assessment: TaskCompletionInputs
+
+
 @dataclass(frozen=True, slots=True)
 class LifecycleVerb:
     """One registered per-entity verb, and the edge it is allowed to take.
@@ -228,6 +228,8 @@ class LifecycleVerb:
         to_status: The status the verb moves the record to.
         approval_required: Whether the request must carry a sealed
             approval receipt reference.
+        binds_integration: Whether the daemon derives the integrated
+            binding from a passing completion assessment before the move.
     """
 
     method: str
@@ -235,231 +237,7 @@ class LifecycleVerb:
     from_statuses: tuple[LifecycleStatus, ...]
     to_status: LifecycleStatus
     approval_required: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class _GuardInputs:
-    """Everything a computable predicate is allowed to read.
-
-    Attributes:
-        document: The locked document the mutation would land in.
-        document_path: The selected generation's document, which the
-            ledgers holding its compacted records resolve against.
-        record: The subject, validated through its own model.
-        updates: The field values the request supplies.
-        reason_code: The stable reason the request carries, if any.
-        ledger_statuses: What each ledger says about the records it has
-            taken out of the document, filled on first read. One request
-            may ask about several siblings of one collection, and reading
-            the whole ledger once per sibling would make a guard cost a
-            file read per reference.
-    """
-
-    document: dict[str, Any]
-    document_path: Path
-    record: LifecycleRecord
-    updates: Mapping[str, Any]
-    reason_code: str | None
-    ledger_statuses: dict[Epoch2Collection, Mapping[str, str]] = field(default_factory=dict)
-
-
-#: A predicate over the document and the request. ``True`` means the guard
-#: holds; a predicate that cannot show its fact answers ``False``, so a
-#: document missing the row it needs shuts the edge rather than opening it.
-GuardComputer = Callable[[_GuardInputs], bool]
-
-
-def _row_field(row: Any, name: str) -> Any:
-    """Return one field of a stored row, or ``None`` when it has none.
-
-    Sibling rows are read raw rather than validated: a predicate about
-    one record must not fail because an unrelated record in the same
-    collection is malformed, and every caller here compares the result
-    against a known value, so an unreadable row reads as not matching.
-
-    Args:
-        row: A stored row, or whatever the document held in its place.
-        name: The field to read.
-
-    Returns:
-        The field's value, or ``None``.
-    """
-    return row.get(name) if isinstance(row, dict) else None
-
-
-def _ledger_statuses(inputs: _GuardInputs, collection: Epoch2Collection) -> Mapping[str, str]:
-    """Return the standing status of every record *collection* has compacted.
-
-    Args:
-        inputs: The guard inputs, which carry the memo this fills.
-        collection: The ledger collection to read.
-
-    Returns:
-        Each compacted record's status, keyed by public key. Superseded
-        lines are dropped, because a corrected line is the one that
-        stands. A ledger that cannot be read answers empty, so the
-        predicate that asked it sees the record as absent.
-    """
-    cached = inputs.ledger_statuses.get(collection)
-    if cached is not None:
-        return cached
-    statuses: Mapping[str, str]
-    try:
-        path = ledger_path(inputs.document_path, collection)
-        statuses = {
-            item.record_key: item.status for item in effective_records(read_ledger_records(path))
-        }
-    except LedgerError, OSError, ValueError:
-        logger.warning(f"_ledger_statuses unreadable collection={collection.value}")
-        statuses = {}
-    inputs.ledger_statuses[collection] = statuses
-    return statuses
-
-
-def _status_of(inputs: _GuardInputs, collection: Epoch2Collection, key: str) -> str | None:
-    """Return one record's status, from the document or from its ledger.
-
-    A terminal record leaves the document for its ledger, so a predicate
-    reading document rows alone would see a completed Batch as absent and
-    shut the very edge its completion opens.
-
-    Args:
-        inputs: The guard inputs.
-        collection: The collection the record is stored under.
-        key: The record's public key.
-
-    Returns:
-        The status, or ``None`` when neither tier holds the record or the
-        row it holds carries no readable status.
-    """
-    row = document_rows(inputs.document, collection).get(key)
-    if row is None:
-        return _ledger_statuses(inputs, collection).get(key)
-    status = _row_field(row, "status")
-    return status if isinstance(status, str) else None
-
-
-def _supplied(inputs: _GuardInputs, name: str) -> bool:
-    """Return whether the request supplies a usable value for *name*.
-
-    Args:
-        inputs: The guard inputs.
-        name: The update field to look for.
-
-    Returns:
-        ``True`` when the field is present and not empty or null.
-    """
-    return bool(inputs.updates.get(name))
-
-
-def _no_open_milestones(inputs: _GuardInputs) -> bool:
-    """Return whether no Milestone under this Track is still open."""
-    if not isinstance(inputs.record, Track):
-        return False
-    track_ref = str(inputs.record.urn)
-    rows = document_rows(inputs.document, Epoch2Collection.MILESTONE)
-    return not any(
-        _row_field(row, "primary_track_ref") == track_ref
-        and _row_field(row, "status") not in _CLOSED_MILESTONE_STATUSES
-        for row in rows.values()
-    )
-
-
-def _track_active(inputs: _GuardInputs) -> bool:
-    """Return whether this Milestone's primary Track is still active."""
-    if not isinstance(inputs.record, Milestone):
-        return False
-    rows = document_rows(inputs.document, Epoch2Collection.TRACK)
-    row = rows.get(inputs.record.primary_track_ref.entity_key)
-    return bool(_row_field(row, "status") == TrackStatus.ACTIVE.value)
-
-
-def _required_batches_completed(inputs: _GuardInputs) -> bool:
-    """Return whether every Batch this Milestone requires has closed.
-
-    A closed Batch is terminal and has been compacted into its ledger, so
-    this predicate is the one that reads both tiers most often.
-    """
-    if not isinstance(inputs.record, Milestone):
-        return False
-    return all(
-        _status_of(inputs, Epoch2Collection.BATCH, ref.entity_key) in _CLOSED_BATCH_STATUSES
-        for ref in inputs.record.required_batch_refs
-    )
-
-
-def _tasks_ready_to_integrate(inputs: _GuardInputs) -> bool:
-    """Return whether every Task in this Batch has finished or been cancelled.
-
-    A completed or cancelled Task has left the document for its ledger,
-    so the settled statuses are read from whichever tier holds each Task.
-    """
-    if not isinstance(inputs.record, DeliveryBatch):
-        return False
-    return all(
-        _status_of(inputs, Epoch2Collection.TASK, ref.entity_key) in _SETTLED_TASK_STATUSES
-        for ref in inputs.record.task_refs
-    )
-
-
-def _target_branch_pinned(inputs: _GuardInputs) -> bool:
-    """Return whether the Batch knows which branch it integrates into."""
-    if not isinstance(inputs.record, DeliveryBatch):
-        return False
-    return _supplied(inputs, "target_branch") or inputs.record.target_branch is not None
-
-
-def _head_binding_pinned(inputs: _GuardInputs) -> bool:
-    """Return whether the Batch records the exact head it was checked at."""
-    if not isinstance(inputs.record, DeliveryBatch):
-        return False
-    return (
-        _supplied(inputs, "current_head_binding") or inputs.record.current_head_binding is not None
-    )
-
-
-def _promotion_contract_complete(inputs: _GuardInputs) -> bool:
-    """Return whether a promoted Task carries a Batch, criteria and a due scope."""
-    if not isinstance(inputs.record, Task):
-        return False
-    return all(_supplied(inputs, name) for name in ("batch_ref", "criteria", "due_scope"))
-
-
-def _run_bound(inputs: _GuardInputs) -> bool:
-    """Return whether the Run the Task would start under is a record that exists."""
-    if not isinstance(inputs.record, Task):
-        return False
-    named = inputs.updates.get("active_run_ref")
-    if not isinstance(named, str) or not named:
-        return False
-    try:
-        parsed = parse_qualified_urn(named)
-    except IdentityError:
-        return False
-    if parsed.kind is not EntityKind.RUN:
-        return False
-    return parsed.entity_key in document_rows(inputs.document, Epoch2Collection.RUN)
-
-
-def _reason_recorded(inputs: _GuardInputs) -> bool:
-    """Return whether the request names why the move happened."""
-    return inputs.reason_code is not None
-
-
-#: Which guards this preflight can answer from the document and the
-#: request. A guard absent from this map is left to the reducer, which
-#: either requires an observation for it or defaults it to satisfied.
-GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
-    TransitionGuard.NO_OPEN_MILESTONES: _no_open_milestones,
-    TransitionGuard.TRACK_ACTIVE: _track_active,
-    TransitionGuard.REQUIRED_BATCHES_COMPLETED: _required_batches_completed,
-    TransitionGuard.TASKS_READY_TO_INTEGRATE: _tasks_ready_to_integrate,
-    TransitionGuard.TARGET_BRANCH_PINNED: _target_branch_pinned,
-    TransitionGuard.HEAD_BINDING_PINNED: _head_binding_pinned,
-    TransitionGuard.PROMOTION_CONTRACT_COMPLETE: _promotion_contract_complete,
-    TransitionGuard.RUN_BOUND: _run_bound,
-    TransitionGuard.REASON_RECORDED: _reason_recorded,
-}
+    binds_integration: bool = False
 
 
 #: Every registered per-entity verb, in registration order.
@@ -512,16 +290,71 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         to_status=BatchStatus.READY_TO_MERGE,
     ),
     LifecycleVerb(
+        method="domain.batch.merge",
+        kind=EntityKind.BATCH,
+        from_statuses=(BatchStatus.READY_TO_MERGE,),
+        to_status=BatchStatus.MERGING,
+    ),
+    LifecycleVerb(
+        method="domain.batch.observe_merge",
+        kind=EntityKind.BATCH,
+        from_statuses=(BatchStatus.MERGING,),
+        to_status=BatchStatus.MERGED_PENDING_RECONCILIATION,
+    ),
+    LifecycleVerb(
+        method="domain.batch.complete",
+        kind=EntityKind.BATCH,
+        from_statuses=(BatchStatus.MERGED_PENDING_RECONCILIATION,),
+        to_status=BatchStatus.COMPLETED,
+    ),
+    LifecycleVerb(
         method="domain.task.promote",
         kind=EntityKind.TASK,
         from_statuses=(TaskStatus.DRAFT,),
         to_status=TaskStatus.PLANNED,
     ),
     LifecycleVerb(
+        method="domain.task.claim",
+        kind=EntityKind.TASK,
+        from_statuses=(TaskStatus.PLANNED,),
+        to_status=TaskStatus.CLAIMED,
+    ),
+    LifecycleVerb(
         method="domain.task.start",
         kind=EntityKind.TASK,
         from_statuses=(TaskStatus.CLAIMED,),
         to_status=TaskStatus.RUNNING,
+    ),
+    LifecycleVerb(
+        method="domain.task.ready",
+        kind=EntityKind.TASK,
+        from_statuses=(TaskStatus.RUNNING,),
+        to_status=TaskStatus.READY_TO_INTEGRATE,
+    ),
+    LifecycleVerb(
+        method="domain.task.complete",
+        kind=EntityKind.TASK,
+        from_statuses=(TaskStatus.READY_TO_INTEGRATE,),
+        to_status=TaskStatus.COMPLETED,
+        binds_integration=True,
+    ),
+    LifecycleVerb(
+        method="domain.run.start",
+        kind=EntityKind.RUN,
+        from_statuses=(RunStatus.QUEUED,),
+        to_status=RunStatus.RUNNING,
+    ),
+    LifecycleVerb(
+        method="domain.run.finish",
+        kind=EntityKind.RUN,
+        from_statuses=(RunStatus.RUNNING,),
+        to_status=RunStatus.COMPLETED,
+    ),
+    LifecycleVerb(
+        method="domain.run.fail",
+        kind=EntityKind.RUN,
+        from_statuses=(RunStatus.RUNNING,),
+        to_status=RunStatus.FAILED,
     ),
 )
 
@@ -536,7 +369,13 @@ DOMAIN_LIFECYCLE_METHODS: Final[tuple[str, ...]] = tuple(
 #: handler and the contract test read the same table, so a verb cannot be
 #: registered against one model and asserted against another.
 DOMAIN_LIFECYCLE_PARAMS: Final[Mapping[str, type[LifecycleParams]]] = {
-    verb.method: MilestoneAcceptParams if verb.approval_required else LifecycleParams
+    verb.method: (
+        MilestoneAcceptParams
+        if verb.approval_required
+        else TaskCompleteParams
+        if verb.binds_integration
+        else LifecycleParams
+    )
     for verb in DOMAIN_LIFECYCLE_VERBS
 }
 
@@ -824,12 +663,13 @@ def _unmet_guard(
     row = row_for(LIFECYCLE_ENTITIES[verb.kind], record.status, verb.to_status)
     if row is None:
         return None
-    inputs = _GuardInputs(
+    inputs = GuardInputs(
         document=document,
         document_path=document_path,
         record=record,
         updates=params.updates,
         reason_code=params.reason_code,
+        binding_refs=params.binding_refs,
     )
     for guard in row.guards:
         computer = GUARD_COMPUTERS.get(guard)
@@ -840,7 +680,7 @@ def _unmet_guard(
 
 def _preflight(
     context: Epoch2RootContext, *, verb: LifecycleVerb, params: LifecycleParams
-) -> DomainEnvelope | None:
+) -> tuple[DomainEnvelope | None, int | None]:
     """Return the refusal this request earns before the transaction runs.
 
     Nothing is written on any path through this function: the document is
@@ -853,7 +693,9 @@ def _preflight(
         params: The already-validated request parameters.
 
     Returns:
-        The refusal envelope, or ``None`` when the transaction should run.
+        The refusal envelope, or ``None`` when the transaction should run,
+        beside the revision the subject was read at, or ``None`` when the
+        preflight left the subject to the transaction unread.
 
     Raises:
         NativeAuthorityRequiredError: The tree left epoch 2.
@@ -861,27 +703,126 @@ def _preflight(
         LockTimeout: A lock stayed held past the lock timeout.
     """
     if params.urn.kind is not verb.kind:
-        return _kind_mismatch(verb, params=params)
+        return _kind_mismatch(verb, params=params), None
     if _receipt_filed(context, key=params.idempotency_key):
-        return None
+        return None, None
     with context.session([params.urn]) as session:
         document = session.read_document()
         document_path = session.document_path
     record = _subject(document, verb=verb, params=params)
     if record is None:
-        return None
+        return None, None
     if record.status not in verb.from_statuses:
-        return _illegal_edge(verb, params=params, record=record)
+        return _illegal_edge(verb, params=params, record=record), record.revision
     if verb.approval_required:
         unsealed = _unsealed_acceptance(document, params=params, record=record)
         if unsealed is not None:
-            return _approval_refusal(verb, params=params, record=record, detail=unsealed)
+            refusal = _approval_refusal(verb, params=params, record=record, detail=unsealed)
+            return refusal, record.revision
     guard = _unmet_guard(
         verb, document=document, document_path=document_path, record=record, params=params
     )
     if guard is None:
-        return None
-    return _guard_refusal(verb, params=params, record=record, guard=guard)
+        return None, record.revision
+    return _guard_refusal(verb, params=params, record=record, guard=guard), record.revision
+
+
+def _integration_refusal(
+    verb: LifecycleVerb,
+    *,
+    params: LifecycleParams,
+    code: DomainErrorCode,
+    detail: str,
+    revision: int | None,
+) -> DomainEnvelope:
+    """Return the refusal of a completion the assessment does not prove.
+
+    Args:
+        verb: The verb the client asked for.
+        params: The already-validated request parameters.
+        code: ``proof_stale`` when a leg must run again at the head, and
+            ``transition_guard_failed`` when the assessment refused.
+        detail: What the assessment found.
+        revision: The revision the subject was read at, when it was read.
+
+    Returns:
+        An ``error`` envelope naming the integrated-binding guard.
+    """
+    return DomainEnvelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
+        status=DomainStatus.ERROR,
+        operation=verb.method,
+        revision_before=revision,
+        revision_after=revision,
+        errors=(
+            DomainError(
+                code=code,
+                message=f"{verb.method} {detail}"[:1000],
+                entity_ref=str(params.urn),
+                guard=TransitionGuard.INTEGRATED_BINDING_PINNED.value,
+                remediation=DENIAL_REMEDIATION[DenialCode.TASK_INTEGRATION_UNPROVEN],
+            ),
+        ),
+    )
+
+
+def _bind_integration(
+    context: Epoch2RootContext,
+    *,
+    verb: LifecycleVerb,
+    params: LifecycleParams,
+    revision: int | None,
+) -> LifecycleParams | DomainEnvelope:
+    """Return *params* carrying the binding a passing assessment derives.
+
+    A binding the caller supplied is replaced rather than trusted: the
+    edge's proof is whatever the assessment finds on the Batch head.
+
+    Args:
+        context: The native context of the addressed root.
+        verb: The verb the client asked for.
+        params: The already-validated request parameters.
+        revision: The revision the subject was read at, when it was read.
+
+    Returns:
+        The request with ``integrated_binding`` set, or the refusal of an
+        assessment that refused or left a leg unproven.
+    """
+    if not isinstance(params, TaskCompleteParams):
+        raise TypeError(f"{verb.method} parses through TaskCompleteParams")
+    inputs = params.assessment
+    args = TaskCompletionParams.model_validate(
+        {
+            **inputs.model_dump(mode="json"),
+            "urn": str(params.urn),
+            "actor": params.actor,
+            "idempotency_key": params.idempotency_key,
+        }
+    )
+    try:
+        answer, binding = completion_binding(
+            context, args, integrated_commit=params.integrated_commit
+        )
+    except DaemonValidationError as error:
+        detail = str(error).removeprefix("validation_failed: ")
+        return _integration_refusal(
+            verb,
+            params=params,
+            code=DomainErrorCode.TRANSITION_GUARD_FAILED,
+            detail=detail,
+            revision=revision,
+        )
+    if binding is None:
+        return _integration_refusal(
+            verb,
+            params=params,
+            code=DomainErrorCode.PROOF_STALE,
+            detail=f"{answer.reason}; rerun {', '.join(answer.rerun_gate_ids) or 'none'}, "
+            f"unavailable {', '.join(answer.unavailable_gate_ids) or 'none'}",
+            revision=revision,
+        )
+    updates = {**params.updates, "integrated_binding": binding.model_dump(mode="json")}
+    return params.model_copy(update={"updates": updates})
 
 
 def _transition_request(verb: LifecycleVerb, params: LifecycleParams) -> TransitionRequest:
@@ -917,6 +858,22 @@ def _transition_request(verb: LifecycleVerb, params: LifecycleParams) -> Transit
     )
 
 
+def _bundle_binding(params: LifecycleParams) -> LifecycleParams:
+    """Return *params* carrying the accepted binding its acceptance bundle names.
+
+    An acceptance is taken on exactly the tree the sealed bundle records,
+    so a request presenting the bundle and no binding means that one; a
+    binding the request does name is left for the seal check to hold
+    against the bundle rather than overwritten.
+    """
+    if not isinstance(params, MilestoneAcceptParams) or params.acceptance_bundle is None:
+        return params
+    if "accepted_binding" in params.updates:
+        return params
+    binding = params.acceptance_bundle.accepted_binding.model_dump(mode="json")
+    return params.model_copy(update={"updates": {**params.updates, "accepted_binding": binding}})
+
+
 async def _run_verb(
     ctx: MethodContext,
     params: dict[str, Any],
@@ -948,8 +905,19 @@ async def _run_verb(
         )
     except ValidationError as error:
         return schema_refusal(error, params=params, operation=verb.method).model_dump(mode="json")
+    request_params = _bundle_binding(request_params)
     context = ctx.native_root_context(authority.root)
-    refused = await asyncio.to_thread(_preflight, context, verb=verb, params=request_params)
+    refused, revision = await asyncio.to_thread(
+        _preflight, context, verb=verb, params=request_params
+    )
+    if refused is None and verb.binds_integration:
+        bound = await asyncio.to_thread(
+            _bind_integration, context, verb=verb, params=request_params, revision=revision
+        )
+        if isinstance(bound, DomainEnvelope):
+            refused = bound
+        else:
+            request_params = bound
     if refused is not None:
         logger.info(f"_run_verb refused method={verb.method} code={refused.errors[0].code.value}")
         return refused.model_dump(mode="json")
@@ -1093,9 +1061,8 @@ __all__ = [
     "DOMAIN_LIFECYCLE_PARAMS",
     "DOMAIN_LIFECYCLE_VERBS",
     "DOMAIN_RECORD_APPEND",
-    "GUARD_COMPUTERS",
-    "GuardComputer",
     "LifecycleParams",
     "LifecycleVerb",
     "MilestoneAcceptParams",
+    "TaskCompleteParams",
 ]

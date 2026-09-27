@@ -1,19 +1,22 @@
-"""The evidence viewer: the receipts behind a claim.
+"""The evidence viewer: one claim, the receipts behind it and the ladder it stands on.
 
-The subject comes from the route and the selected row, since a campaign claim and a
-milestone criterion are different models. The three state rows replace the built frame's
-last three body rows.
+Its subject is the claim it was opened on, captured when it opened, so walking its receipts
+never moves it; the acceptance evidence overlay is the other overlay, over a milestone's
+sealed bundle. The three state rows replace the built frame's last three body rows.
 """
 
 from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
-from eawf.surfaces.tui.console import prototype as pt
-from eawf.surfaces.tui.console.frame import TABLES, View, bar, build, header, thin
+from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.overlays.chassis import crumb, cursor_foot
 from eawf.surfaces.tui.console.overlays.states import with_state_rows
+from eawf.surfaces.tui.console.width import pad
 
-_CAMPAIGN_EVIDENCE: tuple[tuple[str, str, str, str, str], ...] = (
+NAME = "evidence"
+# id, what it was read from, what it claims, its support and the receipts backing it
+CLAIMS: tuple[tuple[str, str, str, str, str], ...] = (
     (
         "EVD-0011",
         "digest differs on retry",
@@ -24,23 +27,31 @@ _CAMPAIGN_EVIDENCE: tuple[tuple[str, str, str, str, str], ...] = (
     ("EVD-0014", "digest stable over 40", "drift is bounded", "2 receipts", "EVT-9120 EVT-9126"),
     ("EVD-0019", "provider changed model", "cause is upstream", "1 receipt", "EVT-9131"),
 )
-_MILESTONE_RECEIPTS: tuple[tuple[str, str, str, str], ...] = (
-    ("EVT-2201", "every escape has an authority ref", "receipt", "Jul 14"),
-    ("EVT-2204", "no escape bypasses the ledger", "receipt", "Jul 14"),
-    ("EVT-2209", "replay of the ledger is exact", "receipt", "Jul 15"),
-)
+_LABEL = 9
 
 
-def _campaign(view: View) -> list[str]:
+def claim_id(sel: int) -> str:
+    """Return the id of the claim on route row ``sel``, the first past the end."""
+    return CLAIMS[sel][0] if 0 <= sel < len(CLAIMS) else CLAIMS[0][0]
+
+
+def render(view: View) -> list[str]:
+    """Return the evidence viewer."""
     s, w = view.session, view.w
-    claim = _CAMPAIGN_EVIDENCE[s.sel] if s.sel < len(_CAMPAIGN_EVIDENCE) else _CAMPAIGN_EVIDENCE[0]
+    claim = next((c for c in CLAIMS if c[0] == s.ov_subject), CLAIMS[0])
+    receipts = claim[4].split()
+    sel = dv.sel_in(s, len(receipts))
     rows = [
-        header(view, f" Eä ▸ evidence · {claim[0]}"),
+        header(view, crumb(NAME, claim[0])),
         " CAM-0001 Provider drift · a claim, and what backs it",
         bar(w),
         f" CLAIM     {claim[2]}",
         f" FROM      {claim[1]}",
-        f" SUPPORT   {claim[3]} · {claim[4]}",
+        f" SUPPORT   {claim[3]}",
+        *(
+            f" {pad('RECEIPTS' if i == 0 else '', _LABEL)} {'▸' if i == sel else ' '} {receipt}"
+            for i, receipt in enumerate(receipts)
+        ),
         thin(w),
         " CONTRADICTION",
         "   EVD-0011 and EVD-0014 disagree about the same task",
@@ -49,31 +60,7 @@ def _campaign(view: View) -> list[str]:
         thin(w),
         " NOT       a campaign claim is not acceptance proof: it never counts",
         "           toward a milestone, and it seals no digest.",
+        cursor_foot("RECEIPT", sel + 1, len(receipts)),
     ]
-    return build(view, rows, keybar([("y", "copy receipts"), ("Esc", "back")], w))
-
-
-def _milestone(view: View) -> list[str]:
-    s, w = view.session, view.w
-    dv.sel_in(s, len(_MILESTONE_RECEIPTS))
-    table = TABLES["RC"]
-    rows = [
-        header(view, f" Eä ▸ evidence · {pt.OWN_MILESTONE}"),
-        " at digest 7c1f…a94 · quotable at this exact revision",
-        bar(w),
-        table.head(["EVIDENCE", "RECEIPT", "CLAIM", "KIND"]),
-        *(table.row(list(e), i == s.sel) for i, e in enumerate(_MILESTONE_RECEIPTS)),
-        thin(w),
-        " DENIED    The audit sign-off is recorded — ≠ denied to your class.",
-        "           the criterion is neither met nor failed; you cannot see it",
-        thin(w),
-        " NOT       Reading evidence does not accept the milestone.",
-    ]
-    keys = keybar([("↑↓", "receipt"), ("y", "copy"), ("Esc", "back")], w)
-    return build(view, rows, keys)
-
-
-def render(view: View) -> list[str]:
-    """Return the evidence viewer."""
-    frame = _campaign(view) if view.session.route == "campaign" else _milestone(view)
-    return with_state_rows("evidence", frame, view.session, view.w)
+    frame = build(view, rows, keybar([("↑↓", "receipt"), ("y", "copy"), ("Esc", "back")], w))
+    return with_state_rows(NAME, frame, s, w)

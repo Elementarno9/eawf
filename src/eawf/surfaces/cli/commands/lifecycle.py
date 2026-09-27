@@ -148,17 +148,25 @@ wave_app.add_typer(wave_budget_app, name="budget")
 # ``domain`` module beside the Track verb that joins this app's own.
 milestone_app = typer.Typer(
     name="milestone",
-    help="Milestone lifecycle (activate, open-review, accept, cancel).",
+    help="Milestone lifecycle (activate, open-review, open-approval, accept, cancel).",
     no_args_is_help=True,
 )
 batch_app = typer.Typer(
     name="batch",
-    help="Delivery-batch lifecycle (activate, ready).",
+    help=(
+        "Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, reconcile, "
+        "observe-merge, complete)."
+    ),
     no_args_is_help=True,
 )
 task_app = typer.Typer(
     name="task",
-    help="Task lifecycle (promote, start).",
+    help="Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, complete).",
+    no_args_is_help=True,
+)
+run_app = typer.Typer(
+    name="run",
+    help="Run lifecycle (create, start, finish, fail).",
     no_args_is_help=True,
 )
 repository_app = typer.Typer(
@@ -851,6 +859,10 @@ def _run_mutation(
 # after every shared symbol is defined, so the siblings can import the apps and
 # helpers from this module without a circular-import failure.
 from eawf.surfaces.cli.commands import domain as _domain  # noqa: E402, F401
+from eawf.surfaces.cli.commands import domain_delivery as _domain_delivery  # noqa: E402, F401
+from eawf.surfaces.cli.commands import (  # noqa: E402
+    domain_integration as _domain_integration,  # noqa: F401
+)
 from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
 from eawf.surfaces.cli.commands import lifecycle_iter as _lifecycle_iter  # noqa: E402
 from eawf.surfaces.cli.commands import lifecycle_phase as _lifecycle_phase  # noqa: E402
@@ -879,6 +891,7 @@ __all__ = [
     "milestone_app",
     "phase_app",
     "project_app",
+    "run_app",
     "task_app",
     "track_app",
     "wave_app",

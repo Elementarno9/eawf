@@ -21,6 +21,7 @@ from eawf.surfaces.tui.console.session import (
     SIZES,
     BackEntry,
     BackStack,
+    FocusTarget,
     LogEntry,
     Session,
     SessionSetup,
@@ -49,6 +50,8 @@ DIRTY: dict[str, Any] = {
     "pane_sel": 1,
     "scroll": 7,
     "back": BackStack(entries=[BackEntry(route="scope.home", sel=1, subj=None)]),
+    "region": "runs",
+    "focus_return": FocusTarget(route="activity", sel=2, sel_id="RUN-2", region=None),
     "prefix": "g",
     "prefix_seq": 3,
     "prefix_deadline": 12.5,
@@ -104,6 +107,8 @@ DIRTY: dict[str, Any] = {
     "visible": 12,
     "count": 30,
     "ov_state": {"question": 1, "pause": 2, "evidence": 1, "readiness": 3},
+    "ov_subject": "CLM-0004",
+    "resolution_ending": "moved",
     "log": [LogEntry(key="Enter", note="drill")],
     "record_facts": ["bundle"],
     "record_nav": ["BAT-0001", None],
@@ -296,8 +301,9 @@ def test_session_w_h_follow_the_size_index(size: int) -> None:
 
 def test_back_stack_push_caps_at_back_cap() -> None:
     stack = BackStack()
+    # distinct subjects: consecutive steps onto one place coalesce rather than stack
     for sel in range(BACK_CAP + 1):
-        stack.push(route="activity", sel=sel, subj=None)
+        stack.push(route="run.detail", sel=sel, subj=f"RUN-{sel}")
     assert len(stack) == BACK_CAP
     assert stack.items()[0].sel == 1
     top = stack.pop()

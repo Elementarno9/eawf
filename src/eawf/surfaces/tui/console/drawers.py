@@ -3,6 +3,10 @@
 A drawer keeps the route frame above it and replaces the frame's tail rows and keybar with
 its own rows; the app composes it. The go drawer is shown while the ``g`` prefix is armed,
 not through the session's overlay.
+
+A console holding no prototype rows still draws the inspect and raw drawers under the
+route it keeps: nothing has been read for the focused field, so each says that in the
+unknown token rather than handing the frame to the route's unknown frame.
 """
 
 from __future__ import annotations
@@ -19,6 +23,9 @@ from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, entry_state
 from eawf.surfaces.tui.console.renderers import copy_target
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.tokens import TRUTH
+
+_UNKNOWN = TRUTH["unknown"].unicode
 
 GO_ROWS: tuple[str, ...] = (
     " GO        g h  home · scope     g a  activity      g n  needs you",
@@ -50,6 +57,11 @@ def _inspected(session: Session, fixture: Fixture) -> str:
 def inspect_rows(view: View) -> list[str]:
     """Return the inspect drawer: the focused field with its provenance."""
     s, fx = view.session, view.fixture
+    if not fx.prototype:
+        return [
+            f" INSPECT   value       {_UNKNOWN} unknown · nothing has been read for this field",
+            f"           answered by {_UNKNOWN} unknown · no producer has answered it here",
+        ]
     if s.route == "entry":
         state = entry_state(view)
         rows = state.rows or ()
@@ -72,6 +84,8 @@ def inspect_rows(view: View) -> list[str]:
 
 def raw_rows(view: View) -> list[str]:
     """Return the raw drawer: a bounded, scrubbed segment of the runner's own words."""
+    if not view.fixture.prototype:
+        return [f" RAW       {_UNKNOWN} unknown · no raw segment has been read here"]
     target = dv.target_id(view.session, view.fixture)
     last = view.fixture.proto.revision
     return [

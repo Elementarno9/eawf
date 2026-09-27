@@ -13,23 +13,22 @@ is the mode the tracked golden contract replays.
 
 from __future__ import annotations
 
-from eawf.kernel.projection.integration import GenerationRow, GitPrReadModel
+from eawf.kernel.projection.integration import PULL_REQUEST_PRODUCER, GitPrReadModel
 from eawf.surfaces.tui.console import derive as dv
-from eawf.surfaces.tui.console.format import group
-from eawf.surfaces.tui.console.frame import (
-    Grid,
-    View,
-    bar,
-    build,
-    g_frame,
-    needs_count,
-    route_keys_bar,
-    thin,
-)
-from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.format import clock_minute, group
+from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
-from eawf.surfaces.tui.console.renderers.read_model import counts, crumb, native, unstated_rows
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNAVAILABLE,
+    UNKNOWN_WORD,
+    counts,
+    finish,
+    label,
+    more,
+    native,
+    native_head,
+    route_crumb,
+)
 
 _COMMITS: tuple[list[str], ...] = (
     ["8f14c2", "13:58", "Bound the replay window to the acked cursor"],
@@ -55,40 +54,37 @@ NO_GENERATION = "∅ this Batch has taken no generation · nothing has been inte
 #: is on is the whole record it holds of that delivery.
 COMMIT_IS_THE_ROW = "this row is the whole record the console holds of that commit"
 
-_ROWS = Grid([20, 14, 10, 0], 2)
+_ROWS = Grid([10, 8, 22, 0], 2)
 
 
-def _generation_cells(row: GenerationRow) -> list[str]:
-    """Return one generation's cells: its key, ordinal, commit and what it touched."""
-    paths = len(row.changed_paths)
-    return [
-        row.key + (" ◂ head" if row.selected else ""),
-        f"generation {group(row.ordinal)}",
-        row.head_sha[:6],
-        dv.plural(paths, "path"),
-    ]
-
-
-def _generation_rows(view: View, model: GitPrReadModel) -> list[str]:
-    """Return the generation section: one line per generation, or the honest absence."""
+def _commit_rows(view: View, model: GitPrReadModel) -> list[str]:
+    """Return the commits section: one row per generation the Batch took, head marked."""
     session, w = view.session, view.w
     cursor = dv.sel_in(session, len(model.generations))
-    taken = len(model.generations)
-    head = f" HISTORY   {dv.plural(taken, 'generation')}"
-    selected = model.selected_generation()
-    rows = [f"{head} · head {selected.key}" if selected else f" HISTORY   {NO_GENERATION}"]
-    if not model.generations:
-        return rows
-    rows.append(_ROWS.head(["GENERATION", "ORDINAL", "COMMIT", "TOUCHED"]))
+    rows = [_ROWS.head(["COMMIT", "WHEN", "GENERATION", "TOUCHED"])]
     rows.extend(
-        _ROWS.row(_generation_cells(row), index == cursor, w)
+        _ROWS.row(
+            [
+                row.head_sha[:6],
+                clock_minute(row.created_at),
+                row.key + (" ◂ head" if row.selected else ""),
+                f"generation {group(row.ordinal)} · {dv.plural(len(row.changed_paths), 'path')}",
+            ],
+            index == cursor,
+            w,
+        )
         for index, row in enumerate(model.generations)
     )
+    if not model.generations:
+        rows.append(f"   {NO_GENERATION}")
     return rows
 
 
 def native_frame(view: View, model: GitPrReadModel) -> list[str]:
     """Return the Git frame drawn from the read model the daemon served.
+
+    Every repository fact the console has no reader for renders unavailable, never
+    clean, and a check with no outcome renders unknown, never passed.
 
     Args:
         view: The render being built.
@@ -98,20 +94,32 @@ def native_frame(view: View, model: GitPrReadModel) -> list[str]:
         The full frame, keybar last.
     """
     session, w = view.session, view.w
-    rows: list[str] = [
-        header_row(
-            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
-        ),
-        " " + counts(model),
-        bar(w),
+    batch = session.subj_id or (model.rows[0].key if model.rows else None)
+    top = native_head(
+        view,
+        model,
+        crumb_text=route_crumb(model, *([batch] if batch else []), "Git"),
+        summary=f"read only · the console never touches a remote · {counts(model)}",
+    )
+    selected = model.selected_generation()
+    tip = (
+        f"head {selected.key} · {selected.head_sha[:6]} · generation {group(selected.ordinal)}"
+        if selected
+        else f"{UNAVAILABLE} · no generation is this Batch's head"
+    )
+    body = [
+        label("BRANCH", f"{UNAVAILABLE} · no repository reader states the branch or its drift"),
+        label("HEAD", tip),
+        thin(w),
+        *_commit_rows(view, model),
+        thin(w),
+        label("REVIEW", f"{UNAVAILABLE} · waiting on {PULL_REQUEST_PRODUCER}"),
+        label("CHECKS", f"{UNKNOWN_WORD} · no check outcome is recorded, so none reads passed"),
+        thin(w),
+        label("ACTION", READ_ONLY),
+        more("the merge-conflict card also only displays"),
     ]
-    rows.extend(_generation_rows(view, model))
-    rows.append(thin(w))
-    rows.append(f" ACTION    {READ_ONLY}")
-    rows.append("           the merge-conflict card also only displays")
-    rows.append(thin(w))
-    rows.extend(unstated_rows(model))
-    return build(view, rows, route_keys_bar(view, ROUTE_KEYS[session.route]))
+    return finish(view, top, body, _KEYS)
 
 
 def _proto_frame(view: View) -> list[str]:

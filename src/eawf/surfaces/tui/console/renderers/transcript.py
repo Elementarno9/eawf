@@ -23,9 +23,9 @@ from eawf.kernel.projection.transcript import (
     TranscriptBlock,
     TranscriptReadModel,
 )
-from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.runtime.events import RunEventKind
 from eawf.surfaces.tui.console import prototype as pt
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import (
@@ -46,7 +46,6 @@ from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.renderers.read_model import counts, crumb, native, unstated_rows
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 PREVIEW = 2
@@ -330,26 +329,30 @@ def _native_line(block: TranscriptBlock, room: int) -> str:
     head = f" {clock_time(block.at)}  {glyph} " + pad(f"#{block.sequence}", 6)
     if block.purged is not None:
         text = _purged_text(block.purged)
-    elif block.text.state is TruthState.KNOWN and block.text.value:
-        text = f"{block.kind.value} · {block.text.value}"
     else:
-        text = f"{block.kind.value} · {truth_cell('unknown')}"
+        text = f"{block.kind.value} · {value_cell(block.text).full}"
     return head + pad(text, max(1, room - cell_len(head)))
 
 
-def _state_row(model: TranscriptReadModel) -> str:
-    """Return the state row: the thinking cell, its label, and what the run reaches."""
-    field = model.thinking
-    stated = field.value if field.state is TruthState.KNOWN and field.value else None
+def _state_rows(model: TranscriptReadModel) -> list[str]:
+    """Return the state row, and the thinking cell's reason under it when the cell is marked.
+
+    The state row carries the thinking cell as its token and word, its label and what the
+    run reaches; the reason goes on its own row so it never pushes those off the frame.
+    """
+    thinking = value_cell(model.thinking)
     parts = [
-        f"{stated or truth_cell('unknown')} · {DERIVED_LABEL}",
+        f"{thinking.slot} {thinking.word}".rstrip() + f" · {DERIVED_LABEL}",
         plural(len(model.blocks), "block"),
         plural(len(model.purged), "purged range"),
         f"contiguous through {group(model.last_contiguous_sequence)}",
     ]
     if model.quarantined:
         parts.append(f"{group(model.quarantined)} quarantined")
-    return " STATE     " + " · ".join(parts)
+    rows = [" STATE     " + " · ".join(parts)]
+    if thinking.reason:
+        rows.append(f"           {thinking.reason}")
+    return rows
 
 
 def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
@@ -371,7 +374,7 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         ),
         " " + counts(model),
         bar(w),
-        _state_row(model),
+        *_state_rows(model),
         thin(w),
     ]
     closing: list[str] = [thin(w), *unstated_rows(model)]

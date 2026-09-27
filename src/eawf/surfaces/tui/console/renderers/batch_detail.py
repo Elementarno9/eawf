@@ -53,7 +53,7 @@ def render(view: View) -> list[str]:
     rows.extend(table.row(list(t), i == s.sel) for i, t in enumerate(tasks))
     rows.append(thin(w))
     rows.append(" VERIFICATION CYCLE   checking → audit review → changes → repair")
-    rows.append("   checking          3 of 4 checks passed          ≈6m left")
+    rows.append("   checking          3 of 4 checks passed          typical ~6m")
     if not dv.own_body(s, OWN):
         rows = dv.absent(s, fx, rows, entity_id=bid, what="tasks or integration detail", w=w)
     return build(view, rows, route_keys_bar(view, ROUTE_KEYS["batch.detail"]))

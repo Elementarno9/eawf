@@ -12,6 +12,8 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.overlays.chassis import cursor_foot
+from eawf.surfaces.tui.console.reads import can_mutate
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
 
@@ -23,6 +25,8 @@ _KEYS: tuple[tuple[str, str], ...] = (
     ("x", "defer"),
     ("Esc", "back"),
 )
+# The draft's verbs write, so a connection state that refuses writes keeps only these.
+_READ_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "field"), ("Esc", "back"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,5 +123,6 @@ def render(view: View) -> list[str]:
         thin(w),
         " NOT       Promoting does not dispatch it and does not claim a run.",
         " " + pad("", 9) + promotion,
+        cursor_foot("FIELD", s.draft_field + 1, len(FIELDS)),
     ]
-    return build(view, rows, keybar(_KEYS, w))
+    return build(view, rows, keybar(_KEYS if can_mutate(s) else _READ_KEYS, w))

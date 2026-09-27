@@ -87,21 +87,30 @@ FIXTURE_REVISION_LITERALS: frozenset[str] = frozenset({"41,208", "41208"})
 FIXTURE_MILESTONE_IDS: frozenset[str] = frozenset({"MLS-0004"})
 
 
-def assert_no_fixture_literal(frames: Mapping[str, str]) -> None:
+def assert_no_fixture_literal(
+    frames: Mapping[str, str], *, held: frozenset[str] = frozenset()
+) -> None:
     """Raise, naming every frame and literal, when a fixture-only token renders.
 
     Args:
         frames: Rendered frame text keyed by a ``route@WxH`` label.
+        held: Record keys the served tree really holds. A fixture id the tree also uses
+            -- this repository has its own Task ``EAWF-0001`` -- is the tree's own record
+            when it renders, not a fallback to the prototype, so it is not checked.
 
     Raises:
         AssertionError: at least one frame carries a fixture-only literal.
     """
-    literals = (
-        *PROTOTYPE_RUN_IDS,
-        *FIXTURE_TASK_IDS,
-        *FIXTURE_REVISION_LITERALS,
-        *FIXTURE_MILESTONE_IDS,
-        FIXTURE_SCOPE,
+    literals = tuple(
+        literal
+        for literal in (
+            *PROTOTYPE_RUN_IDS,
+            *FIXTURE_TASK_IDS,
+            *FIXTURE_REVISION_LITERALS,
+            *FIXTURE_MILESTONE_IDS,
+            FIXTURE_SCOPE,
+        )
+        if literal not in held
     )
     hits = [
         f"{label}: {literal!r}"
@@ -190,3 +199,13 @@ def test_assert_no_fixture_literal_names_every_hit() -> None:
 def test_assert_no_fixture_literal_passes_an_empty_frame_map() -> None:
     """Boundary: nothing rendered is trivially clean."""
     assert_no_fixture_literal({})  # must not raise
+
+
+def test_a_fixture_id_the_served_tree_holds_is_its_own_record() -> None:
+    """A Task id the tree really holds renders as that Task; any other literal still reds."""
+    frame = {"activity@80x24": "RUN-00000001  EAWF-0001  RUNNING"}
+    assert_no_fixture_literal(frame, held=frozenset({"EAWF-0001"}))
+    with pytest.raises(AssertionError, match="EAWF-0001"):
+        assert_no_fixture_literal(frame)
+    with pytest.raises(AssertionError, match=FIXTURE_SCOPE):
+        assert_no_fixture_literal({"x": FIXTURE_SCOPE}, held=frozenset({"EAWF-0001"}))

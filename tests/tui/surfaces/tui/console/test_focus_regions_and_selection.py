@@ -29,23 +29,34 @@ import pytest
 
 from eawf.kernel.projection.compute import KeyedPatch, RouteProjection, build_route_projection
 from eawf.kernel.projection.spine import ENTRY_ROUTE, SPINE_ROUTES, SpineView, build_spine_view
+from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import route_keys
-from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.navigation import (
+    DEPTH_KEYS,
+    Ctx,
+    cycle_region,
+    focused_region,
+    go,
+    recall,
+    regions_of,
+    remember,
+)
 from eawf.surfaces.tui.console.registry import (
     FOCUS_REGION_LIMIT,
     REGISTRY,
+    ROOT_ROUTE,
     ROUTES,
     RouteRegistry,
 )
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.spine import restore
 from eawf.surfaces.tui.console.seam import ProjectionSeam
-from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.session import BACK_CAP, BackEntry, Session
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
@@ -206,7 +217,44 @@ def test_exactly_three_regions_is_admitted() -> None:
     assert RouteRegistry(rows).focus_regions["track"] == ("a", "b", "c")
 
 
-@pytest.mark.parametrize("route", SPINE_ROUTES)
+#: The spine routes whose native frame is still the shared record table, which names its
+#: focus regions on a ``REGIONS`` line. Home and the Run frame draw each region as a
+#: section of the packet layout instead, which the two tests below hold.
+TABLE_ROUTES: tuple[str, ...] = tuple(
+    r for r in SPINE_ROUTES if r not in ("scope.home", "run.detail")
+)
+
+
+def test_the_home_frame_draws_both_its_regions_as_sections() -> None:
+    """Home's outcome tree and its attention list are each drawn, one under the other."""
+    spine = build_spine_view(
+        build_route_projection(
+            route="scope.home", document={}, cursor=7, scope_id=SCOPE, generated_at=AT
+        )
+    )
+    session = Session()
+    session.route = "scope.home"
+    rows = _render(spine, session)
+    assert REGISTRY.focus_regions["scope.home"] == ("outcomes", "attention")
+    assert any(row.startswith("   MILESTONES") for row in rows)
+    assert any(row.startswith(" ATTENTION") for row in rows)
+
+
+def test_the_run_frame_draws_its_timeline_region() -> None:
+    """The Run frame's one focus region, its timeline, is drawn as the section it names."""
+    spine = build_spine_view(
+        build_route_projection(
+            route="run.detail", document={}, cursor=7, scope_id=SCOPE, generated_at=AT
+        )
+    )
+    session = Session()
+    session.route = "run.detail"
+    rows = _render(spine, session)
+    assert REGISTRY.focus_regions["run.detail"] == ("timeline",)
+    assert any(row.startswith("   TIMELINE") for row in rows)
+
+
+@pytest.mark.parametrize("route", TABLE_ROUTES)
 def test_the_native_frame_names_the_route_regions(route: str) -> None:
     """A native frame says which places the focus moves between."""
     spine = build_spine_view(
@@ -372,3 +420,462 @@ def test_an_unadvertised_key_is_recorded_as_unclaimed() -> None:
     dispatch(Ctx(session=session, fixture=fixture, host=_Host(), w=120, h=30), "Q", False)
     assert session.trace is not None
     assert session.trace.endswith("unclaimed")
+
+
+# ---------- the focus and navigation grammar ----------
+#
+# Each test below names the console requirement row it proves. The keys go through the
+# production dispatcher over the tracked registers, the way the app presses them.
+
+
+def _draw(session: Session) -> list[str]:
+    """Compose the full frame the app paints, which also clears last frame's published rows."""
+    return compose_frame(View(session=session, fixture=_fixture(), w=120, h=30))
+
+
+def _session(route: str, subj: str | None = None) -> Session:
+    """Return a session on ``route`` whose frame has been drawn once, as the app does."""
+    session = Session()
+    session.route = route
+    session.subj_id = subj
+    _draw(session)
+    return session
+
+
+def _press(session: Session, *keys: str, shift: bool = False, projection: Any = None) -> None:
+    """Dispatch ``keys`` in order, drawing the frame after each as the app does."""
+    fixture = _fixture()
+    for key in keys:
+        ctx = Ctx(
+            session=session, fixture=fixture, host=_Host(), w=120, h=30, projection=projection
+        )
+        dispatch(ctx, key, shift)
+        if projection is None:
+            _draw(session)
+
+
+def test_con_013_no_route_declares_more_than_three_regions_and_bucket_routes_two() -> None:
+    """CON-013: at most three regions, and a bucket-rail route at most window and detail."""
+    assert all(len(regions_of(spec.id)) <= FOCUS_REGION_LIMIT for spec in ROUTES)
+    for route in ("activity", "attention"):
+        assert len(regions_of(route)) <= 2
+        assert "buckets" not in regions_of(route)
+
+
+def test_con_013_tab_and_shift_tab_cycle_the_declared_regions() -> None:
+    """CON-013: Tab walks the route's regions forward and Shift-Tab walks them back."""
+    session = _session("task.detail", "EAWF-0054")
+    assert focused_region(session) == "criteria"
+    _press(session, "Tab")
+    assert focused_region(session) == "runs"
+    _press(session, "Tab")
+    assert focused_region(session) == "criteria"
+    _press(session, "Tab", shift=True)
+    assert focused_region(session) == "runs"
+    assert session.trace == "S-Tab → focus → runs"
+
+
+def test_con_013_the_home_focus_treatment_moves_with_the_region() -> None:
+    """CON-013: the focused home pane is drawn differently in text, not in colour alone."""
+    session = _session("scope.home")
+    before = _draw(session)
+    _press(session, "Tab")
+    after = _draw(session)
+    assert session.home_region in regions_of("scope.home")
+    assert session.home_region == "attention"
+    assert [str(row) for row in before] != [str(row) for row in after]
+
+
+def test_con_014_arrows_never_leave_the_focused_region() -> None:
+    """CON-014: holding a direction stays inside the region, at either end of it."""
+    session = _session("scope.home")
+    _press(session, *(["ArrowDown"] * 40))
+    assert session.home_region != "attention"
+    _press(session, *(["ArrowUp"] * 40))
+    assert session.home_region != "attention"
+    detail = _session("task.detail", "EAWF-0054")
+    _press(detail, "Tab", *(["ArrowDown"] * 12), *(["ArrowUp"] * 12), "ArrowLeft", "ArrowRight")
+    assert focused_region(detail) == "runs"
+    assert (detail.route, detail.subj_id) == ("task.detail", "EAWF-0054")
+
+
+def _selected_on(spine: SpineView, session: Session) -> tuple[int, str | None]:
+    """Draw ``spine`` into ``session`` and return the caret offset and selected id."""
+    _render(spine, session)
+    return session.sel, session.sel_id
+
+
+def test_con_015_sel_id_survives_patch_sort_filter_and_replay_repair() -> None:
+    """CON-015: the four events move the caret with its row and never change ``sel_id``."""
+    seam = _seam_holding(_projection())
+    session = Session()
+    session.route, session.sel, session.sel_id = ROUTE, 1, "TRK-0003"
+    assert _selected_on(build_spine_view(seam.projection), session) == (1, "TRK-0003")
+
+    asyncio.run(seam.apply_patch(_patch("TRK-0001", sequence=41209)))
+    assert _selected_on(build_spine_view(seam.projection), session) == (2, "TRK-0003")
+
+    spine = build_spine_view(seam.projection)
+    resorted = dataclasses.replace(spine, rows=tuple(reversed(spine.rows)))
+    assert _selected_on(resorted, session) == (1, "TRK-0003")
+
+    session.typing = True
+    _press(session, "T", projection=spine)
+    assert session.sel_id == "TRK-0003"
+    session.typing = False
+    assert _selected_on(spine, session) == (2, "TRK-0003")
+
+    extra = {**TRACKS, "TRK-0000": {**TRACKS["TRK-0002"], "urn": "urn:eawf:EAWF:track:TRK-0000"}}
+    seam._projection = _projection(41300, tracks=extra)
+    assert _selected_on(build_spine_view(seam.projection), session) == (2, "TRK-0003")
+
+
+def test_con_015_a_back_step_carries_the_selected_id() -> None:
+    """CON-015: the back stack stores the id, and Escape restores it."""
+    session = _session("activity")
+    session.sel_id = "RUN-f1bbcd9c"
+    _press(session, "Enter")
+    assert session.back.items()[-1].sel_id == "RUN-f1bbcd9c"
+    _press(session, "Escape")
+    assert session.route == "activity"
+    assert session.sel_id == "RUN-f1bbcd9c"
+
+
+def test_con_016_escape_is_history_first_and_u_is_containment() -> None:
+    """CON-016: from a Run reached through Activity, Escape returns and ``u`` climbs."""
+    session = _session("activity")
+    _press(session, "Enter")
+    run = session.subj_id
+    assert (session.route, run) == ("run.detail", "RUN-538453eb")
+    _press(session, "Escape")
+    assert session.route == "activity"
+    _press(session, "Enter", "u")
+    assert (session.route, session.subj_id) == ("task.detail", "EAWF-0042")
+    _press(session, "Escape")
+    assert (session.route, session.subj_id) == ("run.detail", run)
+
+
+def test_con_016_escape_with_an_empty_stack_climbs_the_containment_chain() -> None:
+    """CON-016: a Task climbs to its Batch, and the Batch to its Milestone."""
+    session = _session("task.detail", "EAWF-0054")
+    _press(session, "Escape")
+    assert (session.route, session.subj_id) == ("batch.detail", "BAT-0001")
+    _press(session, "Escape")
+    assert (session.route, session.subj_id) == ("milestone", "MLS-0001")
+
+
+def test_con_016_brackets_walk_the_siblings_at_the_current_depth() -> None:
+    """CON-016: ``]`` and ``[`` step through the parent's children and wrap, pushing nothing."""
+    session = _session("batch.detail", "BAT-0001")
+    _press(session, "]")
+    assert (session.route, session.subj_id) == ("batch.detail", "BAT-0002")
+    _press(session, "]")
+    assert session.subj_id == "BAT-0001"
+    _press(session, "[")
+    assert session.subj_id == "BAT-0002"
+    assert len(session.back) == 0
+
+
+def test_con_016_brackets_on_a_subject_with_no_siblings_say_so() -> None:
+    """CON-016: a route with no containment field has no sibling walk; nothing moves."""
+    session = _session("activity")
+    _press(session, "]")
+    assert session.route == "activity"
+    assert session.trace == "] → no sibling at this depth"
+
+
+def test_con_016_u_at_the_root_climbs_nowhere() -> None:
+    """CON-016: scope home has no parent; ``u`` says so and the quit stays unarmed."""
+    session = _session("scope.home")
+    _press(session, "u")
+    assert session.route == "scope.home"
+    assert session.last_esc == pytest.approx(0.0)
+    assert session.trace == "u → at the top of the containment chain · nothing above"
+
+
+def test_con_016_depth_keys_do_nothing_while_an_overlay_owns_the_keys() -> None:
+    """CON-016: an overlay's key table does not take ``u`` or the brackets."""
+    session = _session("task.detail", "EAWF-0054")
+    session.overlay = "help"
+    _press(session, "u", "]")
+    assert (session.route, session.subj_id, session.overlay) == (
+        "task.detail",
+        "EAWF-0054",
+        "help",
+    )
+
+
+def test_con_016_the_depth_keys_are_the_declared_four() -> None:
+    """CON-016: Enter, Escape, ``u`` and the bracket pair, and no other."""
+    assert DEPTH_KEYS == ("Enter", "Escape", "u", "[", "]")
+
+
+def test_con_017_no_climb_or_sibling_step_lands_on_a_global_route() -> None:
+    """CON-017: Escape and ``u`` climb to the root or to the entity a sub-surface is about.
+
+    Every ``g`` destination is top level: its own parent is the root, and a route that
+    climbs onto one is a surface about it, never another ``g`` destination.
+    """
+    globals_ = set(REGISTRY.go_map.values()) - {ROOT_ROUTE}
+    for route in globals_:
+        assert REGISTRY.escapes[route].route == ROOT_ROUTE
+    for route, escape in REGISTRY.escapes.items():
+        if escape.route in globals_:
+            assert REGISTRY.by_id[route].go_letter is None, route
+    for route in ("batch.detail", "task.detail", "run.detail", "milestone"):
+        assert REGISTRY.escapes[route].route not in globals_
+
+
+def test_con_017_a_go_destination_is_top_level() -> None:
+    """CON-017: ``g`` clears the history, so the destination is never a child."""
+    session = _session("activity")
+    _press(session, "Enter")
+    assert len(session.back) == 1
+    _press(session, "g", "n")
+    assert (session.route, len(session.back)) == ("attention", 0)
+
+
+@pytest.mark.parametrize("size", [0, 2])
+def test_con_018_the_drilled_detail_is_its_own_route_at_every_width(size: int) -> None:
+    """CON-018: Enter opens the same route onto the same subject at 80 and 160 columns."""
+    session = _session("activity")
+    session.size = size
+    _press(session, "Enter")
+    assert (session.route, session.subj_id) == ("run.detail", "RUN-538453eb")
+
+
+@pytest.mark.parametrize("pushes", [31, 32, 33])
+def test_con_019_the_back_stack_caps_at_32_dropping_the_oldest(pushes: int) -> None:
+    """CON-019: the stack holds 32 steps at most and forgets the oldest first."""
+    stack = Session().back
+    for n in range(pushes):
+        stack.push(route="task.detail", sel=0, subj=f"EAWF-{n:04d}")
+    assert len(stack) == min(pushes, BACK_CAP)
+    assert stack.items()[-1].subj == f"EAWF-{pushes - 1:04d}"
+    assert stack.items()[0].subj == f"EAWF-{max(0, pushes - BACK_CAP):04d}"
+
+
+def test_con_019_consecutive_steps_onto_one_place_coalesce() -> None:
+    """CON-019: a second step onto the same route and subject replaces the first."""
+    stack = Session().back
+    stack.record(BackEntry(route="activity", sel=1, subj=None))
+    stack.record(BackEntry(route="activity", sel=4, subj=None, sel_id="RUN-1"))
+    stack.record(BackEntry(route="activity", sel=2, subj="RUN-1"))
+    assert [(e.sel, e.subj) for e in stack.items()] == [(4, None), (2, "RUN-1")]
+    assert stack.items()[0].sel_id == "RUN-1"
+
+
+def test_con_019_a_pop_restores_every_field_its_push_recorded() -> None:
+    """CON-019: bucket, filter, scroll, anchor, region and id all come back on Escape."""
+    session = _session("activity")
+    session.bucket, session.evt = "perm", "EVT-0001"
+    session.filters["activity"] = "RUN-"
+    session.sel, session.sel_id = 1, "RUN-f1bbcd9c"
+    _draw(session)
+    pushed = remember(session)
+    _press(session, "Enter")
+    assert session.back.items()[-1] == pushed
+    _press(session, "Escape")
+    assert remember(session) == pushed
+
+
+def test_con_019_recall_puts_back_every_cursor_a_step_carries() -> None:
+    """CON-019: the restore is field for field, the ones a renderer might clamp included."""
+    entry = BackEntry(
+        route="task.detail",
+        sel=3,
+        subj="EAWF-0054",
+        sel_id="RUN-1",
+        bucket="perm",
+        filter="seal",
+        scroll=5,
+        evt="EVT-0001",
+        region="runs",
+    )
+    session = Session()
+    recall(session, entry)
+    assert remember(session) == entry
+
+
+def test_con_019_a_jump_clears_the_stack_and_self_navigation_pushes_nothing() -> None:
+    """CON-019: a palette pick is a jump, and opening the current place is not a step."""
+    session = _session("activity")
+    _press(session, "Enter")
+    assert len(session.back) == 1
+    _press(session, "/", "h", "o", "m", "e", "Enter")
+    assert (session.route, len(session.back)) == ("scope.home", 0)
+    ctx = Ctx(session=session, fixture=_fixture(), host=_Host(), w=120, h=30)
+    assert go(ctx, "scope.home", "test") is False
+    assert len(session.back) == 0
+
+
+def test_con_019_the_breadcrumb_renders_the_back_stack() -> None:
+    """CON-019: while history exists the crumb names the step it came from."""
+    session = _session("activity")
+    _press(session, "Enter")
+    crumb = _draw(session)[0]
+    assert "RUN-538453eb" in crumb
+    assert crumb.index(REGISTRY.step_leaf("activity", None)) < crumb.index("RUN-538453eb")
+
+
+def test_con_021_a_back_step_restored_at_a_newer_revision_keeps_its_id() -> None:
+    """CON-021: a pop onto a frame whose revision advanced keeps the selected identifier."""
+    session = Session()
+    session.route, session.sel, session.sel_id = ROUTE, 1, "TRK-0003"
+    session.back.record(remember(session))
+    session.route, session.subj_id, session.sel, session.sel_id = "track", "TRK-0003", 0, None
+    _press(session, "Escape", projection=build_spine_view(_projection()))
+    assert (session.route, session.sel_id) == (ROUTE, "TRK-0003")
+
+    seam = _seam_holding(_projection())
+    asyncio.run(seam.apply_patch(_patch("TRK-0001", sequence=41209)))
+    assert _selected_on(build_spine_view(seam.projection), session) == (2, "TRK-0003")
+
+
+def test_con_022_tab_walks_activity_buckets_in_register_order_and_arrows_stay_on_rows() -> None:
+    """CON-022: Tab cycles every bucket then all; an arrow never changes the bucket."""
+    fixture = _fixture()
+    session = _session("activity")
+    seen: list[str | None] = []
+    for _ in range(len(fixture.proto.buckets) + 1):
+        _press(session, "Tab")
+        seen.append(session.bucket)
+        _press(session, "ArrowDown")
+        assert session.bucket == seen[-1]
+    assert seen == [*(b.key for b in fixture.proto.buckets), None]
+    assert focused_region(session) is None
+
+
+def test_con_022_tab_walks_attention_buckets_and_sub_buckets_in_register_order() -> None:
+    """CON-022: the attention register's order, sub-buckets under their bucket."""
+    fixture = _fixture()
+    order: list[str | None] = []
+    for bucket in fixture.proto.xbuckets:
+        order.append(bucket.key)
+        order.extend(sub.key for sub in bucket.sub or ())
+    session = _session("attention")
+    seen: list[str | None] = []
+    for _ in range(len(order) + 1):
+        _press(session, "Tab")
+        seen.append(session.bucket)
+    assert seen == [*order, None]
+    assert order[:6] == [
+        "failed",
+        "lost",
+        "needs",
+        "needs.permission",
+        "needs.answer",
+        "needs.readiness",
+    ]
+
+
+@pytest.mark.parametrize("route", ["activity", "attention"])
+def test_con_022_the_first_escape_clears_the_bucket_and_the_second_leaves(route: str) -> None:
+    """CON-022: Escape clears a chosen bucket before it goes back."""
+    session = _session("scope.home")
+    ctx = Ctx(session=session, fixture=_fixture(), host=_Host(), w=120, h=30)
+    go(ctx, route, "test")
+    _press(session, "Tab")
+    assert session.bucket is not None
+    _press(session, "Escape")
+    assert (session.route, session.bucket) == (route, None)
+    _press(session, "Escape")
+    assert session.route == "scope.home"
+
+
+def test_con_026_pane_geometry_answers_to_the_terminal_shape_alone() -> None:
+    """CON-026: the console binds no pointer handler, so no drag can resize a pane."""
+    own = vars(ConsoleApp)
+    assert not [name for name in own if "mouse" in name or "click" in name or "drag" in name]
+    session = _session("activity")
+    assert _draw(session) == _draw(session)
+
+
+def test_con_027_focus_returns_to_the_invoking_row_after_the_palette_closes() -> None:
+    """CON-027: the palette borrows the row cursor, and Escape gives the row back."""
+    session = _session("activity")
+    _press(session, "ArrowDown", "ArrowDown")
+    assert session.sel == 2
+    _press(session, "/", "ArrowDown", "ArrowDown", "ArrowDown")
+    assert session.overlay == "palette"
+    _press(session, "Escape")
+    assert (session.overlay, session.sel, session.focus_return) == (None, 2, None)
+
+
+def test_con_027_focus_returns_after_a_dismissal_and_after_a_confirmed_verb() -> None:
+    """CON-027: a consequence card closed either way leaves focus on the row it came from."""
+    session = _session("attention")
+    _press(session, "ArrowDown")
+    at = session.sel
+    _press(session, "a")
+    assert session.overlay == "consequence"
+    _press(session, "Escape")
+    assert (session.overlay, session.sel) == (None, at)
+    _press(session, "a", "Enter")
+    assert (session.overlay, session.sel) == (None, at)
+
+
+def test_con_027_focus_returns_after_a_refused_verb() -> None:
+    """CON-027: a refusal leaves focus where it was, overlay or not."""
+    session = _session("activity")
+    _press(session, "ArrowDown")
+    _press(session, "p")
+    assert (session.route, session.sel, session.overlay) == ("activity", 1, None)
+
+
+def test_con_027_a_jump_from_an_overlay_arrives_fresh_rather_than_returning() -> None:
+    """CON-027: focus return is for closing on the same place; a palette pick is a jump."""
+    session = _session("activity")
+    _press(session, "ArrowDown", "/", "h", "o", "m", "e", "Enter")
+    assert (session.route, session.sel, session.focus_return) == ("scope.home", 0, None)
+
+
+@pytest.mark.parametrize(
+    "route", [route for route, regions in REGISTRY.focus_regions.items() if len(regions) > 1]
+)
+def test_con_028_every_tab_stop_is_a_region_the_registry_declares(route: str) -> None:
+    """CON-028: a region cycle stops only on the route's declared regions, each once."""
+    session = Session()
+    session.route = route
+    stops: list[str] = []
+    for _ in range(len(regions_of(route))):
+        region = cycle_region(session)
+        assert region is not None
+        stops.append(region)
+    assert sorted(stops) == sorted(regions_of(route))
+
+
+def test_con_028_the_native_home_frame_tabs_through_its_declared_regions() -> None:
+    """CON-028: with a read model held, Tab on home is the registry's region cycle."""
+    spine = build_spine_view(_projection())
+    session = Session()
+    session.route = ROUTE
+    _press(session, "Tab", projection=spine)
+    assert focused_region(session) == "attention"
+    _press(session, "Tab", projection=spine)
+    assert focused_region(session) == "outcomes"
+
+
+def test_con_028_a_one_region_route_has_no_tab_stop() -> None:
+    """CON-028: a route with one region gives Tab nowhere to go, and says nothing moved."""
+    session = _session("batch.detail", "BAT-0001")
+    _press(session, "Tab")
+    assert session.region is None
+    assert cycle_region(session) is None
+
+
+def test_con_028_a_rail_declared_as_a_focus_region_refuses_to_build() -> None:
+    """CON-028: a bucket rail is a display region; declaring it a focus region is refused."""
+    rows = tuple(
+        dataclasses.replace(spec, focus_regions=("buckets",)) if spec.id == "activity" else spec
+        for spec in ROUTES
+    )
+    with pytest.raises(ValueError, match="rail a focus region: activity"):
+        RouteRegistry(rows)
+
+
+def test_con_028_a_region_from_another_route_reads_as_the_first() -> None:
+    """CON-028: a stale region name never becomes a Tab stop the registry did not declare."""
+    session = Session()
+    session.route, session.region = "task.detail", "outcomes"
+    assert focused_region(session) == "criteria"

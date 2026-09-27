@@ -33,7 +33,7 @@ from eawf.kernel.projection.registers import (
     attention_mine,
     budget_reading,
 )
-from eawf.kernel.projection.truth import TruthState
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
     Fixed,
@@ -48,9 +48,14 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keymap import native_keys
-from eawf.surfaces.tui.console.renderers.read_model import UNAVAILABLE, counts, crumb
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNAVAILABLE,
+    UNKNOWN_WORD,
+    cell,
+    counts,
+    crumb,
+)
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import pad
 
 #: The row the frame shows where a register nothing writes would have been counted.
@@ -60,17 +65,13 @@ _ROWS = Table([34, 12, 0], 2)
 _EMPTY = "   this scope holds no record the read model renders"
 
 
-def _unknown_token() -> str:
-    """Return the truth token a value with no producer renders as."""
-    return truth_cell("unknown")
-
-
 def _withheld(register: RegisterView) -> list[str]:
     """Return the row naming every bound register nothing writes, or no row at all."""
     if not register.withheld:
         return []
-    token = _unknown_token()
-    return [UNWRITTEN_ROW + " " + " · ".join(f"{name} {token}" for name in register.withheld)]
+    return [
+        UNWRITTEN_ROW + " " + " · ".join(f"{name} {UNKNOWN_WORD}" for name in register.withheld)
+    ]
 
 
 def _activity_block(_view: View, register: RegisterView) -> list[str]:
@@ -86,12 +87,10 @@ def _activity_block(_view: View, register: RegisterView) -> list[str]:
 
 def _attention_block(_view: View, register: RegisterView) -> list[str]:
     """Return Attention's ``mine`` row, the one count the header prints too."""
-    mine = attention_mine(register)
-    known = mine.state is TruthState.KNOWN and mine.value is not None
-    cell = group(int(mine.value)) if known and mine.value else _unknown_token()
-    rows = [f" MINE      {cell} · nothing here opened itself"]
-    if not known and mine.missing_reason:
-        rows.append(f"           {mine.missing_reason}")
+    mine = value_cell(attention_mine(register), spell=lambda n: group(int(n)), exempt=True)
+    rows = [f" MINE      {mine.slot} · nothing here opened itself"]
+    if mine.reason:
+        rows.append(f"           {mine.reason}")
     return rows
 
 
@@ -103,8 +102,7 @@ def _budget_block(_view: View, register: RegisterView) -> list[str]:
         f" BUDGET    a crossing opens {reading.control} · leaves {reading.terminal_status}",
         f"           a budget notice {answer}",
     ]
-    stopped = reading.stopped
-    rows.append(f" STOPPED   {_unknown_token()} {stopped.missing_reason or ''}".rstrip())
+    rows.append(f" STOPPED   {value_cell(reading.stopped).full}")
     return rows
 
 
@@ -176,10 +174,8 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         rows.append(_EMPTY)
     for index in range(win.start, win.stop):
         row = register.rows[index]
-        status = row.status
-        stated = status.value if status.state is TruthState.KNOWN and status.value else None
         # the kind is the collection the read model states, never guessed from the id
-        cells = [row.key, row.collection.value, stated or _unknown_token()]
+        cells = [row.key, row.collection.value, cell(row.status)]
         line = _ROWS.row(cells, index == cursor)
         rows.append(line if index == cursor else Fixed(pad(line, w)))
     rows.append(win.line(complete=register.complete))

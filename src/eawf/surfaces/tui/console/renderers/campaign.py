@@ -3,6 +3,12 @@
 Each section shows a window of its list and counts what is off either end, so no section
 may lie about its length; the focused window follows the cursor and the others show their
 head.
+
+The native frame draws one Campaign's three sections from the read model. Under
+``REPLAYING`` it renders exactly as of the replayed sequence and says that later facts
+exist: the status line names the sequence the replay started at, the head it heads toward
+and how many findings were promoted past the cursor, so the frame never shows a fact from
+a later revision and never hides that one exists.
 """
 
 from __future__ import annotations
@@ -11,8 +17,13 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from eawf.kernel.projection.connection import ReplayNote
+from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Fixture
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Grid,
@@ -25,7 +36,16 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
-from eawf.surfaces.tui.console.renderers.spine import held, native_frame
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNAVAILABLE,
+    UNKNOWN_WORD,
+    counts,
+    finish,
+    label,
+    native_head,
+    route_crumb,
+)
+from eawf.surfaces.tui.console.renderers.spine import held
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
 
@@ -33,6 +53,8 @@ PLAN = "PLAN"
 EVIDENCE = "EVIDENCE"
 ARTIFACTS = "ARTIFACTS"
 CLAIM = "CLM-0004"
+#: The one campaign the prototype plan records.
+OWN = "CAM-0001"
 _GUTTER = 13
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "row"),
@@ -179,9 +201,9 @@ def _section_rows(view: View, section: Section, rows: Sequence[Any], summary: st
     if section.name == PLAN and w >= 160:
         span = "─ ✓ 3 ───"
         out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 ─┐" + " " * len(span) + "┌─ ✓ 4 ─┐")
-        out.append(g_pad("", _GUTTER) + "✓ 2 ─┴" + span + "┴" + "───────" + "┴─ ► 5 ─── ○ 6")
+        out.append(g_pad("", _GUTTER) + "✓ 2 ─┴" + span + "┴" + "───────" + "┴─ ⋯ 5 ─── ○ 6")
     elif section.name == PLAN and w >= 120:
-        out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 · ✓ 2 → ✓ 3 → ✓ 4 → ► 5 → ○ 6")
+        out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 · ✓ 2 → ✓ 3 → ✓ 4 → ⋯ 5 → ○ 6")
     out.append(section.grid.head(["", *section.heads]))
     win = window(len(rows), caps(w)[section.name], s.sel, on)
     if win.above:
@@ -197,12 +219,105 @@ def _section_rows(view: View, section: Section, rows: Sequence[Any], summary: st
     return out
 
 
+def _absent(view: View, campaign: str) -> list[str]:
+    """Return the frame of a campaign this route holds no plan for, said rather than swapped."""
+    s, fx = view.session, view.fixture
+    head = [f"Eä ▸ {fx.scope} ▸ {campaign}", f"Campaign {campaign}", ""]
+    # the header, context and rule rows are g_frame's own, so only the body is kept
+    _, _, _, *body = dv.absent(
+        s, fx, head, entity_id=campaign, what="plan, evidence or artifacts", w=view.w
+    )
+    return g_frame(view, crumb=head[0], ctx=head[1], body=body, keys=_KEYS)
+
+
+#: The connection value under which the frame is drawn as of the replayed sequence.
+REPLAYING = "REPLAYING"
+
+#: Each section's column heads and what it says while no producer states its rows.
+_NATIVE_SECTIONS: tuple[tuple[str, tuple[str, ...], str], ...] = (
+    (PLAN, ("STEP", "STATE", "DEPENDS ON"), "no producer states the campaign plan yet"),
+    (EVIDENCE, ("RECEIPT", "WHAT IT SHOWS", "CLAIM"), "no receipt is recorded against it yet"),
+    (ARTIFACTS, ("ARTIFACT", "WRITTEN"), "no artifact is recorded against it yet"),
+)
+
+
+def replay_line(note: ReplayNote | None) -> str:
+    """Return the replaying status line: where the replay stands and what lies past it.
+
+    Args:
+        note: The replay the link is carrying out; ``None`` when the link replays without
+            having stated the head, which the line says rather than inventing one.
+
+    Returns:
+        ``replaying N → M · K findings promoted after this point``, with ``K`` the unknown
+        token while no producer counts promotions.
+    """
+    if note is None:
+        return f"replaying · the head it replays toward is {UNKNOWN_WORD}"
+    promoted = note.findings_promoted_after_cursor
+    count = UNKNOWN_WORD if promoted is None else group(promoted)
+    return (
+        f"replaying {group(note.replaying_from_sequence)} → {group(note.head_sequence)}"
+        f" · {count} findings promoted after this point"
+    )
+
+
+def _campaign(view: View, spine: SpineView) -> SpineRow | None:
+    """Return the Campaign the frame is about: the session's subject, else the first held."""
+    rows = [row for row in spine.rows if row.collection is Epoch2Collection.CAMPAIGN]
+    subject = view.session.subj_id
+    return next((row for row in rows if row.key == subject), rows[0] if rows else None)
+
+
+def native_frame(view: View, spine: SpineView) -> list[str]:
+    """Return the Campaign frame drawn from the read model the daemon served.
+
+    Args:
+        view: The render being built; its replay note heads the frame while replaying.
+        spine: The campaign register at the committed cursor.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    s, w = view.session, view.w
+    campaign = _campaign(view, spine)
+    key = campaign.key if campaign is not None else "no campaign"
+    status = value_cell(campaign.field("status")).slot if campaign is not None else UNAVAILABLE
+    top = native_head(
+        view,
+        spine,
+        crumb_text=route_crumb(spine, "Research", *([key] if campaign else [])),
+        summary=(f"Campaign {key} · {status}" if campaign else "No Campaign held")
+        + f" · {counts(spine)}",
+    )
+    dv.sel_in(s, 0)
+    body: list[str] = []
+    if s.conn == REPLAYING:
+        body += [label("REPLAYING", replay_line(view.replay)), thin(w)]
+    question = (campaign.title if campaign else None) or f"{UNAVAILABLE} · no question is stated"
+    body += [label("QUESTION", question), label("BOUNDS", f"{UNKNOWN_WORD} · no bound is stated")]
+    for name, heads, absent in _NATIVE_SECTIONS:
+        grid = Grid([12, *([20] * (len(heads) - 1)), 0])
+        body += [
+            thin(w),
+            label(name, f"{UNKNOWN_WORD} · {absent}"),
+            grid.head(["", *heads]),
+        ]
+    return finish(view, top, body, _KEYS)
+
+
 def render(view: View) -> list[str]:
-    """Return the Campaign frame, native when a read model is held."""
+    """Return the Campaign frame, native when a read model is held.
+
+    A drill onto a campaign other than the one the prototype plan records states that
+    campaign's absence rather than drawing the recorded plan under its id.
+    """
     spine = held(view)
     if spine is not None:
         return native_frame(view, spine)
     s, fx, w = view.session, view.fixture, view.w
+    if s.subj_id and s.subj_id != OWN:
+        return _absent(view, s.subj_id)
     x, wide = w >= 160, w >= 120
     dv.sel_in(s, len(section_list(s, fx)))
     body = [

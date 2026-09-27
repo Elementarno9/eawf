@@ -92,8 +92,21 @@ _VERB_ROWS: tuple[tuple[list[str], str, str, str], ...] = (
     ),
     (["batch", "activate"], domain_cmd.BATCH_ACTIVATE, "--expected-batch-revision", _BATCH_URN),
     (["batch", "ready"], domain_cmd.BATCH_READY, "--expected-batch-revision", _BATCH_URN),
+    (["batch", "merge"], domain_cmd.BATCH_MERGE, "--expected-batch-revision", _BATCH_URN),
+    (
+        ["batch", "observe-merge"],
+        domain_cmd.BATCH_OBSERVE_MERGE,
+        "--expected-batch-revision",
+        _BATCH_URN,
+    ),
+    (["batch", "complete"], domain_cmd.BATCH_COMPLETE, "--expected-batch-revision", _BATCH_URN),
     (["task", "promote"], domain_cmd.TASK_PROMOTE, "--expected-task-revision", _TASK_URN),
+    (["task", "claim"], domain_cmd.TASK_CLAIM, "--expected-task-revision", _TASK_URN),
     (["task", "start"], domain_cmd.TASK_START, "--expected-task-revision", _TASK_URN),
+    (["task", "ready"], domain_cmd.TASK_READY, "--expected-task-revision", _TASK_URN),
+    (["run", "start"], domain_cmd.RUN_START, "--expected-run-revision", _RUN_URN),
+    (["run", "finish"], domain_cmd.RUN_FINISH, "--expected-run-revision", _RUN_URN),
+    (["run", "fail"], domain_cmd.RUN_FAIL, "--expected-run-revision", _RUN_URN),
 )
 
 
@@ -219,6 +232,12 @@ def test_cli_methods_match_the_registered_domain_rpcs() -> None:
     assert set(domain_cmd.DOMAIN_CLI_METHODS) == set(DOMAIN_LIFECYCLE_METHODS)
 
 
+def test_every_cli_verb_has_a_command_under_test() -> None:
+    """The verb rows cover every CLI verb but completion, tested on its own."""
+    covered = {row[1] for row in _VERB_ROWS} | {domain_cmd.TASK_COMPLETE}
+    assert covered == set(domain_cmd.DOMAIN_CLI_METHODS)
+
+
 def test_idempotency_key_bound_matches_the_request_model() -> None:
     """The CLI-side key bound is the daemon's bound, not a second number."""
     metadata = LifecycleParams.model_fields["idempotency_key"].metadata
@@ -261,7 +280,7 @@ def test_from_spec_payload_reaches_the_rpc(monkeypatch: pytest.MonkeyPatch, tmp_
         orjson.dumps(
             {
                 "updates": {"target_branch": "main"},
-                "observations": [{"guard": "track_active", "satisfied": True}],
+                "observations": ["host_merge_observed"],
                 "reason_code": "scope-complete",
                 "binding_refs": [_RUN_URN],
                 "correlation_id": "corr-0001",
@@ -282,7 +301,7 @@ def test_from_spec_payload_reaches_the_rpc(monkeypatch: pytest.MonkeyPatch, tmp_
     assert result.exit_code == exit_codes.OK, result.output
     _, params = _FakeClient.calls[0]
     assert params["updates"] == {"target_branch": "main"}
-    assert params["observations"] == [{"guard": "track_active", "satisfied": True}]
+    assert params["observations"] == ["host_merge_observed"]
     assert params["reason_code"] == "scope-complete"
     assert params["binding_refs"] == [_RUN_URN]
     assert params["correlation_id"] == "corr-0001"
@@ -650,7 +669,7 @@ def test_new_nouns_render_in_the_help_listing() -> None:
     """The three native nouns appear on the root help, under a panel."""
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == exit_codes.OK, result.output
-    for noun in ("milestone", "batch", "task"):
+    for noun in ("milestone", "batch", "task", "run"):
         assert noun in result.output
 
 
@@ -664,8 +683,17 @@ def test_operator_verb_spelling_of_each_method() -> None:
         "milestone cancel",
         "batch activate",
         "batch ready",
+        "batch merge",
+        "batch observe-merge",
+        "batch complete",
         "task promote",
+        "task claim",
         "task start",
+        "task ready",
+        "task complete",
+        "run start",
+        "run finish",
+        "run fail",
     ]
 
 
@@ -673,13 +701,13 @@ def test_operator_verb_spelling_of_each_method() -> None:
 
 
 #: Every create command line under test, with the RPC it must forward to.
-#: One row per registered create verb (Run is excluded: it is admitted by
-#: its own lease flow, not by an operator create).
+#: One row per registered lifecycle create verb.
 _CREATE_VERB_ROWS: tuple[tuple[list[str], str, str], ...] = (
     (["track", "create"], domain_cmd.TRACK_CREATE, _TRACK_URN),
     (["milestone", "create"], domain_cmd.MILESTONE_CREATE, _MILESTONE_URN),
     (["batch", "create"], domain_cmd.BATCH_CREATE, _BATCH_URN),
     (["task", "create"], domain_cmd.TASK_CREATE, _TASK_URN),
+    (["run", "create"], domain_cmd.RUN_CREATE, _RUN_URN),
 )
 
 
@@ -699,13 +727,11 @@ def _created(method: str, entity_ref: str, *, revision_after: int = 1) -> dict[s
     return accepted_envelope(receipt, operation=method).model_dump(mode="json")
 
 
-def test_create_cli_methods_are_a_subset_of_the_registered_create_rpcs() -> None:
-    """Every create verb this module exposes names a registered RPC.
+def test_create_cli_methods_match_the_registered_create_rpcs() -> None:
+    """Every registered create verb, the Run's included, has a CLI command.
 
-    Run is the one lifecycle kind with no create command here: it is
-    admitted by its own lease flow, so the daemon's own registry names
-    one more create verb than this CLI exposes. A repository row has no
-    lifecycle machine and its create verb is registered beside the others.
+    A repository row has no lifecycle machine and its create verb is
+    registered beside the others.
     """
     from eawf.runtime.daemon.methods.domain_create import (
         DOMAIN_CREATE_METHODS,
@@ -713,8 +739,7 @@ def test_create_cli_methods_are_a_subset_of_the_registered_create_rpcs() -> None
     )
 
     registered = {*DOMAIN_CREATE_METHODS.values(), REPOSITORY_CREATE_METHOD}
-    assert set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) < registered
-    assert registered - set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) == {"domain.run.create"}
+    assert set(domain_cmd.DOMAIN_CREATE_CLI_METHODS) == registered
 
 
 @pytest.mark.parametrize(("verb", "method", "urn"), _CREATE_VERB_ROWS)
@@ -1180,3 +1205,118 @@ def test_task_submit_refusal_renders_the_daemons_code_unchanged(
     assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
     assert "candidate_lease_absent" in result.output
     assert f"run {_RUN_URN} holds no active lease" in result.output
+
+
+# ---- task complete ------------------------------------------------------------
+
+
+def _complete_args(tmp_path: Path, assessment: Path) -> list[str]:
+    """Return a full ``task complete`` command line."""
+    return [
+        "--workspace",
+        str(tmp_path),
+        *_base_args(["task", "complete"], "--expected-task-revision", _TASK_URN),
+        "--integrated-commit",
+        "a" * 40,
+        "--assessment",
+        str(assessment),
+    ]
+
+
+def test_task_complete_forwards_the_commit_and_the_assessment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The commit and the assessment ride the wire; no binding is sent."""
+    assessment = tmp_path / "assessment.json"
+    document = {"report_verdict": "pass", "gates": [], "receipts": []}
+    assessment.write_bytes(orjson.dumps(document))
+    _install(monkeypatch, result=_accepted(domain_cmd.TASK_COMPLETE, _TASK_URN))
+    result = runner.invoke(app, _complete_args(tmp_path, assessment))
+    assert result.exit_code == exit_codes.OK, result.output
+    method, params = _FakeClient.calls[0]
+    assert method == domain_cmd.TASK_COMPLETE
+    assert params["integrated_commit"] == "a" * 40
+    assert params["assessment"] == document
+    assert "integrated_binding" not in params["updates"]
+
+
+def test_task_complete_missing_assessment_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Error path: an unreadable assessment file never reaches the daemon."""
+    _install(monkeypatch, result=_accepted(domain_cmd.TASK_COMPLETE, _TASK_URN))
+    result = runner.invoke(app, _complete_args(tmp_path, tmp_path / "absent.json"))
+    assert result.exit_code == exit_codes.USER_ERROR
+    assert _FakeClient.calls == []
+
+
+def test_task_complete_refusal_renders_proof_stale(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A completion the assessment does not prove prints the daemon's code."""
+    assessment = tmp_path / "assessment.json"
+    assessment.write_bytes(orjson.dumps({}))
+    answer = DomainEnvelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
+        status=DomainStatus.ERROR,
+        operation=domain_cmd.TASK_COMPLETE,
+        revision_before=3,
+        revision_after=3,
+        errors=(
+            DomainError(
+                code=DomainErrorCode.PROOF_STALE,
+                message="domain.task.complete needs 2 gate(s) proved",
+                entity_ref=_TASK_URN,
+                guard="integrated_binding_pinned",
+                remediation="Record the exact revision binding the Task integrated at.",
+            ),
+        ),
+    ).model_dump(mode="json")
+    _install(monkeypatch, result=answer)
+    result = runner.invoke(app, _complete_args(tmp_path, assessment))
+    assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
+    assert DomainErrorCode.PROOF_STALE.value in result.output
+    assert "guard: integrated_binding_pinned" in result.output
+
+
+def test_milestone_accept_forwards_the_acceptance_bundle(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The bundle the approval was sealed against rides the wire whole."""
+    bundle = {"milestone_ref": _MILESTONE_URN, "revision": 1}
+    path = tmp_path / "bundle.json"
+    path.write_bytes(orjson.dumps(bundle))
+    _install(monkeypatch, result=_accepted(domain_cmd.MILESTONE_ACCEPT, _MILESTONE_URN))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            *_base_args(["milestone", "accept"], "--expected-milestone-revision", _MILESTONE_URN),
+            "--approval-receipt-ref",
+            _APPROVAL_URN,
+            "--acceptance-bundle",
+            str(path),
+        ],
+    )
+    assert result.exit_code == exit_codes.OK, result.output
+    _, params = _FakeClient.calls[0]
+    assert params["acceptance_bundle"] == bundle
+
+
+def test_milestone_accept_unreadable_bundle_is_refused_before_the_wire(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install(monkeypatch, result=_accepted(domain_cmd.MILESTONE_ACCEPT, _MILESTONE_URN))
+    result = runner.invoke(
+        app,
+        [
+            "--workspace",
+            str(tmp_path),
+            *_base_args(["milestone", "accept"], "--expected-milestone-revision", _MILESTONE_URN),
+            "--acceptance-bundle",
+            str(tmp_path / "absent.json"),
+        ],
+    )
+    assert result.exit_code == exit_codes.USER_ERROR
+    assert _FakeClient.calls == []

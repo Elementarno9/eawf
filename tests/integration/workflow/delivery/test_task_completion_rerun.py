@@ -33,7 +33,10 @@ from eawf.kernel.delivery.receipts import (
 )
 from eawf.kernel.state.enums import AgentReportVerdict, GateReceiptResult
 from eawf.runtime.daemon.methods import DaemonValidationError
-from eawf.runtime.daemon.methods.delivery import TaskCompletionParams, assess_task_completion
+from eawf.runtime.daemon.methods.delivery_completion import (
+    TaskCompletionParams,
+    assess_task_completion,
+)
 from eawf.runtime.integration.apply import IntegrationRefusal
 from eawf.workflow.delivery.completion import (
     CompletionRefusal,

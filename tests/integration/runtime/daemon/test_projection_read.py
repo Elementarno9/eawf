@@ -272,7 +272,8 @@ def test_settings_is_served_off_the_document_rather_than_by_a_route_read(
     leaves = _read(ctx, canary, SETTINGS_READ_METHOD)["leaves"]
 
     assert leaves
-    assert all(leaf["winning_layer"] for leaf in leaves)
+    assert all("source_layer" in leaf for leaf in leaves)
+    assert any(leaf["source_layer"] for leaf in leaves)
 
 
 def test_build_route_projection_refuses_an_unbound_route() -> None:

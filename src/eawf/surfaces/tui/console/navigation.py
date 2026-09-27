@@ -1,4 +1,4 @@
-"""What a key handler works with, and the one way a route opens another.
+"""What a key handler works with, the focus grammar, and the one way a route opens another.
 
 A :class:`Ctx` is built per keystroke by the app: the session, the registers, the host
 that owns the clock and the quit, the frame size, the ``--verbose`` flag and the read
@@ -6,6 +6,12 @@ model the frame was drawn from. Route key hooks and the dispatcher both receive 
 route's own keys live beside its renderer without the dispatcher knowing them, and a key
 that acts on what the frame shows reads the same model the frame drew rather than a
 second answer of its own.
+
+The focus grammar lives here too, so the dispatcher and a route's own keys read one
+answer. A route's focus regions are the ones its registry row declares, and the Tab
+destination is the next of them; the selection is the stable id the session holds; and a
+step onto the back stack carries every cursor the place was left with, so Escape restores
+the place rather than its first row.
 """
 
 from __future__ import annotations
@@ -16,16 +22,20 @@ from typing import Protocol
 
 from eawf.kernel.projection.compute import RouteProjection
 from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.clock import Clock, notify
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.operations import VerbRequest
-from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.registry import REGISTRY, SURFACES
+from eawf.surfaces.tui.console.session import BackEntry, FocusTarget, Session
 from eawf.surfaces.tui.console.tokens import Severity
 
 # The key-log key a navigation that no key names directly is recorded under.
 NAV_KEY = "—"
+#: The depth keys: Enter drills, Escape returns, ``u`` climbs the containment chain, and
+#: ``[`` and ``]`` walk the siblings at the current depth. Breadth is the ``g`` prefix.
+DEPTH_KEYS: tuple[str, ...] = ("Enter", "Escape", "u", "[", "]")
 
 
 class Host(Protocol):
@@ -65,6 +75,8 @@ class Ctx:
             to a row of it; with none held there is nothing to answer.
         principal_refusal: Why every bound write is refused because the link acts as
             nobody; empty when it acts as someone or there is no link.
+        settings: The effective-settings view the settings frame was drawn from; an
+            edit is previewed and addressed from it, never from the prototype catalog.
     """
 
     session: Session
@@ -78,6 +90,7 @@ class Ctx:
     send: Callable[[VerbRequest], bool] | None = None
     attention: RouteProjection | None = None
     principal_refusal: str = ""
+    settings: EffectiveSettingsView | None = None
 
     @property
     def s(self) -> Session:
@@ -113,6 +126,89 @@ class Ctx:
         return self.send is not None and self.send(request)
 
 
+def regions_of(route: str) -> tuple[str, ...]:
+    """Return the focus regions ``route`` declares, in Tab order; none for a one-place frame."""
+    return REGISTRY.focus_regions.get(route, ())
+
+
+def focused_region(session: Session) -> str | None:
+    """Return the region holding the arrows: the held one while declared, else the first.
+
+    A region named for another route is not this route's, so it reads as the first.
+    """
+    regions = regions_of(session.route)
+    if not regions:
+        return None
+    return session.region if session.region in regions else regions[0]
+
+
+def cycle_region(session: Session, *, back: bool = False) -> str | None:
+    """Move the focus to the next declared region, or the previous one on ``back``.
+
+    Returns:
+        The region now focused; ``None`` on a route with fewer than two regions, where
+        there is nowhere for the focus to go and nothing changes.
+    """
+    regions = regions_of(session.route)
+    if len(regions) < 2:
+        return None
+    at = regions.index(focused_region(session) or regions[0])
+    session.region = regions[(at + (-1 if back else 1)) % len(regions)]
+    return session.region
+
+
+def remember(session: Session) -> BackEntry:
+    """Return the back-stack step for where the session is now, every cursor included."""
+    return BackEntry(
+        route=session.route,
+        sel=session.sel,
+        subj=session.subj_id,
+        sel_id=session.sel_id,
+        bucket=session.bucket,
+        filter=session.filters.get(session.route, ""),
+        scroll=session.scroll,
+        evt=session.evt,
+        region=session.region,
+    )
+
+
+def recall(session: Session, entry: BackEntry) -> None:
+    """Put the session back where ``entry`` left it, restoring every cursor it carries."""
+    session.route = entry.route
+    session.subj_id = entry.subj
+    session.sel = entry.sel
+    session.sel_id = entry.sel_id
+    session.bucket = entry.bucket
+    session.filters[entry.route] = entry.filter
+    session.scroll = entry.scroll
+    session.evt = entry.evt
+    session.region = entry.region
+
+
+def focus_target(session: Session) -> FocusTarget:
+    """Return the row and region focus returns to when what opens now closes."""
+    return FocusTarget(
+        route=session.route, sel=session.sel, sel_id=session.sel_id, region=session.region
+    )
+
+
+def return_focus(session: Session) -> bool:
+    """Put focus back on the row and region an overlay was opened from.
+
+    Returns:
+        Whether focus moved back; ``False`` when nothing was recorded or the session has
+        since left the route the target was on.
+    """
+    target = session.focus_return
+    session.focus_return = None
+    if target is None or target.route != session.route:
+        return False
+    session.sel = target.sel
+    session.sel_id = target.sel_id
+    session.region = target.region
+    return True
+
+
 def busy(session: Session) -> bool:
     """Return whether an overlay, the filter, the go prefix or an editor owns the keys."""
     return bool(session.overlay or session.typing or session.prefix or session.edit)
@@ -144,11 +240,67 @@ def go(ctx: Ctx, route: str, why: str, entity_id: str | None = None) -> bool:
     ):
         ctx.log(NAV_KEY, f"{why} · already here")
         return False
-    s.back.push(route=s.route, sel=s.sel, subj=s.subj_id)
+    s.back.record(remember(s))
     s.route = route
     s.sel = 0
     s.sel_id = None
+    s.region = None
     s.subj_id = entity_id or None
-    s.overlay = None
+    leave_overlay(s)
     ctx.log(NAV_KEY, f"{why} → {route}")
     return True
+
+
+def open_overlay(session: Session, name: str, *, subject: str | None = None) -> None:
+    """Open overlay or drawer ``name`` above the route, capturing ``subject``.
+
+    An overlay is never a route: the route, its subject and the back stack stay as they
+    are. Opening one from the route records where focus stood as the session's one focus
+    return; replacing the top overlay with another keeps it, so the chain still returns to
+    where it began.
+
+    Args:
+        session: The session the overlay opens in.
+        name: The overlay or drawer to open.
+        subject: What the overlay is about, captured now so nothing inside it can move
+            it; ``None`` leaves it to the route's subject.
+
+    Raises:
+        KeyError: ``name`` is not an overlay or drawer, so opening it would draw a surface
+            nothing registers.
+    """
+    if name not in SURFACES:
+        raise KeyError(f"no overlay or drawer is named {name!r}")
+    if session.overlay is None:
+        session.focus_return = focus_target(session)
+    session.overlay = name
+    session.ov_subject = subject
+
+
+def leave_overlay(session: Session) -> str | None:
+    """Drop the open overlay and what it captured because a verb or a navigation acted.
+
+    Where focus goes afterwards is :func:`return_focus`'s: the invoking row the overlay
+    recorded stays recorded, and a navigation that leaves the route leaves it unused.
+
+    Returns:
+        The overlay that was open, if any.
+    """
+    left = session.overlay
+    session.overlay = None
+    session.ov_subject = None
+    session.resolution_ending = None
+    return left
+
+
+def close_overlay(session: Session) -> str | None:
+    """Dismiss the open overlay and give focus back to the row and region that opened it.
+
+    Dismissing is never a resolution: it writes nothing and only restores the focus.
+
+    Returns:
+        The overlay that was open, if any.
+    """
+    left = leave_overlay(session)
+    return_focus(session)
+    return left

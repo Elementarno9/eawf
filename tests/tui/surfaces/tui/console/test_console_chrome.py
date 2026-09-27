@@ -27,12 +27,13 @@ from pydantic import ValidationError
 import eawf
 from eawf.kernel.projection.compute import RouteProjection, build_route_projection
 from eawf.surfaces.tui.console import chrome as chrome_module
-from eawf.surfaces.tui.console.app import CHROME_OVERLAYS, ConsoleApp, compose_frame
+from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
 from eawf.surfaces.tui.console.chrome import CHROME_RESOURCE, ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import UNKNOWN_SCOPE, Fixture, Proto, load_fixture
 from eawf.surfaces.tui.console.overlays import OVERLAY_RENDERERS
-from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.overlays.chassis import CHROME_OVERLAYS
+from eawf.surfaces.tui.console.registry import REGISTRY, SURFACES
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
 from eawf.surfaces.tui.console.tokens import TRUTH
@@ -171,7 +172,7 @@ def test_console_app_constructs_with_nothing_from_the_tests_tree(tmp_path: Path)
                          if event == "open" and isinstance(args[0], str) else None)
         from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
         from eawf.surfaces.tui.console.clock import FakeClock
-        from eawf.surfaces.tui.console.registry import REGISTRY
+        from eawf.surfaces.tui.console.registry import REGISTRY, SURFACES
         from eawf.surfaces.tui.console.session import SIZES, SessionSetup
         app = ConsoleApp(clock=FakeClock())
         for route in REGISTRY.ids:
@@ -217,14 +218,15 @@ def test_unheld_entry_layer_draws_its_chrome_state(prototype_literals: frozenset
 
 
 @pytest.mark.parametrize("overlay", sorted(OVERLAY_RENDERERS))
-def test_chrome_console_overlay_draws_chrome_or_the_unknown_frame(
+def test_chrome_console_overlay_holds_its_own_frame(
     overlay: str, prototype_literals: frozenset[str]
 ) -> None:
+    """An overlay never hands the frame to the route's unknown frame beneath it."""
     rows = _frame(ConsoleApp(clock=FakeClock()), "activity", overlay)
-    if overlay in CHROME_OVERLAYS:
-        assert "NOT HELD" not in rows[1]
-    else:
-        assert rows[1].strip().startswith("NOT HELD · activity")
+    assert not any("NOT HELD" in row for row in rows)
+    assert SURFACES[overlay].title in rows[0]
+    if overlay not in CHROME_OVERLAYS:
+        assert f"{UNKNOWN} unknown" in "\n".join(rows)
     assert _leaks(rows, prototype_literals) == []
 
 

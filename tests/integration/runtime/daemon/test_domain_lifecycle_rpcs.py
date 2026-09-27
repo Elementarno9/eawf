@@ -28,12 +28,24 @@ import pytest
 
 from eawf.kernel.state.epoch2.domain_events import DOMAIN_EVENT_NAMES
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.paths import ledger_path
 from eawf.platform.install.canary import CanaryProvision
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods.domain import DOMAIN_LIFECYCLE_METHODS
 from eawf.runtime.daemon.methods.domain_envelope import DomainErrorCode
 from eawf.runtime.daemon.wal import list_records
+from tests.integration.runtime.daemon._delivery_verb_fixtures import (
+    BRANCH,
+    ENDED_AT,
+    EVIDENCE_URN,
+    FAILURE,
+    RUN_URN,
+    completion_lines,
+    completion_params,
+    landed_line,
+)
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     APPROVAL_URN,
     BATCH_URN,
@@ -49,12 +61,11 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed_row,
     tree_root,
 )
+from tests.integration.workflow.delivery import _completion_fixtures as world
 
 ACTOR = "OP-0001"
 KEY = "req-lifecycle-0001"
 TRACK_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/track/TRK-RUNTIME"
-RUN_URN = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/run/RUN-00000010"
-BRANCH = "feature/eawf-v0.7"
 
 _BINDING = seed_row("milestone", "COMPLETED")["accepted_binding"]
 _HEAD_BINDING = seed_row("batch", "READY_TO_MERGE")["current_head_binding"]
@@ -96,6 +107,7 @@ class Case:
         code: The stable code a refused case must carry.
         guard: The guard name a refused case must name, when a predicate
             was reached.
+        lines: Ledger lines the canary is seeded with beside the rows.
     """
 
     method: str
@@ -105,6 +117,7 @@ class Case:
     event_name: str = ""
     code: str = ""
     guard: str | None = None
+    lines: tuple[LedgerRecord, ...] = ()
 
 
 COMMITTED_CASES: tuple[Case, ...] = (
@@ -166,6 +179,27 @@ COMMITTED_CASES: tuple[Case, ...] = (
         event_name="domain.batch.ready",
     ),
     Case(
+        method="domain.batch.merge",
+        rows={"batch": {"BAT-0007": seed_row("batch", "READY_TO_MERGE")}},
+        urn=BATCH_URN,
+        event_name="domain.batch.merge_started",
+    ),
+    Case(
+        method="domain.batch.observe_merge",
+        rows={"batch": {"BAT-0007": seed_row("batch", "MERGING")}},
+        urn=BATCH_URN,
+        params={"observations": ["host_merge_observed"]},
+        event_name="domain.batch.merge_observed",
+        lines=(landed_line(seed_row("batch", "MERGING")),),
+    ),
+    Case(
+        method="domain.batch.complete",
+        rows={"batch": {"BAT-0007": seed_row("batch", "MERGED_PENDING_RECONCILIATION")}},
+        urn=BATCH_URN,
+        event_name="domain.batch.completed",
+        lines=(landed_line(seed_row("batch", "MERGING")),),
+    ),
+    Case(
         method="domain.task.promote",
         rows={"task": {"EAWF-0042": seed_row("task", "DRAFT")}},
         urn=TASK_URN,
@@ -179,6 +213,12 @@ COMMITTED_CASES: tuple[Case, ...] = (
         event_name="domain.task.promoted",
     ),
     Case(
+        method="domain.task.claim",
+        rows={"task": {"EAWF-0042": seed_row("task", "PLANNED")}},
+        urn=TASK_URN,
+        event_name="domain.task.claimed",
+    ),
+    Case(
         method="domain.task.start",
         rows={
             "task": {"EAWF-0042": seed_row("task", "CLAIMED")},
@@ -187,6 +227,46 @@ COMMITTED_CASES: tuple[Case, ...] = (
         urn=TASK_URN,
         params={"updates": {"active_run_ref": RUN_URN}},
         event_name="domain.task.started",
+    ),
+    Case(
+        method="domain.task.ready",
+        rows={"task": {"EAWF-0042": seed_row("task", "RUNNING")}},
+        urn=TASK_URN,
+        params={"observations": ["run_report_bound"], "binding_refs": [EVIDENCE_URN]},
+        event_name="domain.task.ready",
+    ),
+    Case(
+        method="domain.task.complete",
+        rows={"task": {"EAWF-0042": world.task_row()}},
+        urn=TASK_URN,
+        params=completion_params(),
+        event_name="domain.task.completed",
+        lines=completion_lines(),
+    ),
+    Case(
+        method="domain.run.start",
+        rows={"run": {"RUN-00000010": seed_row("run", "QUEUED")}},
+        urn=RUN_URN,
+        params={"updates": {"started_at": "2026-09-08T01:00:00Z"}},
+        event_name="domain.run.started",
+    ),
+    Case(
+        method="domain.run.finish",
+        rows={"run": {"RUN-00000010": seed_row("run", "RUNNING")}},
+        urn=RUN_URN,
+        params={"observations": ["run_report_bound"], "updates": {"ended_at": ENDED_AT}},
+        event_name="domain.run.completed",
+    ),
+    Case(
+        method="domain.run.fail",
+        rows={"run": {"RUN-00000010": seed_row("run", "RUNNING")}},
+        urn=RUN_URN,
+        params={
+            "observations": ["run_report_bound"],
+            "reason_code": "gate-red",
+            "updates": {"ended_at": ENDED_AT, "failure": FAILURE},
+        },
+        event_name="domain.run.failed",
     ),
 )
 
@@ -260,6 +340,27 @@ REFUSED_CASES: tuple[Case, ...] = (
         guard="tasks_ready_to_integrate",
     ),
     Case(
+        method="domain.batch.merge",
+        rows={"batch": {"BAT-0007": seed_row("batch", "ACTIVE")}},
+        urn=BATCH_URN,
+        code=DomainErrorCode.ILLEGAL_TRANSITION.value,
+    ),
+    Case(
+        method="domain.batch.observe_merge",
+        rows={"batch": {"BAT-0007": seed_row("batch", "MERGING")}},
+        urn=BATCH_URN,
+        params={"observations": ["host_merge_observed"]},
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="host_merge_observed",
+    ),
+    Case(
+        method="domain.batch.complete",
+        rows={"batch": {"BAT-0007": seed_row("batch", "MERGED_PENDING_RECONCILIATION")}},
+        urn=BATCH_URN,
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="reconciliation_matched",
+    ),
+    Case(
         method="domain.task.promote",
         rows={"task": {"EAWF-0042": seed_row("task", "DRAFT")}},
         urn=TASK_URN,
@@ -274,6 +375,12 @@ REFUSED_CASES: tuple[Case, ...] = (
         guard="promotion_contract_complete",
     ),
     Case(
+        method="domain.task.claim",
+        rows={"task": {"EAWF-0042": seed_row("task", "DRAFT")}},
+        urn=TASK_URN,
+        code=DomainErrorCode.ILLEGAL_TRANSITION.value,
+    ),
+    Case(
         method="domain.task.start",
         rows={"task": {"EAWF-0042": seed_row("task", "CLAIMED")}},
         urn=TASK_URN,
@@ -281,13 +388,57 @@ REFUSED_CASES: tuple[Case, ...] = (
         code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
         guard="run_bound",
     ),
+    Case(
+        method="domain.task.ready",
+        rows={"task": {"EAWF-0042": seed_row("task", "RUNNING")}},
+        urn=TASK_URN,
+        params={"observations": ["run_report_bound"]},
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="criteria_evidence_bound",
+    ),
+    Case(
+        method="domain.task.complete",
+        rows={"task": {"EAWF-0042": world.task_row()}},
+        urn=TASK_URN,
+        params=completion_params(),
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="integrated_binding_pinned",
+    ),
+    Case(
+        method="domain.run.start",
+        rows={"run": {"RUN-00000010": seed_row("run", "QUEUED")}},
+        urn=RUN_URN,
+        code=DomainErrorCode.SCHEMA_VALIDATION_FAILED.value,
+        guard="missing_transition_fields",
+    ),
+    Case(
+        method="domain.run.finish",
+        rows={"run": {"RUN-00000010": seed_row("run", "RUNNING")}},
+        urn=RUN_URN,
+        params={"updates": {"ended_at": ENDED_AT}},
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="run_report_bound",
+    ),
+    Case(
+        method="domain.run.fail",
+        rows={"run": {"RUN-00000010": seed_row("run", "RUNNING")}},
+        urn=RUN_URN,
+        params={
+            "observations": ["run_report_bound"],
+            "updates": {"ended_at": ENDED_AT, "failure": FAILURE},
+        },
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="reason_recorded",
+    ),
 )
 
 
 def _seeded(case: Case, tmp_path: Path, *, code: str) -> CanaryProvision:
-    """Provision a canary holding this case's document rows."""
+    """Provision a canary holding this case's document rows and ledger lines."""
     canary = provision(tmp_path / code.lower(), code=code)
     seed(canary, case.rows)
+    for line in case.lines:
+        append_ledger_record(ledger_path(document_path(canary), line.collection), line)
     return canary
 
 
@@ -515,7 +666,7 @@ def test_every_lifecycle_verb_is_registered_on_the_server() -> None:
 
 def test_each_entity_family_has_a_registered_verb() -> None:
     families = {name.split(".")[1] for name in DOMAIN_LIFECYCLE_METHODS}
-    assert families == {"track", "milestone", "batch", "task"}
+    assert families == {"track", "milestone", "batch", "task", "run"}
 
 
 def test_committed_and_refused_cases_cover_every_verb() -> None:

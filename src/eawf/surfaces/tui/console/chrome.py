@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import json
 from importlib.resources import files
-from typing import Any
+from typing import Any, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from eawf.surfaces.tui.console.registry import ENTRY_STATE_IDS
 
 #: The packaged chrome file, beside this module under ``data/``.
 CHROME_RESOURCE = "chrome.json"
@@ -44,7 +46,20 @@ class States(_Frozen):
 
 
 class EntryState(_Frozen):
-    """One pre-session state of the entry layer."""
+    """One pre-session state of the entry layer.
+
+    The packaged chrome holds each state's static frame; the attach path fills in what
+    it read (:mod:`eawf.surfaces.tui.console.attach`).
+
+    Attributes:
+        commands: The runnable command lines the state hands over. A state with paths
+            or rows holds one per path or row, an empty line where that row has none;
+            any other state holds its primary command first. Enter copies the one
+            under the cursor.
+        disclosure: Labelled rows drawn only from a minimum frame width, each
+            ``(min_width, label, text)``: more evidence on facts the frame already
+            states, never a different answer.
+    """
 
     id: str
     exit: str
@@ -60,6 +75,8 @@ class EntryState(_Frozen):
     paths_label: str | None = Field(default=None, alias="pathsLabel")
     paths_note: str | None = Field(default=None, alias="pathsNote")
     paths_ordered: bool | None = Field(default=None, alias="pathsOrdered")
+    commands: tuple[str, ...] = ()
+    disclosure: tuple[tuple[int, str, str], ...] = ()
 
 
 class SettingsCatalog(_Frozen):
@@ -96,6 +113,10 @@ class ConsoleChrome(_Frozen):
         states: The connection values and what each one reads and refuses.
         entry: The entry layer's pre-session states, in the packet's order.
         settings: The settings catalog.
+
+    Raises:
+        pydantic.ValidationError: the entry table is not exactly the route registry's
+            entry states, in its order.
     """
 
     buckets: tuple[Bucket, ...]
@@ -104,6 +125,14 @@ class ConsoleChrome(_Frozen):
     states: States
     entry: tuple[EntryState, ...]
     settings: SettingsCatalog
+
+    @model_validator(mode="after")
+    def _entry_states_are_registered(self) -> Self:
+        """Refuse an entry table the route registry does not declare state for state."""
+        ids = tuple(state.id for state in self.entry)
+        if ids != ENTRY_STATE_IDS:
+            raise ValueError(f"entry states {ids} are not the registry's {ENTRY_STATE_IDS}")
+        return self
 
 
 def load_chrome() -> ConsoleChrome:

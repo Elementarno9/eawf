@@ -70,15 +70,17 @@ from eawf.kernel.projection.connection import (
     ConnectionValue,
     ReconnectDisposition,
     ReconnectNegotiation,
+    ReplayNote,
     apply_patches,
     connection_for_disposition,
     connection_value,
     projection_now,
+    replay_note,
     staleness_target_seconds,
     vouches_for_counts,
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
-from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, SettingsView
+from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, EffectiveSettingsView
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
@@ -90,8 +92,10 @@ from eawf.surfaces.tui.console.operations import (
     OperationResult,
     OperationStatus,
     Operator,
+    SettingRequest,
     VerbRequest,
     address,
+    address_setting,
     refused,
     settled,
     unanswered,
@@ -231,10 +235,11 @@ class ProjectionSeam:
         self._held: OrderedDict[str, RouteProjection] = OrderedDict()
         self._listeners: list[PatchListener] = []
         self._reading: set[str] = set()
-        self._settings: SettingsView | None = None
+        self._settings: EffectiveSettingsView | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
         self._connection = ConnectionValue.DISCONNECTED
+        self._replay: ReplayNote | None = None
         self._backstop_ticks = 0
         self._operator = operator
         self._operations = OperationLedger()
@@ -269,6 +274,15 @@ class ProjectionSeam:
     def connection(self) -> ConnectionValue:
         """Return the link's current value, one of the nine."""
         return self._connection
+
+    @property
+    def replay_note(self) -> ReplayNote | None:
+        """Return the last replay's start and head while the link is replaying, else ``None``.
+
+        The note is the negotiation's own answer, so a replaying frame can say how far the
+        head is without the console asserting a number of its own.
+        """
+        return self._replay if self._connection is ConnectionValue.REPLAYING else None
 
     @property
     def projection(self) -> RouteProjection | None:
@@ -361,7 +375,7 @@ class ProjectionSeam:
         return tuple(loaded)
 
     @property
-    def settings(self) -> SettingsView | None:
+    def settings(self) -> EffectiveSettingsView | None:
         """Return the effective-settings view; ``None`` before the first settings read."""
         return self._settings
 
@@ -448,7 +462,7 @@ class ProjectionSeam:
         logger.debug(f"load route={route} cursor={projection.header.source_cursor}")
         return projection
 
-    async def load_settings(self) -> SettingsView:
+    async def load_settings(self) -> EffectiveSettingsView:
         """Read every configuration leaf and the layer behind it, and hold the answer.
 
         The settings view is not a row projection: config carries no ordinal, so there
@@ -461,7 +475,7 @@ class ProjectionSeam:
         answer = await self._binding.call(
             READ_METHOD_TEMPLATE.format(route=SETTINGS_ROUTE), self._params()
         )
-        view = SettingsView.model_validate(answer)
+        view = EffectiveSettingsView.model_validate(answer)
         self._settings = view
         logger.debug(f"load_settings leaves={len(view.leaves)}")
         return view
@@ -491,6 +505,7 @@ class ProjectionSeam:
         negotiation = ReconnectNegotiation.model_validate(answer["negotiation"])
         patches = tuple(KeyedPatch.model_validate(row) for row in answer["patches"])
         self._connection = connection_for_disposition(negotiation.disposition)
+        self._replay = replay_note(negotiation)
         if negotiation.disposition is ReconnectDisposition.SNAPSHOT_REQUIRED:
             logger.info(
                 f"reconnect refused route={self._route} "
@@ -539,6 +554,8 @@ class ProjectionSeam:
             or outstanding when the answer never arrived. A request that cannot be
             addressed is refused without being sent.
         """
+        if isinstance(request, SettingRequest):
+            return await self._write_setting(request)
         if self._operator is None:
             return OperationResult(
                 operation_id=None,
@@ -570,6 +587,39 @@ class ProjectionSeam:
         if result.status is OperationStatus.REFUSED and receipt is not None:
             # a refusal wrote nothing, so the receipt still records no answer
             self._answered_under.pop(receipt, None)
+        return result
+
+    async def _write_setting(self, request: SettingRequest) -> OperationResult:
+        """Send one settings edit to the layered-config verbs, then re-read the settings.
+
+        Config carries no ordinal and no patch arrives for it, so the effective value an
+        operator sees next is the daemon's fresh answer rather than the value the console
+        asked for: a write that a higher layer shadows reads as unchanged, as it is.
+
+        Args:
+            request: The edit, carrying the key, the lens layer and the typed value.
+
+        Returns:
+            What the daemon answered; the held view is replaced only after an applied
+            write, and a failed re-read leaves the previous view held and says why.
+        """
+        operation = address_setting(request)
+        self._operations.open(operation)
+        result = await self._send(operation)
+        if result.status is not OperationStatus.APPLIED:
+            return result
+        try:
+            await self.load_settings()
+        except Exception as exc:
+            logger.warning(
+                f"_write_setting reread_failed id={operation.operation_id} cause={exc!r}"
+            )
+            return OperationResult(
+                operation_id=result.operation_id,
+                target=result.target,
+                status=result.status,
+                detail=f"{result.target} written · the re-read failed, so the frame is stale",
+            )
         return result
 
     def _spent_receipt(self, request: VerbRequest) -> OperationResult | None:

@@ -25,7 +25,10 @@ from eawf.kernel.delivery.receipts import ReuseDisposition
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.epoch2.task import TaskStatus
 from eawf.runtime.daemon.methods import DaemonValidationError
-from eawf.runtime.daemon.methods.delivery import TaskCompletionParams, assess_task_completion
+from eawf.runtime.daemon.methods.delivery_completion import (
+    TaskCompletionParams,
+    assess_task_completion,
+)
 from eawf.workflow.delivery.completion import (
     CompletionRefusal,
     CompletionRefusedError,

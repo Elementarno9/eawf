@@ -5,13 +5,16 @@ needs the operator, then exactly one state value with its glyph. A session rende
 the nine connection values; the pre-session layer renders its process value and no count.
 The breadcrumb starts at the brand, and while the back stack holds history its middle is
 that history, the path Escape walks, naming each place once. A crumb too wide for its room
-gives way from the middle, never at the brand, the scope or the leaf.
+gives way from the middle, never at the brand, the scope or the leaf. A drawn header is
+read back into typed runs, so the painter styles each step without touching the text and a
+step above the leaf is a link the pointer can walk to.
 """
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.registry import REGISTRY, RouteRegistry
@@ -133,6 +136,105 @@ def _fold(crumb: str, room: int) -> str:
         else:
             steps[_KEPT_HEAD] = ELLIPSIS
     return CRUMB_SEP.join(steps)
+
+
+class CrumbPart(StrEnum):
+    """What one run of a header row is, which fixes how it is styled and whether it links."""
+
+    BRAND = "brand"
+    SEP = "sep"
+    STEP = "step"
+    ID = "id"
+    LEAF = "leaf"
+    FOLD = "fold"
+    SLOT = "slot"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CrumbRun:
+    """One run of a header row's text and what it is.
+
+    Attributes:
+        text: The run's text, exactly as the row carries it.
+        part: What the run is.
+        start: The cell the run starts at.
+        back: How many steps up from the leaf the run's step is; ``0`` for anything that
+            is not a step above the leaf.
+    """
+
+    text: str
+    part: CrumbPart
+    start: int
+    back: int = 0
+
+    @property
+    def end(self) -> int:
+        """Return the cell one past the run's last."""
+        return self.start + cell_len(self.text)
+
+    @property
+    def link(self) -> bool:
+        """Return whether activating the run walks the breadcrumb to its step.
+
+        The brand is not a place, a fold names no one place, and the leaf is where the
+        operator already is, so going there is not a step.
+        """
+        return self.part in (CrumbPart.STEP, CrumbPart.ID) and self.back > 0
+
+
+# A typed entity id: a capital prefix, a dash and the key the id grammar allows.
+_TYPED_ID = re.compile(r"[A-Z][A-Z0-9]*-[0-9A-Za-z]+")
+# The crumb ends where the padding before the state slot begins.
+_CRUMB_END = re.compile(r"\s{2,}\S")
+
+
+def crumb_runs(row: str) -> tuple[CrumbRun, ...]:
+    """Return a header row cut into its runs, left to right, re-joining to ``row`` exactly.
+
+    Args:
+        row: A header row as :func:`header_row` returns it.
+
+    Returns:
+        The runs; the gutter and the padding before the state slot are ``SLOT`` runs.
+    """
+    gutter = _GUTTER.match(row)
+    lead = gutter.group(0) if gutter else ""
+    rest = row[len(lead) :]
+    found = _CRUMB_END.search(rest)
+    crumb, tail = (rest[: found.start()], rest[found.start() :]) if found else (rest, "")
+    runs: list[CrumbRun] = []
+    at = cell_len(lead)
+    if lead:
+        runs.append(CrumbRun(text=lead, part=CrumbPart.SLOT, start=0))
+    steps = crumb.split(CRUMB_SEP) if crumb else []
+    for i, step in enumerate(steps):
+        if i:
+            runs.append(CrumbRun(text=CRUMB_SEP, part=CrumbPart.SEP, start=at))
+            at += cell_len(CRUMB_SEP)
+        back = len(steps) - 1 - i
+        if i == 0 and step == BRAND:
+            part = CrumbPart.BRAND
+        elif step == ELLIPSIS:
+            part = CrumbPart.FOLD
+        elif back == 0:
+            part = CrumbPart.LEAF
+        elif _TYPED_ID.fullmatch(step):
+            part = CrumbPart.ID
+        else:
+            part = CrumbPart.STEP
+        runs.append(CrumbRun(text=step, part=part, start=at, back=back))
+        at += cell_len(step)
+    if tail:
+        runs.append(CrumbRun(text=tail, part=CrumbPart.SLOT, start=at))
+    return tuple(runs)
+
+
+def crumb_at(row: str, x: int) -> CrumbRun | None:
+    """Return the linked crumb step drawn at cell ``x`` of ``row``, if any."""
+    for run in crumb_runs(row):
+        if run.start <= x < run.end:
+            return run if run.link else None
+    return None
 
 
 def header_row(

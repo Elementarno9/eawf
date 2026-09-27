@@ -5,7 +5,7 @@ no statement of where it came from. That is the one thing an operator needs: the
 that wins is the only place editing the value has any effect, and a repo value a local
 file quietly overrides looks exactly like one in force.
 
-Both settings routes now draw a :class:`~eawf.kernel.projection.settings.SettingsView`
+Both settings routes now draw a :class:`~eawf.kernel.projection.settings.EffectiveSettingsView`
 read through ``projection.settings.read``. The suite pins four things about it: every leaf
 names the layer that set it and the layers it overrode, lowest precedence first; the merge
 engine remains the single authority on which layer wins; the read writes nothing, which is
@@ -27,7 +27,7 @@ from eawf.kernel.projection.settings import (
     SETTINGS_ROUTE,
     SETTINGS_ROUTES,
     SETTINGS_STACK_ROUTE,
-    SettingsView,
+    EffectiveSettingsView,
     build_settings_view,
     layer_overlays,
     render_value,
@@ -39,7 +39,6 @@ from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.provenance import NOTHING_OVERRIDDEN, OVERRIDDEN
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
 
@@ -54,6 +53,9 @@ BRANCH = "probe"
 
 #: A key no built-in default states, so its stack is exactly the layers the probe wrote.
 PROBE_KEY = "probe.leaf"
+
+#: A catalog key the route files under a section, so the frames can put the cursor on it.
+CATALOG_KEY = "prose.level"
 
 #: A key the built-in defaults state, so its stack always carries that floor.
 FLOOR_KEY = "schema_version"
@@ -80,7 +82,7 @@ def _write(path: Path, body: str) -> None:
     path.write_text(body, encoding="utf-8")
 
 
-def _view(tree: Path, *, cursor: int = 41208) -> SettingsView:
+def _view(tree: Path, *, cursor: int = 41208) -> EffectiveSettingsView:
     """Return the settings view over the probe tree, with no env layer in play."""
     return build_settings_view(
         workspace=tree,
@@ -93,11 +95,14 @@ def _view(tree: Path, *, cursor: int = 41208) -> SettingsView:
     )
 
 
-def _frame(route: str, view: SettingsView, *, sel: int = 0, width: int = 120) -> list[str]:
-    """Return the console frame ``route`` renders from ``view``."""
+def _frame(route: str, view: EffectiveSettingsView, *, key: str, width: int = 120) -> list[str]:
+    """Return the console frame ``route`` renders from ``view``, the cursor on ``key``."""
     session = Session()
     session.route = REGISTRY.by_key[route].id
-    session.sel = sel
+    section = view.leaf(key).section
+    assert section is not None
+    session.set_sec = view.sections().index(section)
+    session.set_key = [leaf.key for leaf in view.keys_of(section)].index(key)
     rendered = View(
         session=session,
         fixture=load_fixture(
@@ -167,9 +172,9 @@ def test_a_leaf_one_layer_states_overrode_nothing(tree: Path) -> None:
 
     leaf = _view(tree).leaf(PROBE_KEY)
 
-    assert leaf.winning_layer == "repo"
+    assert leaf.source_layer == "repo"
     assert leaf.effective.value == "from-repo"
-    assert leaf.overridden() == ()
+    assert leaf.override_chain == ()
     assert [(entry.layer, entry.wins) for entry in leaf.stack] == [("repo", True)]
 
 
@@ -183,9 +188,9 @@ def test_a_local_value_wins_and_the_stack_names_every_layer_it_overrode(tree: Pa
 
     leaf = _view(tree).leaf(PROBE_KEY)
 
-    assert leaf.winning_layer == "local"
+    assert leaf.source_layer == "local"
     assert leaf.effective.value == "from-local"
-    assert leaf.overridden() == ("global", "repo", "branch")
+    assert leaf.override_chain == ("global", "repo", "branch")
     assert [entry.value for entry in leaf.stack] == [
         "from-global",
         "from-repo",
@@ -213,26 +218,29 @@ def test_a_layer_that_states_nothing_for_a_leaf_is_left_out(tree: Path) -> None:
     leaf = _view(tree).leaf(PROBE_KEY)
 
     assert "local" not in {entry.layer for entry in leaf.stack}
-    assert leaf.winning_layer == "repo"
+    assert leaf.source_layer == "repo"
 
 
 def test_the_built_in_floor_is_the_winner_when_nothing_overrides_it(tree: Path) -> None:
     """Every built-in default is a leaf, and it wins until a file layer states it."""
     leaf = _view(tree).leaf(FLOOR_KEY)
 
-    assert leaf.winning_layer == "built-in"
-    assert leaf.overridden() == ()
+    assert leaf.source_layer == "built-in"
+    assert leaf.override_chain == ()
     assert leaf.effective.state is TruthState.KNOWN
 
 
-def test_every_leaf_names_a_layer_and_ends_its_stack_with_the_winner(tree: Path) -> None:
-    """The whole read, not one probe key: one winner per leaf and it is the last entry."""
+def test_every_stated_leaf_names_a_layer_and_ends_its_stack_with_the_winner(tree: Path) -> None:
+    """The whole read, not one probe key: one winner per stated leaf and it is the last entry."""
     _write(tree / ".ea" / "config.yaml", "probe:\n  leaf: from-repo\n")
 
     for leaf in _view(tree).leaves:
-        assert leaf.winning_layer in LAYER_ORDER
+        if leaf.source_layer is None:
+            assert leaf.stack == ()
+            continue
+        assert leaf.source_layer in LAYER_ORDER
         assert leaf.stack
-        assert leaf.stack[-1].layer == leaf.winning_layer
+        assert leaf.stack[-1].layer == leaf.source_layer
         assert [entry.wins for entry in leaf.stack].count(True) == 1
 
 
@@ -267,58 +275,49 @@ def test_a_layer_with_no_file_is_not_created_by_reading_it(tree: Path) -> None:
 # ---------- the frames ----------
 
 
-def test_the_settings_frame_shows_each_leaf_with_its_layer_and_what_it_overrode(
-    tree: Path,
-) -> None:
-    """The list answers both questions on one row: what is in force, and who set it."""
-    _write(tree / ".ea" / "config.yaml", "probe:\n  leaf: from-repo\n")
-    _write(tree / ".ea" / "local" / "config.yaml", "probe:\n  leaf: from-local\n")
+def test_the_settings_frame_shows_each_key_with_the_layer_that_set_it(tree: Path) -> None:
+    """The route answers both questions on one row: what is in force, and who set it."""
+    _write(tree / ".ea" / "config.yaml", "prose:\n  level: strict\n")
+    _write(tree / ".ea" / "local" / "config.yaml", "prose:\n  level: loose\n")
     view = _view(tree)
-    at = [leaf.key for leaf in view.leaves].index(PROBE_KEY)
 
-    rows = _frame("settings", view, sel=at)
-    row = _leaf_row(rows, PROBE_KEY)
+    row = _leaf_row(_frame("settings", view, key=CATALOG_KEY), "level ")
 
-    assert "from-local" in row
+    assert "loose" in row
     assert "local" in row
-    assert "repo" in row
-    assert f"{len(view.leaves):,} leaves" in rows[1]
 
 
-def test_the_settings_frame_marks_a_leaf_nothing_overrode(tree: Path) -> None:
-    """A leaf one layer states says so, rather than leaving the column blank."""
+def test_a_leaf_off_the_catalog_is_counted_rather_than_dropped(tree: Path) -> None:
+    """A merged value no catalog key covers stays in the view and is counted on the route."""
     _write(tree / ".ea" / "config.yaml", "probe:\n  leaf: from-repo\n")
     view = _view(tree)
-    at = [leaf.key for leaf in view.leaves].index(PROBE_KEY)
 
-    rows = _frame("settings", view, sel=at)
+    outside = [leaf.key for leaf in view.uncatalogued()]
+    assert PROBE_KEY in outside
+    assert f"{len(outside)} leaves off the catalog" in _frame("settings", view, key=CATALOG_KEY)[1]
 
-    assert NOTHING_OVERRIDDEN in _leaf_row(rows, PROBE_KEY)
 
-
-def test_the_stack_card_draws_the_focused_leafs_whole_ladder(tree: Path) -> None:
-    """The card is the same read as the list, so the two cannot disagree."""
-    _write(tree / ".ea" / "config.yaml", "probe:\n  leaf: from-repo\n")
-    _write(tree / ".ea" / "local" / "config.yaml", "probe:\n  leaf: from-local\n")
+def test_the_stack_card_draws_the_focused_keys_whole_ladder(tree: Path) -> None:
+    """The card is the same read as the route, so the two cannot disagree."""
+    _write(tree / ".ea" / "config.yaml", "prose:\n  level: strict\n")
+    _write(tree / ".ea" / "local" / "config.yaml", "prose:\n  level: loose\n")
     view = _view(tree)
-    at = [leaf.key for leaf in view.leaves].index(PROBE_KEY)
 
-    rows = _frame("settings.stack", view, sel=at)
-    body = "\n".join(rows)
+    body = "\n".join(_frame("settings.stack", view, key=CATALOG_KEY))
 
-    assert PROBE_KEY in body
+    assert CATALOG_KEY in body
     assert "in force from local" in body
-    assert OVERRIDDEN in body
-    assert "from-repo" in body
+    assert "strict" in body
+    assert "repo sets strict, and the local layer above it wins." in body
 
 
 def test_both_settings_frames_read_one_view(tree: Path) -> None:
-    """One read answers the list and the card, so one digest covers what both drew."""
+    """One read answers the route and the card, so one digest covers what both drew."""
     _write(tree / ".ea" / "config.yaml", "probe:\n  leaf: from-repo\n")
     view = _view(tree)
 
-    assert _frame("settings", view)
-    assert _frame("settings.stack", view)
+    assert _frame("settings", view, key=CATALOG_KEY)
+    assert _frame("settings.stack", view, key=CATALOG_KEY)
     assert view.digest == _view(tree).digest
 
 

@@ -18,9 +18,10 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from eawf.kernel.projection.connection import ReplayNote
 from eawf.kernel.projection.registers import RegisterView, attention_mine
 from eawf.kernel.projection.route_view import RouteReadModel
-from eawf.kernel.projection.settings import SettingsView
+from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console.attention import open_count
@@ -34,6 +35,8 @@ from eawf.surfaces.tui.console.tokens import RULE_HEAVY, RULE_THIN, Severity
 from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
 
 CARET = "▸"
+#: The smallest windowable region: an above count, a row and a below count.
+MIN_WINDOW = 3
 _CARET_GAP = re.compile(r"^(\s*)▸(\s{2,})(\S)")
 _GUTTER = 13
 
@@ -65,6 +68,8 @@ class View:
             what the link has read, so its prototype registers are never counted.
         principal_refusal: Why every bound write is refused because the link acts as
             nobody; empty when it acts as someone or there is no link.
+        replay: The replay the link is carrying out, while it is replaying: where it
+            started and the head it heads toward. ``None`` at any other time.
     """
 
     session: Session
@@ -76,9 +81,10 @@ class View:
     projection: SpineView | RouteReadModel | None = None
     register: RegisterView | None = None
     attention: RegisterView | None = None
-    settings: SettingsView | None = None
+    settings: EffectiveSettingsView | None = None
     linked: bool = False
     principal_refusal: str = ""
+    replay: ReplayNote | None = None
 
 
 def unheld(view: View) -> bool:
@@ -249,10 +255,11 @@ def window_rows(view: View, *, total: int, cursor: int, chrome: int) -> RowWindo
         chrome: Every row of the frame that is not a table row, the keybar excepted.
 
     Returns:
-        The window, at least one row tall however little room the frame leaves.
+        The window, never under :data:`MIN_WINDOW` rows however little room the frame
+        leaves: a region shorter than that cannot carry its edge counts and a row.
     """
     session = view.session
-    room = max(1, view.h - 1 - chrome - session.reserved)
+    room = max(MIN_WINDOW, view.h - 1 - chrome - session.reserved)
     start = max(min(session.scroll, cursor), cursor - room + 1)
     start = max(0, min(start, total - room))
     session.scroll, session.visible = start, room
@@ -269,6 +276,40 @@ def _swapped_keys(session: Session, keys: str, w: int) -> str:
     lead = [KEY["up"], KEY["enter"]] if len(nav) > 1 else ([KEY["enter"]] if nav else [])
     entries = [*lead, KEY["actions"], KEY["inspect"], KEY["esc"]]
     return keybar([entry.pair() for entry in entries], w)
+
+
+def make_room(body: Sequence[str], n: int) -> list[str] | None:
+    """Return ``body`` less ``n`` rows that state nothing, so ``n`` rows can go above the keybar.
+
+    The legend row budget: trailing blank rows go first, then thin rules from the bottom
+    up. A rule separates sections but states no fact, so a frame whose every row is a
+    fact keeps its sections and gives up only their dividers.
+
+    Args:
+        body: The frame rows above the keybar.
+        n: How many rows to free.
+
+    Returns:
+        The kept rows, ``n`` fewer than ``body``; ``None`` when fewer than ``n`` rows state
+        nothing, because freeing more would drop a fact.
+
+    Raises:
+        ValueError: ``n`` is negative.
+    """
+    if n < 0:
+        raise ValueError(f"cannot free a negative number of rows, got {n}")
+    kept = list(body)
+    need = n
+    while need and kept and not kept[-1].strip():
+        kept.pop()
+        need -= 1
+    for i in range(len(kept) - 1, -1, -1):
+        if not need:
+            break
+        if kept[i] and set(kept[i]) == {RULE_THIN}:
+            del kept[i]
+            need -= 1
+    return kept if not need else None
 
 
 def build(view: View, rows: Sequence[str], keys: str) -> list[str]:
@@ -488,8 +529,13 @@ def boxed(
 
 
 def toast_box(toast: Toast, w: int) -> list[str]:
-    """Return a toast's three bordered rows, ``w`` cells wide."""
-    glyph = "✗ " if toast.sev == Severity.ERR else ("! " if toast.sev == Severity.WARN else "")
+    """Return a toast's three bordered rows, ``w`` cells wide.
+
+    An error toast leads its title with the error kind's ``!``; the purged token ``✗`` is a
+    value-column glyph and would read as a purged fact. Any other severity is carried by
+    its title word and the border's colour alone.
+    """
+    glyph = "! " if toast.sev == Severity.ERR else ""
     head = glyph + toast.title
     return [
         "┌─ " + head + " " + "─" * max(1, w - 5 - cell_len(head)) + "┐",

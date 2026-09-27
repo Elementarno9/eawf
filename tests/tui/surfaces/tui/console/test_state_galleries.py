@@ -61,6 +61,13 @@ SCOPE = "EAWF"
 #: The eight routes this suite is about: the planning group and the diagnostics group.
 GALLERY_ROUTES: tuple[str, ...] = (*PLANNING_ROUTES, *DIAGNOSTICS_ROUTES)
 
+#: The gallery routes still drawn as the shared record table. Campaign, History diff and
+#: Search draw their packet layouts, each silent column a cell wearing the unknown token;
+#: ``test_native_route_frames`` holds those three.
+TABLE_ROUTES: tuple[str, ...] = tuple(
+    r for r in GALLERY_ROUTES if r not in ("campaign", "history.diff", "search")
+)
+
 #: One row per collection the gallery touches, so no route's register is empty by accident
 #: and a route reading across the corpus can be told apart from one reading a single
 #: register. The campaign and artifact rows stand in for a producer that ships at dev4.
@@ -180,7 +187,7 @@ def test_the_renamed_route_reads_under_its_port_key() -> None:
 # ---------- the rows the daemon served ----------
 
 
-@pytest.mark.parametrize("route", GALLERY_ROUTES)
+@pytest.mark.parametrize("route", (*TABLE_ROUTES, "search"))
 def test_every_gallery_route_draws_the_rows_the_daemon_projected(route: str) -> None:
     """Every row the read model holds reaches the frame, by key and by collection."""
     spine = _view(route)
@@ -257,7 +264,7 @@ def test_every_dev4_column_is_an_unknown_truth_field_naming_why(route: str) -> N
             assert field.truth_kind is TruthKind.DERIVED
 
 
-@pytest.mark.parametrize("route", GALLERY_ROUTES)
+@pytest.mark.parametrize("route", TABLE_ROUTES)
 def test_the_frame_prints_the_unknown_token_beside_every_dev4_column(route: str) -> None:
     """The frame says which columns are silent instead of leaving empty cells."""
     spine = _view(route)

@@ -59,13 +59,36 @@ def conn_label(value: ConnectionValue | None) -> str:
 
 
 class BackEntry(BaseModel):
-    """One step the back stack restores."""
+    """One step the back stack restores: the place, and every cursor it was left with.
+
+    Attributes:
+        route: The route the step was on.
+        sel: The row offset the caret was drawn at. It is only the fallback for a row
+            that carries no id; ``sel_id`` wins wherever the target still holds it.
+        subj: The subject the route was open onto.
+        sel_id: The stable id of the selected row, or ``None`` for an id-less row.
+        bucket: The chosen bucket of a bucket route.
+        filter: The route's own filter text.
+        scroll: The first row of the window.
+        evt: The event anchor a Run frame was pinned to.
+        region: The focus region that held the arrows.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     route: str
     sel: int
     subj: str | None
+    sel_id: str | None = None
+    bucket: str | None = None
+    filter: str = ""
+    scroll: int = 0
+    evt: str | None = None
+    region: str | None = None
+
+    def same_place(self, other: BackEntry) -> bool:
+        """Return whether ``other`` is a step onto the same route and subject."""
+        return (self.route, self.subj) == (other.route, other.subj)
 
 
 class BackStack(BaseModel):
@@ -76,8 +99,20 @@ class BackStack(BaseModel):
     entries: list[BackEntry] = Field(default_factory=list)
 
     def push(self, *, route: str, sel: int, subj: str | None) -> None:
-        """Record a step, dropping the oldest ones beyond the cap."""
-        self.entries.append(BackEntry(route=route, sel=sel, subj=subj))
+        """Record a step that carries only a place and an offset."""
+        self.record(BackEntry(route=route, sel=sel, subj=subj))
+
+    def record(self, entry: BackEntry) -> None:
+        """Record ``entry``, coalescing it into a newest step onto the same place.
+
+        Two consecutive steps onto one route and subject would make Escape land where it
+        already is, so the newer cursors replace the older step instead of stacking. The
+        oldest steps beyond the cap are dropped.
+        """
+        if self.entries and self.entries[-1].same_place(entry):
+            self.entries[-1] = entry
+        else:
+            self.entries.append(entry)
         del self.entries[:-BACK_CAP]
 
     def pop(self) -> BackEntry | None:
@@ -141,6 +176,17 @@ class SessionSetup(BaseModel):
     prefix: str | None = None
 
 
+class FocusTarget(BaseModel):
+    """The row and region an overlay was opened from, where focus returns on its close."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    route: str
+    sel: int
+    sel_id: str | None
+    region: str | None
+
+
 def _default_overlay_steps() -> dict[str, int]:
     """Return the step each stepped overlay starts at."""
     return {"question": 0, "pause": 0, "evidence": 0, "readiness": 0}
@@ -173,6 +219,8 @@ class Session(BaseModel):
     pane_sel: int = 0
     scroll: int = 0
     back: BackStack = Field(default_factory=BackStack)
+    region: str | None = None
+    focus_return: FocusTarget | None = None
     prefix: str | None = None
     prefix_seq: int = 0
     prefix_deadline: float | None = None
@@ -228,6 +276,10 @@ class Session(BaseModel):
     visible: int = 0
     count: int = 0
     ov_state: dict[str, int] = Field(default_factory=_default_overlay_steps)
+    # the open overlay's subject, captured when it opened so nothing inside it moves it
+    ov_subject: str | None = None
+    # the ending the resolution card states for the target in ``ov_subject``
+    resolution_ending: str | None = None
     log: list[LogEntry] = Field(default_factory=list)
     # published by the renderer during a render, read by the frame builder and dispatcher
     record_facts: list[str] | None = None

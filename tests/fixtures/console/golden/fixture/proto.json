@@ -450,7 +450,7 @@
    "state": "OPEN",
    "ledger": [],
    "text": "RUN-3fcd1d52 past its 45m estimate; still running",
-   "due": "—",
+   "due": "due –",
    "kind": "notice · never blocks, never auto-opens",
    "effects": "nothing — this is a notice",
    "not": "it did not pause anything"

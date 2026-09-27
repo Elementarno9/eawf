@@ -227,7 +227,7 @@ def test_a_count_with_no_register_is_absent_rather_than_zero() -> None:
 def test_an_empty_register_counts_zero() -> None:
     """A register the route binds and that holds nothing counts zero, honestly."""
     spine = _view("scope.home", document={"track": {}})
-    assert spine.counts == {"track": 0, "milestone": 0}
+    assert spine.counts == {"track": 0, "milestone": 0, "batch": 0}
     assert spine.rows == ()
 
 
@@ -325,7 +325,15 @@ def test_unproduced_columns_are_unknown_truth_fields_naming_why(route: str) -> N
             assert field.truth_kind is TruthKind.DERIVED
 
 
-@pytest.mark.parametrize("route", SPINE_ROUTES)
+#: The spine routes still drawn as the shared record table. Home draws a tree and the Run
+#: frame one Run's facts, each silent column as a cell wearing the unknown token instead;
+#: ``test_native_route_frames`` holds those two.
+TABLE_ROUTES: tuple[str, ...] = tuple(
+    r for r in SPINE_ROUTES if r not in ("scope.home", "run.detail")
+)
+
+
+@pytest.mark.parametrize("route", TABLE_ROUTES)
 def test_the_frame_names_every_unstated_column(route: str) -> None:
     """The frame says which columns are silent instead of leaving empty cells."""
     spine = _view(route)
@@ -335,7 +343,7 @@ def test_the_frame_names_every_unstated_column(route: str) -> None:
         assert f"{name} ?" in unstated
 
 
-@pytest.mark.parametrize("route", SPINE_ROUTES)
+@pytest.mark.parametrize("route", TABLE_ROUTES)
 def test_the_frame_draws_one_line_per_read_model_row(route: str) -> None:
     """Every row the read model holds reaches the frame, by key and by collection."""
     spine = _view(route)

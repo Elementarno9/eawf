@@ -4,6 +4,10 @@ An overlay module provides ``render(view) -> list[str]``, which returns the whol
 with its own header crumb and keybar. The four decision overlays end with their state
 rows (:mod:`~eawf.surfaces.tui.console.overlays.states`). A drawer is not an overlay: it
 keeps the route frame and replaces its tail, and the app composes it.
+
+An overlay that does not hold what it draws is drawn by the chassis instead
+(:func:`~eawf.surfaces.tui.console.overlays.chassis.unheld_frame`), so it still holds the
+frame rather than letting the route's unknown frame through.
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ from types import MappingProxyType
 
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.overlays import (
+    acceptance,
     consequence,
     draft,
     evidence,
@@ -24,6 +29,7 @@ from eawf.surfaces.tui.console.overlays import (
     readiness,
     resolution,
 )
+from eawf.surfaces.tui.console.overlays.chassis import holds, unheld_frame
 from eawf.surfaces.tui.console.registry import OVERLAYS
 
 Render = Callable[[View], list[str]]
@@ -36,6 +42,7 @@ OVERLAY_RENDERERS: Mapping[str, Render] = MappingProxyType(
         "question": question.render,
         "pause": pause.render,
         "evidence": evidence.render,
+        "acceptance": acceptance.render,
         "readiness": readiness.render,
         "resolution": resolution.render,
         "draft": draft.render,
@@ -53,9 +60,12 @@ def is_overlay(name: str | None) -> bool:
 
 
 def render_overlay(name: str, view: View) -> list[str]:
-    """Return the frame of overlay ``name``.
+    """Return the frame of overlay ``name``, the chassis' held frame when it holds nothing.
 
     Raises:
         KeyError: ``name`` is not an overlay.
     """
-    return OVERLAY_RENDERERS[name](view)
+    render = OVERLAY_RENDERERS[name]
+    if not holds(name, view.session, view.fixture):
+        return unheld_frame(view, name)
+    return render(view)

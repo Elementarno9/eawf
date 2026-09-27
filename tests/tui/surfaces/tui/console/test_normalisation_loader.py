@@ -171,10 +171,10 @@ def test_unknown_golden_ids_names_the_entry_and_the_pattern() -> None:
     assert unknown_golden_ids(table, []) == ["probe: never/matched"]
 
 
-def test_every_route_correction_names_a_key_and_a_family(tracked: NormalisationMap) -> None:
+def test_every_route_correction_names_a_key_and_a_route_group(tracked: NormalisationMap) -> None:
     corrections = tracked.route_corrections()
     assert corrections, "the map carries no classification correction"
-    assert all(c.key and c.family for c in corrections.values())
+    assert all(c.key and c.group for c in corrections.values())
 
 
 def test_a_frame_difference_outside_the_map_fails_the_comparison(

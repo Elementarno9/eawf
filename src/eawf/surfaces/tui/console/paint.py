@@ -1,0 +1,328 @@
+"""The row painter: which console surface each run of a composed row is drawn as.
+
+Renderers return rows of text, because every layout helper, the plain path and the golden
+contract measure text. Colour is therefore read back off the finished words, the same way
+the design packet's prototype highlights its rows: the brand and the crumb in the header,
+the connection chip and the attention count beside it, the rules and the rail, the column
+heads and pane labels, the cursor row, the lifecycle words, and each key against its
+label in the keybar. A run is only ever painted as a surface named in
+:data:`~eawf.surfaces.tui.console.token_map.TOKEN_MAP`, so which colour a surface takes is
+decided in that one table and nowhere here; and because every rule reads the text, colour
+never states a fact the words do not.
+
+Truth tokens and quality markers keep the marks :func:`~eawf.surfaces.tui.console.cells.spans`
+reads off the row, one run per mark, and a mark's surface wins over any other rule.
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import StrEnum
+from types import MappingProxyType
+
+from eawf.surfaces.tui.console.cells import Mark, spans
+from eawf.surfaces.tui.console.header import CrumbPart, crumb_runs
+from eawf.surfaces.tui.console.keybar import GAP
+from eawf.surfaces.tui.console.token_map import SURFACES
+from eawf.surfaces.tui.console.tokens import CARET, RAIL
+
+
+class Part(StrEnum):
+    """Which band of the frame a row belongs to; each band reads its own grammar."""
+
+    HEADER = "header"
+    BODY = "body"
+    KEYBAR = "keybar"
+
+
+@dataclass(frozen=True, slots=True)
+class Stroke:
+    """One run of a row drawn in one style.
+
+    Attributes:
+        text: The run's text, exactly as the frame composed it.
+        surface: The surface whose colour the glyphs take; ``None`` keeps the band's own.
+        ground: The surface whose background the run sits on; ``None`` keeps the band's.
+        bold: Whether the run is drawn bold.
+        underline: Whether the run is underlined, as a typed id that is a link is.
+        mark: The truth token or quality marker the run wears, if any.
+
+    Raises:
+        ValueError: ``surface`` or ``ground`` names no row of the token map, so the run
+            would take a colour the map does not own.
+    """
+
+    text: str
+    surface: str | None = None
+    ground: str | None = None
+    bold: bool = False
+    underline: bool = False
+    mark: Mark | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a surface the token map does not declare."""
+        for name in (self.surface, self.ground):
+            if name is not None and name not in SURFACES:
+                raise ValueError(f"surface {name!r} is not in the token map")
+
+
+# A truth token names an absence, so it is read at the severity the packet gives its word;
+# a quality marker only qualifies a value, so it recedes to the hint tone the value stays
+# legible in. A genuine zero is a value and keeps the text colour.
+MARK_SURFACE: Mapping[Mark, str | None] = MappingProxyType(
+    {
+        Mark.UNKNOWN: "warn",
+        Mark.UNAVAILABLE: "dim",
+        Mark.DENIED: "warn",
+        Mark.PURGED: "dim",
+        Mark.INVALIDATED: "err",
+        Mark.ZERO: None,
+        Mark.DERIVED: "hint",
+        Mark.ESTIMATED: "hint",
+    }
+)
+
+# The lifecycle and state words the console colours, each at the severity the packet's
+# prototype gives it. Only these words are chips; prose around them stays plain.
+_STATUS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"\b(?:RUNNING|ACTIVE|SUCCEEDED|COMPLETED|READY_TO_INTEGRATE|passed)\b"), "ok"),
+    (re.compile(r"\b(?:LOST|FAILED|REJECTED)\b"), "err"),
+    (re.compile(r"\b(?:WAIT-[A-Z]+|ACCEPTANCE_REVIEW|SUSPENDED|STALLED|STALE)\b|≠ denied"), "warn"),
+    (re.compile(r"\b(?:QUEUED|PLANNED|STARTING|CHECKING)\b"), "info"),
+    # The exception buckets name their severity in words beside a count.
+    (re.compile(r"\b(?:needs operator|unknown control outcome)(?= +\d)"), "warn"),
+    (re.compile(r"\b(?:lost or stale|failed)(?= +\d)"), "err"),
+    (re.compile(r"\b(?:checking or integrating|terminal recent)(?= +\d)"), "info"),
+    (re.compile(r"\brunning(?= +\d)"), "ok"),
+)
+
+# A row ending in a state word is a label and its value, never a row of column heads.
+_CHIP_ROW = re.compile(
+    r"\s(?:ACTIVE|PLANNED|COMPLETED|REVIEW|RUNNING|SUCCEEDED|STARTING|QUEUED|CHECKING|LOST"
+    r"|FAILED|DENIED|DRAFTS|DEFERRED|PROMOTION|WAIT-[A-Z]+|ACCEPTANCE_REVIEW"
+    r"|READY_TO_INTEGRATE)\s*$"
+)
+# Column heads: upper-case tokens separated by column gaps; a head may be two words.
+_HEADS = re.compile(
+    r"^(\s*)([A-Z][A-Z0-9]*(?: [A-Z0-9]+)*(?: {2,}[A-Z][A-Z0-9]*(?: [A-Z0-9]+)*)+)\s*$"
+)
+_ONE_HEAD = re.compile(r"^(\s*)([A-Z][A-Z0-9]*(?: [A-Z0-9]+)*)\s*$")
+# A pane label is a position: an upper-case name at the start of the row, then a gap.
+_PANE_LABEL = re.compile(rf"^[ {CARET}]{{0,4}}([A-Z][A-Z0-9]*(?: [A-Z0-9]+)*)(?= {{2,}}|\s*$)")
+_LABEL_SURFACE: Mapping[str, str] = MappingProxyType(
+    {
+        "NEEDS YOU": "warn",
+        "NEEDS OPERATOR": "warn",
+        "STALLED": "warn",
+        "OVER BUDGET": "warn",
+        "UNKNOWN": "warn",
+        "DENIED": "warn",
+        "FAILED": "err",
+        "LOST": "err",
+        "REJECTED": "err",
+        "ACTIVE": "ok",
+        "QUEUED": "info",
+        "RESOLVED": "info",
+    }
+)
+_RULES = re.compile(r"[═─┄]+")
+_CURSOR_ROW = re.compile(rf"^\s*{CARET}")
+_OUTSTANDING = re.compile(r"![1-9][\d,]*(?: NEEDS YOU)?")
+# The header's state slot: one glyph, a space, then the upper-case value, at the row's end.
+_STATE_SLOT = re.compile(r"(?<=\s)(\S) ([A-Z][A-Z /]*[A-Z])\s*$")
+_LIVE = "LIVE"
+# How each typed crumb run is drawn: its surface, bold, underline. A run not listed is plain.
+_CRUMB_STYLE: Mapping[CrumbPart, tuple[str | None, bool, bool]] = MappingProxyType(
+    {
+        CrumbPart.BRAND: ("brand", True, False),
+        CrumbPart.SEP: ("rail", False, False),
+        CrumbPart.STEP: ("hint", False, False),
+        CrumbPart.ID: ("hint", False, True),
+        CrumbPart.FOLD: ("dim", False, False),
+        CrumbPart.LEAF: (None, True, False),
+    }
+)
+_GAP_GLYPH = "▲"
+
+
+class _Canvas:
+    """The per-character style of one row while the grammar rules write into it.
+
+    Positions are string indices, not cells: a run is cut out of the row by slicing, so
+    a wide glyph is still one position and the runs rejoin to the row exactly.
+    """
+
+    def __init__(self, row: str) -> None:
+        self.row = row
+        self.surface: list[str | None] = [None for _ch in row]
+        self.bold: list[bool] = [False for _ch in row]
+        self.underline: list[bool] = [False for _ch in row]
+        self.size = len(self.surface)
+
+    def put(
+        self,
+        start: int,
+        end: int,
+        surface: str | None,
+        *,
+        bold: bool = False,
+        underline: bool = False,
+    ) -> None:
+        """Paint positions ``start`` to ``end`` with ``surface``, adding bold or underline."""
+        for i in range(start, end):
+            if surface is not None:
+                self.surface[i] = surface
+            self.bold[i] = self.bold[i] or bold
+            self.underline[i] = self.underline[i] or underline
+
+    def strokes(self, *, ground: str | None) -> tuple[Stroke, ...]:
+        """Return the row as runs, a marked span always its own run."""
+        marks: list[tuple[Mark | None, int]] = [(None, -1)] * self.size
+        at = 0
+        for index, span in enumerate(spans(self.row)):
+            end = at + len(span.text)
+            if span.mark is not None:
+                surface = MARK_SURFACE[span.mark]
+                for i in range(at, end):
+                    marks[i] = (span.mark, index)
+                    self.surface[i] = surface
+                    self.bold[i] = False
+                    self.underline[i] = False
+            at = end
+        out: list[Stroke] = []
+        start = 0
+        for i in range(1, self.size + 1):
+            if i < self.size and self._key(i) == self._key(start) and marks[i] == marks[start]:
+                continue
+            out.append(
+                Stroke(
+                    self.row[start:i],
+                    surface=self.surface[start],
+                    ground=ground,
+                    bold=self.bold[start],
+                    underline=self.underline[start],
+                    mark=marks[start][0],
+                )
+            )
+            start = i
+        return tuple(out)
+
+    def _key(self, i: int) -> tuple[str | None, bool, bool]:
+        return (self.surface[i], self.bold[i], self.underline[i])
+
+
+def paint(row: str, part: Part) -> tuple[Stroke, ...]:
+    """Return ``row`` cut into the runs it is drawn in, left to right.
+
+    The runs concatenate back to ``row`` exactly, so painting never changes a frame's text.
+
+    Args:
+        row: One composed frame row.
+        part: The band the row sits in.
+
+    Returns:
+        The runs; an empty row has none.
+    """
+    if not row:
+        return ()
+    canvas = _Canvas(row)
+    if part is Part.HEADER:
+        _header(canvas)
+    elif part is Part.KEYBAR:
+        _keybar(canvas)
+    else:
+        _body(canvas)
+    cursor = part is Part.BODY and _CURSOR_ROW.match(row) is not None
+    return canvas.strokes(ground="cursor" if cursor else None)
+
+
+def _header(canvas: _Canvas) -> None:
+    """Paint the brand, the crumb, the attention count and the state slot."""
+    row = canvas.row
+    left_end = canvas.size
+    slot = _STATE_SLOT.search(row)
+    if slot is not None:
+        glyph, label = slot.group(1), slot.group(2)
+        surface = "live" if label == _LIVE else "warn" if glyph == _GAP_GLYPH else "dim"
+        canvas.put(slot.start(1), slot.end(2), surface, bold=label == _LIVE)
+        left_end = slot.start(1)
+    for count in _OUTSTANDING.finditer(row, 0, left_end):
+        canvas.put(count.start(), count.end(), "warn", bold=True)
+        left_end = min(left_end, count.start())
+    # The crumb is read through the header's own typed runs, so the painter and the pointer
+    # agree on which step is which: every step above the leaf is a place Escape walks back
+    # to, the leaf names the frame, and a typed id above the leaf is a link.
+    at = 0
+    for run in crumb_runs(row):
+        end = at + len(run.text)
+        if end <= left_end:
+            step, bold, underline = _CRUMB_STYLE.get(run.part, (None, False, False))
+            canvas.put(at, end, step, bold=bold, underline=underline)
+        at = end
+
+
+def _keybar(canvas: _Canvas) -> None:
+    """Paint each key bold and its label in the hint tone.
+
+    A pair is ``<key> <label>``: the key token is its first word plus any following word
+    that names a key rather than a verb (``PageUp PageDown``, ``Home End``), and a label
+    is always lower-case.
+    """
+    row = canvas.row
+    at = 0
+    for chunk in row.split(GAP):
+        words = list(re.finditer(r"\S+", chunk))
+        if words:
+            key_end = words[0].end()
+            label_from = len(words)
+            for n, word in enumerate(words[1:], start=1):
+                if word.group(0)[0].islower():
+                    label_from = n
+                    break
+                key_end = word.end()
+            canvas.put(at + words[0].start(), at + key_end, None, bold=True)
+            if label_from < len(words):
+                canvas.put(at + words[label_from].start(), at + words[-1].end(), "hint")
+        at += len(chunk) + len(GAP)
+
+
+def _body(canvas: _Canvas) -> None:
+    """Paint the rules, rail, heads, pane labels, caret, counts and state words."""
+    row = canvas.row
+    chip_row = _CHIP_ROW.search(row) is not None
+    if not chip_row and not _heads(canvas):
+        label = _PANE_LABEL.match(row)
+        if label is not None:
+            canvas.put(label.start(1), label.end(1), _LABEL_SURFACE.get(label.group(1)), bold=True)
+    for pattern, surface in _STATUS:
+        for found in pattern.finditer(row):
+            canvas.put(found.start(), found.end(), surface)
+    for count in _OUTSTANDING.finditer(row):
+        canvas.put(count.start(), count.end(), "warn", bold=True)
+    for rule in _RULES.finditer(row):
+        canvas.put(rule.start(), rule.end(), "rule")
+    for i, ch in enumerate(row):
+        if ch == RAIL:
+            canvas.put(i, i + 1, "rail")
+        elif ch == CARET:
+            canvas.put(i, i + 1, "caret", bold=True)
+
+
+def _heads(canvas: _Canvas) -> bool:
+    """Bold a row of column heads, each side of a rail on its own; return whether it was one."""
+    row = canvas.row
+    halves = row.split(RAIL)
+    if len(halves) == 2:
+        left, right = _HEADS.match(halves[0]), _HEADS.match(halves[1]) or _ONE_HEAD.match(halves[1])
+        if left is not None and right is not None:
+            offset = len(halves[0]) + len(RAIL)
+            canvas.put(left.start(2), left.end(2), None, bold=True)
+            canvas.put(offset + right.start(2), offset + right.end(2), None, bold=True)
+            return True
+    whole = _HEADS.match(row)
+    if whole is None:
+        return False
+    canvas.put(whole.start(2), whole.end(2), None, bold=True)
+    return True

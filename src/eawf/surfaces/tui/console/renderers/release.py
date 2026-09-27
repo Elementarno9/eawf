@@ -39,6 +39,8 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 from eawf.surfaces.tui.console.width import pad
 from eawf.workflow.projection.acceptance import ReleaseReadinessView
 
+#: The one release the prototype registers record.
+OWN = "REL-0001"
 MEMBERSHIP = "MEMBERSHIP"
 READINESS = "READINESS"
 
@@ -117,6 +119,11 @@ def render(view: View) -> list[str]:
     if isinstance(model, ReleaseReadinessView):
         return native_frame(view, model)
     s, fx, w = view.session, view.fixture, view.w
+    if s.subj_id and s.subj_id != OWN:
+        # a release the prototype does not record is said to be absent, never swapped
+        rows = [header(view, f" Eä ▸ {fx.scope} ▸ {s.subj_id}"), f" Release {s.subj_id}", bar(w)]
+        rows = dv.absent(s, fx, rows, entity_id=s.subj_id, what="membership or readiness", w=w)
+        return build(view, rows, route_keys_bar(view, ROUTE_KEYS["release"]))
     dv.sel_in(s, len(_MEMBERS))
     on_readiness = (s.rel_reg or MEMBERSHIP) == READINESS
     if on_readiness:

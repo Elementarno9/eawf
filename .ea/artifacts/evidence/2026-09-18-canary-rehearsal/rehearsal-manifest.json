@@ -162,6 +162,7 @@
         "projection.merge.conflict.read",
         "projection.milestone.read",
         "projection.roadmap.read",
+        "projection.scope.home.read",
         "projection.search.read"
       ],
       "record": "batch",

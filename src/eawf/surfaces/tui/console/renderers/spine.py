@@ -20,9 +20,11 @@ opens against the prototype registers, and the tracked golden contract is that m
 
 from __future__ import annotations
 
-from eawf.kernel.projection.spine import SpineView
+from eawf.kernel.projection.connection import staleness_target_seconds
+from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthState
-from eawf.surfaces.tui.console.format import group
+from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEntity
+from eawf.surfaces.tui.console.format import group, seconds
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
@@ -35,22 +37,56 @@ from eawf.surfaces.tui.console.frame import (
     window_rows,
 )
 from eawf.surfaces.tui.console.header import header_row
+from eawf.surfaces.tui.console.keybar import KEY
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.renderers.read_model import counts, crumb
+from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, cell, counts, crumb
 from eawf.surfaces.tui.console.session import Session
-from eawf.surfaces.tui.console.tokens import truth_cell
 from eawf.surfaces.tui.console.width import pad
 
 _ROWS = Table([34, 12, 0], 2)
 _EMPTY = "   this scope holds no record the read model renders"
 
 
+def finished_subject(session: Session, spine: SpineView) -> SpineRow | None:
+    """Return the frame's subject when it is an entity whose lifecycle has ended.
+
+    Terminality is read off the stored status against the entity's own status machine,
+    never off the connection: a finished Run on a live console is still finished, and a
+    running one on an offline console is not.
+
+    Args:
+        session: The session whose subject the frame is drawn for.
+        spine: The read model the frame draws.
+
+    Returns:
+        The subject's row, or ``None`` when there is no subject, it is not a lifecycle
+        entity, its status is not stated, or the status has an outgoing edge.
+    """
+    found = spine.index_of(session.subj_id)
+    if found is None:
+        return None
+    row = spine.rows[found]
+    status = row.field("status")
+    entity = next((e for e in LifecycleEntity if e.value == row.collection.value), None)
+    if entity is None or status.state is not TruthState.KNOWN or status.value is None:
+        return None
+    return row if status.value in TERMINAL_STATUSES[entity] else None
+
+
+def finished_rows(route: str, row: SpineRow) -> list[str]:
+    """Return what a finished subject states in place of the connection line."""
+    ages = seconds(staleness_target_seconds(route, terminal=True))
+    return [
+        f" FINAL     {row.key} {row.field('status').value} · finished, nothing is wrong",
+        f"           the final state ages informationally after {ages} · no lifecycle left",
+    ]
+
+
 def _unstated(spine: SpineView) -> str:
     """Return the declared columns no producer states, each beside the unknown token."""
-    token = truth_cell("unknown")
-    return " UNSTATED  " + " · ".join(f"{name} {token}" for name in spine.unproduced())
+    return " UNSTATED  " + " · ".join(f"{name} {UNKNOWN_WORD}" for name in spine.unproduced())
 
 
 def held(view: View) -> SpineView | None:
@@ -103,7 +139,10 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         bar(w),
     ]
     rd = reads(session)
-    if not rd.complete:
+    finished = finished_subject(session, spine)
+    if finished is not None:
+        rows.extend([*finished_rows(session.route, finished), thin(w)])
+    elif not rd.complete:
         rows.extend(
             [f" ATTACHED  {attached(rd, revision=group(int(spine.source_cursor)))}", thin(w)]
         )
@@ -117,12 +156,12 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         rows.append(_EMPTY)
     for index in range(win.start, win.stop):
         row = spine.rows[index]
-        status = row.field("status")
-        stated = status.value if status.state is TruthState.KNOWN and status.value else None
         # the kind is the collection the read model states, never guessed from the id
-        cells = [row.key, row.collection.value, stated or truth_cell("unknown")]
+        cells = [row.key, row.collection.value, cell(row.field("status"))]
         line = _ROWS.row(cells, index == cursor)
         rows.append(line if index == cursor else Fixed(pad(line, w)))
     rows.append(win.line(complete=spine.complete))
     rows.extend(below)
-    return build(view, rows, route_keys_bar(view, native_keys(session.route)))
+    # a finished subject has no lifecycle left, so the lifecycle menu is not offered
+    keys = [e for e in native_keys(session.route) if finished is None or e != KEY["actions"]]
+    return build(view, rows, route_keys_bar(view, keys))

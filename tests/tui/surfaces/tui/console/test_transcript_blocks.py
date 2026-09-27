@@ -442,9 +442,10 @@ def test_the_frame_labels_the_thinking_state_as_derived() -> None:
 
 
 def test_the_frame_draws_the_unknown_token_when_no_turn_is_open() -> None:
-    """An absent state is stated, and still labelled derived."""
+    """An absent state is stated as its token and word, and still labelled derived."""
     body = _frame(_view((_event(1), _summarized(2))))
-    assert f"? · {transcript.DERIVED_LABEL}" in body
+    state = next(line for line in body.split("\n") if line.startswith(" STATE"))
+    assert state.startswith(f" STATE     ? unknown · {transcript.DERIVED_LABEL} · ")
 
 
 # ---------- the frame, the cursor and the epoch-1 mode ----------

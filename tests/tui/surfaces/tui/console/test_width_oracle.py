@@ -88,7 +88,7 @@ def test_eaw_class_ratified_glyph_is_known_and_one_cell(ch: str) -> None:
 
 def test_all_glyphs_ambiguous_subset_is_the_declared_list() -> None:
     # the narrow policy is what admits these, so the list is pinned rather than inferred
-    assert "".join(AMBIGUOUS) == "≈─│┄═▲◇◈●◐◑"
+    assert "".join(AMBIGUOUS) == "°±¶·×–•…←↑→↓≈≠≤─│┄┊┌┐└┘├┤┬┴┼═█▏▣▲◇◈○●◐◑"  # noqa: RUF001
     assert width.POLICY == AmbiguousWidth.NARROW
 
 
@@ -164,8 +164,8 @@ def test_all_glyphs_covers_every_table_and_chrome_glyph() -> None:
         ("unknown", "?"),
         ("unavailable", "∅"),
         ("denied", "⊘"),
-        ("failed", "✗"),
-        ("attention", "!"),
+        ("purged", "✗"),
+        ("invalidated", "!"),
         ("zero", "0"),
     ],
 )

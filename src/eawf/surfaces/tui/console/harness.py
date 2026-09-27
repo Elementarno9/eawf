@@ -325,14 +325,15 @@ class Harness:
         """Render one frame state: the one render entry point.
 
         Args:
-            setup: The reset argument, fixing the route, subject, overlay and size.
+            setup: The reset argument, fixing the route, subject, overlay and size; an
+                overlay the map renames for ``contract_id`` is opened by its port name.
             contract_id: The frame's id, which selects the map's key rewrites.
             keys: Keys pressed after the reset, in order.
             rack: Toasts raised before the keys.
             verbose: Whether the frame is a verbose state.
         """
         app = self.app
-        app.reset(setup)
+        app.reset(self.normaliser.setup(contract_id, setup))
         app.verbose = False
         await self.follow_size()
         app.render_frame()
@@ -382,7 +383,7 @@ class Harness:
     async def journey(self, journey: Journey) -> Result:
         """Replay one journey, comparing the projection and the frame at every step."""
         app = self.app
-        app.reset(journey.setup)
+        app.reset(self.normaliser.setup(journey.id, journey.setup))
         await self.follow_size()
         app.render_frame()
         result = Result(journey.id, "journey", True)

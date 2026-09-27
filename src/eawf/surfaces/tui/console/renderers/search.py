@@ -1,11 +1,27 @@
-"""search: entity hits for one query, with exact counts; event text is never searched."""
+"""search: entity hits for one query, with exact counts; event text is never searched.
+
+The native frame answers the palette's query over the entity registers the read model
+holds: a hit is a record whose key or title carries the query, sorted by kind then id, and
+each hit says what matched and where. The counts by kind are counted off the hits, so
+they are exact while the projection is complete and say ``known`` when it is not. An empty
+query matches every record, which is the register itself.
+"""
 
 from __future__ import annotations
 
+from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
-from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
-from eawf.surfaces.tui.console.renderers.spine import held, native_frame
+from eawf.surfaces.tui.console.format import group
+from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin, window_rows
+from eawf.surfaces.tui.console.renderers.read_model import (
+    finish,
+    label,
+    native_head,
+    noun,
+    route_crumb,
+)
+from eawf.surfaces.tui.console.renderers.spine import held
 
 _KEYS: tuple[tuple[str, str], ...] = (
     ("↑↓", "hit"),
@@ -15,6 +31,77 @@ _KEYS: tuple[tuple[str, str], ...] = (
     ("Esc", "back"),
 )
 _HITS: tuple[tuple[str, str, str], ...] = pt.SEARCH_HITS
+
+
+def matched(row: SpineRow, query: str) -> str | None:
+    """Return what of ``row`` carries ``query``, or ``None`` when nothing does.
+
+    Args:
+        row: The record searched.
+        query: The palette query, compared without case; empty matches every record.
+
+    Returns:
+        ``"key"`` or ``"title"``, the field the query was found in, or ``"every record"``
+        for an empty query.
+    """
+    needle = query.strip().lower()
+    if not needle:
+        return "every record"
+    if needle in row.key.lower():
+        return "key"
+    if row.title is not None and needle in row.title.lower():
+        return "title"
+    return None
+
+
+def native_frame(view: View, spine: SpineView) -> list[str]:
+    """Return the Search frame drawn from the corpus the daemon served.
+
+    Args:
+        view: The render being built; its session carries the palette query.
+        spine: The diagnostics corpus at the committed cursor, sorted by kind then id.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    s, w = view.session, view.w
+    query = s.pq
+    hits = [(row, what) for row in spine.rows if (what := matched(row, query)) is not None]
+    cursor = dv.sel_in(s, len(hits))
+    s.sel_id = hits[cursor][0].key if hits else None
+    kinds: dict[str, int] = {}
+    for row, _what in hits:
+        kinds[row.collection.value] = kinds.get(row.collection.value, 0) + 1
+    exact = "every count exact" if spine.complete else "every count known"
+    top = native_head(
+        view,
+        spine,
+        crumb_text=route_crumb(spine, "Search"),
+        summary=f"query “{query}” · entities only · {dv.plural(len(hits), 'hit')}"
+        f" · cursor {group(int(spine.source_cursor))}",
+    )
+    grid = Grid([18, 14, 0])
+    stated = " · ".join(noun(n, name) for name, n in kinds.items())
+    body = [
+        label("QUERY", f"{query}▏"),
+        label("KINDS", stated or "0 hits in any register"),
+        thin(w),
+        grid.head(["HIT", "WHAT MATCHED", "WHERE"]),
+    ]
+    foot_rows = 4
+    win = window_rows(view, total=len(hits), cursor=cursor, chrome=len(top) + len(body) + foot_rows)
+    for i, (row, what) in enumerate(hits[win.start : win.stop], start=win.start):
+        where = row.collection.value + (f" · {row.title}" if row.title else "")
+        body.append(grid.row([row.key, what, where], i == cursor, w))
+    if not hits:
+        body.append("   0 hits · no record's key or title carries the query")
+    shown = win.stop - win.start
+    body += [
+        thin(w),
+        label("WINDOW", f"{shown} of {len(hits)} · sorted by kind, then id · {exact}"),
+        label("SCOPE", "Entities only — event text is not searched."),
+    ]
+    return finish(view, top, body, _KEYS)
 
 
 def render(view: View) -> list[str]:

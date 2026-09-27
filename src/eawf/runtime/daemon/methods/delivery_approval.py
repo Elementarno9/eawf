@@ -336,16 +336,21 @@ def _milestone_of(document: dict[str, Any], urn: MilestoneUrn) -> Milestone:
     )
 
 
-def _batches(session: RootSession, document: dict[str, Any]) -> tuple[DeliveryBatch, ...]:
-    """Return every Batch the tree holds, from the document and the ledger.
+def _batches(
+    session: RootSession, document: dict[str, Any], *, milestone_ref: str
+) -> tuple[DeliveryBatch, ...]:
+    """Return every Batch of one Milestone, from the document and the ledger.
 
     A finished Batch is compacted out of the document into its ledger, so
     both tiers are read; a Batch missing from the answer would be a Batch
-    whose verification nobody checked.
+    whose verification nobody checked. A row naming another Milestone --
+    or none, as a record imported from epoch 1 does -- is not this
+    Milestone's work, so it is left unread rather than allowed to refuse
+    a question it has no part in.
 
     Raises:
-        DaemonValidationError: A stored Batch row does not read back, so
-            whether the Milestone's work is verified cannot be decided.
+        DaemonValidationError: A stored Batch row of this Milestone does
+            not read back, so whether its work is verified cannot be decided.
     """
     live = document_rows(document, Epoch2Collection.BATCH)
     payloads = list(live.values())
@@ -354,6 +359,11 @@ def _batches(session: RootSession, document: dict[str, Any]) -> tuple[DeliveryBa
         item.payload
         for item in lines
         if item.record_key.startswith("BAT-") and item.record_key not in live
+    ]
+    payloads = [
+        item
+        for item in payloads
+        if isinstance(item, dict) and item.get("milestone_ref") == milestone_ref
     ]
     try:
         return tuple(DeliveryBatch.model_validate(item) for item in payloads)
@@ -547,7 +557,9 @@ def _bundle_to_ask_about(
     """
     document = session.read_document()
     try:
-        batch_refs = require_verified_batches(milestone, _batches(session, document))
+        batch_refs = require_verified_batches(
+            milestone, _batches(session, document, milestone_ref=str(milestone.urn))
+        )
         head = _bundle_ledger(session, args.urn).head
         if head is None:
             bundle = first_bundle(

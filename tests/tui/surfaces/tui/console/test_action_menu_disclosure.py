@@ -1,5 +1,9 @@
 """The command palette and the action menu disclose only what the route binds.
 
+A surface holding no authority on purpose -- the read-only overlays, the inspect and raw
+drawers, the notifications route and the merge conflict -- binds and advertises no verb
+beyond open, cursor movement and copy, and the action menu never opens over it (CON-143).
+
 The action menu lists exactly its route's verbs, light first, refused ones with their
 reasons, draws no caret, and is refused at construction when a menu names an unregistered
 route, repeats a letter, or holds a light verb the registry gives no door. One judgement
@@ -36,7 +40,8 @@ from eawf.surfaces.tui.console.action_menu import (
 )
 from eawf.surfaces.tui.console.action_menu import PAIRS as MENU_PAIRS
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, keybar
+from eawf.surfaces.tui.console.keymap import DRAWER_KEYS, DRAWER_PAIRS, OVERLAY_KEYS
 from eawf.surfaces.tui.console.palette import (
     CHROME_ROWS,
     CRUMB,
@@ -48,10 +53,12 @@ from eawf.surfaces.tui.console.palette import (
     window,
 )
 from eawf.surfaces.tui.console.palette import PAIRS as PALETTE_PAIRS
-from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.registry import DRAWERS, OVERLAYS, REGISTRY, SURFACES
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.surfaces.tui.console.tokens import CARET
 from eawf.surfaces.tui.console.width import cell_len
+
+from .overlay_support import frame_of, press, prototype, session_on
 
 WIDTHS = [w for w, _h in SIZES]
 CHASSIS = "tests.snapshots.tui.console.console_chassis.chassis"
@@ -480,3 +487,73 @@ def test_menu_rows_match_the_test_only_chassis_drawer() -> None:
             for w, h in SIZES:
                 expected = [row.ljust(w) for row in drawer.render(theirs, fixture, w, h)]
                 assert menu_rows(MENUS.verbs(route), guard=guard, w=w) == expected, (route, w)
+
+
+# ---------- CON-143: a surface holding no authority offers no verb ----------
+
+#: The keys a surface without authority may bind: a cursor, a copy, a door and Escape.
+_READ_ONLY_KEYS: frozenset[str] = frozenset(
+    {"ArrowUp", "ArrowDown", "k", "j", "y", "Y", "Escape", "Enter"}
+)
+#: The keybar tokens such a surface may show.
+_READ_ONLY_TOKENS: frozenset[str] = frozenset({"↑↓", "y", "Y", "Esc", "type", "Enter"})
+READ_ONLY_OVERLAYS: tuple[str, ...] = tuple(
+    name for name in OVERLAYS if not SURFACES[name].authority
+)
+READ_ONLY_DRAWERS: tuple[str, ...] = tuple(
+    name for name in DRAWERS if not SURFACES[name].authority and name != "go"
+)
+
+
+def test_con_143_the_registry_declares_the_read_only_surfaces() -> None:
+    assert set(READ_ONLY_OVERLAYS) == {
+        "help",
+        "palette",
+        "evidence",
+        "acceptance",
+        "readiness",
+        "resolution",
+        "marker",
+    }
+    assert set(READ_ONLY_DRAWERS) == {"inspect", "raw"}
+    assert not SURFACES["go"].authority
+
+
+@pytest.mark.parametrize("name", READ_ONLY_OVERLAYS)
+def test_con_143_a_read_only_overlay_binds_no_verb(name: str) -> None:
+    assert set(OVERLAY_KEYS[name]) <= _READ_ONLY_KEYS
+
+
+@pytest.mark.parametrize("name", READ_ONLY_DRAWERS)
+def test_con_143_a_read_only_drawer_binds_no_verb(name: str) -> None:
+    assert set(DRAWER_KEYS[name]) <= _READ_ONLY_KEYS
+    assert {token for token, _label in DRAWER_PAIRS[name]} <= _READ_ONLY_TOKENS
+
+
+def test_con_143_the_go_drawer_binds_only_its_destinations() -> None:
+    assert set(DRAWER_KEYS["go"]) == {*REGISTRY.go_map, "Escape"}
+
+
+@pytest.mark.parametrize("size", range(len(SIZES)))
+@pytest.mark.parametrize("name", READ_ONLY_OVERLAYS)
+def test_con_143_a_read_only_overlay_advertises_no_verb(name: str, size: int) -> None:
+    fixture = prototype()
+    bar = frame_of(session_on("activity", overlay=name), fixture, size)[-1]
+    tokens = {piece.split(" ", 1)[0] for piece in bar.strip().split("   ") if piece}
+    assert tokens <= _READ_ONLY_TOKENS
+
+
+@pytest.mark.parametrize("name", [*READ_ONLY_OVERLAYS, *READ_ONLY_DRAWERS])
+def test_con_143_the_action_menu_opens_under_no_read_only_surface(name: str) -> None:
+    fixture = prototype()
+    session = session_on("run.detail", subj_id="RUN-538453eb", overlay=name)
+    press(session, fixture, ".")
+    assert session.overlay == name
+
+
+@pytest.mark.parametrize("route", ["notifications", "merge.conflict"])
+def test_con_143_a_read_only_route_lists_no_action_menu_verb(route: str) -> None:
+    fixture = prototype()
+    assert fixture.menus.verbs(route) == ()
+    labels = {entry.label for entry in ROUTE_KEYS[route]}
+    assert labels <= {"row", "copy", "back"}
