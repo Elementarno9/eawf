@@ -1,0 +1,63 @@
+---
+name: research
+description: "Answer one question with a swift one-page investigation; no Campaign."
+argument-hint: "<topic...> [--question <text>] [--scope <urn>] [--from <ref>...] [--include <selector>...] [--exclude <selector>...] [--sources <repo|external|both>] [--web <auto|allow|deny|required>] [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>] [--agents <1..3>] [--budget <spec>] [--save [<relative-path>]] [--output <markdown|json>]"
+user-invocable: true
+disable-model-invocation: false
+---
+
+# /research
+
+Answer one question with a swift one-page investigation; no Campaign.
+
+## 1. Authority
+
+- An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Effects: No Campaign or lifecycle RPC; optional gitignored local brief.
+- Allowed RPCs: `read_entity`, `query_evidence`, `retrieve_source`, `submit_report`. Any other RPC is denied before it reaches a handler.
+- Canonical state: never mutated by this skill.
+- Local write root: `.ea/local/research`; nothing is written outside it.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+The question named by `<topic...>` and `--question`, within the scope and the sources this invocation declares.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+Answer one bounded question quickly in at most one rendered page. You do not create, own, resume, or mutate a Campaign.
+
+```text
+/research <topic...> [--question <text>] [--scope <urn>] [--from <ref>...] [--include <selector>...] [--exclude <selector>...] [--sources <repo|external|both>] [--web <auto|allow|deny|required>] [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>] [--agents <1..3>] [--budget <spec>] [--save [<relative-path>]] [--output <markdown|json>]
+```
+
+## 4. Method
+
+1. State the exact question and the decision or next action it informs. Narrow an over-broad topic before reading.
+2. Inspect supplied and repository-local primary sources first. Fetch external sources only under the resolved source policy.
+3. Run one survey pass. Independent parallel slices are allowed within the agent ceiling, but recursion and additional rounds are forbidden.
+4. Reconcile evidence once. Distinguish implementation fact, document claim, external claim, and inference. Resolve every citation used by the verdict.
+5. Compare plausible alternatives with their main advantage and cost. Give a verdict, confidence, and material open gaps.
+6. If evidence cannot decide, recommend the cheapest discriminating next step. Do not turn the invocation into a Campaign or Spike implicitly.
+7. Stop at one pass, one rendered page, or the first hard budget cap. Saving writes only the same report to the declared gitignored local path.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `research` and roles `researcher`. They bind what you do; they grant no capability.
+
+- must: **Verify behavioural claims against the source tree.** Verify behavioural, quantitative and schema claims against the implementation before asserting them. Where a design document and the source disagree, quote the source and report the drift.
+- must: **Name a refuted claim only when a finding contradicts it.** Name a claim in refuted_claim_ids only when a finding directly contradicts one of the live claims the prompt listed; never infer a contradiction from absent support, and never name a claim the prompt did not list.
+- must: **Back every claim with a reference that resolves and entails it.** Back every claim in a brief with at least one reference that resolves and entails it, a file:line, a store URN or an external URL; mark a claim you cannot back as unresolved and queue it as a next-research item instead of citing weakly.
+
+## 5. Constraints
+
+- Every parallel slice declares what its result would rule out; a slice that cannot name it is not dispatched.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one SwiftResearchReport containing question, scope, findings, alternatives, verdict, confidence, open gaps, references, coverage, and stop reason.
+
+The report validates against `SwiftResearchReport`, and its terminal outcome is exactly one of `answered`, `open`, `blocked`. Prose in the report is explanation, never the result.

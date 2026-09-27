@@ -1,0 +1,75 @@
+---
+name: track
+description: "Create a Track, set its policy, or retire it."
+argument-hint: "<create|show|set-policy|retire> [<track-ref>] [--title <text>] [--charter <text>] [--owner <principal>] [--repository <ref>...] [--scope <urn>] [--policy <key=value>...] [--reason <text>] [--from-spec <path|->] [--dry-run]"
+user-invocable: true
+disable-model-invocation: true
+---
+
+# /track
+
+Create a Track, set its policy, or retire it.
+
+## 1. Authority
+
+- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Effects: Track RPCs.
+- Allowed RPCs: `read_entity`, `domain.track.create`, `domain.track.set_policy`, `domain.track.retire`. Any other RPC is denied before it reaches a handler.
+- Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
+- Local write root: none.
+- Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
+
+## 2. Context
+
+One Track, named by `<track-ref>` or proposed by this invocation, within its Project.
+
+Resolve the subject before acting. Name every entity with its identifier and its exact current revision so staleness is detectable; a fact without a revision is a summary, not context.
+
+## 3. Task
+
+You operate one Track through the single action selected by the invocation.
+
+```text
+/track <create|show|set-policy|retire> [<track-ref>] [--title <text>] [--charter <text>] [--owner <principal>] [--repository <ref>...] [--scope <urn>] [--policy <key=value>...] [--reason <text>] [--from-spec <path|->] [--dry-run]
+```
+
+Select exactly one action: `create`, `show`, `set-policy`, `retire`. An option the selected action does not declare is refused before you start.
+
+## 4. Method
+
+1. Resolve the Track, Project, repositories, policy revision, and exact state revision. For create, resolve the proposed code, title, charter, owner, repositories, and scope before proposing a row.
+2. For show, render current policy, Milestones, unresolved Attention, and repository coverage without mutation.
+3. For create, reject duplicate identity, unresolved repositories, empty charter, or scope that cannot be enforced. Preview the complete Track contract before submitting it.
+4. For set-policy, show the before/after policy and identify every authority, WIP, provider, budget, or repository boundary that changes. A widening requires the protected action declared by policy.
+5. For retire, prove no active Milestone, Batch, Task, Run, pending protected action, or unresolved acceptance depends on the Track. Preserve history; retirement never deletes the Track.
+6. Submit only the RPC declared by the selected action, with expected revision and idempotency key. Return its receipt and refreshed Track projection.
+
+## 4b. Applicable rules
+
+The obligations the effective rule graph holds for activities `plan`. They bind what you do; they grant no capability.
+
+- must: **Give every activity a non-empty rule set.** Keep every activity governed by at least one rule; an activity whose effective rule set is empty is a defect, never a statement that no rules apply.
+- must: **Scope conduct rules to the closed activity set.** Scope an activity-bound rule only to research, plan, design, implement, test, review, integrate, commit, release, deploy or operate; a rule scoped to any other activity is refused with the offending value named.
+- must: **Block on a question only when proceeding is unsafe.** Raise a blocking question only when proceeding under any available assumption would be unsafe or would make the completed work useless if the assumption proved wrong; resolve every other uncertainty by assumption plus disclosure.
+- must: **Dispatch independent units of work together.** Dispatch independent units of work together rather than in sequence, where neither consumes the other's output; a sequential dispatch of independent units is a recorded miss.
+- must: **Evaluate the practice set at each decision point.** Evaluate the applicable practice set at each decision point rather than recalling it: at least before dispatching work, before presenting a choice to the operator and before emitting a terminal report.
+- must: **Expand every abbreviation on first use.** Expand every abbreviation, internal code and lifecycle identifier on first use in an operator-facing surface; write for a competent newcomer, not for the author of the state.
+- must: **State the concern once and finish the task.** When a task looks ill-specified, state the concern once, record the assumption you proceed under and complete the work; do not halt and do not silently substitute your own reading.
+- must: **Finish independent work before raising a question.** Before raising a question, complete all work that does not depend on its answer, and raise it only where the dependent work begins.
+- must: **Recommend the option best for the long term.** Mark the option best for the long term as recommended and state why; where the repository configures a value the choice would override, show the configured value beside the recommendation.
+- must: **Decide instead of asking when every option is the same work.** Do not ask a question with no consequence: where every option leads to the same work, select one, state the selection and proceed.
+- must: **Retrieve the current practice set in one step.** Retrieve the practice set for the current activity with one query at each decision point instead of remembering which practices apply.
+- must: **Record a scope delta before widening the work.** Record a typed scope delta against the task before any widening work begins; an unrecorded widening fails review even when the added work is correct.
+- must: **Surface a decision as a typed choice with named options.** Surface a decision as a typed choice with named options, never as free text, and give each option a plain-prose description of what happens if it is selected.
+- should: **Show a concrete rendering when options differ in structure.** Where options differ structurally, give each a concrete rendering of its outcome, such as a layout, a diagram or a worked example, rather than a description of the difference.
+
+## 5. Constraints
+
+- Stop when the reference is stale, repository identity is ambiguous, policy widening lacks authority, retirement guards fail, or requested work belongs to a Milestone or PlanRevision.
+- Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
+
+## 6. Output
+
+Output one TrackSkillReport containing action, before/after revisions, effective policy, affected references, receipt, warnings, and blockers.
+
+The report validates against `TrackSkillReport`, and its terminal outcome is exactly one of `shown`, `created`, `updated`, `retired`, `blocked`. Prose in the report is explanation, never the result.
