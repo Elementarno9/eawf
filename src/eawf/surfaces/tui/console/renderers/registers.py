@@ -28,11 +28,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
-from eawf.kernel.projection.registers import (
-    RegisterView,
-    attention_mine,
-    budget_reading,
-)
+from eawf.kernel.projection.attention import NOTIFICATION_MATRIX, attention_mine
+from eawf.kernel.projection.registers import RegisterView, budget_reading
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
@@ -85,9 +82,13 @@ def _activity_block(_view: View, register: RegisterView) -> list[str]:
     return rows
 
 
-def _attention_block(_view: View, register: RegisterView) -> list[str]:
+def _attention_block(view: View, register: RegisterView) -> list[str]:
     """Return Attention's ``mine`` row, the one count the header prints too."""
-    mine = value_cell(attention_mine(register), spell=lambda n: group(int(n)), exempt=True)
+    mine = value_cell(
+        attention_mine(register, principal=view.principal),
+        spell=lambda n: group(int(n)),
+        exempt=True,
+    )
     rows = [f" MINE      {mine.slot} · nothing here opened itself"]
     if mine.reason:
         rows.append(f"           {mine.reason}")
@@ -106,12 +107,25 @@ def _budget_block(_view: View, register: RegisterView) -> list[str]:
     return rows
 
 
+def _notifications_block(_view: View, register: RegisterView) -> list[str]:
+    """Return the presentation matrix: each class, whether it may toast, who decided."""
+    return [
+        " CLASS                TOAST              DECIDED BY",
+        *(
+            f" {pad(row.notification_class.value, 21)}{pad(row.may_interrupt.value, 19)}"
+            f"{row.decided_by}"
+            for row in NOTIFICATION_MATRIX.classes
+        ),
+        f" STOPPED   {value_cell(budget_reading(register).stopped).full}",
+    ]
+
+
 _BLOCKS: Mapping[str, Callable[[View, RegisterView], list[str]]] = MappingProxyType(
     {
         "activity": _activity_block,
         "attention": _attention_block,
         "cost.ceiling": _budget_block,
-        "notifications": _budget_block,
+        "notifications": _notifications_block,
     }
 )
 

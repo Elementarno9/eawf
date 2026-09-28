@@ -18,6 +18,7 @@ from eawf.kernel.projection.integration import ConflictSideView, HunkView, Merge
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import counts, native
 
 #: The lines of one side the card prints before it stops. A hunk side may carry hundreds
@@ -30,7 +31,7 @@ NO_CONFLICT = "no conflict frame is held · nothing is blocking this Batch"
 #: The sentence the card prints where an operator looks for the verb it does not have.
 READ_ONLY = "The console never edits a file — resolve it in your git tool."
 
-_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "hunk"), ("y", "copy"), ("Esc", "close"))
+_KEYS = route_pairs("merge.conflict")
 _PROTO_HUNKS: tuple[tuple[str, tuple[str, str], tuple[str, str]], ...] = (
     (
         "src/normalize.py",

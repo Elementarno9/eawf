@@ -18,6 +18,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, lab, prose, thin
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -33,12 +34,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 
 #: The one claim the prototype ladder records.
 OWN = "CLM-0004"
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "rung"),
-    ("Enter", "what it found"),
-    ("y", "copy"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("evidence")
 
 
 def _prose(wide: bool, x: bool, room: int) -> list[str]:

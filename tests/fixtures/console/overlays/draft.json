@@ -1,0 +1,31 @@
+{
+ "drafts": [
+  {
+   "id": "EAWF-0091",
+   "title": "Retire the wave shim",
+   "state": "DRAFT",
+   "due_scope": "MLS-0002",
+   "due": "Sep 30",
+   "batch": "BAT-0002 Bound replay"
+  },
+  {
+   "id": "EAWF-0092",
+   "title": "Retire the alias table",
+   "state": "DRAFT",
+   "due_scope": "MLS-0002",
+   "due": "Sep 30",
+   "criteria": "EVD-2249 · the ledger check",
+   "owner": "OP-0001",
+   "batch": "BAT-0002 Bound replay"
+  },
+  {
+   "id": "EAWF-0093",
+   "title": "Rename the replay flag",
+   "state": "DEFERRED",
+   "due_scope": "MLS-0003",
+   "due": "Oct 14",
+   "criteria": "EVD-2250 · the flag check",
+   "batch": "BAT-0003 Flags"
+  }
+ ]
+}

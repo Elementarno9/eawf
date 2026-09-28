@@ -97,6 +97,13 @@ _TITLE_FIELDS: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyT
     {Epoch2Collection.TASK: ("title", "intent")}
 )
 
+#: The stored field a pending action names the principal it is addressed to in, which is
+#: also the transition-event field the move carries it in.
+_ASSIGNEE_FIELD: Final = "assignee_ref"
+
+#: The stored field a suspended Run names why it waits in.
+_SUSPENSION_FIELD: Final = "suspension_reason"
+
 #: Where each record names the record it is filed under, as a path into the stored row.
 _PARENT_FIELD: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
     {
@@ -106,6 +113,16 @@ _PARENT_FIELD: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyT
         Epoch2Collection.RUN: ("scope", "task_ref"),
     }
 )
+
+
+#: The field a row spelled back for a replay carries its facts in. A stored document row
+#: never states it, so a fresh read derives every fact again, while a replay -- whose
+#: document holds only the rows the client already had -- keeps the facts it held rather
+#: than losing the ones read off another collection.
+FACTS_FIELD: Final = "projected_facts"
+
+#: The instants a Run states about itself, read verbatim as the document stores them.
+_RUN_INSTANTS: Final = ("created_at", "started_at", "ended_at", "updated_at")
 
 
 class _ProjectionViewModel(Epoch2Model):
@@ -240,6 +257,18 @@ class ProjectionRow(_ProjectionViewModel):
         parent_key: The key of the record this one is filed under -- a Milestone's
             Track, a Batch's Milestone, a Task's Batch, a Run's Task -- so a frame can
             nest rows without reading the document; ``None`` when none is stated.
+        assignee_ref: The one principal a pending action is addressed to, as its
+            record names it; ``None`` when it is addressed to every eligible principal
+            or the record is not a pending action. Whose attention count a question
+            belongs in is read from this, so it travels with the row.
+        suspension_reason: Why a suspended Run waits, as its record names it; ``None``
+            when the Run is not suspended, or its record names no reason.
+        facts: The further facts the document states about the record, by name, each
+            as stored: a Run's instants, purpose and failure, the title and
+            status of the Task it runs and which attempt it is; an action's kind,
+            question and subject; how many Runs a Track or Milestone holds. A
+            fact the document does not state is absent, never blank, so a frame draws
+            the unknown token for it.
     """
 
     key: NonEmptyStr
@@ -249,6 +278,22 @@ class ProjectionRow(_ProjectionViewModel):
     status: TruthField[str]
     title: NonEmptyStr | None = None
     parent_key: NonEmptyStr | None = None
+    assignee_ref: NonEmptyStr | None = None
+    suspension_reason: NonEmptyStr | None = None
+    facts: dict[str, NonEmptyStr] = Field(default_factory=dict)
+
+    def __eq__(self, other: object) -> bool:
+        """Return whether two rows are one record at one revision, whatever facts ride on them.
+
+        The facts are read beside the record from other collections at build time, so a
+        replay that learns of a record only through its keyed patch holds the record and
+        not yet those facts; it is still the same record, and the same answer.
+        """
+        if not isinstance(other, ProjectionRow):
+            return NotImplemented
+        return self.model_dump(exclude={"facts"}) == other.model_dump(exclude={"facts"})
+
+    __hash__ = _ProjectionViewModel.__hash__
 
 
 class RouteProjection(_ProjectionViewModel):
@@ -300,6 +345,9 @@ class PatchEntry(_ProjectionViewModel):
         control: The Run control the move records, for a control-ledger line; a
             reconnecting console reads an answer it lost from this rather than
             asking again.
+        assignee_ref: The principal a pending action is addressed to after the move,
+            ``None`` when it is addressed to every eligible principal. A replay must
+            state the audience a clean read states, so the move carries it.
     """
 
     key: NonEmptyStr
@@ -308,6 +356,7 @@ class PatchEntry(_ProjectionViewModel):
     revision: StrictPositiveInt
     status: NonEmptyStr
     control: ControlMark | None = None
+    assignee_ref: NonEmptyStr | None = None
 
 
 class KeyedPatch(_ProjectionViewModel):
@@ -372,8 +421,9 @@ def build_route_projection(
         )
     if cursor < 0:
         raise ValueError(f"a projection cursor is a committed canonical_sequence, never {cursor}")
+    links = _Links(document)
     rows = tuple(
-        _projection_row(key=key, row=row, collection=collection)
+        _with_facts(_projection_row(key=key, row=row, collection=collection), row, links)
         for collection in collections
         for key, row in sorted(
             _collection_rows(
@@ -448,6 +498,7 @@ def patches_for_event(envelope: Envelope) -> tuple[KeyedPatch, ...]:
         revision=revision,
         status=status,
         control=_control_mark(payload),
+        assignee_ref=_assignee_of(collection, payload),
     )
     by_read_model: dict[ReadModelKind, list[str]] = {}
     for route in routes:
@@ -463,6 +514,22 @@ def patches_for_event(envelope: Envelope) -> tuple[KeyedPatch, ...]:
         )
         for kind, kind_routes in sorted(by_read_model.items())
     )
+
+
+def _assignee_of(collection: Epoch2Collection, fields: Mapping[str, Any]) -> str | None:
+    """Return the principal a pending action is addressed to, or ``None`` for every other row."""
+    if collection is not Epoch2Collection.PENDING_ACTION:
+        return None
+    value = fields.get(_ASSIGNEE_FIELD)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _suspension_of(collection: Epoch2Collection, fields: Mapping[str, Any]) -> str | None:
+    """Return why a suspended Run waits, or ``None`` for every other row."""
+    if collection is not Epoch2Collection.RUN:
+        return None
+    value = fields.get(_SUSPENSION_FIELD)
+    return value if isinstance(value, str) and value.strip() else None
 
 
 def _control_mark(payload: Mapping[str, Any]) -> ControlMark | None:
@@ -576,6 +643,8 @@ def _projection_row(*, key: str, row: Any, collection: Epoch2Collection) -> Proj
         status=_status_field(status=row.get("status"), urn=urn, revision=revision),
         title=_title_of(collection, row),
         parent_key=_parent_key_of(collection, row),
+        assignee_ref=_assignee_of(collection, row),
+        suspension_reason=_suspension_of(collection, row),
     )
 
 
@@ -639,6 +708,231 @@ def _parent_key_of(collection: Epoch2Collection, fields: Mapping[str, Any]) -> s
     return value.rstrip("/").rsplit("/", 1)[-1] or None
 
 
+#: The collections a record's containment chain climbs through, each to the next, in the
+#: order the fields in :data:`_PARENT_FIELD` name them.
+_CHAIN: Final[Mapping[Epoch2Collection, Epoch2Collection]] = MappingProxyType(
+    {
+        Epoch2Collection.RUN: Epoch2Collection.TASK,
+        Epoch2Collection.TASK: Epoch2Collection.BATCH,
+        Epoch2Collection.BATCH: Epoch2Collection.MILESTONE,
+        Epoch2Collection.MILESTONE: Epoch2Collection.TRACK,
+    }
+)
+
+
+def _text(value: Any) -> str | None:
+    """Return ``value`` stripped when it is a non-blank string, else ``None``."""
+    return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _key_of(ref: Any) -> str | None:
+    """Return the entity key a URN reference ends in, or ``None`` when it states none."""
+    text = _text(ref)
+    if text is None:
+        return None
+    return text.rstrip("/").rsplit("/", 1)[-1] or None
+
+
+class _Links:
+    """The document's other records, looked up by key while one projection is built.
+
+    A frame names the Task a Run runs, its status and the attempt the Run is; a Track
+    counts the Runs under it. Those facts sit on records of other collections, so they are
+    read here once per build rather than by the console, which holds only the route's own
+    rows. Lookups are by key and cached, so a build reads each record at most once.
+    """
+
+    def __init__(self, document: Mapping[str, Any]) -> None:
+        self._document = document
+        self._fields: dict[tuple[Epoch2Collection, str], tuple[Mapping[str, Any], str | None]] = {}
+        self._attempts: dict[str, list[str]] | None = None
+        self._runs_under: dict[str, int] | None = None
+
+    def _rows(self, collection: Epoch2Collection) -> Mapping[str, Any]:
+        rows = self._document.get(collection.value)
+        return rows if isinstance(rows, dict) else {}
+
+    def fields(
+        self, collection: Epoch2Collection, key: str
+    ) -> tuple[Mapping[str, Any], str | None]:
+        """Return a record's stored fields and its status; empty when it is not held."""
+        found = self._fields.get((collection, key))
+        if found is None:
+            found = _stored_fields(collection, key, self._rows(collection).get(key))
+            self._fields[(collection, key)] = found
+        return found
+
+    def parent(self, collection: Epoch2Collection, key: str) -> str | None:
+        """Return the key of the record ``key`` is filed under, when it names one."""
+        return _parent_key_of(collection, self.fields(collection, key)[0])
+
+    def chain(self, collection: Epoch2Collection, key: str) -> dict[str, str]:
+        """Return every record ``key`` is filed under, keyed by collection name."""
+        chain: dict[str, str] = {}
+        at: tuple[Epoch2Collection, str] | None = (collection, key)
+        while at is not None and at[0] in _CHAIN:
+            parent = self.parent(*at)
+            if parent is None:
+                break
+            at = (_CHAIN[at[0]], parent)
+            chain[at[0].value] = parent
+        return chain
+
+    def attempts(self, task: str) -> list[str]:
+        """Return the Runs of ``task`` in the order they were created, oldest first."""
+        if self._attempts is None:
+            by_task: dict[str, list[tuple[str, str]]] = {}
+            for key, row in self._rows(Epoch2Collection.RUN).items():
+                fields, _status = self.fields(Epoch2Collection.RUN, key)
+                owner = _parent_key_of(Epoch2Collection.RUN, fields)
+                if owner is not None and isinstance(row, dict):
+                    by_task.setdefault(owner, []).append(
+                        (_text(fields.get("created_at")) or "", key)
+                    )
+            self._attempts = {
+                task: [k for _at, k in sorted(runs)] for task, runs in by_task.items()
+            }
+        return self._attempts.get(task, [])
+
+    def runs_under(self, key: str) -> int:
+        """Return how many Runs are filed, through their Task, under the record ``key``."""
+        if self._runs_under is None:
+            tally: dict[str, int] = {}
+            for run in self._rows(Epoch2Collection.RUN):
+                for owner in self.chain(Epoch2Collection.RUN, run).values():
+                    tally[owner] = tally.get(owner, 0) + 1
+            self._runs_under = tally
+        return self._runs_under.get(key, 0)
+
+
+def _stored_fields(
+    collection: Epoch2Collection, key: str, row: Any
+) -> tuple[Mapping[str, Any], str | None]:
+    """Return the fields a stored row states and its status, whatever form it was stored in.
+
+    A native record states its fields directly; an imported one states them inside the
+    record the cutover wrapped, and its status beside it. A row that is neither states
+    nothing a fact could be read from.
+    """
+    if not isinstance(row, dict):
+        return {}, None
+    if "urn" in row or ROW_PAYLOAD_FIELD not in row:
+        return row, _text(row.get("status"))
+    payload = row[ROW_PAYLOAD_FIELD]
+    if isinstance(payload, dict) and _NATIVE_IMPORT_KEY in payload:
+        return {}, _text(row.get("status"))
+    try:
+        legacy = read_legacy_row(collection, key, row)
+    except ValueError:
+        return {}, None
+    return legacy.record.record, _text(legacy.status)
+
+
+def _run_facts(key: str, fields: Mapping[str, Any], links: _Links) -> dict[str, str]:
+    """Return what the document states about a Run, its Task and its place among attempts."""
+    facts = {name: _text(fields.get(name)) for name in _RUN_INSTANTS}
+    scope = fields.get("scope")
+    facts["purpose"] = _text(scope.get("purpose")) if isinstance(scope, dict) else None
+    failure = fields.get("failure")
+    if isinstance(failure, dict):
+        facts["failure"] = _text(failure.get("message"))
+        facts["failure_code"] = _text(failure.get("code"))
+    task = _parent_key_of(Epoch2Collection.RUN, fields)
+    if task is not None:
+        task_fields, task_status = links.fields(Epoch2Collection.TASK, task)
+        facts["task_title"] = _title_of(Epoch2Collection.TASK, task_fields)
+        facts["task_status"] = task_status
+        facts.update(links.chain(Epoch2Collection.TASK, task))
+        attempts = links.attempts(task)
+        if key in attempts:
+            facts["attempt"] = str(attempts.index(key) + 1)
+            facts["attempts"] = str(len(attempts))
+    return {name: value for name, value in facts.items() if value}
+
+
+def _action_facts(fields: Mapping[str, Any], links: _Links) -> dict[str, str]:
+    """Return what the document states about a pending action and where its subject sits."""
+    requested = fields.get("requested_by")
+    subject_ref = _text(fields.get("subject_ref"))
+    facts = {
+        "kind": _text(fields.get("kind")),
+        "question": _text(fields.get("question")),
+        "requested_by": (
+            _text(requested.get("principal_id")) if isinstance(requested, dict) else None
+        ),
+        "created_at": _text(fields.get("created_at")),
+        "subject": _key_of(subject_ref),
+    }
+    if subject_ref is not None:
+        kind = subject_ref.rstrip("/").rsplit("/", 2)
+        collection = next(
+            (c for c in Epoch2Collection if len(kind) == 3 and c.value == kind[1]), None
+        )
+        subject = facts["subject"]
+        if collection is not None and subject is not None:
+            facts["subject_kind"] = collection.value
+            if collection in _CHAIN or collection is Epoch2Collection.TRACK:
+                facts[collection.value] = subject
+            facts.update(links.chain(collection, subject))
+    return {name: value for name, value in facts.items() if value}
+
+
+def _batch_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a Batch states about where it merges and the exact head it was bound at.
+
+    A merging Batch is drawn as the facts it holds beside the questions it cannot answer,
+    so its branch, its bound head and the instant it last moved are read here verbatim.
+    """
+    binding = fields.get("current_head_binding")
+    failure = fields.get("failure")
+    tasks = fields.get("task_refs")
+    facts = {
+        "target_branch": _text(fields.get("target_branch")),
+        "head": _text(binding.get("head_sha")) if isinstance(binding, dict) else None,
+        "updated_at": _text(fields.get("updated_at")),
+        "failure": _text(failure.get("message")) if isinstance(failure, dict) else None,
+        "tasks": str(len(tasks)) if isinstance(tasks, list | tuple) else None,
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
+def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow:
+    """Return ``row`` with the facts the document states about it, beyond its status.
+
+    A row spelled back for a replay carries the facts it was projected with; those are
+    kept wherever the rebuilt document can no longer state them afresh.
+    """
+    carried = stored.get(FACTS_FIELD) if isinstance(stored, dict) else None
+    facts = {
+        name: value
+        for name, value in (carried.items() if isinstance(carried, dict) else ())
+        if isinstance(name, str) and _text(value)
+    }
+    fields, _status = _stored_fields(row.collection, row.key, stored)
+    if row.collection is Epoch2Collection.RUN:
+        facts.update(_run_facts(row.key, fields, links))
+    elif row.collection is Epoch2Collection.PENDING_ACTION:
+        facts.update(_action_facts(fields, links))
+    elif row.collection is Epoch2Collection.TASK:
+        stated = {
+            "due": _key_of(fields.get("due_scope")),
+            "updated_at": _text(fields.get("updated_at")),
+            "priority": _text(fields.get("priority")),
+            "run": _key_of(fields.get("active_run_ref")),
+        }
+        criteria = fields.get("criteria")
+        if isinstance(criteria, list | tuple) and criteria:
+            stated["criteria"] = str(len(criteria))
+        facts.update({name: value for name, value in stated.items() if value})
+    elif row.collection is Epoch2Collection.BATCH:
+        facts.update(_batch_facts(fields))
+    elif row.collection in (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE):
+        runs = links.runs_under(row.key)
+        if runs or FACTS_FIELD not in (stored if isinstance(stored, dict) else {}):
+            facts["runs"] = str(runs)
+    return row.model_copy(update={"facts": facts}) if facts else row
+
+
 def row_document(row: ProjectionRow) -> dict[str, Any]:
     """Return ``row`` spelled as the stored row it would be projected from again.
 
@@ -656,6 +950,12 @@ def row_document(row: ProjectionRow) -> dict[str, Any]:
         for name in path[:-1]:
             nested = nested.setdefault(name, {})
         nested[path[-1]] = row.parent_key
+    if row.assignee_ref is not None:
+        stored[_ASSIGNEE_FIELD] = row.assignee_ref
+    if row.suspension_reason is not None:
+        stored[_SUSPENSION_FIELD] = row.suspension_reason
+    if row.facts:
+        stored[FACTS_FIELD] = dict(row.facts)
     return stored
 
 
@@ -682,13 +982,15 @@ def _digest(*, route: str, cursor: int, rows: tuple[ProjectionRow, ...]) -> str:
     """Return the digest of one route's rows at one cursor.
 
     The generation stamp is left out on purpose: a digest that moved with the clock
-    could not be what two surfaces compare through.
+    could not be what two surfaces compare through. So are the rows' facts, which a
+    replay may not hold for a record it learned of only through a patch.
     """
     encoded = json.dumps(
         {
             "route": route,
             "source_cursor": cursor,
-            "rows": [row.model_dump(mode="json") for row in rows],
+            # the facts ride beside the record and are not what two surfaces agree on
+            "rows": [row.model_dump(mode="json", exclude={"facts"}) for row in rows],
         },
         sort_keys=True,
         separators=(",", ":"),
@@ -699,6 +1001,7 @@ def _digest(*, route: str, cursor: int, rows: tuple[ProjectionRow, ...]) -> str:
 __all__ = [
     "CANONICAL_SEQUENCE_FIELD",
     "DIAGNOSTICS_CORPUS",
+    "FACTS_FIELD",
     "MISSING_STATUS_REASON",
     "PROJECTION_POLICY_REVISION",
     "PROJECTION_PRODUCER",

@@ -20,11 +20,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
-from eawf.kernel.projection.compute import RouteProjection
+from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.clock import Clock, notify
+from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.operations import VerbRequest
 from eawf.surfaces.tui.console.registry import REGISTRY, SURFACES
@@ -77,6 +78,14 @@ class Ctx:
             nobody; empty when it acts as someone or there is no link.
         settings: The effective-settings view the settings frame was drawn from; an
             edit is previewed and addressed from it, never from the prototype catalog.
+        outstanding: How many sent operations the daemon has not answered yet; the
+            guarded quit waits while any is outstanding.
+        rows: Every row the link's held projections carry. A lifecycle move is previewed
+            from the row's own status and revision, and nowhere else.
+        decisions: The records the frame's decision overlay or card was drawn from; a
+            key on it acts on the same record.
+        principal: Who the console acts as, whose own top attention item ``!`` jumps to;
+            ``None`` when it acts as nobody.
     """
 
     session: Session
@@ -91,6 +100,10 @@ class Ctx:
     attention: RouteProjection | None = None
     principal_refusal: str = ""
     settings: EffectiveSettingsView | None = None
+    outstanding: int = 0
+    rows: tuple[ProjectionRow, ...] = ()
+    decisions: DecisionRecords | None = None
+    principal: str | None = None
 
     @property
     def s(self) -> Session:

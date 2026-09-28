@@ -11,11 +11,12 @@ from typing import Any
 
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, boxed
-from eawf.surfaces.tui.console.renderers.read_model import native, native_frame
+from eawf.surfaces.tui.console.keybar import route_pairs
+from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY, native, native_frame
 from eawf.surfaces.tui.console.session import Session
 
 _UNKNOWN_PREFIX = re.compile(r"^\? ")
-_KEYS: tuple[tuple[str, str], ...] = (("y", "copy"), ("Esc", "close"))
+_KEYS = route_pairs("evidence.digest")
 
 
 def rung_of(session: Session, fixture: Fixture) -> dict[str, Any]:
@@ -73,5 +74,7 @@ def copy(session: Session, fixture: Fixture) -> str:
     The fragment selects one rung record of the claim, so the copied text opens the
     same card anywhere a claim URN resolves.
     """
+    if not fixture.registers.ev_rungs:
+        return NOTHING_TO_COPY
     n = str(rung_of(session, fixture)["n"]).split(" ")[0]
     return f"eawf://{fixture.scope}/{fixture.scope}/_/claim/CLM-0004#rung-{n}"

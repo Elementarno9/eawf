@@ -187,11 +187,6 @@ class FocusTarget(BaseModel):
     region: str | None
 
 
-def _default_overlay_steps() -> dict[str, int]:
-    """Return the step each stepped overlay starts at."""
-    return {"question": 0, "pause": 0, "evidence": 0, "readiness": 0}
-
-
 class Session(BaseModel):
     """Every cursor the console remembers.
 
@@ -234,6 +229,11 @@ class Session(BaseModel):
     evt: str | None = None
     reply: dict[str, Any] | None = None
     c_target: dict[str, Any] | None = None
+    # the linked consequence card, its marked selection, and the cards already confirmed
+    # by verb and target, each with the revision and operation id it was sent under
+    mutation: Any = None
+    marked: list[str] = Field(default_factory=list)
+    confirmed: dict[str, tuple[int, str]] = Field(default_factory=dict)
     verb: str = "a"
     home_track: int = 0
     home_ms: int = 0
@@ -275,7 +275,6 @@ class Session(BaseModel):
     promote: dict[str, Any] | None = None
     visible: int = 0
     count: int = 0
-    ov_state: dict[str, int] = Field(default_factory=_default_overlay_steps)
     # the open overlay's subject, captured when it opened so nothing inside it moves it
     ov_subject: str | None = None
     # the ending the resolution card states for the target in ``ov_subject``

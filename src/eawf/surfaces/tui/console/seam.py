@@ -21,7 +21,7 @@ because the daemon commits each control line at an ordinal of its own and names 
 request it belongs to, so nothing is asked twice; any other operation is sent again
 under its own operation id, which the daemon files the write under, so the second send
 answers with what the first one did rather than writing twice, and an operation whose
-answer is lost again simply stays outstanding.
+answer is lost again stays outstanding in recovery, the operator's to decide.
 Step 7 -- a clean load and a replayed projection at one cursor digest alike -- holds
 because the replay rebuilds through the daemon's own projection builder rather than
 digesting rows here.
@@ -81,6 +81,7 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, EffectiveSettingsView
+from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
@@ -88,6 +89,7 @@ from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
     AnswerRequest,
     ConsoleOperation,
+    LifecycleRequest,
     OperationLedger,
     OperationResult,
     OperationStatus,
@@ -95,7 +97,10 @@ from eawf.surfaces.tui.console.operations import (
     SettingRequest,
     VerbRequest,
     address,
+    address_lifecycle,
     address_setting,
+    exhausted,
+    not_sent,
     refused,
     settled,
     unanswered,
@@ -105,6 +110,9 @@ if TYPE_CHECKING:
     from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
+
+#: The wire code a write refused for naming a revision the record has moved past carries.
+_STALE_REVISION = f"{TransactionRefusalCode.REVISION_CONFLICT.value}:"
 
 #: The label a count carries when the link cannot vouch for completeness. The number
 #: is still shown, because a register that was read states something true; what it
@@ -557,20 +565,14 @@ class ProjectionSeam:
         if isinstance(request, SettingRequest):
             return await self._write_setting(request)
         if self._operator is None:
-            return OperationResult(
-                operation_id=None,
-                target=request.target,
-                status=OperationStatus.REFUSED,
-                detail=f"{NO_PRINCIPAL_REASON} (and --receipt-ref to answer) — nothing was sent",
-            )
+            return not_sent(request.target, f"{NO_PRINCIPAL_REASON} (and --receipt-ref to answer)")
         row = self._row(request.target)
         if row is None:
-            return OperationResult(
-                operation_id=None,
-                target=request.target,
-                status=OperationStatus.REFUSED,
-                detail=f"{request.target} is in no projection the console holds — nothing was sent",
+            return not_sent(
+                request.target, f"{request.target} is in no projection the console holds"
             )
+        if isinstance(request, LifecycleRequest):
+            return await self._move(request, urn=row.urn)
         spent = self._spent_receipt(request)
         if spent is not None:
             return spent
@@ -587,7 +589,53 @@ class ProjectionSeam:
         if result.status is OperationStatus.REFUSED and receipt is not None:
             # a refusal wrote nothing, so the receipt still records no answer
             self._answered_under.pop(receipt, None)
+        if result.status is OperationStatus.REFUSED and _STALE_REVISION in result.detail:
+            await self._reload_holding(request.target)
         return result
+
+    async def _move(self, request: LifecycleRequest, *, urn: str) -> OperationResult:
+        """Send one confirmed lifecycle move under the id its card minted.
+
+        A move already outstanding under that id is asked again rather than opened twice,
+        which is how a repeated confirmation of the same card at the same revision is one
+        write: the daemon answers the second ask with what the first one did.
+        """
+        assert self._operator is not None, "only called with an operator"
+        held = next(
+            (
+                op
+                for op in self._operations.outstanding()
+                if op.operation_id == request.operation_id
+            ),
+            None,
+        )
+        operation = held or address_lifecycle(request, urn=urn, operator=self._operator)
+        if held is None:
+            self._operations.open(operation)
+        return await self._send(operation)
+
+    def held_rows(self) -> tuple[ProjectionRow, ...]:
+        """Return every row the held projections carry, one per key, the visible route's first.
+
+        A consequence card is built from these, so a move is previewed at the revision and
+        status the console was shown and at nothing it invented.
+        """
+        rows: dict[str, ProjectionRow] = {}
+        for route in (self._route, *reversed(self._held)):
+            held = self._held.get(route)
+            for row in held.rows if held is not None else ():
+                rows.setdefault(row.key, row)
+        return tuple(rows.values())
+
+    async def _reload_holding(self, key: str) -> None:
+        """Re-read every held route that holds ``key`` after a stale compare-and-swap.
+
+        The record moved past the revision the operator was shown, so the console reads
+        the record as it now stands rather than leaving the old revision on screen for a
+        second answer to be refused against.
+        """
+        for route in [r for r, held in self._held.items() if any(x.key == key for x in held.rows)]:
+            await self.load(route)
 
     async def _write_setting(self, request: SettingRequest) -> OperationResult:
         """Send one settings edit to the layered-config verbs, then re-read the settings.
@@ -619,6 +667,7 @@ class ProjectionSeam:
                 target=result.target,
                 status=result.status,
                 detail=f"{result.target} written · the re-read failed, so the frame is stale",
+                disposition=result.disposition,
             )
         return result
 
@@ -635,14 +684,10 @@ class ProjectionSeam:
         answered = self._answered_under.get(receipt)
         if answered is None or answered == request.target:
             return None
-        return OperationResult(
-            operation_id=None,
-            target=request.target,
-            status=OperationStatus.REFUSED,
-            detail=(
-                f"receipt {receipt} already records the answer to {answered} — each answer "
-                "needs an evidence receipt of its own; nothing was sent"
-            ),
+        return not_sent(
+            request.target,
+            f"receipt {receipt} already records the answer to {answered} — each answer "
+            "needs an evidence receipt of its own",
         )
 
     async def _send(self, operation: ConsoleOperation) -> OperationResult:
@@ -674,8 +719,19 @@ class ProjectionSeam:
         return result
 
     async def _reconcile(self) -> tuple[OperationResult, ...]:
-        """Ask the daemon again for every outstanding operation, by its own id."""
-        return tuple([await self._send(op) for op in self._operations.outstanding()])
+        """Ask the daemon again for every outstanding operation, by its own id.
+
+        The reconnect is the one automatic reconciliation, so an operation whose answer
+        is lost again comes back in ``recovery`` rather than as a second ``unknown``:
+        nothing further will ask on the operator's behalf until the next reconnect.
+        """
+        results: list[OperationResult] = []
+        for operation in self._operations.outstanding():
+            result = await self._send(operation)
+            if result.status is OperationStatus.OUTSTANDING:
+                result = exhausted(operation)
+            results.append(result)
+        return tuple(results)
 
     def _settle_from_patches(self, patches: tuple[KeyedPatch, ...]) -> tuple[OperationResult, ...]:
         """Settle each outstanding Run control whose line the replay carries, from that line.

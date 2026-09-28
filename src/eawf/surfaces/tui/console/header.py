@@ -3,6 +3,8 @@
 The right side is the same at every frame size: an attention count only when something
 needs the operator, then exactly one state value with its glyph. A session renders one of
 the nine connection values; the pre-session layer renders its process value and no count.
+A frame about an entity whose lifecycle has ended renders no connection value at all:
+terminal is a property of the entity, and a finished Run under a live chip reads as live.
 The breadcrumb starts at the brand, and while the back stack holds history its middle is
 that history, the path Escape walks, naming each place once. A crumb too wide for its room
 gives way from the middle, never at the brand, the scope or the leaf. A drawn header is
@@ -246,6 +248,7 @@ def header_row(
     w: int,
     process: ProcessValue | None = None,
     registry: RouteRegistry = REGISTRY,
+    terminal: bool = False,
 ) -> str:
     """Return the header row, exactly ``w`` cells.
 
@@ -259,6 +262,8 @@ def header_row(
         process: The pre-session process value; given exactly when the session is on the
             ``entry`` layer, where no count and no connection value render.
         registry: The route rows the history steps are named from.
+        terminal: Whether the frame's subject is an entity whose lifecycle has ended; its
+            header keeps the attention count and suppresses the connection value.
 
     Raises:
         ValueError: ``process`` is given off the entry layer or missing on it, ``needs``
@@ -270,7 +275,7 @@ def header_row(
     if process is not None:
         slot = f"{process.glyph} {process.label}"
         return pad(crumb, w - cell_len(slot)) + slot
-    slot = attention_count(needs) + state_slot(session.conn)
+    slot = attention_count(needs) + ("" if terminal else state_slot(session.conn))
     room = w - cell_len(slot)
     full = crumb.replace(SCOPE_SLOT, f"{CRUMB_SEP}{scope}{CRUMB_SEP}")
     if cell_len(full) <= room:

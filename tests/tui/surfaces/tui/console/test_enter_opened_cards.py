@@ -1,5 +1,10 @@
 """The acceptance routes draw read models, and an opened card says what it was read at.
 
+CON-138 to CON-140 and CON-142 close the file: the artifact, rung record and step cards
+draw the one record their subject names, state an absent record under the id asked for,
+promise only the keys their regions support, and go back to the row they came from.
+PRX-062 adds a driven journey per card to the contract's port journey file.
+
 Four routes leave the prototype registers here. The Milestone renders the sealed bundle an
 acceptance is given against and the approval bound to the exact head that bundle names;
 the Release renders the candidate's membership over the readiness the records in hand
@@ -24,6 +29,7 @@ from __future__ import annotations
 import copy
 import dataclasses
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -56,12 +62,13 @@ from eawf.runtime.daemon.methods.projection import (
 )
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
+from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import route_keys
-from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.navigation import Ctx, go, open_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.milestone import NO_APPROVAL, NO_BUNDLE
@@ -83,6 +90,10 @@ from eawf.workflow.projection.acceptance import (
     build_acceptance_view,
     export_report,
 )
+
+from . import decision_support as ds
+from .journey_support import load_port_journeys, replayed
+from .overlay_support import chrome
 
 #: When the probe records and projections are stamped. The digest does not cover the
 #: stamp; a fixed clock only keeps this suite's output reproducible.
@@ -718,3 +729,308 @@ def test_the_epoch_one_mode_resolves_every_key_this_footer_advertises(route: str
         if session.trace is None or session.trace.endswith("unclaimed"):
             unclaimed.append(f"{route}:{key}")
     assert not unclaimed, f"advertised but unhandled: {', '.join(unclaimed)}"
+
+
+# ---------- CON-138: the artifact card renders the file as it is ----------
+
+ARTIFACTS = ds.records("cards/artifact.json")
+RUNGS = ds.records("cards/rung.json")
+STEPS = ds.records("cards/step.json")
+_STAGE_WORDS = re.compile(r"\b(probe|canary|certify|conformance runner)\b", re.IGNORECASE)
+
+
+def _card(route: str, subject: str, held: Any, size: int = 1, **fields: Any) -> list[str]:
+    return ds.frame(ds.opened(route, None, subject, **fields), decisions=held, size=size)
+
+
+@pytest.mark.parametrize("size", range(3))
+def test_con_138_a_file_that_fits_promises_copy_and_close(size: int) -> None:
+    rows = _card("campaign.artifact", "ART-0002", ARTIFACTS, size)
+    assert rows[0].startswith(" Eä ▸ CAM-0001 ▸ digest-table.md")
+    assert "Campaign CAM-0001 · artifact 2 of 3 · as of 14:02" in rows[1]
+    assert rows[3].startswith(" SOURCE     digest-table.md · markdown · table · 0.9 KB")
+    assert rows[4].rstrip() == " RECORD     Kept with CAM-0001 · sha256 2f77…a1"
+    for line in ARTIFACTS.artifact("ART-0002").lines:  # type: ignore[union-attr]
+        assert any(f"│ {line}" in r for r in rows)
+    assert "█" not in ds.text(rows) and "lines above" not in ds.text(rows)
+    assert "the file is the record · the console renders it, it does not rewrite it" in ds.text(
+        rows
+    )
+    assert ds.keys(rows) == [" y copy", "Esc close"]
+
+
+@pytest.mark.parametrize("size", range(3))
+def test_con_138_the_top_and_the_scrolled_window_count_what_they_hide(size: int) -> None:
+    session = ds.opened("campaign.artifact", None, "ART-0001")
+    top = ds.frame(session, decisions=ARTIFACTS, size=size)
+    hidden = re.search(r"… (\d+) lines below", ds.text(top))
+    assert hidden and "lines above" not in ds.text(top)
+    assert ds.keys(top) == [" ↑↓ scroll", "y copy", "Esc close"]
+    assert "█" in ds.text(top)
+    ds.press(session, "ArrowDown", "ArrowDown", "ArrowDown", decisions=ARTIFACTS, size=size)
+    scrolled = ds.text(ds.frame(session, decisions=ARTIFACTS, size=size))
+    above = re.search(r"… (\d+) lines above", scrolled)
+    below = re.search(r"… (\d+) lines below", scrolled)
+    assert above and int(above.group(1)) == session.art_scroll == 3
+    shown = sum(1 for r in scrolled.split("\n") if "of the report" in r or "PROVIDER" in r)
+    total = len(ARTIFACTS.artifact("ART-0001").lines)  # type: ignore[union-attr]
+    assert below and int(below.group(1)) == total - 3 - shown
+
+
+def test_con_138_arrows_over_a_file_that_fits_do_nothing() -> None:
+    session = ds.opened("campaign.artifact", None, "ART-0002")
+    before = ds.frame(session, decisions=ARTIFACTS)
+    ds.press(session, "ArrowDown", decisions=ARTIFACTS)
+    assert (session.art_scroll, ds.frame(session, decisions=ARTIFACTS)) == (0, before)
+
+
+def test_con_138_a_binary_artifact_is_never_rendered_inline() -> None:
+    rows = _card("campaign.artifact", "ART-0003", ARTIFACTS)
+    assert "binary · it opens externally and is never rendered here" in ds.text(rows)
+
+
+def test_con_138_copy_names_the_artifact_and_its_digest() -> None:
+    session = ds.opened("campaign.artifact", None, "ART-0002")
+    ds.press(session, "y", decisions=ARTIFACTS)
+    assert session.toasts[-1].text == "ART-0002 · sha256 2f77…a1"
+
+
+# ---------- CON-139: the rung record card renders one EvidenceRungRecord ----------
+
+RUNG_TITLES: dict[tuple[str, int], str] = {
+    ("CLM-0021", 1): "RUNG 1 RESOLVE · PASS",
+    ("CLM-0021", 2): "RUNG 2 ANCHOR · FAILED",
+    ("CLM-0022", 3): "RUNG 3 SCREEN · UNKNOWN",
+    ("CLM-0021", 3): "RUNG 3 SCREEN · NOT RUN",
+    ("CLM-0022", 4): "RUNG 4 ENTAIL · ATTESTED",
+}
+RUNG_MEANS: dict[tuple[str, int], str] = {
+    ("CLM-0021", 1): "This rung holds — it does not certify the claim on its own.",
+    ("CLM-0021", 2): "This rung refutes the claim.",
+    ("CLM-0022", 3): "No outcome yet — unknown, not failed.",
+    ("CLM-0021", 3): "No outcome yet — unknown, not failed.",
+    ("CLM-0022", 4): "This rung attests — no automated check stands behind it.",
+}
+
+
+@pytest.mark.parametrize(("key", "title"), RUNG_TITLES.items())
+def test_con_139_a_passed_failed_unknown_not_run_and_attested_rung(
+    key: tuple[str, int], title: str
+) -> None:
+    claim, rung = key
+    rows = _card("evidence.digest", claim, RUNGS, rung=rung - 1)
+    assert rows[0].startswith(f" Eä ▸ {claim} ▸ Rung {rung}")
+    assert f"Claim {claim} · rung {rung} of 4 · as of 14:02" in rows[1]
+    assert rows[3].startswith(f"┌─ {title} ─")
+    body = ds.text(rows)
+    for label in ("CHECK", "OVER", "FOUND", "AS OF", "RECORD", "MEANS"):
+        assert f"│ {label}" in body, label
+    assert RUNG_MEANS[key] in body
+    assert f"Kept with {claim}" in body
+    assert "the finding is the record · the scorer keeps its own output" in body
+    assert not _STAGE_WORDS.search(rows[3])
+    assert "conformance runner" not in body
+    assert "▸" not in "\n".join(rows[3:-1])
+    assert ds.keys(rows) == [" y copy", "Esc close"]
+
+
+def test_con_139_an_unknown_and_a_not_run_rung_state_their_time_in_words() -> None:
+    unknown = ds.text(_card("evidence.digest", "CLM-0022", RUNGS, rung=2))
+    not_run = ds.text(_card("evidence.digest", "CLM-0021", RUNGS, rung=2))
+    assert "AS OF      open · evidence scorer" in unknown
+    assert "AS OF      – · evidence scorer" in not_run  # noqa: RUF001
+
+
+def test_con_139_copy_yields_the_claim_urn_with_its_rung_fragment() -> None:
+    session = ds.opened("evidence.digest", None, "CLM-0021", rung=1)
+    ds.press(session, "ArrowDown", "y", decisions=RUNGS)
+    assert session.rung == 1
+    copied = session.toasts[-1].text
+    assert copied == f"{RUNGS.claim('CLM-0021').urn}#rung-2"  # type: ignore[union-attr]
+    assert "urn:eawf:" not in copied
+
+
+def test_con_139_the_card_and_the_ladder_row_read_one_record() -> None:
+    rows = ds.frame(ds.opened("evidence", "evidence", "CLM-0021"), decisions=RUNGS)
+    card = _card("evidence.digest", "CLM-0021", RUNGS, rung=1)
+    assert re.search(r"2 anchor +FAILED", ds.text(rows))
+    assert "ANCHOR · FAILED" in card[3]
+
+
+# ---------- CON-140: the campaign step card renders one CampaignPlanStep ----------
+
+STEP_ROWS: dict[int, tuple[str, list[str]]] = {
+    1: (
+        "1 baseline digests · ✓ done · 11:18 → 12:24",
+        [" Tab region", "↑↓ line", "y copy", "Esc back"],
+    ),
+    5: ("5 cross-provider · ⋯ running · started 13:44", [" ↑↓ line", "y copy", "Esc back"]),
+    6: ("6 write-up · ○ blocked · never started", [" y copy", "Esc back"]),
+}
+
+
+@pytest.mark.parametrize("size", range(3))
+@pytest.mark.parametrize(("ordinal", "expected"), STEP_ROWS.items())
+def test_con_140_the_done_running_and_blocked_step(
+    ordinal: int, expected: tuple[str, list[str]], size: int
+) -> None:
+    step_row, keys = expected
+    rows = _card("campaign.step", "CAM-0001", STEPS, size, cam_step=ordinal - 1)
+    assert rows[0].startswith(f" Eä ▸ CAM-0001 ▸ Step {ordinal}")
+    assert f"Campaign CAM-0001 · step {ordinal} of 6 · as of 14:02" in rows[1]
+    assert step_row in ds.text(rows)
+    assert ds.keys(rows) == keys
+    assert not re.search(r"(?<!of )\b\d+%", ds.text(rows))
+
+
+def test_con_140_a_running_step_names_its_progress_against_its_bound() -> None:
+    body = ds.text(_card("campaign.step", "CAM-0001", STEPS, cam_step=4))
+    assert "RUNNER      RUN-98c47577 · codex · session fresh" in body
+    assert "SPENT       1.3 of ≤2 h" in body
+    assert "PROGRESS    ~12 of 20 runs replayed · 1.3 of the ≤2 h bound spent" in body
+    assert "∅ None yet · it is still running." in body
+
+
+def test_con_140_a_blocked_step_names_what_it_waits_on() -> None:
+    body = ds.text(_card("campaign.step", "CAM-0001", STEPS, cam_step=5))
+    assert "WAITS ON    step 5 · the open contradiction CLM-0014" in body
+    assert "RUNNER      ∅ none · –" in body  # noqa: RUF001
+    assert "WAITING     It waits on step 5 and the open contradiction CLM-0014." in body
+    assert "ACTIVITY    ∅ Nothing to show" in body
+
+
+def test_con_140_the_produced_rows_are_rows_not_a_count() -> None:
+    rows = _card("campaign.step", "CAM-0001", STEPS, cam_step=0)
+    assert any("EVD-0011" in r and "receipt" in r for r in rows)
+    assert any("bounds-check.md" in r and "artifact · kept with CAM-0001" in r for r in rows)
+
+
+def test_con_140_tab_moves_the_arrows_between_the_regions_with_rows() -> None:
+    session = ds.opened("campaign.step", None, "CAM-0001", cam_step=0)
+    ds.press(session, "ArrowDown", decisions=STEPS)
+    assert session.hist_sel == 1
+    ds.press(session, "Tab", "ArrowDown", decisions=STEPS)
+    assert (session.step_reg, session.sel, session.hist_sel) == ("PRODUCED", 1, 1)
+    rows = ds.frame(session, decisions=STEPS)
+    assert any("▸" in r and "bounds-check.md" in r for r in rows)
+
+
+def test_con_140_a_step_with_one_region_refuses_tab() -> None:
+    session = ds.opened("campaign.step", None, "CAM-0001", cam_step=4)
+    ds.press(session, "Tab", decisions=STEPS)
+    assert session.step_reg == "HISTORY"
+    assert session.trace is None or session.trace.endswith("unclaimed")
+
+
+def test_con_140_escape_returns_to_the_step_row_it_was_opened_from() -> None:
+    session = ds.opened("campaign", None, None, sel=4)
+    ctx = Ctx(session=session, fixture=chrome(), host=_Host(), w=120, h=30, decisions=STEPS)
+    assert go(ctx, "campaign.step", "step 5", "CAM-0001")
+    session.cam_step = 4
+    ds.press(session, "Escape", decisions=STEPS)
+    assert (session.route, session.sel) == ("campaign", 4)
+
+
+# ---------- CON-142: an Enter-opened card is about one record, captured at open ----------
+
+ABSENT: list[tuple[str, str | None, str, str, dict[str, int]]] = [
+    ("backlog", "draft", "EAWF-9999", "EAWF-9999", {}),
+    ("timeline", "marker", "MLS-9999", "MLS-9999", {}),
+    ("campaign.artifact", None, "ART-9999", "ART-9999", {}),
+    ("evidence.digest", None, "CLM-9999", "CLM-9999 · rung 2", {"rung": 1}),
+    ("campaign.step", None, "CAM-0001", "CAM-0001 · step 3", {"cam_step": 2}),
+]
+_HELD = DecisionRecords.model_validate(
+    {
+        **ARTIFACTS.model_dump(mode="json", exclude_defaults=True),
+        **RUNGS.model_dump(mode="json", exclude_defaults=True),
+        **STEPS.model_dump(mode="json", exclude_defaults=True),
+    }
+)
+
+
+@pytest.mark.parametrize(("route", "overlay", "subject", "named", "fields"), ABSENT)
+def test_con_142_a_card_for_an_absent_record_states_the_absence(
+    route: str, overlay: str | None, subject: str, named: str, fields: dict[str, int]
+) -> None:
+    rows = ds.frame(ds.opened(route, overlay, subject, **fields), decisions=_HELD)
+    assert named in rows[0]
+    assert f"nothing is recorded for {named}" in ds.text(rows)
+    assert ds.keys(rows) == [" Esc back"]
+
+
+@pytest.mark.parametrize(("route", "overlay", "subject", "named", "fields"), ABSENT)
+def test_con_142_an_absent_card_acts_on_no_key_but_escape(
+    route: str, overlay: str | None, subject: str, named: str, fields: dict[str, int]
+) -> None:
+    session = ds.opened(route, overlay, subject, **fields)
+    before = ds.frame(session, decisions=_HELD)
+    ds.press(session, "ArrowDown", "Enter", "y", "Tab", decisions=_HELD)
+    assert ds.frame(session, decisions=_HELD) == before
+    assert session.toasts == []
+
+
+@pytest.mark.parametrize(
+    ("route", "subject", "fields"),
+    [
+        ("campaign.artifact", "ART-0002", {}),
+        ("evidence.digest", "CLM-0021", {"rung": 0}),
+        ("campaign.step", "CAM-0001", {"cam_step": 5}),
+    ],
+)
+def test_con_142_a_card_without_rows_promises_only_copy_and_escape(
+    route: str, subject: str, fields: dict[str, int]
+) -> None:
+    rows = ds.frame(ds.opened(route, None, subject, **fields), decisions=_HELD)
+    assert {pair.split()[0] for pair in ds.keys(rows)} == {"y", "Esc"}
+
+
+def test_con_142_a_sub_surface_card_pushes_the_back_stack_once_for_a_double_enter() -> None:
+    session = ds.opened("campaign", None, None, sel=1)
+    ctx = Ctx(session=session, fixture=chrome(), host=_Host(), w=120, h=30, decisions=_HELD)
+    assert go(ctx, "campaign.artifact", "artifact", "ART-0002")
+    assert not go(ctx, "campaign.artifact", "artifact", "ART-0002")
+    assert len(session.back) == 1
+    ds.press(session, "Escape", decisions=_HELD)
+    assert (session.route, session.sel) == ("campaign", 1)
+
+
+def test_con_142_an_overlay_card_replaces_itself_and_returns_to_its_invoking_row() -> None:
+    drafts = ds.records("overlays/draft.json")
+    session = ds.opened("backlog", "draft", "EAWF-0091", sel=2)
+    open_overlay(session, "draft", subject="EAWF-0092")
+    assert (session.overlay, session.ov_subject) == ("draft", "EAWF-0092")
+    session.sel = 0
+    ds.press(session, "Escape", decisions=drafts)
+    assert (session.overlay, session.sel) == (None, 2)
+
+
+def test_con_142_nothing_inside_a_card_moves_its_subject() -> None:
+    drafts = ds.records("overlays/draft.json")
+    session = ds.opened("backlog", "draft", "EAWF-0091")
+    ds.press(session, "ArrowDown", "ArrowDown", "Enter", "p", decisions=drafts)
+    assert session.ov_subject == "EAWF-0091"
+    card = ds.opened("campaign.step", None, "CAM-0001", cam_step=0)
+    ds.press(card, "ArrowDown", "Tab", "ArrowDown", "y", decisions=STEPS)
+    assert (card.route, card.subj_id, card.cam_step) == ("campaign.step", "CAM-0001", 0)
+
+
+# ---------- PRX-062: every Enter-opened card has a driven journey in the contract ----------
+
+
+@pytest.mark.parametrize(
+    ("journey_id", "route"),
+    [("PJ18", "campaign.artifact"), ("PJ19", "evidence.digest"), ("PJ20", "campaign.step")],
+)
+def test_prx_062_an_enter_opened_card_returns_to_the_row_it_was_opened_from(
+    journey_id: str, route: str
+) -> None:
+    result = replayed().results[journey_id]
+    assert result.ok, f"{journey_id}: {result.detail}"
+    journey = next(j.journey for j in load_port_journeys().journeys if j.journey.id == journey_id)
+    steps = journey.steps
+    opened = next(i for i, step in enumerate(steps) if step.after["route"] == route)
+    assert steps[opened].key == "Enter"
+    assert steps[-1].key == "Escape"
+    assert steps[-1].frame == steps[opened - 1].frame
+    assert steps[-1].after == steps[opened - 1].after

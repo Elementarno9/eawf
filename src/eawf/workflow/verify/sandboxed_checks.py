@@ -10,8 +10,9 @@ flips the live dispatch pause flag, and drives the production dispatch
 path for real.
 
 This module denies the readiness checks that reach. Every check runs in a
-child interpreter whose ``EAWF_RUNTIME_DIR`` and ``EA_STATE`` are pinned
-to a throwaway sandbox seeded from a snapshot of the live pair
+child interpreter whose ``EAWF_RUNTIME_DIR`` is pinned to, and whose live
+ledger is fenced behind, a throwaway sandbox seeded from a snapshot of the
+live pair
 (:func:`eawf.runtime.daemon.gate_execution.gate_sandbox`). Reads still see
 a faithful copy of the ledger; writes land in the copy and die with it.
 The module doubles as that child's entry point (``python -m
@@ -189,7 +190,7 @@ def run_checks_out_of_process(
                 capture_output=True,
                 text=True,
                 check=False,
-                env=gate_child_env(sandbox),
+                env=gate_child_env(sandbox, live_state_path=state_path),
             )
         response = _read_child_response(response_path)
     if response is None:

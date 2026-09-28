@@ -5,13 +5,10 @@ A confirmed ledger is never overwritten by answering again.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from eawf.surfaces.tui.console.attention import OPEN, question_row
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
-from eawf.surfaces.tui.console.overlays.states import with_state_rows
 from eawf.surfaces.tui.console.reads import can_mutate
 
 ANSWERS: tuple[str, ...] = (
@@ -19,17 +16,6 @@ ANSWERS: tuple[str, ...] = (
     "the alias table only",
     "both — they are independent",
 )
-
-
-def build_with_states(view: View, name: str, rows: Sequence[str], keys: str) -> list[str]:
-    """Build a decision overlay with its state rows just above the keybar.
-
-    The body is filled to its full height first, so the state rows take the last body
-    rows whatever the overlay's own length.
-    """
-    body = [*rows, *([""] * max(0, view.h - 1 - len(rows)))]
-    wrapped = with_state_rows(name, [*body, keys], view.session, view.w)
-    return build(view, wrapped[:-1], keys)
 
 
 def render(view: View) -> list[str]:
@@ -71,4 +57,4 @@ def render(view: View) -> list[str]:
     ]
     live = [("1 2 3", "pick an answer"), ("x", "decline"), ("Esc", "back — it stays open")]
     pairs = live if is_open and can_mutate(s) else [("Esc", "back")]
-    return build_with_states(view, "question", rows, keybar(pairs, w))
+    return build(view, rows, keybar(pairs, w))

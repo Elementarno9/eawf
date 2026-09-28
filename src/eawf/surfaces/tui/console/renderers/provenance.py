@@ -44,7 +44,8 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.keybar import keybar, pick, route_pairs
+from eawf.surfaces.tui.console.mutation import open_setting, setting_token
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.operations import SettingRequest
 from eawf.surfaces.tui.console.session import Session
@@ -52,17 +53,12 @@ from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, TRUTH
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 #: The route keybar while browsing, in the order the packet states it.
-ROUTE_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "field"),
-    ("Tab", "section"),
-    ("Enter", "edit"),
-    ("l", "layer"),
-    ("x", "unset"),
-    ("Esc", "back"),
+ROUTE_KEYS: tuple[tuple[str, str], ...] = tuple(
+    pick("settings", "field", "section", "edit", "layer", "unset", "back")
 )
 
 #: The stack card's keybar: it moves between layers and closes, and edits nothing.
-STACK_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "layer"), ("Esc", "close"))
+STACK_KEYS: tuple[tuple[str, str], ...] = route_pairs("settings.stack")
 
 _PICK_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "choose"), ("Enter", "write"), ("Esc", "cancel"))
 _TEXT_KEYS: tuple[tuple[str, str], ...] = (("type", "value"), ("Enter", "write"), ("Esc", "cancel"))
@@ -442,7 +438,7 @@ def stack_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
         _clip(f" WINNING   {source} {value_text(leaf) if leaf.source_layer else ''}".rstrip(), w)
     )
     rows.append(_clip(f" LENS      {at} · l on the Settings route cycles the five file layers", w))
-    rows.append(_clip(f" ON LENS   {_on_lens(leaf, at)}", w))
+    rows.append(_clip(f" ON THIS   {_on_lens(leaf, at)}", w))
     rows += [_clip(row, w) for row in _tier_two(leaf)]
     return build(view, rows, keybar(STACK_KEYS, w))
 
@@ -502,17 +498,6 @@ def coerce(leaf: SettingsLeaf, text: str) -> tuple[Any, str]:
             return text, ""
 
 
-def _send(ctx: Ctx, request: SettingRequest, done: str) -> None:
-    """Hand one edit to the daemon link, saying plainly when there is none."""
-    if ctx.send is None or not ctx.send(request):
-        ctx.log("Enter" if not request.unset else "x", "no daemon link · nothing was written")
-        return
-    ctx.log(
-        "Enter" if not request.unset else "x",
-        f"{done} · the daemon answers and the view is re-read",
-    )
-
-
 def _commit(ctx: Ctx, settings: EffectiveSettingsView, edit: dict[str, Any]) -> None:
     """Write the chosen value at the lens through the daemon, or say why it was not sent."""
     s = ctx.s
@@ -530,7 +515,7 @@ def _commit(ctx: Ctx, settings: EffectiveSettingsView, edit: dict[str, Any]) -> 
         value=value,
         branch=settings.branch if at is Layer.BRANCH else None,
     )
-    _send(ctx, request, f"writing {leaf.key} = {text} at {at}")
+    open_setting(ctx, request, effect=after_write(leaf, at, text), token=setting_token(leaf))
 
 
 def _edit_key(ctx: Ctx, settings: EffectiveSettingsView, key: str) -> bool:
@@ -568,7 +553,7 @@ def _unset(ctx: Ctx, settings: EffectiveSettingsView, leaf: SettingsLeaf) -> Non
         unset=True,
         branch=settings.branch if at is Layer.BRANCH else None,
     )
-    _send(ctx, request, f"unsetting {leaf.key} at {at} · {after_unset(leaf, at)}")
+    open_setting(ctx, request, effect=after_unset(leaf, at), token=setting_token(leaf))
 
 
 def native_seam(ctx: Ctx, settings: EffectiveSettingsView, key: str, shift: bool) -> bool:

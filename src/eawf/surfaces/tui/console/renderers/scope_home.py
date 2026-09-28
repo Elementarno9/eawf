@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from eawf.kernel.projection.attention import AttentionItem, build_attention_view
 from eawf.kernel.projection.registers import UNWRITTEN_REASON, RegisterView
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthField
@@ -26,6 +27,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.attention import bucket_label, open_actions, top_bucket
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Action
+from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
@@ -43,6 +45,7 @@ from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.reads import attn_cell, prototype_attached, reads
 from eawf.surfaces.tui.console.registry import route_of
+from eawf.surfaces.tui.console.renderers.attention import NO_DEADLINE
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -111,8 +114,9 @@ NO_TRACK = "∅ no track · filed under none held"
 #: The attention rows the home frame lists before it counts the rest.
 _ATTENTION_ROWS = 4
 
-# The cells the RUNS, ATTENTION and PROGRESS columns take beside a tree row's name.
-_RUNS_W, _ATTN_W, _PROGRESS_W = 11, 12, 22
+# The cells the RUNS, ATTENTION and PROGRESS columns take beside a tree row's name, and
+# the MINE column the attention count splits off under more than one principal.
+_RUNS_W, _ATTN_W, _PROGRESS_W, _MINE_W = 11, 16, 22, 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,15 +180,82 @@ def _name(row: SpineRow) -> str:
     return f"{row.key} {row.title}" if row.title else row.key
 
 
+def _runs(row: SpineRow) -> str:
+    """Return how many Runs are filed under a tree row, or the unknown token when unread."""
+    runs = row.facts.get("runs")
+    return runs if runs is not None else _word(row.field("runs"))
+
+
+@dataclass(frozen=True, slots=True)
+class HomeAttention:
+    """What the home frame reads off the attention reducer, for one principal.
+
+    Attributes:
+        register: The Attention register, when one is held and written.
+        principal: The principal key the console acts as, or ``None``.
+    """
+
+    register: RegisterView | None
+    principal: str | None
+
+    def items(self) -> tuple[AttentionItem, ...]:
+        """Return every open item that needs somebody, whoever it is addressed to."""
+        return build_attention_view(self.register).blocking() if self.register else ()
+
+    def mine(self) -> tuple[AttentionItem, ...]:
+        """Return the open items this principal is in the audience of."""
+        if self.register is None or self.principal is None:
+            return ()
+        return build_attention_view(self.register).open_for(self.principal)
+
+    def cell(self, key: str, *, own: bool) -> str:
+        """Return a tree row's attention count: open items filed under ``key``.
+
+        Args:
+            key: The Track or Milestone key the count is taken under.
+            own: Whether only this principal's items are counted.
+        """
+        if self.register is None:
+            return UNKNOWN_WORD
+        facts = {row.key: row.facts for row in self.register.rows}
+        items = self.mine() if own else self.items()
+        n = sum(
+            1 for i in items if key in (facts[i.key].get("track"), facts[i.key].get("milestone"))
+        )
+        return f"!{n}" if n else "0"
+
+    def holders(self) -> set[str]:
+        """Return every principal the register addresses an item to, and this one."""
+        rows = self.register.rows if self.register is not None else ()
+        return {row.assignee_ref for row in rows if row.assignee_ref} | (
+            {self.principal} if self.principal else set()
+        )
+
+
+def _home_attention(view: View) -> HomeAttention:
+    register = view.attention
+    written = register if register is not None and not register.withheld else None
+    return HomeAttention(written, view.principal)
+
+
 def _tree_lines(
     view: View, spine: SpineView, tree: list[TreeRow], cursor: int, chrome: int
 ) -> list[str]:
-    """Return the tree's head, the rows around the cursor, and its window line."""
+    """Return the tree's head, the rows around the cursor, and its window line.
+
+    Under more than one principal the attention column splits in two -- this principal's
+    own count and every principal's -- and nothing else in the table moves.
+    """
     w = view.w
-    first = max(24, w - 3 - _RUNS_W - _ATTN_W - _PROGRESS_W)
-    tracks = Table([first, _RUNS_W, _ATTN_W, 0], 2)
-    leaves = Table([first - 2, _RUNS_W + _ATTN_W, 0], 4)
-    lines = [tracks.head(["MILESTONES", "RUNS", "ATTENTION", "PROGRESS"])]
+    attention = _home_attention(view)
+    shared = len(attention.holders()) > 1
+    attn_w = _ATTN_W + (_MINE_W if shared else 0)
+    first = max(24, w - 3 - _RUNS_W - attn_w - _PROGRESS_W)
+    widths = [first, _RUNS_W, *([_MINE_W, _ATTN_W] if shared else [_ATTN_W]), 0]
+    tracks = Table(widths, 2)
+    leaves = Table([first - 2, _RUNS_W + attn_w, 0], 4)
+    heads = ["RUNS", *(["MINE", "ALL PRINCIPALS"] if shared else ["ATTENTION"])]
+    lines = [tracks.head(["MILESTONES", *heads, "PROGRESS"])]
     win = window_rows(view, total=len(tree), cursor=cursor, chrome=chrome + 2)
     for index in range(win.start, win.stop):
         item, on = tree[index], index == cursor
@@ -192,9 +263,9 @@ def _tree_lines(
             line = tracks.row([NO_TRACK], on)
         elif item.depth == 0:
             row = item.row
-            # a count no producer states is the unknown token with its word, never a blank
-            runs, attn = (_word(row.field(name)) for name in ("runs", "attention"))
-            line = tracks.row([_name(row), runs, attn, progress(spine, row)], on)
+            counts_ = [attention.cell(row.key, own=True)] if shared else []
+            counts_.append(attention.cell(row.key, own=False))
+            line = tracks.row([_name(row), _runs(row), *counts_, progress(spine, row)], on)
         else:
             row = item.row
             status = value_cell(row.field("status")).slot
@@ -206,28 +277,55 @@ def _tree_lines(
     return lines
 
 
-def attention_lines(register: RegisterView | None) -> list[str]:
-    """Return the home frame's attention region, read off the Attention register.
+def principal_line(view: View) -> list[str]:
+    """Return the row naming the operator, drawn only under more than one principal.
 
-    A register nobody writes, or one not read yet, states no count: the region says which,
-    rather than printing ``nothing is waiting``, which would be a claim.
+    The register states no authority class yet, so the class wears the unknown token.
+    """
+    attention = _home_attention(view)
+    if len(attention.holders()) < 2:
+        return []
+    who = view.principal or "nobody"
+    n = len(attention.mine())
+    yours = f"{dv.plural(n, 'action')} {'is' if n == 1 else 'are'} yours"
+    return [f" PRINCIPAL  you are {who} · class {UNKNOWN_WORD} · {yours}"]
+
+
+def attention_lines(view: View, register: RegisterView | None) -> list[str]:
+    """Return the home frame's attention region, read off the attention reducer.
+
+    The list is this principal's: each open item in its audience, under the bucket that
+    needs the operator, with what it asks and when it is due. An item addressed only to
+    another principal is counted on a line of its own rather than listed. A register not
+    read yet states no count: the region says so, rather than printing ``nothing is
+    waiting``, which would be a claim.
     """
     if register is None:
         return [f" ATTENTION  {UNKNOWN_WORD} · the attention register has not been read"]
     if register.withheld:
         return [f" ATTENTION  {UNKNOWN_WORD} · {UNWRITTEN_REASON}"]
-    if not register.rows:
+    attention = HomeAttention(register, view.principal)
+    mine, every = attention.mine(), attention.items()
+    others = len(every) - len(mine)
+    elsewhere = f"   {dv.plural(others, 'action')} open to other principals" if others else ""
+    if not mine:
         return [
             " ATTENTION   nothing here opened itself",
             "   nothing is waiting on you · runs continue without you",
+            *([elsewhere] if elsewhere else []),
         ]
-    lines = [f" ATTENTION  {dv.plural(len(register.rows), 'action')} open"]
-    lines.extend(
-        f"   {row.key}  {value_cell(row.status).slot}" for row in register.rows[:_ATTENTION_ROWS]
-    )
-    rest = len(register.rows) - _ATTENTION_ROWS
+    w = view.w
+    facts = {row.key: row.facts for row in register.rows}
+    lines = [" ATTENTION", f" NEEDS OPERATOR  {group(len(mine))}"]
+    for item in mine[:_ATTENTION_ROWS]:
+        fact = facts.get(item.key, {})
+        text = f"{fact.get('subject', item.key)} {fact.get('question', '')}".rstrip()
+        lines.append(Fixed(pad("   " + pad(text, w - 3 - _DUE_W - 1) + " " + NO_DEADLINE, w)))
+    rest = len(mine) - _ATTENTION_ROWS
     if rest > 0:
         lines.append(f"   … {rest} more on the Attention route")
+    if elsewhere:
+        lines.append(elsewhere)
     return lines
 
 
@@ -251,8 +349,11 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         index = min(index + 1, len(tree) - 1)
     s.sel = index
     s.sel_id = keys[index] if tree else None
-    top = native_head(view, spine, crumb_text=route_crumb(spine), summary=counts(spine))
-    below = [thin(w), *attention_lines(view.attention)]
+    top = [
+        *native_head(view, spine, crumb_text=route_crumb(spine), summary=counts(spine)),
+        *principal_line(view),
+    ]
+    below = [thin(w), *attention_lines(view, view.attention)]
     rows = [*top, *_tree_lines(view, spine, tree, index, len(top) + len(below)), *below]
     return build(view, rows, route_keys_bar(view, native_keys(s.route)))
 

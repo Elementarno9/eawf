@@ -59,12 +59,15 @@ def holds(name: str, session: Session, fixture: Fixture) -> bool:
     """Return whether overlay ``name`` has what it draws.
 
     The chrome overlays always do. A resolution card holds once the ending of its target
-    has been captured, because every other word it prints is chrome. Every other overlay
+    has been captured, because every other word it prints is chrome. A consequence card
+    holds once a card was built from what the daemon link holds. Every other overlay
     draws from the prototype registers until it is drawn from the projection.
     """
     if name in CHROME_OVERLAYS:
         return True
     if name == "resolution" and session.resolution_ending and session.ov_subject:
+        return True
+    if name == "consequence" and session.mutation is not None:
         return True
     return fixture.prototype
 

@@ -1,0 +1,81 @@
+{
+ "principal": "OP-0001",
+ "run_states": {
+  "RUN-a708a7d6": "LOST",
+  "RUN-0000000b": "RUNNING"
+ },
+ "pauses": [
+  {
+   "id": "PSE-0001",
+   "scope": "RUN-a708a7d6",
+   "reason": "provider",
+   "status": "OPEN",
+   "resume_predicate": "a heartbeat at or after 14:03",
+   "evaluator": "the lease monitor",
+   "control": {
+    "requested": "2026-09-18T14:03:11+00:00",
+    "accepted": "2026-09-18T14:03:11+00:00"
+   },
+   "retry_used": 2,
+   "retry_allowed": 3
+  },
+  {
+   "id": "PSE-0002",
+   "scope": "RUN-0000000b",
+   "reason": "policy",
+   "status": "OPEN",
+   "resume_predicate": "the nightly window opens",
+   "evaluator": "the policy clock",
+   "last_evaluated": "2026-09-18T13:00:00+00:00"
+  },
+  {
+   "id": "PSE-0003",
+   "scope": "BAT-0003",
+   "reason": "permission",
+   "status": "OPEN",
+   "resume_predicate": "the permission is granted",
+   "waiting_on": "ACT-0004",
+   "eligible": [
+    "OP-0001",
+    "OP-0002"
+   ]
+  },
+  {
+   "id": "PSE-0004",
+   "scope": "BAT-0004",
+   "reason": "lease",
+   "status": "HELD",
+   "resume_predicate": "the lease is renewed",
+   "held_by": "OP-0002",
+   "hold_id": "HLD-0007"
+  },
+  {
+   "id": "PSE-0005",
+   "scope": "BAT-0005",
+   "reason": "provider",
+   "status": "ESCALATED",
+   "resume_predicate": "the provider answers",
+   "escalation": {
+    "cause": "budget",
+    "raised_at": "2026-09-18T15:00:00+00:00",
+    "raised_ref": "ACT-0009"
+   }
+  },
+  {
+   "id": "PSE-0006",
+   "scope": "BAT-0006",
+   "reason": "infrastructure",
+   "status": "RESOLVED",
+   "resume_predicate": "the disk has room",
+   "resolved_at": "2026-09-18T15:30:00+00:00"
+  },
+  {
+   "id": "PSE-0007",
+   "scope": "BAT-0007",
+   "reason": "lease",
+   "status": "CANCELLED",
+   "resume_predicate": "the lease is renewed",
+   "enclosing": "BAT-0007"
+  }
+ ]
+}

@@ -3,18 +3,28 @@
 The window follows the cursor and always says what is off screen.
 
 The native frame draws the same table from the Run register: each Run with the Task it
-runs and its stored status, the buckets being the statuses the rows state, counted off
-those rows. A Run's reason and the instant it was last read are not in the register, so
-those two columns wear the unknown token rather than a blank. The rail is the route's
+runs and its stored status, the buckets being the eight exception buckets the Run grouping
+partitions the rows into -- ``needs operator``'s suspension reasons indented under it in
+the rail and folded into it in the strip. A Run's reason is read off
+its suspension, failure or purpose and the instant is when its record last moved; a Run
+whose record states neither wears the unknown token rather than a blank. The rail is the route's
 declared rail, so it folds into a strip exactly where the registry says it does.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from datetime import datetime
+from types import MappingProxyType
+
+from eawf.kernel.projection.activity import STATUS_BUCKETS, ActivityGrouping, group_runs
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.registers import RegisterView
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.fixture import FleetRow
+from eawf.surfaces.tui.console.format import clock_minute, group
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
@@ -36,7 +46,6 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     native_head,
     route_crumb,
 )
-from eawf.surfaces.tui.console.renderers.registers import restore
 from eawf.surfaces.tui.console.width import pad
 
 RAIL_W = 29
@@ -104,15 +113,26 @@ def _with_rail(view: View, body: list[str], col: int) -> list[str]:
     return out
 
 
-def bucket_items(register: RegisterView) -> list[dv.StripItem]:
-    """Return ``all`` then one bucket per stated status, each counted off the rows."""
-    stated = [dv.StripItem(name, name, n) for name, n in register.status_counts().items()]
-    return [dv.StripItem(None, "all", len(register.rows)), *stated]
+def bucket_items(grouping: ActivityGrouping) -> list[dv.StripItem]:
+    """Return ``all`` then the eight buckets; the strip folds the sub-buckets into theirs."""
+    return [
+        dv.StripItem(None, "all", grouping.total),
+        *(
+            dv.StripItem(c.bucket.value, c.label, value_cell(c.count).slot)
+            for c in grouping.top_level()
+        ),
+    ]
 
 
-def rail_lines(register: RegisterView) -> list[str]:
-    """Return the bucket rail: its head, then one bucket per stated status."""
-    return ["BUCKETS", *(f" {pad(x.label, 24)}{x.n}" for x in bucket_items(register)[1:])]
+def rail_lines(grouping: ActivityGrouping) -> list[str]:
+    """Return the bucket rail: its head, then every bucket, the sub-buckets indented."""
+    return [
+        "BUCKETS",
+        *(
+            f" {pad(('  ' if c.sub else '') + c.label, 24)}{value_cell(c.count).slot}"
+            for c in grouping.counts
+        ),
+    ]
 
 
 def beside(body: list[str], rail: list[str], col: int, w: int) -> list[str]:
@@ -130,6 +150,124 @@ def beside(body: list[str], rail: list[str], col: int, w: int) -> list[str]:
     ]
 
 
+#: What a Run waits for, read as the reason Activity gives: each suspension names the fact
+#: that clears it, so the reason is that fact in the operator's words.
+_WAITING_FOR: Mapping[str, str] = MappingProxyType(
+    {
+        "AWAITING_OPERATOR_INPUT": "needs your answer",
+        "AWAITING_HUMAN_REVIEW": "needs your review",
+        "AWAITING_PERMISSION_GRANT": "needs permission",
+        "AWAITING_DEPENDENCY": "waiting on other work",
+        "AWAITING_LEASE": "waiting for a lease",
+        "AWAITING_PROVIDER_CAPACITY": "waiting for provider capacity",
+    }
+)
+
+#: What a Run in a state that is its own reason is doing, by the purpose it runs for.
+_DOING: Mapping[str, str] = MappingProxyType(
+    {
+        "implement": "implementing",
+        "integrate": "integrating",
+        "repair": "repairing",
+        "review": "checking",
+        "audit": "checking",
+        "research": "researching",
+        "plan": "planning",
+        "observe": "observing",
+    }
+)
+
+#: The reason a Run's status states by itself, where no further fact is needed.
+_STATUS_REASON: Mapping[str, str] = MappingProxyType(
+    {"QUEUED": "waiting for a slot", "COMPLETED": "run finished", "CANCELLED": "cancelled"}
+)
+
+#: The gutter mark a Run marked for a bulk verb carries beside the caret.
+MARKED = "+"
+
+#: The next move an empty Activity route offers: nothing executes until a Task is claimed.
+EMPTY_NEXT = "g b shows the backlog · a Run starts when a Task is dispatched"
+
+
+def run_reason(row: ProjectionRow) -> str:
+    """Return why a Run stands where it does, read off the facts its record states.
+
+    A suspended Run names what it waits for, a failed one its failure, a running one what
+    it runs for; a status that states no reason of its own wears the unknown token.
+    """
+    facts, status = row.facts, row.status.value
+    waiting = _WAITING_FOR.get(row.suspension_reason or "")
+    if status == "SUSPENDED" and waiting:
+        return waiting
+    if facts.get("failure"):
+        return facts["failure"]
+    if status == "RUNNING" and facts.get("purpose") in _DOING:
+        return _DOING[facts["purpose"]]
+    return _STATUS_REASON.get(status or "", UNKNOWN_WORD)
+
+
+def as_of(row: ProjectionRow) -> str:
+    """Return the minute a Run's record last moved, or the unknown token when unstated."""
+    stamp = row.facts.get("updated_at")
+    try:
+        return clock_minute(datetime.fromisoformat(stamp)) if stamp else UNKNOWN_WORD
+    except ValueError:
+        return UNKNOWN_WORD
+
+
+def task_cell(row: ProjectionRow) -> str:
+    """Return the Task a Run runs: its key and title, or the no-value mark."""
+    if row.parent_key is None:
+        return NO_VALUE
+    title = row.facts.get("task_title")
+    return f"{row.parent_key} {title}" if title else row.parent_key
+
+
+def _bucket_of(row: ProjectionRow) -> str | None:
+    """Return the exception bucket a Run lands in, by the grouping's own status table."""
+    try:
+        return STATUS_BUCKETS[RunStatus(row.status.value or "")].value
+    except ValueError:
+        return None
+
+
+def _shown(view: View, register: RegisterView) -> list[ProjectionRow]:
+    """Return the Runs the bucket and the filter leave, in the register's order."""
+    s = view.session
+    flt = dv.filter_of(s).lower()
+    return [
+        row
+        for row in register.rows
+        if not (s.bucket and _bucket_of(row) != s.bucket)
+        and not (flt and flt not in f"{row.key} {task_cell(row)} {run_reason(row)}".lower())
+    ]
+
+
+def empty_lines(view: View, register: RegisterView) -> list[str]:
+    """Return what an empty Activity route says: a filter result, a gap, or real emptiness.
+
+    Each names what it is, because the three answer different questions: a filter hid
+    the Runs, a read could not vouch for them, or the scope really runs nothing at this
+    revision -- and each offers the next move.
+    """
+    s = view.session
+    revision = group(int(register.source_cursor))
+    if register.rows and (s.bucket or dv.filter_of(s)):
+        return [
+            f"   nothing matches the filter · {len(register.rows)} runs hidden",
+            "   Esc clears the filter",
+        ]
+    if not reads(s).complete:
+        return [
+            f"   no Run is known at revision {revision} · this read cannot vouch for every Run",
+            "   the count fills in once the link is whole again",
+        ]
+    return [
+        f"   NOTHING RUNS  this scope holds no record of a Run at revision {revision}",
+        f"   {EMPTY_NEXT}",
+    ]
+
+
 def native_frame(view: View, register: RegisterView) -> list[str]:
     """Return the Activity frame drawn from the Run register the daemon served.
 
@@ -141,36 +279,47 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    cursor = restore(s, register)
+    shown = _shown(view, register)
+    found = next((i for i, row in enumerate(shown) if row.key == s.sel_id), None)
+    cursor = found if found is not None else min(max(s.sel, 0), max(len(shown) - 1, 0))
+    s.sel, s.sel_id = cursor, (shown[cursor].key if shown else None)
     wide = REGISTRY.rail_at(s.route, w) is not None
     col = w - RAIL_W - 1 if wide else w
+    grouping = group_runs(register)
     top = native_head(
         view, register, crumb_text=route_crumb(register, "Activity"), summary=counts(register)
     )
+    if s.typing or dv.filter_of(s):
+        typed = "▏" if s.typing else ""
+        top.append(f" FILTER    \\{dv.filter_of(s)}{typed}   Esc clears · Enter keeps")
     if not wide:
-        top.append(dv.strip_row(s, bucket_items(register), w))
-    unstated = register.unstated_rows()
+        top.append(dv.strip_row(s, bucket_items(grouping), w))
+    unstated = grouping.unbucketed
     if unstated:
         top.append(f" UNBUCKETED {unstated} in no bucket · the row states no status")
-    cols = [16, 14, 12, max(12, col - 16 - 14 - 12 - 12)]
+    task_w = max(14, (col - 16 - 12 - _AS_OF_W) // 2)
+    cols = [16, task_w, 12, max(12, col - 16 - task_w - 12 - _AS_OF_W - 1)]
     table = Table([cols[0] - 3, cols[1], cols[2], cols[3], 0], 2)
     body: list[str] = [table.head(["RUN", "TASK", "STATE", "REASON", "AS OF"])]
-    win = window_rows(view, total=len(register.rows), cursor=cursor, chrome=len(top) + 1 + _FOOTER)
+    win = window_rows(view, total=len(shown), cursor=cursor, chrome=len(top) + 1 + _FOOTER)
     for index in range(win.start, win.stop):
-        row = register.rows[index]
+        row = shown[index]
         cells = [
             row.key,
-            row.parent_key or NO_VALUE,
+            pad(task_cell(row), cols[1] - 1),
             value_cell(row.status).slot,
-            UNKNOWN_WORD,
-            UNKNOWN_WORD,
+            pad(run_reason(row), cols[3] - 1),
+            as_of(row),
         ]
-        body.append(table.row(cells, index == cursor))
-    if not register.rows:
-        body.append("   this scope holds no record the Run register renders")
+        line = table.row(cells, index == cursor)
+        # a Run marked for a bulk verb says so in text, in the gutter beside the caret
+        body.append(f"{line[:2]}{MARKED}{line[3:]}" if row.key in s.marked else line)
+    if not shown:
+        body.extend(empty_lines(view, register))
     if wide:
-        body = beside(body, rail_lines(register), col, w)
-    rows = [*top, *body, thin(w), win.line(complete=register.complete)]
+        body = beside(body, rail_lines(grouping), col, w)
+    matching = " matching" if (s.bucket or dv.filter_of(s)) else ""
+    rows = [*top, *body, thin(w), win.line(complete=register.complete) + matching]
     return build(view, rows, route_keys_bar(view, native_keys(s.route)))
 
 

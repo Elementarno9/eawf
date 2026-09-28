@@ -12,20 +12,39 @@ unknown token rather than handing the frame to the route's unknown frame.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from types import MappingProxyType
 
+from eawf.kernel.projection.attention import build_attention_view
+from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.projection.spine import SpineRow
+from eawf.kernel.projection.truth import TruthField
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
-from eawf.surfaces.tui.console.action_menu import menu_rows
-from eawf.surfaces.tui.console.attention import menu_verbs, verb_available
+from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, menu_rows
+from eawf.surfaces.tui.console.attention import ATTENTION_ROUTE, menu_verbs, verb_available
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, entry_state
+from eawf.surfaces.tui.console.mutation import (
+    GateKind,
+    chrome_kept,
+    gate,
+    lifecycle_verbs,
+    menu_entity,
+    verb_check,
+)
+from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.renderers import copy_target
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import TRUTH
+from eawf.surfaces.tui.console.width import pad
 
 _UNKNOWN = TRUTH["unknown"].unicode
+
+# The most stored fields the raw drawer quotes before it says how many it left out.
+_RAW_LINES = 8
 
 GO_ROWS: tuple[str, ...] = (
     " GO        g h  home · scope     g a  activity      g n  needs you",
@@ -40,14 +59,113 @@ def go_rows(view: View) -> list[str]:
     return list(GO_ROWS)
 
 
+#: The attention verb whose refusal depends on how many principals the register names.
+_ASSIGN = "assign"
+
+
+def _assign_refused(view: View, verb: MenuVerb) -> Availability | None:
+    """Return ``assign``'s refusal once the held register names a second principal.
+
+    The chrome refuses ``assign`` for want of another principal; once the register
+    addresses an item to one, that is no longer why, and the daemon binding's reason is.
+    """
+    held = view.attention
+    if verb.verb != _ASSIGN or held is None or held.withheld:
+        return None
+    named = {item.assignee_ref for item in build_attention_view(held).items} - {None}
+    if not named - {view.principal}:
+        return None
+    return Availability(False, binding_refusal(ATTENTION_ROUTE, _ASSIGN))
+
+
 def action_rows(view: View) -> list[str]:
-    """Return the action drawer: the route's verbs, refused ones with their live reasons."""
+    """Return the action drawer: the route's verbs, refused ones with their live reasons.
+
+    On a linked console the selection's lifecycle verbs follow the chrome's, each judged
+    on the card it would open. When no request can leave the console they are not listed
+    at all, and one row says so; a refusal the operator can act on keeps them listed with
+    its reason.
+    """
     s, fx, refusal = view.session, view.fixture, view.principal_refusal
-    return menu_rows(
-        menu_verbs(s, fx),
-        guard=lambda v: verb_available(s, fx, v, principal_refusal=refusal),
+    chrome = menu_verbs(s, fx)
+    decided = gate(s, fx, verb="lifecycle move", linked=view.linked, principal_refusal=refusal)
+    native = () if fx.prototype else lifecycle_verbs(s, view.rows, decided)
+    native_keys = {verb.key for verb in native}
+    rows = menu_rows(
+        (*chrome_kept(chrome, native), *native),
+        guard=lambda v: (
+            verb_check(s, view.rows, decided, v)
+            if v.key in native_keys
+            else _assign_refused(view, v) or verb_available(s, fx, v, principal_refusal=refusal)
+        ),
         w=view.w,
     )
+    selected = len(s.marked)
+    if selected:
+        rows.insert(
+            0, pad(f" SELECTED  {selected} selected · one preview, {selected} results", view.w)
+        )
+    if not fx.prototype and decided.kind is GateKind.TRANSPORT and menu_entity(s, view.rows):
+        rows.append(pad(f" WRITES    not offered · {decided.reason}", view.w))
+    return rows
+
+
+@dataclass(frozen=True, slots=True)
+class Focused:
+    """The held record the cursor names, as the diagnostics drawers read it.
+
+    Attributes:
+        key: The record's stable identifier.
+        status: The record's status as the projection stated it, with its provenance.
+        facts: The further facts the projection read off the stored record.
+        cursor: The committed cursor the record was read through.
+    """
+
+    key: str
+    status: TruthField[str]
+    facts: Mapping[str, str]
+    cursor: str
+
+
+def focused(view: View) -> Focused | None:
+    """Return the held record under the cursor, by stable id; ``None`` when none is held.
+
+    A frame about one record -- a Run, a Task -- focuses that record when its own cursor
+    names none.
+    """
+    model = view.register or view.projection
+    if model is None:
+        return None
+    wanted = [key for key in (view.session.sel_id, view.session.subj_id) if key is not None]
+    row = next((r for key in wanted for r in model.rows if r.key == key), None)
+    if row is None:
+        return None
+    status = row.status if isinstance(row, ProjectionRow) else row.field("status")
+    facts = row.facts if isinstance(row, ProjectionRow | SpineRow) else {}
+    return Focused(key=row.key, status=status, facts=facts, cursor=model.source_cursor)
+
+
+def _native_inspect(record: Focused) -> list[str]:
+    """Return the provenance of the focused field: who stated it, at what revision, how fresh."""
+    status = record.status
+    return [
+        f" INSPECT   value       {record.key} status {value_cell(status).full}",
+        f"           answered by {status.producer} · revision {group(status.producer_revision)}",
+        f"           projection  cursor {group(int(record.cursor))} · {status.truth_kind.value}",
+        f"           freshness   {status.freshness.value} · precision {status.precision.value}",
+        f"           raw state   {status.state.value}",
+    ]
+
+
+def _native_raw(record: Focused) -> list[str]:
+    """Return the focused record's stored facts, bounded and labelled as the raw form."""
+    facts = [f"{name}={value}" for name, value in sorted(record.facts.items())][:_RAW_LINES]
+    rows = [f" RAW       {record.key} · the stored record's own fields, quoted exactly"]
+    rows.append(f"           status={record.status.value}")
+    rows.extend(f"           {fact}" for fact in facts)
+    hidden = len(record.facts) - len(facts)
+    rows.append("           bounded" + (f" · {hidden} more fields not shown" if hidden else ""))
+    return rows
 
 
 def _inspected(session: Session, fixture: Fixture) -> str:
@@ -57,6 +175,9 @@ def _inspected(session: Session, fixture: Fixture) -> str:
 def inspect_rows(view: View) -> list[str]:
     """Return the inspect drawer: the focused field with its provenance."""
     s, fx = view.session, view.fixture
+    record = focused(view)
+    if record is not None:
+        return _native_inspect(record)
     if not fx.prototype:
         return [
             f" INSPECT   value       {_UNKNOWN} unknown · nothing has been read for this field",
@@ -84,6 +205,9 @@ def inspect_rows(view: View) -> list[str]:
 
 def raw_rows(view: View) -> list[str]:
     """Return the raw drawer: a bounded, scrubbed segment of the runner's own words."""
+    record = focused(view)
+    if record is not None:
+        return _native_raw(record)
     if not view.fixture.prototype:
         return [f" RAW       {_UNKNOWN} unknown · no raw segment has been read here"]
     target = dv.target_id(view.session, view.fixture)

@@ -1,0 +1,309 @@
+{
+ "principal": "OP-0001",
+ "run_states": {
+  "RUN-0000000a": "RUNNING",
+  "RUN-0000000d": "LOST"
+ },
+ "questions": [
+  {
+   "id": "QST-0001",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "OPEN"
+  },
+  {
+   "id": "QST-0002",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "BLOCKED",
+   "blocking": true
+  },
+  {
+   "id": "QST-0003",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "BLOCKED",
+   "blocking": true,
+   "escalated_by": "the Sep 18 deadline"
+  },
+  {
+   "id": "QST-0004",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "ANSWERED",
+   "resolution_actor": "OP-0001",
+   "chosen_option": "alias_table"
+  },
+  {
+   "id": "QST-0005",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "ANSWERED",
+   "resolution_actor": "OP-0002",
+   "chosen_option": "wave_shim",
+   "late_answers": [
+    {
+     "principal": "OP-0001",
+     "option": "both"
+    }
+   ]
+  },
+  {
+   "id": "QST-0006",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "AUTO_RESOLVED",
+   "default_option": "alias_table",
+   "override_until": "2026-09-18T16:00:00+00:00",
+   "resolution_actor": "policy"
+  },
+  {
+   "id": "QST-0007",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "SEALED",
+   "default_option": "alias_table",
+   "resolution_actor": "policy"
+  },
+  {
+   "id": "QST-0008",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "DROPPED",
+   "drop_reason": "moot",
+   "resolution_actor": "OP-0002"
+  },
+  {
+   "id": "QST-0009",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "DROPPED",
+   "drop_reason": "superseded",
+   "superseded_by": "QST-0012",
+   "resolution_actor": "OP-0002"
+  },
+  {
+   "id": "QST-0010",
+   "run": "RUN-0000000d",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "OPEN"
+  },
+  {
+   "id": "QST-0011",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "What should the release note say about the retired alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [],
+   "status": "OPEN"
+  },
+  {
+   "id": "QST-0012",
+   "run": "RUN-0000000a",
+   "scope": "BAT-0002",
+   "asked_at": "2026-09-18T10:02:00+00:00",
+   "question": "Which shim may be retired — the wave shim, or the alias table?",
+   "rationale": "Both are read by the replay path; retiring the wrong one breaks it.",
+   "options": [
+    {
+     "key": "wave_shim",
+     "label": "the wave shim only"
+    },
+    {
+     "key": "alias_table",
+     "label": "the alias table only",
+     "recommended": true
+    },
+    {
+     "key": "both",
+     "label": "both — they are independent"
+    }
+   ],
+   "status": "ANSWERED",
+   "resolution_actor": "OP-0003",
+   "chosen_option": "both",
+   "disclosed": false
+  }
+ ]
+}

@@ -26,11 +26,15 @@ from eawf.surfaces.tui.console.frame import (
     strip_chips,
     thin,
 )
+from eawf.surfaces.tui.console.keybar import pick
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.campaign import CLAIM, window
+from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
+
+_ROUTE = "campaign.step"
 
 HISTORY = "HISTORY"
 PRODUCED = "PRODUCED"
@@ -141,12 +145,12 @@ def render(view: View) -> list[str]:
     body += _activity(view, acts, on_history, running)
     body.append(thin(w))
     body += _products(view, made, on_history, running)
-    keys: list[tuple[str, str]] = [("Tab", "region")] if acts and made else []
+    keys = pick(_ROUTE, "region") if acts and made else []
     if on_history:
-        keys.append(("↑↓", "line"))
+        keys += pick(_ROUTE, "line")
     elif made:
-        keys.extend([("↑↓", "product"), ("Enter", "open")])
-    keys.extend([("y", "copy"), ("Esc", "back")])
+        keys += pick(_ROUTE, "product", "open")
+    keys += pick(_ROUTE, "copy", "back")
     n = str(step[0]).split(" ")[0]
     return g_frame(
         view,
@@ -159,6 +163,8 @@ def render(view: View) -> list[str]:
 
 def copy(session: Session, fixture: Fixture) -> str:
     """Return the step's stable URN."""
+    if not fixture.registers.cam_steps:
+        return NOTHING_TO_COPY
     n = str(fixture.registers.cam_steps[step_index(session, fixture)][0]).split(" ")[0]
     return f"urn:eawf:{fixture.scope}:CAM-0001:step:{n}"
 

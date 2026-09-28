@@ -22,6 +22,7 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.width import cell_len, pad
 
@@ -134,10 +135,35 @@ def _lanes(view: View) -> list[str]:
     for i, lane in enumerate(TL_LANES):
         _check_lane(lane, now_col)
         on = on_lanes and i == s.sel
-        rows.append(Fixed(pad(("▸" if on else " ") + pad(lane[0], _LANE - 1) + lane[1], w)))
+        bar_row = ("▸" if on else " ") + pad(lane[0], _LANE - 1) + lane[1]
+        if on and focus:
+            bar_row = marked_lane(bar_row, s.mark)
+        rows.append(Fixed(pad(bar_row, w)))
         labels = " " * _LABEL_OFFSET + lane[2]
         rows.append(Fixed(pad(labels, w)) if on and focus else labels)
+    if on_lanes and focus:
+        lane = TL_LANES[s.sel] if s.sel < len(TL_LANES) else TL_LANES[0]
+        rows.append(marker_row(lane[0], focus, s.mark))
     return rows
+
+
+def marked_lane(row: str, mark: int) -> str:
+    """Return a lane row with ``[`` and ``]`` around its ``mark``-th marker.
+
+    The marker cursor is text, never colour alone: the brackets take the cells either side
+    of the marker, which are the lane's own line or the gutter, so no column moves.
+    """
+    found = [m.start() for m in _MARK.finditer(row, _LANE)]
+    if not found:
+        return row
+    at = found[min(max(mark, 0), len(found) - 1)]
+    return f"{row[: at - 1]}[{row[at]}]{row[at + 2 :]}"
+
+
+def marker_row(lane: str, milestones: list[str], mark: int) -> str:
+    """Return the ``MARKER`` row: the focused milestone, its lane and its position on it."""
+    at = min(max(mark, 0), len(milestones) - 1)
+    return f" MARKER    {milestones[at]} · {lane} · {at + 1} of {len(milestones)}"
 
 
 def _regions(view: View) -> list[str]:
@@ -191,3 +217,16 @@ def render(view: View) -> list[str]:
         rows.append("   " + _LEGEND)
         foot = keys
     return build(view, rows, foot)
+
+
+def seam(ctx: Ctx, key: str, shift: bool) -> bool:
+    """Refuse the marker arrows, naming why, on a frame that draws no dated marker.
+
+    The route's bar advertises the arrows whatever it holds, so a lane with no marker to
+    move to answers them rather than leaving them silently unclaimed.
+    """
+    s = ctx.s
+    if s.route != "timeline" or key not in ("ArrowLeft", "ArrowRight") or s.timeline_marks:
+        return False
+    ctx.log(key, "no dated marker on this lane · nothing to move to")
+    return True

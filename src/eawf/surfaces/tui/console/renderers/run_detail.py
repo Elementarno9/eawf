@@ -13,14 +13,22 @@ says so, and offers no lifecycle verb.
 
 from __future__ import annotations
 
+from datetime import datetime
+
+from eawf.kernel.projection.attention import build_attention_view
+from eawf.kernel.projection.registers import UNWRITTEN_REASON
 from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
-from eawf.surfaces.tui.console.format import group
+from eawf.surfaces.tui.console.format import clock_time, group, span
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS
+from eawf.surfaces.tui.console.overlays.situations import LOST
+from eawf.surfaces.tui.console.renderers.detail import state_of, unknown_frame
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -78,8 +86,70 @@ def _subject(view: View, spine: SpineView) -> SpineRow | None:
     return spine.rows[restore(view.session, spine)] if spine.rows else None
 
 
+def _instant(run: SpineRow, name: str) -> datetime | None:
+    """Return one instant a Run states, or ``None`` when it states none readable."""
+    stamp = run.facts.get(name)
+    try:
+        return datetime.fromisoformat(stamp) if stamp else None
+    except ValueError:
+        return None
+
+
+def elapsed(view: View, spine: SpineView, run: SpineRow) -> str:
+    """Return how long a Run has run: to its end once it ended, else to now.
+
+    A Run that has ended states both stamps, so its elapsed time is a recorded fact. A
+    running one is measured to the frame's own instant, or, with no wall clock held, to
+    the instant the rows were read -- and then it says so.
+    """
+    started = _instant(run, "started_at")
+    if started is None:
+        return f"elapsed {UNKNOWN_WORD}"
+    ended = _instant(run, "ended_at")
+    to = ended or view.now or spine.generated_at
+    if to is None:
+        return f"elapsed {UNKNOWN_WORD}"
+    text = f"elapsed {span(max(0, int((to - started).total_seconds())))}"
+    if ended is None and view.now is None:
+        text += f" as of {clock_time(to)}"
+    return text
+
+
+def asked(view: View, run: SpineRow) -> str:
+    """Return what the Run is waiting on an answer to, read off the Attention register."""
+    register = view.attention
+    if register is None:
+        return f"{UNKNOWN_WORD} · the attention register has not been read"
+    if register.withheld:
+        return f"{UNKNOWN_WORD} · {UNWRITTEN_REASON}"
+    open_keys = {item.key for item in build_attention_view(register).items}
+    for row in register.rows:
+        if row.key in open_keys and row.facts.get("subject") == run.key:
+            return row.facts.get("question", row.key)
+    return "nothing · no open action names this Run"
+
+
+def lost(view: View, run: SpineRow) -> bool:
+    """Return whether the Run is stored as running but is known to have stopped answering.
+
+    The Run register carries no heartbeat, so stopped-answering is read from the decision
+    records the console holds -- the same Run states the pause detail reads -- and only for
+    a Run whose stored status is the one the registry labels ambiguous.
+    """
+    status = run.field("status")
+    records = view.decisions
+    return (
+        records is not None
+        and status.value == RunStatus.RUNNING.value
+        and records.run_states.get(run.key) == LOST
+    )
+
+
 def native_frame(view: View, spine: SpineView) -> list[str]:
     """Return the Run frame drawn from the read model the daemon served.
+
+    The connection, the Run's own state and the state of the Task it runs are three
+    values on three rows: a Run that finished never reads as a Task that did.
 
     Args:
         view: The render being built; its session names the Run.
@@ -93,12 +163,17 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     key = run.key if run is not None else "no run"
     state = value_cell(run.field("status")).slot if run is not None else UNKNOWN_WORD
     finished = finished_subject(s, spine)
+    # a finished Run has no lifecycle left, so the lifecycle menu is not offered
+    keys = [e for e in native_keys(s.route) if finished is None or e != KEY["actions"]]
+    if run is not None and lost(view, run):
+        return unknown_frame(view, spine, run, keys)
+    treated = state_of(run) if run is not None else None
     top = native_head(
         view,
         spine,
         crumb_text=route_crumb(spine, *([run.parent_key] if run and run.parent_key else []), key),
         summary=f"Run {key} · {state} · {counts(spine)}",
-        attached_line=finished is None,
+        terminal=finished is not None,
     )
     rows = list(top)
     if finished is not None:
@@ -106,23 +181,49 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     if run is None:
         rows.append(label("RUN", "∅ this scope holds no Run"))
     else:
-        provider = value_cell(run.field("provider")).full
+        facts = run.facts
+        task = run.parent_key
+        title = facts.get("task_title")
+        task_state = facts.get("task_status", UNKNOWN_WORD)
+        started = _instant(run, "started_at")
+        ended = _instant(run, "ended_at")
+        scope = " · ".join(facts[name] for name in ("batch", "milestone", "track") if name in facts)
+        attempt = (
+            f"attempt {facts['attempt']} of {facts['attempts']}"
+            if "attempt" in facts
+            else f"attempt {UNKNOWN_WORD}"
+        )
         rows += [
-            label("STATE", state),
-            label("TASK", run.parent_key or f"{NO_VALUE} the Run states no Task"),
-            label("PROVIDER", provider),
-            label("USAGE", f"elapsed {UNKNOWN_WORD} · cost {UNKNOWN_WORD}"),
-            more("no usage producer feeds this frame yet"),
+            label(
+                "STATE",
+                f"{state} · {treated.meaning}" if treated else f"{state} · the Run's own lifecycle",
+            ),
+            *([label("CLOCK", ELAPSED_WORDS[treated.elapsed])] if treated else []),
+            label(
+                "TASK",
+                f"{task}{f' {title}' if title else ''} · task {task_state}"
+                if task
+                else f"{NO_VALUE} the Run states no Task",
+            ),
+            label("SCOPE", scope or f"{NO_VALUE} the Task is filed in no Batch"),
+            label("PROVIDER", value_cell(run.field("provider")).full),
+            label(
+                "STARTED",
+                (clock_time(started) if started else UNKNOWN_WORD)
+                + (f" · for {facts['purpose']}" if "purpose" in facts else ""),
+            ),
+            label("ENDED", clock_time(ended) if ended else "still running"),
+            label("ASKED", asked(view, run)),
+            label("USAGE", f"{elapsed(view, spine, run)} · cost {UNKNOWN_WORD}"),
+            more("no metering producer states tokens or cost yet"),
             label("CONTROLS", "no control sent from this console"),
-            label("LINEAGE", f"attempt {UNKNOWN_WORD} · retries and forks are not read yet"),
+            label("LINEAGE", f"{attempt} · forks are not read yet"),
         ]
     rows += [
         thin(w),
         tl_header(w),
         f"   {UNKNOWN_WORD} · the Run's events are read on its transcript route",
     ]
-    # a finished Run has no lifecycle left, so the lifecycle menu is not offered
-    keys = [e for e in native_keys(s.route) if finished is None or e != KEY["actions"]]
     return build(view, rows, route_keys_bar(view, keys))
 
 

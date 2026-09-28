@@ -31,7 +31,7 @@ from textual.pilot import Pilot
 from eawf.surfaces.tui.console.app import TOOLKIT_KEYS, ConsoleApp
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import load_fixture
-from eawf.surfaces.tui.console.normalisation import Normaliser, load_map
+from eawf.surfaces.tui.console.normalisation import Normaliser, load_map, recorded_mark
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
 from eawf.surfaces.tui.console.tokens import Severity
 
@@ -272,6 +272,29 @@ class Capture:
     grid: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class SentKey:
+    """One key the harness sent and what the console did with it.
+
+    The console's own key log keeps only its newest lines and stays silent about a key
+    nothing claimed, so the harness keeps its own account of every key it sends.
+
+    Attributes:
+        contract_id: The frame or journey the key was sent for.
+        key: The key as recorded.
+        response: The trace line the console wrote for the key, or the harness action a
+            simulated key was performed as.
+        logged: Whether the console's key log changed, which is what the operator sees.
+        moved: Whether the painted frame or the projected session changed.
+    """
+
+    contract_id: str
+    key: str
+    response: str
+    logged: bool
+    moved: bool
+
+
 class Harness:
     """Drive one mounted console through recorded states.
 
@@ -280,12 +303,16 @@ class Harness:
         pilot: The toolkit's test pilot.
         normaliser: The map the replay compares through and whose rewrites decide which
             pack keys are harness actions.
+
+    Attributes:
+        sent: Every key sent, oldest first, with the console's response to it.
     """
 
     def __init__(self, app: ConsoleApp, pilot: Pilot[Any], normaliser: Normaliser) -> None:
         self.app = app
         self.pilot = pilot
         self.normaliser = normaliser
+        self.sent: list[SentKey] = []
 
     async def follow_size(self) -> None:
         """Resize the terminal to the session's frame size when they differ."""
@@ -295,11 +322,20 @@ class Harness:
             await self.pilot.pause()
 
     async def press(self, key: str, contract_id: str) -> None:
-        """Press one recorded key, performing a simulated key as its harness action."""
+        """Press one recorded key, performing a simulated key as its harness action.
+
+        Every key is recorded in :attr:`sent` with what the console did with it.
+        """
+        s = self.app.session
+        log, rows, projection = list(s.log), list(self.app.frame_rows), s.projection()
         if key in self.normaliser.simulated_keys(contract_id):
             await self._simulate(key)
-            return
-        await self.pilot.press(pilot_key(key))
+            response = f"harness action · {key}"
+        else:
+            await self.pilot.press(pilot_key(key))
+            response = s.trace or ""
+        moved = self.app.frame_rows != rows or s.projection() != projection
+        self.sent.append(SentKey(contract_id, key, response, s.log != log, moved))
 
     async def _simulate(self, key: str) -> None:
         """Perform a pack key the console does not bind: a size cycle or an entry step."""
@@ -364,7 +400,9 @@ class Harness:
             )
         except Exception as exc:  # a renderer defect is a result row, not a crashed replay
             return Result(state.id, kind, False, f"exception: {type(exc).__name__}: {exc}")
-        verdict = self.normaliser.compare(state.id, state.frame, shot.text)
+        verdict = self.normaliser.compare(
+            state.id, state.frame, shot.text, mark=recorded_mark(state.keys)
+        )
         if shot.grid and verdict.ok:
             return Result(state.id, kind, False, "; ".join(shot.grid))
         if verdict.ok:
@@ -403,11 +441,50 @@ class Harness:
             result.detail = f"auto-opens is {app.session.auto_opens}"
         return result
 
+    async def record(
+        self,
+        journey_id: str,
+        *,
+        title: str,
+        setup: SessionSetup,
+        keys: Sequence[str],
+        proves: str | None = None,
+    ) -> Journey:
+        """Record a journey from the render path: each step's projection and whole frame.
+
+        The journey is driven exactly as :meth:`journey` replays it -- the one reset, then
+        each key through the toolkit -- so a recording replays against itself.
+
+        Args:
+            journey_id: The journey's id.
+            title: What the journey walks.
+            setup: The reset argument the journey starts from.
+            keys: The keys pressed after the reset, in order.
+            proves: What the journey proves.
+
+        Returns:
+            The journey, one step for the reset and one per key.
+        """
+        app = self.app
+        app.reset(self.normaliser.setup(journey_id, setup))
+        await self.follow_size()
+        app.render_frame()
+        steps: list[JourneyStep] = []
+        for key in (None, *keys):
+            if key is not None:
+                await self.press(key, journey_id)
+            text, _cycles = await settle(self.pilot)
+            steps.append(JourneyStep(key=key, after=app.session.projection(), frame=text))
+        return Journey(id=journey_id, title=title, proves=proves, setup=setup, steps=tuple(steps))
+
     def _record_step(
         self, result: Result, i: int, step: JourneyStep, text: str, cycles: int
     ) -> None:
         projection = diff_projection(step.after, self.app.session.projection())
-        verdict = self.normaliser.compare(result.id, step.frame, text)
+        # the step's own recorded marker, which the projection check holds the port to
+        verdict = self.normaliser.compare(
+            result.id, step.frame, text, mark=int(step.after.get("mark") or 0)
+        )
         ok = not projection and verdict.ok
         result.steps.append(
             {

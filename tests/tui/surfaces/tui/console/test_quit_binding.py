@@ -13,14 +13,14 @@ import asyncio
 
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import QUIT_CEILING, QUIT_FLOOR, FakeClock
-from eawf.surfaces.tui.console.keymap import GLOBAL_HELP
+from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS
 from eawf.surfaces.tui.console.session import SessionSetup
 
 
 def test_global_help_lists_ctrl_c() -> None:
     """The help card's EVERYWHERE block advertises the binding (D-TUI-7)."""
-    rows = [(token, key) for token, _text, key in GLOBAL_HELP]
-    assert ("Ctrl+C", "ctrl+c") in rows
+    rows = [(key.token, key.keys) for key in GLOBAL_KEYS]
+    assert ("Ctrl+C", ("ctrl+c",)) in rows
 
 
 async def _press_ctrl_c_twice(clock: FakeClock, *, gap: float, setup: SessionSetup) -> ConsoleApp:

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
@@ -23,7 +24,6 @@ from eawf.kernel.projection.transcript import (
     TranscriptBlock,
     TranscriptReadModel,
 )
-from eawf.kernel.runtime.events import RunEventKind
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
@@ -36,15 +36,14 @@ from eawf.surfaces.tui.console.frame import (
     g_frame,
     g_pad,
     needs_count,
-    route_keys_bar,
     snap_caret,
     strip_chips,
     thin,
 )
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
+from eawf.surfaces.tui.console.keybar import keybar, route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy
-from eawf.surfaces.tui.console.renderers.read_model import counts, crumb, native, unstated_rows
+from eawf.surfaces.tui.console.renderers.read_model import crumb, native, unstated_rows
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import cell_len, pad
 
@@ -64,13 +63,7 @@ TR_GLYPH: Mapping[str, str] = MappingProxyType(
 )
 # Cells the time, glyph and kind columns of a block head take before its text.
 _HEAD_W = len(" 00:00:00  ¶ " + " " * 9)
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "block"),
-    ("Enter", "fold"),
-    ("f", "follow"),
-    ("y", "copy"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("transcript")
 Block = Mapping[str, Any]
 
 
@@ -290,19 +283,18 @@ def _proto_frame(view: View) -> list[str]:
     )
 
 
-#: The glyph each native block kind carries in the transcript's lead column.
-NATIVE_GLYPH: Mapping[RunEventKind, str] = MappingProxyType(
+#: The glyph each native lane carries in the kind column, beside its full word.
+NATIVE_GLYPH: Mapping[str, str] = MappingProxyType(
     {
-        RunEventKind.REASONING_STARTED: "°",
-        RunEventKind.REASONING_SUMMARIZED: "°",
-        RunEventKind.COMMAND_STARTED: "›",  # noqa: RUF001
-        RunEventKind.COMMAND_OUTPUT: "›",  # noqa: RUF001
-        RunEventKind.COMMAND_RESULT: "›",  # noqa: RUF001
-        RunEventKind.EVENT_GAP: "∅",
+        **TR_GLYPH,
+        "background": "»",
+        "running": "⋯",
+        "purged": "✗",
+        "event": "·",
     }
 )
 
-#: The lead glyph of a kind the console has no glyph for. A kind it cannot name is still
+#: The lead glyph of a lane the console has no glyph for. A lane it cannot name is still
 #: drawn, with a mark saying the console does not recognise it.
 UNGLYPHED = "·"
 
@@ -312,6 +304,14 @@ DERIVED_LABEL = "derived"
 
 #: What the block section says for a Run that has produced nothing.
 NO_BLOCK = "∅ this Run has produced no event · nothing has been observed of it yet"
+
+#: What a purged block shows in its fold slot: the store holds none of it.
+PURGED_MARK = "✗ purged"
+
+# The kind column's width: the longest kind word and its gap.
+_KIND_W = 11
+# The width from which a derived typical duration is shown, and from which it is labelled.
+_TYPICAL_AT, _TYPICAL_WORD_AT = 120, 160
 
 
 def _purged_text(purged: PurgedRange) -> str:
@@ -323,15 +323,138 @@ def _purged_text(purged: PurgedRange) -> str:
     return f"{group(purged.count)} sequences purged · {sequences} · {asked}"
 
 
-def _native_line(block: TranscriptBlock, room: int) -> str:
-    """Return one native block's line: its clock, glyph, sequence and what it says."""
-    glyph = NATIVE_GLYPH.get(block.kind, UNGLYPHED)
-    head = f" {clock_time(block.at)}  {glyph} " + pad(f"#{block.sequence}", 6)
+def native_word(block: TranscriptBlock) -> str:
+    """Return the kind word a block's second column states.
+
+    A command still going is ``background`` when it was detached and ``running`` when
+    the Run is held by it; every other block states its lane.
+    """
+    if block.in_flight and block.lane == "tool":
+        return "background" if block.background else "running"
+    return block.lane
+
+
+def _block_text(block: TranscriptBlock) -> str:
+    """Return what a block says: its purged range, or its text with its kind named."""
     if block.purged is not None:
-        text = _purged_text(block.purged)
+        return _purged_text(block.purged)
+    return f"{block.kind.value} · {value_cell(block.text).full}"
+
+
+def reference(view: View, model: TranscriptReadModel) -> datetime | None:
+    """Return the instant elapsed times are measured to: now, else the last block's.
+
+    Under a held console clock no wall time is read, so the feed stays the authored tail.
+    """
+    if view.now is not None and not view.held:
+        return view.now
+    return model.blocks[-1].at if model.blocks else None
+
+
+def _seconds(block: TranscriptBlock, to: datetime | None) -> int:
+    return max(0, int((to - block.at).total_seconds())) if to is not None else 0
+
+
+def _note(
+    block: TranscriptBlock, *, hidden: int, is_open: bool, to: datetime | None, w: int
+) -> str:
+    """Return a block head's right-hand note: its elapsed, its fold or its hole.
+
+    A block in flight states how long it has run and, where width allows, how long its
+    kind of work usually takes -- a derived comparison, never a countdown.
+    """
+    if block.purged is not None:
+        return PURGED_MARK
+    if block.in_flight:
+        text = fmt_dur(_seconds(block, to))
+        if block.typical_seconds is not None and w >= _TYPICAL_AT:
+            typical = f"~{fmt_dur(block.typical_seconds)}"
+            text += f" · {typical}" + (" typical" if w >= _TYPICAL_WORD_AT else "")
+        return text
+    if hidden:
+        return f"▾ {hidden} lines" if is_open else f"▸ {hidden} lines"
+    return ""
+
+
+# The cells a fold note takes with its gap, at most: ``▾ 999 lines``.
+_FOLD_NOTE_W = 13
+
+
+def _wrap_two(text: str, first: int, rest: int) -> list[str]:
+    """Return ``text`` wrapped at words: the first line to ``first`` cells, the rest to ``rest``."""
+    wrapped = _wrap_to(text, first)
+    if len(wrapped) <= 1:
+        return wrapped
+    words = text.split(" ")[wrapped[0].count(" ") + 1 :]
+    return [wrapped[0], *_wrap_to(" ".join(words), rest)]
+
+
+def _layout(view: View, model: TranscriptReadModel, index: int) -> tuple[str, list[str], str]:
+    """Return one block's head cells, its wrapped text and its note, at the frame's width.
+
+    The first line leaves room for the note; a block whose note is a fold reserves the
+    widest fold note, so the count it states is the count of lines it really hides.
+    """
+    block, w = model.blocks[index], view.w
+    word = native_word(block)
+    head = f" {clock_time(block.at)}  {NATIVE_GLYPH.get(word, UNGLYPHED)} " + pad(word, _KIND_W)
+    room = max(8, (w - 2) - cell_len(head) - 1)
+    to = reference(view, model)
+    fixed = _note(block, hidden=0, is_open=False, to=to, w=w)
+    reserve = cell_len(fixed) + 2 if fixed else _FOLD_NOTE_W
+    wrapped = _wrap_two(_block_text(block), max(4, room - reserve), room)
+    hidden = max(0, len(wrapped) - PREVIEW)
+    is_open = bool(folds(view.session).get(index))
+    return head, wrapped, _note(block, hidden=hidden, is_open=is_open, to=to, w=w)
+
+
+def _native_block_lines(view: View, model: TranscriptReadModel, index: int) -> list[str]:
+    """Return one block's lines: its head, then the lines its fold state shows.
+
+    Blocks are prose: they wrap inside the region and fold beyond the preview, and are
+    never cut with an ellipsis.
+    """
+    head, wrapped, note = _layout(view, model, index)
+    room = max(8, (view.w - 2) - cell_len(head) - 1)
+    is_open = bool(folds(view.session).get(index))
+    shown = wrapped if is_open else wrapped[:PREVIEW]
+    first = room - (cell_len(note) + 2 if note else 0)
+    lines = [head + pad(shown[0], first) + (f"  {note}" if note else "")]
+    lines.extend(pad("", cell_len(head)) + line for line in shown[1:])
+    return lines
+
+
+def native_hidden(view: View, model: TranscriptReadModel, index: int) -> int:
+    """Return how many lines block ``index`` folds away at the frame's width."""
+    _head, wrapped, _note_text = _layout(view, model, index)
+    return max(0, len(wrapped) - PREVIEW)
+
+
+def native_context(view: View, model: TranscriptReadModel) -> str:
+    """Return the line under the header: what is true of the Run right now.
+
+    It names the Run, whether it is thinking or held by work and for how long, how many
+    pieces of work run in the background, whether the view follows the tail, and the
+    block count -- every one derived from the blocks rather than stored beside them.
+    """
+    s = view.session
+    run = s.subj_id or (model.rows[0].key if model.rows else "no run")
+    to = reference(view, model)
+    going = [b for b in model.blocks if b.in_flight]
+    thinking = next((b for b in reversed(going) if b.lane == "thinking"), None)
+    held = next((b for b in reversed(going) if b.lane == "tool" and not b.background), None)
+    if thinking is not None:
+        state = f"THINKING for {fmt_dur(_seconds(thinking, to))}"
+    elif held is not None:
+        state = f"RUNNING for {fmt_dur(_seconds(held, to))}"
     else:
-        text = f"{block.kind.value} · {value_cell(block.text).full}"
-    return head + pad(text, max(1, room - cell_len(head)))
+        state = "nothing running"
+    background = sum(1 for b in going if b.background or b.lane == "subagent")
+    parts = [f"Run {run}", state]
+    if background:
+        parts.append(f"{background} running in the background")
+    parts += ["following" if s.follow else "held", plural(len(model.blocks), "block")]
+    return " · ".join(parts)
 
 
 def _state_rows(model: TranscriptReadModel) -> list[str]:
@@ -358,6 +481,10 @@ def _state_rows(model: TranscriptReadModel) -> list[str]:
 def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     """Return the Transcript frame drawn from the read model the daemon served.
 
+    The frame opens on the latest block and fills from the bottom; a held view keeps its
+    row and counts what is above and below it; the scrollbar column is drawn only when
+    something is off screen.
+
     Args:
         view: The render being built; its session carries the block the cursor sits on.
         model: The route's read model at the committed cursor.
@@ -372,32 +499,40 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
         header_row(
             session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
         ),
-        " " + counts(model),
+        Fixed(pad(" " + native_context(view, model), w)),
         bar(w),
         *_state_rows(model),
         thin(w),
     ]
     closing: list[str] = [thin(w), *unstated_rows(model)]
     # the keybar takes the last row, and the two sections take their own
-    fixed_rows = len(opening) + len(closing) + 1
-    track = max(1, h - fixed_rows)
+    track = max(1, h - len(opening) - len(closing) - 1)
     flat = [
-        Line(index, True, _native_line(block, w - 2)) for index, block in enumerate(model.blocks)
+        Line(index, n == 0, line)
+        for index in range(len(model.blocks))
+        for n, line in enumerate(_native_block_lines(view, model, index))
     ]
     body: list[str] = []
     if flat:
         win = _window(flat, sel, track)
+        sliced = bool(win.above or win.below)
+        width = w - 2 if sliced else w
         if win.above:
-            body.append(pad(f" … {win.above} above", w))
+            body.append(pad(f" … {win.above} above", width))
         body.extend(
-            g_pad(("▸" if line.block == sel else " ") + line.raw[1:], w) for line in win.lines
+            g_pad(("▸" if line.head and line.block == sel else " ") + line.raw[1:], width)
+            for line in win.lines
         )
         if win.below:
-            body.append(pad(f" … {win.below} below", w))
+            body.append(pad(f" … {win.below} below", width))
+        # the feed fills from the bottom, so a short run sits against the section's foot
+        body[:0] = [pad("", width)] * max(0, track - len(body))
+        if sliced:
+            body = [f"{row} █" for row in body]
     else:
         body.append(f" BLOCKS    {NO_BLOCK}")
     rows = [*opening, *(Fixed(pad(strip_chips(row), w)) for row in body), *closing]
-    return build(view, rows, route_keys_bar(view, ROUTE_KEYS[session.route]))
+    return build(view, rows, keybar(list(_KEYS), w))
 
 
 def render(view: View) -> list[str]:
@@ -408,11 +543,50 @@ def render(view: View) -> list[str]:
     return _proto_frame(view)
 
 
+def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
+    """Walk, fold, follow and copy the blocks of a held read model."""
+    s = ctx.s
+    total = len(model.blocks)
+    sel = max(0, total - 1) if s.tr_sel is None else s.tr_sel
+    s.tr_sel = sel
+    if key in ("ArrowDown", "ArrowUp"):
+        s.tr_sel = max(0, min(total - 1, sel + (1 if key == "ArrowDown" else -1)))
+        s.follow = False
+        block = model.block_at(s.tr_sel)
+        ctx.log(key, f"{block.lane} · {clock_time(block.at)}" if block else "no block")
+        return True
+    if key == "Enter":
+        view = View(session=s, fixture=ctx.fixture, w=ctx.w, h=ctx.h)
+        n = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
+        if not n:
+            ctx.log("Enter", "this block has nothing folded away")
+            return True
+        fold = folds(s)
+        fold[sel] = not fold.get(sel)
+        ctx.log("Enter", ("opened " if fold[sel] else "folded ") + f"{n} lines")
+        return True
+    if key == "f":
+        s.follow = not s.follow
+        if s.follow:
+            s.tr_sel = max(0, total - 1)
+        ctx.log("f", "following the tail" if s.follow else "held where you are")
+        return True
+    if key == "y":
+        block = model.block_at(sel)
+        what = f"{block.lane} at {clock_time(block.at)}" if block else f"block {sel + 1}"
+        ctx.notify(what, "copied")
+        ctx.log("y", "copied the block under the cursor")
+        return True
+    return False
+
+
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Walk the blocks, fold the selected one, toggle following and copy a block."""
     s = ctx.s
     if s.route != "transcript" or busy(s):
         return False
+    if isinstance(ctx.projection, TranscriptReadModel):
+        return _native_seam(ctx, key, ctx.projection)
     blocks = blocks_now(ctx.fixture.registers.tr_blocks)
     # the frame publishes the run it drew, so the arrows reach the tail of a native run
     # longer than the prototype feed and stop at the end of a shorter one

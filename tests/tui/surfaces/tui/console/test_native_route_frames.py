@@ -36,7 +36,7 @@ from eawf.kernel.projection.operations import (
     SANDBOX_DECISION_PRODUCER,
     build_operations_view,
 )
-from eawf.kernel.projection.registers import UNWRITTEN_REASON, build_register_view
+from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.verification import RuntimeTupleVerdict, build_verification_view
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -712,8 +712,8 @@ def test_home_nests_each_milestone_under_its_track_with_title_and_progress() -> 
 def test_home_attention_region_states_why_it_has_no_count() -> None:
     frame = _frame("scope.home")
     assert "has not been read" in _starts(frame, " ATTENTION")
-    unwritten = _frame("scope.home", attention=_model("attention"))
-    assert UNWRITTEN_REASON in _starts(unwritten, " ATTENTION")
+    quiet = _frame("scope.home", attention=_model("attention"))
+    assert _starts(quiet, " ATTENTION").startswith(" ATTENTION   nothing here opened itself")
 
 
 def test_home_cursor_never_rests_on_the_group_heading() -> None:
@@ -748,11 +748,23 @@ def test_activity_draws_the_rail_where_the_registry_declares_it(w: int) -> None:
     assert "TSK-0001" in run and "RUNNING" in run and UNKNOWN_WORD in run
 
 
-def test_attention_states_both_counts_unknown_when_nothing_writes_it() -> None:
+def test_attention_states_mine_unknown_for_a_console_acting_as_nobody() -> None:
     frame = _frame("attention")
     assert frame[0].startswith(" Eä ▸ EAWF ▸ Needs you")
-    assert frame[1].startswith(f" mine {UNKNOWN_WORD} · fleet-wide {UNKNOWN_WORD}")
-    assert UNWRITTEN_REASON in _starts(frame, " ACTIONS")
+    # with nothing open the sub line is the frozen phrase, whoever the console acts as
+    assert frame[1].startswith(" nothing needs you")
+    open_one = {
+        "pending_action": {
+            "ACT-0001": {
+                "urn": f"{ROOT}/pending-action/ACT-0001",
+                "revision": 1,
+                "status": "WAITING",
+                "subject_ref": f"{ROOT}/run/RUN-00000001",
+            }
+        }
+    }
+    asked = _frame("attention", document=open_one)
+    assert asked[1].startswith(f" {UNKNOWN_WORD} mine · 1 all principals")
 
 
 def test_run_frame_draws_one_runs_facts_under_its_task() -> None:

@@ -12,6 +12,7 @@ timing tests advance one explicitly.
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import NamedTuple
 
@@ -32,6 +33,8 @@ RACK_MAX = 3
 # The key-log key (an em dash) a clock-driven change is recorded under, since no key
 # caused it.
 TICK_KEY = "—"
+# Where a held clock's wall readings start, so a stamped field is the same on every run.
+_FAKE_EPOCH = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class Clock:
@@ -40,6 +43,10 @@ class Clock:
     def now(self) -> float:
         """Return the current monotonic reading."""
         return time.monotonic()
+
+    def wall(self) -> datetime:
+        """Return the wall-clock instant a confirmed write stamps a field with."""
+        return datetime.now(UTC)
 
 
 class FakeClock(Clock):
@@ -56,6 +63,10 @@ class FakeClock(Clock):
     def now(self) -> float:
         """Return the held reading."""
         return self._now
+
+    def wall(self) -> datetime:
+        """Return a wall-clock instant that moves only with the held reading."""
+        return _FAKE_EPOCH + timedelta(seconds=self._now)
 
     def advance(self, by: float) -> None:
         """Move the clock forward by ``by`` seconds.
@@ -143,6 +154,43 @@ def quit_step(session: Session, clock: Clock) -> QuitCheck:
         return QuitCheck(QuitStep.BURST, gap_ms)
     session.last_esc = now
     return QuitCheck(QuitStep.ARMED, gap_ms)
+
+
+def disarm(session: Session, key: str) -> None:
+    """Disarm an armed quit guard, saying so in the key log so the outcome is observable."""
+    if session.last_esc:
+        session.disarm_quit()
+        session.log_key("Esc", f"quit disarmed · {key} came between the presses")
+
+
+def guarded_quit(session: Session, clock: Clock, *, outstanding: int) -> bool:
+    """Apply one Escape at a quiet scope home to the guard, logging the step it took.
+
+    An operation the daemon has not answered holds the guard disarmed, so the console is
+    never left while a control's outcome is still owed.
+
+    Args:
+        session: The session whose guard and key log are used.
+        clock: The console clock the gap is judged on.
+        outstanding: How many sent operations still await the daemon's answer.
+
+    Returns:
+        Whether the console should quit now.
+    """
+    if outstanding:
+        session.disarm_quit()
+        session.log_key("Esc", f"{outstanding} outstanding · quit waits for the daemon's answer")
+        return False
+    check = quit_step(session, clock)
+    if check.step is QuitStep.QUIT:
+        note = f"quit — guarded: scope home, nothing open, {check.gap_ms}ms apart"
+        session.log_key("Esc Esc", note)
+        return True
+    if check.step is QuitStep.BURST:
+        session.log_key("Esc", "too fast to be two presses — still armed")
+    else:
+        session.log_key("Esc", "at scope home · press again within 1.5s to quit")
+    return False
 
 
 def notify(session: Session, clock: Clock, *, text: str, title: str, sev: Severity) -> None:

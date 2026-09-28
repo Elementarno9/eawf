@@ -34,6 +34,7 @@ from eawf.surfaces.tui.console.attach import (
     with_entry_state,
 )
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, EntryState, load_chrome
+from eawf.surfaces.tui.terminal_logging import restore_root_logging, swap_root_logging_to_textual
 
 if TYPE_CHECKING:
     from eawf.surfaces.tui.console.app import ConsoleApp
@@ -288,7 +289,13 @@ def _run_console(app: ConsoleApp, seam: ProjectionSeam | None) -> int:
             if seam is not None:
                 await seam.disconnect()
 
-    asyncio.run(_drive())
+    # The CLI's stderr log handler would keep writing after Textual owns the
+    # screen; a daemon auto-spawn during connect is enough to tear the frame.
+    saved = swap_root_logging_to_textual()
+    try:
+        asyncio.run(_drive())
+    finally:
+        restore_root_logging(saved)
     return 0
 
 

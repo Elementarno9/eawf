@@ -14,6 +14,10 @@ rebuilt rows. Nothing reorders rows by hand.
 The last rule is the one the native mode must not cost: the epoch-1 home mode, which the
 tracked golden contract replays, keeps every key its footer advertises resolving. A footer
 that advertises a key nothing handles is a frame promising an action it does not have.
+
+CON-149, CON-151 and CON-152 are held at the end: the ``u``, bracket and ``!``
+journeys, the docked readout that follows the cursor by id, and the roadmap marker
+cursor drawn in text.
 """
 
 from __future__ import annotations
@@ -30,8 +34,9 @@ import pytest
 from eawf.kernel.projection.compute import KeyedPatch, RouteProjection, build_route_projection
 from eawf.kernel.projection.spine import ENTRY_ROUTE, SPINE_ROUTES, SpineView, build_spine_view
 from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
+from eawf.surfaces.tui.console.attention import is_notice, open_actions
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
-from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.dispatch import dispatch, siblings_of
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
@@ -57,6 +62,8 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.spine import restore
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import BACK_CAP, BackEntry, Session
+from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
+from tests.tui.surfaces.tui.console import test_native_route_frames as frames
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
@@ -879,3 +886,210 @@ def test_con_028_a_region_from_another_route_reads_as_the_first() -> None:
     session = Session()
     session.route, session.region = "task.detail", "outcomes"
     assert focused_region(session) == "criteria"
+
+
+# ---------- CON-149: the three global keys no golden exercises, as journeys ----------
+
+
+def test_con_149_u_from_a_run_reached_through_activity_lands_where_escape_would_climb() -> None:
+    """``u`` lands on the Task an empty-stack Escape would climb to; Escape still goes back."""
+    session = _session("activity")
+    _press(session, "Enter")
+    run = session.subj_id
+    climbed = _session("run.detail", run)
+    _press(climbed, "Escape")
+    _press(session, "u")
+    assert (session.route, session.subj_id) == (climbed.route, climbed.subj_id)
+    assert session.route == "task.detail"
+    reached = _session("activity")
+    _press(reached, "Enter", "Escape")
+    assert reached.route == "activity"
+
+
+def test_con_149_brackets_on_a_task_walk_its_batch_and_keep_the_crumb_depth() -> None:
+    session = _session("task.detail", "EAWF-0042")
+    depth = _draw(session)[0].count("▸")
+    peers = siblings_of(session, _fixture())
+    assert len(peers) > 1 and "EAWF-0042" in peers
+    _press(session, "]")
+    after = peers[(peers.index("EAWF-0042") + 1) % len(peers)]
+    assert (session.route, session.subj_id) == ("task.detail", after)
+    assert _draw(session)[0].count("▸") == depth
+    _press(session, "[")
+    assert session.subj_id == "EAWF-0042"
+    assert len(session.back) == 0
+
+
+def test_con_149_bang_lands_on_the_top_open_action_from_any_route() -> None:
+    """``!`` opens the Attention route on the top-ranked open action, never on a notice."""
+    session = _session("run.detail", "RUN-538453eb")
+    _press(session, "!")
+    fixture = _fixture()
+    top = open_actions(fixture)[0]
+    assert not is_notice(top)
+    assert (session.route, session.sel_id) == ("attention", top.id)
+
+
+def test_con_149_bang_on_a_held_register_selects_this_principals_top_action() -> None:
+    session = _session("activity")
+    ctx = Ctx(
+        session=session,
+        fixture=_fixture(),
+        host=_Host(),
+        w=120,
+        h=30,
+        attention=bodies._projection("attention"),
+        principal=bodies.ME,
+    )
+    dispatch(ctx, "!", False)
+    assert (session.route, session.sel_id) == ("attention", "ACT-0001")
+
+
+def test_con_149_bang_with_nothing_open_says_so_and_moves_nowhere() -> None:
+    session = _session("activity")
+    only_sealed = {
+        **bodies.DOCUMENT,
+        "pending_action": {"ACT-0003": bodies.DOCUMENT["pending_action"]["ACT-0003"]},
+    }
+    ctx = Ctx(
+        session=session,
+        fixture=_fixture(),
+        host=_Host(),
+        w=120,
+        h=30,
+        attention=bodies._projection("attention", only_sealed),
+        principal=bodies.ME,
+    )
+    dispatch(ctx, "!", False)
+    assert session.route == "activity"
+    assert session.trace == "! → nothing needs you"
+
+
+# ---------- CON-151: a docked readout reports on the cursor's row by its id ----------
+
+
+def _readout_frame(route: str, **kwargs: Any) -> list[str]:
+    return frames._frame(route, **kwargs)
+
+
+def _readout(frame: list[str], label: str) -> list[str]:
+    """Return the readout rows: the labelled head and its continuation, above the keybar."""
+    at = next(i for i, row in enumerate(frame) if row.startswith(f" {label}"))
+    return frame[at:-1]
+
+
+@pytest.mark.parametrize(
+    ("route", "label", "kwargs"),
+    [
+        ("trust", "FIELD", {"subject": "MLS-0101"}),
+        ("health", "REPAIR", {}),
+    ],
+)
+def test_con_151_the_readout_names_its_subject_and_docks_to_the_foot(
+    route: str, label: str, kwargs: dict[str, Any]
+) -> None:
+    frame = _readout_frame(route, w=80, **kwargs)
+    rows = _readout(frame, label)
+    assert rows, route
+    # docked: nothing but the keybar sits under it
+    assert len(rows) <= 3 and frame.index(rows[0]) + len(rows) == len(frame) - 1
+    # the head names the focused row by its stable identifier, then what it is
+    cursor = next(row for row in frame if row.lstrip().startswith("▸"))
+    key = cursor.lstrip("▸ ").split()[0]
+    assert key in rows[0]
+    assert " · " in rows[0]
+
+
+@pytest.mark.parametrize(
+    ("route", "label", "kwargs"),
+    [
+        ("trust", "FIELD", {"subject": "MLS-0101"}),
+        ("health", "REPAIR", {}),
+    ],
+)
+def test_con_151_the_readout_draws_no_caret_and_is_no_focus_region(
+    route: str, label: str, kwargs: dict[str, Any]
+) -> None:
+    rows = _readout(_readout_frame(route, **kwargs), label)
+    assert not any("▸" in row for row in rows)
+    assert all(label.lower() not in region for region in regions_of(route))
+
+
+def test_con_151_the_readout_follows_the_cursor_by_id_not_by_offset() -> None:
+    document = {
+        **frames.DOCUMENT,
+        "health_view": {
+            "hv-0001": frames._row("health_view", "hv-0001", "OK"),
+            "hv-0002": frames._row("health_view", "hv-0002", "FAILED"),
+        },
+    }
+    session = Session()
+    session.route = "health"
+    session.sel_id = "hv-0002"
+    model = frames._model("health", document)
+    view = View(session=session, fixture=_fixture(), w=120, h=30, projection=model)
+    first = render_route(view)
+    assert "hv-0002" in _readout(first, "REPAIR")[0]
+    # a new check sorting above the cursor moves the row; the readout stays on hv-0002
+    document["health_view"]["hv-0000"] = frames._row("health_view", "hv-0000", "OK")
+    moved = View(
+        session=session,
+        fixture=_fixture(),
+        w=120,
+        h=30,
+        projection=frames._model("health", document),
+    )
+    again = render_route(moved)
+    assert "hv-0002" in _readout(again, "REPAIR")[0]
+    assert session.sel_id == "hv-0002"
+
+
+# ---------- CON-152: every cursor is text, and what Enter opens is what is marked ----------
+
+
+def _lane_row(frame: list[str]) -> str:
+    return next(row for row in frame if row.startswith("▸") and "[" in row)
+
+
+def test_con_152_the_roadmap_marker_cursor_is_drawn_in_text() -> None:
+    session = _session("timeline")
+    frame = _draw(session)
+    assert re.search(r"\[[●○]\]", _lane_row(frame))
+    marker = next(row for row in frame if row.startswith(" MARKER"))
+    assert re.match(r"^ MARKER    MLS-\d{4} · Runtime · 1 of \d+", marker)
+
+
+def test_con_152_moving_the_marker_changes_the_text_not_only_the_colour() -> None:
+    session = _session("timeline")
+    frames = [_draw(session)]
+    for _ in range(2):
+        _press(session, "ArrowRight")
+        frames.append(_draw(session))
+    assert len({"\n".join(frame) for frame in frames}) == 3
+    positions = [_lane_row(frame).index("[") for frame in frames]
+    assert positions == sorted(positions) and len(set(positions)) == 3
+    assert "3 of" in next(row for row in frames[-1] if row.startswith(" MARKER"))
+
+
+def test_con_152_the_marker_is_part_of_the_projection_journeys_assert() -> None:
+    session = _session("timeline")
+    _press(session, "ArrowRight")
+    assert session.projection()["mark"] == 1
+
+
+def test_con_152_enter_opens_the_milestone_the_frame_marks() -> None:
+    session = _session("timeline")
+    _press(session, "ArrowRight", "ArrowRight")
+    marked = next(row for row in _draw(session) if row.startswith(" MARKER")).split()[1]
+    _press(session, "Enter")
+    assert session.overlay == "marker"
+    assert marked in _draw(session)[0]
+
+
+@pytest.mark.parametrize("route", ["activity", "attention", "scope.home", "run.detail"])
+def test_con_152_the_row_cursor_is_a_text_caret(route: str) -> None:
+    frame = render_route(bodies._view(route, subject="RUN-00000002"))
+    carets = [row for row in frame if row.lstrip().startswith("▸")]
+    assert len(carets) <= 1
+    if route != "run.detail":
+        assert carets

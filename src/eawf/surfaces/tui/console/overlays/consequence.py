@@ -1,7 +1,9 @@
 """The consequence card: what a verb will and will not do, read before it is confirmed.
 
 A drawer target describes any route's heavy verb; without one the card follows the
-Attention row under the cursor and the pending verb letter.
+Attention row under the cursor and the pending verb letter. A linked console holding a
+card built from its daemon link draws that card instead
+(:mod:`~eawf.surfaces.tui.console.overlays.mutation_card`).
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from eawf.surfaces.tui.console.fixture import Action
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
+from eawf.surfaces.tui.console.overlays import mutation_card
 from eawf.surfaces.tui.console.registry import kind_of
 
 CRUMB = " Eä ▸ consequence"
@@ -50,6 +53,8 @@ def _not_text(verb: str, action: Action) -> str:
 def render(view: View) -> list[str]:
     """Return the consequence card."""
     s, fx, w = view.session, view.fixture, view.w
+    if s.mutation is not None:
+        return mutation_card.render(view)
     revision = f" AT        revision {group(fx.proto.revision)} · exact"
     target = s.c_target
     if target:

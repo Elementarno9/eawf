@@ -18,6 +18,7 @@ from typing import Any
 
 from eawf.surfaces.tui.console.chrome import SettingsCatalog
 from eawf.surfaces.tui.console.frame import Fixed, View, g_frame, g_pad, rule_n
+from eawf.surfaces.tui.console.keybar import pick
 from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.renderers.provenance import native_seam, settings_frame
 from eawf.surfaces.tui.console.session import Session
@@ -531,12 +532,12 @@ def _keys(view: View, name: str, k: Key | None) -> list[tuple[str, str]]:
     if s.set_typing:
         return [("type", "narrow"), ("↑↓", "field"), ("Enter", "keep"), ("Esc", "clear")]
     read_only = k is not None and editor_kind(cfg, name, k[0], k[1]) == "file"
-    edit = [] if read_only else [("Enter", "edit")]
-    unset = [] if read_only else [("x", "unset")]
-    keys = [("↑↓", "field"), ("Tab", "section"), *edit, ("l", "layer"), *unset, ("Esc", "back")]
+    labels = ["field", "section", "edit", "layer", "unset", "back"]
+    if read_only:
+        labels = [label for label in labels if label not in ("edit", "unset")]
     if view.w >= 120:
-        keys += [("i", "stack"), ("\\", "filter")]
-    return keys
+        labels += ["stack", "filter"]
+    return pick("settings", *labels)
 
 
 def render(view: View) -> list[str]:

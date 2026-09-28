@@ -14,6 +14,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin, window_rows
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     finish,
     label,
@@ -23,13 +24,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 )
 from eawf.surfaces.tui.console.renderers.spine import held
 
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "hit"),
-    ("Enter", "drill"),
-    ("\\", "refine"),
-    ("k", "kind"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("search")
 _HITS: tuple[tuple[str, str, str], ...] = pt.SEARCH_HITS
 
 

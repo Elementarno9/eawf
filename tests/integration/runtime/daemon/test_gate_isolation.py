@@ -9,7 +9,7 @@ the live tree byte identical.
 
 Two nested processes carry that boundary and both are observed here. The gate
 RUNNER child is launched by ``run_gate_out_of_process`` with the sandbox bound
-into ``EAWF_RUNTIME_DIR`` / ``EA_STATE``; a delegating spy on the spawn records
+into ``EAWF_RUNTIME_DIR`` and fencing the live ledger; a delegating spy on the spawn records
 what the real child receives, because the sandbox is deleted the moment the
 gate returns. The gate COMMAND itself is then launched from inside that runner
 under the no-auth env-scrub floor, and reports what it resolved by writing a
@@ -37,6 +37,7 @@ from typing import Any
 import pytest
 
 from eawf.kernel.state.models import State
+from eawf.kernel.state.resolve import GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV
 from eawf.runtime.daemon import gate_execution
 from eawf.workflow.audit_dsl.models import CheckSpec
 
@@ -277,7 +278,9 @@ def test_gate_child_binds_isolated_runtime_dir(
     for handle in ("eawfd.pid", "eawfd.lock", "eawfd.sock"):
         assert handle not in sandbox_tree, f"the live daemon {handle} reached the sandbox"
     assert "eawfd.log" not in sandbox_tree, "an oversized log was copied into the sandbox"
-    child_state = Path(env["EA_STATE"])
+    assert "EA_STATE" not in env, "a ledger pin would outrank the gate's own -w"
+    assert Path(env[GATE_LIVE_STATE_ENV]) == live_state
+    child_state = Path(env[GATE_SANDBOX_STATE_ENV])
     assert child_state != live_state, "the gate inherited the live ledger path"
     assert live_state.parent not in child_state.parents
     assert "EAWF_SPEC_CACHE_DIR" not in env, "an inherited spec-cache path leaked a live path back"
@@ -334,7 +337,7 @@ def test_live_state_byte_identical_after_mutating_gate(
     assert State.model_validate_json(live_state.read_bytes()).dispatch_paused is False
     assert "EV-GATE" not in live_events.read_text(encoding="utf-8")
     assert _tree_signature(live_runtime) == runtime_before, "the gate wrote the live runtime dir"
-    sandbox_state = Path(spy.envs[0]["EA_STATE"])
+    sandbox_state = Path(spy.envs[0][GATE_SANDBOX_STATE_ENV])
     assert sandbox_state != live_state, "the gate runner inherited the live ledger path"
     assert not sandbox_state.exists(), "the sandbox ledger outlived the gate that owned it"
 
@@ -433,7 +436,11 @@ def test_seed_gate_sandbox_rejects_non_directory_root(tmp_path: Path) -> None:
 
 
 def test_gate_child_env_repoints_runtime_and_state_seams(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both resolver overrides point at the sandbox; the cache seam is dropped."""
+    """The runtime dir points at the sandbox, the live ledger is fenced behind it.
+
+    An inherited ``EA_STATE`` and the cache seam are dropped: the pin would
+    outrank the workspaces a gate's own suite names.
+    """
     monkeypatch.setenv("EAWF_RUNTIME_DIR", "/live/runtime")
     monkeypatch.setenv("EA_STATE", "/live/.ea/state.json")
     monkeypatch.setenv("EAWF_SPEC_CACHE_DIR", "/live/runtime/spec-cache")
@@ -443,10 +450,12 @@ def test_gate_child_env_repoints_runtime_and_state_seams(monkeypatch: pytest.Mon
         state_path=Path("/sandbox/.ea/state.json"),
     )
 
-    env = gate_execution.gate_child_env(sandbox)
+    env = gate_execution.gate_child_env(sandbox, live_state_path=Path("/live/.ea/state.json"))
 
     assert env["EAWF_RUNTIME_DIR"] == "/sandbox/runtime"
-    assert env["EA_STATE"] == "/sandbox/.ea/state.json"
+    assert env[GATE_LIVE_STATE_ENV] == "/live/.ea/state.json"
+    assert env[GATE_SANDBOX_STATE_ENV] == "/sandbox/.ea/state.json"
+    assert "EA_STATE" not in env
     assert "EAWF_SPEC_CACHE_DIR" not in env
     assert os.environ["EAWF_RUNTIME_DIR"] == "/live/runtime", "the parent env was mutated"
 

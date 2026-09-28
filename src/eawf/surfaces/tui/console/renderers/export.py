@@ -13,6 +13,7 @@ from __future__ import annotations
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.renderers.read_model import native
 from eawf.workflow.projection.acceptance import RunReportPlanView, export_report
@@ -22,7 +23,7 @@ from eawf.workflow.projection.acceptance import RunReportPlanView, export_report
 NOTHING_TO_REPORT = "no read model is held, so there is nothing to report"
 
 _PARTS: tuple[tuple[str, str, str, str], ...] = pt.EXPORT_PARTS
-_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "part"), ("Enter", "export"), ("Esc", "cancel"))
+_KEYS = route_pairs("export")
 
 
 def native_card(view: View, model: RunReportPlanView) -> list[str]:

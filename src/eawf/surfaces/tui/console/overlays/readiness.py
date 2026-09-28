@@ -1,7 +1,6 @@
 """The readiness matrix: every signal with its evidence, then the approval and publish refusal.
 
-The cursor walks the signals and the foot names the one it is on; the state rows are
-spliced above the keybar of the built frame.
+The cursor walks the signals and the foot names the one it is on.
 """
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import TABLES, Table, View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.overlays.chassis import cursor_foot
-from eawf.surfaces.tui.console.overlays.states import with_state_rows
 from eawf.surfaces.tui.console.renderers.release import SIGNALS
 
 
@@ -32,5 +30,4 @@ def render(view: View) -> list[str]:
         " NOT       Publish is unavailable — 1 member is not accepted.",
         cursor_foot("SIGNAL", sel + 1, len(SIGNALS)),
     ]
-    frame = build(view, rows, keybar([("↑↓", "signal"), ("Esc", "back")], w))
-    return with_state_rows("readiness", frame, s, w)
+    return build(view, rows, keybar([("↑↓", "signal"), ("Esc", "back")], w))

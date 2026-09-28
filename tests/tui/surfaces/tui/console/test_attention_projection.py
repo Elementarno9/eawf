@@ -1,25 +1,28 @@
-"""Attention with no producer, a pause that arrives as a patch, and the budget reading.
+"""The Attention projection: its producer, its buckets, its audience and its one gesture.
 
-Three claims meet on the Attention and budget routes.
+UI-062. The Attention route's eight exception buckets, with the ``AttentionNeedKind``
+needs under ``needs operator``, partition the register totally and disjointly: every open
+item lands in exactly one bucket and, under ``needs operator``, exactly one need; the
+strip, the rail and the summary line are one derivation; a bucket filter never changes a
+rail count; a bucket whose producer this projection does not carry states the unknown
+token, and a declared hole states a zero that is never a count of an undeclared source.
 
-The first is the one the console is most likely to get wrong. The pending-action producer
-has not shipped, so the Attention register is bound and unwritten, and a bound unwritten
-register is not an empty one: ``0 actions`` would tell an operator the queue is clear when
-in truth nothing has ever been asked. The count is withheld and the unknown truth token
-stands in its place, naming why.
+UI-017. Counts use the exact audience: an item addressed to one principal is that
+principal's ``mine`` and nobody else's, an unaddressed item is everyone's, one principal's
+disposition changes no other principal's count, and a resolution is attributable and
+compare-and-swap safe.
 
-The second is the transport. A pause used to reach the console as whole state over the
-socket binding, and a console that re-reads the world on every pause is a console that
-cannot say which cursor it stands at. A committed pending-action transition now produces a
-keyed patch addressed to the Attention route, the seam applies it through its own sink,
-and applying it opens no overlay and moves no focus: a patch is a row arriving, not an
-operator being interrupted.
+UI-028. The header's ``!N NEEDS YOU`` is this principal's own open non-notice count at
+the rendered revision, the same number as the route's ``mine``; it never renders ``!0``
+and never twice on a frame. ``g n`` opens the route and ``!`` jumps to the top item from
+any route.
 
-The third is the budget. Cost ceiling and Notifications read the notice's own contract --
-which control a termination opens, which status it leaves, and whether the crossing
-interrupts anybody -- rather than restating those as frame literals. Which Runs a cap
-stopped is a run-ledger fact, so it comes back unknown naming that, and neither route
-promotes a terminal status into a reason a Run ended.
+UI-009. Each item keeps its source record and exact revision; an answer is addressed to
+that revision, and a refusal for a revision the record has moved past re-reads the record
+rather than leaving the stale one on screen.
+
+The pending-action register has a producer: the acceptance-approval verb opens and seals
+protected approvals, so the register is written and counted, never withheld.
 """
 
 from __future__ import annotations
@@ -31,6 +34,16 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.projection.attention import (
+    BUCKET_SOURCES,
+    NO_PRINCIPAL_MINE_REASON,
+    AttentionBucket,
+    AttentionNeedKind,
+    BucketSource,
+    attention_all,
+    attention_mine,
+    build_attention_view,
+)
 from eawf.kernel.projection.compute import (
     ROUTE_COLLECTIONS,
     KeyedPatch,
@@ -38,6 +51,7 @@ from eawf.kernel.projection.compute import (
     build_route_projection,
     patches_for_event,
 )
+from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.projection.read_models import ReadModelKind
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
@@ -45,9 +59,7 @@ from eawf.kernel.projection.registers import (
     COST_CEILING_ROUTE,
     NOTIFICATIONS_ROUTE,
     UNWRITTEN_COLLECTIONS,
-    UNWRITTEN_REASON,
     RegisterView,
-    attention_mine,
     budget_reading,
     build_register_view,
     notice_interrupts,
@@ -59,19 +71,32 @@ from eawf.kernel.runtime.budget_notice import (
     BudgetNotice,
 )
 from eawf.kernel.state.enums import StoreKind
+from eawf.kernel.state.epoch2.pending_action import AnswerOutcome, HumanPrincipal, PendingAction
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.surfaces.tui.console.fixture import load_fixture
-from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.cli._daemon_client import DaemonRpcError
+from eawf.surfaces.tui.console.attention import open_actions
+from eawf.surfaces.tui.console.chrome import load_chrome
+from eawf.surfaces.tui.console.clock import Clock, FakeClock
+from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
+from eawf.surfaces.tui.console.frame import View, needs_count
+from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.operations import (
+    AnswerRequest,
+    OperationResult,
+    OperationStatus,
+    Operator,
+)
+from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.renderers import attention as attention_renderer
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.registers import UNWRITTEN_ROW
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import truth_cell
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
-
 #: A pending action's qualified address, in the epoch-2 URN grammar the patch builder
 #: parses. The repository slot is real because a pending action is repository-level.
 ACTION_URN = "eawf://WSP-A/EAWF/REP-A/pending-action/ACT-0001"
@@ -88,7 +113,7 @@ DOCUMENT: dict[str, Any] = {
         },
     },
     "pending_action": {
-        "ACT-0001": {"urn": ACTION_URN, "revision": 1, "status": "OPEN"},
+        "ACT-0001": {"urn": ACTION_URN, "revision": 1, "status": "WAITING"},
     },
 }
 
@@ -109,15 +134,33 @@ def _register(route: str, **kwargs: Any) -> RegisterView:
     return build_register_view(_projection(route, **kwargs))
 
 
+class _Host:
+    """The dispatcher's host: a held clock and a quit nothing here asks for."""
+
+    def __init__(self) -> None:
+        self._clock = FakeClock()
+
+    @property
+    def clock(self) -> Clock:
+        """Return the console clock."""
+        return self._clock
+
+    def quit(self) -> None:
+        """End the session; unreachable from the keys these tests press."""
+
+
+def _frame_fixture() -> Fixture:
+    """Return the tracked prototype fixture the epoch-1 mode draws."""
+    return load_fixture(Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture")
+
+
 def _frame(register: RegisterView) -> tuple[list[str], Session]:
     """Return the native frame ``register`` renders, and the session it published into."""
     session = Session()
     session.route = register.route
     view = View(
         session=session,
-        fixture=load_fixture(
-            Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture"
-        ),
+        fixture=_frame_fixture(),
         w=120,
         h=24,
         register=register,
@@ -150,51 +193,392 @@ def _seam_holding(projection: RouteProjection) -> ProjectionSeam:
     return seam
 
 
-# ---------- the attention register is bound and unwritten ----------
+# ---------- the register has a producer, and is counted ----------
+
+
+#: A register as the acceptance-approval producer writes it: two waiting questions, one
+#: addressed to OP-0001 and one to everyone, one not yet asked, and one already sealed.
+AUDIENCE: dict[str, Any] = {
+    "pending_action": {
+        "ACT-0001": {
+            "urn": ACTION_URN,
+            "revision": 1,
+            "status": "WAITING",
+            "assignee_ref": "OP-0001",
+        },
+        "ACT-0002": {"urn": ACTION_URN.replace("0001", "0002"), "revision": 3, "status": "WAITING"},
+        "ACT-0003": {"urn": ACTION_URN.replace("0001", "0003"), "revision": 1, "status": "CREATED"},
+        "ACT-0004": {"urn": ACTION_URN.replace("0001", "0004"), "revision": 2, "status": "SEALED"},
+    }
+}
+
+
+def _attention(document: dict[str, Any] | None = None, **kwargs: Any) -> RegisterView:
+    """Return the Attention register over ``document``, the audience probe by default."""
+    return _register(ATTENTION_ROUTE, document=AUDIENCE if document is None else document, **kwargs)
 
 
 def test_the_attention_route_binds_the_pending_action_register() -> None:
-    """The route reads one register, and it is the one a pending action lives in."""
+    """The route reads one register, and a producer now writes it."""
     assert ROUTE_COLLECTIONS[ATTENTION_ROUTE] == (Epoch2Collection.PENDING_ACTION,)
-    assert Epoch2Collection.PENDING_ACTION in UNWRITTEN_COLLECTIONS
+    assert Epoch2Collection.PENDING_ACTION not in UNWRITTEN_COLLECTIONS
 
 
-def test_the_unwritten_register_states_no_count_rather_than_zero() -> None:
-    """A register with no producer is withheld; a zero would be a count nobody took."""
-    register = _register(ATTENTION_ROUTE)
-    assert register.withheld == ("pending_action",)
-    assert register.counts == {}
-    assert register.count("pending_action") is None
+def test_the_written_register_is_counted_rather_than_withheld() -> None:
+    """A register a producer writes states its rows, so zero there is a count."""
+    register = _attention()
+    assert register.withheld == ()
+    assert register.count("pending_action") == 4
+    assert _attention({}).count("pending_action") == 0
 
 
-def test_a_document_row_of_an_unwritten_register_is_not_drawn_as_a_count() -> None:
-    """Even a row left in the document does not turn a withheld register into a number."""
-    register = _register(ATTENTION_ROUTE)
-    assert register.rows == ()
-    assert attention_mine(register).state is TruthState.UNKNOWN
+# ---------- UI-062: eight buckets partition the register ----------
 
 
-def test_the_attention_frame_shows_the_unknown_token_for_action_rows() -> None:
-    """The frame prints the truth token where the action count would be, and says why."""
-    rows, _session = _frame(_register(ATTENTION_ROUTE))
-    mine = rows[1]
-    assert mine.startswith(" mine ")
-    assert truth_cell("unknown") in mine
-    assert "0" not in mine.split("·")[0]
-    assert any(UNWRITTEN_REASON in row for row in rows)
+def test_ui_062_the_buckets_are_eight_in_severity_order() -> None:
+    """The order is fixed and severity-first, and ``needs operator`` carries three needs."""
+    assert [b.value for b in AttentionBucket] == [
+        "failed",
+        "lost",
+        "needs operator",
+        "stalled",
+        "over budget",
+        "rejected",
+        "active",
+        "queued",
+    ]
+    assert [n.value for n in AttentionNeedKind] == ["permission", "answer", "readiness"]
 
 
-def test_the_attention_frame_names_the_register_nothing_writes() -> None:
-    """The withheld register is named on the frame rather than quietly missing."""
-    rows, _session = _frame(_register(ATTENTION_ROUTE))
-    unwritten = next(row for row in rows if row.startswith(UNWRITTEN_ROW))
-    assert "pending_action" in unwritten
-    assert truth_cell("unknown") in unwritten
+def test_ui_062_every_open_item_lands_in_exactly_one_bucket_and_one_need() -> None:
+    """The partition is total and disjoint; a sealed question is no longer open."""
+    view = build_attention_view(_attention())
+    assert [i.key for i in view.items] == ["ACT-0001", "ACT-0002", "ACT-0003"]
+    placed = {i.key: (i.bucket, i.need) for i in view.items}
+    assert placed["ACT-0001"] == (AttentionBucket.NEEDS_OPERATOR, AttentionNeedKind.ANSWER)
+    assert placed["ACT-0003"] == (AttentionBucket.QUEUED, None)
+    counted = {(c.bucket, c.need): c.count for c in view.bucket_counts()}
+    tops = [c for c in view.bucket_counts() if c.need is None and c.count is not None]
+    assert sum(c.count or 0 for c in tops) == len(view.items)
+    needs = [c.count or 0 for c in view.bucket_counts() if c.need is not None]
+    assert sum(needs) == counted[(AttentionBucket.NEEDS_OPERATOR, None)] == 2
 
 
-def test_an_empty_attention_document_reads_the_same_as_a_populated_one() -> None:
-    """Withholding is a property of the producer, not of what the document happens to hold."""
-    assert _register(ATTENTION_ROUTE, document={}).withheld == ("pending_action",)
+def test_ui_062_holes_state_zero_and_unstated_buckets_state_no_count() -> None:
+    """A hole's zero is declared; a bucket whose producer is off this register is unknown."""
+    counts = {
+        c.bucket: c for c in build_attention_view(_attention()).bucket_counts() if c.need is None
+    }
+    for hole in (AttentionBucket.STALLED, AttentionBucket.REJECTED, AttentionBucket.ACTIVE):
+        assert BUCKET_SOURCES[hole] is BucketSource.HOLE
+        assert counts[hole].count == 0
+        assert counts[hole].reason
+    for unstated in (AttentionBucket.FAILED, AttentionBucket.LOST, AttentionBucket.OVER_BUDGET):
+        assert counts[unstated].count is None
+        assert counts[unstated].reason
+    assert counts[AttentionBucket.OVER_BUDGET].reason == BUDGET_UNSTATED_REASON
+
+
+def test_ui_062_a_row_stating_no_status_lands_in_no_bucket() -> None:
+    """An unstated row is reported apart rather than filed under a bucket it never named."""
+    view = build_attention_view(
+        _attention({"pending_action": {"ACT-0009": {"urn": ACTION_URN, "revision": 1}}})
+    )
+    assert view.items == ()
+    assert view.unplaced == ("ACT-0009",)
+
+
+def test_ui_062_the_strip_the_rail_and_the_summary_are_one_derivation() -> None:
+    """The strip's ``all``, the rail's rows and the summary line state the same numbers."""
+    register = _attention()
+    items = attention_renderer.bucket_items(register)
+    rail = attention_renderer.rail_lines(register)
+    assert items[0].n == 3
+    assert [line.split()[-1] for line in rail[1:]] == [str(x.n) for x in items[1:]]
+    assert "3 all principals" in attention_renderer.counts_line(register, principal="OP-0002")
+    assert any(line.startswith("   ↳ answer") and line.endswith("2") for line in rail)
+    assert any(line.startswith(" failed") and line.rstrip().endswith("?") for line in rail)
+
+
+def test_ui_062_a_bucket_filter_never_changes_a_rail_count() -> None:
+    """Filtering what the body lists leaves every bucket's count where it was."""
+    register = _attention()
+    unfiltered, _ = _frame(register)
+    session = Session()
+    session.route = ATTENTION_ROUTE
+    session.bucket = "queued"
+    view = View(
+        session=session,
+        fixture=_frame_fixture(),
+        w=120,
+        h=24,
+        register=register,
+        attention=register,
+    )
+    filtered = render_route(view)
+    rail = [row.split("│ ", 1)[1] for row in unfiltered if "│ " in row]
+    assert rail == [row.split("│ ", 1)[1] for row in filtered if "│ " in row]
+
+
+def test_ui_062_asking_another_route_for_attention_items_raises() -> None:
+    """Rows that are not actions cannot be bucketed as actions."""
+    with pytest.raises(ValueError, match="states no attention items"):
+        build_attention_view(_register("activity"))
+
+
+# ---------- UI-017: counts use the exact audience ----------
+
+
+def test_ui_017_an_addressed_item_is_its_principals_and_nobody_elses() -> None:
+    """OP-0001 counts the item addressed to it and the unaddressed one; OP-0002 only the latter."""
+    register = _attention()
+    assert attention_mine(register, principal="OP-0001").value == "3"
+    assert attention_mine(register, principal="OP-0002").value == "2"
+    assert attention_all(register).value == "3"
+
+
+def test_ui_017_a_console_acting_as_nobody_has_no_mine() -> None:
+    """The unknown token stands where the count would be, never everyone's count."""
+    mine = attention_mine(_attention(), principal=None)
+    assert mine.state is TruthState.UNKNOWN
+    assert mine.missing_reason == NO_PRINCIPAL_MINE_REASON
+
+
+def test_ui_017_one_principals_disposition_changes_no_other_count() -> None:
+    """A losing answer is a per-principal row beside the seal; it moves nobody's count."""
+    action = PendingAction.model_validate(
+        {
+            "id": "ACT-0001",
+            "urn": ACTION_URN,
+            "kind": "operator_decision",
+            "subject_ref": ACTION_URN.replace("pending-action/ACT-0001", "milestone/MLS-0001"),
+            "question": "Proceed?",
+            "options": [
+                {"option_id": "yes", "label": "Yes", "effect": "approve"},
+                {"option_id": "no", "label": "No", "effect": "decline"},
+            ],
+            "idempotency_key": "req-0001",
+            "status": "WAITING",
+            "requested_by": {"principal_kind": "human", "principal_id": "OP-0003"},
+            "assignee_ref": "OP-0001",
+            "created_at": AT.isoformat(),
+            "updated_at": AT.isoformat(),
+        }
+    )
+    noted = action.with_disposition(
+        principal_id="OP-0002", outcome=AnswerOutcome.SUPERSEDED, option_id="no"
+    )
+    document = {"pending_action": {"ACT-0001": noted.model_dump(mode="json")}}
+    register = _attention(document)
+    assert attention_mine(register, principal="OP-0001").value == "1"
+    assert attention_mine(register, principal="OP-0002").value == "0"
+
+
+def test_ui_017_a_global_resolution_is_attributable_and_compare_and_swap_safe() -> None:
+    """The seal names who resolved it, a stale answer is refused, and it leaves every count."""
+    action = PendingAction.model_validate(
+        {
+            "id": "ACT-0001",
+            "urn": ACTION_URN,
+            "kind": "operator_decision",
+            "subject_ref": ACTION_URN.replace("pending-action/ACT-0001", "milestone/MLS-0001"),
+            "question": "Proceed?",
+            "options": [
+                {"option_id": "yes", "label": "Yes", "effect": "approve"},
+                {"option_id": "no", "label": "No", "effect": "decline"},
+            ],
+            "idempotency_key": "req-0001",
+            "status": "WAITING",
+            "revision": 2,
+            "requested_by": {"principal_kind": "human", "principal_id": "OP-0003"},
+            "created_at": AT.isoformat(),
+            "updated_at": AT.isoformat(),
+        }
+    )
+    resolver = HumanPrincipal(principal_kind="human", principal_id="OP-0001")
+    receipt = ACTION_URN.replace("pending-action/ACT-0001", "evidence/EVD-0001")
+    with pytest.raises(ValueError, match="not the 1 the answer was given against"):
+        action.answer(
+            expected_revision=1, resolver=resolver, option_id="yes", receipt_ref=receipt, at=AT
+        )
+    sealed = action.answer(
+        expected_revision=2, resolver=resolver, option_id="yes", receipt_ref=receipt, at=AT
+    ).action
+    assert sealed.resolution_actor == resolver
+    register = _attention({"pending_action": {"ACT-0001": sealed.model_dump(mode="json")}})
+    for principal in ("OP-0001", "OP-0002"):
+        assert attention_mine(register, principal=principal).value == "0"
+
+
+# ---------- UI-028: the header count and the one gesture ----------
+
+
+def _header_view(register: RegisterView, *, route: str, principal: str | None) -> View:
+    """Return a linked render view on ``route`` holding the Attention register."""
+    session = Session()
+    session.route = route
+    return View(
+        session=session,
+        fixture=_frame_fixture(),
+        w=120,
+        h=24,
+        register=register if route == ATTENTION_ROUTE else None,
+        attention=register,
+        linked=True,
+        principal=principal,
+    )
+
+
+def test_ui_028_the_header_count_is_this_principals_mine_at_the_same_revision() -> None:
+    """The corner and the route's ``mine`` are one number, per principal."""
+    register = _attention()
+    for principal, n in (("OP-0001", 3), ("OP-0002", 2)):
+        view = _header_view(register, route=ATTENTION_ROUTE, principal=principal)
+        assert needs_count(view) == n
+        frame = render_route(view)
+        assert f"!{n} NEEDS YOU" in frame[0]
+        assert frame[1].startswith(f" {n} mine · 3 all principals")
+
+
+def test_ui_028_the_phrase_renders_once_and_never_as_zero() -> None:
+    """``NEEDS YOU`` appears on one row of a frame, and a zero count renders no badge."""
+    register = _attention()
+    frame = render_route(_header_view(register, route=ATTENTION_ROUTE, principal="OP-0002"))
+    assert sum(row.count("NEEDS YOU") for row in frame) == 1
+    quiet = render_route(_header_view(_attention({}), route=ATTENTION_ROUTE, principal="OP-0002"))
+    assert not any("NEEDS YOU" in row or "!0" in row for row in quiet)
+    nobody = render_route(_header_view(register, route=ATTENTION_ROUTE, principal=None))
+    assert "NEEDS YOU" not in nobody[0]
+
+
+def test_ui_028_the_count_travels_to_every_route() -> None:
+    """The badge is read off the Attention register whatever route is drawn."""
+    view = _header_view(_attention(), route="activity", principal="OP-0001")
+    assert "!3 NEEDS YOU" in render_route(view)[0]
+
+
+def test_ui_028_g_n_opens_the_attention_route() -> None:
+    """The route is one ``g`` letter away from every route."""
+    assert REGISTRY.go_map["n"] == ATTENTION_ROUTE
+
+
+def _press(
+    key: str, *, route: str, attention: RouteProjection | None, principal: str | None
+) -> Session:
+    """Press ``key`` on ``route`` and return the session it left."""
+    session = Session()
+    session.route = route
+    ctx = Ctx(
+        session=session,
+        fixture=Fixture.from_chrome(load_chrome()) if attention is not None else _frame_fixture(),
+        host=_Host(),
+        w=120,
+        h=24,
+        attention=attention,
+        principal=principal,
+    )
+    dispatch(ctx, key, False)
+    return session
+
+
+def test_ui_028_bang_jumps_to_this_principals_top_item_from_any_route() -> None:
+    """``!`` lands on the Attention route with the top item selected, and opens nothing."""
+    held = _projection(ATTENTION_ROUTE, document=AUDIENCE)
+    for route in ("activity", "scope.home", "roadmap"):
+        session = _press("!", route=route, attention=held, principal="OP-0002")
+        assert session.route == ATTENTION_ROUTE
+        assert session.sel_id == "ACT-0002"
+        assert session.overlay is None
+    mine_first = _press("!", route="activity", attention=held, principal="OP-0001")
+    assert mine_first.sel_id == "ACT-0001"
+
+
+def test_ui_028_bang_with_nothing_open_stays_put() -> None:
+    """With nothing open the key says so rather than opening an empty route."""
+    session = _press(
+        "!",
+        route="activity",
+        attention=_projection(ATTENTION_ROUTE, document={}),
+        principal="OP-0001",
+    )
+    assert session.route == "activity"
+    assert session.log[-1].note == "nothing needs you"
+
+
+def test_ui_028_bang_on_the_prototype_register_selects_its_first_open_action() -> None:
+    """A console with no link reads its prototype register, so the golden mode still jumps."""
+    session = _press("!", route="activity", attention=None, principal=None)
+    fixture = _frame_fixture()
+    assert session.route == ATTENTION_ROUTE
+    assert session.sel_id == open_actions(fixture)[0].id
+
+
+# ---------- UI-009: source ledger and exact revision; stale CAS re-reads ----------
+
+
+def test_ui_009_each_item_keeps_its_source_record_and_exact_revision() -> None:
+    """An item is the register row it came from, addressed and revisioned as stored."""
+    view = build_attention_view(_attention())
+    item = next(i for i in view.items if i.key == "ACT-0002")
+    assert item.source_ref == ACTION_URN.replace("0001", "0002")
+    assert item.revision == 3
+
+
+class _StaleDaemon:
+    """A daemon whose record moves on between the console's read and its answer."""
+
+    def __init__(self) -> None:
+        self.reads = 0
+        self.writes: list[dict[str, Any]] = []
+
+    def client(self) -> _StaleDaemon:
+        return self
+
+    def __enter__(self) -> _StaleDaemon:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        if method == READ_METHOD_TEMPLATE.format(route=ATTENTION_ROUTE):
+            self.reads += 1
+            revision = 1 if self.reads == 1 else 2
+            row = {"urn": ACTION_URN, "revision": revision, "status": "WAITING"}
+            return _projection(
+                ATTENTION_ROUTE,
+                cursor=41208 + self.reads,
+                document={"pending_action": {"ACT-0001": row}},
+            ).model_dump(mode="json")
+        self.writes.append(dict(params or {}))
+        raise DaemonRpcError(-32602, "validation_failed: revision_conflict: ACT-0001 moved on")
+
+
+def test_ui_009_an_answer_is_addressed_to_the_revision_shown_and_a_stale_one_rereads() -> None:
+    """The refused answer wrote nothing, and the console now holds the record as it stands."""
+    daemon = _StaleDaemon()
+    seam = ProjectionSeam(
+        route=ATTENTION_ROUTE,
+        scope_id=SCOPE,
+        state_path=None,
+        clock=lambda: AT,
+        daemon_client_factory=daemon.client,
+        operator=Operator(
+            principal="OP-0001",
+            receipt_ref=ACTION_URN.replace("pending-action/ACT-0001", "evidence/EVD-0001"),
+        ),
+    )
+
+    async def drive() -> OperationResult:
+        await seam.load()
+        return await seam.request(AnswerRequest(target="ACT-0001", option_id="approve"))
+
+    result = asyncio.run(drive())
+    assert result.status is OperationStatus.REFUSED
+    assert daemon.writes[0]["expected_revision"] == 1
+    assert daemon.reads == 2
+    assert seam.projection is not None
+    assert seam.projection.rows[0].revision == 2
 
 
 # ---------- a needs_user pause arrives as a keyed patch ----------
@@ -212,14 +596,24 @@ def test_a_pause_transition_produces_a_keyed_patch_for_the_attention_route() -> 
     assert patch.entries[0].collection is Epoch2Collection.PENDING_ACTION
 
 
-def test_the_patch_carries_only_the_three_columns_the_entry_shape_states() -> None:
-    """The entry shape is untouched: urn, revision and status, and nothing per route.
+def test_the_patch_carries_the_three_columns_and_the_audience() -> None:
+    """The entry states urn, revision and status, plus the audience a pending action has.
 
-    The control mark is the one optional column, and only a Run control line fills it.
+    The control mark and the assignee are the optional columns: only a Run control line
+    fills the first, and only a pending action addressed to one principal the second.
     """
     entry = patches_for_event(_pause_envelope())[0].entries[0]
-    assert set(entry.model_dump()) == {"key", "urn", "collection", "revision", "status", "control"}
+    assert set(entry.model_dump()) == {
+        "key",
+        "urn",
+        "collection",
+        "revision",
+        "status",
+        "control",
+        "assignee_ref",
+    }
     assert entry.control is None
+    assert entry.assignee_ref is None
 
 
 def test_applying_the_pause_patch_opens_no_overlay_and_moves_no_focus() -> None:
@@ -239,15 +633,19 @@ def test_applying_the_pause_patch_opens_no_overlay_and_moves_no_focus() -> None:
     assert seam.projection.header.source_cursor == "41209"
 
 
-def test_the_applied_patch_still_leaves_the_register_withheld() -> None:
-    """One arriving row does not make a register written; the producer does."""
+def test_the_applied_patch_is_counted_for_its_audience() -> None:
+    """The arriving question is in every principal's count when it names no assignee."""
     seam = _seam_holding(_projection(ATTENTION_ROUTE, document={}))
-    patch = next(p for p in patches_for_event(_pause_envelope()) if ATTENTION_ROUTE in p.routes)
+    patch = next(
+        p
+        for p in patches_for_event(_pause_envelope(status="WAITING"))
+        if ATTENTION_ROUTE in p.routes
+    )
     asyncio.run(seam.apply_patch(patch))
     assert seam.projection is not None
     register = build_register_view(seam.projection)
-    assert register.withheld == ("pending_action",)
-    assert attention_mine(register).missing_reason == UNWRITTEN_REASON
+    assert register.withheld == ()
+    assert attention_mine(register, principal="OP-0001").value == "1"
 
 
 def test_a_patch_for_another_route_does_not_reach_the_attention_seam() -> None:
@@ -340,10 +738,9 @@ def test_the_stopped_runs_are_unknown_rather_than_guessed_from_a_status(route: s
     assert reading.stopped.missing_reason == BUDGET_UNSTATED_REASON
 
 
-@pytest.mark.parametrize("route", [COST_CEILING_ROUTE, NOTIFICATIONS_ROUTE])
-def test_the_budget_frame_prints_the_reading_it_read(route: str) -> None:
+def test_the_budget_frame_prints_the_reading_it_read() -> None:
     """Every part of the reading reaches the frame, the unknown token included."""
-    rows, _session = _frame(_register(route))
+    rows, _session = _frame(_register(COST_CEILING_ROUTE))
     budget = next(row for row in rows if row.startswith(" BUDGET"))
     stopped = next(row for row in rows if row.startswith(" STOPPED"))
     assert BUDGET_TERMINATION_CONTROL.value in budget

@@ -19,13 +19,15 @@ from types import MappingProxyType
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
-from eawf.surfaces.tui.console import prototype as pt
+from eawf.surfaces.tui.console import keymap as km
 from eawf.surfaces.tui.console.action_menu import MenuVerb
-from eawf.surfaces.tui.console.clock import QuitStep, arm_prefix, expire_prefix, quit_step
+from eawf.surfaces.tui.console.attach import ONBOARDING, skip_step
+from eawf.surfaces.tui.console.clock import arm_prefix, disarm, expire_prefix, guarded_quit
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.header import CrumbRun
 from eawf.surfaces.tui.console.keybar import KEY
 from eawf.surfaces.tui.console.keymap import DISMISS, ENTRY_ALLOW, ENTRY_ROUTE, OVERLAY_KEYS, can
+from eawf.surfaces.tui.console.mutation import adopt, card_key, menu_key, select
 from eawf.surfaces.tui.console.navigation import (
     NAV_KEY,
     Ctx,
@@ -50,16 +52,17 @@ from eawf.surfaces.tui.console.operations import (
     AnswerRequest,
     ControlRequest,
     VerbRequest,
-    binding_refusal,
 )
 from eawf.surfaces.tui.console.overlays import is_overlay
+from eawf.surfaces.tui.console.overlays.bound_keys import bound_key, open_held_row
 from eawf.surfaces.tui.console.overlays.chassis import holds, unheld_keys
 from eawf.surfaces.tui.console.overlays.evidence import claim_id
 from eawf.surfaces.tui.console.overlays.palette import palette_hits
+from eawf.surfaces.tui.console.overlays.pause import RUN as _PAUSE_RUN
+from eawf.surfaces.tui.console.overlays.pause import TARGETS as _PAUSE_TARGETS
 from eawf.surfaces.tui.console.overlays.question import ANSWERS
 from eawf.surfaces.tui.console.overlays.resolution import Ending
-from eawf.surfaces.tui.console.overlays.states import OV_MODEL, step_state
-from eawf.surfaces.tui.console.reads import can_mutate, mut_reason
+from eawf.surfaces.tui.console.reads import write_refusal
 from eawf.surfaces.tui.console.registry import (
     DRILL_PREFIXES,
     OVERLAY_ARROWS,
@@ -80,7 +83,6 @@ HOME = "scope.home"
 CRUMB_KEY = "click"
 # The most steps a walk to scope home takes; the back stack is capped well below it.
 _CRUMB_WALK = 64
-_MODIFIERS = frozenset({"Shift", "Control", "Alt", "Meta", "CapsLock"})
 _ABSENT_KEYS = re.compile(r"^(y|r|i|\.|Enter|ArrowUp|ArrowDown|Tab)$")
 _PALETTE_TEXT = re.compile(r"[a-z0-9.\- ]", re.IGNORECASE)
 # What a record frame must hold before a key can act on it.
@@ -94,30 +96,10 @@ _RECORD_NEEDS: Mapping[str, str] = MappingProxyType(
         "Tab": "section",
     }
 )
-_ALIASES: Mapping[str, str] = MappingProxyType({"j": "ArrowDown", "k": "ArrowUp"})
 # What still acts while the action drawer is open, beside its verb letters: its toggle,
 # Escape, and the modifiers the key count ignores.
-_PANE_KEYS: frozenset[str] = frozenset({".", "Escape", *_MODIFIERS})
+_PANE_KEYS: frozenset[str] = frozenset({".", "Escape", *km.MODIFIERS})
 _DRAFT_FIELDS: tuple[str, ...] = ("criteria", "owner", "batch")
-_PAUSE_RUN = pt.PAUSED_RUN
-_PAUSE_TARGETS: Mapping[str, dict[str, str]] = MappingProxyType(
-    {
-        "n": {
-            "verb": "reconcile",
-            "id": _PAUSE_RUN,
-            "kind": "run",
-            "effects": "the daemon is asked again for the outcome of the pause",
-            "not": "it does not restart the run and does not fail the task",
-        },
-        "c": {
-            "verb": "cancel",
-            "id": _PAUSE_RUN,
-            "kind": "run",
-            "effects": "cancel is requested; it stays unknown until the run answers",
-            "not": "it does not fail the task and does not undo any merged work",
-        },
-    }
-)
 
 
 def dispatch(ctx: Ctx, key: str, shift: bool = False) -> None:
@@ -132,10 +114,10 @@ def dispatch(ctx: Ctx, key: str, shift: bool = False) -> None:
     expire_prefix(s, ctx.clock)
     opened_from = focus_target(s) if s.overlay is None else None
     if _frame_keys(ctx, key, shift):
-        s.disarm_quit()
+        disarm(s, key)
     else:
         _console_keys(ctx, key, shift)
-        _step_overlay_state(ctx, key)
+    adopt(ctx)
     _settle_focus(s, opened_from)
 
 
@@ -165,11 +147,13 @@ def _frame_keys(ctx: Ctx, key: str, shift: bool) -> bool:
     s = ctx.s
     if key == "Tab" and shift and s.route != "settings":
         return False
-    k = _ALIASES.get(key, key)
+    k = km.ALIASES.get(key, key)
     if s.absent_frame and not s.overlay and _ABSENT_KEYS.match(k):
         ctx.log(k, "nothing is recorded here — Esc goes back")
         return True
     if s.record_facts is not None and not s.overlay and _record_key(ctx, k):
+        return True
+    if bound_key(ctx, k):
         return True
     # an overlay, a drawer or the armed prefix owns the keyboard, so the route beneath hears
     # nothing: a key never acts from the route's table through a surface above it
@@ -238,7 +222,7 @@ def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
         return
     s.keys += 1
     if k != "Escape":
-        s.disarm_quit()
+        disarm(s, k)
     if s.overlay == "palette" and _palette_key(ctx, k):
         return
     if _console_claims(ctx, k):
@@ -271,9 +255,12 @@ def _console_claims(ctx: Ctx, k: str) -> bool:
 
 
 def _surface_claims(ctx: Ctx, k: str) -> bool:
-    """Return whether the open overlay or drawer claimed the key, refusing one it does not bind."""
+    """Return whether the open overlay or drawer claimed the key, refusing one it does not bind.
+
+    With nothing open, the refusal gate is the route's key table and the global grammar.
+    """
     s = ctx.s
-    bound = OVERLAY_KEYS.get(s.overlay) if s.overlay is not None else None
+    bound = OVERLAY_KEYS.get(s.overlay) if s.overlay else km.allowlist(s, ctx.fixture)
     if bound is not None and k not in bound:
         ctx.noop(k)
         return True
@@ -325,7 +312,7 @@ def _keyboard_owner(s: Session) -> Callable[[Ctx, str], None] | None:
         return _prefix_key
     if s.overlay in ("inspect", "raw"):
         return _drawer_key
-    return None
+    return card_key if s.overlay == "consequence" and s.mutation is not None else None
 
 
 def _palette_key(ctx: Ctx, k: str) -> bool:
@@ -445,6 +432,7 @@ def _pause_key(ctx: Ctx, k: str) -> None:
 def _prefix_key(ctx: Ctx, k: str) -> None:
     """Resolve the armed go prefix: a destination letter, a cancel, or a dropped prefix."""
     s = ctx.s
+    deadline = s.prefix_deadline
     s.prefix = None
     s.prefix_deadline = None
     dest = REGISTRY.go_map.get(k)
@@ -463,6 +451,9 @@ def _prefix_key(ctx: Ctx, k: str) -> None:
     elif k == "Escape":
         s.prefix_cancels += 1
         ctx.log("Esc", "prefix cancelled")
+    elif k == km.HELP_KEY:  # the prefix state's help is the destination drawer it prints
+        s.prefix, s.prefix_deadline = "g", deadline
+        ctx.log("?", "help · the drawer below is the keymap while g is armed")
     else:
         ctx.log(f"g {k}", "no such destination — prefix dropped")
 
@@ -477,7 +468,7 @@ def _drawer_key(ctx: Ctx, k: str) -> None:
         copied = copy_target(s, ctx.fixture)
         ctx.notify(copied, "copied")
         ctx.log("y", f"copied — {copied}")
-    elif k in _MODIFIERS:
+    elif k in km.MODIFIERS:
         s.keys -= 1
     else:
         ctx.noop(k)
@@ -512,13 +503,15 @@ def _entry_key(ctx: Ctx, k: str) -> bool:
     if k not in {key for key, _label in state.keys} | set(ENTRY_ALLOW):
         ctx.noop(k)
         return True
-    return False
+    return k == "s" and state.id == ONBOARDING and skip_step(ctx, len(state.rows or ()))
 
 
 def _menu_key(ctx: Ctx, k: str) -> bool:
     """Run the action-menu verb bound to letter ``k``; ``False`` when no verb has that letter."""
     s, fx = ctx.s, ctx.fixture
     verb = fx.menus.verb(s.route, k)
+    if menu_key(ctx, k):
+        return True
     if verb is None:
         return False
     if att.is_light(verb):
@@ -573,17 +566,6 @@ def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
     s.subj_id = None
     ctx.notify(REGISTRY.route_word(to), "opened")
     ctx.log(k, f"{verb.verb} → {to}")
-
-
-def _step_overlay_state(ctx: Ctx, k: str) -> None:
-    """Step a decision overlay through its state model on ``s``."""
-    s = ctx.s
-    overlay = s.overlay
-    if k != "s" or overlay is None or overlay not in OV_MODEL:
-        return
-    word = step_state(s, overlay)
-    if word is not None:
-        ctx.log("s", f"{overlay} → {word}")
 
 
 # ---------- the route-independent keys ----------
@@ -668,8 +650,9 @@ def _send_verb(ctx: Ctx, k: str, request: VerbRequest, verb: str) -> None:
     the frame afterwards, so a verb the daemon never heard of cannot look done.
     """
     s = ctx.s
-    if not can_mutate(s):
-        ctx.log(k, f"{verb} {request.target} refused — {mut_reason(s, ctx.fixture)}")
+    refusal = write_refusal(s, ctx.fixture, verb=verb, principal_refusal=ctx.principal_refusal)
+    if refusal:
+        ctx.log(k, f"{verb} {request.target} refused — {refusal}")
         return
     if ctx.dispatch_write(request):
         ctx.log(k, f"{verb} {request.target} sent to the daemon · waiting for its answer")
@@ -699,9 +682,9 @@ def _confirm(ctx: Ctx) -> None:
         return
     action_id = row.key
     verb = att.VERB[s.verb or "a"]
+    refusal = write_refusal(s, ctx.fixture, verb=verb.name, kind=att.ATTENTION_ROUTE)
     option = ANSWER_OPTIONS.get(verb.name)
-    if option is None:
-        refusal = binding_refusal(att.ATTENTION_ROUTE, verb.name)
+    if refusal or option is None:
         ctx.log("Enter", f"{verb.name} {action_id} refused — {refusal}")
         return
     _send_verb(ctx, "Enter", AnswerRequest(target=action_id, option_id=option), verb.name)
@@ -723,9 +706,9 @@ def _selected_row(s: Session, rows: tuple[ProjectionRow, ...]) -> ProjectionRow 
 def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
     """Send a Run control the card previewed, or say why its verb reaches no daemon."""
     verb, kind, target_id = target["verb"], target["kind"], target["id"]
+    refusal = write_refusal(ctx.s, ctx.fixture, verb=verb, kind=kind)
     control = RUN_CONTROLS.get(verb) if kind in RUN_KINDS else None
-    if control is None:
-        refusal = binding_refusal(kind, verb)
+    if refusal or control is None:
         ctx.log("Enter", f"{verb} on {target_id} — nothing was written · {refusal}")
         return
     _send_verb(ctx, "Enter", ControlRequest(target=target_id, control=control), verb)
@@ -762,7 +745,6 @@ def _enter_release(ctx: Ctx) -> None:
     s = ctx.s
     if s.rel_reg == "READINESS":
         open_overlay(s, "readiness", subject=s.subj_id)
-        s.ov_state["readiness"] = s.rel_sel
         ctx.log("Enter", "readiness matrix · on the signal you were reading")
         return
     target = _nav_at_cursor(s)
@@ -846,6 +828,8 @@ def _enter_milestone(ctx: Ctx) -> None:
 
 def _enter_attention(ctx: Ctx) -> None:
     s = ctx.s
+    if att.held_refusal(ctx, "Enter") or open_held_row(ctx):
+        return
     rows = att.attn_list(s, ctx.fixture)
     row = rows[s.sel] if s.sel < len(rows) else (rows[0] if rows else None)
     row_id = row.id if row else ""
@@ -970,22 +954,12 @@ def _escape(ctx: Ctx, k: str, pane: bool) -> None:
         ctx.log("Esc", "bucket cleared — every bucket shows")
         return
     if s.route == HOME and not s.back:
-        _guarded_quit(ctx)
+        if guarded_quit(s, ctx.clock, outstanding=ctx.outstanding):
+            ctx.host.quit()
         return
     if not _step_back(ctx):
         ctx.log("Esc", "at scope home · press again within 1.5s to quit")
         s.last_esc = ctx.clock.now()
-
-
-def _guarded_quit(ctx: Ctx) -> None:
-    check = quit_step(ctx.s, ctx.clock)
-    if check.step is QuitStep.QUIT:
-        ctx.log("Esc Esc", f"quit — guarded: scope home, nothing open, {check.gap_ms}ms apart")
-        ctx.host.quit()
-    elif check.step is QuitStep.BURST:
-        ctx.log("Esc", "too fast to be two presses — still armed")
-    else:
-        ctx.log("Esc", "at scope home · press again within 1.5s to quit")
 
 
 def _step_back(ctx: Ctx) -> bool:
@@ -1298,11 +1272,10 @@ def _refused(ctx: Ctx, k: str, verb: str) -> bool:
     An overlay's verb passes the same gate as the route's, with the same words, so an
     overlay is never a way around a refusal.
     """
-    s = ctx.s
-    if can_mutate(s):
-        return False
-    ctx.log(k, f"{verb} is unavailable — {mut_reason(s, ctx.fixture)}")
-    return True
+    refusal = write_refusal(ctx.s, ctx.fixture, verb=verb)
+    if refusal:
+        ctx.log(k, f"{verb} is unavailable — {refusal}")
+    return bool(refusal)
 
 
 def _promote(ctx: Ctx, k: str, pane: bool) -> None:
@@ -1407,17 +1380,21 @@ def _marker(ctx: Ctx, k: str, pane: bool) -> None:
 
 def _attention_verb(ctx: Ctx, k: str, pane: bool) -> None:
     s, fx = ctx.s, ctx.fixture
-    if s.route != att.ATTENTION_ROUTE:
+    if s.route != att.ATTENTION_ROUTE or att.held_refusal(ctx, k):
         return
     rows = att.attn_list(s, fx)
     row = rows[s.sel] if s.sel < len(rows) else None
     name = att.VERB[k].name
-    if att.gated(s, fx, key=k, verb=name, row=row, principal_refusal=ctx.principal_refusal):
+    card = (att.answer_card(row) if k == "a" else "") or "consequence"
+    refused = card == "consequence" and att.gated(
+        s, fx, key=k, verb=name, row=row, principal_refusal=ctx.principal_refusal
+    )
+    if refused:
         return
     s.verb = k
     s.c_target = None
-    open_overlay(s, "consequence", subject=row.id if row is not None else None)
-    ctx.log(k, f"{name} → consequence preview first")
+    open_overlay(s, card, subject=row.id if row is not None else None)
+    ctx.log(k, f"{name} → {card} preview first")
 
 
 def _modifier(ctx: Ctx, k: str, pane: bool) -> None:
@@ -1438,6 +1415,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
     {
         "PageDown": _page,
         "PageUp": _page,
+        **dict.fromkeys((" ", ","), select),
         "Home": _ends,
         "End": _ends,
         "ArrowDown": _move,
@@ -1456,6 +1434,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
         "Y": _copy_urn,
         "-": _dismiss,
         "?": _help,
+        km.ATTENTION_JUMP_KEY: att.top_attention,
         "/": _palette,
         "\\": _filter,
         "ctrl+f": _filter,
@@ -1469,7 +1448,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
         "a": _attention_verb,
         "z": _attention_verb,
         "v": _attention_verb,
-        **dict.fromkeys(_MODIFIERS, _modifier),
+        **dict.fromkeys(km.MODIFIERS, _modifier),
     }
 )
 

@@ -14,12 +14,18 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
+from eawf.kernel.projection.attention import top_item
+from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
+from eawf.kernel.projection.registers import build_register_view
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, VerbWeight
 from eawf.surfaces.tui.console.fixture import Action, Fixture
-from eawf.surfaces.tui.console.operations import binding_refusal
-from eawf.surfaces.tui.console.reads import can_mutate, mut_reason
+from eawf.surfaces.tui.console.reads import write_refusal
 from eawf.surfaces.tui.console.session import Session
+
+if TYPE_CHECKING:
+    from eawf.surfaces.tui.console.navigation import Ctx
 
 OPEN = "OPEN"
 ATTENTION_ROUTE = "attention"
@@ -122,6 +128,81 @@ def open_count(fixture: Fixture) -> int:
     return len(open_actions(fixture))
 
 
+def audience_refusal(assignee_ref: str | None, principal: str | None) -> str:
+    """Return why ``principal`` may not act on an item addressed to ``assignee_ref``.
+
+    The audience is the attention reducer's own rule -- an item addressed to nobody is
+    everyone's, one addressed to a principal is theirs -- and this is the one gate Enter
+    and every verb on an Attention row consult, so a refusal always names who may act.
+
+    Args:
+        assignee_ref: The principal the item is addressed to, or ``None`` for everyone.
+        principal: Who the console acts as, or ``None`` when it acts as nobody.
+
+    Returns:
+        The refusal naming the holder, or an empty string when ``principal`` may act.
+    """
+    if assignee_ref is None or assignee_ref == principal:
+        return ""
+    who = "you act as nobody" if principal is None else f"you act as {principal}"
+    return f"{assignee_ref} only · {who} · relaunch with --actor {assignee_ref} to act on it"
+
+
+def held_refusal(ctx: Ctx, k: str) -> bool:
+    """Refuse ``k`` on the held Attention row the cursor names when it is another's.
+
+    Returns:
+        Whether the key was refused, the refusal logged naming who holds the row.
+    """
+    held = ctx.attention
+    row: ProjectionRow | None = None
+    if held is not None and ctx.s.sel_id is not None:
+        row = next((r for r in held.rows if r.key == ctx.s.sel_id), None)
+    refusal = audience_refusal(row.assignee_ref, ctx.principal) if row is not None else ""
+    if refusal and row is not None:
+        ctx.log(k, f"{row.key} refused — {refusal}")
+    return bool(refusal)
+
+
+def top_key(
+    fixture: Fixture, attention: RouteProjection | None, *, principal: str | None
+) -> str | None:
+    """Return the key of the item ``!`` jumps to, or ``None`` when nothing needs anyone.
+
+    A linked console reads the Attention register it holds, this principal's own top
+    item first; a console with no link reads its prototype register.
+
+    Args:
+        fixture: The prototype registers a console with no link reads.
+        attention: The Attention projection the link holds, if any.
+        principal: Who the console acts as; ``None`` when it acts as nobody.
+    """
+    if attention is not None:
+        item = top_item(build_register_view(attention), principal=principal)
+        return item.key if item is not None else None
+    actions = open_actions(fixture)
+    return actions[0].id if actions else None
+
+
+def top_attention(ctx: Ctx, k: str, pane: bool) -> None:
+    """Jump to the top attention item from anywhere: one gesture, never a modal.
+
+    The jump is a fresh arrival with no path behind it, as a ``g`` letter is, so it opens
+    nothing and leaves no back step. With nothing open the session stays where it is.
+    """
+    s = ctx.s
+    key = top_key(ctx.fixture, ctx.attention, principal=ctx.principal)
+    if key is None:
+        ctx.log("!", "nothing needs you")
+        return
+    # a fresh arrival: no bucket, no filter, no scroll, as every route reached by name
+    s.bucket, s.filter, s.scroll, s.typing = None, "", 0, False
+    s.filters[ATTENTION_ROUTE] = ""
+    s.route, s.sel, s.sel_id, s.region, s.subj_id = ATTENTION_ROUTE, 0, key, None, None
+    s.back.clear()
+    ctx.log("!", f"→ {ATTENTION_ROUTE} · top item {key}")
+
+
 def attn_row(session: Session, fixture: Fixture) -> Action | None:
     """Return the Attention row under the cursor, the first row past the end."""
     rows = attn_list(session, fixture)
@@ -147,6 +228,16 @@ def question_row(session: Session, fixture: Fixture) -> Action:
         if "question" in action.kind:
             return action
     return register[1] if len(register) > 1 else register[0]
+
+
+def answer_card(action: Action | None) -> str:
+    """Return the kind of card an answer to ``action`` opens, empty for the consequence card.
+
+    A question is answered from its numbered options and a readiness item from the
+    readiness matrix; every other kind is answered on the consequence preview.
+    """
+    kind = action.kind if action is not None else ""
+    return next((card for card in ("question", "readiness") if card in kind), "")
 
 
 def is_mutation(session: Session, verb: MenuVerb | None) -> bool:
@@ -187,9 +278,10 @@ def verb_available(
         missing = session.promote.get("missing", [])
         if missing:
             return Availability(False, "needs " + ", ".join(missing))
-        if not can_mutate(session):
-            return Availability(False, mut_reason(session, fixture))
-        return Availability(True)
+        refusal = write_refusal(
+            session, fixture, kind=None, verb=verb.verb, principal_refusal=principal_refusal
+        )
+        return Availability(False, refusal) if refusal else Availability(True)
     if not verb.available:
         return Availability(False, verb.reason)
     if session.route == ATTENTION_ROUTE and verb.key in VERB:
@@ -197,25 +289,17 @@ def verb_available(
         if refusal:
             return Availability(False, refusal)
     refusal = (
-        _write_refusal(session, fixture, verb, principal_refusal=principal_refusal)
+        write_refusal(
+            session,
+            fixture,
+            kind=session.route,
+            verb=verb.verb,
+            principal_refusal=principal_refusal,
+        )
         if is_mutation(session, verb)
         else ""
     )
     return Availability(False, refusal) if refusal else Availability(True)
-
-
-def _write_refusal(
-    session: Session, fixture: Fixture, verb: MenuVerb, *, principal_refusal: str
-) -> str:
-    """Return why a writing verb cannot act: the link, the missing mutator or the principal.
-
-    The connection state is judged first, so an offline console names the state that
-    stops every write rather than one verb's missing mutator; a verb no mutator carries
-    names that before the principal, because no principal would make it work.
-    """
-    if not can_mutate(session):
-        return mut_reason(session, fixture)
-    return binding_refusal(session.route, verb.verb) or principal_refusal
 
 
 def gated(
@@ -251,15 +335,15 @@ def gated(
             key, f"{row.id} is already {row.state.lower()} — a resolved action is immutable"
         )
         return True
-    if not can_mutate(session):
-        session.log_key(key, f"{verb} is unavailable — {mut_reason(session, fixture)}")
-        return True
-    unbound = binding_refusal(ATTENTION_ROUTE, VERB[key].name) if key in VERB else ""
-    if unbound:
-        session.log_key(key, f"{verb} is unavailable — {unbound}")
-        return True
-    if principal_refusal:
-        session.log_key(key, f"{verb} is unavailable — {principal_refusal}")
+    refusal = write_refusal(
+        session,
+        fixture,
+        kind=ATTENTION_ROUTE if key in VERB else None,
+        verb=VERB[key].name if key in VERB else verb,
+        principal_refusal=principal_refusal,
+    )
+    if refusal:
+        session.log_key(key, f"{verb} is unavailable — {refusal}")
         return True
     return False
 

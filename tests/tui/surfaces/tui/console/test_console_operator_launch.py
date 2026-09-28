@@ -194,7 +194,7 @@ def test_launch_tui_answer_reaches_the_approval_seal(
     assert params["receipt_ref"] == RECEIPT
     assert params["urn"] == f"{CONTAINER}/pending-action/{ACTION}"
     assert params["expected_revision"] == 3
-    assert any(note.startswith("applied") for note in notes)
+    assert any(note.startswith("confirmed") for note in notes)
 
 
 def test_launch_tui_run_control_reaches_the_control_verb(
@@ -220,7 +220,8 @@ def test_launch_tui_without_operator_refuses_with_the_reason(
     notes = _send(app, seam, "attention", AnswerRequest(target=ACTION, option_id="approve"))
 
     assert WRITES == []
-    refusal = next(note for note in notes if note.startswith("refused"))
+    # nothing was requested, so the control is idle rather than refused by the daemon
+    refusal = next(note for note in notes if note.startswith("idle"))
     assert "no operator principal" in refusal
     assert "--actor" in refusal
 

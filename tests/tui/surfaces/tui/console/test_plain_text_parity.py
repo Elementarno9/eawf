@@ -21,7 +21,7 @@ import pytest
 
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.harness import Contract, FrameState, load_contract
-from eawf.surfaces.tui.console.normalisation import Normaliser, load_map
+from eawf.surfaces.tui.console.normalisation import Normaliser, load_map, recorded_mark
 from eawf.surfaces.tui.console.plain import (
     ASCII_TWINS,
     OFFLINE_SNAPSHOT,
@@ -77,7 +77,8 @@ def parity_states(contract: Contract) -> tuple[FrameState, ...]:
 
 def _twin_golden(normaliser: Normaliser, state: FrameState) -> list[str]:
     """Return the ASCII twin of the port's expected frame for ``state``."""
-    return plain_rows(normaliser.expected(state.id, state.frame).split("\n"))
+    expected = normaliser.expected(state.id, state.frame, mark=recorded_mark(state.keys))
+    return plain_rows(expected.split("\n"))
 
 
 def _render(fixture: Fixture, state: FrameState, normaliser: Normaliser) -> list[str]:

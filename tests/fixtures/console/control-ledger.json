@@ -1,0 +1,13 @@
+{
+  "cells": [
+    {"disposition": "idle", "control": "pause", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["–", "–", "–"], "note": "not requested · the control stands where it did"},
+    {"disposition": "requesting", "control": "pause", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["13:00:02", "–", "–"], "note": "nothing has moved until the daemon acts"},
+    {"disposition": "accepted", "control": "pause", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["13:00:02", "13:00:03", "–"], "note": "the effect is not observed yet"},
+    {"disposition": "confirmed", "control": "pause", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["13:00:02", "13:00:03", "13:00:05"], "note": "the Run confirmed it · the effect is recorded"},
+    {"disposition": "rejected", "control": "resume", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["13:00:02", "–", "–"], "note": "the request ended · the Run is unchanged"},
+    {"disposition": "invalidated", "control": "answer", "target": "ACT-0901", "issued_by": "operator (you)", "stamps": ["13:00:02", "–", "–"], "note": "bound revision 6 moved to 7 · reconcile first"},
+    {"disposition": "unknown", "control": "cancel", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["13:00:02", "13:00:03", "–"], "note": "no answer yet · a reconnect asks again"},
+    {"disposition": "recovery", "control": "cancel", "target": "RUN-be1e085a", "issued_by": "operator (you)", "stamps": ["13:00:02", "13:00:03", "–"], "note": "asking again found no answer · you decide"},
+    {"disposition": "superseded", "control": "answer", "target": "ACT-0901", "issued_by": "operator (you)", "stamps": ["13:00:02", "–", "–"], "note": "bo answered first at 41,209 · nothing written"}
+  ]
+}

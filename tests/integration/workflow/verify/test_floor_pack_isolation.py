@@ -10,7 +10,7 @@ The suite below pins the two properties that close that hole for the floor
 pack and for the advisory single-gate path:
 
 * the checks run in a child interpreter whose ``EAWF_RUNTIME_DIR`` /
-  ``EA_STATE`` are bound to a throwaway sandbox, not to the live pair; and
+  live ledger are bound to a throwaway sandbox, not to the live pair; and
 * a floor-pack gate that deliberately mutates whatever ledger it resolves
   leaves the live tree byte identical.
 
@@ -33,6 +33,7 @@ import pytest
 from eawf.kernel.spec.common import CriterionSpec, GateSpec
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
+from eawf.kernel.state.resolve import GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV
 from eawf.kernel.store.paths import store_dir as _store_dir
 from eawf.platform.profiles.models import FloorCheck, VerifyBlock
 from eawf.runtime.daemon import gate_execution
@@ -271,8 +272,8 @@ def _capture_child_envs(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, str]]
     seen: list[dict[str, str]] = []
     real = gate_execution.gate_child_env
 
-    def _spy(sandbox: gate_execution.GateSandbox) -> dict[str, str]:
-        env = real(sandbox)
+    def _spy(sandbox: gate_execution.GateSandbox, *, live_state_path: Path) -> dict[str, str]:
+        env = real(sandbox, live_state_path=live_state_path)
         seen.append(dict(env))
         return env
 
@@ -287,7 +288,7 @@ def test_floor_pack_runs_out_of_process(tmp_path: Path, monkeypatch: pytest.Monk
     """CR-01: the floor pack executes in a child bound to a sandbox.
 
     Asserts the whole chain at once: the readiness compute reached the
-    sandboxed runner, the child's ``EAWF_RUNTIME_DIR`` / ``EA_STATE`` name a
+    sandboxed runner, the child's runtime dir and ledger fence name a
     throwaway sandbox rather than the live fixture pair, the sandbox carried
     the live snapshot content (so gate reads stay faithful) without the live
     daemon's transport handles, and the floor views came from a real run.
@@ -320,7 +321,8 @@ def test_floor_pack_runs_out_of_process(tmp_path: Path, monkeypatch: pytest.Monk
     assert len(envs) == 1, "the floor pack did not run as one sandboxed batch"
     child_env = envs[0]
     child_runtime = Path(child_env["EAWF_RUNTIME_DIR"])
-    child_state = Path(child_env["EA_STATE"])
+    child_state = Path(child_env[GATE_SANDBOX_STATE_ENV])
+    assert "EA_STATE" not in child_env, "a ledger pin would outrank the gate's own -w"
     assert child_runtime != live_runtime, "the floor pack inherited the live runtime directory"
     assert live_runtime not in child_runtime.parents
     assert child_state != live_state, "the floor pack inherited the live ledger"
@@ -449,7 +451,8 @@ def test_advisory_single_gate_runs_out_of_process(
     assert status == "pass"
     assert len(envs) == 1, "the advisory gate did not reach the sandboxed runner"
     assert Path(envs[0]["EAWF_RUNTIME_DIR"]) != live_runtime
-    assert Path(envs[0]["EA_STATE"]) != live_state
+    assert Path(envs[0][GATE_SANDBOX_STATE_ENV]) != live_state
+    assert Path(envs[0][GATE_LIVE_STATE_ENV]) == live_state
 
 
 def test_live_state_byte_identical_after_floor_pack(
@@ -507,7 +510,7 @@ def test_live_state_byte_identical_after_floor_pack(
 
     seen = json.loads(report.read_text(encoding="utf-8"))
     assert seen["mutated"] is True, "the gate mutated nothing; the test proved no isolation"
-    assert seen["reason"] == "env"
+    assert seen["reason"] == "pwd_upward"
     assert Path(seen["state_path"]) != live_state
     assert live_state.parent not in Path(seen["state_path"]).parents
     assert len(seen["events_after"]) == 2, "the gate appended to some other event store"
@@ -729,14 +732,19 @@ def test_build_child_env_gate_lane_carries_the_containment_bindings() -> None:
 
     base = {
         "EAWF_RUNTIME_DIR": "/sandbox/runtime",
-        "EA_STATE": "/sandbox/.ea/state.json",
+        "EA_STATE": "/live/.ea/state.json",
+        GATE_LIVE_STATE_ENV: "/live/.ea/state.json",
+        GATE_SANDBOX_STATE_ENV: "/sandbox/.ea/state.json",
         "EAWF_DAEMONLESS": "1",
         "GH_TOKEN": "not-a-real-value-for-gh-token",
     }
 
     gate_env = build_child_env(GATE_RUNTIME_LANE, base_env=base)
     assert gate_env["EAWF_RUNTIME_DIR"] == "/sandbox/runtime"
-    assert gate_env["EA_STATE"] == "/sandbox/.ea/state.json"
+    assert gate_env[GATE_LIVE_STATE_ENV] == "/live/.ea/state.json"
+    assert gate_env[GATE_SANDBOX_STATE_ENV] == "/sandbox/.ea/state.json"
+    # A ledger pin outranks the gate's own -w and working directory.
+    assert "EA_STATE" not in gate_env
     # Containment is not a licence: the rest of the EAWF_* family and every
     # credential stay dropped.
     assert "EAWF_DAEMONLESS" not in gate_env
@@ -745,3 +753,4 @@ def test_build_child_env_gate_lane_carries_the_containment_bindings() -> None:
     agent_env = build_child_env("claude-code", base_env=base)
     assert "EAWF_RUNTIME_DIR" not in agent_env
     assert "EA_STATE" not in agent_env
+    assert GATE_SANDBOX_STATE_ENV not in agent_env

@@ -19,6 +19,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, thin, window_rows
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
@@ -32,13 +33,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "row"),
-    ("Enter", "run"),
-    ("\\", "filter"),
-    ("p", "policy"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("sandbox.log")
 RUNS: tuple[str, ...] = pt.SANDBOX_RUNS
 
 

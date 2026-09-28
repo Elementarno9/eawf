@@ -7,13 +7,15 @@ the write under, so sending the same operation twice is one write: that is what 
 reconnect reconcile an operation whose answer was lost by simply asking again under the
 same id, instead of guessing whether it landed.
 
-Three daemon mutators are bound. An answer to a pending action goes to the approval seal,
+Four daemon mutators are bound. An answer to a pending action goes to the approval seal,
 which reports a later conflicting answer as superseded rather than refusing it; a Run
 control goes to the control-request verb, which records that a principal asked and moves
-the Run not at all; and a settings edit goes to the layered-config verbs, which write one
-layer file under the daemon's lock. Every other writing verb stays listed and refused
-with its reason, because a verb that looked like it worked while the daemon never heard
-of it is the one thing a console must not draw.
+the Run not at all; a settings edit goes to the layered-config verbs, which write one
+layer file under the daemon's lock; and a lifecycle move goes to the per-entity verb that
+names it, addressed at the revision its consequence card was built at and filed under the
+operation id the card minted, so confirming the same card twice is one write. Every other
+writing verb stays listed and refused with its reason, because a verb that looked like it
+worked while the daemon never heard of it is the one thing a console must not draw.
 """
 
 from __future__ import annotations
@@ -26,7 +28,9 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final
 
+from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.kernel.state.epoch2.consequence import MUTATIONS_BY_METHOD
 from eawf.workflow.delivery.acceptance_approval import ACCEPTANCE_OPTIONS
 
 logger = logging.getLogger(__name__)
@@ -180,7 +184,42 @@ class SettingRequest:
             raise ValueError("a branch edit needs the branch whose layer it writes")
 
 
-VerbRequest = AnswerRequest | ControlRequest | SettingRequest
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LifecycleRequest:
+    """An operator's confirmed lifecycle move, addressed at the revision it was previewed at.
+
+    Attributes:
+        target: The record's public key.
+        method: The per-entity daemon verb that names the move.
+        revision: The revision the consequence card was bound to; the daemon refuses the
+            move when the record has moved on, rather than applying it to a revision the
+            operator never saw.
+        operation_id: The id the card minted, which the daemon files the write under.
+        updates: The fields the card stamped at confirmation.
+    """
+
+    target: str
+    method: str
+    revision: int
+    operation_id: str
+    updates: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        """Refuse a move no lifecycle verb carries.
+
+        Raises:
+            ValueError: ``method`` is no lifecycle verb, ``revision`` is not positive, or
+                ``operation_id`` is blank.
+        """
+        if self.method not in MUTATIONS_BY_METHOD:
+            raise ValueError(f"{self.method!r} is not a lifecycle verb")
+        if self.revision < 1:
+            raise ValueError(f"revision must be positive, got {self.revision}")
+        if not self.operation_id.strip():
+            raise ValueError("a lifecycle move needs the operation id its card minted")
+
+
+VerbRequest = AnswerRequest | ControlRequest | SettingRequest | LifecycleRequest
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -201,7 +240,12 @@ class Operator:
 
 
 class OperationStatus(StrEnum):
-    """Where one operation stands, as far as the console knows."""
+    """Where one operation stands in the console's ledger: still owed an answer, or closed.
+
+    This is the ledger's own bookkeeping. What the operator is told the request came to
+    is the result's :class:`~eawf.kernel.runtime.control.ControlDisposition`, which keeps
+    the nine outcomes apart where this collapses them.
+    """
 
     OUTSTANDING = "outstanding"
     APPLIED = "applied"
@@ -235,19 +279,65 @@ class OperationResult:
         operation_id: The operation's id; ``None`` for a request refused before it was
             addressed, which was never sent.
         target: The public key of the record the request was about.
-        status: Where the operation stands.
+        status: Where the operation stands in the ledger.
         detail: One sentence an operator reads.
+        disposition: Which of the nine control outcomes the request came to. A request
+            refused before it was sent is ``idle``: nothing was asked, so the control
+            still stands where it did.
+        revision: The revision the daemon answered at: the record's revision after an
+            applied move, or the revision a superseding answer stands at.
+        answered_by: The principal whose answer won, for a superseded answer.
     """
 
     operation_id: str | None
     target: str
     status: OperationStatus
     detail: str
+    disposition: ControlDisposition
+    revision: int | None = None
+    answered_by: str | None = None
 
 
 def _minted(prefix: str) -> str:
     """Return a fresh operation id under ``prefix``."""
     return f"{prefix}-{secrets.token_hex(_ID_BYTES)}"
+
+
+def mint_lifecycle_id() -> str:
+    """Return a fresh operation id for one lifecycle move a consequence card previews."""
+    return _minted("MUT")
+
+
+def address_lifecycle(
+    request: LifecycleRequest, *, urn: str, operator: Operator
+) -> ConsoleOperation:
+    """Return the per-entity verb call ``request`` is sent as.
+
+    The operation id doubles as the daemon's idempotency key, so a repeat of the same
+    confirmed card replays the first write's receipt rather than moving the record twice.
+
+    Args:
+        request: The confirmed move.
+        urn: The record's canonical address, as the projection states it.
+        operator: Who the console acts as.
+
+    Returns:
+        The addressed operation under the card's own id.
+    """
+    params: dict[str, Any] = {
+        "urn": urn,
+        "expected_revision": request.revision,
+        "idempotency_key": request.operation_id,
+        "actor": operator.principal,
+    }
+    if request.updates:
+        params["updates"] = dict(request.updates)
+    return ConsoleOperation(
+        operation_id=request.operation_id,
+        method=request.method,
+        params=MappingProxyType(params),
+        target=request.target,
+    )
 
 
 def address_setting(request: SettingRequest) -> ConsoleOperation:
@@ -312,12 +402,7 @@ def address(
             target=request.target,
         )
     if operator.receipt_ref is None:
-        return OperationResult(
-            operation_id=None,
-            target=request.target,
-            status=OperationStatus.REFUSED,
-            detail="no evidence receipt to record the answer under — nothing was sent",
-        )
+        return not_sent(request.target, "no evidence receipt to record the answer under")
     key = _minted("console")
     return ConsoleOperation(
         operation_id=key,
@@ -340,15 +425,20 @@ def address(
 def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> OperationResult:
     """Return the result the daemon's answer to ``operation`` states.
 
-    An answer the seal reports as ``superseded`` lost to one already given: it is a
-    result, not a refusal, and the console says so rather than claiming it applied.
+    A settings write and a sealed answer are facts the daemon wrote, so they are
+    confirmed. A Run control is answered with the disposition of the control fact that
+    now stands, which for a fresh request is ``requesting``: the daemon recorded that a
+    principal asked, and the Run has not moved; an answer naming no disposition leaves
+    the outcome unknown rather than assumed. An answer the seal reports as
+    ``superseded`` lost to one already given; it is neither applied nor refused, and the
+    console says so rather than claiming it applied.
 
     Args:
         operation: The sent operation the answer is for.
         answer: The daemon's answer payload.
 
     Returns:
-        A superseded result when the seal says so, otherwise an applied one.
+        The result, carrying the disposition the answer states.
     """
     if operation.method in (SETTING_SET_METHOD, SETTING_UNSET_METHOD):
         return OperationResult(
@@ -356,20 +446,131 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
             target=operation.target,
             status=OperationStatus.APPLIED,
             detail=_setting_detail(operation, answer),
+            disposition=ControlDisposition.CONFIRMED,
         )
+    if operation.method in MUTATIONS_BY_METHOD:
+        return _lifecycle_settled(operation, answer)
+    reason = answer.get("reason")
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
+        disposition = ControlDisposition.SUPERSEDED
+    elif operation.method == SEAL_METHOD:
+        disposition = ControlDisposition.CONFIRMED
+    else:
+        # an answer that names no disposition says nothing about the effect
+        stated = answer.get("disposition")
+        disposition = ControlDisposition(stated) if stated else ControlDisposition.UNKNOWN
+    detail = outcome_detail(operation, disposition)
+    return OperationResult(
+        operation_id=operation.operation_id,
+        target=operation.target,
+        status=(
+            OperationStatus.SUPERSEDED
+            if disposition is ControlDisposition.SUPERSEDED
+            else OperationStatus.APPLIED
+        ),
+        detail=f"{detail} · {reason}" if reason else detail,
+        disposition=disposition,
+        revision=answer.get("revision") if isinstance(answer.get("revision"), int) else None,
+        answered_by=_winner(answer) if disposition is ControlDisposition.SUPERSEDED else None,
+    )
+
+
+#: What each control outcome tells the operator, after the target and the verb. Every
+#: sentence says what became of the request and never paints an effect the daemon did
+#: not confirm: ``accepted`` is a fact about the request channel, ``rejected`` ends the
+#: request and not the target, and ``superseded`` is a loss, never a refusal or an error.
+OUTCOME_SENTENCES: Final[Mapping[ControlDisposition, str]] = MappingProxyType(
+    {
+        ControlDisposition.IDLE: "not requested · the control stands where it did",
+        ControlDisposition.REQUESTING: "requested · nothing has moved until the daemon acts",
+        ControlDisposition.ACCEPTED: "accepted · the effect is not observed yet",
+        ControlDisposition.CONFIRMED: "confirmed · the effect is recorded",
+        ControlDisposition.REJECTED: "rejected · the request ended and the target is unchanged",
+        ControlDisposition.INVALIDATED: "invalidated · the proof it was bound to changed",
+        ControlDisposition.UNKNOWN: "outcome unknown · no answer yet, a reconnect asks again",
+        ControlDisposition.RECOVERY: "recovery · asking again found no answer, you decide",
+        ControlDisposition.SUPERSEDED: "superseded · an answer already given stands, "
+        "nothing was written for this one",
+    }
+)
+
+
+def _check_outcome_sentences() -> None:
+    """Refuse a disposition the console has no sentence for.
+
+    Raises:
+        ValueError: A disposition is missing, so a result carrying it would be announced
+            as whatever the renderer fell back to.
+    """
+    missing = sorted(value.value for value in ControlDisposition if value not in OUTCOME_SENTENCES)
+    if missing:
+        raise ValueError(f"no outcome sentence for disposition {', '.join(missing)}")
+
+
+_check_outcome_sentences()
+
+
+def outcome_detail(operation: ConsoleOperation, disposition: ControlDisposition) -> str:
+    """Return the sentence an operator reads for ``operation`` reaching ``disposition``.
+
+    Args:
+        operation: The sent operation.
+        disposition: What it came to.
+
+    Returns:
+        The target, the verb asked for, and the outcome's own sentence.
+    """
+    verb = operation.params.get("control") or operation.params.get("option_id") or "request"
+    return f"{operation.target} {verb} {OUTCOME_SENTENCES[disposition]}"
+
+
+def _winner(answer: Mapping[str, Any]) -> str | None:
+    """Return the principal whose answer sealed the action, as the seal's dispositions name."""
+    rows = answer.get("dispositions") or ()
+    return next(
+        (
+            str(row["principal_id"])
+            for row in rows
+            if isinstance(row, Mapping) and row.get("outcome") == "sealed"
+        ),
+        None,
+    )
+
+
+def _lifecycle_settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> OperationResult:
+    """Return what a per-entity verb's envelope states: committed, or refused with its code.
+
+    A refusal is answered in the envelope rather than as a transport error, so its code,
+    the guard that failed and the remediation are read off the envelope's first error row.
+    """
+    after = answer.get("revision_after")
+    revision = after if isinstance(after, int) else None
+    errors = answer.get("errors") or ()
+    if answer.get("status") != "ok":
+        first = errors[0] if errors and isinstance(errors[0], Mapping) else {}
+        guard = f" · guard {first['guard']}" if first.get("guard") else ""
         return OperationResult(
             operation_id=operation.operation_id,
             target=operation.target,
-            status=OperationStatus.SUPERSEDED,
-            detail=f"{operation.target} was already answered · this answer is superseded",
+            status=OperationStatus.REFUSED,
+            disposition=ControlDisposition.REJECTED,
+            detail=(
+                f"{operation.target} refused · {first.get('code', 'refused')}{guard} · "
+                f"{first.get('remediation', 'nothing was written')}"
+            ),
+            revision=revision,
         )
-    stated = answer.get("reason") or answer.get("disposition") or "recorded"
+    mutation = MUTATIONS_BY_METHOD[operation.method]
+    before = answer.get("revision_before")
     return OperationResult(
         operation_id=operation.operation_id,
         target=operation.target,
         status=OperationStatus.APPLIED,
-        detail=f"{operation.target} · {stated}",
+        disposition=ControlDisposition.CONFIRMED,
+        detail=(
+            f"{operation.target} {mutation.to_status} · revision {before} → {after} · committed"
+        ),
+        revision=revision,
     )
 
 
@@ -397,7 +598,8 @@ def refused(operation: ConsoleOperation, message: str) -> OperationResult:
         operation_id=operation.operation_id,
         target=operation.target,
         status=OperationStatus.REFUSED,
-        detail=f"{operation.target} refused · {message}",
+        detail=f"{outcome_detail(operation, ControlDisposition.REJECTED)} · {message}",
+        disposition=ControlDisposition.REJECTED,
     )
 
 
@@ -414,7 +616,49 @@ def unanswered(operation: ConsoleOperation) -> OperationResult:
         operation_id=operation.operation_id,
         target=operation.target,
         status=OperationStatus.OUTSTANDING,
-        detail=f"{operation.target} · no answer yet · a reconnect reconciles it by its id",
+        detail=outcome_detail(operation, ControlDisposition.UNKNOWN),
+        disposition=ControlDisposition.UNKNOWN,
+    )
+
+
+def exhausted(operation: ConsoleOperation) -> OperationResult:
+    """Return the result of a write whose answer was lost again when a reconnect asked.
+
+    The reconnect is the console's one automatic reconciliation, so once it too goes
+    unanswered the effect stays undetermined and the operator decides; the operation
+    stays in the ledger so a later reconnect can still settle it.
+
+    Args:
+        operation: The sent operation the reconciliation asked about.
+
+    Returns:
+        An outstanding result in ``recovery``.
+    """
+    return OperationResult(
+        operation_id=operation.operation_id,
+        target=operation.target,
+        status=OperationStatus.OUTSTANDING,
+        detail=outcome_detail(operation, ControlDisposition.RECOVERY),
+        disposition=ControlDisposition.RECOVERY,
+    )
+
+
+def not_sent(target: str, reason: str) -> OperationResult:
+    """Return the result of a request refused before it was addressed; nothing was sent.
+
+    Args:
+        target: The public key of the record the request was about.
+        reason: Why the console could not send it.
+
+    Returns:
+        A refused result in ``idle``: no request exists, so the control stands where it did.
+    """
+    return OperationResult(
+        operation_id=None,
+        target=target,
+        status=OperationStatus.REFUSED,
+        detail=f"{reason} — nothing was sent",
+        disposition=ControlDisposition.IDLE,
     )
 
 
@@ -465,6 +709,7 @@ __all__ = [
     "ANSWER_OPTIONS",
     "CONTROL_METHOD",
     "NO_PRINCIPAL_REASON",
+    "OUTCOME_SENTENCES",
     "QUESTION_OPTIONS",
     "RUN_CONTROLS",
     "RUN_KINDS",
@@ -476,6 +721,7 @@ __all__ = [
     "AnswerRequest",
     "ConsoleOperation",
     "ControlRequest",
+    "LifecycleRequest",
     "OperationLedger",
     "OperationResult",
     "OperationStatus",
@@ -483,8 +729,13 @@ __all__ = [
     "SettingRequest",
     "VerbRequest",
     "address",
+    "address_lifecycle",
     "address_setting",
     "binding_refusal",
+    "exhausted",
+    "mint_lifecycle_id",
+    "not_sent",
+    "outcome_detail",
     "refused",
     "settled",
     "unanswered",

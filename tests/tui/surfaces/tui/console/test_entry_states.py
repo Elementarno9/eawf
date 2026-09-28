@@ -7,6 +7,9 @@ no marker, a stopped cutover journal, a marker or state document written by a ne
 console. Only the event loop is stood in for (``_run_console`` hands back the app it was
 given), and for the attached case the daemon behind the seam's client. No fixture row is
 edited to draw a state.
+
+CON-124 closes the file: the first run lists its four steps under ``STEP``, ``STATE``
+and ``WHY IT IS NEEDED``, and a skipped step says what stays unavailable.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import re
 import shlex
 import sys
 from collections.abc import Iterator
@@ -70,6 +74,8 @@ _SAFE_KEY_LABELS = frozenset(
         "cancel · not attached",
         "quit · exit 4",
         "exit",
+        "do it",
+        "skip",
     }
 )
 
@@ -739,3 +745,53 @@ def test_con_012_the_happy_path_draws_the_layer_then_lands_on_scope_home(
     assert before[-1].strip().startswith("Esc cancel")
     assert "RESOLVING" not in after[0]
     assert _WRITES == []
+
+
+# ---------- CON-124: the first run names the four things a session needs ----------
+
+
+def test_con_124_the_first_run_lists_its_four_steps_under_step_state_why(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = _land(world, monkeypatch, "onboarding")
+    for size in range(len(SIZES)):
+        rows = _frame(app, size)
+        assert rows[0].rstrip().endswith("◈ FIRST RUN")
+        assert "NEEDS YOU" not in rows[0]
+        assert not any(rows[0].rstrip().endswith(value) for value in CONNECTION)
+        head = next(i for i, row in enumerate(rows) if re.match(r"^ STEP\s+STATE\s+WHY IT", row))
+        steps = [re.search(r"\d (\w+)", row) for row in rows[head + 1 : head + 5]]
+        assert [m.group(1) if m else "" for m in steps] == [
+            "workspace",
+            "provider",
+            "sandbox",
+            "first",
+        ]
+        assert "No migration is applied and no agent is started here." in _text(rows)
+        assert rows[-1].split()[:8] == ["↑↓", "step", "Enter", "do", "it", "s", "skip", "Esc"]
+
+
+def test_con_124_skipping_a_step_says_what_stays_unavailable_and_changes_nothing(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = _land(world, monkeypatch, "onboarding")
+    before = _digests(world.repo)
+
+    async def drive() -> tuple[list[str], bool]:
+        async with app.run_test(size=SIZES[0]) as pilot:
+            app.press_key("ArrowDown")
+            app.press_key("s")
+            app.press_key("Enter")
+            notes = [row.note for row in app.session.log]
+            app.press_key("Escape")
+            await pilot.pause()
+            return notes, app.is_running
+
+    notes, running = asyncio.run(drive())
+    assert any(
+        "skipped step 2" in note and "every run verb stays refused" in note for note in notes
+    )
+    # the skip moved the cursor on to the sandbox step, whose Enter runs nothing here
+    assert any("no declared command runs this step yet" in note for note in notes)
+    assert running is False
+    assert _digests(world.repo) == before

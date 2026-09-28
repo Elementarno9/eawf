@@ -170,12 +170,14 @@ class CriterionRow:
         passed: Whether the step passed.
         observation: What the step actually showed.
         evidence_keys: The ``EVD-####`` keys the step cites, in record order.
+        evidence_kinds: The kinds of evidence the step shows, in record order.
     """
 
     step_id: str
     passed: bool
     observation: str
     evidence_keys: tuple[str, ...]
+    evidence_kinds: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -347,6 +349,7 @@ def criteria_rows(bundle: MilestoneAcceptanceBundle) -> tuple[CriterionRow, ...]
             passed=step.passed,
             observation=step.observation,
             evidence_keys=tuple(ref.entity_key for ref in step.evidence_refs),
+            evidence_kinds=tuple(step.evidence_kinds),
         )
         for step in bundle.steps
     )

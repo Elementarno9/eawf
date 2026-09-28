@@ -26,6 +26,7 @@ from textual.filter import LineFilter, Monochrome
 from eawf.kernel.config.registry.config_keys import CONFIG_REGISTRY
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.spine import SpineView, build_spine_view
+from eawf.kernel.projection.transcript import LANES
 from eawf.kernel.projection.truth import (
     Freshness,
     Precision,
@@ -749,7 +750,11 @@ def test_con_076_a_native_transcript_block_names_its_kind_in_full() -> None:
         found = _BLOCK_HEAD.match(row)
         assert found is not None
         kind = RunEventKind(found.group("kind"))
-        assert found.group("glyph") == NATIVE_GLYPH[kind]
+        # the kind cell is the lane's glyph and its whole word, never an abbreviation
+        assert found.group("word") == LANES[kind]
+        assert found.group("glyph") == NATIVE_GLYPH[found.group("word")]
 
 
-_BLOCK_HEAD = re.compile(r"^[ ▸]\d\d:\d\d:\d\d  (?P<glyph>\S) #\d+\s+(?P<kind>[a-z_.]+) · ")
+_BLOCK_HEAD = re.compile(
+    r"^[ ▸]\d\d:\d\d:\d\d  (?P<glyph>\S) (?P<word>[a-z]+)\s+(?P<kind>[a-z_.]+) · "
+)

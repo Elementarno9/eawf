@@ -25,6 +25,7 @@ from types import MappingProxyType
 from eawf.surfaces.tui.console.cells import Mark, spans
 from eawf.surfaces.tui.console.header import CrumbPart, crumb_runs
 from eawf.surfaces.tui.console.keybar import GAP
+from eawf.surfaces.tui.console.lifecycle import WORD_CLASSES
 from eawf.surfaces.tui.console.token_map import SURFACES
 from eawf.surfaces.tui.console.tokens import CARET, RAIL
 
@@ -96,6 +97,18 @@ _STATUS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b(?:lost or stale|failed)(?= +\d)"), "err"),
     (re.compile(r"\b(?:checking or integrating|terminal recent)(?= +\d)"), "info"),
     (re.compile(r"\brunning(?= +\d)"), "ok"),
+)
+
+# Every epoch-2 state word, in the severity class its family table gives it: colour carries
+# the class and nothing else, so a word the table classes never takes a second colour.
+_LIFECYCLE: tuple[tuple[re.Pattern[str], str], ...] = tuple(
+    (
+        re.compile(
+            rf"\b(?:{'|'.join(sorted(w for w, c in WORD_CLASSES.items() if c is klass))})\b"
+        ),
+        klass.value,
+    )
+    for klass in sorted(set(WORD_CLASSES.values()))
 )
 
 # A row ending in a state word is a label and its value, never a row of column heads.
@@ -232,7 +245,7 @@ def paint(row: str, part: Part) -> tuple[Stroke, ...]:
         _header(canvas)
     elif part is Part.KEYBAR:
         _keybar(canvas)
-    else:
+    elif not _block(canvas):
         _body(canvas)
     cursor = part is Part.BODY and _CURSOR_ROW.match(row) is not None
     return canvas.strokes(ground="cursor" if cursor else None)
@@ -288,6 +301,40 @@ def _keybar(canvas: _Canvas) -> None:
         at += len(chunk) + len(GAP)
 
 
+# A transcript block's head: the clock, then the kind cell -- one glyph and its full word.
+_BLOCK_KIND = re.compile(r"^[ \u25b8]\d\d:\d\d:\d\d  (\S [a-z]+)\b")
+# The class each transcript kind is coloured as. Colour sits on the kind cell alone and
+# repeats what the word says; the block's own text is never coloured.
+_KIND_SURFACE: Mapping[str, str] = MappingProxyType(
+    {
+        "message": "text",
+        "tool": "info",
+        "file": "info",
+        "background": "info",
+        "subagent": "info",
+        "running": "info",
+        "question": "warn",
+        "error": "err",
+        "thinking": "hint",
+        "heartbeat": "dim",
+        "purged": "dim",
+        "event": "dim",
+    }
+)
+
+
+def _block(canvas: _Canvas) -> bool:
+    """Colour a transcript block head's kind cell and nothing else; return whether it was one."""
+    found = _BLOCK_KIND.match(canvas.row)
+    surface = _KIND_SURFACE.get(found.group(1).split(" ")[1]) if found is not None else None
+    if found is None or surface is None:
+        return False
+    canvas.put(found.start(1), found.end(1), surface)
+    if canvas.row.startswith(CARET):
+        canvas.put(0, 1, "caret", bold=True)
+    return True
+
+
 def _body(canvas: _Canvas) -> None:
     """Paint the rules, rail, heads, pane labels, caret, counts and state words."""
     row = canvas.row
@@ -296,7 +343,7 @@ def _body(canvas: _Canvas) -> None:
         label = _PANE_LABEL.match(row)
         if label is not None:
             canvas.put(label.start(1), label.end(1), _LABEL_SURFACE.get(label.group(1)), bold=True)
-    for pattern, surface in _STATUS:
+    for pattern, surface in (*_STATUS, *_LIFECYCLE):
         for found in pattern.finditer(row):
             canvas.put(found.start(), found.end(), surface)
     for count in _OUTSTANDING.finditer(row):

@@ -559,7 +559,11 @@ def test_edit_enter_sends_a_typed_request_and_holds_no_optimistic_value(
     session = _on(_session(), view, INT_KEY)
 
     _press(
-        fixture, view, session, ["Enter", "Backspace", "Backspace", "4", "5", "Enter"], send=link
+        fixture,
+        view,
+        session,
+        ["Enter", "Backspace", "Backspace", "4", "5", "Enter", "Enter"],
+        send=link,
     )
 
     assert link.sent == [SettingRequest(target=INT_KEY, layer="repo", value=45)]
@@ -594,9 +598,9 @@ def test_edit_x_unsets_only_what_the_lens_layer_states(tree: Path, fixture: Fixt
     assert "not set at global" in session.log[0].note
 
     session.lens = "repo"
-    _press(fixture, view, session, ["x"], send=link)
+    _press(fixture, view, session, ["x", "Enter"], send=link)
     assert link.sent == [SettingRequest(target=LITERAL_KEY, layer="repo", unset=True)]
-    assert "falls back to built-in standard" in session.log[0].note
+    assert "falls back to built-in standard" in session.log[1].note
 
 
 def test_edit_without_a_daemon_link_writes_nothing_and_says_so(
@@ -619,7 +623,7 @@ def test_edit_a_branch_write_names_the_branch_the_view_read(tree: Path, fixture:
     session = _on(_session(), view, LITERAL_KEY)
     session.lens = "branch"
 
-    _press(fixture, view, session, ["Enter", "Enter"], send=link)
+    _press(fixture, view, session, ["Enter", "Enter", "Enter"], send=link)
 
     assert link.sent == [
         SettingRequest(target=LITERAL_KEY, layer="branch", value="standard", branch=BRANCH)
@@ -707,7 +711,7 @@ def test_edit_end_to_end_the_daemon_writes_the_layer_and_the_frame_shows_its_rer
     link = _Link()
     session = _on(_session(), view, LITERAL_KEY)
 
-    _press(fixture, view, session, ["Enter", "ArrowDown", "Enter"], send=link)
+    _press(fixture, view, session, ["Enter", "ArrowDown", "Enter", "Enter"], send=link)
     result = asyncio.run(seam.request(link.sent[0]))
 
     assert result.status is OperationStatus.APPLIED
@@ -722,7 +726,7 @@ def test_edit_end_to_end_the_daemon_writes_the_layer_and_the_frame_shows_its_rer
     assert "strict" in row
     assert "repo" in row
 
-    _press(fixture, held, session, ["x"], send=link)
+    _press(fixture, held, session, ["Escape", "x", "Enter"], send=link)
     removed = asyncio.run(seam.request(link.sent[1]))
 
     assert removed.status is OperationStatus.APPLIED

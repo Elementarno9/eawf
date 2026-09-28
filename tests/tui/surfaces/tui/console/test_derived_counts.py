@@ -17,6 +17,11 @@ frame prints the truth token for it, so a silent column says it is silent.
 The entry layer is here to be excluded. It renders ``process_frame``, the one read model
 no projection carries, so it has no read verb at all rather than a read that answers with
 nothing.
+
+CON-126 is held here too: under two principals the Attention route lists this
+principal's actions under ``MINE`` and the rest under ``ALL PRINCIPALS``, and every
+verb and Enter on an action another principal holds refuse from one gate naming who
+holds it.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.projection.attention import attention_all, attention_mine
 from eawf.kernel.projection.compute import (
     ROUTE_COLLECTIONS,
     ROUTE_READ_MODELS,
@@ -49,12 +55,16 @@ from eawf.kernel.projection.spine import (
 from eawf.kernel.projection.truth import TruthKind, TruthState
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, ROUTE_RECONNECT_METHODS
+from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.read_model import UNAVAILABLE
 from eawf.surfaces.tui.console.session import Session
+from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
+from tests.tui.surfaces.tui.console.test_console_verbs import _Host
 
 #: When the probe projections are stamped. The digest does not cover the stamp; a fixed
 #: clock only keeps this suite's output reproducible.
@@ -382,3 +392,67 @@ def test_an_unbound_route_has_no_projection_to_build_from() -> None:
     assert "settings" not in ROUTE_COLLECTIONS
     with pytest.raises(ValueError, match="renders no epoch-2 collection"):
         _projection("settings")
+
+
+# ---------- CON-126: MINE and ALL PRINCIPALS under two principals ----------
+
+
+def _two_principal_ctx(sel_id: str, principal: str | None) -> Ctx:
+    """Return a key context on the Attention route over the two-principal register."""
+    session = Session()
+    session.route = "attention"
+    session.sel_id = sel_id
+    return Ctx(
+        session=session,
+        fixture=load_fixture(
+            Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture"
+        ),
+        host=_Host(),
+        w=120,
+        h=30,
+        attention=bodies._projection("attention"),
+        principal=principal,
+    )
+
+
+def test_con_126_an_action_another_principal_holds_is_never_counted_as_mine() -> None:
+    register = bodies._attention()
+    assert attention_mine(register, principal=bodies.ME).value == "1"
+    assert attention_mine(register, principal=bodies.OTHER).value == "2"
+    assert attention_all(register).value == "2"
+
+
+def test_con_126_the_row_names_who_may_act_on_it() -> None:
+    view = bodies._view("attention")
+    view.session.sel_id = "ACT-0002"
+    frame = render_route(view)
+    at = next(i for i, row in enumerate(frame) if "ACT-0002" in row)
+    assert frame[at].lstrip().startswith("▸ ACT-0002")
+    assert f"{bodies.OTHER} only · you act as {bodies.ME}" in frame[at + 1]
+    under = max(i for i, row in enumerate(frame[:at]) if row.startswith(" ALL PRINCIPALS"))
+    assert under < at
+    # the keybar offers no verb on a row this principal may not act on
+    for verb in ("a answer", "x deny", "z snooze", "v resolve"):
+        assert verb not in frame[-1]
+
+
+@pytest.mark.parametrize("key", ["a", "x", "z", "v", "Enter"])
+def test_con_126_every_verb_and_enter_refuse_from_the_one_gate_naming_the_holder(key: str) -> None:
+    ctx = _two_principal_ctx("ACT-0002", bodies.ME)
+    dispatch(ctx, key, False)
+    assert ctx.session.overlay is None
+    # the key log is newest first
+    note = ctx.session.log[0].note
+    assert f"ACT-0002 refused — {bodies.OTHER} only" in note
+    assert f"--actor {bodies.OTHER}" in note
+
+
+def test_con_126_the_holder_acting_as_themselves_is_not_refused() -> None:
+    ctx = _two_principal_ctx("ACT-0002", bodies.OTHER)
+    dispatch(ctx, "a", False)
+    assert "refused" not in ctx.session.log[0].note
+
+
+def test_con_126_the_frame_says_an_all_principals_count_is_not_a_work_list() -> None:
+    text = "\n".join(render_route(bodies._view("attention")))
+    assert "an all-principals count is not a work list" in text

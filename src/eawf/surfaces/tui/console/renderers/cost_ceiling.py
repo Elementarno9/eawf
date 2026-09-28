@@ -14,6 +14,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -25,7 +26,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 )
 from eawf.surfaces.tui.console.session import Session
 
-_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "row"), ("Enter", "run"), ("Esc", "back"))
+_KEYS = route_pairs("cost.ceiling")
 _STOPPED: tuple[tuple[str, str, str], ...] = pt.STOPPED_RUNS
 
 

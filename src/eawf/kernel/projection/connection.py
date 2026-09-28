@@ -579,6 +579,12 @@ def apply_patches(
             before = held.get((entry.collection, entry.key))
             stored = row_document(before) if before is not None else {}
             stored.update({"urn": entry.urn, "revision": entry.revision, "status": entry.status})
+            # the move states the audience after it, so an unassigned question stays so;
+            # it states no suspension reason, so a held one would be a stale claim
+            stored.pop("assignee_ref", None)
+            stored.pop("suspension_reason", None)
+            if entry.assignee_ref is not None:
+                stored["assignee_ref"] = entry.assignee_ref
             rows.setdefault(entry.collection.value, {})[entry.key] = stored
     return build_route_projection(
         route=projection.route,

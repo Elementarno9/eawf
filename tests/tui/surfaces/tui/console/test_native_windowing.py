@@ -320,7 +320,7 @@ def test_the_native_keybar_advertises_paging_by_full_key_names(family: str) -> N
 def test_native_keys_follow_the_arrow_entry() -> None:
     """Paging sits right after the row keys, route verbs after it."""
     keys = native_keys("crash.recovery")
-    assert keys[:3] == (KEY["up"], KEY["page"], KEY["ends"])
+    assert keys[:3] == (ROUTE_KEYS["crash.recovery"][0], KEY["page"], KEY["ends"])
     assert keys[3:] == ROUTE_KEYS["crash.recovery"][1:]
 
 

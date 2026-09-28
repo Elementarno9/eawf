@@ -650,4 +650,10 @@ service_templates = [
 # bundling overshoots by whole megabytes. Raise it only against a fresh
 # ``uv build --wheel`` measurement, and read the archive member list first to
 # confirm the growth really is package code.
-wheel_max_bytes = 5242880
+#
+# Raised to 6 MiB (6291456) against a 5435388-byte wheel: the native console
+# (about 378 KB compressed under eawf/surfaces/tui/console) and the native
+# delivery loop are package code, and non-Python members total about 184 KB, so
+# no data tree entered the archive. Retiring the epoch-1 TUI shrinks the wheel
+# well below this; tighten the ceiling again then.
+wheel_max_bytes = 6291456

@@ -24,8 +24,11 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+from eawf.kernel.projection.attention import NOTIFICATION_MATRIX, ToastPolicy
 from eawf.surfaces.tui.console.keybar import KEY, Pair, keybar
 from eawf.surfaces.tui.console.keymap import ATTACH_LATER
+from eawf.surfaces.tui.console.prototype import SNAPSHOT_AGE
+from eawf.surfaces.tui.console.reads import DISCONNECTED_CAUSE
 from eawf.surfaces.tui.console.session import SessionSetup
 from eawf.surfaces.tui.console.tokens import CONNECTION, RULE_THIN
 from eawf.surfaces.tui.console.width import cell_len, pad
@@ -167,11 +170,14 @@ class PackFrame:
         rows: The frame's rows.
         pack: Every recorded frame state of the contract, by id, for a rewrite that
             derives the port's frame from a sibling recording.
+        mark: The roadmap marker the frame's cursor stands on, which the pack drew in
+            colour alone and so did not record in the text.
     """
 
     contract_id: str
     rows: tuple[str, ...]
     pack: Mapping[str, str]
+    mark: int = 0
 
     @property
     def w(self) -> int:
@@ -261,7 +267,8 @@ def _help_without_simulator(frame: PackFrame) -> list[str]:
 
 _CONN_ID = re.compile(r"^conn/DISCONNECTED/(?P<route>.+)$")
 _GAP_LABEL = "no count can be called complete for the gap"
-_DISCONNECTED_LABEL = "disconnected · nothing is arriving"
+_DISCONNECTED_LABEL = f"disconnected · {DISCONNECTED_CAUSE}"
+_ATTACHED_REVISION = re.compile(r"^(?P<line> ATTACHED  revision \S+)\s*$")
 
 
 def _slot(conn: str) -> str:
@@ -272,8 +279,9 @@ def _disconnected_body(frame: PackFrame) -> list[str]:
     """Return the port's disconnected frame: the pack's gap frame of the route, relabelled.
 
     Both states refuse writes and read the same revision, so the port draws them alike
-    but for the label; a route whose gap frame reads like its live frame does not read
-    the connection state, and keeps the recorded frame.
+    but for the cause line and the age: a lost link is read at its last revision, and
+    the ``ATTACHED`` line says how old that revision is. A route whose gap frame reads
+    like its live frame does not read the connection state, and keeps the recorded frame.
     """
     found = _CONN_ID.match(frame.contract_id)
     route = found.group("route") if found else ""
@@ -285,6 +293,10 @@ def _disconnected_body(frame: PackFrame) -> list[str]:
     w = frame.w
     rows[0] = rows[0].replace(_slot("GAP DETECTED"), _slot("DISCONNECTED"))
     rows[1] = pad(rows[1].rstrip().replace(_GAP_LABEL, _DISCONNECTED_LABEL), w)
+    for i, row in enumerate(rows):
+        found_line = _ATTACHED_REVISION.match(row)
+        if found_line is not None:
+            rows[i] = pad(f"{found_line.group('line')} · {SNAPSHOT_AGE} old", w)
     return rows
 
 
@@ -336,6 +348,27 @@ def _full_page_keys(frame: PackFrame) -> list[str]:
         found = _HELP_PAGE.match(row)
         if found is not None:
             rows[i] = pad(f"   {full}  {found.group('label')}", frame.w)
+    return rows
+
+
+_ROW_PAIR = " ".join(KEY["up"].pair())
+_OPEN_PAIR = " ".join(KEY["open"].pair())
+_BUCKETS_PAIR = " ".join(KEY["tab"].pair())
+
+
+def _advertised_open(frame: PackFrame) -> list[str]:
+    """Advertise the Attention route's bound Enter after its row pair, and recompose the bar.
+
+    The pack binds Enter on the route but leaves it off the bar; the port advertises every
+    route verb it binds, and the globals then drop in their fixed order to make room. The
+    Attention bar is the one whose row pair is followed straight by its buckets pair, so a
+    journey step on another route keeps its bar.
+    """
+    rows = list(frame.rows)
+    pieces = _pieces(rows[-1])
+    at = pieces.index(_ROW_PAIR) + 1 if _ROW_PAIR in pieces else 0
+    if at and pieces[at : at + 1] == [_BUCKETS_PAIR]:
+        rows[-1] = _rebar(rows[-1], [*pieces[:at], _OPEN_PAIR, *pieces[at:]])
     return rows
 
 
@@ -444,14 +477,30 @@ def _recrumb(row: str, old: str, new: str) -> str:
     return grown[:gap] + grown[gap + extra :] if gap >= 0 else pad(grown, cell_len(row))
 
 
-def _acceptance_evidence(frame: PackFrame) -> list[str]:
-    """Name the milestone's evidence as the acceptance evidence overlay, with no claim ladder.
+def _backlog_open(frame: PackFrame) -> list[str]:
+    """Name the Backlog's Enter for the card it opens rather than the card's own verb."""
+    rows = list(frame.rows)
+    pieces = _pieces(rows[-1])
+    renamed = ["Enter open" if piece == "Enter promote" else piece for piece in pieces]
+    if renamed != pieces:
+        rows[-1] = _rebar(rows[-1], renamed)
+    return rows
 
-    The ladder's state rows are a Claim's, so the bundle's own overlay does not draw them.
+
+def _without_harness_rows(frame: PackFrame) -> list[str]:
+    """Blank a decision overlay's review-harness rows: its stepped state and impossible legend.
+
+    The pack stepped each overlay through its state model and narrated the transitions it
+    can never take; the port states the record's own state from the projection instead.
     """
+    return [" " * frame.w if _STATE_ROW.match(row) else row for row in frame.rows]
+
+
+def _acceptance_evidence(frame: PackFrame) -> list[str]:
+    """Name the milestone's evidence as the acceptance evidence overlay."""
     rows = list(frame.rows)
     rows[0] = _recrumb(rows[0], _PACK_EVIDENCE, _PORT_ACCEPTANCE)
-    return [" " * frame.w if _STATE_ROW.match(row) else row for row in rows]
+    return rows
 
 
 # Each cursor overlay the pack recorded: its ids, its table's head and what its foot calls
@@ -489,12 +538,122 @@ def _cursor_foot(frame: PackFrame) -> list[str]:
     return rows
 
 
+# The pack's card body, row by row, and what the presentation matrix states in its place:
+# the three matrix columns, no settings owner, and no second ``NEEDS YOU`` on the frame.
+_MATRIX_HEAD = "CLASS               TOAST               DECIDED BY"
+_MATRIX_ROWS = tuple(
+    f"{row.notification_class.value.replace('_', ' '):<19}{row.may_interrupt.value:<20}"
+    f"{row.decided_by}"
+    for row in NOTIFICATION_MATRIX.classes
+)
+_PACK_BODY = (
+    "CLASS               MAY INTERRUPT   DECIDED BY",
+    "needs permission   yes             policy",
+    "needs your answer  yes             policy",
+    "stopped responding yes             policy",
+    "run finished       no              profile",
+    "budget passed      no              ratified · R23",
+    "Read only · settings ▸ interface owns this policy.",
+    "A muted class still counts in !N NEEDS YOU.",
+)
+_PORT_BODY = (
+    _MATRIX_HEAD,
+    *_MATRIX_ROWS,
+    "Read only · a toast is the one interruption; nothing takes focus.",
+    "A class that raises no toast still counts in the header's count.",
+)
+_PACK_FOOT = " A run in this class "
+_EFFECT = {
+    ToastPolicy.YES: "may raise a toast",
+    ToastPolicy.NO: "raises no toast",
+    ToastPolicy.ONCE_PER_REVISION: "may raise one toast per revision",
+}
+
+
+def _matrix_body(frame: PackFrame) -> list[str]:
+    """Draw the notifications card from the presentation matrix the port projects."""
+    swap = dict(zip(_PACK_BODY, _PORT_BODY, strict=True))
+    rows: list[str] = []
+    selected = 0
+    for row in frame.rows:
+        inner = row[2:-1] if row.startswith("│ ") and row.endswith("│") else None
+        if inner is None:
+            rows.append(row)
+            continue
+        text = inner.rstrip()
+        mark, bare = (
+            (text[0], text[1:]) if text[:1] in ("▸", " ") and text[1:] in swap else ("", text)
+        )
+        if mark == "▸":
+            selected = _PACK_BODY.index(bare) - 1
+        if bare in swap:
+            text = mark + swap[bare]
+        rows.append("│ " + pad(text, cell_len(inner)) + "│")
+    chosen = NOTIFICATION_MATRIX.classes[selected]
+    name = chosen.notification_class.value.replace("_", " ")
+    foot = f" A {name} {_EFFECT[chosen.may_interrupt]}, as the {chosen.decided_by} decided."
+    return [pad(foot, frame.w) if row.startswith(_PACK_FOOT) else row for row in rows]
+
+
+# The frame rows the roadmap's lanes occupy: under the week header, three lanes of two rows.
+_LANES = range(4, 10)
+_LANE_BAR = re.compile(r"^▸\S")
+_LANE_IDS = re.compile(r"\d{4}")
+_MARKER_GLYPHS = frozenset("●○")
+_MORE_BELOW = re.compile(r"^   \d+ more rows? below")
+
+
+def recorded_mark(keys: Sequence[str]) -> int:
+    """Return the marker a recorded frame's keys leave the roadmap cursor on.
+
+    The pack recorded a frame's setup and keys but not its marker, which it drew in colour
+    alone; the marker walks one step per arrow, so the keys state it.
+    """
+    return max(0, sum((key == "ArrowRight") - (key == "ArrowLeft") for key in keys))
+
+
+def _text_marker(frame: PackFrame) -> list[str]:
+    """Draw the roadmap's marker cursor in text, and the ``MARKER`` row naming it.
+
+    The pack drew the focused marker in colour alone, so the same frame answered for
+    every marker. The port brackets the focused marker on the focused lane, adds the row
+    naming the milestone, its lane and its position under the lanes, and gives back the
+    blank row the new one takes.
+    """
+    rows = list(frame.rows)
+    focused = next((i for i in _LANES if i < len(rows) and _LANE_BAR.match(rows[i])), None)
+    if focused is None:
+        return rows
+    ids = _LANE_IDS.findall(rows[focused + 1])
+    glyphs = [i for i, ch in enumerate(rows[focused]) if ch in _MARKER_GLYPHS]
+    if not ids or len(ids) != len(glyphs):
+        return rows
+    at = min(frame.mark, len(glyphs) - 1)
+    cell = glyphs[at]
+    row = rows[focused]
+    rows[focused] = row[: cell - 1] + "[" + row[cell] + "]" + row[cell + 2 :]
+    lane = row[1:].split(" ", 1)[0]
+    marker = f" MARKER    MLS-{ids[at]} · {lane} · {at + 1} of {len(ids)}"
+    # the new row takes the room a blank row gave, or pushes one more row under a pane
+    below = next((i for i, row in enumerate(rows) if _MORE_BELOW.match(row)), None)
+    blanks = [i for i, row in enumerate(rows[:-1]) if not row.strip()]
+    if below is not None:
+        del rows[below - 1]
+    elif blanks:
+        del rows[blanks[-1]]
+    else:
+        return list(frame.rows)
+    rows.insert(_LANES.stop, pad(marker, frame.w))
+    return rows
+
+
 REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="entry simulator pair", rows=_entry_without_simulator, keys=frozenset("[]")),
     Rewrite(entry="help simulator row", rows=_help_without_simulator, keys=frozenset("w")),
     Rewrite(entry="disconnected body", rows=_disconnected_body),
     Rewrite(entry="window indicator", rows=_edge_markers),
     Rewrite(entry="activity keybar and rail", rows=_full_page_keys),
+    Rewrite(entry="attention keybar", rows=_advertised_open),
     Rewrite(entry="settings editor keybar", rows=_unslashed_keys),
     Rewrite(entry="quality prefix", rows=_quality_prefix),
     Rewrite(entry="unattended progress", rows=_named_progress),
@@ -502,12 +661,16 @@ REWRITES: tuple[Rewrite, ...] = (
     Rewrite(entry="campaign step glyph", rows=_running_step),
     Rewrite(entry="absent deadline", rows=_absent_deadline),
     Rewrite(entry="error toast glyph", rows=_error_toast),
+    Rewrite(entry="backlog open verb", rows=_backlog_open),
+    Rewrite(entry="decision overlay harness rows", rows=_without_harness_rows),
     Rewrite(
         entry="acceptance evidence overlay",
         rows=_acceptance_evidence,
         overlays={"evidence": "acceptance"},
     ),
     Rewrite(entry="cursor overlay foot", rows=_cursor_foot),
+    Rewrite(entry="notifications matrix", rows=_matrix_body),
+    Rewrite(entry="roadmap marker cursor", rows=_text_marker),
 )
 
 
@@ -590,15 +753,23 @@ class Normaliser:
                 overlay = rewrite.overlays[overlay]
         return setup if overlay == setup.overlay else setup.model_copy(update={"overlay": overlay})
 
-    def expected(self, contract_id: str, frame: str) -> str:
-        """Return the port's expected frame: the pack frame through each rewrite selecting it."""
+    def expected(self, contract_id: str, frame: str, *, mark: int = 0) -> str:
+        """Return the port's expected frame: the pack frame through each rewrite selecting it.
+
+        Args:
+            contract_id: The frame or journey id, which selects the rewrites.
+            frame: The pack's recorded frame.
+            mark: The roadmap marker the cursor stands on when the frame was drawn.
+        """
         rows = tuple(frame.split("\n"))
         for entry, rewrite in self._rewrites:
             if rewrite.rows is not None and entry.selects(contract_id):
-                page = PackFrame(contract_id=contract_id, rows=rows, pack=self.pack)
+                page = PackFrame(contract_id=contract_id, rows=rows, pack=self.pack, mark=mark)
                 rows = tuple(rewrite.rows(page))
         return "\n".join(rows)
 
-    def compare(self, contract_id: str, recorded: str, rendered: str) -> Comparison:
+    def compare(
+        self, contract_id: str, recorded: str, rendered: str, *, mark: int = 0
+    ) -> Comparison:
         """Compare the port's render with the recorded frame through the map."""
-        return first_diff(self.expected(contract_id, recorded), rendered)
+        return first_diff(self.expected(contract_id, recorded, mark=mark), rendered)

@@ -4,6 +4,10 @@
 state that cannot vouch for a count says so in the frame (a label under the title and an
 ``ATTACHED`` line), and a state that refuses writes names its reason from the chrome. The
 ``ATTACHED`` line names the revision and age the caller read, never one of its own.
+
+The two contracts each have one door: :func:`reads` says what a count may claim, and
+:func:`write_refusal` says why a write may not be sent. A verb refuses from there whether
+its key came from the keybar, the action menu or an overlay.
 """
 
 from __future__ import annotations
@@ -14,10 +18,22 @@ from enum import Enum
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
+from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.session import Session
 
 # The connection states a write may be sent in.
 MUTABLE: frozenset[str] = frozenset({"LIVE", "LIVE / PARTIAL", "DEGRADED"})
+# The connection states under which no request can leave the console at all.
+TRANSPORT_LOSS: frozenset[str] = frozenset({"DISCONNECTED", "OFFLINE SNAPSHOT"})
+
+#: Why the link is lost, as a disconnected frame's cause line and its write gate say it.
+#: The transport dropped mid-session, so no request can be issued at all.
+DISCONNECTED_CAUSE = "the daemon cannot be reached"
+
+# The refusals the port states for connection values the packet's chrome names none for.
+_PORT_REFUSALS: dict[str, str] = {
+    "DISCONNECTED": f"{DISCONNECTED_CAUSE} · no request can be issued"
+}
 
 
 class Age(Enum):
@@ -58,7 +74,7 @@ _READS: dict[str, Reads] = {
         False, "loading · the previous revision, labelled with its age", Age.REVISION
     ),
     "DEGRADED": Reads(False, "degraded · a feed is unhealthy", Age.REVISION),
-    "DISCONNECTED": Reads(False, "disconnected · nothing is arriving", Age.REVISION),
+    "DISCONNECTED": Reads(False, f"disconnected · {DISCONNECTED_CAUSE}", Age.AGED),
 }
 
 
@@ -96,9 +112,45 @@ def can_mutate(session: Session) -> bool:
     return session.conn in MUTABLE
 
 
+def transport_lost(session: Session) -> bool:
+    """Return whether no request can leave in the session's connection state, whatever it is."""
+    return session.conn in TRANSPORT_LOSS
+
+
 def mut_reason(session: Session, fixture: Fixture) -> str:
     """Return the live reason a write is refused in the session's connection state."""
-    return fixture.proto.states.refuse.get(session.conn) or "not permitted in this connection state"
+    conn = session.conn
+    refusal = fixture.proto.states.refuse.get(conn) or _PORT_REFUSALS.get(conn)
+    return refusal or "not permitted in this connection state"
+
+
+def write_refusal(
+    session: Session,
+    fixture: Fixture,
+    *,
+    verb: str,
+    kind: str | None = None,
+    principal_refusal: str = "",
+) -> str:
+    """Return why a write may not be sent, or nothing when it may; the one write gate.
+
+    The connection state is judged first, so an offline console names the state that stops
+    every write rather than one verb's missing mutator; a verb no mutator carries names that
+    before the principal, because no principal would make it work.
+
+    Args:
+        session: The session whose connection state is judged.
+        fixture: The registers the connection state's reason is read from.
+        kind: The route or target kind the verb acts on; ``None`` where the verb is already
+            addressed to a mutator, so only the state and the principal are judged.
+        verb: The verb's name, as the menu lists it.
+        principal_refusal: Why every bound write is refused because the daemon link acts as
+            nobody; empty when it acts as someone or there is no link.
+    """
+    if not can_mutate(session):
+        return mut_reason(session, fixture)
+    unbound = binding_refusal(kind, verb) if kind is not None else ""
+    return unbound or principal_refusal
 
 
 def attn_cell(session: Session, n: int) -> str:

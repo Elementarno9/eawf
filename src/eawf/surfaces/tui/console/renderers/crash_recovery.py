@@ -16,6 +16,7 @@ from eawf.kernel.state.epoch2.transitions import TERMINAL_STATUSES, LifecycleEnt
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -28,12 +29,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
 )
 from eawf.surfaces.tui.console.session import conn_label
 
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "door"),
-    ("Enter", "choose"),
-    ("i", "inspect"),
-    ("Esc", "later"),
-)
+_KEYS = route_pairs("crash.recovery")
 
 
 def _doors(revision: int) -> tuple[list[str], ...]:

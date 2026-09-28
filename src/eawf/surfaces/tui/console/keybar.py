@@ -4,16 +4,23 @@ A key is declared by the names the dispatcher matches (``ArrowUp``, ``PageDown``
 ``Escape``), and the keybar token is derived from those names, so the bar always spells a
 key in full (``PageUp PageDown``, ``Home End``) and names a pair of direction keys once
 (``↑↓``). A token that abbreviates a key or slashes two keys together is refused before it
-renders. The bar is one line: a one-cell margin, then ``<key> <label>`` pairs three cells
-apart, and trailing pairs drop until the pairs fit the frame's width budget. Each route
-table is ordered route verbs first and globals last, so the tail that drops is always a
-global.
+renders, and so is a shifted key other than ``?`` and ``Y``: no case convention may encode
+danger. The bar is one line: a one-cell margin, then ``<key> <label>`` pairs three cells
+apart. A route verb never drops; the global pairs drop in one fixed order until the pairs
+fit the frame's width budget, so the bar is the route's whole table plus as much of the
+global set as the width allows.
+
+Every route frame draws its bar from :data:`ROUTE_KEYS`, and the help overlay and the
+dispatcher's refusal gate read the same tables, so a binding added here reaches all three.
+The tables are audited when this module loads: a letter with two meanings inside one route,
+or a reserved global key bound to a route-local verb, refuses to import.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from itertools import pairwise
 from types import MappingProxyType
 
@@ -70,6 +77,18 @@ def assert_full_key_names(token: str) -> None:
             raise ValueError(f"keybar token {token!r} is a slashed pair; name the verb once")
 
 
+# Single keys that need Shift on a US layout, beside the capital letters.
+_SHIFTED_SYMBOLS = frozenset('~!@#$%^&*()_+{}|:"<>?')
+# The only shifted keys a frame may show: help is chrome rather than a verb, and ``Y``
+# copies the stable URN, so neither mutates anything.
+ADMITTED_SHIFTED = frozenset({"?", "Y"})
+
+
+def is_shifted(key: str) -> bool:
+    """Return whether ``key`` is a single key that needs Shift: a capital or a symbol."""
+    return len(key) == 1 and (key.isupper() or key in _SHIFTED_SYMBOLS)
+
+
 def key_token(keys: Sequence[str]) -> str:
     """Return the keybar token for the keys one entry binds.
 
@@ -89,6 +108,24 @@ def key_token(keys: Sequence[str]) -> str:
     return token
 
 
+class KeyKind(StrEnum):
+    """What a binding does, which decides where it may sit and whether it previews.
+
+    Members:
+        NAV: Moves the view, the cursor or the focus, or opens a surface.
+        GLOBAL: Part of the global grammar; advertised only where the width allows.
+        SAFE: A frequent local verb that is reversible and takes no preview.
+        ANSWER: Resolves a question or a delivery disposition and mutates no lifecycle.
+        PRIMARY: The route's one direct mutation; it opens the consequence preview first.
+    """
+
+    NAV = "nav"
+    GLOBAL = "global"
+    SAFE = "safe"
+    ANSWER = "answer"
+    PRIMARY = "primary"
+
+
 @dataclass(frozen=True, slots=True)
 class KeyEntry:
     """One advertised binding: the verb's label and the keys that perform it.
@@ -96,19 +133,25 @@ class KeyEntry:
     Attributes:
         label: What the keys do where the bar shows them, never the destination's name.
         keys: The dispatcher key names, in the order the token prints them.
+        kind: What the binding does; a navigation key unless declared otherwise.
 
     Raises:
-        ValueError: ``label`` is blank, or ``keys`` fails :func:`key_token`.
+        ValueError: ``label`` is blank, ``keys`` fails :func:`key_token`, or a key is
+            shifted and is not one of :data:`ADMITTED_SHIFTED`.
     """
 
     label: str
     keys: tuple[str, ...]
+    kind: KeyKind = KeyKind.NAV
 
     def __post_init__(self) -> None:
         """Validate the label and the keys once, at declaration."""
         if not self.label.strip():
             raise ValueError(f"key entry {self.keys!r} needs a label")
         key_token(self.keys)
+        for key in self.keys:
+            if is_shifted(key) and key not in ADMITTED_SHIFTED:
+                raise ValueError(f"key entry {self.label!r} binds shifted key {key!r}")
 
     @property
     def token(self) -> str:
@@ -123,11 +166,15 @@ class KeyEntry:
 _UP_DOWN = ("ArrowUp", "ArrowDown")
 
 
-def _k(label: str, *keys: str) -> KeyEntry:
+def _k(label: str, *keys: str, kind: KeyKind = KeyKind.NAV) -> KeyEntry:
     """Return an entry; a shorthand for the tables below."""
-    return KeyEntry(label, keys)
+    return KeyEntry(label, keys, kind)
 
 
+_G = KeyKind.GLOBAL
+
+# The shared vocabulary. A key the global grammar reserves is bound only through one of
+# these entries, never through a route-local one, so it means the same thing everywhere.
 KEY: Mapping[str, KeyEntry] = MappingProxyType(
     {
         "up": _k("row", *_UP_DOWN),
@@ -136,28 +183,37 @@ KEY: Mapping[str, KeyEntry] = MappingProxyType(
         "ends": _k("ends", "Home", "End"),
         "enter": _k("drill", "Enter"),
         "open": _k("open", "Enter"),
-        "esc": _k("back", "Escape"),
+        "esc": _k("back", "Escape", kind=_G),
+        "clear_bucket": _k("clear bucket", "Escape", kind=_G),
         "tab": _k("buckets", "Tab"),
         "tab_section": _k("section", "Tab"),
-        "go": _k("go", "g"),
+        "go": _k("go", "g", kind=_G),
+        "palette": _k("palette", "/", kind=_G),
         "filter": _k("filter", "\\"),
-        "actions": _k("actions", "."),
-        "help": _k("help", "?"),
-        "inspect": _k("inspect", "i"),
-        "raw": _k("raw", "r"),
-        "copy": _k("copy", "y"),
-        "digest": _k("copy digest", "y"),
-        "answer": _k("answer", "a"),
-        "deny": _k("deny", "x"),
-        "snooze": _k("snooze", "z"),
-        "resolve": _k("resolve", "v"),
+        "refine": _k("refine", "\\"),
+        "actions": _k("actions", ".", kind=_G),
+        "help": _k("help", "?", kind=_G),
+        "inspect": _k("inspect", "i", kind=_G),
+        "stack": _k("stack", "i", kind=_G),
+        "raw": _k("raw", "r", kind=KeyKind.SAFE),
+        "copy": _k("copy", "y", kind=_G),
+        "digest": _k("copy digest", "y", kind=_G),
+        "answer": _k("answer", "a", kind=KeyKind.ANSWER),
+        "deny": _k("deny", "x", kind=KeyKind.ANSWER),
+        "snooze": _k("snooze", "z", kind=KeyKind.ANSWER),
+        "resolve": _k("resolve", "v", kind=KeyKind.PRIMARY),
     }
 )
 
 _K = KEY
 
-# Every route's ordered key table; the pre-session ``entry`` layer builds its own from the
-# state it is in, so it has no row here.
+# The keys a record frame offers after its row keys, in place of its route's own table.
+RECORD_FRAME_KEYS: tuple[KeyEntry, ...] = (KEY["actions"], KEY["inspect"], KEY["esc"])
+
+# Every route's ordered key table, route verbs first and globals last; the pre-session
+# ``entry`` layer builds its own from the state it is in, so it has no row here. A frame
+# that shows a state-dependent part of its table picks the entries by label with
+# :func:`pick`, so it can leave keys out but never spell one the table lacks.
 ROUTE_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
     {
         "scope.home": (
@@ -215,36 +271,128 @@ ROUTE_KEYS: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
             _K["actions"],
             _K["esc"],
         ),
-        "backlog": (_K["up"], _K["enter"], _K["esc"]),
+        # Enter opens the draft card; promoting is the card's verb, never the route's
+        "backlog": (
+            _K["up"],
+            _k("group", "Tab"),
+            _K["open"],
+            _K["palette"],
+            _K["esc"],
+        ),
         "campaign": (
             _K["up"],
             _K["tab_section"],
-            _K["enter"],
+            _K["open"],
             _K["actions"],
             _K["inspect"],
             _K["esc"],
         ),
         "history": (_K["up"], _K["filter"], _K["enter"], _K["copy"], _K["esc"]),
-        "settings": (_K["up"], _K["enter"], _K["filter"], _K["inspect"], _K["esc"]),
-        "trust": (_K["up"], _K["enter"], _K["actions"], _K["inspect"], _K["esc"]),
-        "evidence": (_K["up"], _K["enter"], _K["copy"], _K["esc"]),
-        "evidence.digest": (_K["copy"], _K["esc"]),
-        "health": (_K["up"], _K["enter"], _K["filter"], _K["esc"]),
-        "sandbox.log": (_K["up"], _K["enter"], _K["filter"], _k("policy", "p"), _K["esc"]),
-        "unattended": (_K["up"], _K["enter"], _K["esc"]),
-        "search": (_K["up"], _K["enter"], _K["filter"], _K["esc"]),
-        "transcript": (_K["up"], _K["enter"], _k("follow", "f"), _K["copy"], _K["esc"]),
+        "settings": (
+            _k("field", *_UP_DOWN),
+            _K["tab_section"],
+            _k("edit", "Enter"),
+            _k("layer", "l"),
+            _k("unset", "x", kind=KeyKind.PRIMARY),
+            _K["esc"],
+            _K["stack"],
+            _K["filter"],
+        ),
+        "trust": (
+            _k("field", *_UP_DOWN),
+            _k("evidence", "Enter"),
+            _K["actions"],
+            _K["inspect"],
+            _K["esc"],
+        ),
+        "evidence": (
+            _k("rung", *_UP_DOWN),
+            _k("what it found", "Enter"),
+            _K["copy"],
+            _K["esc"],
+        ),
+        "evidence.digest": (_K["copy"], _k("close", "Escape", kind=_G)),
+        "health": (
+            _k("check", *_UP_DOWN),
+            _k("detail", "Enter"),
+            _K["filter"],
+            _K["esc"],
+        ),
+        "sandbox.log": (
+            _K["up"],
+            _k("run", "Enter"),
+            _K["filter"],
+            _k("policy", "p"),
+            _K["esc"],
+        ),
+        "unattended": (
+            _K["up"],
+            _k("run", "Enter"),
+            _k("request pause", "a", kind=KeyKind.PRIMARY),
+            _k("request drain", "d", kind=KeyKind.PRIMARY),
+            _K["esc"],
+        ),
+        "search": (
+            _k("hit", *_UP_DOWN),
+            _K["enter"],
+            _K["refine"],
+            _k("kind", "k"),
+            _K["esc"],
+        ),
+        "transcript": (
+            _k("block", *_UP_DOWN),
+            _k("fold", "Enter"),
+            _k("follow", "f", kind=KeyKind.SAFE),
+            _K["copy"],
+            _K["esc"],
+        ),
         "receipt": (_K["copy"], _K["esc"]),
-        "cost.ceiling": (_K["up"], _K["enter"], _K["esc"]),
-        "crash.recovery": (_K["up"], _K["enter"], _K["inspect"], _K["esc"]),
-        "git.pr": (_K["up"], _K["enter"], _K["copy"], _K["esc"]),
-        "history.diff": (_K["up"], _K["enter"], _K["esc"]),
-        "settings.stack": (_K["up"], _K["esc"]),
-        "notifications": (_K["up"], _K["esc"]),
-        "merge.conflict": (_K["up"], _K["copy"], _K["esc"]),
-        "export": (_K["up"], _K["enter"], _K["esc"]),
-        "campaign.step": (_K["up"], _K["enter"], _K["copy"], _K["esc"]),
-        "campaign.artifact": (_k("scroll", *_UP_DOWN), _K["copy"], _K["esc"]),
+        "cost.ceiling": (_K["up"], _k("run", "Enter"), _K["esc"]),
+        "crash.recovery": (
+            _k("door", *_UP_DOWN),
+            _k("choose", "Enter"),
+            _K["inspect"],
+            _k("later", "Escape", kind=_G),
+        ),
+        "git.pr": (
+            _K["up"],
+            _k("commit", "Enter"),
+            _k("conflict", "m"),
+            _K["copy"],
+            _K["esc"],
+        ),
+        "history.diff": (
+            _k("field", *_UP_DOWN),
+            _k("field", "Enter"),
+            _k("entity", "e"),
+            _k("revisions", "p"),
+            _K["esc"],
+        ),
+        "settings.stack": (_k("layer", *_UP_DOWN), _k("close", "Escape", kind=_G)),
+        "notifications": (_k("class", *_UP_DOWN), _k("close", "Escape", kind=_G)),
+        "merge.conflict": (
+            _k("hunk", *_UP_DOWN),
+            _K["copy"],
+            _k("close", "Escape", kind=_G),
+        ),
+        "export": (
+            _k("part", *_UP_DOWN),
+            _k("export", "Enter"),
+            _k("cancel", "Escape", kind=_G),
+        ),
+        "campaign.step": (
+            _k("region", "Tab"),
+            _k("line", *_UP_DOWN),
+            _k("product", *_UP_DOWN),
+            _K["open"],
+            _K["copy"],
+            _K["esc"],
+        ),
+        "campaign.artifact": (
+            _k("scroll", *_UP_DOWN),
+            _K["copy"],
+            _k("close", "Escape", kind=_G),
+        ),
     }
 )
 
@@ -259,6 +407,64 @@ def unregistered_routes(
 _UNKEYED = unregistered_routes(ROUTE_KEYS)
 if _UNKEYED:
     raise ValueError(f"key tables for unregistered routes: {', '.join(_UNKEYED)}")
+
+# The global grammar's keys: a route table binds each only through the shared vocabulary,
+# and a route wanting a verb of its own takes an unclaimed letter instead.
+RESERVED: frozenset[str] = frozenset("g/\\.?!iryY-u[]")
+_SHARED: frozenset[KeyEntry] = frozenset(KEY.values())
+
+
+def collision_audit(tables: Mapping[str, Sequence[KeyEntry]]) -> tuple[str, ...]:
+    """Return each collision in ``tables``, one line per finding, in route order.
+
+    Two findings exist: a single key (a letter or a symbol) that carries two labels inside
+    one route, and a reserved key bound by a route-local entry rather than the shared
+    vocabulary. A named key such as ``Enter`` or the arrows may change its label with the
+    state a route is in, so only single keys are held to one meaning.
+    """
+    found: list[str] = []
+    for route in sorted(tables):
+        meaning: dict[str, str] = {}
+        for entry in tables[route]:
+            for key in entry.keys:
+                if len(key) != 1:
+                    continue
+                if key in RESERVED and entry not in _SHARED:
+                    found.append(f"{route}: reserved key {key!r} bound to {entry.label!r}")
+                held = meaning.setdefault(key, entry.label)
+                if held != entry.label:
+                    found.append(f"{route}: {key!r} means both {held!r} and {entry.label!r}")
+    return tuple(found)
+
+
+_COLLISIONS = collision_audit(ROUTE_KEYS)
+if _COLLISIONS:
+    raise ValueError(f"key table collisions: {'; '.join(_COLLISIONS)}")
+
+
+def route_pairs(route: str) -> tuple[Pair, ...]:
+    """Return ``route``'s whole table as keybar pairs, in advertising order.
+
+    Raises:
+        KeyError: ``route`` has no key table.
+    """
+    return tuple(entry.pair() for entry in ROUTE_KEYS[route])
+
+
+def pick(route: str, *labels: str) -> list[Pair]:
+    """Return the pairs of ``route``'s entries labelled ``labels``, in the order given.
+
+    A frame whose bar follows its state names the entries it shows here, so a label the
+    table does not hold fails at render rather than drawing a key nothing binds.
+
+    Raises:
+        KeyError: ``route`` has no key table, or no entry in it carries one of ``labels``.
+    """
+    table = {entry.label: entry for entry in ROUTE_KEYS[route]}
+    missing = [label for label in labels if label not in table]
+    if missing:
+        raise KeyError(f"{route} has no key labelled {', '.join(missing)}")
+    return [table[label].pair() for label in labels]
 
 
 def budget(w: int) -> int:
@@ -280,8 +486,31 @@ def _compose(pairs: Sequence[Pair]) -> str:
     return " " * MARGIN + GAP.join(f"{token} {label}" for token, label in pairs)
 
 
+# The global pairs in the order they leave a bar too wide for its budget; the copy,
+# dismiss and inspect pairs go after these, from the tail.
+GLOBAL_DROP_ORDER: tuple[str, ...] = ("?", "/", ".", "Esc", "g")
+GLOBAL_TOKENS: frozenset[str] = frozenset({*GLOBAL_DROP_ORDER, "-", "y", "Y", "i"})
+
+
+def _drop_at(pairs: Sequence[Pair]) -> int:
+    """Return the index of the pair that leaves a bar too wide next.
+
+    The global pairs leave in :data:`GLOBAL_DROP_ORDER`, then the other globals from the
+    tail. A bar holding no global has only route verbs left, which the key-table contract
+    keeps inside every budget, so its last pair goes only for a table that breaks it. The
+    first pair is never chosen.
+    """
+    last = len(GLOBAL_DROP_ORDER)
+    ranked = [
+        (GLOBAL_DROP_ORDER.index(token) if token in GLOBAL_DROP_ORDER else last, -i)
+        for i, (token, _label) in enumerate(pairs)
+        if i and token in GLOBAL_TOKENS
+    ]
+    return -min(ranked)[1] if ranked else len(pairs) - 1
+
+
 def keybar(pairs: Sequence[Pair], w: int) -> str:
-    """Return the keybar row: exactly ``w`` cells, trailing pairs dropped past the budget.
+    """Return the keybar row: exactly ``w`` cells, global pairs dropped past the budget.
 
     The first pair never drops; a lone pair wider than the frame is clipped instead.
 
@@ -298,7 +527,7 @@ def keybar(pairs: Sequence[Pair], w: int) -> str:
     kept = list(pairs)
     bar = _compose(kept)
     while cell_len(bar) > room and len(kept) > 1:
-        kept.pop()
+        del kept[_drop_at(kept)]
         bar = _compose(kept)
     return pad(bar, w)
 

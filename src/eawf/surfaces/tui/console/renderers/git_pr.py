@@ -17,6 +17,7 @@ from eawf.kernel.projection.integration import PULL_REQUEST_PRODUCER, GitPrReadM
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.format import clock_minute, group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -35,13 +36,7 @@ _COMMITS: tuple[list[str], ...] = (
     ["a1d0e9", "13:31", "Add an ordering test for the normalizer"],
     ["77c410", "13:12", "Probe: reproduce the ordering assumption"],
 )
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "row"),
-    ("Enter", "commit"),
-    ("m", "conflict"),
-    ("y", "copy"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("git.pr")
 
 #: The sentence the route prints where an operator looks for the verb it does not have.
 #: Every key this route binds reads; nothing it reaches writes a file or a remote.

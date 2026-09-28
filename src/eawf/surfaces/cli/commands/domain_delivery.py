@@ -46,6 +46,7 @@ from eawf.surfaces.cli.commands.domain import (
     _run_create_verb,
     _run_verb,
 )
+from eawf.surfaces.cli.commands.domain_consequence import DryRun, Yes
 from eawf.surfaces.cli.commands.lifecycle import batch_app, run_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
 
@@ -86,10 +87,14 @@ def _move(
     idempotency_key: str,
     actor: str,
     from_spec: Path | None,
+    dry_run: bool,
+    yes: bool,
 ) -> None:
     """Dispatch one plain lifecycle move through the sibling module's body."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=method,
         urn=urn,
         expected_revision=expected_revision,
@@ -110,9 +115,11 @@ def task_claim_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Claim a PLANNED Task for the actor that will run it."""
-    _move(ctx, TASK_CLAIM, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(ctx, TASK_CLAIM, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
 
 
 @task_app.command("ready")
@@ -123,13 +130,15 @@ def task_ready_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Declare a RUNNING Task ready to integrate on its bound report and evidence.
 
     The payload presents the ``run_report_bound`` observation and names
     the evidence in ``binding_refs``; a Run report alone does not qualify.
     """
-    _move(ctx, TASK_READY, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(ctx, TASK_READY, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
 
 
 @task_app.command("complete")
@@ -142,6 +151,8 @@ def task_complete_cmd(
     integrated_commit: Annotated[str, typer.Option("--integrated-commit", help=_COMMIT_HELP)],
     assessment: Annotated[Path, typer.Option("--assessment", help=_ASSESSMENT_HELP)],
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Complete a Task on the Batch head its passing assessment proves.
 
@@ -157,6 +168,8 @@ def task_complete_cmd(
         return
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=TASK_COMPLETE,
         urn=urn,
         expected_revision=expected_revision,
@@ -205,9 +218,11 @@ def run_start_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Start a QUEUED Run; the payload's updates carry started_at."""
-    _move(ctx, RUN_START, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(ctx, RUN_START, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
 
 
 @run_app.command("finish")
@@ -218,9 +233,11 @@ def run_finish_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Complete a RUNNING Run once its report is bound; updates carry ended_at."""
-    _move(ctx, RUN_FINISH, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(ctx, RUN_FINISH, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
 
 
 @run_app.command("fail")
@@ -231,9 +248,11 @@ def run_fail_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Fail a RUNNING Run; the payload carries the reason, ended_at and failure."""
-    _move(ctx, RUN_FAIL, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(ctx, RUN_FAIL, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
 
 
 # ---- Batch ------------------------------------------------------------------
@@ -247,9 +266,11 @@ def batch_merge_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Authorise the merge of a READY_TO_MERGE Batch at the head it pinned."""
-    _move(ctx, BATCH_MERGE, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(ctx, BATCH_MERGE, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
 
 
 @batch_app.command("observe-merge")
@@ -260,9 +281,21 @@ def batch_observe_merge_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Record that the host landed a MERGING Batch, on a filed landed read-back."""
-    _move(ctx, BATCH_OBSERVE_MERGE, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(
+        ctx,
+        BATCH_OBSERVE_MERGE,
+        urn,
+        expected_revision,
+        idempotency_key,
+        actor,
+        from_spec,
+        dry_run,
+        yes,
+    )
 
 
 @batch_app.command("complete")
@@ -273,9 +306,13 @@ def batch_complete_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Complete a merged Batch whose landed commit matches the head it pinned."""
-    _move(ctx, BATCH_COMPLETE, urn, expected_revision, idempotency_key, actor, from_spec)
+    _move(
+        ctx, BATCH_COMPLETE, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes
+    )
 
 
 __all__ = [

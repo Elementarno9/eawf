@@ -21,6 +21,7 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin, window_rows
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
@@ -33,13 +34,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "row"),
-    ("Enter", "run"),
-    ("a", "request pause"),
-    ("d", "request drain"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("unattended")
 RUNS: tuple[str, ...] = tuple(row[0] for row in pt.QUEUE)
 
 

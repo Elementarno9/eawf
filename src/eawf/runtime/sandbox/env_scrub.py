@@ -28,9 +28,9 @@ account credential family (claude: ``CLAUDE_CONFIG_DIR`` /
 not on the allowlist -- ``AWS_*``, ``GH_*`` / ``GITHUB_*``, ``SSH_*``,
 ``KUBECONFIG``, ``EAWF_*`` daemon internals, and any unknown variable --
 is absent by construction. The gate lane additionally carries the
-``EAWF_RUNTIME_DIR`` / ``EA_STATE`` containment pair, which pins WHICH
-runtime directory and ledger a gate reaches rather than granting it
-anything.
+containment bindings (``EAWF_RUNTIME_DIR`` and the live-ledger fence),
+which pin WHICH runtime directory and ledger a gate reaches rather than
+granting it anything.
 
 What this module does NOT do: the env scrub is the credential half of the
 safety floor alone. Its companion egress proxy is started by no spawn path,
@@ -50,6 +50,8 @@ import os
 import shutil
 import sys
 from collections.abc import Mapping
+
+from eawf.kernel.state.resolve import GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -148,17 +150,18 @@ _GATE_AUTH_PREFIXES: tuple[str, ...] = ()
 
 #: gate-lane CONTAINMENT bindings, carried through rather than dropped.
 #:
-#: These two are not credentials; they are the seams that decide WHICH
-#: runtime directory and WHICH ledger a gate reaches. Dropping them denies
-#: a gate nothing: both resolvers simply fall back to the operator's live
-#: ``~/.eawfd`` daemon socket and to the live ``.ea`` found by walking up
-#: from the working tree. So the drop does not contain a gate -- it defeats
-#: containment, because a caller that deliberately bound a gate to a
-#: throwaway sandbox would have the binding stripped and the gate would
-#: reach the live daemon and the live ledger anyway. Carried, a gate
-#: launched inside a sandbox stays inside it; a gate launched outside one
-#: sees exactly what the fallback would have given it.
-_GATE_CONTAINMENT_KEYS: frozenset[str] = frozenset({"EAWF_RUNTIME_DIR", "EA_STATE"})
+#: These are not credentials; they decide WHICH runtime directory and WHICH
+#: ledger a gate reaches. Dropping them denies a gate nothing: the runtime
+#: resolver falls back to the operator's live ``~/.eawfd`` daemon socket and
+#: the state resolver to the live ``.ea`` found by walking up from the
+#: working tree. So the drop would defeat containment rather than tighten it.
+#: The ledger is fenced rather than pinned: ``EA_STATE`` is deliberately NOT
+#: carried, because it outranks ``-w`` and the working directory and would
+#: repoint every workspace a gate's own test suite builds; the fence swaps
+#: only a resolution that lands on the live ledger for its sandbox copy.
+_GATE_CONTAINMENT_KEYS: frozenset[str] = frozenset(
+    {"EAWF_RUNTIME_DIR", GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV}
+)
 
 
 def pinned_tmpdir(platform: str) -> str | None:
@@ -248,8 +251,8 @@ def build_child_env(
     the cross-lane credential, and any unknown variable -- is absent by
     construction, so the child can never read a credential the floor did
     not explicitly grant it. The one exception is the gate lane's
-    containment pair (:data:`_GATE_CONTAINMENT_KEYS`), which carries
-    through because dropping it widens what a gate reaches rather than
+    containment bindings (:data:`_GATE_CONTAINMENT_KEYS`), which carry
+    through because dropping them widens what a gate reaches rather than
     narrowing it.
 
     Args:

@@ -14,7 +14,7 @@ import pytest
 
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.keymap import GLOBAL_HELP
+from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS
 from eawf.surfaces.tui.console.palette import HitKind, PaletteEntity, hits, palette_rows
 from eawf.surfaces.tui.console.registry import REGISTRY, route_for_id
 from eawf.surfaces.tui.console.session import Session
@@ -120,7 +120,7 @@ def test_con_097_verbs_are_not_a_palette_kind(fixture: Fixture) -> None:
 
 def test_con_097_no_key_but_the_slash_opens_a_search() -> None:
     assert "search" not in REGISTRY.go_map.values()
-    assert [token for token, _text, key in GLOBAL_HELP if key == "/"] == ["/"]
+    assert [key.token for key in GLOBAL_KEYS if "/" in key.keys] == ["/"]
     for table in ROUTE_KEYS.values():
         assert not any("search" in entry.label for entry in table)
 

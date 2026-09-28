@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from types import MappingProxyType
 from typing import Final
 
@@ -200,6 +201,8 @@ class SpineRow:
         fields: Every field the route declares, by name, each a truth field.
         title: The record's own title, when it states one.
         parent_key: The key of the record it is filed under, when it names one.
+        facts: The further facts the projection read about the record, by name, as
+            :attr:`~eawf.kernel.projection.compute.ProjectionRow.facts` states them.
     """
 
     key: str
@@ -209,6 +212,7 @@ class SpineRow:
     fields: Mapping[str, TruthField[str]]
     title: str | None = None
     parent_key: str | None = None
+    facts: Mapping[str, str] = MappingProxyType({})
 
     def field(self, name: str) -> TruthField[str]:
         """Return the named field.
@@ -232,6 +236,9 @@ class SpineView:
         digest: The projection's digest, which one cursor yields once.
         complete: Whether the projection claimed every row of its scope, and so whether a
             count taken from it may be called complete.
+        generated_at: When the daemon read the rows, which is the instant an elapsed
+            time or an age derived from them is stated as of; ``None`` for a view built
+            without a served header.
         rows: The records, in the projection's own order.
         counts: The rows per collection the route binds, keyed by collection name. A
             collection the route does not bind has no entry, which is how a count with no
@@ -244,6 +251,7 @@ class SpineView:
     source_cursor: str
     digest: str
     complete: bool
+    generated_at: datetime | None = None
     rows: tuple[SpineRow, ...]
     counts: Mapping[str, int]
 
@@ -322,6 +330,7 @@ def build_spine_view(projection: RouteProjection) -> SpineView:
             revision=row.revision,
             title=row.title,
             parent_key=row.parent_key,
+            facts=MappingProxyType(dict(row.facts)),
             fields=MappingProxyType(
                 {
                     spec.name: (
@@ -349,6 +358,7 @@ def build_spine_view(projection: RouteProjection) -> SpineView:
         source_cursor=projection.header.source_cursor,
         digest=projection.digest,
         complete=projection.header.completeness is Completeness.COMPLETE,
+        generated_at=projection.header.generated_at,
         rows=rows,
         counts=counts,
     )

@@ -18,6 +18,7 @@ from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.projection.verification import HealthReadModel
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, g_pad, thin
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -30,12 +31,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     tuple_rows,
 )
 
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "check"),
-    ("Enter", "detail"),
-    ("\\", "filter"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("health")
 Check = tuple[str, str, str, str | None]
 
 
@@ -145,12 +141,12 @@ def _repair(check: HealthCheck | None) -> list[str]:
         return [label("REPAIR", "∅ no check is focused · nothing declared is held")]
     if check.outcome == "passed":
         return [
-            label("REPAIR", NOTHING_TO_REPAIR),
+            label("REPAIR", f"{check.name} · {NOTHING_TO_REPAIR}"),
             more("Its last result stands until the next sweep."),
         ]
     return [
-        label("REPAIR", f"{UNKNOWN_WORD} · no remediation is declared for {check.name}"),
-        more(REPAIR_LIVES),
+        label("REPAIR", f"{check.name} · check {check.outcome}"),
+        more(f"{UNKNOWN_WORD} · no remediation is declared for it · {REPAIR_LIVES}"),
     ]
 
 
@@ -167,7 +163,10 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
     s, w = view.session, view.w
     wide = w >= 120
     checks = checks_of(model)
-    dv.sel_in(s, len(checks))
+    # the cursor is kept by the check's name, so a reordered list keeps the same check
+    names = [check.name for check in checks]
+    at = names.index(s.sel_id) if s.sel_id in names else min(max(s.sel, 0), len(checks) - 1)
+    s.sel, s.sel_id = max(at, 0), (names[at] if checks else None)
     top = native_head(
         view,
         model,

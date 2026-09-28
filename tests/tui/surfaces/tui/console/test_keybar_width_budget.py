@@ -1,10 +1,12 @@
-"""The keybar fits its width budget by dropping tail pairs and spells every key in full.
+"""The keybar fits its width budget by dropping globals in a fixed order (CON-032).
 
 The budget is the frame width less one margin cell, counted with the leading margin, so a
-bar at exactly the budget keeps every pair and one cell over it drops the last pair. Every
-route table fits at the three frame sizes, with the attention bar at 77 cells and the
-activity bar at 69 cells at 80 columns as the pinned cases, and the tail-drop rule is the
-test-only chassis rule on every bar the golden contract records.
+bar at exactly the budget keeps every pair and one cell over it drops a pair. A route verb
+never drops: the global pairs leave in the fixed order ``? help``, ``/ palette``,
+``. actions``, ``Esc back``, ``g go``, then the copy and inspect pairs, and every global a
+bar drops is still listed in help's EVERYWHERE block. Every route table fits at the three
+frame sizes, with the attention bar at 77 cells and the activity bar at 69 cells at 80
+columns as the pinned cases.
 """
 
 from __future__ import annotations
@@ -14,9 +16,14 @@ from pathlib import Path
 
 import pytest
 
+from eawf.surfaces.tui.console.app import compose_frame
+from eawf.surfaces.tui.console.fixture import load_fixture
+from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import (
     ABBREVIATED,
     GAP,
+    GLOBAL_DROP_ORDER,
+    GLOBAL_TOKENS,
     KEY,
     KEY_NAMES,
     MARGIN,
@@ -29,8 +36,9 @@ from eawf.surfaces.tui.console.keybar import (
     route_bar,
     unregistered_routes,
 )
+from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS, acts_here
 from eawf.surfaces.tui.console.registry import REGISTRY
-from eawf.surfaces.tui.console.session import SIZES
+from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.surfaces.tui.console.width import assert_known_width, cell_len
 
 WIDTHS = [w for w, _h in SIZES]
@@ -78,18 +86,100 @@ def test_unregistered_routes_names_only_the_unknown_table_routes() -> None:
     assert unregistered_routes({}) == ()
 
 
+def _shown(bar: str) -> list[str]:
+    return bar[MARGIN:].rstrip().split(GAP)
+
+
 @pytest.mark.parametrize("w", WIDTHS)
 @pytest.mark.parametrize("route", ROUTES)
-def test_route_bar_fits_budget_dropping_only_tail_pairs(route: str, w: int) -> None:
+def test_con032_route_bar_fits_budget_and_never_drops_a_route_verb(route: str, w: int) -> None:
+    """CON-032: the bar is the whole route table plus a width-bounded part of the globals."""
     bar = route_bar(route, w)
     assert cell_len(bar) == w
     assert _used(bar) <= budget(w)
-    shown = bar[MARGIN:].rstrip().split(GAP)
+    shown = _shown(bar)
     pairs = [f"{token} {label}" for token, label in _pairs(route)]
-    assert shown == pairs[: len(shown)]
-    if len(shown) < len(pairs):
-        with_next = cell_len(" " * MARGIN + GAP.join(pairs[: len(shown) + 1]))
-        assert with_next > budget(w)
+    verbs = [
+        p
+        for (token, _label), p in zip(_pairs(route), pairs, strict=True)
+        if token not in GLOBAL_TOKENS
+    ]
+    assert [p for p in shown if p in verbs] == verbs
+    assert [p for p in pairs if p in shown] == shown
+
+
+def _help_tokens(route: str) -> set[str]:
+    return {key.token.split(" ")[0] for key in GLOBAL_KEYS if acts_here(key, route)}
+
+
+@pytest.mark.parametrize("w", WIDTHS)
+@pytest.mark.parametrize("route", ROUTES)
+def test_con032_every_dropped_global_is_listed_in_help(route: str, w: int) -> None:
+    """CON-032: a global the bar drops still acts, and help's EVERYWHERE block lists it."""
+    shown = set(_shown(route_bar(route, w)))
+    dropped = [token for token, label in _pairs(route) if f"{token} {label}" not in shown]
+    assert set(dropped) <= _help_tokens(route), (route, w, dropped)
+
+
+def test_con032_globals_drop_in_the_fixed_order() -> None:
+    """CON-032: ``? / . Esc g`` leave first, in that order, then copy and inspect from the tail."""
+    verb = ("Enter", "x" * 20)
+    globals_ = [
+        ("i", "inspect"),
+        ("g", "go"),
+        ("y", "copy"),
+        ("Esc", "back"),
+        (".", "actions"),
+        ("?", "help"),
+        ("/", "palette"),
+        ("-", "dismiss"),
+    ]
+    pairs = [verb, *globals_]
+    order: list[str] = []
+    kept = [token for token, _label in pairs]
+    w = cell_len(" " + GAP.join(f"{t} {lab}" for t, lab in pairs)) + 1
+    while len(kept) > 1:
+        w -= 1
+        now = [piece.split(" ")[0] for piece in _shown(keybar(pairs, w))]
+        order += [token for token in kept if token not in now]
+        kept = now
+    assert order == [*GLOBAL_DROP_ORDER, "-", "y", "i"]
+    assert kept == ["Enter"]
+
+
+def test_con032_the_first_pair_never_drops_even_when_it_is_a_global() -> None:
+    """CON-032: a bar whose lead pair is a global keeps it and drops the pair behind it."""
+    bar = keybar([("y", "copy " * 5), ("Enter", "drill " * 5)], 40)
+    assert bar.startswith(" y copy")
+    assert "Enter" not in bar
+
+
+def test_con032_a_bar_of_route_verbs_only_drops_from_the_tail_past_its_budget() -> None:
+    """CON-032: with no global left, only a table breaking the fit contract loses a verb."""
+    pairs = [("a", "x" * 30), ("b", "x" * 30), ("c", "x" * 30)]
+    assert _shown(keybar(pairs, 80)) == [f"a {'x' * 30}", f"b {'x' * 30}"]
+
+
+def test_con032_attention_frame_advertises_enter_and_sits_at_77_cells() -> None:
+    """CON-032: the drawn attention bar advertises Enter and drops both globals at 80."""
+    root = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden" / "fixture"
+    session = Session()
+    session.route = "attention"
+    frame = compose_frame(View(session=session, fixture=load_fixture(root), w=80, h=24))
+    assert frame[-1].rstrip() == (
+        " ↑↓ row   Enter open   Tab buckets   a answer   x deny   z snooze   v resolve"
+    )
+    assert _used(frame[-1]) == 77
+
+
+def test_con032_attention_bucket_bar_reads_clear_bucket_where_it_fits() -> None:
+    """CON-032: while a bucket is set, the Escape pair reads ``Esc clear bucket``."""
+    root = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden" / "fixture"
+    session = Session()
+    session.route = "attention"
+    session.bucket = "needs"
+    frame = compose_frame(View(session=session, fixture=load_fixture(root), w=160, h=40))
+    assert frame[-1].rstrip().endswith("Esc clear bucket")
 
 
 def test_route_bar_pinned_attention_and_activity_at_80() -> None:

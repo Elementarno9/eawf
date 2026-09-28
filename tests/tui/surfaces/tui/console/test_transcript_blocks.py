@@ -20,10 +20,15 @@ label beside it, so a frame never presents the inference as an observation.
 The last group is the one the coverage grid owes. ``transcript`` is out of the manifest's
 hole list in the same commit that binds it, and this suite checks the grid and the console
 agree in both directions rather than taking the grid's word for it.
+
+CON-169, CON-170, CON-171 and CON-172 are held in the last section: the clock and the
+kind in full, the fold marks, the header derived from the blocks, the tail and the
+follow, the held clock, and colour on the kind cell alone.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -69,11 +74,14 @@ from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route, transcript
 from eawf.surfaces.tui.console.renderers.read_model import native
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
+from tests.tui.surfaces.tui.console.test_console_verbs import _Host
 from tests.tui.surfaces.tui.console.test_coverage_grid_manifest import (
     coverage_defects,
     load_manifest,
@@ -581,3 +589,260 @@ def test_no_route_is_left_owed_to_a_later_wave() -> None:
 def test_the_grid_and_the_console_still_agree_in_both_directions() -> None:
     """A route bound here and left a hole in the grid is the drift the grid exists to catch."""
     assert coverage_defects(load_manifest()) == ()
+
+
+# ---------- CON-169 to CON-172: the route draws the run's own words ----------
+
+_BLOCK_ROW = re.compile(r"^[ ▸](?P<clock>\d\d:\d\d:\d\d)  (?P<glyph>\S) (?P<word>[a-z]+)\s")
+_SHELL_TYPICAL = 30
+
+
+def _at(seconds: int) -> datetime:
+    return AT + timedelta(seconds=seconds)
+
+
+def _live_run() -> tuple[RunEventRecord, ...]:
+    """Return a Run thinking for 18s, with one foreground and one background command going.
+
+    A finished shell command took 30s, so shell's typical duration is derived as 30s.
+    """
+    output = CommandPayload(
+        command_family_ref="shell",
+        command_ref="CMD-000000f9",
+        phase="output",
+        execution="foreground",
+        stream="stdout",
+        chunk_ref="artifact://runs/chunk-0001",
+    )
+    lines = (
+        (_command(1, command_ref="CMD-0000d0e0"), 0),
+        (
+            _command(
+                2,
+                kind=RunEventKind.COMMAND_RESULT,
+                command_ref="CMD-0000d0e0",
+                exit_code=0,
+                outcome="succeeded",
+            ),
+            _SHELL_TYPICAL,
+        ),
+        (_command(3, command_ref="CMD-000000b9", execution="background"), 40),
+        (_event(4), 42),
+        (_command(5, command_ref="CMD-000000f9"), 48),
+        (_event(6, event_kind=RunEventKind.COMMAND_OUTPUT, payload=output), 60),
+    )
+    return tuple(line.model_copy(update={"recorded_at": _at(at)}) for line, at in lines)
+
+
+def _rows(frame: str) -> list[str]:
+    return frame.split("\n")
+
+
+def _blocks(frame: str) -> list[re.Match[str]]:
+    return [m for row in _rows(frame) if (m := _BLOCK_ROW.match(row))]
+
+
+def test_con_169_each_block_is_its_clock_then_its_kind_in_full() -> None:
+    model = _view(_live_run())
+    blocks = _blocks(_frame(model))
+    assert len(blocks) == len(model.blocks)
+    for found in blocks:
+        assert found.group("glyph") == transcript.NATIVE_GLYPH[found.group("word")]
+    words = [found.group("word") for found in blocks]
+    assert words == ["tool", "tool", "background", "thinking", "running", "tool"]
+
+
+def test_con_169_the_header_states_what_is_true_now_derived_from_the_blocks() -> None:
+    header = _rows(_frame(_view(_live_run())))[1]
+    assert header.startswith(
+        " Run RUN-00000010 · THINKING for 18s · 1 running in the background · following · 6 blocks"
+    )
+
+
+def test_con_169_a_block_in_flight_states_its_elapsed_and_the_typical_time_where_width_allows() -> (
+    None
+):
+    wide = next(r for r in _rows(_frame(_view(_live_run()), width=120)) if "⋯ running" in r)
+    narrow = next(r for r in _rows(_frame(_view(_live_run()), width=80)) if "⋯ running" in r)
+    widest = next(r for r in _rows(_frame(_view(_live_run()), width=160)) if "⋯ running" in r)
+    assert wide.rstrip().endswith(f"12s · ~{_SHELL_TYPICAL}s")
+    assert narrow.rstrip().endswith("12s")
+    assert widest.rstrip().endswith(f"12s · ~{_SHELL_TYPICAL}s typical")
+    for frame in (wide, narrow, widest):
+        assert "estimate" not in frame and "left" not in frame and "remaining" not in frame
+
+
+def test_con_169_a_purged_range_shows_purged_in_its_fold_slot() -> None:
+    frame = _frame(_view((_event(1), _gap(2, expected=2, observed=5), _summarized(5))))
+    purged = next(r for r in _rows(frame) if "✗ purged" in r)
+    assert _BLOCK_ROW.match(purged) is not None
+    assert purged.rstrip().endswith(transcript.PURGED_MARK)
+
+
+def _long_summary() -> tuple[RunEventRecord, ...]:
+    words = " ".join(f"word{n}" for n in range(60))
+    return (_event(1), _summarized(2, words))
+
+
+def test_con_169_a_long_block_folds_beyond_its_preview_and_states_how_much() -> None:
+    model = _view(_long_summary())
+    frame = _frame(model, width=80, sel=1)
+    head = next(r for r in _rows(frame) if r.startswith("▸"))
+    found = re.search(r"▸ (\d+) lines\s*$", head)
+    assert found is not None, head
+    hidden = int(found.group(1))
+    assert hidden > 0
+    assert "…" not in "".join(r for r in _rows(frame) if "word" in r)
+
+
+def test_con_169_enter_unfolds_the_block_in_place_and_shows_every_line() -> None:
+    model = _view(_long_summary())
+    session = Session()
+    session.route = TRANSCRIPT_ROUTE
+    session.tr_sel = 1
+    session.follow = False
+    view = View(session=session, fixture=_fixture(), w=80, h=30, projection=model)
+    closed = render_route(view)
+    ctx = Ctx(session=session, fixture=_fixture(), host=_Host(), w=80, h=30, projection=model)
+    assert transcript.seam(ctx, "Enter", False)
+    opened = render_route(view)
+    head = next(r for r in opened if r.startswith("▸"))
+    assert re.search(r"▾ \d+ lines\s*$", head)
+    text = "\n".join(opened)
+    assert "word59" in text and "word59" not in "\n".join(closed)
+
+
+def test_con_170_blocks_run_in_stream_order_and_open_on_the_latest() -> None:
+    model = _view(_live_run())
+    frame = _frame(model)
+    clocks = [found.group("clock") for found in _blocks(frame)]
+    assert clocks == sorted(clocks)
+    caret = [r for r in _rows(frame) if r.startswith("▸")]
+    assert len(caret) == 1 and "12:01:00" in caret[0]
+
+
+def test_con_170_a_short_run_fills_from_the_bottom_of_its_section() -> None:
+    rows = _rows(_frame(_view((_event(1),))))
+    block = next(i for i, r in enumerate(rows) if _BLOCK_ROW.match(r))
+    closing = next(i for i, r in enumerate(rows) if i > block and r.startswith("─"))
+    assert closing == block + 1
+    assert rows[block - 1].strip() == ""
+
+
+def test_con_171_a_thinking_block_states_its_state_and_elapsed_never_its_content() -> None:
+    frame = _frame(_view(_live_run()))
+    thinking = next(r for r in _rows(frame) if "° thinking" in r)
+    assert OPEN_TURN_TEXT in thinking
+    assert thinking.rstrip().endswith("18s")
+
+
+def test_con_171_a_long_transcript_shows_its_tail_and_counts_the_rest() -> None:
+    events = tuple(_event(n) if n % 2 else _summarized(n) for n in range(1, 61))
+    frame = _frame(_view(events))
+    assert re.search(r"^ … \d+ above", frame, re.MULTILINE)
+    assert _blocks(frame)[-1].group("clock") == "12:01:00"
+
+
+def test_con_172_a_block_that_lands_while_following_takes_the_cursor() -> None:
+    session = Session()
+    session.route = TRANSCRIPT_ROUTE
+    session.follow = True
+    view = View(session=session, fixture=_fixture(), w=120, h=30, projection=_view(_live_run()[:3]))
+    render_route(view)
+    assert session.tr_sel == 2
+    grown = View(session=session, fixture=_fixture(), w=120, h=30, projection=_view(_live_run()))
+    render_route(grown)
+    assert session.tr_sel == 5
+
+
+def test_con_172_a_held_view_keeps_its_row_and_counts_what_arrived_below() -> None:
+    events = tuple(_event(n) if n % 2 else _summarized(n) for n in range(1, 61))
+    session = Session()
+    session.route = TRANSCRIPT_ROUTE
+    session.follow = False
+    session.tr_sel = 3
+    frame = "\n".join(
+        render_route(
+            View(session=session, fixture=_fixture(), w=120, h=30, projection=_view(events))
+        )
+    )
+    assert session.tr_sel == 3
+    assert re.search(r"^ … \d+ below", frame, re.MULTILINE)
+
+
+def test_con_172_f_holds_and_follows_the_tail() -> None:
+    model = _view(_live_run())
+    session = Session()
+    session.route = TRANSCRIPT_ROUTE
+    session.follow = True
+    ctx = Ctx(session=session, fixture=_fixture(), host=_Host(), w=120, h=30, projection=model)
+    transcript.seam(ctx, "ArrowUp", False)
+    assert session.follow is False
+    transcript.seam(ctx, "f", False)
+    assert session.follow is True and session.tr_sel == len(model.blocks) - 1
+    header = _rows(_frame(model))[1]
+    assert "· following ·" in header
+
+
+def test_con_172_a_held_clock_freezes_the_feed_on_the_authored_tail() -> None:
+    model = _view(_live_run())
+
+    def render(now: datetime | None, held: bool) -> str:
+        session = Session()
+        session.route = TRANSCRIPT_ROUTE
+        session.follow = True
+        return "\n".join(
+            render_route(
+                View(
+                    session=session,
+                    fixture=_fixture(),
+                    w=120,
+                    h=30,
+                    projection=model,
+                    now=now,
+                    held=held,
+                )
+            )
+        )
+
+    held_early = render(_at(61), held=True)
+    held_late = render(_at(600), held=True)
+    live_late = render(_at(600), held=False)
+    assert held_early == held_late
+    assert "THINKING for 18s" in held_late
+    assert "THINKING for 9m 18s" in live_late
+
+
+def test_con_172_colour_sits_on_the_kind_cell_only() -> None:
+    frame = _frame(_view(_live_run()))
+    for row in (r for r in _rows(frame) if _BLOCK_ROW.match(r)):
+        found = _BLOCK_ROW.match(row)
+        assert found is not None
+        # a quality marker keeps its own mark; the kind colour is the one unmarked run
+        strokes = paint(row, Part.BODY)
+        coloured = [s for s in strokes if s.surface not in (None, "caret") and s.mark is None]
+        assert len(coloured) == 1
+        assert coloured[0].text == f"{found.group('glyph')} {found.group('word')}"
+
+
+def test_con_169_the_keybar_walks_blocks_and_folds_them() -> None:
+    bar = _rows(_frame(_view(_live_run())))[-1].split()
+    assert bar[:4] == ["↑↓", "block", "Enter", "fold"]
+    assert bar[4:6] == ["f", "follow"]
+
+
+def test_con_172_the_scrollbar_column_is_drawn_only_when_something_is_hidden() -> None:
+    short = _rows(_frame(_view((_event(1),))))
+    assert not any(r.endswith("█") for r in short)
+    events = tuple(_event(n) if n % 2 else _summarized(n) for n in range(1, 61))
+    long = _rows(_frame(_view(events)))
+    assert any(r.endswith("█") for r in long)
+
+
+def test_con_169_the_epoch_one_feed_renders_a_waiting_question_and_its_estimate_as_typical() -> (
+    None
+):
+    frame = _frame(None)
+    question = next(r for r in _rows(frame) if "? question" in r)
+    assert re.search(r"waiting \d+m \d\ds", question)
+    assert "estimate" not in frame

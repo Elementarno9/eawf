@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from eawf.kernel.projection.compute import RouteProjection, build_route_projection
+from eawf.kernel.runtime.control import ControlDisposition
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
@@ -287,6 +288,7 @@ def test_con_096_a_daemon_answer_a_toast_and_a_tick_open_no_overlay(fixture: Fix
                     target="ACT-0031",
                     status=OperationStatus.OUTSTANDING,
                     detail="unknown",
+                    disposition=ControlDisposition.UNKNOWN,
                 )
             )
             app.raise_toast("a notice arrived", title="notice")

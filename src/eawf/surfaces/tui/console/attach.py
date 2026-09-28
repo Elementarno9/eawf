@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from eawf._version import __version__
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
@@ -41,6 +41,9 @@ from eawf.surfaces.tui.console.chrome import ConsoleChrome, EntryState
 from eawf.surfaces.tui.console.format import clock_time, day
 from eawf.surfaces.tui.console.registry import ENTRY_STATES, EntryStateSpec
 from eawf.surfaces.tui.console.tokens import TRUTH
+
+if TYPE_CHECKING:
+    from eawf.surfaces.tui.console.navigation import Ctx
 
 #: The cells an ordinary pane row gives its step or fact name before the value.
 _NAME_CELLS = 26
@@ -494,6 +497,32 @@ def schema_state(
     )
 
 
+#: The entry state a first run with no registered workspace lands in.
+ONBOARDING: Final = "onboarding"
+
+#: What stays unavailable when a first-run step is skipped, by step. Skipping records
+#: nothing: the step is still owed, and the frame says what its absence withholds.
+ONBOARDING_SKIPS: tuple[str, ...] = (
+    "no workspace · nothing can attach until one is registered",
+    "no authorised provider · every run verb stays refused until one is",
+    "the default sandbox policy stays in force",
+    "no task attached · attach one later to watch it run",
+)
+
+
+def skip_step(ctx: Ctx, steps: int) -> bool:
+    """Skip the first-run step under the cursor, saying what stays unavailable without it.
+
+    Returns:
+        ``True``: the key is always claimed.
+    """
+    s = ctx.s
+    at = min(max(s.path_sel, 0), len(ONBOARDING_SKIPS) - 1)
+    ctx.log("s", f"skipped step {at + 1} · {ONBOARDING_SKIPS[at]}")
+    s.path_sel = min(at + 1, max(steps - 1, 0))
+    return True
+
+
 def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> EntryState:
     """Return the first-run frame: what a session needs before one can exist.
 
@@ -512,7 +541,7 @@ def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> 
         if registered
         else EntryCommand(argv=("repo", "register", str(root)), purpose="")
     )
-    return _base(chrome, "onboarding").model_copy(
+    return _base(chrome, ONBOARDING).model_copy(
         update={
             "rows": (
                 ("1 workspace", "none registered", "every entity hangs off one"),
@@ -520,7 +549,7 @@ def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> 
                 ("3 sandbox", "not checked here", "what an agent may touch"),
                 ("4 first task", "optional", "you may attach and watch"),
             ),
-            "keys": (("↑↓", "step"), ("Enter", "show the exact command"), ("Esc", "exit")),
+            "keys": (("↑↓", "step"), ("Enter", "do it"), ("s", "skip"), ("Esc", "exit")),
             "commands": (first.line, "", "", ""),
             "tail": (
                 "No workspace is registered on this machine.",
@@ -767,6 +796,8 @@ def with_entry_state(chrome: ConsoleChrome, state: EntryState) -> ConsoleChrome:
 
 
 __all__ = [
+    "ONBOARDING",
+    "ONBOARDING_SKIPS",
     "AttachRequest",
     "AttachResult",
     "AttachStep",
@@ -779,5 +810,6 @@ __all__ = [
     "resolve_attach",
     "resolving_state",
     "schema_state",
+    "skip_step",
     "with_entry_state",
 ]

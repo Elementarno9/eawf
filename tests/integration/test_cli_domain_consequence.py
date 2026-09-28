@@ -1,0 +1,116 @@
+"""CON-060: a lifecycle command prints its consequence before anything is sent.
+
+The command line keeps the console card's ordering. Every per-entity lifecycle command
+prints the consequence block -- the target at the exact revision it names, the effects
+and the non-effects -- before the daemon is called; ``--dry-run`` prints only that block
+and never calls the daemon, so nothing canonical or external is recorded. The daemon is a
+recording stand-in, so a call that should not happen is seen not to.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import orjson
+import pytest
+from typer.testing import CliRunner
+
+from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.app import app
+from eawf.surfaces.cli.commands import domain as domain_cmd
+from eawf.surfaces.cli.commands.domain_consequence import block_text, consequence_block
+from tests.integration.test_cli_domain_lifecycle import (
+    _BATCH_URN,
+    _TASK_URN,
+    _VERB_ROWS,
+    _accepted,
+    _base_args,
+    _FakeClient,
+    _install,
+    _no_escalate,
+)
+
+runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _no_daemon_spawn(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep the escalation gate from spawning a real daemon, and start with no calls."""
+    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
+    monkeypatch.setattr("eawf.surfaces.cli._dispatch.escalate_mutation", _no_escalate)
+    _FakeClient.calls = []
+
+
+@pytest.mark.parametrize(("verb", "method", "revision_flag", "urn"), _VERB_ROWS)
+def test_con_060_every_lifecycle_command_dry_runs_without_calling_the_daemon(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    verb: list[str],
+    method: str,
+    revision_flag: str,
+    urn: str,
+) -> None:
+    _install(monkeypatch, result=_accepted(method, urn))
+    args = ["--workspace", str(tmp_path), *_base_args(verb, revision_flag, urn), "--dry-run"]
+    if method == domain_cmd.TASK_COMPLETE:
+        pytest.skip("task complete reads an assessment file before it can be addressed")
+    result = runner.invoke(app, args)
+    assert result.exit_code == exit_codes.OK, result.output
+    assert _FakeClient.calls == []
+    assert f"consequence: {method} {urn} at revision 3 · exact" in result.stdout
+    assert "dry run · nothing was sent" in result.stdout
+
+
+def test_con_060_the_consequence_prints_before_the_daemons_answer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install(monkeypatch, result=_accepted(domain_cmd.BATCH_ACTIVATE, _BATCH_URN))
+    args = [
+        "--workspace",
+        str(tmp_path),
+        *_base_args(["batch", "activate"], "--expected-batch-revision", _BATCH_URN),
+        "--yes",
+    ]
+    result = runner.invoke(app, args)
+    assert result.exit_code == exit_codes.OK, result.output
+    printed = result.output.index("consequence: domain.batch.activate")
+    answered = result.output.index(f"{domain_cmd.BATCH_ACTIVATE} ok {_BATCH_URN}")
+    assert printed < answered
+    assert "  not: no task is claimed or dispatched" in result.output
+    assert len(_FakeClient.calls) == 1
+
+
+def test_con_060_a_json_dry_run_answers_the_block_and_sent_false(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _install(monkeypatch, result=_accepted(domain_cmd.TASK_CLAIM, _TASK_URN))
+    args = [
+        "--json",
+        "--workspace",
+        str(tmp_path),
+        *_base_args(["task", "claim"], "--expected-task-revision", _TASK_URN),
+        "--dry-run",
+    ]
+    result = runner.invoke(app, args)
+    assert result.exit_code == exit_codes.OK, result.output
+    payload = orjson.loads(result.stdout)
+    assert payload["sent"] is False
+    assert payload["consequence"]["target"] == _TASK_URN
+    assert payload["consequence"]["revision"] == 3
+    assert payload["consequence"]["not"] == ["no run is started", "the batch does not move"]
+    assert _FakeClient.calls == []
+
+
+def test_con_060_the_block_names_target_revision_effects_and_non_effects() -> None:
+    text = block_text(consequence_block(domain_cmd.TASK_CLAIM, _TASK_URN, 3))
+    assert (
+        text.splitlines()[0] == f"consequence: domain.task.claim {_TASK_URN} at revision 3 · exact"
+    )
+    assert "  effect: task " in text
+    assert "  not: no run is started" in text
+    assert "  if stale: if revision 3 moves before you confirm" in text
+
+
+def test_con_060_a_method_that_is_not_a_lifecycle_verb_has_no_block() -> None:
+    with pytest.raises(KeyError):
+        consequence_block("domain.task.create", _TASK_URN, 3)

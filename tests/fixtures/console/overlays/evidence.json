@@ -1,0 +1,485 @@
+{
+ "claims": [
+  {
+   "id": "CLM-0001",
+   "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/claim/CLM-0001",
+   "title": "drift is real on retry",
+   "in_words": "a retry of the same run can change its replay digest",
+   "proves": "provider drift reaches the replay digest",
+   "breaks_if": "a retried run keeps its digest in 40 of 40",
+   "source": "drift-report.md",
+   "asked_by": "QST-0001",
+   "supports": [
+    {
+     "ref": "EVD-0011",
+     "what": "digest differs on retry"
+    },
+    {
+     "ref": "EVD-0019",
+     "denied": true
+    }
+   ],
+   "contradictions": [
+    {
+     "ref": "CLM-0014",
+     "what": "drift is bounded"
+    }
+   ],
+   "rungs": [
+    {
+     "rung": 1,
+     "outcome": "pass",
+     "check": "Does every reference resolve to a fetchable digest?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41201,
+     "evidence": "EVD-0001"
+    },
+    {
+     "rung": 2,
+     "outcome": "pass",
+     "check": "Is the claim anchored to the exact revision it cites?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41202,
+     "evidence": "EVD-0002"
+    },
+    {
+     "rung": 3,
+     "outcome": "pass",
+     "check": "Does an automated screen find nothing against it?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41203,
+     "evidence": "EVD-0003"
+    },
+    {
+     "rung": 4,
+     "outcome": "pass",
+     "check": "Does the evidence entail the claim?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41204,
+     "evidence": "EVD-0004"
+    }
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "id": "CLM-0002",
+   "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/claim/CLM-0002",
+   "title": "drift is real on retry",
+   "in_words": "a retry of the same run can change its replay digest",
+   "proves": "provider drift reaches the replay digest",
+   "breaks_if": "a retried run keeps its digest in 40 of 40",
+   "source": "drift-report.md",
+   "asked_by": "QST-0001",
+   "supports": [
+    {
+     "ref": "EVD-0011",
+     "what": "digest differs on retry"
+    },
+    {
+     "ref": "EVD-0019",
+     "denied": true
+    }
+   ],
+   "contradictions": [
+    {
+     "ref": "CLM-0014",
+     "what": "drift is bounded"
+    }
+   ],
+   "rungs": [
+    {
+     "rung": 1,
+     "outcome": "pass",
+     "check": "Does every reference resolve to a fetchable digest?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41201,
+     "evidence": "EVD-0001"
+    },
+    {
+     "rung": 2,
+     "outcome": "pass",
+     "check": "Is the claim anchored to the exact revision it cites?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41202,
+     "evidence": "EVD-0002"
+    },
+    {
+     "rung": 3,
+     "outcome": "unknown",
+     "check": "Does an automated screen find nothing against it?"
+    },
+    {
+     "rung": 4,
+     "outcome": "not_run",
+     "check": "Does the evidence entail the claim?"
+    }
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "id": "CLM-0003",
+   "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/claim/CLM-0003",
+   "title": "drift is real on retry",
+   "in_words": "a retry of the same run can change its replay digest",
+   "proves": "provider drift reaches the replay digest",
+   "breaks_if": "a retried run keeps its digest in 40 of 40",
+   "source": "drift-report.md",
+   "asked_by": "QST-0001",
+   "supports": [],
+   "contradictions": [
+    {
+     "ref": "CLM-0014",
+     "what": "drift is bounded"
+    }
+   ],
+   "rungs": [
+    {
+     "rung": 1,
+     "outcome": "pass",
+     "check": "Does every reference resolve to a fetchable digest?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41201,
+     "evidence": "EVD-0001"
+    },
+    {
+     "rung": 2,
+     "outcome": "fail",
+     "check": "Is the claim anchored to the exact revision it cites?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41202,
+     "evidence": "EVD-0002"
+    },
+    {
+     "rung": 3,
+     "outcome": "not_run",
+     "check": "Does an automated screen find nothing against it?"
+    },
+    {
+     "rung": 4,
+     "outcome": "not_run",
+     "check": "Does the evidence entail the claim?"
+    }
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "id": "CLM-0004",
+   "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/claim/CLM-0004",
+   "title": "drift is real on retry",
+   "in_words": "a retry of the same run can change its replay digest",
+   "proves": "provider drift reaches the replay digest",
+   "breaks_if": "a retried run keeps its digest in 40 of 40",
+   "source": "drift-report.md",
+   "asked_by": "QST-0001",
+   "supports": [
+    {
+     "ref": "EVD-0011",
+     "what": "digest differs on retry"
+    },
+    {
+     "ref": "EVD-0019",
+     "denied": true
+    }
+   ],
+   "contradictions": [
+    {
+     "ref": "CLM-0014",
+     "what": "drift is bounded"
+    }
+   ],
+   "rungs": [
+    {
+     "rung": 1,
+     "outcome": "pass",
+     "check": "Does every reference resolve to a fetchable digest?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41201,
+     "evidence": "EVD-0001"
+    },
+    {
+     "rung": 2,
+     "outcome": "pass",
+     "check": "Is the claim anchored to the exact revision it cites?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41202,
+     "evidence": "EVD-0002"
+    },
+    {
+     "rung": 3,
+     "outcome": "pass",
+     "check": "Does an automated screen find nothing against it?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41203,
+     "evidence": "EVD-0003"
+    },
+    {
+     "rung": 4,
+     "outcome": "attested",
+     "check": "Does the evidence entail the claim?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41204,
+     "evidence": "EVD-0004"
+    }
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "id": "CLM-0005",
+   "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/claim/CLM-0005",
+   "title": "drift is real on retry",
+   "in_words": "a retry of the same run can change its replay digest",
+   "proves": "provider drift reaches the replay digest",
+   "breaks_if": "a retried run keeps its digest in 40 of 40",
+   "source": "drift-report.md",
+   "asked_by": "QST-0001",
+   "supports": [
+    {
+     "ref": "EVD-0011",
+     "what": "digest differs on retry"
+    },
+    {
+     "ref": "EVD-0019",
+     "denied": true
+    }
+   ],
+   "contradictions": [
+    {
+     "ref": "CLM-0014",
+     "what": "drift is bounded"
+    }
+   ],
+   "rungs": [
+    {
+     "rung": 1,
+     "outcome": "unknown",
+     "check": "Does every reference resolve to a fetchable digest?",
+     "digest_unavailable": true
+    },
+    {
+     "rung": 2,
+     "outcome": "not_run",
+     "check": "Is the claim anchored to the exact revision it cites?"
+    },
+    {
+     "rung": 3,
+     "outcome": "not_run",
+     "check": "Does an automated screen find nothing against it?"
+    },
+    {
+     "rung": 4,
+     "outcome": "not_run",
+     "check": "Does the evidence entail the claim?"
+    }
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "id": "CLM-0006",
+   "urn": "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/claim/CLM-0006",
+   "title": "drift is real on retry",
+   "in_words": "a retry of the same run can change its replay digest",
+   "proves": "provider drift reaches the replay digest",
+   "breaks_if": "a retried run keeps its digest in 40 of 40",
+   "source": "drift-report.md",
+   "asked_by": "QST-0001",
+   "supports": [
+    {
+     "ref": "EVD-0011",
+     "what": "digest differs on retry"
+    },
+    {
+     "ref": "EVD-0019",
+     "denied": true
+    }
+   ],
+   "contradictions": [
+    {
+     "ref": "CLM-0014",
+     "what": "drift is bounded"
+    }
+   ],
+   "rungs": [
+    {
+     "rung": 1,
+     "outcome": "pass",
+     "check": "Does every reference resolve to a fetchable digest?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41201,
+     "evidence": "EVD-0001"
+    },
+    {
+     "rung": 2,
+     "outcome": "pass",
+     "check": "Is the claim anchored to the exact revision it cites?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41202,
+     "evidence": "EVD-0002"
+    },
+    {
+     "rung": 3,
+     "outcome": "fail",
+     "check": "Does an automated screen find nothing against it?",
+     "inputs": [
+      {
+       "ref": "RUN-538453eb",
+       "digest": "sha256:4f2a0c19e7d3b8a1"
+      }
+     ],
+     "finding": "Ordering preserved · 0 inversions.",
+     "counts": [
+      "6,102 acked events compared"
+     ],
+     "as_of": "2026-09-18T13:31:00+00:00",
+     "sequence": 41203,
+     "evidence": "EVD-0003"
+    },
+    {
+     "rung": 4,
+     "outcome": "not_run",
+     "check": "Does the evidence entail the claim?"
+    }
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  }
+ ]
+}

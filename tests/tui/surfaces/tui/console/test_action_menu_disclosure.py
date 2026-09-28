@@ -4,12 +4,18 @@ A surface holding no authority on purpose -- the read-only overlays, the inspect
 drawers, the notifications route and the merge conflict -- binds and advertises no verb
 beyond open, cursor movement and copy, and the action menu never opens over it (CON-143).
 
+Tests that prove a console requirement row name it (CON-034, CON-036, CON-037, CON-038).
+
 The action menu lists exactly its route's verbs, light first, refused ones with their
 reasons, draws no caret, and is refused at construction when a menu names an unregistered
 route, repeats a letter, or holds a light verb the registry gives no door. One judgement
 decides what a pressed verb does. The palette reaches routes and entities and never a verb,
 and its window keeps the cursor on screen. Both render as the test-only chassis renders
 them, the palette's edge markers under the port's ``… N above`` and ``… N below`` wording.
+
+CON-125 and the menu half of CON-082 are held at the end: the verbs an attention row
+and a notice row bind, the fixed consequence copy, ``assign`` refused only while one
+principal holds the register, and transport loss named as the cause.
 """
 
 from __future__ import annotations
@@ -39,9 +45,19 @@ from eawf.surfaces.tui.console.action_menu import (
     toggle,
 )
 from eawf.surfaces.tui.console.action_menu import PAIRS as MENU_PAIRS
+from eawf.surfaces.tui.console.app import compose_frame
+from eawf.surfaces.tui.console.attention import attn_list, gated, is_notice, verbs_for
+from eawf.surfaces.tui.console.chrome import load_chrome
+from eawf.surfaces.tui.console.clock import FakeClock
+from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.drawers import action_rows
+from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
+from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.header import header_row
-from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, keybar
+from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyKind, keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_KEYS, DRAWER_PAIRS, OVERLAY_KEYS
+from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.overlays import render_overlay
 from eawf.surfaces.tui.console.palette import (
     CHROME_ROWS,
     CRUMB,
@@ -54,9 +70,11 @@ from eawf.surfaces.tui.console.palette import (
 )
 from eawf.surfaces.tui.console.palette import PAIRS as PALETTE_PAIRS
 from eawf.surfaces.tui.console.registry import DRAWERS, OVERLAYS, REGISTRY, SURFACES
+from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.surfaces.tui.console.tokens import CARET
 from eawf.surfaces.tui.console.width import cell_len
+from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 
 from .overlay_support import frame_of, press, prototype, session_on
 
@@ -555,5 +573,233 @@ def test_con_143_the_action_menu_opens_under_no_read_only_surface(name: str) -> 
 def test_con_143_a_read_only_route_lists_no_action_menu_verb(route: str) -> None:
     fixture = prototype()
     assert fixture.menus.verbs(route) == ()
-    labels = {entry.label for entry in ROUTE_KEYS[route]}
-    assert labels <= {"row", "copy", "back"}
+    for entry in ROUTE_KEYS[route]:
+        assert entry.kind in (KeyKind.NAV, KeyKind.GLOBAL), entry
+        assert set(entry.keys) <= _READ_ONLY_KEYS, entry
+
+
+# ---------- the menu over the production dispatcher ----------
+#
+# Each test below names the console requirement row it proves. The keys go through the
+# production dispatcher over the tracked registers, the way the app presses them.
+
+
+class _Host:
+    """The dispatcher's host: a held clock and a quit that records it was asked."""
+
+    def __init__(self) -> None:
+        self.quits = 0
+        self._clock = FakeClock()
+
+    @property
+    def clock(self) -> FakeClock:
+        """Return the console clock."""
+        return self._clock
+
+    def quit(self) -> None:
+        """Record that the console was asked to end."""
+        self.quits += 1
+
+
+FIXTURE = load_fixture(PROTO)
+# Category words a refusal may not stop at: it names the evidence instead.
+_CATEGORIES = frozenset({"unavailable", "disabled", "not allowed", "refused", "n/a", "blocked"})
+
+
+def _on(route: str, subj: str | None = None) -> Session:
+    session = Session()
+    session.route = route
+    session.subj_id = subj
+    compose_frame(View(session=session, fixture=FIXTURE, w=120, h=30))
+    return session
+
+
+def _keys(session: Session, *keys: str) -> None:
+    for key in keys:
+        dispatch(Ctx(session=session, fixture=FIXTURE, host=_Host(), w=120, h=30), key, False)
+        compose_frame(View(session=session, fixture=FIXTURE, w=120, h=30))
+
+
+_NO_MENU_ROW = pytest.mark.xfail(
+    strict=True,
+    reason="the pack binds these writes to letters with no action-menu row; needs a ruling",
+)
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        pytest.param(r, marks=_NO_MENU_ROW) if r in ("unattended", "settings") else r
+        for r in sorted(ROUTE_KEYS)
+    ],
+)
+def test_con034_every_lettered_write_has_a_menu_row(route: str) -> None:
+    """CON-034: a letter is a shortcut over the menu, never a verb's sole binding."""
+    menu = {verb.key for verb in FIXTURE.menus.verbs(route)}
+    writes = [e for e in ROUTE_KEYS[route] if e.kind in (KeyKind.PRIMARY, KeyKind.ANSWER)]
+    assert {key for entry in writes for key in entry.keys} <= menu
+
+
+def test_con034_enter_on_an_attention_row_reaches_its_card() -> None:
+    """CON-034: Enter on the row is the first way to every verb; it opens the row's card."""
+    session = _on("attention")
+    _keys(session, "Enter")
+    assert session.overlay in {"consequence", "question", "pause"}
+
+
+def test_con036_dot_on_a_route_without_verbs_opens_nothing_and_says_so() -> None:
+    """CON-036: ``.`` with no verbs raises ``NO ACTIONS`` in the rack and opens no drawer."""
+    session = _on("health")
+    _keys(session, ".")
+    assert session.overlay is None
+    assert session.toasts[-1].title == NO_ACTIONS_TITLE
+    assert session.toasts[-1].text == NO_ACTIONS_TEXT
+
+
+def test_con036_a_light_verb_acts_at_once_and_a_heavy_verb_previews() -> None:
+    """CON-036: a light verb opens its surface with no card; a heavy verb opens its card."""
+    light = _on("run.detail", "RUN-538453eb")
+    _keys(light, ".", "l")
+    assert light.route == "transcript"
+    assert light.overlay is None
+    heavy = _on("run.detail", "RUN-538453eb")
+    _keys(heavy, ".", "n")
+    assert heavy.overlay == "consequence"
+
+
+def test_con036_one_ordering_feeds_the_rows_and_the_letters() -> None:
+    """CON-036: the rows the drawer lists are the verbs the letters run, light first."""
+    for route in REGISTRY.ids:
+        verbs = FIXTURE.menus.verbs(route)
+        assert verbs == menu_order(verbs)
+        for verb in verbs:
+            assert FIXTURE.menus.verb(route, verb.key) is verb
+
+
+def test_con037_every_refusal_reason_names_evidence_not_a_category() -> None:
+    """CON-037: a refused verb says what is missing, not merely that it is unavailable."""
+    refused = [v for r in REGISTRY.ids for v in FIXTURE.menus.verbs(r) if not v.available]
+    assert refused
+    for verb in refused:
+        assert verb.reason.strip().lower() not in _CATEGORIES, verb
+        assert len(verb.reason.split()) >= 3, verb
+
+
+def test_con037_pressing_a_refused_verb_records_its_refusal() -> None:
+    """CON-037: activating a refused verb writes a refusal to the key log, never a no-op."""
+    session = _on("run.detail", "RUN-538453eb")
+    _keys(session, ".", "t")
+    assert session.trace == "t → refused: the run has not ended"
+    assert session.overlay == ACTIONS_OVERLAY
+
+
+def test_con038_every_menu_comes_from_the_registry_and_names_a_registered_route() -> None:
+    """CON-038: the menus are one registry, checked against the route registry at load."""
+    assert isinstance(FIXTURE.menus, ActionMenus)
+    with pytest.raises(ValueError):
+        ActionMenus({"nowhere": [_heavy()]})
+
+
+def test_con038_the_drawer_lists_exactly_the_registry_verbs_of_its_route() -> None:
+    """CON-038: a verb missing from a route's drawer is missing from the registry."""
+    session = _on("run.detail", "RUN-538453eb")
+    session.overlay = ACTIONS_OVERLAY
+    text = "\n".join(compose_frame(View(session=session, fixture=FIXTURE, w=160, h=40)))
+    for verb in FIXTURE.menus.verbs("run.detail"):
+        assert verb.verb in text
+
+
+# ---------- CON-125: an attention row and a notice row bind different verbs ----------
+
+
+def _only(key: str) -> dict[str, Any]:
+    """Return the two-principal tree cut down to the one pending action ``key``."""
+    return {**bodies.DOCUMENT, "pending_action": {key: bodies.DOCUMENT["pending_action"][key]}}
+
+
+def _proto_fixture() -> Fixture:
+    return load_fixture(PROTO)
+
+
+def test_con_125_an_attention_row_binds_answer_deny_snooze_and_resolve() -> None:
+    fixture = _proto_fixture()
+    action = next(a for a in fixture.proto.attention if not is_notice(a))
+    assert verbs_for(action) == ["a", "x", "z", "v"]
+
+
+def test_con_125_a_notice_row_binds_snooze_and_resolve_only() -> None:
+    fixture = _proto_fixture()
+    notice = next(a for a in fixture.proto.attention if is_notice(a))
+    assert verbs_for(notice) == ["z", "v"]
+    session = Session()
+    session.route = "attention"
+    rows = attn_list(session, fixture)
+    session.sel = rows.index(notice)
+    for key, verb in (("a", "answer"), ("x", "deny")):
+        assert gated(session, fixture, key=key, verb=verb, row=notice, principal_refusal="")
+        assert "a notice has nothing to" in session.log[-1].note
+
+
+@pytest.mark.parametrize(
+    ("key", "copy"),
+    [
+        ("z", "hidden for you only — other principals still see it"),
+        ("v", "sealed for every principal — it leaves the active buckets and becomes immutable"),
+        ("x", "recorded as declined, with your reason — it does not answer"),
+    ],
+)
+def test_con_125_each_verb_states_its_fixed_consequence(key: str, copy: str) -> None:
+    fixture = _proto_fixture()
+    session = Session()
+    session.route = "attention"
+    session.overlay = "consequence"
+    session.verb = key
+    frame = "\n".join(
+        render_overlay("consequence", View(session=session, fixture=fixture, w=160, h=40))
+    )
+    assert copy in frame
+
+
+def test_con_125_the_live_menu_binds_the_row_verbs_and_refuses_assign_alone() -> None:
+    fixture = Fixture.from_chrome(load_chrome())
+    verbs = {verb.verb: verb for verb in fixture.menus.verbs("attention")}
+    assert set(verbs) >= {"answer", "deny", "snooze", "resolve", "assign"}
+    assert verbs["assign"].reason == "you are the only principal"
+
+
+def test_con_125_assign_is_not_refused_for_want_of_a_principal_once_there_are_two() -> None:
+    view = bodies._view("attention")
+    view.session.overlay = "actions"
+    rows = action_rows(view)
+    assign = next(row for row in rows if " assign " in row)
+    assert "you are the only principal" not in assign
+    single = {
+        **bodies.DOCUMENT,
+        "pending_action": {"ACT-0001": bodies.DOCUMENT["pending_action"]["ACT-0001"]},
+    }
+    lone = bodies._view("attention", document=single)
+    assert "you are the only principal" in next(r for r in action_rows(lone) if " assign " in r)
+
+
+def test_con_125_the_selected_row_names_its_kind_and_eligibility_and_an_absent_deadline() -> None:
+    single = {
+        **bodies.DOCUMENT,
+        "pending_action": {"ACT-0001": bodies.DOCUMENT["pending_action"]["ACT-0001"]},
+    }
+    frame = render_route(bodies._view("attention", document=single))
+    at = next(i for i, row in enumerate(frame) if row.lstrip().startswith("▸ ACT-0001"))
+    assert "due –" in frame[at]  # noqa: RUF001
+    detail = frame[at + 1].split("│")[0].strip()
+    assert detail == "decision · you are the only eligible answer"
+
+
+# ---------- CON-082: the action menu names transport loss as its cause ----------
+
+
+def test_con_082_disconnected_names_transport_loss_in_the_action_menu() -> None:
+    view = bodies._view("attention", conn="DISCONNECTED")
+    view.session.overlay = "actions"
+    rows = action_rows(view)
+    answer = next(row for row in rows if " answer " in row)
+    assert "the daemon cannot be reached" in answer
+    assert any(r.startswith("   ACTIONS   KEY") for r in compose_frame(view))

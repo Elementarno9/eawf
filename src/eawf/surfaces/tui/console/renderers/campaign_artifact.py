@@ -11,8 +11,10 @@ from typing import Any
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import Scrollbar, View, boxed
+from eawf.surfaces.tui.console.keybar import pick
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers.campaign import Win
+from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.session import Session
 
@@ -68,8 +70,8 @@ def render(view: View) -> list[str]:
     lines.extend(art["body"][win.start : win.start + win.take])
     if win.below:
         lines.append(f"… {plural(win.below, 'line')} below")
-    keys: list[tuple[str, str]] = [("↑↓", "scroll")] if (win.above or win.below) else []
-    keys.extend([("y", "copy"), ("Esc", "close")])
+    keys = pick("campaign.artifact", "scroll") if (win.above or win.below) else []
+    keys += pick("campaign.artifact", "copy", "close")
     arts = list(fx.registers.cam_art)
     source = f"{art['f']} · {art['k']} · {art['sz']} · written {art['at']} by {art['by']}"
     return boxed(
@@ -90,6 +92,8 @@ def render(view: View) -> list[str]:
 
 def copy(session: Session, fixture: Fixture) -> str:
     """Return the artifact's stable URN."""
+    if not fixture.registers.cam_art:
+        return NOTHING_TO_COPY
     return f"urn:eawf:{fixture.scope}:CAM-0001:artifact:{artifact_of(session, fixture)['f']}"
 
 

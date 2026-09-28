@@ -39,8 +39,15 @@ from eawf.surfaces.tui.console.frame import (
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import KEY
 from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.lifecycle import Layout
 from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.surfaces.tui.console.renderers.detail import (
+    state_of,
+    subject_of,
+    subject_rows,
+    unknown_frame,
+)
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, cell, counts, crumb
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
@@ -129,23 +136,39 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         The full frame, keybar last.
     """
     session, w = view.session, view.w
+    finished = finished_subject(session, spine)
+    # a finished subject has no lifecycle left, so the lifecycle menu is not offered
+    keys = [e for e in native_keys(session.route) if finished is None or e != KEY["actions"]]
+    subject = subject_of(view, spine)
+    state = state_of(subject) if subject is not None else None
+    if subject is not None and state is not None and state.layout is Layout.UNKNOWN:
+        return unknown_frame(view, spine, subject, keys)
+    if subject is not None and session.sel_id is None:
+        # a frame opened on a record starts with the cursor on that record
+        session.sel_id = subject.key
     cursor = restore(session, spine)
     regions = REGISTRY.focus_regions.get(session.route, ())
     rows: list[str] = [
         header_row(
-            session, crumb=crumb(view, spine), scope=spine.scope_id, needs=needs_count(view), w=w
+            session,
+            crumb=crumb(view, spine),
+            scope=spine.scope_id,
+            needs=needs_count(view),
+            w=w,
+            terminal=finished is not None,
         ),
         " " + counts(spine),
         bar(w),
     ]
     rd = reads(session)
-    finished = finished_subject(session, spine)
     if finished is not None:
         rows.extend([*finished_rows(session.route, finished), thin(w)])
     elif not rd.complete:
         rows.extend(
             [f" ATTACHED  {attached(rd, revision=group(int(spine.source_cursor)))}", thin(w)]
         )
+    if subject is not None and state is not None:
+        rows.extend(subject_rows(subject, state, w))
     if regions:
         rows.append(" REGIONS   " + " · ".join(regions))
         rows.append(thin(w))
@@ -162,6 +185,4 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         rows.append(line if index == cursor else Fixed(pad(line, w)))
     rows.append(win.line(complete=spine.complete))
     rows.extend(below)
-    # a finished subject has no lifecycle left, so the lifecycle menu is not offered
-    keys = [e for e in native_keys(session.route) if finished is None or e != KEY["actions"]]
     return build(view, rows, route_keys_bar(view, keys))

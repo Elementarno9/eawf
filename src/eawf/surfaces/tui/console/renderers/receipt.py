@@ -15,6 +15,7 @@ from types import MappingProxyType
 from typing import Any
 
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import native
 from eawf.workflow.projection.acceptance import ReceiptCard, ReceiptCardView
 
@@ -36,7 +37,7 @@ _UNKNOWN: Mapping[str, Any] = MappingProxyType(
         "body": [],
     }
 )
-_KEYS: tuple[tuple[str, str], ...] = (("y", "copy"), ("Esc", "back"))
+_KEYS = route_pairs("receipt")
 
 
 def _label(name: str, pad_to: int) -> str:

@@ -193,6 +193,8 @@ class ApprovalOpenParams(BaseModel):
         requested_by: The principal the question is recorded as asked by.
         steps: What the acceptance journey showed.
         accepted_binding: The exact tree the acceptance is taken on.
+        assignee: The one principal the question is addressed to, whose attention
+            count it lands in; ``None`` addresses it to every eligible principal.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -202,6 +204,7 @@ class ApprovalOpenParams(BaseModel):
     requested_by: ActionPrincipal
     steps: tuple[AcceptanceStepOutcome, ...] = Field(min_length=1)
     accepted_binding: ExactRevisionBinding
+    assignee: PrincipalKey | None = None
 
 
 class ApprovalSealParams(BaseModel):
@@ -467,6 +470,8 @@ def _envelope(
             "actor_ref": request.actor,
             "idempotency_key": request.idempotency_key,
             "canonical_sequence": sequence,
+            # a replaying console states the audience a clean read states
+            "assignee_ref": after.assignee_ref,
         },
     )
 
@@ -633,7 +638,12 @@ def open_acceptance_approval(
         key = next_action_key(taken)
         urn = _action_urn(args.urn, key)
         action = acceptance_question(
-            key=key, urn=urn, bundle=bundle, requested_by=args.requested_by, at=now
+            key=key,
+            urn=urn,
+            bundle=bundle,
+            requested_by=args.requested_by,
+            assignee=args.assignee,
+            at=now,
         )
         request = ActionCommitRequest(
             urn=urn,

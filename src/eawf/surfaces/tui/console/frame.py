@@ -16,20 +16,24 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from types import MappingProxyType
 
+from eawf.kernel.projection.attention import attention_mine
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.connection import ReplayNote
-from eawf.kernel.projection.registers import RegisterView, attention_mine
+from eawf.kernel.projection.registers import RegisterView
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console.attention import open_count
 from eawf.surfaces.tui.console.chrome import EntryState
+from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.header import ProcessValue, header_row
-from eawf.surfaces.tui.console.keybar import KEY, KeyEntry, Pair, keybar
+from eawf.surfaces.tui.console.keybar import KEY, RECORD_FRAME_KEYS, KeyEntry, Pair, keybar
 from eawf.surfaces.tui.console.session import Session, Toast
 from eawf.surfaces.tui.console.tokens import RULE_HEAVY, RULE_THIN, Severity
 from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
@@ -70,6 +74,14 @@ class View:
             nobody; empty when it acts as someone or there is no link.
         replay: The replay the link is carrying out, while it is replaying: where it
             started and the head it heads toward. ``None`` at any other time.
+        rows: Every row the link's held projections carry, which the action menu judges
+            each lifecycle verb against.
+        decisions: The records the decision overlays and cards are bound to, which
+            arrive beside the projection; ``None`` when none are held.
+        principal: Who the console acts as, whose own attention items the header counts;
+            ``None`` when it acts as nobody, which has no ``mine`` to count.
+        now: The wall-clock instant the frame is drawn at, which an age or a running
+            elapsed time is measured to; ``None`` states those as of the read instead.
     """
 
     session: Session
@@ -85,6 +97,10 @@ class View:
     linked: bool = False
     principal_refusal: str = ""
     replay: ReplayNote | None = None
+    rows: tuple[ProjectionRow, ...] = ()
+    decisions: DecisionRecords | None = None
+    principal: str | None = None
+    now: datetime | None = None
 
 
 def unheld(view: View) -> bool:
@@ -130,9 +146,10 @@ def needs_count(view: View) -> int:
     """Return the header's attention count: the held Attention register's, and only that.
 
     The count has one producer whatever route is drawn, so the header's ``!N`` and the
-    Attention frame's ``mine`` row cannot disagree. A register nobody writes states no
-    count, and the header shows no badge for it -- the badge is absent, which is what it
-    already is at zero, rather than a zero standing in for a number nobody has. A linked
+    Attention frame's ``mine`` row cannot disagree. It is this principal's own count, so a
+    console acting as nobody states none and the header shows no badge for it -- the
+    badge is absent, which is what it already is at zero, rather than another principal's
+    number standing in for one this console has not got. A linked
     console that has read no register yet shows none either, whatever prototype rows it
     carries; only a console with no link at all holds its prototype register as the
     register, which is the mode the tracked golden contract replays.
@@ -140,7 +157,7 @@ def needs_count(view: View) -> int:
     held = view.attention
     if held is None:
         return 0 if view.linked else open_count(view.fixture)
-    mine = attention_mine(held)
+    mine = attention_mine(held, principal=view.principal)
     return int(mine.value) if mine.state is TruthState.KNOWN and mine.value else 0
 
 
@@ -274,7 +291,7 @@ def _swapped_keys(session: Session, keys: str, w: int) -> str:
         return keys
     nav = session.record_nav or []
     lead = [KEY["up"], KEY["enter"]] if len(nav) > 1 else ([KEY["enter"]] if nav else [])
-    entries = [*lead, KEY["actions"], KEY["inspect"], KEY["esc"]]
+    entries = [*lead, *RECORD_FRAME_KEYS]
     return keybar([entry.pair() for entry in entries], w)
 
 

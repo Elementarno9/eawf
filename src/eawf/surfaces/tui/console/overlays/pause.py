@@ -2,13 +2,34 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from types import MappingProxyType
+
 from eawf.surfaces.tui.console import prototype as pt
-from eawf.surfaces.tui.console.frame import View, bar, header, thin
+from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
-from eawf.surfaces.tui.console.overlays.question import build_with_states
 from eawf.surfaces.tui.console.reads import can_mutate
 
 RUN = pt.PAUSED_RUN
+#: What the pause card's two verbs preview on its consequence card, by letter.
+TARGETS: Mapping[str, dict[str, str]] = MappingProxyType(
+    {
+        "n": {
+            "verb": "reconcile",
+            "id": RUN,
+            "kind": "run",
+            "effects": "the daemon is asked again for the outcome of the pause",
+            "not": "it does not restart the run and does not fail the task",
+        },
+        "c": {
+            "verb": "cancel",
+            "id": RUN,
+            "kind": "run",
+            "effects": "cancel is requested; it stays unknown until the run answers",
+            "not": "it does not fail the task and does not undo any merged work",
+        },
+    }
+)
 
 
 def render(view: View) -> list[str]:
@@ -31,4 +52,4 @@ def render(view: View) -> list[str]:
     ]
     live = [("n", "reconcile"), ("c", "cancel"), ("Esc", "back")]
     pairs = live if can_mutate(s) else [("Esc", "back")]
-    return build_with_states(view, "pause", rows, keybar(pairs, w))
+    return build(view, rows, keybar(pairs, w))

@@ -129,13 +129,27 @@ def _unowned(root: Path) -> set[str]:
     }
 
 
+def _owned_outside_the_plans(root: Path) -> set[str]:
+    """Return the ids a native Task the three plans do not create already owns.
+
+    The copied tree keeps every Task the plans do not create, and a delivered
+    Task that cites a planned id owns it whether or not its plan is applied.
+    """
+    planned_tasks = _planned_keys()["task"]
+    return {
+        row.id
+        for row in load_catalog(root / CATALOG_PATH).requirements
+        if any(owner not in planned_tasks for owner in row.owners)
+    }
+
+
 def test_without_the_plans_exactly_the_planned_ids_are_unowned(tmp_path: Path) -> None:
     root = _copied_tree(tmp_path)
 
     assert main(["--repo-root", str(root), "write"]) == 0
 
     planned = set().union(*(_atom_ids(name) for name in PLAN_NAMES))
-    assert _unowned(root) == planned
+    assert _unowned(root) == planned - _owned_outside_the_plans(root)
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1
 
 
@@ -167,5 +181,5 @@ def test_leaving_one_plan_unapplied_returns_its_ids_unowned(tmp_path: Path, left
             land(name, root, tmp_path / "runtime")
     assert main(["--repo-root", str(root), "write"]) == 0
 
-    assert _unowned(root) == _atom_ids(left_out)
+    assert _unowned(root) == _atom_ids(left_out) - _owned_outside_the_plans(root)
     assert main(["--repo-root", str(root), "check", "--require-owned"]) == 1

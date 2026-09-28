@@ -100,8 +100,8 @@
       "entry": "attention keybar",
       "pack": "Enter bound and unadvertised; . actions shown",
       "port": "Enter open advertised; . actions and Esc back dropped as globals at 80",
-      "golden_ids": ["route/attention@*", "conn/*/attention"],
-      "rulings": ["X-03"]
+      "golden_ids": ["route/attention@*", "route/attention.bucket@*", "conn/*/attention", "J3", "J4", "J5", "J25"],
+      "rulings": ["X-03", "CON-032"]
     },
     {
       "entry": "activity keybar and rail",
@@ -128,7 +128,7 @@
       "entry": "roadmap marker cursor",
       "pack": "marker cursor in colour only; J18 frames identical while mark changes",
       "port": "text marker [ ] around the focused marker",
-      "golden_ids": ["timeline/marker@*", "marker-card/*", "J18"],
+      "golden_ids": ["route/timeline@*", "timeline/marker@*", "marker-card/*", "J3", "J7", "J18"],
       "rulings": ["S6-31"]
     },
     {
@@ -161,6 +161,13 @@
       "port": "the approval renders only against the head it binds; the fixture state corrected",
       "golden_ids": ["route/release@80"],
       "rulings": ["X-14"]
+    },
+    {
+      "entry": "backlog open verb",
+      "pack": "the Backlog keybar offers Enter promote",
+      "port": "Enter opens the draft card; promote is the card's verb, never the route's",
+      "golden_ids": ["route/backlog@*", "J3"],
+      "rulings": ["CON-136"]
     },
     {
       "entry": "decision overlay harness rows",
@@ -266,6 +273,13 @@
       "port": "the row after the overlay's body names the row the cursor is on, of how many",
       "golden_ids": ["overlay/evidence@*", "overlay/readiness@*", "overlay/draft@*"],
       "rulings": ["CON-141"]
+    },
+    {
+      "entry": "notifications matrix",
+      "pack": "a MAY INTERRUPT column decided by policy and profile, budget passed at no citing R23, a settings owner line, and a second NEEDS YOU sentence under the header's",
+      "port": "the presentation matrix's three columns CLASS, TOAST and DECIDED BY, budget passed at once per revision, no settings owner, and the header as the frame's one NEEDS YOU",
+      "golden_ids": ["route/notifications@*", "J3"],
+      "rulings": ["UI-068", "UI-028"]
     }
   ]
 }

@@ -51,6 +51,7 @@ import orjson
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.state.enums import GateReceiptResult, StoreKind
+from eawf.kernel.state.resolve import GATE_LIVE_STATE_ENV, GATE_SANDBOX_STATE_ENV
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt
@@ -617,24 +618,32 @@ def gate_sandbox(*, live_state_path: Path) -> Iterator[GateSandbox]:
         shutil.rmtree(root, ignore_errors=True)
 
 
-def gate_child_env(sandbox: GateSandbox) -> dict[str, str]:
+def gate_child_env(sandbox: GateSandbox, *, live_state_path: Path) -> dict[str, str]:
     """Return the child environment with every live-tree seam repointed.
 
-    ``EAWF_RUNTIME_DIR`` and ``EA_STATE`` are the two overrides both resolvers
-    consult first, so pinning them denies a gate suite the live daemon socket
-    and the live ledger in one move. The spec-cache override is dropped rather
-    than pinned: unset, it derives from the sandbox runtime dir, while an
-    inherited absolute value would leak a live path back in.
+    ``EAWF_RUNTIME_DIR`` is pinned to the sandbox so the child cannot dial
+    the live daemon. The ledger is fenced instead of pinned: ``EA_STATE``
+    outranks ``-w`` and the working directory, so pinning it would repoint
+    every workspace a gate's own test suite builds and fail that suite
+    exactly where it passes outside the harness. The fence swaps only a
+    resolution that lands on *live_state_path* for the sandbox snapshot, and
+    an inherited ``EA_STATE`` is dropped so the gate resolves as an operator
+    shell would. The spec-cache override is dropped rather than pinned:
+    unset, it derives from the sandbox runtime dir, while an inherited
+    absolute value would leak a live path back in.
 
     Args:
         sandbox: The sandbox the child must run against.
+        live_state_path: The live ledger the sandbox was seeded from.
 
     Returns:
         A copy of the current environment with the sandbox bindings applied.
     """
     env = dict(os.environ)
     env["EAWF_RUNTIME_DIR"] = str(sandbox.runtime_dir)
-    env["EA_STATE"] = str(sandbox.state_path)
+    env[GATE_LIVE_STATE_ENV] = str(live_state_path)
+    env[GATE_SANDBOX_STATE_ENV] = str(sandbox.state_path)
+    env.pop("EA_STATE", None)
     env.pop("EAWF_SPEC_CACHE_DIR", None)
     return env
 
@@ -701,7 +710,7 @@ def run_gate_out_of_process(
                 capture_output=True,
                 text=True,
                 check=False,
-                env=gate_child_env(sandbox),
+                env=gate_child_env(sandbox, live_state_path=context.state_path),
             )
         response = _read_child_response(response_path)
         if response is None:

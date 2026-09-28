@@ -28,6 +28,8 @@ from eawf.surfaces.tui.console.frame import View, bar, build, header, thin, unhe
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import ENTRY_ROUTE
 from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.overlays.bound_keys import unless_bound
+from eawf.surfaces.tui.console.overlays.drawn import draw_card
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import (
     activity,
@@ -107,7 +109,7 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "crash.recovery": RouteModule(render=crash_recovery.render),
         "milestone": RouteModule(render=milestone.render),
         "release": RouteModule(render=release.render),
-        "timeline": RouteModule(render=timeline.render),
+        "timeline": RouteModule(render=timeline.render, seam=timeline.seam),
         "backlog": RouteModule(render=backlog.render, seam=backlog.seam),
         "campaign": RouteModule(render=campaign.render, seam=campaign.seam),
         "history": RouteModule(render=history.render),
@@ -126,11 +128,13 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "export": RouteModule(render=export.render, seam=export.seam),
         "receipt": RouteModule(render=receipt.render),
         "campaign.step": RouteModule(
-            render=campaign_step.render, seam=campaign_step.seam, copy=campaign_step.copy
+            render=campaign_step.render,
+            seam=unless_bound(campaign_step.seam),
+            copy=campaign_step.copy,
         ),
         "campaign.artifact": RouteModule(
             render=campaign_artifact.render,
-            seam=campaign_artifact.seam,
+            seam=unless_bound(campaign_artifact.seam),
             copy=campaign_artifact.copy,
         ),
     }
@@ -181,7 +185,8 @@ def render_route(view: View) -> list[str]:
     resolving state instead: no projection exists, so no route is drawn.
 
     The entry layer is drawn before any session exists, so it never waits on a read
-    model: it draws from the chrome's pre-session states alone.
+    model: it draws from the chrome's pre-session states alone. A card sub-surface bound
+    to a record the console holds is drawn from that record.
 
     Raises:
         KeyError: the session's route is not registered, which the navigation seam makes
@@ -189,6 +194,9 @@ def render_route(view: View) -> list[str]:
     """
     if awaiting_first_projection(view) and view.session.route != ENTRY_ROUTE:
         return entry.render_state(view, _resolving(view.fixture))
+    card = draw_card(view)
+    if card is not None:
+        return card
     if unheld(view) and view.session.route != ENTRY_ROUTE:
         return unknown_frame(view)
     return ROUTE_MODULES[view.session.route].render(view)

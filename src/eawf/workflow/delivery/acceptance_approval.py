@@ -306,6 +306,7 @@ def acceptance_question(
     urn: PendingActionUrn,
     bundle: MilestoneAcceptanceBundle,
     requested_by: HumanPrincipal | AgentPrincipal,
+    assignee: str | None,
     at: datetime,
 ) -> PendingAction:
     """Return the protected approval asking to accept exactly *bundle*.
@@ -320,6 +321,8 @@ def acceptance_question(
             repository.
         bundle: The revision the operator is asked to accept.
         requested_by: Who asks.
+        assignee: The one principal the question is addressed to, or ``None`` for
+            every eligible principal.
         at: When the question was asked.
 
     Returns:
@@ -337,6 +340,7 @@ def acceptance_question(
         idempotency_key=approval_idempotency_key(bundle),
         status=PendingActionStatus.WAITING,
         requested_by=requested_by,
+        assignee_ref=assignee,
         created_at=at,
         updated_at=at,
     )

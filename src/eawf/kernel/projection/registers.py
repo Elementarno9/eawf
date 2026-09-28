@@ -31,6 +31,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from types import MappingProxyType
 from typing import Final
 
@@ -83,10 +84,8 @@ REGISTER_ROUTES: Final[tuple[str, ...]] = (
 
 #: The collections nothing in epoch 2 writes yet. A route binding one of these reads a
 #: register that is empty because it has no producer, which a console must not draw as a
-#: register that was read and found quiet.
-UNWRITTEN_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset(
-    {Epoch2Collection.PENDING_ACTION}
-)
+#: register that was read and found quiet. Every bound register has a producer today.
+UNWRITTEN_COLLECTIONS: Final[frozenset[Epoch2Collection]] = frozenset()
 
 #: Why a bound register states no count. The console prints the unknown truth token in the
 #: count's place; this is what an operator reads when asking why it is not a number.
@@ -141,6 +140,9 @@ class RegisterView:
         digest: The projection's digest, which one cursor yields once.
         complete: Whether the projection claimed every row of its scope, and so whether a
             count taken from it may be called complete.
+        generated_at: When the daemon read the rows, which is the instant an elapsed
+            time or an age derived from them is stated as of; ``None`` for a view built
+            without a served header.
         rows: The records, in the projection's own order.
         counts: The rows per *written* collection the route binds, keyed by collection
             name. A collection nothing writes has no entry, which is how a register with
@@ -155,6 +157,7 @@ class RegisterView:
     source_cursor: str
     digest: str
     complete: bool
+    generated_at: datetime | None = None
     rows: tuple[ProjectionRow, ...]
     counts: Mapping[str, int]
     withheld: tuple[str, ...]
@@ -240,21 +243,6 @@ def _unknown(*, reason: str, revision: int, refs: tuple[str, ...]) -> TruthField
     )
 
 
-def _known(*, value: str, revision: int, refs: tuple[str, ...]) -> TruthField[str]:
-    """Return the truth field a count derived from the projection's own rows comes back as."""
-    return TruthField[str](
-        value=value,
-        state=TruthState.KNOWN,
-        truth_kind=TruthKind.DERIVED,
-        producer=PROJECTION_PRODUCER,
-        producer_revision=revision,
-        precision=Precision.EXACT,
-        measurement_quality=MeasurementQuality.EXACT,
-        freshness=Freshness.LIVE,
-        provenance_refs=refs,
-    )
-
-
 def _revision_of(view: RegisterView) -> int:
     """Return the producer revision a derived field of ``view`` is stated at.
 
@@ -303,46 +291,10 @@ def build_register_view(projection: RouteProjection) -> RegisterView:
         source_cursor=projection.header.source_cursor,
         digest=projection.digest,
         complete=projection.header.completeness is Completeness.COMPLETE,
+        generated_at=projection.header.generated_at,
         rows=rows,
         counts=counts,
         withheld=tuple(c.value for c in bound if c in UNWRITTEN_COLLECTIONS),
-    )
-
-
-def attention_mine(view: RegisterView) -> TruthField[str]:
-    """Return the count of actions addressed to this principal, as a truth field.
-
-    The header's ``!N`` and the Attention route's own ``mine`` row both read this, so the
-    two cannot state different numbers. A pending action is addressed to the operator of
-    the scope it was raised in, so every row of the scope's register is one of this
-    principal's; a per-principal producer would filter here rather than beside the header.
-
-    Args:
-        view: The Attention route's read model.
-
-    Returns:
-        The count when a producer writes the register, and the unknown state naming why
-        when none does -- never a zero standing in for a register nobody writes.
-
-    Raises:
-        ValueError: ``view`` is another route's read model, whose rows are not actions.
-    """
-    if view.route != ATTENTION_ROUTE:
-        raise ValueError(
-            f"route {view.route!r} states no attention count; the count is the "
-            f"{ATTENTION_ROUTE!r} route's register"
-        )
-    revision = _revision_of(view)
-    if view.withheld:
-        return _unknown(
-            reason=UNWRITTEN_REASON,
-            revision=revision,
-            refs=tuple(f"{view.scope_id}:{name}" for name in view.withheld),
-        )
-    return _known(
-        value=str(len(view.rows)),
-        revision=revision,
-        refs=tuple(row.urn for row in view.rows) or (view.scope_id,),
     )
 
 
@@ -396,7 +348,6 @@ __all__ = [
     "UNWRITTEN_REASON",
     "BudgetReading",
     "RegisterView",
-    "attention_mine",
     "budget_reading",
     "build_register_view",
     "notice_interrupts",

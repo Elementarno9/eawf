@@ -511,11 +511,14 @@ def current_fleet_row(session: Session, fixture: Fixture) -> FleetRow | None:
 
 @dataclass(frozen=True, slots=True)
 class StripItem:
-    """One bucket of a bucket strip: its key (``None`` for all), label and count."""
+    """One bucket of a bucket strip: its key (``None`` for all), label and count.
+
+    The count is the unknown token, never a zero, where the bucket cannot be counted.
+    """
 
     key: str | None
     label: str
-    n: int
+    n: int | str
 
 
 def strip_row(session: Session, items: Sequence[StripItem], w: int) -> str:

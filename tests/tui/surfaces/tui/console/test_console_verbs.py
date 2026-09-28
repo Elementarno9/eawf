@@ -25,6 +25,7 @@ from eawf.kernel.projection.compute import (
     build_route_projection,
 )
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, negotiate_reconnect
+from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
@@ -410,6 +411,7 @@ def test_ledger_holds_an_operation_until_it_is_answered() -> None:
             target=op.target,
             status=OperationStatus.OUTSTANDING,
             detail="",
+            disposition=ControlDisposition.UNKNOWN,
         )
     )
     assert ledger.outstanding() == (op,)
@@ -426,7 +428,13 @@ def test_ledger_refuses_a_duplicate_and_an_unknown_id() -> None:
         ledger.settle(settled(_op("console-0002"), {}))
     with pytest.raises(KeyError):
         ledger.settle(
-            OperationResult(operation_id=None, target="", status=OperationStatus.REFUSED, detail="")
+            OperationResult(
+                operation_id=None,
+                target="",
+                status=OperationStatus.REFUSED,
+                detail="",
+                disposition=ControlDisposition.IDLE,
+            )
         )
 
 
@@ -546,7 +554,7 @@ def test_confirm_resolves_pending_action_via_daemon() -> None:
     assert seam.outstanding == ()
     assert _register(fixture) == before
     assert app.session.log[0].key == "daemon"
-    assert app.session.log[0].note.startswith("applied")
+    assert app.session.log[0].note.startswith("confirmed")
 
 
 def test_run_control_reaches_daemon_through_the_seam() -> None:

@@ -2,7 +2,7 @@
 
 Its subject is the claim it was opened on, captured when it opened, so walking its receipts
 never moves it; the acceptance evidence overlay is the other overlay, over a milestone's
-sealed bundle. The three state rows replace the built frame's last three body rows.
+sealed bundle.
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import View, bar, build, header, thin
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.overlays.chassis import crumb, cursor_foot
-from eawf.surfaces.tui.console.overlays.states import with_state_rows
 from eawf.surfaces.tui.console.width import pad
 
 NAME = "evidence"
@@ -62,5 +61,4 @@ def render(view: View) -> list[str]:
         "           toward a milestone, and it seals no digest.",
         cursor_foot("RECEIPT", sel + 1, len(receipts)),
     ]
-    frame = build(view, rows, keybar([("↑↓", "receipt"), ("y", "copy"), ("Esc", "back")], w))
-    return with_state_rows(NAME, frame, s, w)
+    return build(view, rows, keybar([("↑↓", "receipt"), ("y", "copy"), ("Esc", "back")], w))

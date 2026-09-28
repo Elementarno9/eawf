@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from eawf.kernel.state.resolve import fence_live_ledger
 from eawf.platform.registry import (
     Registry,
     RegistryReadError,
@@ -108,7 +109,9 @@ def resolve_state_path(workspace: Path | None) -> Path:
             themselves.
 
     Returns:
-        The resolved state path; may not exist on disk.
+        The resolved state path; may not exist on disk. Under a gate harness
+        a path landing on the fenced live ledger is its sandbox snapshot
+        instead (:func:`~eawf.kernel.state.resolve.fence_live_ledger`).
 
     Raises:
         FileNotFoundError: When no candidate is found via the
@@ -117,17 +120,17 @@ def resolve_state_path(workspace: Path | None) -> Path:
     env = os.environ.get("EA_STATE")
     if env:
         logger.debug(f"resolve_state_path env-hit path={env}")
-        return Path(env)
+        return fence_live_ledger(Path(env), os.environ)
     if workspace is not None:
         candidate = Path(workspace) / ".ea" / "state.json"
         logger.debug(f"resolve_state_path workspace-flag path={candidate}")
-        return candidate
+        return fence_live_ledger(candidate, os.environ)
     cur = Path.cwd().resolve()
     for directory in [cur, *cur.parents]:
         target = directory / ".ea" / "state.json"
         if target.exists():
             logger.debug(f"resolve_state_path pwd-upward-hit path={target}")
-            return target
+            return fence_live_ledger(target, os.environ)
     raise FileNotFoundError(
         "No .ea/state.json found upward from cwd; pass -w or set EA_STATE",
     )

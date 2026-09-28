@@ -17,6 +17,7 @@ from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin, window_rows
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -31,13 +32,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "field"),
-    ("Enter", "evidence"),
-    (".", "actions"),
-    ("i", "inspect"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("trust")
 
 
 #: The three truth-field groups a TrustView carries, in the order the frame draws them.

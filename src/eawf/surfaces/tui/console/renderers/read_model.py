@@ -32,15 +32,18 @@ opens against the prototype registers, and the tracked golden contract is that m
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Protocol
 
+from eawf.kernel.projection.registers import RegisterView
 from eawf.kernel.projection.route_view import RouteReadModel
+from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthField
 from eawf.kernel.projection.verification import HealthReadModel, RuntimeTupleRow
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
-from eawf.surfaces.tui.console.format import group
+from eawf.surfaces.tui.console.format import group, span
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
@@ -72,6 +75,9 @@ KNOWN = "known"
 #: What a declared column no producer states shows beside its name: the unknown token
 #: with its state word, so the column reads as silent without a legend.
 UNKNOWN_WORD = f"{truth_cell('unknown')} unknown"
+
+#: What ``y`` copies from a card whose register holds no row: there is no address to give.
+NOTHING_TO_COPY = "nothing is held here to copy"
 
 #: What the tuple section says when no conformance verdict is held. An empty section is
 #: an absence of evidence, never a healthy tuple.
@@ -218,39 +224,61 @@ def route_crumb(model: Projected, *steps: str) -> str:
     return " " + CRUMB_SEP.join([BRAND, model.scope_id, *steps])
 
 
+def read_age(view: View, model: Projected) -> str:
+    """Return how old the rows are, measured from their read to the frame's instant.
+
+    Empty when either instant is unknown, which states the revision alone rather than
+    a guess at its age.
+    """
+    read_at = model.generated_at if isinstance(model, (SpineView, RegisterView)) else None
+    if read_at is None or view.now is None:
+        return ""
+    return span(max(0, int((view.now - read_at).total_seconds())))
+
+
 def native_head(
-    view: View, model: Projected, *, crumb_text: str, summary: str, attached_line: bool = True
+    view: View, model: Projected, *, crumb_text: str, summary: str, terminal: bool = False
 ) -> list[str]:
     """Return a native frame's head: header, summary line, heavy rule, and the reads line.
 
     Every packet frame opens the same way -- its crumb, one line saying what the frame is
     about, the heavy rule -- and a connection that cannot vouch for the rows adds the
-    ``ATTACHED`` line under the rule, so a frame drawn from an old read says so before any
-    row does.
+    ``ATTACHED`` line under the rule, with the rows' age where it is known, so a frame
+    drawn from an old read says so before any row does and every count on it reads as
+    ``known``.
 
     Args:
         view: The render being built.
         model: The read model the frame draws; its scope and cursor head the frame.
         crumb_text: The crumb, with its leading gutter.
         summary: The line under the header, without its leading gutter.
-        attached_line: Whether the reads line is drawn. A frame about an entity whose
-            lifecycle has ended states that instead, because a finished record does not
-            age with the link.
+        terminal: Whether the frame's subject is an entity whose lifecycle has ended. Its
+            header carries no connection value and no reads line is drawn, because a
+            finished record does not age with the link.
 
     Returns:
         The head rows, the rule under them last.
     """
     session, w = view.session, view.w
     rd = reads(session)
-    line = f" {summary}" + ("" if rd.complete else f" · {rd.label}")
+    known = "" if rd.complete or re.search(rf"\b{KNOWN}\b", summary) else f" · {KNOWN}"
+    line = f" {summary}{known}" + ("" if rd.complete else f" · {rd.label}")
     rows: list[str] = [
-        header_row(session, crumb=crumb_text, scope=model.scope_id, needs=needs_count(view), w=w),
+        header_row(
+            session,
+            crumb=crumb_text,
+            scope=model.scope_id,
+            needs=needs_count(view),
+            w=w,
+            terminal=terminal,
+        ),
         Fixed(pad(line, w)),
         bar(w),
     ]
-    if attached_line and not rd.complete:
+    if not terminal and not rd.complete:
         revision = group(int(model.source_cursor))
-        rows.extend([f" ATTACHED  {attached(rd, revision=revision)}", thin(w)])
+        text = attached(rd, revision=revision, age=read_age(view, model))
+        rows.extend([f" ATTACHED  {text}", thin(w)])
     return rows
 
 

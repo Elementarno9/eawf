@@ -126,7 +126,9 @@ class LiveRepo:
             "the check wrote the live runtime directory"
         )
         assert seen["mutated"] is True, "the check mutated nothing; the test proved no isolation"
-        assert seen["reason"] == "env"
+        # The walk-up from the repository root lands on the live ledger, which
+        # the harness fences behind its sandbox copy.
+        assert seen["reason"] == "pwd_upward"
         assert Path(seen["state_path"]) != self.state_path
         assert self.state_path.parent not in Path(seen["state_path"]).parents
         assert Path(seen["runtime_dir"]) != self.runtime_dir

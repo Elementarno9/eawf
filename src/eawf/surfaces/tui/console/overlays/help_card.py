@@ -1,4 +1,8 @@
-"""The help overlay: this route's keymap, from the keybar's own table, then the global keys."""
+"""The help overlay: this route's keymap, from the keybar's own table, then the global keys.
+
+It teaches only keys that act where the operator stands: the route's own table, and each
+global key that acts on this route, so a depth key is taught only where there is a depth.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,8 @@ from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyEntry, keybar
 from eawf.surfaces.tui.console.keymap import (
     ENTRY_ALLOW,
     ENTRY_ROUTE,
-    GLOBAL_HELP,
+    GLOBAL_KEYS,
+    acts_here,
     native_keys,
     route_keys,
 )
@@ -51,9 +56,9 @@ def render(view: View) -> list[str]:
     allowed = {key for key, _label in entry_state(view).keys} | set(ENTRY_ALLOW)
     rows.extend([thin(w), " EVERYWHERE"])
     rows.extend(
-        "   " + _token(token) + text
-        for token, text, key in GLOBAL_HELP
-        if not pre or key in allowed
+        "   " + _token(key.token) + key.text
+        for key in GLOBAL_KEYS
+        if acts_here(key, s.route, linked=view.linked) and (not pre or allowed.issuperset(key.keys))
     )
     if pre:
         rows.append("   before a session exists, only the keys above are bound")

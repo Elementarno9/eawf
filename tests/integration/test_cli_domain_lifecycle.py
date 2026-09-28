@@ -512,7 +512,7 @@ def test_text_output_names_the_operation_and_the_revisions(
         ],
     )
     assert result.exit_code == exit_codes.OK, result.output
-    assert result.output.splitlines()[0] == (
+    assert result.stdout.splitlines()[0] == (
         f"{domain_cmd.BATCH_ACTIVATE} ok {_BATCH_URN} revision 3 -> 4"
     )
 

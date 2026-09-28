@@ -11,7 +11,10 @@ would otherwise drive a real event loop.
 
 from __future__ import annotations
 
+import io
 import json
+import logging
+import sys
 from pathlib import Path
 
 import pytest
@@ -307,3 +310,55 @@ def test_dispatch_tui_delegates_to_launch_tui(
         "verbose": True,
         "operator": None,
     }
+
+
+class _HandlerProbe:
+    """Stands in for the console and records the root handlers while it runs."""
+
+    def __init__(self) -> None:
+        self.during: list[logging.Handler] = []
+
+    async def run_async(self) -> None:
+        self.during = list(logging.getLogger().handlers)
+
+
+def test_native_console_keeps_log_records_off_the_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """While the console owns the screen no root handler writes to the terminal,
+    and the CLI's terminal handler is back once the console exits."""
+    terminal = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", terminal)
+    root = logging.getLogger()
+    handler = logging.StreamHandler(stream=sys.stderr)
+    root.addHandler(handler)
+    probe = _HandlerProbe()
+    try:
+        launch._run_console(probe, None)  # type: ignore[arg-type]
+        assert handler not in probe.during
+        assert not any(
+            isinstance(h, logging.StreamHandler) and h.stream is terminal for h in probe.during
+        )
+        assert handler in root.handlers
+    finally:
+        root.removeHandler(handler)
+
+
+def test_native_console_restores_the_terminal_handler_when_the_run_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _Crashing:
+        async def run_async(self) -> None:
+            raise RuntimeError("console crashed")
+
+    terminal = io.StringIO()
+    monkeypatch.setattr(sys, "stderr", terminal)
+    root = logging.getLogger()
+    handler = logging.StreamHandler(stream=sys.stderr)
+    root.addHandler(handler)
+    try:
+        with pytest.raises(RuntimeError, match="console crashed"):
+            launch._run_console(_Crashing(), None)  # type: ignore[arg-type]
+        assert handler in root.handlers
+    finally:
+        root.removeHandler(handler)

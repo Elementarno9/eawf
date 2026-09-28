@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, Grid, View, boxed
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers import settings as st
 from eawf.surfaces.tui.console.renderers.provenance import stack_frame
 
-_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "layer"), ("Esc", "close"))
+_KEYS = route_pairs("settings.stack")
 _NOT_SET = "–"  # noqa: RUF001
 # One spec: the head clears the same one-column gutter the rows reserve.
 _GRID = Grid([12, 17, 12, 0], 1)

@@ -1,0 +1,74 @@
+{
+ "markers": [
+  {
+   "id": "MLS-0001",
+   "title": "Replay-safe activity",
+   "track": "Runtime",
+   "fact": "dated",
+   "state": "ACTIVE",
+   "batches": [
+    "BAT-0001 Semantic event slice · ACTIVE",
+    "BAT-0002 Bound replay · ACTIVE"
+   ],
+   "promised": "Activity survives a replay unchanged.",
+   "built_batches": 2,
+   "built_tasks": 13,
+   "criteria": [
+    [
+     "Events carry a semantic kind",
+     true
+    ],
+    [
+     "Replay digest equals a clean load",
+     true
+    ],
+    [
+     "No wave vocabulary remains",
+     false
+    ]
+   ],
+   "sealed_at": "2026-09-18T13:20:00+00:00",
+   "digest": "2b9f…c41"
+  },
+  {
+   "id": "MLS-0002",
+   "title": "Replay-safe activity",
+   "track": "Runtime",
+   "fact": "forecast",
+   "state": "ACTIVE",
+   "batches": [
+    "BAT-0001 Semantic event slice · ACTIVE",
+    "BAT-0002 Bound replay · ACTIVE"
+   ],
+   "promised": "Activity survives a replay unchanged.",
+   "built_batches": 2,
+   "built_tasks": 13,
+   "criteria": [
+    [
+     "Events carry a semantic kind",
+     true
+    ],
+    [
+     "Replay digest equals a clean load",
+     true
+    ],
+    [
+     "No wave vocabulary remains",
+     false
+    ]
+   ]
+  },
+  {
+   "id": "MLS-0003",
+   "title": "Replay-safe activity",
+   "track": "Runtime",
+   "fact": "undated",
+   "state": "ACTIVE",
+   "batches": [],
+   "promised": "Activity survives a replay unchanged.",
+   "built_batches": 0,
+   "built_tasks": 0,
+   "criteria": []
+  }
+ ]
+}

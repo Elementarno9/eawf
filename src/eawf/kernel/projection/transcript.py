@@ -155,6 +155,14 @@ class TranscriptBlock:
             block's value is in the purged state rather than the unknown one, because
             the console knows precisely what is missing.
         purged: The range this block stands for, or ``None`` for an observed event.
+        lane: What sort of work the block records, as the transcript names it: one of
+            :data:`LANES`, read off the event kind.
+        in_flight: Whether the work the block opened is still going: a command with no
+            result yet, or a reasoning turn not yet summarized.
+        background: Whether the block is a command detached into the background, which
+            works elsewhere rather than holding the Run.
+        typical_seconds: How long this command family usually takes, derived from the
+            finished executions of it in the same stream; ``None`` when none finished.
     """
 
     sequence: int
@@ -162,6 +170,10 @@ class TranscriptBlock:
     at: datetime
     text: TruthField[str]
     purged: PurgedRange | None = None
+    lane: str = "event"
+    in_flight: bool = False
+    background: bool = False
+    typical_seconds: int | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -306,6 +318,70 @@ def _thinking_field(events: Sequence[RunEventRecord], *, scope_id: str) -> Truth
     return _derived(THINKING, urn=opened.event_ref)
 
 
+#: What sort of work each event kind records, as the transcript's kind column names it.
+#: A kind not listed is drawn as a plain event rather than refused.
+LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
+    {
+        RunEventKind.MESSAGE_SUMMARIZED: "message",
+        RunEventKind.PLAN_UPDATED: "message",
+        RunEventKind.TOOL_REQUESTED: "tool",
+        RunEventKind.TOOL_ACCEPTED: "tool",
+        RunEventKind.TOOL_RESULT: "tool",
+        RunEventKind.COMMAND_STARTED: "tool",
+        RunEventKind.COMMAND_OUTPUT: "tool",
+        RunEventKind.COMMAND_RESULT: "tool",
+        RunEventKind.FILE_CHANGED: "file",
+        RunEventKind.DIFF_SUMMARIZED: "file",
+        RunEventKind.QUESTION_RAISED: "question",
+        RunEventKind.APPROVAL_REQUESTED: "question",
+        RunEventKind.ERROR_OBSERVED: "error",
+        RunEventKind.REASONING_STARTED: "thinking",
+        RunEventKind.REASONING_SUMMARIZED: "thinking",
+        RunEventKind.CHILD_RUN_REQUESTED: "subagent",
+        RunEventKind.CHILD_RUN_STARTED: "subagent",
+        RunEventKind.CHILD_RUN_TERMINAL: "subagent",
+        RunEventKind.HEARTBEAT: "heartbeat",
+        RunEventKind.EVENT_GAP: "purged",
+    }
+)
+
+#: The lane an event kind the table does not name is drawn in.
+EVENT_LANE: Final = "event"
+
+
+def _median(values: Sequence[int]) -> int:
+    """Return the middle of ``values``, the lower middle for an even count."""
+    ordered = sorted(values)
+    return ordered[(len(ordered) - 1) // 2]
+
+
+def _in_flight(events: tuple[RunEventRecord, ...]) -> tuple[set[str], dict[str, int]]:
+    """Return the events whose work is still going, and each command family's typical time.
+
+    A command is in flight from its start until a result names the same execution, and a
+    reasoning turn until it is summarized. The typical time of a family is the median of
+    its finished executions in the stream.
+    """
+    started: dict[str, RunEventRecord] = {}
+    durations: dict[str, list[int]] = {}
+    for event in events:
+        payload = event.payload
+        if not isinstance(payload, CommandPayload):
+            continue
+        if payload.phase == "started":
+            started[payload.command_ref] = event
+        elif payload.phase == "result" and payload.command_ref in started:
+            begun = started.pop(payload.command_ref)
+            seconds = int((event.recorded_at - begun.recorded_at).total_seconds())
+            durations.setdefault(payload.command_family_ref, []).append(max(0, seconds))
+    going = {event.event_ref for event in started.values()}
+    turn = open_reasoning_turn(events)
+    if turn is not None:
+        going.add(turn.event_ref)
+    typical = {family: _median(times) for family, times in durations.items()}
+    return going, typical
+
+
 def build_transcript_blocks(
     events: Sequence[RunEventRecord],
 ) -> tuple[tuple[TranscriptBlock, ...], tuple[PurgedRange, ...]]:
@@ -320,9 +396,12 @@ def build_transcript_blocks(
     """
     blocks: list[TranscriptBlock] = []
     purged: list[PurgedRange] = []
-    for event in _ordered(events):
-        if isinstance(event.payload, EventGapPayload):
-            covered = _purged_range(event.payload)
+    ordered = _ordered(events)
+    going, typical = _in_flight(ordered)
+    for event in ordered:
+        payload = event.payload
+        if isinstance(payload, EventGapPayload):
+            covered = _purged_range(payload)
             purged.append(covered)
             blocks.append(
                 TranscriptBlock(
@@ -331,6 +410,7 @@ def build_transcript_blocks(
                     at=event.recorded_at,
                     text=_purged_field(covered, urn=event.event_ref),
                     purged=covered,
+                    lane=LANES[RunEventKind.EVENT_GAP],
                 )
             )
             continue
@@ -340,6 +420,15 @@ def build_transcript_blocks(
                 kind=event.event_kind,
                 at=event.recorded_at,
                 text=block_text(event),
+                lane=LANES.get(event.event_kind, EVENT_LANE),
+                in_flight=event.event_ref in going,
+                background=isinstance(payload, CommandPayload)
+                and payload.execution == "background",
+                typical_seconds=(
+                    typical.get(payload.command_family_ref)
+                    if isinstance(payload, CommandPayload)
+                    else None
+                ),
             )
         )
     logger.debug(f"build_transcript_blocks blocks={len(blocks)} purged={len(purged)}")
@@ -392,7 +481,9 @@ def build_transcript_view(
 
 __all__ = [
     "BLOCK_REVISION",
+    "EVENT_LANE",
     "FAMILY",
+    "LANES",
     "NO_OPEN_TURN_REASON",
     "NO_TEXT_REASON",
     "OPEN_TURN_TEXT",

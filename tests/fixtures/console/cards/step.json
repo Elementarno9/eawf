@@ -1,0 +1,75 @@
+{
+ "steps": [
+  {
+   "campaign": "CAM-0001",
+   "ordinal": 1,
+   "total": 6,
+   "title": "baseline digests",
+   "state": "done",
+   "started_at": "2026-09-18T11:18:00+00:00",
+   "ended_at": "2026-09-18T12:24:00+00:00",
+   "runner": "RUN-a708a7d6",
+   "provider": "claude",
+   "spent": 1.1,
+   "limit": 2,
+   "unit": "h",
+   "outcome": "20 runs were replayed, 20 digests recorded, and no ordering inversions found.",
+   "events": [
+    [
+     "11:18",
+     "¶ started · baseline over both providers"
+    ],
+    [
+     "11:40",
+     "› replayed 10 runs"
+    ],
+    [
+     "12:24",
+     "✓ finished"
+    ]
+   ],
+   "produced": [
+    "EVD-0011",
+    "bounds-check.md"
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "campaign": "CAM-0001",
+   "ordinal": 5,
+   "total": 6,
+   "title": "cross-provider",
+   "state": "running",
+   "started_at": "2026-09-18T13:44:00+00:00",
+   "runner": "RUN-98c47577",
+   "provider": "codex",
+   "session_fact": "session fresh",
+   "spent": 1.3,
+   "limit": 2,
+   "unit": "h",
+   "done_units": 12,
+   "total_units": 20,
+   "progress_unit": "runs replayed",
+   "events": [
+    [
+     "13:44",
+     "¶ started · cross-provider replay"
+    ]
+   ],
+   "why_none": "it is still running.",
+   "as_of": "2026-09-18T14:02:00+00:00"
+  },
+  {
+   "campaign": "CAM-0001",
+   "ordinal": 6,
+   "total": 6,
+   "title": "write-up",
+   "state": "pending",
+   "waits_on": [
+    "step 5",
+    "the open contradiction CLM-0014"
+   ],
+   "as_of": "2026-09-18T14:02:00+00:00"
+  }
+ ]
+}

@@ -28,6 +28,7 @@ from textual.widget import Widget
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
 from eawf.kernel.delivery.receipts import ProofReceipt
+from eawf.kernel.projection.attention import delivered_revisions, deliveries
 from eawf.kernel.projection.compute import RouteProjection
 from eawf.kernel.projection.integration import INTEGRATION_ROUTES, build_integration_view
 from eawf.kernel.projection.operations import OPERATIONS_ROUTES, build_operations_view
@@ -46,6 +47,7 @@ from eawf.kernel.projection.verification import (
     RuntimeTupleVerdict,
     build_verification_view,
 )
+from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.events import RunEventRecord
 from eawf.surfaces.tui.chassis.theme import EA_DARK, EA_THEMES
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
@@ -58,6 +60,7 @@ from eawf.surfaces.tui.console.clock import (
     quit_step,
     sweep_toasts,
 )
+from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -65,11 +68,11 @@ from eawf.surfaces.tui.console.frame import View, thin, unheld
 from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
+from eawf.surfaces.tui.console.mutation import settle
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
     OperationResult,
-    OperationStatus,
     VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays import is_overlay, render_overlay
@@ -98,13 +101,20 @@ WRITE_WORKERS = "writes"
 DAEMON_KEY = "daemon"
 # The style-metadata key a painted span's mark travels under.
 MARK_META = "mark"
-# How each settled write is announced: toast title and severity.
-_WRITE_TOASTS: Mapping[OperationStatus, tuple[str, Severity]] = MappingProxyType(
+# How loudly each control outcome is announced; the toast title is the outcome's own word.
+# Only a confirmed effect speaks as success, because requesting and accepted are facts
+# about the request channel; a superseded answer is a loss, never a warning or an error.
+WRITE_TOAST_SEVERITY: Mapping[ControlDisposition, Severity] = MappingProxyType(
     {
-        OperationStatus.APPLIED: ("recorded", Severity.OK),
-        OperationStatus.SUPERSEDED: ("superseded", Severity.WARN),
-        OperationStatus.REFUSED: ("refused", Severity.ERR),
-        OperationStatus.OUTSTANDING: ("unknown", Severity.WARN),
+        ControlDisposition.IDLE: Severity.INFO,
+        ControlDisposition.REQUESTING: Severity.INFO,
+        ControlDisposition.ACCEPTED: Severity.INFO,
+        ControlDisposition.CONFIRMED: Severity.OK,
+        ControlDisposition.REJECTED: Severity.ERR,
+        ControlDisposition.INVALIDATED: Severity.WARN,
+        ControlDisposition.UNKNOWN: Severity.WARN,
+        ControlDisposition.RECOVERY: Severity.WARN,
+        ControlDisposition.SUPERSEDED: Severity.INFO,
     }
 )
 # The toolkit's key names that differ from the dispatcher's.
@@ -209,6 +219,16 @@ def compose_frame(view: View) -> list[str]:
     if len(rows) != h:
         raise ValueError(f"frame has {len(rows)} rows, not {h}")
     return rows
+
+
+# What only the operator may change: the route and its subject, what is open, where the
+# focus is, and whether a prefix or a text input holds the keyboard.
+_STANCE_FIELDS: tuple[str, ...] = ("route", "subj_id", "overlay", "region", "prefix", "typing")
+
+
+def stance(session: Session) -> dict[str, object]:
+    """Return the session's stance: the fields no projection event may move."""
+    return {name: getattr(session, name) for name in _STANCE_FIELDS}
 
 
 def _classes(*surfaces: str) -> str:
@@ -345,6 +365,9 @@ class ConsoleApp(App[None]):
             an earlier consent.
         proof_receipts: The receipts a receipt card may open, in record order. A console
             given none opens no card and says the receipt is not held.
+        decision_records: The questions, pauses, claims and planning records the decision
+            overlays and cards are bound to. They are process records rather than document
+            rows, so they arrive beside the projection under the same rule as the bundle.
         chrome: The static tables a console given no fixture draws; the packaged chrome
             when omitted. A fixture carries its own chrome, so passing both is refused.
 
@@ -370,6 +393,7 @@ class ConsoleApp(App[None]):
         acceptance_bundle: MilestoneAcceptanceBundle | None = None,
         acceptance_approval: AcceptanceApproval | None = None,
         proof_receipts: Sequence[ProofReceipt] = (),
+        decision_records: DecisionRecords | None = None,
     ) -> None:
         if fixture is not None and chrome is not None:
             raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
@@ -390,7 +414,11 @@ class ConsoleApp(App[None]):
         self.acceptance_bundle = acceptance_bundle
         self.acceptance_approval = acceptance_approval
         self.proof_receipts = tuple(proof_receipts)
+        self.decision_records = decision_records
         self.session = Session()
+        # the attention revisions already announced to this principal; ``None`` until the
+        # first read, which seeds it so nothing already open is toasted after a restart
+        self._delivered: set[tuple[str, int]] | None = None
         self.reset(None)
         self.frame_rows: list[str] = []
         self.render_count = 0
@@ -435,15 +463,60 @@ class ConsoleApp(App[None]):
         """Read the owed routes and repaint once any of them arrived."""
         seam = self.seam
         assert seam is not None, "only started with a seam"
-        if await seam.sync() and self.is_running:
-            self.render_frame()
+        if await seam.sync():
+            self.deliver_attention()
+            if self.is_running:
+                self.arrive()
 
     def _on_seam_patched(self, routes: tuple[str, ...]) -> None:
-        """Repaint when a patch changed the route on screen or the header's count."""
+        """Announce new attention, then repaint when the route on screen or the count moved.
+
+        A patch only ever adds a toast to the rack: it opens no overlay, moves no focus and
+        changes no route, whatever it carried.
+        """
+        if ATTENTION_ROUTE in routes:
+            self.deliver_attention()
         if not self.is_running:
             return
         if self.route_key in routes or ATTENTION_ROUTE in routes:
-            self.render_frame()
+            self.arrive()
+
+    def arrive(self) -> None:
+        """Repaint for a projection event, which may never open, focus or navigate.
+
+        An event that moved the session's stance is put back and counted in
+        ``session.auto_opens``, which the golden journeys assert stays zero: the console
+        interrupts only when the operator asked it to.
+        """
+        before = stance(self.session)
+        self.render_frame()
+        if stance(self.session) == before:
+            return
+        self.session.auto_opens += 1
+        for name, value in before.items():
+            setattr(self.session, name, value)
+        self.session.log_key(DAEMON_KEY, "an arriving event moved the focus · put back")
+        self.render_frame()
+
+    def deliver_attention(self) -> None:
+        """Toast each attention revision newly addressed to this principal, once.
+
+        The first register read seeds the record of what was delivered, so an item that
+        was already open when the console attached, or before a restart, is not toasted.
+        """
+        register = self.attention_view()
+        if register is None:
+            return
+        if self._delivered is None:
+            self._delivered = set(delivered_revisions(register))
+            return
+        for item in deliveries(register, principal=self.principal(), delivered=self._delivered):
+            self._delivered.add((item.source_ref, item.revision))
+            self.raise_toast(
+                f"{item.key} {item.notification_class.value.replace('_', ' ')}",
+                title="needs you",
+                sev=Severity.WARN,
+            )
 
     def on_resize(self, event: Resize) -> None:
         """Re-lay the frame at the new size."""
@@ -588,7 +661,17 @@ class ConsoleApp(App[None]):
             linked=self.seam is not None,
             principal_refusal=self.principal_refusal(),
             replay=self.seam.replay_note if self.seam is not None else None,
+            rows=self.seam.held_rows() if self.seam is not None else (),
+            decisions=self.decision_records,
+            principal=self.principal(),
+            # a held clock reads no wall time, so a held frame is its authored instant
+            now=self.console_clock.wall() if self.seam is not None and not self.held else None,
         )
+
+    def principal(self) -> str | None:
+        """Return who the console acts as, or ``None`` when it acts as nobody."""
+        operator = self.seam.operator if self.seam is not None else None
+        return operator.principal if operator is not None else None
 
     def principal_refusal(self) -> str:
         """Return why every bound write is refused before it is chosen, or nothing.
@@ -646,6 +729,10 @@ class ConsoleApp(App[None]):
             attention=self.seam.projection_for(ATTENTION_ROUTE) if self.seam else None,
             principal_refusal=view.principal_refusal,
             settings=view.settings,
+            outstanding=len(self.seam.outstanding) if self.seam else 0,
+            rows=view.rows,
+            decisions=view.decisions,
+            principal=view.principal,
         )
 
     def press_key(self, key: str, *, shift: bool = False) -> None:
@@ -686,11 +773,12 @@ class ConsoleApp(App[None]):
         Args:
             result: What the daemon, or the seam on its behalf, answered.
         """
-        title, sev = _WRITE_TOASTS[result.status]
-        self.raise_toast(result.detail, title=title, sev=sev)
-        self.session.log_key(DAEMON_KEY, f"{result.status.value} · {result.detail}")
+        outcome = result.disposition
+        settle(self.session, result, self.console_clock.now())
+        self.raise_toast(result.detail, title=outcome.value, sev=WRITE_TOAST_SEVERITY[outcome])
+        self.session.log_key(DAEMON_KEY, f"{outcome.value} · {result.detail}")
         if self.is_running:
-            self.render_frame()
+            self.arrive()
 
     def on_key(self, event: Key) -> None:
         """Take every key from the toolkit and dispatch it.

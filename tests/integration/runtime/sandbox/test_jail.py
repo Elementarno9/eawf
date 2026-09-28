@@ -39,6 +39,7 @@ import asyncio
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -490,23 +491,31 @@ def test_seatbelt_jail_executes_real_write_policy_on_macos(tmp_path: Path) -> No
     # Sanity: this is the inline-profile form the fix emits.
     assert prefix[:2] == ["sandbox-exec", "-p"]
 
-    # A denied target OUTSIDE the writable cwd (and outside the profile's
-    # /private/tmp temp carve-outs, since tmp_path resolves elsewhere).
-    denied_dir = tmp_path / "outside"
-    denied_dir.mkdir()
+    # A denied target OUTSIDE the writable cwd and outside every temp
+    # carve-out. tmp_path cannot hold it: under a TMPDIR pinned to the
+    # /private/tmp carve-out (as the gate environment pins it) the target
+    # would be writable and the check would prove nothing. The per-user
+    # Darwin temp is the directory the profile deliberately never opens.
+    user_temp = subprocess.run(
+        ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    denied_dir = Path(tempfile.mkdtemp(dir=user_temp))
     denied_target = denied_dir / "blocked.txt"
     allowed_target = cwd / "allowed.txt"
 
-    denied = subprocess.run(
-        [*prefix, "/bin/sh", "-c", f"echo nope > {denied_target}"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert denied.returncode != 0, (
-        f"denied write should be blocked; got rc=0 stderr={denied.stderr!r}"
-    )
-    assert not denied_target.exists(), "blocked write must never create the file"
+    try:
+        denied = subprocess.run(
+            [*prefix, "/bin/sh", "-c", f"echo nope > {denied_target}"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert denied.returncode != 0, (
+            f"denied write should be blocked; got rc=0 stderr={denied.stderr!r}"
+        )
+        assert not denied_target.exists(), "blocked write must never create the file"
+    finally:
+        shutil.rmtree(denied_dir, ignore_errors=True)
 
     allowed = subprocess.run(
         [*prefix, "/bin/sh", "-c", f"echo hi > {allowed_target}"],

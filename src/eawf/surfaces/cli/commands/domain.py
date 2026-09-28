@@ -66,6 +66,7 @@ from eawf.surfaces.cli._daemon_client import (
     DaemonClient,
     DaemonRpcError,
 )
+from eawf.surfaces.cli.commands.domain_consequence import DryRun, Yes, preview
 from eawf.surfaces.cli.commands.lifecycle import (
     batch_app,
     milestone_app,
@@ -741,11 +742,13 @@ def _run_verb(
     from_spec: Path | None,
     approval_receipt_ref: str | None = None,
     extra_params: dict[str, Any] | None = None,
+    dry_run: bool = False,
+    yes: bool = False,
 ) -> None:
     """Dispatch one native lifecycle verb and render its answer.
 
     The single body every command in this module delegates to: build the
-    typed request, send it, print the envelope.
+    typed request, print its consequence, send it, print the envelope.
 
     Args:
         ctx: Typer context carrying the resolved global flags.
@@ -757,6 +760,8 @@ def _run_verb(
         from_spec: The payload file, or ``None``.
         approval_receipt_ref: The sealed approval reference, or ``None``.
         extra_params: The verb's own wire fields, or ``None``.
+        dry_run: Print the consequence only and send nothing.
+        yes: Send after printing the consequence, without asking.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -770,6 +775,8 @@ def _run_verb(
             approval_receipt_ref=approval_receipt_ref,
             extra_params=extra_params,
         )
+        if not preview(method, urn, expected_revision, flags=flags, dry_run=dry_run, yes=yes):
+            return
         envelope = _call_domain_verb(request, flags=flags)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
@@ -898,10 +905,14 @@ def track_retire_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Retire an ACTIVE Track once no Milestone under it is open."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=TRACK_RETIRE,
         urn=urn,
         expected_revision=expected_revision,
@@ -978,10 +989,14 @@ def milestone_activate_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Move a PLANNED Milestone to ACTIVE under an active Track."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=MILESTONE_ACTIVATE,
         urn=urn,
         expected_revision=expected_revision,
@@ -1001,10 +1016,14 @@ def milestone_open_review_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Open acceptance review on an ACTIVE Milestone."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=MILESTONE_OPEN_REVIEW,
         urn=urn,
         expected_revision=expected_revision,
@@ -1030,6 +1049,8 @@ def milestone_accept_cmd(
         Path | None, typer.Option("--acceptance-bundle", help=_BUNDLE_HELP)
     ] = None,
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Accept a Milestone in review against a sealed approval receipt.
 
@@ -1048,6 +1069,8 @@ def milestone_accept_cmd(
             return
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=MILESTONE_ACCEPT,
         urn=urn,
         expected_revision=expected_revision,
@@ -1069,10 +1092,14 @@ def milestone_cancel_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Cancel a Milestone that has not completed."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=MILESTONE_CANCEL,
         urn=urn,
         expected_revision=expected_revision,
@@ -1122,10 +1149,14 @@ def batch_activate_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Move a PLANNED delivery Batch to ACTIVE."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=BATCH_ACTIVATE,
         urn=urn,
         expected_revision=expected_revision,
@@ -1145,10 +1176,14 @@ def batch_ready_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Declare an ACTIVE Batch ready to merge."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=BATCH_READY,
         urn=urn,
         expected_revision=expected_revision,
@@ -1198,10 +1233,14 @@ def task_promote_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Promote a DRAFT Task to PLANNED once its contract is complete."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=TASK_PROMOTE,
         urn=urn,
         expected_revision=expected_revision,
@@ -1221,10 +1260,14 @@ def task_start_cmd(
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
     from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Start a CLAIMED Task under the Run the payload binds it to."""
     _run_verb(
         ctx,
+        dry_run=dry_run,
+        yes=yes,
         method=TASK_START,
         urn=urn,
         expected_revision=expected_revision,

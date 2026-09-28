@@ -16,12 +16,15 @@ The third is the cost of the first two. The console still opens against the prot
 registers, and the tracked golden contract replays that mode, so every key the footer
 advertises on a register route must still resolve there. A footer advertising a key
 nothing handles is a frame promising an action it does not have.
+
+CON-127 is held here too: the badge is ``!N NEEDS YOU`` beside the connection value,
+once per frame and never at zero, across the 261-frame contract, and N counts only the
+open actions this principal may act on.
 """
 
 from __future__ import annotations
 
 import asyncio
-import dataclasses
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,6 +32,8 @@ from typing import Any
 
 import pytest
 
+from eawf.kernel.projection.activity import group_runs
+from eawf.kernel.projection.attention import NO_PRINCIPAL_MINE_REASON, attention_mine
 from eawf.kernel.projection.compute import (
     ROUTE_COLLECTIONS,
     RouteProjection,
@@ -38,9 +43,7 @@ from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
     REGISTER_ROUTES,
-    UNWRITTEN_REASON,
     RegisterView,
-    attention_mine,
     build_register_view,
 )
 from eawf.kernel.projection.spine import build_spine_view
@@ -51,11 +54,13 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS
 from eawf.surfaces.tui.console.attach import interrupted_state, with_entry_state
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View, needs_count
+from eawf.surfaces.tui.console.harness import load_contract
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
 from eawf.surfaces.tui.console.keymap import route_keys
 from eawf.surfaces.tui.console.navigation import Ctx
@@ -63,6 +68,7 @@ from eawf.surfaces.tui.console.overlays import render_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.tokens import CONNECTION
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import AT as TXN_AT
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     document_path,
@@ -71,6 +77,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
+from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 
 #: When the probe projections are stamped. The digest does not cover the stamp; a fixed
 #: clock only keeps this suite's output reproducible.
@@ -112,25 +119,30 @@ def _fixture() -> Fixture:
     return load_fixture(Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture")
 
 
+#: The principal the probe console acts as; every probe question is open to it.
+PRINCIPAL = "OP-0001"
+
+
 def _written_attention(rows: int) -> RegisterView:
-    """Return an Attention register as it reads once a producer writes it.
-
-    The pending-action producer has not shipped, so the shipped register is withheld.
-    Stating one by hand is how the count's wiring is checked on both sides of that
-    arrival: the day the producer lands, the header must already be reading this.
-    """
-    source = _register("activity")
-    return dataclasses.replace(
-        source,
-        route=ATTENTION_ROUTE,
-        read_model=source.read_model,
-        rows=source.rows[:rows],
-        counts={"pending_action": rows},
-        withheld=(),
-    )
+    """Return an Attention register holding ``rows`` waiting questions, as the producer writes."""
+    actions = {
+        f"ACT-{i:04d}": {
+            "urn": f"eawf://WSP-A/EAWF/REP-A/pending-action/ACT-{i:04d}",
+            "revision": 1,
+            "status": "WAITING",
+        }
+        for i in range(1, rows + 1)
+    }
+    return _register(ATTENTION_ROUTE, document={"pending_action": actions})
 
 
-def _view(register: RegisterView | None, *, route: str, attention: RegisterView | None) -> View:
+def _view(
+    register: RegisterView | None,
+    *,
+    route: str,
+    attention: RegisterView | None,
+    principal: str | None = PRINCIPAL,
+) -> View:
     """Return a render view on ``route`` holding ``register`` and ``attention``."""
     session = Session()
     session.route = route
@@ -141,6 +153,7 @@ def _view(register: RegisterView | None, *, route: str, attention: RegisterView 
         h=24,
         register=register,
         attention=attention,
+        principal=principal,
     )
 
 
@@ -165,7 +178,7 @@ def test_every_register_route_is_served_by_its_own_read_verb(route: str) -> None
 def test_the_header_count_equals_the_attention_register_mine_count() -> None:
     """One producer states both, so the corner and the route cannot disagree."""
     register = _written_attention(3)
-    mine = attention_mine(register)
+    mine = attention_mine(register, principal=PRINCIPAL)
     view = _view(register, route=ATTENTION_ROUTE, attention=register)
     assert mine.state is TruthState.KNOWN
     assert needs_count(view) == int(mine.value or "")
@@ -187,14 +200,14 @@ def test_the_header_count_travels_to_a_route_that_is_not_attention() -> None:
     assert "!2 NEEDS YOU" in render_route(view)[0]
 
 
-def test_a_withheld_attention_register_states_no_count_and_prints_no_badge() -> None:
-    """A register nobody writes is unknown; the badge is absent, never a zero."""
-    register = _register(ATTENTION_ROUTE, document={})
-    mine = attention_mine(register)
-    view = _view(register, route=ATTENTION_ROUTE, attention=register)
+def test_a_console_acting_as_nobody_states_no_count_and_prints_no_badge() -> None:
+    """Nobody's ``mine`` is unknown; the badge is absent, never another principal's count."""
+    register = _written_attention(2)
+    mine = attention_mine(register, principal=None)
+    view = _view(register, route=ATTENTION_ROUTE, attention=register, principal=None)
     assert mine.state is TruthState.UNKNOWN
     assert mine.value is None
-    assert mine.missing_reason == UNWRITTEN_REASON
+    assert mine.missing_reason == NO_PRINCIPAL_MINE_REASON
     assert needs_count(view) == 0
     assert "NEEDS YOU" not in render_route(view)[0]
 
@@ -202,7 +215,7 @@ def test_a_withheld_attention_register_states_no_count_and_prints_no_badge() -> 
 def test_an_empty_written_attention_register_counts_zero() -> None:
     """A register that was read and held nothing states zero, which is a count."""
     register = _written_attention(0)
-    mine = attention_mine(register)
+    mine = attention_mine(register, principal=PRINCIPAL)
     assert mine.state is TruthState.KNOWN
     assert mine.value == "0"
     assert needs_count(_view(register, route=ATTENTION_ROUTE, attention=register)) == 0
@@ -211,7 +224,7 @@ def test_an_empty_written_attention_register_counts_zero() -> None:
 def test_one_open_action_counts_one() -> None:
     """The off-by-one boundary under the multi-row case."""
     register = _written_attention(1)
-    assert attention_mine(register).value == "1"
+    assert attention_mine(register, principal=PRINCIPAL).value == "1"
 
 
 def test_the_epoch_one_header_still_counts_the_prototype_register() -> None:
@@ -222,8 +235,8 @@ def test_the_epoch_one_header_still_counts_the_prototype_register() -> None:
 
 def test_asking_another_route_for_the_attention_count_raises() -> None:
     """Rows that are not actions cannot be counted as actions."""
-    with pytest.raises(ValueError, match="states no attention count"):
-        attention_mine(_register("activity"))
+    with pytest.raises(ValueError, match="states no attention items"):
+        attention_mine(_register("activity"), principal=PRINCIPAL)
 
 
 # ---------- Activity's buckets come off the served read model ----------
@@ -244,8 +257,11 @@ def test_the_activity_frame_prints_the_derived_bucket_counts() -> None:
     # at 120 columns the buckets are the route's rail, one bucket per rail row
     rail = [row.split("│ ", 1)[1] for row in rows if "│ " in row]
     assert rail[0].startswith("BUCKETS")
-    for name, count in register.status_counts().items():
-        assert any(re.search(rf"^ {name}\s+{count}\b", line) for line in rail), rail
+    for count in group_runs(register).counts:
+        slot = value_cell(count.count).slot
+        assert any(
+            line.strip().startswith(count.label) and line.rstrip().endswith(slot) for line in rail
+        ), rail
     assert "cursor 41,208" in rows[1]
 
 
@@ -373,6 +389,7 @@ def _native_view(route: str, *, attention: RegisterView | None) -> View:
         h=24,
         projection=build_spine_view(_projection(REGISTRY.by_id[route].key, document={})),
         attention=attention,
+        principal=PRINCIPAL,
     )
 
 
@@ -502,3 +519,62 @@ def test_with_entry_state_refuses_an_unknown_entry_state() -> None:
     state = load_chrome().entry[0].model_copy(update={"id": "not-a-state"})
     with pytest.raises(ValueError, match="no entry state"):
         with_entry_state(load_chrome(), state)
+
+
+# ---------- CON-127: the header's !N NEEDS YOU, one principal's, once ----------
+
+#: The tracked 261-frame golden contract every header rule is checked across.
+_CONTRACT_FRAMES = tuple(
+    state.frame
+    for state in load_contract(
+        Path(__file__).resolve().parents[4] / "fixtures/console/golden/sequences"
+    ).states
+)
+_BADGE = re.compile(r"!(?P<n>\d[\d,]*) NEEDS YOU  (?P<glyph>\S) ")
+
+
+def test_con_127_no_tracked_frame_carries_the_badge_twice_or_at_zero() -> None:
+    assert len(_CONTRACT_FRAMES) == 261
+    for frame in _CONTRACT_FRAMES:
+        # a count is ``!`` and a numeral; prose naming the badge as ``!N`` is not one
+        assert len(re.findall(r"!\d[\d,]* NEEDS YOU", frame)) <= 1
+        assert "!0 NEEDS YOU" not in frame
+
+
+def test_con_127_the_badge_sits_immediately_left_of_the_connection_value() -> None:
+    glyphs = {glyph.unicode for glyph in CONNECTION.values()}
+    headers = [frame.split("\n")[0] for frame in _CONTRACT_FRAMES]
+    badged = [header for header in headers if "NEEDS YOU" in header]
+    assert badged
+    for header in badged:
+        found = _BADGE.search(header)
+        assert found is not None, header
+        assert found.group("glyph") in glyphs
+
+
+def test_con_127_the_header_counts_only_what_this_principal_may_act_on() -> None:
+    mine = bodies._view("activity", principal=bodies.ME)
+    theirs = bodies._view("activity", principal=bodies.OTHER)
+    assert needs_count(mine) == 1
+    assert needs_count(theirs) == 2
+    assert "!1 NEEDS YOU" in render_route(mine)[0]
+    assert "!2 NEEDS YOU" in render_route(theirs)[0]
+
+
+def test_con_127_the_header_agrees_with_the_attention_mine_count_on_every_route() -> None:
+    attention = render_route(bodies._view("attention"))
+    assert attention[1].startswith(" 1 mine ·")
+    for route in ("activity", "attention", "scope.home", "run.detail"):
+        frame = render_route(bodies._view(route, subject="RUN-00000002"))
+        assert "!1 NEEDS YOU" in frame[0], route
+        assert sum(row.count("NEEDS YOU") for row in frame) == 1, route
+
+
+def test_con_127_a_sealed_action_is_counted_by_nobody() -> None:
+    only_sealed = {
+        **bodies.DOCUMENT,
+        "pending_action": {"ACT-0003": bodies.DOCUMENT["pending_action"]["ACT-0003"]},
+    }
+    view = bodies._view("activity", document=only_sealed)
+    assert needs_count(view) == 0
+    assert "NEEDS YOU" not in render_route(view)[0]

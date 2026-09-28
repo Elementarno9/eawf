@@ -39,13 +39,12 @@ from eawf.surfaces.tui.app import (
     UserScreen,
     WorkspaceScreen,
     _breadcrumb,
-    _restore_root_logging,
-    _swap_root_logging_to_textual,
     resolve_scope,
 )
 from eawf.surfaces.tui.chassis.sigils import Sigil, glyph
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks, load_state
 from eawf.surfaces.tui.snapshot import capture_screen_text
+from eawf.surfaces.tui.terminal_logging import restore_root_logging, swap_root_logging_to_textual
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _EMPTY_REPO = _FIXTURES / "01-empty-repo.json"
@@ -780,7 +779,7 @@ def test_swap_root_logging_removes_stderr_handler(_isolated_root_logging: object
     root.addHandler(stderr_handler)
     assert _has_terminal_stream_handler()  # precondition: the leak is present
 
-    _swap_root_logging_to_textual()
+    swap_root_logging_to_textual()
 
     assert not _has_terminal_stream_handler()  # no handler writes to the screen
     assert any(isinstance(h, TextualHandler) for h in root.handlers)
@@ -794,7 +793,7 @@ def test_swap_root_logging_textual_handler_is_timestamped(
     for handler in list(root.handlers):
         root.removeHandler(handler)
 
-    _swap_root_logging_to_textual()
+    swap_root_logging_to_textual()
 
     textual = next(h for h in root.handlers if isinstance(h, TextualHandler))
     record = logging.LogRecord(
@@ -819,7 +818,7 @@ def test_swap_root_logging_also_detaches_stdout(_isolated_root_logging: object) 
         root.removeHandler(handler)
     root.addHandler(logging.StreamHandler(stream=sys.stdout))
 
-    _swap_root_logging_to_textual()
+    swap_root_logging_to_textual()
 
     assert not _has_terminal_stream_handler()
     assert any(isinstance(h, TextualHandler) for h in root.handlers)
@@ -835,10 +834,10 @@ def test_restore_root_logging_reinstates_prior_handlers(
     stderr_handler = logging.StreamHandler(stream=sys.stderr)
     root.addHandler(stderr_handler)
 
-    saved = _swap_root_logging_to_textual()
+    saved = swap_root_logging_to_textual()
     assert not _has_terminal_stream_handler()  # swapped out for the run
 
-    _restore_root_logging(saved)
+    restore_root_logging(saved)
 
     assert root.handlers == [stderr_handler]  # exact prior list back
     assert _has_terminal_stream_handler()  # scrubbed stderr sink restored

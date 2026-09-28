@@ -35,6 +35,7 @@ from eawf.surfaces.tui.console.frame import (
     strip_chips,
     thin,
 )
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -56,14 +57,7 @@ CLAIM = "CLM-0004"
 #: The one campaign the prototype plan records.
 OWN = "CAM-0001"
 _GUTTER = 13
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "row"),
-    ("Tab", "section"),
-    ("Enter", "open"),
-    (".", "actions"),
-    ("i", "inspect"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("campaign")
 
 
 @dataclass(frozen=True, slots=True)
@@ -358,6 +352,13 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     s = ctx.s
     reg = ctx.fixture.registers
     if s.route != "campaign" or busy(s):
+        return False
+    if ctx.projection is not None:
+        # the sections below walk the prototype registers; a held campaign draws only what
+        # its producers state, and none states a step, receipt or artifact row yet
+        if key in ("Tab", "Enter"):
+            ctx.log(key, "nothing to open · no producer states a campaign row yet")
+            return True
         return False
     if key == "Tab":
         sections = list(reg.cam_sects)

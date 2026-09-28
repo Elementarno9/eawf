@@ -18,6 +18,7 @@ from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -31,13 +32,7 @@ from eawf.surfaces.tui.console.renderers.spine import held
 
 PAIRS: tuple[str, ...] = pt.DIFF_PAIRS
 ENTITY = pt.DIFF_ENTITY
-_KEYS: tuple[tuple[str, str], ...] = (
-    ("↑↓", "field"),
-    ("Enter", "field"),
-    ("e", "entity"),
-    ("p", "revisions"),
-    ("Esc", "back"),
-)
+_KEYS = route_pairs("history.diff")
 
 
 def _subject(view: View, spine: SpineView) -> SpineRow | None:

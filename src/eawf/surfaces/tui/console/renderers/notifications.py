@@ -1,22 +1,31 @@
-"""notifications: which Run classes may interrupt and who decided.
+"""notifications: which classes may raise a toast, and which contract decided so.
 
-The route only reads; the policy lives in settings.
+The route only reads: every row is one row of the presentation matrix the attention
+reducer states, over exactly its three columns. No class takes focus, opens a modal or
+changes route; a toast is the one interruption any class may make.
 """
 
 from __future__ import annotations
 
+from eawf.kernel.projection.attention import NOTIFICATION_MATRIX, NotificationPolicy, ToastPolicy
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
+from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.registers import native_frame
 
-_CLASSES: tuple[tuple[str, str, str], ...] = (
-    ("needs permission", "yes", "policy"),
-    ("needs your answer", "yes", "policy"),
-    ("stopped responding", "yes", "policy"),
-    ("run finished", "no", "profile"),
-    ("budget passed", "no", "ratified · R23"),
-)
-_KEYS: tuple[tuple[str, str], ...] = (("↑↓", "class"), ("Esc", "close"))
+_KEYS = route_pairs("notifications")
+
+#: What the foot says a class does, by its toast policy.
+_EFFECT: dict[ToastPolicy, str] = {
+    ToastPolicy.YES: "may raise a toast",
+    ToastPolicy.NO: "raises no toast",
+    ToastPolicy.ONCE_PER_REVISION: "may raise one toast per revision",
+}
+
+
+def class_name(row: NotificationPolicy) -> str:
+    """Return the words a class is drawn with."""
+    return row.notification_class.value.replace("_", " ")
 
 
 def render(view: View) -> list[str]:
@@ -24,21 +33,24 @@ def render(view: View) -> list[str]:
     if view.register is not None:
         return native_frame(view, view.register)
     s = view.session
-    dv.sel_in(s, len(_CLASSES))
-    lines = [f"{LABEL_MARK}CLASS               MAY INTERRUPT   DECIDED BY{CHIP_END}", ""]
+    classes = NOTIFICATION_MATRIX.classes
+    dv.sel_in(s, len(classes))
+    lines = [f"{LABEL_MARK}CLASS               TOAST               DECIDED BY{CHIP_END}", ""]
     lines.extend(
-        ("▸" if i == s.sel else " ") + g_pad(name, 19) + g_pad(may, 16) + by
-        for i, (name, may, by) in enumerate(_CLASSES)
+        ("▸" if i == s.sel else " ")
+        + g_pad(class_name(row), 19)
+        + g_pad(row.may_interrupt.value, 20)
+        + row.decided_by
+        for i, row in enumerate(classes)
     )
     lines.extend(
         [
             "",
-            "Read only · settings ▸ interface owns this policy.",
-            "A muted class still counts in !N NEEDS YOU.",
+            "Read only · a toast is the one interruption; nothing takes focus.",
+            "A class that raises no toast still counts in the header's count.",
         ]
     )
-    _name, may, by = _CLASSES[s.sel]
-    verb = "interrupts you" if may == "yes" else "does not interrupt you"
+    row = classes[s.sel]
     return boxed(
         view,
         crumb=f"Eä ▸ {view.fixture.scope} ▸ Notifications",
@@ -46,6 +58,6 @@ def render(view: View) -> list[str]:
         pre=[],
         title="NOTIFICATIONS · what may interrupt",
         lines=lines,
-        foot=f"A run in this class {verb}, and {by} decided that.",
+        foot=f"A {class_name(row)} {_EFFECT[row.may_interrupt]}, as the {row.decided_by} decided.",
         keys=_KEYS,
     )
