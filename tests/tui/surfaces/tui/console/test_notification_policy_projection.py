@@ -136,7 +136,7 @@ def test_ui_068_the_route_draws_the_three_columns_and_no_owner(native: bool) -> 
     assert "interface" not in text
     assert "R23" not in text
     for name, toast, decided in EXPECTED:
-        shown = name if native else name.replace("_", " ")
+        shown = name.replace("_", " ")
         assert any(shown in row and toast in row and decided in row for row in text.splitlines())
 
 

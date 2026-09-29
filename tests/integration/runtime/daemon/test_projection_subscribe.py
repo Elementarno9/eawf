@@ -64,11 +64,12 @@ FRAME_TIMEOUT_SECONDS = 10.0
 KEYS = ("MLS-0030", "MLS-0031", "MLS-0032")
 
 #: The read models a Milestone move patches. The roadmap renders milestones, so do the
-#: scope home, the Milestone's own acceptance bundle and the readiness of a candidate
-#: that carries it; the history page, the history diff and the search page read across
-#: the whole corpus, so one commit fans out to all seven.
+#: scope home, the Track frame that lists them, the Milestone's own acceptance bundle and
+#: the readiness of a candidate that carries it; the history page, the history diff and
+#: the search page read across the whole corpus, so one commit fans out to all eight.
 MILESTONE_READ_MODELS = (
     ReadModelKind.ACCEPTANCE_BUNDLE_VIEW,
+    ReadModelKind.ENTITY_DETAIL_VIEW,
     ReadModelKind.HISTORY_DIFF_VIEW,
     ReadModelKind.HISTORY_PAGE,
     ReadModelKind.RELEASE_READINESS_VIEW,
@@ -330,6 +331,7 @@ def test_patches_for_event_builds_one_entry_at_the_events_ordinal() -> None:
         "roadmap",
         "scope.home",
         "search",
+        "track",
     }
 
 

@@ -29,8 +29,8 @@ from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import RowWindow, View, window_rows
-from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
-from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS, KeyKind
+from eawf.surfaces.tui.console.keymap import native_keys, unserved
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import Session
@@ -43,7 +43,7 @@ W, H = 120, 40
 
 #: What a caret row opens with: the frame's one-cell margin, then the caret.
 _CARET = " ▸ "
-_WINDOW = re.compile(r"^ WINDOW    (?:(?P<a>[\d,]+)–(?P<b>[\d,]+)|0) of (?P<n>[\d,]+)")  # noqa: RUF001
+_WINDOW = re.compile(r"^ WINDOW +(?:(?P<a>[\d,]+)–(?P<b>[\d,]+)|0) of (?P<n>[\d,]+)")  # noqa: RUF001
 
 
 def _fixture() -> Fixture:
@@ -98,12 +98,25 @@ def spine_view(session: Session, n: int = ROWS, *, route: str = "track") -> View
 
 
 def home_view(session: Session, n: int = ROWS) -> View:
-    """Return a view of the native scope home over ``n`` tracks.
+    """Return a view of the native scope home: one Track with ``n`` Milestones under it.
 
-    Home is the one spine route whose epoch-1 frame walks a tree of its own, so it is the
-    one whose arrows must be seen reaching the native rows.
+    Home walks a tree whose Track rows are containers, so its cursor lands on the
+    Milestone leaves only; the table it windows holds the Track row above them.
     """
-    return spine_view(session, n, route="scope.home")
+    session.route = "scope.home"
+    track = next(iter(_tracks(1)))
+    milestones = {
+        f"MLS-{i:04d}": {
+            "urn": f"urn:eawf:{SCOPE}:milestone:MLS-{i:04d}",
+            "revision": 1,
+            "status": "PLANNED",
+            "primary_track_ref": f"urn:eawf:{SCOPE}:track:{track}",
+        }
+        for i in range(n)
+    }
+    document = {"track": _tracks(1), "milestone": milestones}
+    spine = build_spine_view(_projection("scope.home", document))
+    return View(session=session, fixture=_fixture(), w=W, h=H, projection=spine)
 
 
 def read_model_view(session: Session, n: int = ROWS) -> View:
@@ -118,11 +131,11 @@ def read_model_view(session: Session, n: int = ROWS) -> View:
     return View(session=session, fixture=_fixture(), w=W, h=H, projection=model)
 
 
-#: One builder per native frame family; each takes the session and, optionally, the rows.
+#: One builder per native frame family whose table is flat; each takes the session and,
+#: optionally, the rows. Home's tree is walked by its own tests below.
 FAMILIES: dict[str, Callable[..., View]] = {
     "register": register_view,
     "spine": spine_view,
-    "home": home_view,
     "read_model": read_model_view,
 }
 
@@ -283,10 +296,19 @@ def test_a_frame_stays_inside_its_height(family: str) -> None:
     assert len(frame) == H
 
 
+#: The families that draw no ``WINDOW`` row while every row is on screen: the home tree
+#: and the Activity register state a window only when it hides a row, as the packet's
+#: frames do.
+WHOLE_WITHOUT_WINDOW: frozenset[str] = frozenset({"home", "register"})
+
+
 @pytest.mark.parametrize("family", FAMILIES)
 def test_a_short_table_fits_whole(family: str) -> None:
     """A table shorter than the window is drawn whole and the window says so."""
     frame = render_route(FAMILIES[family](Session(), 3))
+    if family in WHOLE_WITHOUT_WINDOW:
+        assert not any(row.startswith(" WINDOW") for row in frame)
+        return
     assert window_of(frame) == (1, 3, 3)
 
 
@@ -294,7 +316,10 @@ def test_a_short_table_fits_whole(family: str) -> None:
 def test_an_empty_table_states_a_zero_window(family: str) -> None:
     """A table with no rows says so, and the window names nothing on screen."""
     frame = render_route(FAMILIES[family](Session(), 0))
-    assert window_of(frame) == (0, 0, 0)
+    if family in WHOLE_WITHOUT_WINDOW:
+        assert not any(row.startswith(" WINDOW") for row in frame)
+    else:
+        assert window_of(frame) == (0, 0, 0)
     assert any("holds no record" in row for row in frame)
 
 
@@ -317,31 +342,46 @@ def test_the_native_keybar_advertises_paging_by_full_key_names(family: str) -> N
     assert "PgDn" not in bar
 
 
-def test_native_keys_follow_the_arrow_entry() -> None:
-    """Paging sits right after the row keys, route verbs after it."""
-    keys = native_keys("crash.recovery")
-    assert keys[:3] == (ROUTE_KEYS["crash.recovery"][0], KEY["page"], KEY["ends"])
-    assert keys[3:] == ROUTE_KEYS["crash.recovery"][1:]
+def _split_at_globals(route: str) -> int:
+    table = ROUTE_KEYS[route]
+    return next((i for i, e in enumerate(table) if e.kind is KeyKind.GLOBAL), len(table))
+
+
+def test_native_keys_follow_the_route_verbs() -> None:
+    """Paging sits after the route's own verbs and ahead of the globals."""
+    keys = native_keys("task.detail", windowed=True)
+    at = _split_at_globals("task.detail")
+    table = ROUTE_KEYS["task.detail"]
+    assert keys == (*table[:at], KEY["page"], KEY["ends"], *table[at:])
 
 
 def test_native_keys_do_not_repeat_an_entry_the_route_already_has() -> None:
-    """Activity already pages, so only the ends entry is added."""
-    keys = native_keys("activity")
+    """Activity already pages, so paging is listed once, after its verbs."""
+    keys = native_keys("activity", windowed=True)
     assert keys.count(KEY["page"]) == 1
-    assert keys[:3] == (KEY["up"], KEY["page"], KEY["ends"])
+    at = _split_at_globals("activity") - 1
+    assert keys[at : at + 3] == (KEY["page"], KEY["ends"], KEY["actions"])
 
 
-def test_native_keys_lead_with_paging_on_a_route_without_arrows() -> None:
-    """A route whose table has no arrow entry still pages, from the front of its bar."""
-    keys = native_keys("receipt")
-    assert keys[:2] == (KEY["page"], KEY["ends"])
-    assert keys[2:] == ROUTE_KEYS["receipt"]
+def test_native_keys_page_on_a_route_without_arrows() -> None:
+    """A route whose table has no arrow entry still pages once its table is windowed."""
+    keys = native_keys("receipt", windowed=True)
+    assert KEY["page"] in keys
+    assert [k for k in keys if k not in (KEY["page"], KEY["ends"])] == list(ROUTE_KEYS["receipt"])
+
+
+@pytest.mark.parametrize("route", ["activity", "task.detail", "receipt", "scope.home"])
+def test_native_keys_offer_no_paging_when_every_row_shows(route: str) -> None:
+    """A table that shows every row has nowhere to page to, so the bar does not offer it."""
+    keys = native_keys(route, windowed=False)
+    assert KEY["page"] not in keys
+    assert KEY["ends"] not in keys
 
 
 def test_native_keys_refuse_an_unknown_route() -> None:
     """A route with no key table has no native keybar either."""
     with pytest.raises(KeyError):
-        native_keys("no.such.route")
+        native_keys("no.such.route", windowed=True)
 
 
 # ---------- the window arithmetic ----------
@@ -405,3 +445,50 @@ def test_row_window_line_groups_and_marks_a_partial_table() -> None:
     win = RowWindow(start=1440, stop=1490, total=1490)
     assert win.line() == " WINDOW    1,441–1,490 of 1,490"  # noqa: RUF001
     assert win.line(complete=False).endswith(" known")
+
+
+# ---------- scope home: a tree whose cursor lands on leaves only ----------
+
+
+def _leaf_on(view: View, frame: list[str]) -> str:
+    """Return the Milestone the caret is drawn on, failing when no caret row is on screen."""
+    carets = [row for row in frame[:-1] if row.startswith("   ▸ MLS-")]
+    assert len(carets) == 1, "exactly one Milestone leaf carries the caret"
+    return carets[0].split()[1]
+
+
+def test_j1_02_home_walks_1490_leaves_with_the_caret_on_screen() -> None:
+    """Fifty presses down a 1,490-leaf tree keep the caret on a leaf, never the Track."""
+    view = home_view(Session())
+    frame = render_route(view)
+    assert _leaf_on(view, frame) == "MLS-0000"
+    for _ in range(PRESSES):
+        frame = press(view, "ArrowDown")
+    assert _leaf_on(view, frame) == f"MLS-{PRESSES:04d}"
+    assert view.session.sel_id == f"MLS-{PRESSES:04d}"
+
+
+def test_j1_02_home_end_and_home_land_on_the_last_and_first_leaf() -> None:
+    """End reaches the last Milestone; Home comes back to the first, past the Track row."""
+    view = home_view(Session())
+    render_route(view)
+    assert _leaf_on(view, press(view, "End")) == f"MLS-{ROWS - 1:04d}"
+    assert _leaf_on(view, press(view, "Home")) == "MLS-0000"
+    assert "PageUp PageDown page" in render_route(view)[-1]
+
+
+def test_j1_02_home_paging_rests_on_a_leaf_and_never_on_the_track() -> None:
+    """PageDown moves a screen onto a Milestone; PageUp past the top stops on the first."""
+    view = home_view(Session())
+    render_route(view)
+    assert _leaf_on(view, press(view, "PageDown")) != "MLS-0000"
+    for _ in range(2):
+        frame = press(view, "PageUp")
+    assert _leaf_on(view, frame) == "MLS-0000"
+
+
+def test_j4_06_a_native_frame_leaves_off_what_it_does_not_serve() -> None:
+    """Recovery can take no door yet; a Track's Tab walks groups only on a Track's own frame."""
+    assert "Enter" in unserved("crash.recovery", None)
+    assert "Tab" in unserved("track", None)
+    assert "Tab" not in unserved("track", "TRK-0001")

@@ -42,10 +42,10 @@ FAMILY: Final = "operations"
 OPERATIONS_ROUTES: Final[tuple[str, ...]] = ("sandbox.log", "unattended", "crash.recovery")
 
 #: The item whose producer would state an authorisation decision.
-SANDBOX_DECISION_PRODUCER: Final = "RUN-059 SandboxDecision"
+SANDBOX_DECISION_PRODUCER: Final = "the sandbox-decision record"
 
 #: The item whose producer would state the dispatch queue.
-DISPATCH_QUEUE_PRODUCER: Final = "RUN-060 dispatch-queue projection"
+DISPATCH_QUEUE_PRODUCER: Final = "the dispatch-queue projection"
 
 #: What each operations route renders per row, in column order. The first field of every
 #: route is the status the document states; every other column names the producer it is

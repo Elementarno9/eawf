@@ -826,9 +826,14 @@ def test_con_172_colour_sits_on_the_kind_cell_only() -> None:
 
 
 def test_con_169_the_keybar_walks_blocks_and_folds_them() -> None:
-    bar = _rows(_frame(_view(_live_run())))[-1].split()
+    bar = _rows(_frame(_view(_long_summary()), width=80, sel=1))[-1].split()
     assert bar[:4] == ["↑↓", "block", "Enter", "fold"]
     assert bar[4:6] == ["f", "follow"]
+
+
+def test_j4_06_enter_fold_is_left_off_a_block_that_folds_nothing() -> None:
+    bar = _rows(_frame(_view(_live_run())))[-1].split()
+    assert bar[:4] == ["↑↓", "block", "f", "follow"]
 
 
 def test_con_172_the_scrollbar_column_is_drawn_only_when_something_is_hidden() -> None:

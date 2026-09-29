@@ -19,10 +19,17 @@ from types import MappingProxyType
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console import drill
 from eawf.surfaces.tui.console import keymap as km
-from eawf.surfaces.tui.console.action_menu import MenuVerb
+from eawf.surfaces.tui.console.action_menu import MenuVerb, light_opening
 from eawf.surfaces.tui.console.attach import ONBOARDING, skip_step
-from eawf.surfaces.tui.console.clock import arm_prefix, disarm, expire_prefix, guarded_quit
+from eawf.surfaces.tui.console.clock import (
+    arm_prefix,
+    disarm,
+    expire_prefix,
+    guarded_quit,
+    prompt_quit,
+)
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.header import CrumbRun
 from eawf.surfaces.tui.console.keybar import KEY
@@ -33,6 +40,7 @@ from eawf.surfaces.tui.console.navigation import (
     Ctx,
     busy,
     close_overlay,
+    cycle,
     cycle_region,
     focus_target,
     go,
@@ -70,7 +78,13 @@ from eawf.surfaces.tui.console.registry import (
     SECTIONS,
     route_for_id,
 )
-from eawf.surfaces.tui.console.renderers import copy_target, cost_ceiling, history, seam_for, track
+from eawf.surfaces.tui.console.renderers import (
+    copy_for,
+    cost_ceiling,
+    history,
+    seam_for,
+    track,
+)
 from eawf.surfaces.tui.console.renderers import timeline as tl
 from eawf.surfaces.tui.console.session import FocusTarget, Session
 from eawf.surfaces.tui.console.tokens import Severity
@@ -145,7 +159,7 @@ def _settle_focus(s: Session, opened_from: FocusTarget | None) -> None:
 def _frame_keys(ctx: Ctx, key: str, shift: bool) -> bool:
     """Return whether an absent frame, a record frame, the route or a reply claimed the key."""
     s = ctx.s
-    if key == "Tab" and shift and s.route != "settings":
+    if key == "Tab" and shift and s.route != "settings" and not drill.is_native(ctx):
         return False
     k = km.ALIASES.get(key, key)
     if s.absent_frame and not s.overlay and _ABSENT_KEYS.match(k):
@@ -158,6 +172,8 @@ def _frame_keys(ctx: Ctx, key: str, shift: bool) -> bool:
     # an overlay, a drawer or the armed prefix owns the keyboard, so the route beneath hears
     # nothing: a key never acts from the route's table through a surface above it
     above = s.overlay is not None or s.prefix is not None
+    if not above and drill.claim(ctx, k, shift):
+        return True
     hook = None if ctx.unheld or above else seam_for(s.route)
     if hook is not None and hook(ctx, k, shift):
         return True
@@ -216,9 +232,11 @@ def _reply_key(ctx: Ctx, k: str) -> bool:
 def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
     s = ctx.s
     if k == "Tab" and shift:
-        if _owns_region_cycle(s) and _tab_region(ctx, back=True):
-            return
-        ctx.log("S-Tab", "left the canvas — the page has the keyboard again")
+        handler = None if busy(s) else _TAB.get(s.route)
+        if handler is not None:
+            handler(ctx, back=True)
+        elif not (_owns_region_cycle(s) and _tab_region(ctx, back=True)):
+            drill.no_cycle(ctx, back=True)
         return
     s.keys += 1
     if k != "Escape":
@@ -330,7 +348,7 @@ def _palette_key(ctx: Ctx, k: str) -> bool:
         return True
     if k != "Enter":
         return False
-    found = palette_hits(s.pq, ctx.fixture)
+    found = palette_hits(s.pq, ctx.fixture, ctx.rows)
     hit = found[min(s.sel, len(found) - 1)] if found else None
     if hit is None or not has_renderer(hit.route):
         close_overlay(s)
@@ -465,7 +483,7 @@ def _drawer_key(ctx: Ctx, k: str) -> None:
         close_overlay(s)
         ctx.log("Esc", "close pane")
     elif k == "y":
-        copied = copy_target(s, ctx.fixture)
+        copied = copy_for(ctx)
         ctx.notify(copied, "copied")
         ctx.log("y", f"copied — {copied}")
     elif k in km.MODIFIERS:
@@ -509,7 +527,7 @@ def _entry_key(ctx: Ctx, k: str) -> bool:
 def _menu_key(ctx: Ctx, k: str) -> bool:
     """Run the action-menu verb bound to letter ``k``; ``False`` when no verb has that letter."""
     s, fx = ctx.s, ctx.fixture
-    verb = fx.menus.verb(s.route, k)
+    verb = drill.offered_verb(ctx, k)
     if menu_key(ctx, k):
         return True
     if verb is None:
@@ -550,7 +568,7 @@ def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
     s.pane_sel = 0
     to = verb.target
     if not to:
-        copied = copy_target(s, fx)
+        copied = copy_for(ctx)
         ctx.notify(copied, "copied")
         ctx.log(k, f"{verb.verb} · {copied}")
         return
@@ -558,28 +576,18 @@ def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
         ctx.notify(f"{to} is designed but not bound here", "unavailable", Severity.ERR)
         ctx.log(k, f"{verb.verb} → {to} is not bound here")
         return
+    subject, opened = light_opening(verb, s.subj_id, prototype=fx.prototype)
     s.back.record(remember(s))
     s.region = None
     s.route = to
     s.sel = 0
     s.sel_id = None
-    s.subj_id = None
-    ctx.notify(REGISTRY.route_word(to), "opened")
+    s.subj_id = subject
+    ctx.notify(opened, "opened")
     ctx.log(k, f"{verb.verb} → {to}")
 
 
 # ---------- the route-independent keys ----------
-
-
-def _drill(ctx: Ctx, dest: str, entity_id: str | None) -> None:
-    s = ctx.s
-    s.back.record(remember(s))
-    s.region = None
-    s.route = dest
-    s.sel = 0
-    s.subj_id = entity_id or None
-    s.sel_id = None
-    ctx.log("Enter", f"drill → {dest}" + (f" · {entity_id}" if entity_id else ""))
 
 
 def _nav_at_cursor(s: Session) -> str | None:
@@ -691,16 +699,14 @@ def _confirm(ctx: Ctx) -> None:
 
 
 def _selected_row(s: Session, rows: tuple[ProjectionRow, ...]) -> ProjectionRow | None:
-    """Return the held row the cursor selects: by stable id, else by offset.
+    """Return the held row the cursor selects, by stable id only.
 
-    A selection whose id the rows no longer hold selects nothing, rather than sliding
-    onto whichever row now sits at its offset.
+    A selection whose id the rows no longer hold, or a frame whose caret names no row,
+    selects nothing, rather than sliding onto whichever row sits at the cursor's offset.
     """
-    if not rows:
+    if s.sel_id is None:
         return None
-    if s.sel_id is not None:
-        return next((row for row in rows if row.key == s.sel_id), None)
-    return rows[min(max(s.sel, 0), len(rows) - 1)]
+    return next((row for row in rows if row.key == s.sel_id), None)
 
 
 def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
@@ -748,7 +754,7 @@ def _enter_release(ctx: Ctx) -> None:
         ctx.log("Enter", "readiness matrix · on the signal you were reading")
         return
     target = _nav_at_cursor(s)
-    _drill(ctx, route_for_id(target) or "milestone", target)
+    drill.drill_to(ctx, route_for_id(target) or "milestone", target)
 
 
 def _enter_entry(ctx: Ctx) -> None:
@@ -785,9 +791,12 @@ def _enter_timeline(ctx: Ctx) -> None:
     region = s.tl_reg or tl.LANES
     if region == tl.LANES:
         lane = tl.lane_name(s.sel)
-        open_overlay(s, "marker", subject=s.timeline_marker or "MLS-0001")
+        if s.timeline_marker is None:
+            ctx.log("Enter", f"no marker on the {lane} lane · nothing to open")
+            return
+        open_overlay(s, "marker", subject=s.timeline_marker)
         s.marker_card = {
-            "id": s.timeline_marker or "MLS-0001",
+            "id": s.timeline_marker,
             "lane": lane,
             "glyph": tl.marker_glyph(lane, s.mark),
         }
@@ -888,19 +897,19 @@ def _enter_note(note: str) -> Callable[[Ctx], None]:
 def _enter_nav(default: str) -> Callable[[Ctx], None]:
     def enter(ctx: Ctx) -> None:
         target = _nav_at_cursor(ctx.s)
-        _drill(ctx, route_for_id(target) or default, target)
+        drill.drill_to(ctx, route_for_id(target) or default, target)
 
     return enter
 
 
 def _enter_activity(ctx: Ctx) -> None:
     row = dv.current_fleet_row(ctx.s, ctx.fixture)
-    _drill(ctx, "run.detail", row.run if row else None)
+    drill.drill_to(ctx, "run.detail", row.run if row else None)
 
 
 def _enter_cost_ceiling(ctx: Ctx) -> None:
     """Open the Run the cursor sits on in the stopped list, which the footer promises."""
-    _drill(ctx, "run.detail", cost_ceiling.stopped_run(ctx.s))
+    drill.drill_to(ctx, "run.detail", cost_ceiling.stopped_run(ctx.s))
 
 
 _ENTER: Mapping[str, Callable[[Ctx], None]] = MappingProxyType(
@@ -960,6 +969,7 @@ def _escape(ctx: Ctx, k: str, pane: bool) -> None:
     if not _step_back(ctx):
         ctx.log("Esc", "at scope home · press again within 1.5s to quit")
         s.last_esc = ctx.clock.now()
+        prompt_quit(s, ctx.clock)
 
 
 def _step_back(ctx: Ctx) -> bool:
@@ -971,7 +981,7 @@ def _step_back(ctx: Ctx) -> bool:
         subject = f" · {entry.subj}" if entry.subj else ""
         ctx.log("Esc", f"back → {entry.route}{subject} · selection restored")
         return True
-    up = parent_of(s, ctx.fixture)
+    up = drill.parent(ctx) if drill.is_native(ctx) else parent_of(s, ctx.fixture)
     if up is None:
         return False
     s.route, s.subj_id = up
@@ -994,7 +1004,7 @@ def _up(ctx: Ctx, k: str, pane: bool) -> None:
     if pane or s.overlay:
         ctx.noop(k)
         return
-    up = parent_of(s, ctx.fixture)
+    up = drill.parent(ctx) if drill.is_native(ctx) else parent_of(s, ctx.fixture)
     if up is None:
         ctx.log("u", "at the top of the containment chain · nothing above")
         return
@@ -1012,7 +1022,7 @@ def _sibling(ctx: Ctx, k: str, pane: bool) -> None:
     if pane or s.overlay:
         ctx.noop(k)
         return
-    peers = siblings_of(s, ctx.fixture)
+    peers = drill.siblings(ctx) if drill.is_native(ctx) else siblings_of(s, ctx.fixture)
     if len(peers) < 2 or s.subj_id not in peers:
         ctx.log(k, "no sibling at this depth")
         return
@@ -1098,7 +1108,8 @@ def parent_of(session: Session, fixture: Fixture) -> tuple[str, str | None] | No
     if escape is None:
         return None
     if escape.via is None:
-        return (escape.route, escape.subject)
+        # a fixed parent subject is a prototype record; a live tree climbs to the route alone
+        return (escape.route, escape.subject if fixture.prototype else None)
     climb = _record_subject(fixture, subject, escape.route, escape.via) if subject else None
     return (escape.route, climb) if climb is not None else (HOME, None)
 
@@ -1126,9 +1137,9 @@ def _tab(ctx: Ctx, k: str, pane: bool) -> None:
     """Cycle what Tab owns on this route: its own register, else its declared regions."""
     handler = _TAB.get(ctx.s.route)
     if handler is not None:
-        handler(ctx)
+        handler(ctx, back=False)
     elif not _tab_region(ctx, back=False):
-        ctx.noop("Tab")
+        drill.no_cycle(ctx, back=False)
 
 
 def _tab_region(ctx: Ctx, *, back: bool) -> bool:
@@ -1140,61 +1151,58 @@ def _tab_region(ctx: Ctx, *, back: bool) -> bool:
     return True
 
 
-def _tab_release(ctx: Ctx) -> None:
+def _tab_release(ctx: Ctx, *, back: bool) -> None:
     s = ctx.s
-    s.rel_reg = "READINESS" if (s.rel_reg or "MEMBERSHIP") == "MEMBERSHIP" else "MEMBERSHIP"
+    s.rel_reg = cycle(("MEMBERSHIP", "READINESS"), s.rel_reg or "MEMBERSHIP", back=back)
     s.rel_sel = 0
-    ctx.log("Tab", f"region → {s.rel_reg}")
+    ctx.log("S-Tab" if back else "Tab", f"region → {s.rel_reg}")
 
 
-def _tab_timeline(ctx: Ctx) -> None:
+def _tab_timeline(ctx: Ctx, *, back: bool) -> None:
     s = ctx.s
-    regions = list(tl.REGIONS)
-    s.tl_reg = regions[(regions.index(s.tl_reg or tl.LANES) + 1) % len(regions)]
+    s.tl_reg = cycle(list(tl.REGIONS), s.tl_reg or tl.LANES, back=back)
     s.tl_sel = 0
-    ctx.log("Tab", f"region → {s.tl_reg}")
+    ctx.log("S-Tab" if back else "Tab", f"region → {s.tl_reg}")
 
 
-def _tab_activity(ctx: Ctx) -> None:
+def _tab_activity(ctx: Ctx, *, back: bool) -> None:
     s = ctx.s
-    keys = [b.key for b in ctx.fixture.proto.buckets]
-    at = keys.index(s.bucket) if s.bucket in keys else -1
-    s.bucket = None if at + 1 >= len(keys) else keys[at + 1]
+    keys: list[str | None] = [None, *(b.key for b in ctx.fixture.proto.buckets)]
+    s.bucket = cycle(keys, s.bucket if s.bucket in keys else None, back=back)
     s.sel = 0
     s.scroll = 0
-    ctx.log("Tab", f"bucket → {s.bucket or 'all'}")
+    ctx.log("S-Tab" if back else "Tab", f"bucket → {s.bucket or 'all'}")
 
 
-def _tab_attention(ctx: Ctx) -> None:
+def _tab_attention(ctx: Ctx, *, back: bool) -> None:
     s, fx = ctx.s, ctx.fixture
     keys: list[str | None] = [None]
     for bucket in fx.proto.xbuckets:
         keys.append(bucket.key)
         keys.extend(sub.key for sub in bucket.sub or ())
-    at = keys.index(s.bucket) if s.bucket in keys else 0
-    s.bucket = keys[(at + 1) % len(keys)]
+    s.bucket = cycle(keys, s.bucket if s.bucket in keys else None, back=back)
     s.sel = 0
     s.scroll = 0
-    ctx.log("Tab", "bucket → " + (att.bucket_label(fx, s.bucket) if s.bucket else "all"))
+    label = att.bucket_label(fx, s.bucket) if s.bucket else "all"
+    ctx.log("S-Tab" if back else "Tab", f"bucket → {label}")
 
 
-def _tab_milestone(ctx: Ctx) -> None:
+def _tab_milestone(ctx: Ctx, *, back: bool) -> None:
     s = ctx.s
-    s.section = (s.section + 1) % len(SECTIONS)
-    ctx.log("Tab", f"section → {SECTIONS[s.section]}")
+    s.section = SECTIONS.index(cycle(SECTIONS, SECTIONS[s.section], back=back))
+    ctx.log("S-Tab" if back else "Tab", f"section → {SECTIONS[s.section]}")
 
 
-def _tab_track(ctx: Ctx) -> None:
+def _tab_track(ctx: Ctx, *, back: bool) -> None:
     s = ctx.s
     groups = list(track.GROUP_IDS)
-    current = s.track_group or groups[0]
-    s.track_group = groups[(groups.index(current) + 1) % len(groups)]
+    s.track_group = cycle(groups, s.track_group or groups[0], back=back)
     s.sel = 0
     s.scroll = 0
-    ctx.log("Tab", f"group → {s.track_group}")
+    ctx.log("S-Tab" if back else "Tab", f"group → {s.track_group}")
 
 
-_TAB: Mapping[str, Callable[[Ctx], None]] = MappingProxyType(
+_TAB: Mapping[str, Callable[..., None]] = MappingProxyType(
     {
         "release": _tab_release,
         "timeline": _tab_timeline,
@@ -1311,13 +1319,13 @@ def _defer(ctx: Ctx, k: str, pane: bool) -> None:
 
 
 def _copy(ctx: Ctx, k: str, pane: bool) -> None:
-    copied = copy_target(ctx.s, ctx.fixture)
+    copied = copy_for(ctx)
     ctx.notify(copied, "copied")
     ctx.log("y", f"copied — {copied}")
 
 
 def _copy_urn(ctx: Ctx, k: str, pane: bool) -> None:
-    urn = dv.urn(ctx.s, ctx.fixture)
+    urn = dv.urn(ctx.s, ctx.fixture, rows=ctx.rows, scope=ctx.scope)
     ctx.notify(urn, "copied URN")
     ctx.log("Y", f"copied URN — {urn}")
 

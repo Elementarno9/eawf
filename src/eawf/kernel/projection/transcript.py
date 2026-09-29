@@ -79,7 +79,7 @@ TRANSCRIPT_ROUTES: Final[tuple[str, ...]] = (TRANSCRIPT_ROUTE,)
 
 #: The item whose producer would state what a Run cost and how it ended. Those are
 #: metering and outcome facts rather than stream facts, so no event line carries them.
-RUN_OUTCOME_PRODUCER: Final = "RUN-061 run outcome and metering rollup"
+RUN_OUTCOME_PRODUCER: Final = "no producer reports a Run's outcome or cost yet"
 
 #: The revision every derived transcript cell states. A block is folded out of one line
 #: that is never revised, so the first revision is the only one it stands at.

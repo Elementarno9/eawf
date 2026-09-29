@@ -11,6 +11,10 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from eawf.kernel.identity.errors import IdentityError
+from eawf.kernel.identity.keys import EntityKind
+from eawf.kernel.identity.urn import format_qualified_urn, parse_qualified_urn
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.attention import attn_list
 from eawf.surfaces.tui.console.fixture import Fixture, FleetRow, Milestone, Track
@@ -449,6 +453,7 @@ def absent(
 def sel_in(session: Session, n: int) -> int:
     """Publish the row count and clamp the cursor into it; every route uses this clamp."""
     session.count = n
+    session.nav_rows = n
     session.sel = 0 if n <= 0 else max(0, min(session.sel, n - 1))
     return session.sel
 
@@ -456,6 +461,7 @@ def sel_in(session: Session, n: int) -> int:
 def sel_by_id(session: Session, ids: Sequence[str]) -> int:
     """Clamp the cursor on a re-sorting list by entity id, never by row offset."""
     session.count = len(ids)
+    session.nav_rows = len(ids)
     if not ids:
         session.sel = 0
         session.sel_id = None
@@ -521,15 +527,22 @@ class StripItem:
     n: int | str
 
 
-def strip_row(session: Session, items: Sequence[StripItem], w: int) -> str:
+def strip_row(
+    session: Session, items: Sequence[StripItem], w: int, *, lead: str = " BUCKETS   "
+) -> str:
     """Return the bucket strip: grown around the focused bucket while it fits, edges counted.
+
+    Args:
+        session: The session whose bucket the strip grows around.
+        items: The buckets, ``all`` first.
+        w: The frame width in cells.
+        lead: The strip's label cell, as wide as the other labels of its frame.
 
     Raises:
         IndexError: ``items`` is empty.
     """
     keys = [x.key for x in items]
     focus = keys.index(session.bucket) if session.bucket in keys else 0
-    lead = " BUCKETS   "
 
     def cell(x: StripItem, on: bool) -> str:
         return ("▸" if on else "") + f"{x.label} {x.n}"
@@ -607,10 +620,62 @@ def target_id(session: Session, fixture: Fixture) -> str:
     }.get(session.route, session.route)
 
 
-def urn(session: Session, fixture: Fixture) -> str:
-    """Return the stable URN of the frame's subject."""
+#: What stands for the tree's URN while no held record states the tree it was read from.
+NO_SCOPE_URN = "∅ no held record states this tree's URN"
+
+
+def scope_urn(rows: Sequence[ProjectionRow]) -> str | None:
+    """Return the URN of the project the held records are filed in.
+
+    The project is read off the first held record whose URN parses in the qualified
+    scheme, so the address is the one every record of the tree is spelled under.
+
+    Args:
+        rows: The rows the link holds.
+
+    Returns:
+        The project's qualified URN, or ``None`` when no held record states one.
+    """
+    for row in rows:
+        try:
+            held = parse_qualified_urn(row.urn)
+        except IdentityError:
+            continue
+        return format_qualified_urn(
+            workspace_key=held.workspace_key,
+            project_key=held.project_key,
+            repository_key=None,
+            kind=EntityKind.PROJECT,
+            entity_key=held.project_key,
+        )
+    return None
+
+
+def urn(
+    session: Session, fixture: Fixture, *, rows: Sequence[ProjectionRow] = (), scope: str = ""
+) -> str:
+    """Return the stable URN of the frame's subject.
+
+    Args:
+        session: The session whose selection or subject is addressed.
+        fixture: The registers, whose scope names a console holding no link.
+        rows: The rows the link holds. A row under the caret, else the subject's row,
+            answers with the URN its record carries rather than one spelled here.
+        scope: The scope a linked console is attached to, named where no row answers.
+
+    Returns:
+        The record's own URN when the link holds it. Else a console holding no prototype
+        rows names the tree's own URN, in the one scheme its records are addressed by, and
+        the prototype replay names the route's address.
+    """
+    wanted = (session.sel_id, session.subj_id) if rows else ()
+    held = next((row.urn for key in wanted if key for row in rows if row.key == key), None)
+    if held is not None:
+        return held
+    if not fixture.prototype:
+        return scope_urn(rows) or NO_SCOPE_URN
     tail = f":{session.subj_id}" if session.subj_id else ""
-    return f"urn:eawf:{fixture.scope}:{session.route}{tail}"
+    return f"urn:eawf:{scope or fixture.scope}:{session.route}{tail}"
 
 
 def wrap_pane(label: str, text: str, w: int) -> list[str]:

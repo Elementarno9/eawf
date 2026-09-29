@@ -196,6 +196,7 @@ KEY: Mapping[str, KeyEntry] = MappingProxyType(
         "inspect": _k("inspect", "i", kind=_G),
         "stack": _k("stack", "i", kind=_G),
         "raw": _k("raw", "r", kind=KeyKind.SAFE),
+        "transcript": _k("transcript", "Enter"),
         "copy": _k("copy", "y", kind=_G),
         "digest": _k("copy digest", "y", kind=_G),
         "answer": _k("answer", "a", kind=KeyKind.ANSWER),
@@ -491,6 +492,13 @@ def _compose(pairs: Sequence[Pair]) -> str:
 GLOBAL_DROP_ORDER: tuple[str, ...] = ("?", "/", ".", "Esc", "g")
 GLOBAL_TOKENS: frozenset[str] = frozenset({*GLOBAL_DROP_ORDER, "-", "y", "Y", "i"})
 
+# The paging pairs only repeat what the arrows do a screen at a time, so a bar that would
+# otherwise lose the way back or a copy gives up the ends pair, then the pages pair, first.
+PAGING_DROP_ORDER: tuple[str, ...] = ("Home End", "PageUp PageDown")
+
+# The globals a bar gives up freely; any other global is worth a paging pair.
+_CHEAP_GLOBALS: frozenset[str] = frozenset(GLOBAL_DROP_ORDER[: GLOBAL_DROP_ORDER.index("Esc")])
+
 
 def _drop_at(pairs: Sequence[Pair]) -> int:
     """Return the index of the pair that leaves a bar too wide next.
@@ -509,7 +517,7 @@ def _drop_at(pairs: Sequence[Pair]) -> int:
     return -min(ranked)[1] if ranked else len(pairs) - 1
 
 
-def keybar(pairs: Sequence[Pair], w: int) -> str:
+def keybar(pairs: Sequence[Pair], w: int, *, keep_actions: bool = False) -> str:
     """Return the keybar row: exactly ``w`` cells, global pairs dropped past the budget.
 
     The first pair never drops; a lone pair wider than the frame is clipped instead.
@@ -517,6 +525,10 @@ def keybar(pairs: Sequence[Pair], w: int) -> str:
     Args:
         pairs: ``(token, label)`` pairs in advertising order, globals last.
         w: The frame width in cells.
+        keep_actions: Whether the action menu's pair is worth the paging pairs. A frame
+            drawn from a read model keeps it, because its menu is where the verbs of the
+            record on screen are refused or offered; the prototype replay drops it first,
+            as its tracked bars do.
 
     Raises:
         ValueError: a token fails :func:`assert_full_key_names`, or ``w`` fails :func:`budget`.
@@ -524,12 +536,34 @@ def keybar(pairs: Sequence[Pair], w: int) -> str:
     for token, _label in pairs:
         assert_full_key_names(token)
     room = budget(w)
+    cheap = _CHEAP_GLOBALS - {KEY["actions"].token} if keep_actions else _CHEAP_GLOBALS
     kept = list(pairs)
     bar = _compose(kept)
     while cell_len(bar) > room and len(kept) > 1:
-        del kept[_drop_at(kept)]
+        at = _drop_at(kept)
+        token = kept[at][0]
+        spared = (
+            _without_paging(kept, room) if token in GLOBAL_TOKENS and token not in cheap else None
+        )
+        if spared is not None:
+            return pad(_compose(spared), w)
+        del kept[at]
         bar = _compose(kept)
     return pad(bar, w)
+
+
+def _without_paging(pairs: Sequence[Pair], room: int) -> list[Pair] | None:
+    """Return ``pairs`` less the fewest paging pairs that fit ``room``, or ``None``.
+
+    ``None`` when dropping every paging pair still leaves the bar too wide, so the pages
+    are kept for a bar that would lose its global anyway.
+    """
+    trial = list(pairs)
+    for token in PAGING_DROP_ORDER:
+        trial = [pair for pair in trial if pair[0] != token]
+        if cell_len(_compose(trial)) <= room:
+            return trial
+    return None
 
 
 def route_bar(route: str, w: int) -> str:

@@ -22,7 +22,15 @@ from datetime import datetime
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthState
 from eawf.surfaces.tui.console.format import clock_time, group
-from eawf.surfaces.tui.console.frame import View, bar, build, needs_count, route_keys_bar, thin
+from eawf.surfaces.tui.console.frame import (
+    View,
+    bar,
+    build,
+    needs_count,
+    route_keys_bar,
+    scope_label,
+    thin,
+)
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import KeyEntry
 from eawf.surfaces.tui.console.lifecycle import (
@@ -34,6 +42,7 @@ from eawf.surfaces.tui.console.lifecycle import (
 )
 from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, label, more, route_crumb
+from eawf.surfaces.tui.console.width import cell_len, clip_words
 
 #: The label gutter of the subject section, the leading space excluded: the same gutter the
 #: spine frame's REGIONS and UNSTATED rows use, so the section reads as one column of labels.
@@ -55,6 +64,26 @@ NO_RUN_RETRY = "retry is not offered: it would claim the first attempt failed"
 def family_of(row: SpineRow) -> Family | None:
     """Return the entity family a row belongs to, or ``None`` for a record with no states."""
     return next((f for f in Family if f.value == row.collection.value), None)
+
+
+def subject_line(row: SpineRow, what: str, w: int) -> str:
+    """Return the line under a detail frame's header: the subject named, then ``what``.
+
+    A detail frame is about one record, so its summary names that record -- its kind, its
+    key and its title -- where a list frame would count its rows. The title gives way
+    first, so the state after it is never cut off.
+
+    Args:
+        row: The subject.
+        what: What is said of it after the name, such as its state word.
+        w: The frame width the line, with its leading gutter, is drawn in.
+    """
+    family = family_of(row)
+    kind = (family.value if family is not None else row.collection.value).replace("_", " ")
+    head, tail = f"{kind.capitalize()} {row.key}", f" · {what}"
+    room = w - 2 - cell_len(head) - cell_len(tail)
+    title = f" {clip_words(row.title, room)}" if row.title and room > 1 else ""
+    return head + title + tail
 
 
 def subject_of(view: View, spine: SpineView) -> SpineRow | None:
@@ -205,12 +234,12 @@ def unknown_frame(
     rows: list[str] = [
         header_row(
             session,
-            crumb=route_crumb(spine, *steps),
-            scope=spine.scope_id,
+            crumb=route_crumb(view, spine, *steps),
+            scope=scope_label(view, spine.scope_id),
             needs=needs_count(view),
             w=w,
         ),
-        f" {family.value.capitalize()} {row.key}{f' {row.title}' if row.title else ''} · {what}",
+        f" {subject_line(row, what, w)}",
         bar(w),
     ]
     rd = reads(session)
@@ -237,6 +266,7 @@ __all__ = [
     "at",
     "family_of",
     "state_of",
+    "subject_line",
     "subject_of",
     "subject_rows",
     "unknown_frame",

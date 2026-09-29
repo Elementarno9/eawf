@@ -16,7 +16,6 @@ from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import value_cell
-from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
@@ -61,8 +60,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     top = native_head(
         view,
         spine,
-        crumb_text=route_crumb(spine, "History", "Diff"),
-        summary=f"{key} · {pair or 'one revision'} · cursor {group(int(spine.source_cursor))}",
+        crumb_text=route_crumb(view, spine, "History", "Diff"),
+        summary=f"{key} · {pair or 'one revision'}",
     )
     body = [
         label(

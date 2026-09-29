@@ -157,13 +157,19 @@ def test_auth_058_the_header_paints_brand_crumb_count_and_chip() -> None:
 
 
 @pytest.mark.parametrize(
-    ("slot", "surface"),
-    [("▲ GAP DETECTED", "warn"), ("◌ DISCONNECTED", "dim"), ("◑ LIVE / PARTIAL", "dim")],
+    ("slot", "surface", "bold"),
+    [
+        ("▲ GAP DETECTED", "warn", True),
+        ("◌ DISCONNECTED", "dim", False),
+        ("◑ LIVE / PARTIAL", "dim", False),
+    ],
 )
-def test_auth_058_a_chip_that_is_not_live_is_never_painted_live(slot: str, surface: str) -> None:
+def test_auth_058_a_chip_that_is_not_live_is_never_painted_live(
+    slot: str, surface: str, bold: bool
+) -> None:
+    """A warn chip takes the packet's warn weight; a dim chip stays at the body weight."""
     strokes = _by_text(paint(f" Eä ▸ Home   {slot}", Part.HEADER))
-    assert strokes[slot].surface == surface
-    assert not strokes[slot].bold
+    assert (strokes[slot].surface, strokes[slot].bold) == (surface, bold)
 
 
 def test_auth_058_a_zero_count_is_never_painted() -> None:
@@ -185,7 +191,10 @@ def test_auth_058_the_body_paints_rules_heads_cursor_and_state_words() -> None:
     assert [s.text for s in head if s.bold] == ["RUN        STATE     AS OF", "BUCKETS"]
     assert _by_text(head)["│"].surface == "rail"
     cursor = paint(" ▸ RUN-538453eb  WAIT-PERM  needs operator 3 │ FAILED  ", Part.BODY)
-    assert {s.ground for s in cursor} == {"cursor"}
+    # the caret grounds its own pane; the rail beside it is another pane and stays plain
+    rail = cursor.index(_by_text(cursor)["│"])
+    assert {s.ground for s in cursor[:rail]} == {"cursor"}
+    assert {s.ground for s in cursor[rail:]} == {None}
     found = _by_text(cursor)
     assert found["▸"] == Stroke("▸", surface="caret", ground="cursor", bold=True)
     assert found["WAIT-PERM"].surface == "warn"
@@ -216,7 +225,8 @@ def test_auth_058_a_mark_is_one_run_in_its_own_surface(mark: Mark) -> None:
         text = f"{TRUTH[mark.value].unicode} {mark.value}"
     strokes = paint(f" COST  {text} · rate card", Part.BODY)
     marked = [s for s in strokes if s.mark is not None]
-    assert marked == [Stroke(text, surface=MARK_SURFACE[mark], mark=mark)]
+    heavy = MARK_SURFACE[mark] in ("warn", "err")
+    assert marked == [Stroke(text, surface=MARK_SURFACE[mark], bold=heavy, mark=mark)]
 
 
 # ---------------------------------------------------------------- AUTH-058 · live frame
@@ -288,10 +298,10 @@ def test_auth_058_a_live_frame_paints_each_surface_its_theme_token(logical: str)
         "Eä": ("accent", True),
         "● LIVE": ("accent", True),
         "!4 NEEDS YOU": ("warn", True),
-        "FAILED": ("err", False),
-        "RUNNING": ("ok", False),
-        "QUEUED": ("status-claimed", False),
-        "WAIT-USER": ("warn", False),
+        "FAILED": ("err", True),
+        "RUNNING": ("ok", True),
+        "QUEUED": ("status-claimed", True),
+        "WAIT-USER": ("warn", True),
         "drill": ("muted", False),
     }
     for text, (token, bold) in expect.items():
@@ -300,7 +310,7 @@ def test_auth_058_a_live_frame_paints_each_surface_its_theme_token(logical: str)
         assert is_bold is bold, text
     assert _colour_of(lines, "Enter")[0] == tokens["foreground"]
     assert _colour_of(lines, "Enter")[2]
-    assert _colour_of(lines[:1], "▸")[0] == tokens["faint"]
+    assert _colour_of(lines[:1], "▸")[0] == tokens["dim"]
     caret_fg, caret_bg, _ = _colour_of(lines[1:-1], "▸")
     assert (caret_fg, caret_bg) == (tokens["accent"], tokens["panel-2"])
     body_bg = {_hex(seg.style.bgcolor) for line in lines[1:-1] for seg in line if seg.style}

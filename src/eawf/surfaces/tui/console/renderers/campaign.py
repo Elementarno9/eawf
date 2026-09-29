@@ -25,6 +25,7 @@ from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
+    Breadth,
     Fixed,
     Grid,
     View,
@@ -77,11 +78,11 @@ def section_list(session: Session, fixture: Fixture) -> tuple[Any, ...]:
     return reg.cam_steps if sec == PLAN else reg.cam_evid if sec == EVIDENCE else reg.cam_art
 
 
-def caps(w: int) -> dict[str, int]:
+def caps(breadth: Breadth) -> dict[str, int]:
     """Return each section's row cap; the smallest windowable section is three rows."""
-    if w >= 160:
+    if breadth is Breadth.XWIDE:
         return {PLAN: 6, EVIDENCE: 5, ARTIFACTS: 5}
-    if w >= 120:
+    if breadth is Breadth.WIDE:
         return {PLAN: 6, EVIDENCE: 4, ARTIFACTS: 3}
     return {PLAN: 3, EVIDENCE: 3, ARTIFACTS: 3}
 
@@ -129,9 +130,9 @@ class Section:
     cells: Callable[[Any], list[str]]
 
 
-def _sections(w: int, fixture: Fixture) -> list[tuple[Section, Sequence[Any], str]]:
+def _sections(breadth: Breadth, fixture: Fixture) -> list[tuple[Section, Sequence[Any], str]]:
     reg = fixture.registers
-    x, wide = w >= 160, w >= 120
+    x, wide = breadth is Breadth.XWIDE, breadth >= Breadth.WIDE
     steps, evid, arts = reg.cam_steps, reg.cam_evid, reg.cam_art
     done = sum(1 for st in steps if "done" in st[1])
     if x:
@@ -192,14 +193,14 @@ def _section_rows(view: View, section: Section, rows: Sequence[Any], summary: st
     s, w = view.session, view.w
     on = (s.cam_sec or PLAN) == section.name
     out: list[str] = [Fixed(g_pad(g_pad(" " + section.name, _GUTTER) + summary, w))]
-    if section.name == PLAN and w >= 160:
+    if section.name == PLAN and view.xwide:
         span = "─ ✓ 3 ───"
         out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 ─┐" + " " * len(span) + "┌─ ✓ 4 ─┐")
         out.append(g_pad("", _GUTTER) + "✓ 2 ─┴" + span + "┴" + "───────" + "┴─ ⋯ 5 ─── ○ 6")
-    elif section.name == PLAN and w >= 120:
+    elif section.name == PLAN and view.wide:
         out.append(g_pad(" GRAPH", _GUTTER) + "✓ 1 · ✓ 2 → ✓ 3 → ✓ 4 → ⋯ 5 → ○ 6")
     out.append(section.grid.head(["", *section.heads]))
-    win = window(len(rows), caps(w)[section.name], s.sel, on)
+    win = window(len(rows), caps(view.breadth)[section.name], s.sel, on)
     if win.above:
         out.append(_receded(section.grid.row(["", f"… {win.above} above"], False, w), w))
     for k, item in enumerate(rows[win.start : win.start + win.take]):
@@ -227,11 +228,12 @@ def _absent(view: View, campaign: str) -> list[str]:
 #: The connection value under which the frame is drawn as of the replayed sequence.
 REPLAYING = "REPLAYING"
 
-#: Each section's column heads and what it says while no producer states its rows.
-_NATIVE_SECTIONS: tuple[tuple[str, tuple[str, ...], str], ...] = (
-    (PLAN, ("STEP", "STATE", "DEPENDS ON"), "no producer states the campaign plan yet"),
-    (EVIDENCE, ("RECEIPT", "WHAT IT SHOWS", "CLAIM"), "no receipt is recorded against it yet"),
-    (ARTIFACTS, ("ARTIFACT", "WRITTEN"), "no artifact is recorded against it yet"),
+#: Each section and what it says while no producer states its rows. With no row to stand
+#: over, a section draws no column heads: its label line already states the absence.
+_NATIVE_SECTIONS: tuple[tuple[str, str], ...] = (
+    (PLAN, "no producer states the campaign plan yet"),
+    (EVIDENCE, "no receipt is recorded against it yet"),
+    (ARTIFACTS, "no artifact is recorded against it yet"),
 )
 
 
@@ -280,7 +282,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     top = native_head(
         view,
         spine,
-        crumb_text=route_crumb(spine, "Research", *([key] if campaign else [])),
+        crumb_text=route_crumb(view, spine, "Research", *([key] if campaign else [])),
         summary=(f"Campaign {key} · {status}" if campaign else "No Campaign held")
         + f" · {counts(spine)}",
     )
@@ -290,13 +292,8 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         body += [label("REPLAYING", replay_line(view.replay)), thin(w)]
     question = (campaign.title if campaign else None) or f"{UNAVAILABLE} · no question is stated"
     body += [label("QUESTION", question), label("BOUNDS", f"{UNKNOWN_WORD} · no bound is stated")]
-    for name, heads, absent in _NATIVE_SECTIONS:
-        grid = Grid([12, *([20] * (len(heads) - 1)), 0])
-        body += [
-            thin(w),
-            label(name, f"{UNKNOWN_WORD} · {absent}"),
-            grid.head(["", *heads]),
-        ]
+    for name, absent in _NATIVE_SECTIONS:
+        body += [thin(w), label(name, f"{UNKNOWN_WORD} · {absent}")]
     return finish(view, top, body, _KEYS)
 
 
@@ -312,7 +309,7 @@ def render(view: View) -> list[str]:
     s, fx, w = view.session, view.fixture, view.w
     if s.subj_id and s.subj_id != OWN:
         return _absent(view, s.subj_id)
-    x, wide = w >= 160, w >= 120
+    x, wide = view.xwide, view.wide
     dv.sel_in(s, len(section_list(s, fx)))
     body = [
         " QUESTION    Does provider drift change replay digests?",
@@ -320,7 +317,7 @@ def render(view: View) -> list[str]:
     ]
     if x:
         body.append(" STOP RULE   Armed — one contradiction is open, so step 6 may not start.")
-    for section, rows, summary in _sections(w, fx):
+    for section, rows, summary in _sections(view.breadth, fx):
         body.append(thin(w))
         body += _section_rows(view, section, rows, summary)
         if section.name == EVIDENCE and wide:
@@ -357,7 +354,9 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
         # the sections below walk the prototype registers; a held campaign draws only what
         # its producers state, and none states a step, receipt or artifact row yet
         if key in ("Tab", "Enter"):
-            ctx.log(key, "nothing to open · no producer states a campaign row yet")
+            held_any = bool(ctx.projection.rows)
+            why = "no producer states a campaign row yet" if held_any else "no campaign is held"
+            ctx.log(key, f"nothing to open · {why}")
             return True
         return False
     if key == "Tab":

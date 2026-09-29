@@ -56,6 +56,7 @@ from eawf.surfaces.tui.console.overlays.situations import (
     unknown_outcome,
 )
 from eawf.surfaces.tui.console.reads import can_mutate
+from eawf.surfaces.tui.console.renderers.release import NO_RELEASE
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import RULE_THIN, TRUTH
 from eawf.surfaces.tui.console.width import cell_len, pad
@@ -497,6 +498,13 @@ def _signal_state(signal: ReadinessSignal) -> str:
     return f"{UNKNOWN} unknown"
 
 
+def _remedy(signal: ReadinessSignal) -> str:
+    """Return what would state ``signal``: nothing for a stated one, else why it is silent."""
+    if signal.state.state is TruthState.KNOWN:
+        return NO_VALUE
+    return signal.state.missing_reason or NO_VALUE
+
+
 def _red_signal(model: ReleaseReadinessView) -> str | None:
     return next(
         (
@@ -519,9 +527,8 @@ def readiness_situation(model: ReleaseReadinessView) -> tuple[str, Situation]:
     """Return the release's key and its situation, read off the release's own row."""
     release = next((r for r in model.rows if r.collection is Epoch2Collection.RELEASE), None)
     if release is None:
-        return f"{UNKNOWN} unknown", Situation(
-            f"{UNKNOWN} unknown · no release row is held", "a release row is read"
-        )
+        # no release is cut, which is a state of the tree rather than a gap in the read
+        return "no release", Situation(NO_RELEASE, "a release is cut from accepted Milestones")
     status = status_of(model)
     if status is None:
         return release.key, Situation(
@@ -538,25 +545,25 @@ def render_readiness(view: View, model: ReleaseReadinessView) -> list[str]:
     as_of = f"revision {model.source_cursor}"
     signals = model.signals
     s.sel = max(0, min(s.sel, max(0, len(signals) - 1)))
-    members = [r for r in model.rows if r.collection is Epoch2Collection.MILESTONE]
+    cut = any(r.collection is Epoch2Collection.RELEASE for r in model.rows)
+    members = [r for r in model.rows if r.collection is Epoch2Collection.MILESTONE] if cut else []
+    none_held = NO_RELEASE if not cut else "none held"
     body = [
         lab(
             "MEMBERS" if i == 0 else "",
             f"{m.key} · {(m.fields['status'].value or '').lower() or UNKNOWN} · as of {as_of}",
         )
         for i, m in enumerate(members)
-    ] or [lab("MEMBERS", f"{TRUTH['unavailable'].unicode} none held · as of {as_of}")]
+    ] or [lab("MEMBERS", f"{TRUTH['unavailable'].unicode} {none_held} · as of {as_of}")]
     body += [thin(w), _SIGNAL_TABLE.head(["READINESS", "STATE", "EVIDENCE", "FRESH · REMEDY"])]
     for i, signal in enumerate(signals):
-        known = signal.state.state is TruthState.KNOWN
-        remedy = NO_VALUE if known else (signal.state.missing_reason or "")
-        cells = [
-            signal.name,
-            _signal_state(signal),
-            signal.evidence or NO_VALUE,
-            f"{as_of} · {remedy}",
-        ]
+        remedy = f"{as_of} · {_remedy(signal)}"
+        cells = [signal.name, _signal_state(signal), signal.evidence or NO_VALUE, remedy]
         body.append(_SIGNAL_TABLE.row(cells, i == s.sel, w))
+    if signals:
+        # a narrow cell cuts the remedy, so the focused signal's is also stated whole
+        focus = signals[s.sel]
+        body.append(lab("REMEDY", f"{focus.name} · {_remedy(focus)}"))
     approval = model.approval if status_of(model) in APPROVED_ONWARD else None
     body += [
         thin(w),
@@ -573,7 +580,9 @@ def render_readiness(view: View, model: ReleaseReadinessView) -> list[str]:
     return decision_frame(
         view,
         name="readiness",
-        subject=f"{key} · {situation.name.split(' · ')[0]}",
+        subject=key
+        if situation.name == NO_RELEASE
+        else f"{key} · {situation.name.split(' · ')[0]}",
         context="every member and signal under one as-of instant",
         body=body,
         keys=[("↑↓", "row"), _ESC_BACK],

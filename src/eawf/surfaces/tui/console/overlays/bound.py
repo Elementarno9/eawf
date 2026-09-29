@@ -21,6 +21,7 @@ from eawf.surfaces.tui.console.decisions import (
     ClaimRecord,
     DecisionRecords,
     DraftRecord,
+    DraftState,
     MarkerRecord,
     PauseRecord,
     QuestionRecord,
@@ -28,6 +29,7 @@ from eawf.surfaces.tui.console.decisions import (
     StepRecord,
 )
 from eawf.surfaces.tui.console.session import Session
+from eawf.surfaces.tui.console.tokens import TRUTH
 from eawf.workflow.projection.acceptance import AcceptanceBundleView, ReleaseReadinessView
 
 #: The overlays that are cards: Enter-opened, about one record captured at open.
@@ -82,9 +84,12 @@ def bound_overlay(
         return projection
     if name == "readiness" and isinstance(projection, ReleaseReadinessView):
         return projection
+    subject = session.ov_subject
+    if name == "draft" and isinstance(projection, SpineView):
+        held = decisions.draft(subject) if decisions is not None else None
+        return held or draft_of(projection, subject)
     if decisions is None:
         return None
-    subject = session.ov_subject
     if name == "question":
         return decisions.question(subject)
     if name == "pause":
@@ -96,6 +101,36 @@ def bound_overlay(
     if name == "marker":
         return decisions.marker(subject)
     return None
+
+
+def draft_of(spine: SpineView, key: str | None) -> DraftRecord | None:
+    """Return the Backlog row ``key`` names as the record its draft card draws.
+
+    The Task register states the row's title, its status, the scope it is due in, how
+    many criteria it holds and the Batch it is filed under; it states no owner, so the
+    card shows that field unanswered rather than inventing one.
+
+    Returns:
+        The record, or ``None`` when the register holds no draft or deferred row ``key``.
+    """
+    found = spine.index_of(key)
+    if found is None:
+        return None
+    row = spine.rows[found]
+    status = row.field("status").value
+    if status not in {state.value for state in DraftState}:
+        return None
+    facts = row.facts
+    criteria = facts.get("criteria")
+    return DraftRecord(
+        id=row.key,
+        title=row.title or row.key,
+        state=DraftState(status),
+        due_scope=facts.get("due") or f"{TRUTH['unavailable'].unicode} no due scope is stated",
+        due="undated",
+        criteria=f"{criteria} stated" if criteria else None,
+        batch=row.parent_key,
+    )
 
 
 def bound_card(session: Session, decisions: DecisionRecords | None) -> Bound | None:

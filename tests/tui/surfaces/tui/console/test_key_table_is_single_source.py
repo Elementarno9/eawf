@@ -215,7 +215,7 @@ def test_con031_every_bar_pair_is_a_row_of_the_route_table(route: str, w: int) -
     session = Session()
     session.route = route
     frame = compose_frame(View(session=session, fixture=FIXTURE, w=w, h=40))
-    table = {*ROUTE_KEYS[route], *native_keys(route)}
+    table = {*ROUTE_KEYS[route], *native_keys(route, windowed=True)}
     tokens = {entry.token for entry in table}
     admitted = {_piece(entry) for entry in table}
     admitted |= {_piece(entry) for entry in KEY.values() if entry.token in tokens}

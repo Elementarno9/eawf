@@ -58,13 +58,14 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.runtime_dir import ensure_runtime_dir
 from eawf.runtime.daemon.server import handle_connection
-from eawf.surfaces.tui.console.app import ConsoleApp
+from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.harness import capture_cells, grid_errors, settle
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
+from eawf.surfaces.tui.launch import project_name
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import method_context
 from tests.integration.workflow.release._canary_acceptance_walk import CanaryWalk, walk_canary
 
@@ -182,7 +183,7 @@ def _socket_dir() -> Path:
 
 @contextlib.asynccontextmanager
 async def live_console(
-    repo_root: Path, runtime_root: Path
+    repo_root: Path, runtime_root: Path, *, launched: bool = False
 ) -> AsyncIterator[tuple[ConsoleApp, ProjectionSeam]]:
     """Serve the epoch-2 tree at ``repo_root`` at an isolated well-known socket and connect.
 
@@ -203,11 +204,13 @@ async def live_console(
             already-walked canary, or this repository itself.
         runtime_root: Where the daemon context this suite serves keeps its WAL --
             for a canary, the same directory its walk was produced against.
+        launched: Whether to add what ``eawf tui`` adds around the frame -- the outer
+            gutter and the project name in the crumb -- so a key's effect is judged on
+            the frame an operator sees; the grid checks read the bare frame.
 
     Yields:
-        The console (built exactly as ``eawf tui`` builds it for an epoch-2 tree,
-        packaged chrome plus a live seam), already connected, and the seam
-        itself.
+        The console (packaged chrome plus a live seam, as ``eawf tui`` builds it for an
+        epoch-2 tree), already connected, and the seam itself.
     """
     ctx = method_context(runtime_root)
     ctx.bus = EventBus()
@@ -227,8 +230,16 @@ async def live_console(
                 state_path=None,
                 repo_root=repo_root,
                 daemon_client_factory=lambda: _LoopbackClient(sock_path),
+                scope_name=project_name(repo_root / ".ea/state.json", repo_root)
+                if launched
+                else "",
             )
-            app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
+            app = ConsoleApp(
+                chrome=load_chrome(),
+                seam=seam,
+                clock=FakeClock(),
+                gutter=OUTER_GUTTER if launched else 0,
+            )
             await seam.connect()
             try:
                 yield app, seam

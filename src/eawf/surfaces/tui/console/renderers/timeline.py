@@ -4,12 +4,22 @@ The legend rides the keybar where it fits and takes the row above it elsewhere. 
 table serves the whole console: the route draws its rows, the marker cursor counts its
 milestones from the label row, and the marker card reads its glyph from the same bar, so
 the two can never disagree about what a marker commits to.
+
+The native frame is the same chart over the read model: one lane per Track across the
+weeks around now, then the Milestones no date places in the UNDATED region, then the
+release register. A Milestone is placed on its lane only by a date its record states; no
+producer states one yet, so every Milestone is listed as undated and each lane says so
+rather than drawing a marker nobody dated.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
+from datetime import datetime, timedelta
 
+from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import (
     Fixed,
@@ -22,8 +32,14 @@ from eawf.surfaces.tui.console.frame import (
     thin,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.navigation import Ctx
-from eawf.surfaces.tui.console.renderers.spine import held, native_frame
+from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.renderers.children import status
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    native_head,
+    route_crumb,
+)
+from eawf.surfaces.tui.console.renderers.spine import held
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 Lane = tuple[str, str, str]
@@ -52,6 +68,8 @@ _LANE = 12
 _LABEL_OFFSET = 9
 _WEEKS = "            W26     W27     W28     W29  │  W30     W31     W32"
 _LEGEND = "● dated  ○ forecast  ┄ uncertain  │ now  ▣ release"
+# The native chart draws solid lanes crossed by a plain keyline, so it states no dotted run.
+_NATIVE_LEGEND = "● dated  ○ forecast  │ now  ▣ release"
 UNDATED_ROWS: tuple[tuple[str, str, str], ...] = (
     ("MLS-0012", "Calibration follow-up", "no date proposed yet"),
     ("MLS-0014", "Snapshot retention review", "waits on MLS-0011"),
@@ -192,12 +210,148 @@ def _regions(view: View) -> list[str]:
     return rows
 
 
+def _with_legend(view: View, rows: list[str], keys: str, legend: str) -> list[str]:
+    """Return the frame with ``legend`` on the keybar where it fits, above it elsewhere."""
+    w, h = view.w, view.h
+    left = keys.rstrip()
+    if cell_len(left) + 2 + cell_len(legend) <= w:
+        gap = w - cell_len(left) - cell_len(legend) - 1
+        foot = left + " " * gap + legend + " "
+    else:
+        rows.extend("" for _ in range(h - 2 - len(rows)))
+        rows.append("   " + legend)
+        foot = keys
+    return build(view, rows, foot)
+
+
+#: The weeks the chart draws either side of the week now falls in.
+_SPAN = 3
+#: The cells one week takes on the chart.
+_WEEK_W = 8
+#: What an undated Milestone's row says about its date.
+NO_DATE = "no date proposed yet"
+
+
+def _of(spine: SpineView, collection: Epoch2Collection) -> list[SpineRow]:
+    return [row for row in spine.rows if row.collection is collection]
+
+
+def week_header(now: datetime, label_w: int) -> str:
+    """Return the week row: the weeks around ``now``, a keyline after the current one."""
+    weeks = [(now + timedelta(weeks=k)).isocalendar().week for k in range(-_SPAN, _SPAN + 1)]
+    cells = [f"W{wk:02d}" for wk in weeks]
+    before = "".join(pad(cell, _WEEK_W) for cell in cells[:_SPAN])
+    after = "".join(pad(cell, _WEEK_W) for cell in cells[_SPAN + 1 :]).rstrip()
+    return " " * label_w + before + f"{cells[_SPAN]}  │  " + after
+
+
+def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[str]:
+    """Return the week row and one lane per Track, each saying no Milestone on it is dated."""
+    s, w = view.session, view.w
+    tracks = _of(spine, Epoch2Collection.TRACK)
+    label_w = min(20, max(_LANE, *(cell_len(t.key) + 2 for t in tracks))) if tracks else _LANE
+    on_lanes = (s.tl_reg or LANES) == LANES
+    dv.sel_in(s, len(tracks))
+    s.mark, s.timeline_marks, s.timeline_marker = 0, 0, None
+    if not tracks:
+        return ["   ∅ no Track is recorded, so the chart has no lane"]
+    if now is None:
+        rows = [f"   the week now falls in is {UNKNOWN_WORD} · no instant is held to place it"]
+        line = "─" * max(0, w - label_w - 1)
+    else:
+        weeks = week_header(now, label_w)
+        at = weeks.index("│") - label_w
+        rows = [weeks]
+        line = "─" * at + "│" + "─" * max(0, cell_len(weeks) - label_w - at - 1)
+    milestones = _of(spine, Epoch2Collection.MILESTONE)
+    for i, track in enumerate(tracks):
+        on = on_lanes and i == s.sel
+        rows.append(Fixed(pad(("▸" if on else " ") + pad(track.key, label_w - 1) + line, w)))
+        undated = sum(1 for m in milestones if m.parent_key == track.key)
+        note = f"no Milestone on this lane states a date · {undated} undated below"
+        rows.append(Fixed(pad(" " * label_w + note, w)))
+    return rows
+
+
+def _native_regions(view: View, spine: SpineView) -> list[str]:
+    """Return the UNDATED and RELEASES regions and the dependency line, publishing their rows."""
+    s, w = view.session, view.w
+    region = s.tl_reg or LANES
+    milestones = _of(spine, Epoch2Collection.MILESTONE)
+    undated: list[tuple[str, ...]] = [(m.key, m.title or "", NO_DATE) for m in milestones]
+    releases: list[tuple[str, ...]] = [
+        (r.key, r.title or "", UNKNOWN_WORD, status(r))
+        for r in _of(spine, Epoch2Collection.RELEASE)
+    ]
+    listed = undated if region == UNDATED else releases if region == RELEASES else []
+    if listed:
+        s.tl_sel = max(0, min(len(listed) - 1, s.tl_sel))
+    if region != LANES:
+        # the arrows and Enter walk the focused region's rows, not the lanes above it
+        s.nav_rows = len(listed)
+    wide = view.wide
+    undated_table = Table([12, 11, 48 if wide else 26, 0], 2)
+    rows = [thin(w), f" UNDATED     {dv.plural(len(undated), 'milestone')} with no date proposed"]
+    rows.extend(
+        undated_table.row(["", *u], region == UNDATED and i == s.tl_sel)
+        for i, u in enumerate(undated)
+    )
+    tally = Counter(r[3] for r in releases)
+    stated = " · ".join(f"{n} {word.lower()}" for word, n in tally.items())
+    rows += [thin(w), f" RELEASES    {stated or '∅ no release is recorded'}"]
+    release_table = Table([12, 13, 24 if wide else 11, 11, 0], 2)
+    rows.extend(
+        release_table.row(["", "▣ " + r[0], r[1], r[2], r[3]], region == RELEASES and i == s.tl_sel)
+        for i, r in enumerate(releases)
+    )
+    rows += [thin(w), " DEPENDS     no dependency between Milestones is recorded", thin(w)]
+    s.tl_regs = {UNDATED: [list(u) for u in undated], RELEASES: [list(r) for r in releases]}
+    return rows
+
+
+def roadmap_frame(view: View, spine: SpineView) -> list[str]:
+    """Return the Timeline chart drawn from the read model the daemon served.
+
+    Args:
+        view: The render being built; its instant places the week the chart centres on,
+            else the instant the rows were read.
+        spine: The roadmap read model: Tracks, Milestones, Batches and Releases.
+
+    Returns:
+        The full frame, the legend beside the keybar or above it.
+    """
+    now = view.now or spine.generated_at
+    milestones = _of(spine, Epoch2Collection.MILESTONE)
+    if now is None:
+        span = f"now {UNKNOWN_WORD}"
+    else:
+        first, last = now - timedelta(weeks=_SPAN), now + timedelta(weeks=_SPAN)
+        week = now.isocalendar().week
+        span = f"W{first.isocalendar().week:02d} → W{last.isocalendar().week:02d} · now W{week:02d}"
+    dated = f"0 of {dv.plural(len(milestones), 'milestone')} dated"
+    rows = [
+        *native_head(
+            view,
+            spine,
+            crumb_text=route_crumb(view, spine, "Timeline"),
+            summary=f"{span} · {dated}",
+        ),
+        *_native_lanes(view, spine, now),
+        *_native_regions(view, spine),
+    ]
+    entries = native_keys("timeline", windowed=view.session.windowed)
+    if (view.session.tl_reg or LANES) == LANES:
+        # a lane states no dated marker yet, so Enter has nothing to open until Tab moves on
+        entries = tuple(e for e in entries if e.keys != ("Enter",))
+    return _with_legend(view, rows, route_keys_bar(view, entries), _NATIVE_LEGEND)
+
+
 def render(view: View) -> list[str]:
     """Return the Timeline frame, native when a read model is held."""
     spine = held(view)
     if spine is not None:
-        return native_frame(view, spine)
-    s, fx, w, h = view.session, view.fixture, view.w, view.h
+        return roadmap_frame(view, spine)
+    s, fx, w = view.session, view.fixture, view.w
     dv.sel_in(s, len(TL_LANES))
     rows = [
         header(view, f" Eä ▸ {fx.scope} ▸ Timeline"),
@@ -207,26 +361,4 @@ def render(view: View) -> list[str]:
     ]
     rows.extend(_lanes(view))
     rows.extend(_regions(view))
-    keys = route_keys_bar(view, ROUTE_KEYS["timeline"])
-    left = keys.rstrip()
-    if cell_len(left) + 2 + cell_len(_LEGEND) <= w:
-        gap = w - cell_len(left) - cell_len(_LEGEND) - 1
-        foot = left + " " * gap + _LEGEND + " "
-    else:
-        rows.extend("" for _ in range(h - 2 - len(rows)))
-        rows.append("   " + _LEGEND)
-        foot = keys
-    return build(view, rows, foot)
-
-
-def seam(ctx: Ctx, key: str, shift: bool) -> bool:
-    """Refuse the marker arrows, naming why, on a frame that draws no dated marker.
-
-    The route's bar advertises the arrows whatever it holds, so a lane with no marker to
-    move to answers them rather than leaving them silently unclaimed.
-    """
-    s = ctx.s
-    if s.route != "timeline" or key not in ("ArrowLeft", "ArrowRight") or s.timeline_marks:
-        return False
-    ctx.log(key, "no dated marker on this lane · nothing to move to")
-    return True
+    return _with_legend(view, rows, route_keys_bar(view, ROUTE_KEYS["timeline"]), _LEGEND)

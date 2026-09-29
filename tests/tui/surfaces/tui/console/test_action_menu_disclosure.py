@@ -57,6 +57,7 @@ from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyKind, keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_KEYS, DRAWER_PAIRS, OVERLAY_KEYS
 from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.operations import UNBOUND_REASON
 from eawf.surfaces.tui.console.overlays import render_overlay
 from eawf.surfaces.tui.console.palette import (
     CHROME_ROWS,
@@ -764,7 +765,9 @@ def test_con_125_the_live_menu_binds_the_row_verbs_and_refuses_assign_alone() ->
     fixture = Fixture.from_chrome(load_chrome())
     verbs = {verb.verb: verb for verb in fixture.menus.verbs("attention")}
     assert set(verbs) >= {"answer", "deny", "snooze", "resolve", "assign"}
-    assert verbs["assign"].reason == "you are the only principal"
+    # the packaged chrome's reason describes the prototype's principals; the live menu
+    # lists assign refused for want of a daemon verb until the register says otherwise
+    assert verbs["assign"].reason == UNBOUND_REASON
 
 
 def test_con_125_assign_is_not_refused_for_want_of_a_principal_once_there_are_two() -> None:

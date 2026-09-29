@@ -72,18 +72,21 @@ class SurfaceToken:
 
 # Chrome first, then the severity vocabulary, then the lifecycle tints. The keybar and
 # header hints take muted rather than the packet's faint: faint misses 4.5:1 on the band.
+# The bands, the dim tone and the receded pane take the tones each theme mixes from its
+# own palette, the way the packet's stylesheet mixes them.
 # The cursor row sits on the raised panel rather than the packet's accent-dim selection
 # fill, which no theme binds, so the selection stays one neutral lift on every theme.
 TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("canvas", Channel.BACKGROUND, "surface", ".screen"),
     SurfaceToken("text", Channel.COLOR, "foreground", ".canvas"),
-    SurfaceToken("band", Channel.BACKGROUND, "panel", None),
+    SurfaceToken("band", Channel.BACKGROUND, "band", ".canvas"),
     SurfaceToken("hint", Channel.COLOR, "muted", None),
     SurfaceToken("brand", Channel.COLOR, "accent", ".canvas .brand"),
     SurfaceToken("live", Channel.COLOR, "accent", ".canvas .br"),
     SurfaceToken("rule", Channel.COLOR, "muted", ".canvas .bd"),
-    SurfaceToken("rail", Channel.COLOR, "faint", ".canvas .dm"),
-    SurfaceToken("dim", Channel.COLOR, "faint", ".canvas .dm"),
+    SurfaceToken("rail", Channel.COLOR, "dim", ".canvas .dm"),
+    SurfaceToken("dim", Channel.COLOR, "dim", ".canvas .dm"),
+    SurfaceToken("recede", Channel.COLOR, "recede", ".canvas .sh"),
     SurfaceToken("frame", Channel.BORDER, "border", ".blk"),
     SurfaceToken("focus", Channel.BORDER, "primary", None),
     SurfaceToken("caret", Channel.COLOR, "accent", ".canvas .br"),

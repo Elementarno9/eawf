@@ -17,12 +17,12 @@ from types import MappingProxyType
 
 from eawf.kernel.projection.attention import build_attention_view
 from eawf.kernel.projection.compute import ProjectionRow
-from eawf.kernel.projection.spine import SpineRow
+from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthField
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, menu_rows
-from eawf.surfaces.tui.console.attention import ATTENTION_ROUTE, menu_verbs, verb_available
+from eawf.surfaces.tui.console.attention import ATTENTION_ROUTE, verb_available
 from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
@@ -37,11 +37,15 @@ from eawf.surfaces.tui.console.mutation import (
 )
 from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.renderers import copy_target
+from eawf.surfaces.tui.console.renderers.spine import offered_verbs
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import TRUTH
 from eawf.surfaces.tui.console.width import pad
 
 _UNKNOWN = TRUTH["unknown"].unicode
+
+#: The route whose inspect drawer is about the tree rather than a field of one record.
+HOME = "scope.home"
 
 # The most stored fields the raw drawer quotes before it says how many it left out.
 _RAW_LINES = 8
@@ -61,20 +65,23 @@ def go_rows(view: View) -> list[str]:
 
 #: The attention verb whose refusal depends on how many principals the register names.
 _ASSIGN = "assign"
+#: Why ``assign`` is refused while the register names no principal but this one.
+ONLY_PRINCIPAL = "you are the only principal"
 
 
 def _assign_refused(view: View, verb: MenuVerb) -> Availability | None:
-    """Return ``assign``'s refusal once the held register names a second principal.
+    """Return ``assign``'s refusal as the held register decides it.
 
-    The chrome refuses ``assign`` for want of another principal; once the register
-    addresses an item to one, that is no longer why, and the daemon binding's reason is.
+    While the register addresses items to no principal but this one there is nobody to
+    assign to, which is the first thing to say; once it names a second principal, that is
+    no longer why, and the daemon binding's reason is.
     """
     held = view.attention
     if verb.verb != _ASSIGN or held is None or held.withheld:
         return None
     named = {item.assignee_ref for item in build_attention_view(held).items} - {None}
     if not named - {view.principal}:
-        return None
+        return Availability(False, ONLY_PRINCIPAL)
     return Availability(False, binding_refusal(ATTENTION_ROUTE, _ASSIGN))
 
 
@@ -87,7 +94,7 @@ def action_rows(view: View) -> list[str]:
     its reason.
     """
     s, fx, refusal = view.session, view.fixture, view.principal_refusal
-    chrome = menu_verbs(s, fx)
+    chrome = offered_verbs(s, fx, view.projection)
     decided = gate(s, fx, verb="lifecycle move", linked=view.linked, principal_refusal=refusal)
     native = () if fx.prototype else lifecycle_verbs(s, view.rows, decided)
     native_keys = {verb.key for verb in native}
@@ -172,9 +179,29 @@ def _inspected(session: Session, fixture: Fixture) -> str:
     return "cost ~4.62 of 20.00" if session.route == "run.detail" else copy_target(session, fixture)
 
 
+def scope_rows(view: View, spine: SpineView) -> list[str]:
+    """Return scope home's inspect drawer: the tree itself, as the operator addresses it.
+
+    The header names the project, so the root id the tree is read by and the URN its
+    records are spelled under are stated here, where ``y`` copies the URN.
+    """
+    project = view.scope_name or "∅ unnamed · the header names the tree by its root id"
+    return [
+        f" SCOPE     project     {project}",
+        f"           root        {spine.scope_id}",
+        f"           urn         {dv.scope_urn(view.rows) or dv.NO_SCOPE_URN}",
+        f"           revision    {group(int(spine.source_cursor))} · the tree was read through it",
+    ]
+
+
 def inspect_rows(view: View) -> list[str]:
-    """Return the inspect drawer: the focused field with its provenance."""
+    """Return the inspect drawer: the focused field with its provenance.
+
+    On scope home the focus is the tree itself, so the drawer is its scope.
+    """
     s, fx = view.session, view.fixture
+    if s.route == HOME and isinstance(view.projection, SpineView):
+        return scope_rows(view, view.projection)
     record = focused(view)
     if record is not None:
         return _native_inspect(record)

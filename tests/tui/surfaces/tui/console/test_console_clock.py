@@ -300,9 +300,20 @@ def test_console_clock_reads_time_but_schedules_nothing() -> None:
 
 
 def test_the_app_schedules_the_one_sweep_and_reads_no_clock() -> None:
-    """The app's exemption is one interval; it never reads a time source of its own."""
+    """The app's exemption is the sweep and the appearance poll; it reads no time source.
+
+    The poll only swaps the palette, so no frame's text depends on it.
+    """
     tree = ast.parse((CONSOLE_DIR / APP_MODULE).read_text(encoding="utf-8"))
-    calls = [ast.unparse(node.func) for node in ast.walk(tree) if isinstance(node, ast.Call)]
-    scheduled = [call for call in calls if call.rsplit(".", 1)[-1] in _SCHEDULERS]
-    assert scheduled == ["self.set_interval"]
+    nodes = [node for node in ast.walk(tree) if isinstance(node, ast.Call)]
+    calls = [ast.unparse(node.func) for node in nodes]
+    scheduled = [
+        (ast.unparse(node.func), ast.unparse(node.args[1]))
+        for node in nodes
+        if ast.unparse(node.func).rsplit(".", 1)[-1] in _SCHEDULERS
+    ]
+    assert scheduled == [
+        ("self.set_interval", "self.tick"),
+        ("self.set_interval", "self.follow_appearance"),
+    ]
     assert not [call for call in calls if any(call.endswith(read) for read in _TIME_CALLS)]

@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import Scrollbar, View, boxed
 from eawf.surfaces.tui.console.keybar import pick
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers.campaign import Win
-from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY
+from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY, absent_card
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.session import Session
 
@@ -59,8 +60,18 @@ def art_window(session: Session, art: dict[str, Any], h: int) -> Win:
 def render(view: View) -> list[str]:
     """Return the artifact card, native when a read model is held."""
     spine = held(view)
-    if spine is not None:
+    if spine is not None and spine.rows:
         return native_frame(view, spine)
+    if spine is not None:
+        return absent_card(
+            view,
+            spine,
+            steps=("Research", "Artifact"),
+            what="artifact",
+            unstated=spine.unproduced(),
+            # Esc returns to the campaign as it does from the step card, in the same words
+            keys=pick("campaign.step", "back"),
+        )
     s, fx, h = view.session, view.fixture, view.h
     art = artifact_of(s, fx)
     win = art_window(s, art, h)
@@ -100,7 +111,10 @@ def copy(session: Session, fixture: Fixture) -> str:
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Scroll the file; a file that fits refuses the arrows with its reason."""
     s = ctx.s
+    # a held read model draws the absent card, which has no file to scroll
     if s.route != "campaign.artifact" or key not in ("ArrowDown", "ArrowUp"):
+        return False
+    if isinstance(ctx.projection, SpineView):
         return False
     # the fit is computed for this artifact at this height, never read from the last render
     art = artifact_of(s, ctx.fixture)

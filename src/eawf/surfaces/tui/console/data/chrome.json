@@ -921,7 +921,9 @@
      9
     ]
    ],
-   "tail": [],
+   "tail": [
+    "∅ no snapshot held · this console has read nothing from the tree yet"
+   ],
    "keys": [
     [
      "↑↓",

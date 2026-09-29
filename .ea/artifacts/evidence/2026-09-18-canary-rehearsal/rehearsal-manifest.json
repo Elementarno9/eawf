@@ -34,6 +34,7 @@
       "read_by": [
         "projection.history.diff.read",
         "projection.history.read",
+        "projection.roadmap.read",
         "projection.scope.home.read",
         "projection.search.read",
         "projection.track.read"
@@ -138,7 +139,8 @@
         "projection.release.read",
         "projection.roadmap.read",
         "projection.scope.home.read",
-        "projection.search.read"
+        "projection.search.read",
+        "projection.track.read"
       ],
       "record": "milestone",
       "written_by": [
@@ -163,7 +165,8 @@
         "projection.milestone.read",
         "projection.roadmap.read",
         "projection.scope.home.read",
-        "projection.search.read"
+        "projection.search.read",
+        "projection.track.read"
       ],
       "record": "batch",
       "written_by": [
@@ -181,6 +184,7 @@
       "producer": "native_verb",
       "read_by": [
         "projection.backlog.read",
+        "projection.batch.detail.read",
         "projection.history.diff.read",
         "projection.history.read",
         "projection.search.read",
@@ -207,6 +211,7 @@
         "projection.notifications.read",
         "projection.run.detail.read",
         "projection.search.read",
+        "projection.task.detail.read",
         "projection.transcript.read",
         "projection.unattended.read"
       ],
@@ -229,7 +234,8 @@
       "consumer": "console_route",
       "producer": "none",
       "read_by": [
-        "projection.release.read"
+        "projection.release.read",
+        "projection.roadmap.read"
       ],
       "record": "release",
       "written_by": []

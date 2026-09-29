@@ -3,12 +3,21 @@
 The focused group carries the cursor and the others recede, so which list the arrows walk
 is visible rather than remembered. The fixture describes one track, so another track's id
 says plainly that nothing is held for it.
+
+The native frame draws the same three groups for one Track from the read model: the
+Milestones filed under it, by their parent key, with the Batches cut under each; then the
+Campaigns and the shaped queue, which no record files under a Track yet, so each says so
+rather than borrowing the fixture's rows.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 
+from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import (
     Fixed,
@@ -17,12 +26,28 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
+    recede,
     route_keys_bar,
     thin,
+    window_rows,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
-from eawf.surfaces.tui.console.renderers.spine import held, native_frame
-from eawf.surfaces.tui.console.width import pad
+from eawf.surfaces.tui.console.renderers.children import (
+    child_cursor,
+    children,
+    lrow,
+    named,
+    status,
+)
+from eawf.surfaces.tui.console.renderers.detail import subject_of
+from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD
+from eawf.surfaces.tui.console.renderers.spine import (
+    detail_head,
+    detail_keys,
+    held,
+    native_frame,
+)
+from eawf.surfaces.tui.console.width import clip_words, pad
 
 OWN = "Runtime"
 
@@ -84,11 +109,86 @@ def _line(group: Group, row: tuple[str, ...], cur: bool) -> str:
     return " " + ("▸ " if cur else "  ") + cells
 
 
+#: What the two groups no record files under a Track say in place of rows.
+UNFILED: Mapping[str, str] = MappingProxyType(
+    {
+        GROUPS[1].id: "∅ a Campaign names no Track, so none is listed under this one",
+        GROUPS[2].id: "∅ no record files a shaped Task under a Track yet",
+    }
+)
+
+
+def _name_w(wide: bool) -> int:
+    """Return the Milestone name column: the packet's width, widened in the wide layout."""
+    return 48 if wide else 34
+
+
+def _milestone_cells(spine: SpineView, milestone: SpineRow, width: int) -> list[str]:
+    """Return one Milestone's cells: its name, status, Batches cut under it, and due date."""
+    batches = children(spine.rows, milestone.key, Epoch2Collection.BATCH)
+    # the name is clipped short of its column so the status never runs into it
+    name = clip_words(named(milestone), width - 2)
+    return [name, status(milestone), str(len(batches)), UNKNOWN_WORD]
+
+
+def track_frame(view: View, spine: SpineView) -> list[str]:
+    """Return one Track's frame: its facts, then the three groups Tab cycles.
+
+    The focused group carries the caret and publishes what Enter drills into; the other
+    two recede.
+
+    Args:
+        view: The render being built; its session names the Track and the focused group.
+        spine: The Track register with the Milestones and Batches filed under it.
+
+    Returns:
+        The full frame, keybar last; the register frame when the session names no Track.
+    """
+    session, w = view.session, view.w
+    subject = subject_of(view, spine)
+    if subject is None:
+        return native_frame(view, spine)
+    focused = group_of(session.track_group)
+    session.track_group = focused.id
+    milestones = children(spine.rows, subject.key, Epoch2Collection.MILESTONE)
+    runs = subject.facts.get("runs")
+    rows = [
+        *detail_head(view, spine, subject),
+        lrow("RUNS", f"{runs} filed under it" if runs is not None else UNKNOWN_WORD),
+    ]
+    on_milestones = focused.id == GROUPS[0].id
+    keys = [m.key for m in milestones] if on_milestones else []
+    cursor = child_cursor(session, keys, subject=subject.key)
+    table = Table([_name_w(view.wide), 12, 9, 0], 2)
+    head = table.head(["MILESTONES", "STATE", "BATCHES", "DUE"])
+    rows += [thin(w), head if on_milestones else recede(head, w)]
+    chrome = len(rows) + 2 * len(UNFILED) + 2
+    win = window_rows(view, total=len(milestones), cursor=cursor, chrome=chrome)
+    for index in range(win.start, win.stop):
+        on = on_milestones and index == cursor
+        line = table.row(_milestone_cells(spine, milestones[index], _name_w(view.wide)), on)
+        rows.append(line if on else Fixed(pad(line, w)) if on_milestones else recede(line, w))
+    if not milestones:
+        rows.append("   ∅ no Milestone is filed under this Track")
+    if win.hides:
+        rows.append(win.line(complete=spine.complete))
+    # the Milestone table is windowed whichever group holds the focus; the arrows walk
+    # only the focused group's rows
+    session.nav_rows = len(keys)
+    for group_id, empty in UNFILED.items():
+        own = focused.id == group_id
+        rows += [
+            thin(w),
+            *(r if own else recede(r, w) for r in (f"   {group_id}", f"   {empty}")),
+        ]
+    return build(view, rows, route_keys_bar(view, detail_keys(view, spine)))
+
+
 def render(view: View) -> list[str]:
     """Return the Track frame, native when a read model is held."""
     spine = held(view)
     if spine is not None:
-        return native_frame(view, spine)
+        return track_frame(view, spine)
     s, fx, w = view.session, view.fixture, view.w
     focused = group_of(s.track_group)
     s.track_group = focused.id
@@ -103,10 +203,10 @@ def render(view: View) -> list[str]:
     for group in GROUPS:
         on = group is focused
         rows.append(thin(w))
-        rows.append(group.head if on else Fixed(pad(group.head, w)))
+        rows.append(group.head if on else recede(group.head, w))
         for i, row in enumerate(group.rows):
             line = _line(group, row, on and i == s.sel)
-            rows.append(line if on else Fixed(pad(line, w)))
+            rows.append(line if on else recede(line, w))
     rows.append(thin(w))
     rows.append(" RETIRED   nothing retired in this track")
     if track != OWN:

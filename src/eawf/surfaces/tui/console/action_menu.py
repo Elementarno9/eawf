@@ -113,6 +113,29 @@ class Outcome(StrEnum):
     CONSEQUENCE = "consequence"
 
 
+def light_opening(
+    verb: MenuVerb, subject: str | None, *, prototype: bool
+) -> tuple[str | None, str]:
+    """Return the subject a light verb's route opens on, and the toast it raises.
+
+    On a linked console the route is about the record on screen and the toast names the
+    place in the operator's words beside that record, never a route id. The prototype
+    registers replay the pack, which opens the route unscoped under its crumb word.
+
+    Args:
+        verb: The light verb, whose words name the place, such as ``open branch and PR``.
+        subject: The record on screen; ``None`` when the frame is about none.
+        prototype: Whether the console replays the prototype registers.
+
+    Returns:
+        The subject to carry, and the toast text.
+    """
+    if prototype:
+        return None, REGISTRY.route_word(verb.target or "")
+    place = verb.verb.removeprefix("open ")
+    return subject, f"{place} · {subject}" if subject else place
+
+
 def menu_order(verbs: Sequence[MenuVerb]) -> tuple[MenuVerb, ...]:
     """Return ``verbs`` light first, each weight in its declared order."""
     light = tuple(v for v in verbs if v.weight == VerbWeight.LIGHT)

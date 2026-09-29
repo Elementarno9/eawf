@@ -17,12 +17,12 @@ from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
-    counts,
     finish,
     label,
     more,
     native_head,
     route_crumb,
+    wrapped,
 )
 from eawf.surfaces.tui.console.session import Session
 
@@ -61,16 +61,16 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     top = native_head(
         view,
         register,
-        crumb_text=route_crumb(register, "Cost ceiling"),
-        summary=f"spend against ceiling · observe only · {counts(register)}",
+        crumb_text=route_crumb(view, register, "Cost ceiling"),
+        summary="spend against ceiling · observe only",
     )
     answer = "interrupts you" if reading.interrupts else "does not interrupt you"
     body = [
         label("CEILING", f"{UNKNOWN_WORD} spent of ? · no governor ceiling is read"),
         label("OWNED BY", OWNER),
         thin(w),
-        label("STOPPED", value_cell(reading.stopped).full),
-        Grid([17, 8, 0]).head(["RUN", "AT", "REASON"]),
+        # no stopped Run is listed, so no table head stands over rows that are not there
+        *wrapped("STOPPED", value_cell(reading.stopped).full, w),
         thin(w),
         label("SPEND", f"{UNKNOWN_WORD} · no spend accounting is read"),
         more("a provider with no rate card reads ∅ unmetered, never zero"),

@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, build, header
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.palette import CRUMB, PAIRS, Hit, PaletteEntity, hits, palette_rows
-from eawf.surfaces.tui.console.registry import REGISTRY, route_for_id
+from eawf.surfaces.tui.console.registry import COLLECTION_ROUTES, REGISTRY, route_for_id
 
 # Entities the prototype registers do not carry, so every route stays reachable by name.
 PALETTE_NAMED: tuple[PaletteEntity, ...] = (
@@ -16,14 +19,26 @@ PALETTE_NAMED: tuple[PaletteEntity, ...] = (
 )
 
 
-def entities(fixture: Fixture) -> list[PaletteEntity]:
+def entities(fixture: Fixture, rows: Sequence[ProjectionRow] = ()) -> list[PaletteEntity]:
     """Return every entity the palette can open: fleet Runs, stored records, named entities.
 
     The named entities are the prototype's own, so a fixture holding no prototype rows
-    names none of them.
+    names none of them. A linked console names the spine records its held projections
+    carry first -- Tracks, Milestones, Batches, Tasks, Runs, Campaigns -- each opening the
+    route its own collection lives on.
+
+    Args:
+        fixture: The registers.
+        rows: Every row the link's held projections carry; empty with no link.
     """
     out: list[PaletteEntity] = []
     seen: set[str] = set()
+    for held in rows:
+        route = COLLECTION_ROUTES.get(held.collection)
+        if route is not None and held.key not in seen:
+            seen.add(held.key)
+            what = held.title or REGISTRY.route_word(route)
+            out.append(PaletteEntity(id=held.key, route=route, what=what))
     for row in fixture.proto.fleet:
         if row.run and row.run not in seen:
             seen.add(row.run)
@@ -43,13 +58,14 @@ def entities(fixture: Fixture) -> list[PaletteEntity]:
     return out
 
 
-def palette_hits(query: str, fixture: Fixture) -> list[Hit]:
-    """Return the palette rows ``query`` selects."""
-    return hits(query, entities(fixture))
+def palette_hits(query: str, fixture: Fixture, rows: Sequence[ProjectionRow] = ()) -> list[Hit]:
+    """Return the palette rows ``query`` selects, over the held ``rows`` as well."""
+    return hits(query, entities(fixture, rows))
 
 
 def render(view: View) -> list[str]:
     """Return the palette overlay."""
     s, w, h = view.session, view.w, view.h
-    rows = [header(view, CRUMB), *palette_rows(s, palette_hits(s.pq, view.fixture), w=w, h=h)]
+    found = palette_hits(s.pq, view.fixture, view.rows)
+    rows = [header(view, CRUMB), *palette_rows(s, found, w=w, h=h)]
     return build(view, rows, keybar(PAIRS, w))

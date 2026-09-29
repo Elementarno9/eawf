@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from eawf.kernel.projection.spine import SpineView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import (
@@ -29,7 +30,7 @@ from eawf.surfaces.tui.console.frame import (
 from eawf.surfaces.tui.console.keybar import pick
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.campaign import CLAIM, window
-from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY
+from eawf.surfaces.tui.console.renderers.read_model import NOTHING_TO_COPY, absent_card
 from eawf.surfaces.tui.console.renderers.spine import held, native_frame
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
@@ -81,7 +82,7 @@ def _activity(view: View, acts: list[Any], on_history: bool, running: bool) -> l
         return [lab("ACTIVITY", "∅ Nothing to show — the step has not started.")]
     head = _ACTIVITY.head(["", "AT", "WHAT HAPPENED"])
     rows = [_head_row("ACTIVITY" if running else "HISTORY", head)]
-    cap = 8 if w >= 160 else 5 if w >= 120 else 2
+    cap = 8 if view.xwide else 5 if view.wide else 2
     win = window(len(acts), cap, s.hist_sel if on_history else 0, on_history)
     if win.above:
         rows.append(_receded(_ACTIVITY.row(["", "", f"… {win.above} earlier"], False, w), w))
@@ -117,8 +118,17 @@ def _products(view: View, made: list[str], on_history: bool, running: bool) -> l
 def render(view: View) -> list[str]:
     """Return the campaign step card, native when a read model is held."""
     spine = held(view)
-    if spine is not None:
+    if spine is not None and spine.rows:
         return native_frame(view, spine)
+    if spine is not None:
+        return absent_card(
+            view,
+            spine,
+            steps=("Research", "Step"),
+            what="step",
+            unstated=spine.unproduced(),
+            keys=pick(_ROUTE, "back"),
+        )
     s, fx, w = view.session, view.fixture, view.w
     reg = fx.registers
     i = step_index(s, fx)
@@ -208,7 +218,8 @@ def _open_product(ctx: Ctx, step: Sequence[Any]) -> bool:
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Handle the step card's regions and open a product from the step that made it."""
     s = ctx.s
-    if s.route != "campaign.step":
+    # a held read model draws the absent card, which has no region, line or product
+    if s.route != "campaign.step" or isinstance(ctx.projection, SpineView):
         return False
     reg = ctx.fixture.registers
     i = step_index(s, ctx.fixture)

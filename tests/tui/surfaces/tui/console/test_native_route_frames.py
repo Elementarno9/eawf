@@ -41,6 +41,7 @@ from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.verification import RuntimeTupleVerdict, build_verification_view
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.observability.doctor.models import CheckResult
+from eawf.surfaces.tui.console.cells import NO_VALUE
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
@@ -51,9 +52,11 @@ from eawf.surfaces.tui.console.renderers.campaign import replay_line
 from eawf.surfaces.tui.console.renderers.crash_recovery import doors
 from eawf.surfaces.tui.console.renderers.health import NOTHING_TO_REPAIR, checks_line, checks_of
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD
-from eawf.surfaces.tui.console.renderers.scope_home import NO_TRACK, tree_of
+from eawf.surfaces.tui.console.renderers.run_detail import TIMELINE_HEAD
+from eawf.surfaces.tui.console.renderers.scope_home import NO_TRACK, groups_of, tree_of
 from eawf.surfaces.tui.console.renderers.search import matched
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
+from eawf.surfaces.tui.console.width import pad
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
@@ -213,7 +216,7 @@ def test_no_packet_route_draws_the_generic_table(route: str, w: int) -> None:
     assert not any(re.match(r"^\s+ROW\s+KIND\s+STATUS", row) for row in frame)
     assert not any(row.startswith((" UNSTATED", " WAITING", " REGIONS")) for row in frame)
     assert frame[0].startswith(f" Eä ▸ {SCOPE}")
-    assert "cursor 41,208" in frame[1] or (route == "attention" and w == 80)
+    assert "cursor" not in frame[1]
 
 
 # ---------- UI-020 / UI-063: the trust route ----------
@@ -226,18 +229,7 @@ def test_ui_020_trust_is_bound_to_its_read_model_and_draws_the_three_groups() ->
     assert re.match(r"^\s+JURY\s+VERDICT\s+ANSWERED BY\s+FRESHNESS", frame[3])
     for group in (" CALIBRATION", " TRACK RECORD"):
         assert any(row.startswith(group) for row in frame)
-    assert frame[-1].split() == [
-        "↑↓",
-        "field",
-        "Enter",
-        "evidence",
-        ".",
-        "actions",
-        "i",
-        "inspect",
-        "Esc",
-        "back",
-    ]
+    assert frame[-1].split() == ["Enter", "evidence", ".", "actions", "i", "inspect", "Esc", "back"]
 
 
 def test_ui_063_an_unobserved_subject_is_unknown_never_a_negative() -> None:
@@ -375,16 +367,8 @@ def test_ui_065_the_repair_is_named_at_the_foot_and_never_run() -> None:
     assert "running it lives in settings" in frame[-2]
     passing = _starts(_frame("health", verdicts=VERDICTS, sel=0), " REPAIR")
     assert NOTHING_TO_REPAIR in passing
-    assert _frame("health")[-1].split() == [
-        "↑↓",
-        "check",
-        "Enter",
-        "detail",
-        "\\",
-        "filter",
-        "Esc",
-        "back",
-    ]
+    # the focused check's detail is the docked readout itself, so Enter offers nothing more
+    assert _frame("health")[-1].split() == ["Esc", "back"]
 
 
 @pytest.mark.parametrize(("w", "runner"), [(80, False), (120, True)])
@@ -423,18 +407,7 @@ def test_ui_066_a_policy_is_cited_in_the_packet_form() -> None:
     assert "sandbox policy · rev 3" in _text(frame)
     assert "pol-" not in _text(frame) and "fs.write.scope" not in _text(frame)
     assert frame.index(_starts(frame, " DECISION")) == len(frame) - 3
-    assert frame[-1].split() == [
-        "↑↓",
-        "row",
-        "Enter",
-        "run",
-        "\\",
-        "filter",
-        "p",
-        "policy",
-        "Esc",
-        "back",
-    ]
+    assert frame[-1].split() == ["p", "policy", "Esc", "back"]
 
 
 # ---------- UI-023 / UI-067: the unattended route ----------
@@ -463,17 +436,12 @@ def test_ui_023_the_route_observes_and_names_the_daemon_as_authority() -> None:
     assert "derived from the dependency graph" in _starts(frame, " PLAN")
     assert DISPATCH_QUEUE_PRODUCER in _text(frame)
     assert "every verb is a daemon request" in _starts(frame, " CONTROL")
+    # no dispatch-queue record is read yet, so a pause or drain has nothing to address
     assert frame[-1].split() == [
         "↑↓",
         "row",
         "Enter",
         "run",
-        "a",
-        "request",
-        "pause",
-        "d",
-        "request",
-        "drain",
         "Esc",
         "back",
     ]
@@ -495,18 +463,7 @@ def test_ui_045_repository_facts_render_unavailable_never_clean() -> None:
     checks = _starts(frame, " CHECKS")
     assert UNKNOWN_WORD in checks and "pass" not in checks.replace("passed", "")
     assert "happen in your git tool" in _starts(frame, " ACTION")
-    assert frame[-1].split() == [
-        "↑↓",
-        "row",
-        "Enter",
-        "commit",
-        "m",
-        "conflict",
-        "y",
-        "copy",
-        "Esc",
-        "back",
-    ]
+    assert frame[-1].split() == ["m", "conflict", "y", "copy", "Esc", "back"]
 
 
 # ---------- UI-046: the cost.ceiling route ----------
@@ -520,7 +477,7 @@ def test_ui_046_the_ceiling_observes_and_no_zero_stands_for_unpriced() -> None:
     assert "∅ unmetered" in _text(frame)
     assert "80%" not in _text(frame) and "eighty" not in _text(frame)
     assert "ceiling moves in settings" in _starts(frame, " AUTHORITY")
-    assert frame[-1].split() == ["↑↓", "row", "Enter", "run", "Esc", "back"]
+    assert frame[-1].split() == ["Esc", "back"]
 
 
 # ---------- UI-047: the crash.recovery route ----------
@@ -537,7 +494,7 @@ def test_ui_047_three_doors_each_state_where_they_leave_the_console() -> None:
     assert "2 runs were active then" in _text(frame)
     assert len([row for row in frame if re.search(r"(reattach|replay|read-only)\s+\?", row)]) == 3
     assert "No door discards work" in _starts(frame, " NO LOSS")
-    assert frame[-1].split() == ["↑↓", "door", "Enter", "choose", "i", "inspect", "Esc", "later"]
+    assert frame[-1].split() == ["↑↓", "door", "i", "inspect", "Esc", "later"]
 
 
 @pytest.mark.parametrize(("sel", "door"), [(0, "reattach"), (2, "read-only"), (9, "read-only")])
@@ -551,31 +508,20 @@ def test_ui_047_the_chosen_readout_follows_the_cursor(sel: int, door: str) -> No
 
 def test_ui_048_matched_names_the_field_the_query_was_found_in() -> None:
     row = _model("search").rows[0]
-    assert matched(row, "") == "every record"
-    assert matched(row, "trk-core") == "key"
-    assert matched(row, "framework") == "title"
+    assert matched(row, "") == NO_VALUE
+    assert matched(row, "trk-core") == "id"
+    assert matched(row, "framework") == "name"
     assert matched(row, "nowhere") is None
 
 
 def test_ui_048_hits_counts_by_kind_and_the_window_line() -> None:
     frame = _frame("search", query="cut")
-    assert "1 milestone" in _starts(frame, " KINDS")
+    assert _starts(frame, " KINDS").split()[1:] == ["milestones", "1"]
     assert "MLS-0101" in _text(frame) and "MLS-0100" not in _text(frame)
     window = _starts(frame, " WINDOW")
     assert "1 of 1 · sorted by kind, then id · every count exact" in window
     assert "event text is not searched" in _starts(frame, " SCOPE")
-    assert frame[-1].split() == [
-        "↑↓",
-        "hit",
-        "Enter",
-        "drill",
-        "\\",
-        "refine",
-        "k",
-        "kind",
-        "Esc",
-        "back",
-    ]
+    assert frame[-1].split() == ["Enter", "drill", "Esc", "back"]
 
 
 def test_ui_048_a_query_nothing_carries_is_zero_hits_stated() -> None:
@@ -605,18 +551,7 @@ def test_ui_049_one_entity_at_two_of_its_own_revisions() -> None:
     assert "COMPLETED" in field and field.count(UNKNOWN_WORD) == 2
     assert "system" not in _text(frame)
     assert "counted here, never hidden" in _starts(frame, " UNCHANGED")
-    assert frame[-1].split() == [
-        "↑↓",
-        "field",
-        "Enter",
-        "field",
-        "e",
-        "entity",
-        "p",
-        "revisions",
-        "Esc",
-        "back",
-    ]
+    assert frame[-1].split() == ["Enter", "field", "e", "entity", "p", "revisions", "Esc", "back"]
 
 
 def test_ui_049_a_first_revision_has_nothing_to_pair() -> None:
@@ -690,11 +625,16 @@ def test_ui_073_the_campaign_frame_heads_with_the_replay_only_while_replaying() 
 
 
 def test_home_nests_each_milestone_under_its_track_with_title_and_progress() -> None:
-    tree = tree_of(_model("scope.home"))
-    assert [(t.row.key if t.row else None, t.depth) for t in tree] == [
+    groups = groups_of(_model("scope.home"))
+    assert [(t.row.key if t.row else None, t.depth) for t in tree_of(groups, 0)] == [
         ("TRK-CORE", 0),
         ("MLS-0100", 1),
         ("MLS-0101", 1),
+        (None, 0),
+    ]
+    # only the focused group expands; the unfiled group opens when the cursor is in it
+    assert [(t.row.key if t.row else None, t.depth) for t in tree_of(groups, 1)] == [
+        ("TRK-CORE", 0),
         (None, 0),
         ("MLS-0900", 1),
     ]
@@ -703,10 +643,11 @@ def test_home_nests_each_milestone_under_its_track_with_title_and_progress() -> 
     track = next(row for row in frame if "TRK-CORE" in row)
     assert "Core framework" in track and "1 of 2 milestones done" in track
     leaf = next(row for row in frame if "MLS-0100" in row)
-    assert leaf.startswith("     MLS-0100 Close out the canary")
-    assert "ACTIVE" in leaf and "1 of 2 batches done" in leaf
+    # the cursor lands on the first Milestone leaf, never on the Track above it
+    assert leaf.startswith("   ▸ MLS-0100 Close out the canary")
+    assert "ACTIVE" in leaf and "batches done" not in leaf
     assert NO_TRACK in _text(frame)
-    assert "1 track · 3 milestones · 2 batches · cursor 41,208" in frame[1]
+    assert frame[1].rstrip() == " 1 track · 3 milestones · 2 batches"
 
 
 def test_home_attention_region_states_why_it_has_no_count() -> None:
@@ -733,7 +674,7 @@ def test_home_restores_the_selection_by_id_through_the_tree() -> None:
     frame = render_route(view)
     caret = next(row for row in frame[3:] if row.lstrip().startswith("▸ "))
     assert "MLS-0900" in caret
-    assert (session.sel, session.sel_id) == (4, "MLS-0900")
+    assert (session.sel, session.sel_id) == (2, "MLS-0900")
 
 
 @pytest.mark.parametrize("w", [80, 120, 160])
@@ -773,7 +714,7 @@ def test_run_frame_draws_one_runs_facts_under_its_task() -> None:
     assert frame[1].startswith(" Run RUN-00000001 · RUNNING")
     for label in (" STATE", " TASK", " PROVIDER", " USAGE", " CONTROLS", " LINEAGE"):
         assert any(row.startswith(label) for row in frame), label
-    assert re.match(r"^\s+TIMELINE\s+EVENT\s+DETAIL", next(r for r in frame if "TIMELINE" in r))
+    assert frame[3] == pad(TIMELINE_HEAD, len(frame[3])), "the timeline pane comes first"
 
 
 def test_run_frame_with_no_run_says_so() -> None:
@@ -818,7 +759,7 @@ def test_the_journeys_draw_the_packet_layouts_live_over_a_served_tree(tmp_path: 
     assert tracks and milestones
     for milestone in milestones:
         leaf = next(row for row in home if milestone.key in row)
-        assert leaf.startswith(f"     {milestone.key}")
+        assert re.match(rf"^   [▸ ] {milestone.key}", leaf)
         assert milestone.status.value in leaf
     activity = frames["activity"].splitlines()
     assert any(re.match(r"^\s+RUN\s+TASK\s+STATE\s+REASON\s+AS OF", row) for row in activity)

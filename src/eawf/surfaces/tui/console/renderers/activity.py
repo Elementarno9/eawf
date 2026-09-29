@@ -32,23 +32,28 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
+    recede_rail,
     route_keys_bar,
     thin,
     window_rows,
 )
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.reads import prototype_attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
+    label,
     native_head,
     route_crumb,
 )
-from eawf.surfaces.tui.console.width import pad
+from eawf.surfaces.tui.console.width import cell_len, pad
 
 RAIL_W = 29
+#: The rail's count column, the count set against its right edge.
+_COUNT_W = 4
 _AS_OF_W = 6
 _FOOTER = 2
 _COL_HEAD = 1
@@ -109,7 +114,7 @@ def _with_rail(view: View, body: list[str], col: int) -> list[str]:
         bucket = buckets[ri - 1] if 0 < ri <= len(buckets) else None
         receded = bool(bucket and s.bucket and bucket.key != s.bucket)
         raw = pad(left + "│ " + right, w)
-        out.append(Fixed(raw) if receded else raw)
+        out.append(recede_rail(raw, w) if receded else raw)
     return out
 
 
@@ -124,30 +129,76 @@ def bucket_items(grouping: ActivityGrouping) -> list[dv.StripItem]:
     ]
 
 
-def rail_lines(grouping: ActivityGrouping) -> list[str]:
-    """Return the bucket rail: its head, then every bucket, the sub-buckets indented."""
+def rail_lines(grouping: ActivityGrouping, bucket: str | None) -> list[str]:
+    """Return the bucket rail: its head, then every bucket, the sub-buckets indented.
+
+    The chosen bucket carries the caret, so the rail says which bucket the list shows
+    even when that bucket is empty; its sub-buckets are part of it and carry none.
+    """
+    label_w = RAIL_W - 2 - _COUNT_W
     return [
         "BUCKETS",
         *(
-            f" {pad(('  ' if c.sub else '') + c.label, 24)}{value_cell(c.count).slot}"
+            ("▸" if not c.sub and c.bucket.value == bucket else " ")
+            + pad(("  " if c.sub else "") + c.label, label_w)
+            + _count_cell(value_cell(c.count).slot)
             for c in grouping.counts
         ),
     ]
 
 
-def beside(body: list[str], rail: list[str], col: int, w: int) -> list[str]:
-    """Return ``body`` set in ``col`` cells with ``rail`` drawn beside it past a rule."""
-    return [
-        Fixed(
-            pad(
-                pad(body[i] if i < len(body) else "", col)
-                + "│ "
-                + (rail[i] if i < len(rail) else ""),
-                w,
-            )
+def _count_cell(slot: str) -> str:
+    """Return a count set against the right edge of its column, so the digits line up."""
+    return " " * max(0, _COUNT_W - cell_len(slot)) + slot
+
+
+def rail_receded(grouping: ActivityGrouping, bucket: str | None) -> frozenset[int]:
+    """Return the rail rows that recede: every bucket but the chosen one, once one is.
+
+    A sub-bucket is part of its bucket, so it recedes with it; the head never does.
+    """
+    if bucket is None:
+        return frozenset()
+    return frozenset(i for i, c in enumerate(grouping.counts, start=1) if c.bucket.value != bucket)
+
+
+def bucket_seam(ctx: Ctx, key: str, shift: bool) -> bool:
+    """Cycle Tab over the buckets the native frame drew, ``all`` after the last.
+
+    The prototype frame publishes no bucket keys, so its Tab stays the dispatcher's.
+    """
+    s = ctx.s
+    keys = s.bucket_keys
+    if key != "Tab" or keys is None or busy(s):
+        return False
+    at = keys.index(s.bucket) if s.bucket in keys else 0
+    s.bucket = keys[(at + (-1 if shift else 1)) % len(keys)]
+    s.sel, s.sel_id, s.scroll = 0, None, 0
+    ctx.log("Tab", f"bucket → {s.bucket or 'all'}")
+    return True
+
+
+def beside(
+    body: list[str],
+    rail: list[str],
+    col: int,
+    w: int,
+    *,
+    receded: frozenset[int] = frozenset(),
+) -> list[str]:
+    """Return ``body`` set in ``col`` cells with ``rail`` drawn beside it past a rule.
+
+    The rail rows whose offsets are in ``receded`` are painted receded, the body beside
+    them untouched.
+    """
+    out: list[str] = []
+    for i in range(max(len(body), len(rail))):
+        line = pad(
+            pad(body[i] if i < len(body) else "", col) + "│ " + (rail[i] if i < len(rail) else ""),
+            w,
         )
-        for i in range(max(len(body), len(rail)))
-    ]
+        out.append(recede_rail(line, w) if i in receded else Fixed(line))
+    return out
 
 
 #: What a Run waits for, read as the reason Activity gives: each suspension names the fact
@@ -252,6 +303,11 @@ def empty_lines(view: View, register: RegisterView) -> list[str]:
     """
     s = view.session
     revision = group(int(register.source_cursor))
+    if register.rows and s.bucket and not dv.filter_of(s):
+        return [
+            f"   nothing in {s.bucket} · {len(register.rows)} runs are in other buckets",
+            "   Esc clears the bucket",
+        ]
     if register.rows and (s.bucket or dv.filter_of(s)):
         return [
             f"   nothing matches the filter · {len(register.rows)} runs hidden",
@@ -283,20 +339,22 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     found = next((i for i, row in enumerate(shown) if row.key == s.sel_id), None)
     cursor = found if found is not None else min(max(s.sel, 0), max(len(shown) - 1, 0))
     s.sel, s.sel_id = cursor, (shown[cursor].key if shown else None)
-    wide = REGISTRY.rail_at(s.route, w) is not None
+    wide = REGISTRY.rail_at(s.route, view.columns) is not None
     col = w - RAIL_W - 1 if wide else w
     grouping = group_runs(register)
     top = native_head(
-        view, register, crumb_text=route_crumb(register, "Activity"), summary=counts(register)
+        view, register, crumb_text=route_crumb(view, register, "Activity"), summary=counts(register)
     )
     if s.typing or dv.filter_of(s):
         typed = "▏" if s.typing else ""
-        top.append(f" FILTER    \\{dv.filter_of(s)}{typed}   Esc clears · Enter keeps")
+        top.append(label("FILTER", f"\\{dv.filter_of(s)}{typed}   Esc clears · Enter keeps"))
+    items = bucket_items(grouping)
+    s.bucket_keys = [item.key for item in items]
     if not wide:
-        top.append(dv.strip_row(s, bucket_items(grouping), w))
+        top.append(dv.strip_row(s, items, w, lead=label("BUCKETS")))
     unstated = grouping.unbucketed
     if unstated:
-        top.append(f" UNBUCKETED {unstated} in no bucket · the row states no status")
+        top.append(label("UNBUCKETED", f"{unstated} in no bucket · the row states no status"))
     task_w = max(14, (col - 16 - 12 - _AS_OF_W) // 2)
     cols = [16, task_w, 12, max(12, col - 16 - task_w - 12 - _AS_OF_W - 1)]
     table = Table([cols[0] - 3, cols[1], cols[2], cols[3], 0], 2)
@@ -317,10 +375,13 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     if not shown:
         body.extend(empty_lines(view, register))
     if wide:
-        body = beside(body, rail_lines(grouping), col, w)
+        receded = rail_receded(grouping, s.bucket)
+        body = beside(body, rail_lines(grouping, s.bucket), col, w, receded=receded)
     matching = " matching" if (s.bucket or dv.filter_of(s)) else ""
-    rows = [*top, *body, thin(w), win.line(complete=register.complete) + matching]
-    return build(view, rows, route_keys_bar(view, native_keys(s.route)))
+    # a WINDOW row owes the operator only the rows it hides
+    foot = [thin(w), win.line(complete=register.complete) + matching] if win.hides else []
+    rows = [*top, *body, *foot]
+    return build(view, rows, route_keys_bar(view, native_keys(s.route, windowed=s.windowed)))
 
 
 def render(view: View) -> list[str]:
@@ -331,7 +392,7 @@ def render(view: View) -> list[str]:
     rows_all = _rows(view)
     if s.sel >= len(rows_all):
         s.sel = max(0, len(rows_all) - 1)
-    wide = REGISTRY.rail_at("activity", w) is not None
+    wide = REGISTRY.rail_at("activity", view.columns) is not None
     col = w - RAIL_W - 1
     rd = reads(s)
     head_rows = _head(view, wide)

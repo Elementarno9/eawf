@@ -13,6 +13,7 @@ read model held the route draws its epoch-1 frame, which the golden contract rep
 
 from __future__ import annotations
 
+import textwrap
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -29,13 +30,16 @@ from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.derive import plural
 from eawf.surfaces.tui.console.format import clock_time, group
 from eawf.surfaces.tui.console.frame import (
+    Breadth,
     Fixed,
     View,
+    acting_pairs,
     bar,
     build,
     g_frame,
     g_pad,
     needs_count,
+    scope_label,
     snap_caret,
     strip_chips,
     thin,
@@ -43,7 +47,12 @@ from eawf.surfaces.tui.console.frame import (
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy
-from eawf.surfaces.tui.console.renderers.read_model import crumb, native, unstated_rows
+from eawf.surfaces.tui.console.renderers.read_model import (
+    crumb,
+    native,
+    route_crumb,
+    unstated_rows,
+)
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import cell_len, pad
 
@@ -128,7 +137,7 @@ def _running(block: Block) -> bool:
     return bool(block.get("run") or block.get("runS") is not None)
 
 
-def _right(block: Block, *, is_open: bool, hidden: int, w: int) -> str:
+def _right(block: Block, *, is_open: bool, hidden: int, wide: bool) -> str:
     """Return a block head's right-hand note: its duration, wait, fold or finish."""
     run_s = block.get("runS")
     dur = block.get("run") or (fmt_dur(run_s) if run_s is not None else None)
@@ -136,7 +145,7 @@ def _right(block: Block, *, is_open: bool, hidden: int, w: int) -> str:
     wait = block.get("wait") or (f"waiting {fmt_dur(wait_s)}" if wait_s is not None else None)
     if _running(block) and block.get("bg") != "done":
         fold = ("▾ " if is_open else "▸ ") if block.get("body") else ""
-        est = f"{dur} · {block['est']}" if block.get("est") and w >= 120 else str(dur)
+        est = f"{dur} · {block['est']}" if block.get("est") and wide else str(dur)
         return fold + est
     if wait:
         return str(wait)
@@ -157,7 +166,7 @@ def _lines(view: View, blocks: Sequence[Block]) -> list[Line]:
         lead = ("»" if background else "⋯") if flight else TR_GLYPH[block["k"]]
         word = ("background" if background else "running") if flight else block["k"]
         head = f" {block['at']}  {lead} " + pad(word, 11)
-        right = _right(block, is_open=is_open, hidden=hidden_lines(block, w), w=w)
+        right = _right(block, is_open=is_open, hidden=hidden_lines(block, w), wide=view.wide)
         room = (w - 2) - cell_len(head) - (cell_len(right) + 2 if right else 0) - 1
         wrapped = _wrap_to(block["text"], room)
         shown = wrapped if is_open else wrapped[:PREVIEW]
@@ -217,15 +226,15 @@ def _state(view: View, blocks: Sequence[Block]) -> str:
 
 
 def _context(view: View, blocks: Sequence[Block]) -> str:
-    s, w = view.session, view.w
+    s = view.session
     background = sum(1 for b in blocks if b.get("bg") == "running")
-    where = " running in the background" if w >= 120 else " in background"
+    where = " running in the background" if view.wide else " in background"
     return (
         f"Run {RUN_ID} · {_state(view, blocks)}"
         + (f" · {background}{where}" if background else "")
         + " · "
         + ("following" if s.follow else "held")
-        + (f" · {len(blocks)} blocks" if w >= 120 else "")
+        + (f" · {len(blocks)} blocks" if view.wide else "")
     )
 
 
@@ -310,8 +319,6 @@ PURGED_MARK = "✗ purged"
 
 # The kind column's width: the longest kind word and its gap.
 _KIND_W = 11
-# The width from which a derived typical duration is shown, and from which it is labelled.
-_TYPICAL_AT, _TYPICAL_WORD_AT = 120, 160
 
 
 def _purged_text(purged: PurgedRange) -> str:
@@ -356,20 +363,21 @@ def _seconds(block: TranscriptBlock, to: datetime | None) -> int:
 
 
 def _note(
-    block: TranscriptBlock, *, hidden: int, is_open: bool, to: datetime | None, w: int
+    block: TranscriptBlock, *, hidden: int, is_open: bool, to: datetime | None, breadth: Breadth
 ) -> str:
     """Return a block head's right-hand note: its elapsed, its fold or its hole.
 
     A block in flight states how long it has run and, where width allows, how long its
-    kind of work usually takes -- a derived comparison, never a countdown.
+    kind of work usually takes -- a derived comparison, never a countdown: the wide
+    layout shows it and the widest labels it.
     """
     if block.purged is not None:
         return PURGED_MARK
     if block.in_flight:
         text = fmt_dur(_seconds(block, to))
-        if block.typical_seconds is not None and w >= _TYPICAL_AT:
+        if block.typical_seconds is not None and breadth >= Breadth.WIDE:
             typical = f"~{fmt_dur(block.typical_seconds)}"
-            text += f" · {typical}" + (" typical" if w >= _TYPICAL_WORD_AT else "")
+            text += f" · {typical}" + (" typical" if breadth is Breadth.XWIDE else "")
         return text
     if hidden:
         return f"▾ {hidden} lines" if is_open else f"▸ {hidden} lines"
@@ -400,12 +408,12 @@ def _layout(view: View, model: TranscriptReadModel, index: int) -> tuple[str, li
     head = f" {clock_time(block.at)}  {NATIVE_GLYPH.get(word, UNGLYPHED)} " + pad(word, _KIND_W)
     room = max(8, (w - 2) - cell_len(head) - 1)
     to = reference(view, model)
-    fixed = _note(block, hidden=0, is_open=False, to=to, w=w)
+    fixed = _note(block, hidden=0, is_open=False, to=to, breadth=view.breadth)
     reserve = cell_len(fixed) + 2 if fixed else _FOLD_NOTE_W
     wrapped = _wrap_two(_block_text(block), max(4, room - reserve), room)
     hidden = max(0, len(wrapped) - PREVIEW)
     is_open = bool(folds(view.session).get(index))
-    return head, wrapped, _note(block, hidden=hidden, is_open=is_open, to=to, w=w)
+    return head, wrapped, _note(block, hidden=hidden, is_open=is_open, to=to, breadth=view.breadth)
 
 
 def _native_block_lines(view: View, model: TranscriptReadModel, index: int) -> list[str]:
@@ -448,7 +456,12 @@ def native_context(view: View, model: TranscriptReadModel) -> str:
     elif held is not None:
         state = f"RUNNING for {fmt_dur(_seconds(held, to))}"
     else:
-        state = "nothing running"
+        # nothing in flight says nothing about the Run itself, so its register status is
+        # stated beside it rather than a claim that nothing runs
+        found = model.index_of(run)
+        stored = value_cell(model.rows[found].field("status")).slot if found is not None else None
+        quiet = "nothing in flight" if model.blocks else "no event recorded yet"
+        state = f"{stored} · {quiet}" if stored else quiet
     background = sum(1 for b in going if b.background or b.lane == "subagent")
     parts = [f"Run {run}", state]
     if background:
@@ -457,11 +470,12 @@ def native_context(view: View, model: TranscriptReadModel) -> str:
     return " · ".join(parts)
 
 
-def _state_rows(model: TranscriptReadModel) -> list[str]:
+def _state_rows(model: TranscriptReadModel, w: int) -> list[str]:
     """Return the state row, and the thinking cell's reason under it when the cell is marked.
 
     The state row carries the thinking cell as its token and word, its label and what the
-    run reaches; the reason goes on its own row so it never pushes those off the frame.
+    run reaches; the reason goes on its own rows, wrapped at the frame width rather than
+    cut, and without the state word the row above already printed.
     """
     thinking = value_cell(model.thinking)
     parts = [
@@ -474,8 +488,15 @@ def _state_rows(model: TranscriptReadModel) -> list[str]:
         parts.append(f"{group(model.quarantined)} quarantined")
     rows = [" STATE     " + " · ".join(parts)]
     if thinking.reason:
-        rows.append(f"           {thinking.reason}")
+        indent = " " * 11
+        rows.extend(indent + line for line in textwrap.wrap(thinking.basis, width=max(8, w - 12)))
     return rows
+
+
+def _crumb(view: View, model: TranscriptReadModel) -> str:
+    """Return the crumb through the Run to the Transcript leaf, as the Run frame's climbs."""
+    run = view.session.subj_id
+    return route_crumb(view, model, run, "Transcript") if run else crumb(view, model)
 
 
 def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
@@ -497,11 +518,15 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     sel = cursor(session, len(model.blocks))
     opening: list[str] = [
         header_row(
-            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+            session,
+            crumb=_crumb(view, model),
+            scope=scope_label(view, model.scope_id),
+            needs=needs_count(view),
+            w=w,
         ),
         Fixed(pad(" " + native_context(view, model), w)),
         bar(w),
-        *_state_rows(model),
+        *_state_rows(model, w),
         thin(w),
     ]
     closing: list[str] = [thin(w), *unstated_rows(model)]
@@ -532,7 +557,11 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     else:
         body.append(f" BLOCKS    {NO_BLOCK}")
     rows = [*opening, *(Fixed(pad(strip_chips(row), w)) for row in body), *closing]
-    return build(view, rows, keybar(list(_KEYS), w))
+    session.nav_rows = len(model.blocks)
+    folded = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
+    # Enter folds the block under the caret, so a block with nothing folded offers nothing
+    pairs = [pair for pair in _KEYS if folded or pair[0] != "Enter"]
+    return build(view, rows, keybar(acting_pairs(view, pairs), w))
 
 
 def render(view: View) -> list[str]:
@@ -556,7 +585,7 @@ def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
         ctx.log(key, f"{block.lane} · {clock_time(block.at)}" if block else "no block")
         return True
     if key == "Enter":
-        view = View(session=s, fixture=ctx.fixture, w=ctx.w, h=ctx.h)
+        view = View(session=s, fixture=ctx.fixture, w=ctx.w, h=ctx.h, gutter=ctx.gutter)
         n = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
         if not n:
             ctx.log("Enter", "this block has nothing folded away")

@@ -67,7 +67,9 @@ from tests.tui.surfaces.tui.console import test_native_route_frames as frames
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
-ROUTE = "scope.home"
+#: A route whose every row takes the cursor: scope home's Track rows are containers the
+#: cursor never lands on, so the selection-by-id suite walks the Track route instead.
+ROUTE = "track"
 
 #: The six routes the spine binds: the five a projection carries, and the entry layer.
 BOUND_ROUTES: tuple[str, ...] = (ENTRY_ROUTE, *SPINE_ROUTES)
@@ -258,7 +260,7 @@ def test_the_run_frame_draws_its_timeline_region() -> None:
     session.route = "run.detail"
     rows = _render(spine, session)
     assert REGISTRY.focus_regions["run.detail"] == ("timeline",)
-    assert any(row.startswith("   TIMELINE") for row in rows)
+    assert rows[3].startswith(" TIMELINE"), "the timeline pane opens the frame"
 
 
 @pytest.mark.parametrize("route", TABLE_ROUTES)
@@ -369,7 +371,7 @@ def test_restore_publishes_the_selected_id_for_the_next_patch() -> None:
 def test_a_patch_for_another_route_does_not_reach_this_seam() -> None:
     """One feed carries every route; a patch that is not ours changes nothing."""
     seam = _seam_holding(_projection())
-    other = _patch("TRK-0001", sequence=41209).model_copy(update={"routes": ("track",)})
+    other = _patch("TRK-0001", sequence=41209).model_copy(update={"routes": ("scope.home",)})
     asyncio.run(seam.apply_patch(other))
     assert [row.key for row in seam.projection.rows] == ["TRK-0002", "TRK-0003", "TRK-0004"]
 
@@ -852,15 +854,14 @@ def test_con_028_every_tab_stop_is_a_region_the_registry_declares(route: str) ->
     assert sorted(stops) == sorted(regions_of(route))
 
 
-def test_con_028_the_native_home_frame_tabs_through_its_declared_regions() -> None:
-    """CON-028: with a read model held, Tab on home is the registry's region cycle."""
+def test_con_028_the_native_home_frame_keeps_the_focus_with_nothing_waiting() -> None:
+    """CON-028: with nothing in the attention list, Tab on home has no list to focus."""
     spine = build_spine_view(_projection())
     session = Session()
-    session.route = ROUTE
-    _press(session, "Tab", projection=spine)
-    assert focused_region(session) == "attention"
+    session.route = "scope.home"
     _press(session, "Tab", projection=spine)
     assert focused_region(session) == "outcomes"
+    assert session.log[0].note == "nothing is waiting — no list to focus"
 
 
 def test_con_028_a_one_region_route_has_no_tab_stop() -> None:

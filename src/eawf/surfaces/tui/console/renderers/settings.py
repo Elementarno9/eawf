@@ -287,8 +287,8 @@ class _Layout:
     value_w: int
 
     @classmethod
-    def at_width(cls, w: int) -> _Layout:
-        rail_w = 14 if w < 120 else 17
+    def at_width(cls, w: int, *, wide: bool) -> _Layout:
+        rail_w = 17 if wide else 14
         col = w - rail_w - 2
         key_w = min(38, max(24, col - 24))
         return cls(rail_w, col, key_w, col - key_w - 3)
@@ -439,12 +439,12 @@ def _strip(cfg: SettingsCatalog) -> str:
 
 
 def _body(view: View, layout: _Layout, name: str, k: Key | None) -> list[str]:
-    s, cfg, w, h = view.session, view.fixture.settings, view.w, view.h
+    s, cfg, h = view.session, view.fixture.settings, view.h
     col = layout.col
     keys = section_keys(s, cfg)
     total = len(cfg.sections.get(name, []))
     count = "" if len(keys) == total else f"{len(keys)} of {total}"
-    lead = g_pad(" " + name.upper(), 14 if w < 120 else 22) + count + _filter_hint(s)
+    lead = g_pad(" " + name.upper(), 22 if view.wide else 14) + count + _filter_hint(s)
     strip = _strip(cfg)
     body: list[str] = []
     if cell_len(lead) + 3 + cell_len(strip) <= col:
@@ -535,7 +535,7 @@ def _keys(view: View, name: str, k: Key | None) -> list[tuple[str, str]]:
     labels = ["field", "section", "edit", "layer", "unset", "back"]
     if read_only:
         labels = [label for label in labels if label not in ("edit", "unset")]
-    if view.w >= 120:
+    if view.wide:
         labels += ["stack", "filter"]
     return pick("settings", *labels)
 
@@ -550,7 +550,7 @@ def render(view: View) -> list[str]:
     if s.set_key >= len(keys):
         s.set_key = max(0, len(keys) - 1)
     k = cur_key(s, cfg)
-    layout = _Layout.at_width(view.w)
+    layout = _Layout.at_width(view.w, wide=view.wide)
     rows = _with_rail(view, layout, name, _body(view, layout, name, k))
     ctx = (
         f"{len(cfg.cats)} categories · {len(cfg.names)} sections · in {cat_of(cfg, name)} ▸ {name}"

@@ -14,6 +14,7 @@ is the mode the tracked golden contract replays.
 from __future__ import annotations
 
 from eawf.kernel.projection.integration import PULL_REQUEST_PRODUCER, GitPrReadModel
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.format import clock_minute, group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
@@ -22,13 +23,13 @@ from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
     UNKNOWN_WORD,
-    counts,
     finish,
     label,
     more,
     native,
     native_head,
     route_crumb,
+    wrapped,
 )
 
 _COMMITS: tuple[list[str], ...] = (
@@ -75,6 +76,23 @@ def _commit_rows(view: View, model: GitPrReadModel) -> list[str]:
     return rows
 
 
+def _batch_of(view: View, model: GitPrReadModel) -> str | None:
+    """Return the Batch the frame is about: its subject, or the Batch a Run subject is in.
+
+    The light verb opens this route from a Run, and a Run's delivery is its Batch's, so a
+    Run subject is read through the Batch its record is filed under; one whose Batch is
+    not stated names none rather than borrowing another Batch.
+    """
+    subject = view.session.subj_id
+    if subject is None:
+        return model.rows[0].key if model.rows else None
+    run = next(
+        (row for row in view.rows if row.key == subject and row.collection is Epoch2Collection.RUN),
+        None,
+    )
+    return run.facts.get("batch") if run is not None else subject
+
+
 def native_frame(view: View, model: GitPrReadModel) -> list[str]:
     """Return the Git frame drawn from the read model the daemon served.
 
@@ -88,13 +106,13 @@ def native_frame(view: View, model: GitPrReadModel) -> list[str]:
     Returns:
         The full frame, keybar last.
     """
-    session, w = view.session, view.w
-    batch = session.subj_id or (model.rows[0].key if model.rows else None)
+    w = view.w
+    batch = _batch_of(view, model)
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, *([batch] if batch else []), "Git"),
-        summary=f"read only · the console never touches a remote · {counts(model)}",
+        crumb_text=route_crumb(view, model, *([batch] if batch else []), "Git"),
+        summary=(f"{batch or 'no Batch'} · read only · the console never touches a remote"),
     )
     selected = model.selected_generation()
     tip = (
@@ -103,7 +121,9 @@ def native_frame(view: View, model: GitPrReadModel) -> list[str]:
         else f"{UNAVAILABLE} · no generation is this Batch's head"
     )
     body = [
-        label("BRANCH", f"{UNAVAILABLE} · no repository reader states the branch or its drift"),
+        *wrapped(
+            "BRANCH", f"{UNAVAILABLE} · no repository reader states the branch or its drift", w
+        ),
         label("HEAD", tip),
         thin(w),
         *_commit_rows(view, model),

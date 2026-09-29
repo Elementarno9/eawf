@@ -79,7 +79,7 @@ from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.read_model import NO_VERDICT, native
+from eawf.surfaces.tui.console.renderers.read_model import NO_VERDICT, native, noun
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
 
@@ -89,6 +89,10 @@ AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 
 #: The scope every probe projection is built for.
 SCOPE = "EAWF"
+
+#: A requirement row id, such as ``RUN-059``: an internal code that reads as a Run id and
+#: never belongs in an operator-facing reason.
+REQUIREMENT_ID = re.compile(r"\b[A-Z]{2,4}-\d{3}\b")
 
 #: The seven routes this wave binds, verification first.
 BOUND_ROUTES: tuple[str, ...] = (*VERIFICATION_ROUTES, *OPERATIONS_ROUTES)
@@ -383,7 +387,7 @@ def test_the_sandbox_log_names_the_decision_producer_it_waits_on() -> None:
     )
     reason = model.rows[0].field("decision").missing_reason
     assert reason == MISSING_PRODUCER_REASON.format(item=SANDBOX_DECISION_PRODUCER)
-    assert "RUN-059" in str(reason)
+    assert not REQUIREMENT_ID.search(str(reason))
 
 
 def test_the_queue_names_the_dispatch_projection_it_waits_on() -> None:
@@ -391,7 +395,7 @@ def test_the_queue_names_the_dispatch_projection_it_waits_on() -> None:
     model = _view("unattended")
     waiting = {spec.name: spec.missing_producer for spec in model.unproduced()}
     assert waiting == dict.fromkeys(("queue_state", "progress"), DISPATCH_QUEUE_PRODUCER)
-    assert "RUN-060" in str(model.rows[0].field("progress").missing_reason)
+    assert not REQUIREMENT_ID.search(str(model.rows[0].field("progress").missing_reason))
 
 
 def test_a_column_with_no_named_producer_falls_back_to_the_generic_reason() -> None:
@@ -437,19 +441,27 @@ def test_the_frame_draws_one_line_per_read_model_row(route: str) -> None:
     body = "\n".join(rows)
     for row in model.rows:
         assert row.key in body
-        assert row.collection.value[:11] in body
+        assert row.collection.value[:11].replace("_", " ") in body
     assert session.sel_id == (model.rows[0].key if model.rows else None)
 
 
+#: The routes whose line under the header states their own subject rather than a count of
+#: the register they read: Recovery is about the console's lost projection, not the Runs.
+SUBJECT_LINE_ROUTES: frozenset[str] = frozenset({"crash.recovery"})
+
+
 @pytest.mark.parametrize("route", BOUND_ROUTES)
-def test_the_frame_prints_the_derived_counts_and_the_cursor(route: str) -> None:
-    """Every count on the frame is one the view derived, and the cursor is beside them."""
+def test_the_frame_prints_the_derived_counts_and_no_cursor(route: str) -> None:
+    """Every count on the frame is one the view derived; a complete read names no cursor."""
     model = _view(route)
     rows, _session = _frame(model)
     counts = rows[1]
     for name, count in model.counts.items():
-        assert re.search(rf"\b{count} {name}s?\b", counts), counts
-    assert "cursor 41,208" in counts
+        if route in SUBJECT_LINE_ROUTES:
+            assert noun(count, name) not in counts, counts
+        else:
+            assert noun(count, name) in counts, counts
+    assert "cursor" not in counts
 
 
 @pytest.mark.parametrize("route", BOUND_ROUTES)

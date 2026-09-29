@@ -17,12 +17,18 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.keybar import KEY, RECORD_FRAME_KEYS, ROUTE_KEYS, KeyEntry, Pair
+from eawf.surfaces.tui.console.keybar import (
+    KEY,
+    RECORD_FRAME_KEYS,
+    ROUTE_KEYS,
+    KeyEntry,
+    KeyKind,
+    Pair,
+)
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.session import Session
 
 ENTRY_ROUTE = "entry"
-_ARROWS = ("ArrowUp", "ArrowDown")
 # The key that dismisses the rack, accepted by every overlay.
 DISMISS = "-"
 
@@ -144,6 +150,37 @@ MOTION: frozenset[str] = frozenset(
         "Tab",
     }
 )
+#: The keys a route's native frame draws nothing for, so its bar neither advertises nor
+#: binds them: no dated marker for the marker keys to move between, no campaign section
+#: row for Tab to walk, no filter field for
+#: ``\`` to type into, no kind for ``k`` to cycle (``k`` also steps up), no decision record
+#: for Enter to open a Run from, no door the console can take yet, no detail beyond the
+#: docked repair readout, no dispatch-queue record for a pause or drain to address, and no
+#: criteria or Runs region on a Task frame for Tab to move between.
+NATIVE_UNSERVED: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "timeline": frozenset({"ArrowLeft", "ArrowRight"}),
+        "campaign": frozenset({"Tab"}),
+        "history": frozenset({"\\"}),
+        "health": frozenset({"\\", "Enter"}),
+        "search": frozenset({"\\", "k"}),
+        "sandbox.log": frozenset({"\\", "Enter"}),
+        "crash.recovery": frozenset({"Enter"}),
+        "task.detail": frozenset({"Tab"}),
+        "unattended": frozenset({"a", "d"}),
+    }
+)
+#: The routes whose Tab walks the groups or sections of the one record the frame is about,
+#: so a frame drawn with no subject -- the route's plain register -- has nothing to cycle.
+SUBJECT_TAB: frozenset[str] = frozenset({"track", "milestone"})
+
+
+def unserved(route: str, subject: str | None) -> frozenset[str]:
+    """Return the keys a native frame of ``route`` serves nothing for, given its subject."""
+    keys = NATIVE_UNSERVED.get(route, frozenset())
+    return keys | {"Tab"} if subject is None and route in SUBJECT_TAB else keys
+
+
 ALIASES: Mapping[str, str] = MappingProxyType({"j": "ArrowDown", "k": "ArrowUp", "ctrl+f": "\\"})
 ATTACH_LATER = KeyEntry("attach later", ("/",))
 
@@ -166,18 +203,38 @@ def route_keys(
     return ROUTE_KEYS.get(target, ())
 
 
-def native_keys(route: str) -> tuple[KeyEntry, ...]:
+#: The keys a route's native frame serves beyond its table: scope home's inspect opens the
+#: scope drawer, which names the project, its root id and the tree's URN -- facts only a
+#: tree read through a daemon link states, so the prototype replay's bar never shows it.
+NATIVE_SERVED: Mapping[str, tuple[KeyEntry, ...]] = MappingProxyType(
+    {"scope.home": (KEY["inspect"],)}
+)
+
+
+def native_keys(route: str, *, windowed: bool) -> tuple[KeyEntry, ...]:
     """Return the key table a native frame of ``route`` advertises.
 
-    A native table can outgrow any screen, so its frame pages as well as steps: the page
-    and ends keys follow the arrow entry, which heads the table when there is none.
+    A native table can outgrow any screen, so a frame whose table was cut to its window
+    pages as well as steps: the page and ends keys follow the route's own verbs, ahead of
+    the globals. A frame showing every row has nowhere to page to and does not offer it.
+
+    Args:
+        route: The route whose table is read.
+        windowed: Whether a table on the frame hides rows beyond its window.
 
     Raises:
         KeyError: ``route`` has no key table.
     """
     paging = (KEY["page"], KEY["ends"])
     table = tuple(entry for entry in ROUTE_KEYS[route] if entry not in paging)
-    at = next((i + 1 for i, entry in enumerate(table) if entry.keys == _ARROWS), 0)
+    served = NATIVE_SERVED.get(route, ())
+    if served:
+        # a served key sits beside the menu, where the route tables keep the inspect pair
+        menu = table.index(KEY["actions"]) + 1 if KEY["actions"] in table else len(table)
+        table = (*table[:menu], *served, *table[menu:])
+    if not windowed:
+        return table
+    at = next((i for i, entry in enumerate(table) if entry.kind is KeyKind.GLOBAL), len(table))
     return (*table[:at], *paging, *table[at:])
 
 
@@ -188,7 +245,8 @@ def can(session: Session, fixture: Fixture, entry: KeyEntry) -> bool:
     acts there whether or not the route's own table carries it.
     """
     record = RECORD_FRAME_KEYS if session.record_facts is not None else ()
-    return any(e.token == entry.token for e in (*route_keys(session, fixture), *record))
+    served = () if fixture.prototype else NATIVE_SERVED.get(session.route, ())
+    return any(e.token == entry.token for e in (*route_keys(session, fixture), *record, *served))
 
 
 def acts_here(key: GlobalKey, route: str, *, linked: bool = False) -> bool:
@@ -202,7 +260,8 @@ def acts_here(key: GlobalKey, route: str, *, linked: bool = False) -> bool:
     if key.where is Where.SELECTION:
         return linked and route in SELECTION_ROUTES
     if key.where is Where.INSPECT:
-        return any(KEY["inspect"].keys == entry.keys for entry in ROUTE_KEYS.get(route, ()))
+        served = NATIVE_SERVED.get(route, ()) if linked else ()
+        return any(KEY["inspect"].keys == e.keys for e in (*ROUTE_KEYS.get(route, ()), *served))
     if key.where is Where.DEPTH:
         escape = REGISTRY.escapes.get(route)
         return escape is not None and escape.via is not None

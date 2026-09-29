@@ -81,6 +81,7 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, EffectiveSettingsView
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
@@ -105,6 +106,11 @@ from eawf.surfaces.tui.console.operations import (
     settled,
     unanswered,
 )
+from eawf.workflow.projection.acceptance import (
+    MILESTONE_ACCEPTANCE_METHOD,
+    MILESTONE_ROUTE,
+    MilestoneAcceptanceRecord,
+)
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -127,6 +133,12 @@ PINNED_ROUTES: frozenset[str] = frozenset({ATTENTION_ROUTE})
 #: projection of a large tree is megabytes of rows, so the bound is what keeps a long
 #: session's memory flat; eight covers a working set of back-and-forth navigation.
 DEFAULT_ROUTE_CAPACITY = 8
+
+#: The collections whose moves can change what a Milestone was accepted at or by: the
+#: Milestone itself, whose accepted revision moves, and the question an approval seals.
+_ACCEPTANCE_COLLECTIONS: frozenset[Epoch2Collection] = frozenset(
+    {Epoch2Collection.MILESTONE, Epoch2Collection.PENDING_ACTION}
+)
 
 #: Called with the routes one pushed patch changed, so the app can repaint when the
 #: route on screen is among them.
@@ -200,6 +212,7 @@ class ProjectionSeam:
         clock: Callable[[], datetime] | None = None,
         capacity: int = DEFAULT_ROUTE_CAPACITY,
         operator: Operator | None = None,
+        scope_name: str = "",
         **binding_options: Any,
     ) -> None:
         """Build the seam and the one binding that carries it.
@@ -221,6 +234,8 @@ class ProjectionSeam:
                 included.
             operator: Who the console's writes are attributed to. A seam given none
                 refuses every write with that reason and sends nothing.
+            scope_name: The name an operator knows the scope by, which the header shows
+                in place of ``scope_id``; empty shows the id.
             **binding_options: Passed through to the binding, for the poll and probe
                 cadences and the client factory a test drives it with.
 
@@ -244,12 +259,15 @@ class ProjectionSeam:
         self._listeners: list[PatchListener] = []
         self._reading: set[str] = set()
         self._settings: EffectiveSettingsView | None = None
+        self._acceptance: dict[str, MilestoneAcceptanceRecord] = {}
+        self._subject: str | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
         self._connection = ConnectionValue.DISCONNECTED
         self._replay: ReplayNote | None = None
         self._backstop_ticks = 0
         self._operator = operator
+        self._scope_name = scope_name
         self._operations = OperationLedger()
         self._answered_under: dict[str, str] = {}
         self._binding = StateBinding(
@@ -272,6 +290,16 @@ class ProjectionSeam:
     def route(self) -> str:
         """Return the console route key on screen."""
         return self._route
+
+    @property
+    def scope_id(self) -> str:
+        """Return the id of the scope the projection is stated for."""
+        return self._scope_id
+
+    @property
+    def scope_name(self) -> str:
+        """Return the name the header gives the scope; empty when it is named by its id."""
+        return self._scope_name
 
     @property
     def operator(self) -> Operator | None:
@@ -331,6 +359,9 @@ class ProjectionSeam:
         owed = [route for route in wanted if route in ROUTE_COLLECTIONS and route not in self._held]
         if self._route in SETTINGS_ROUTES and self._settings is None:
             owed.append(SETTINGS_ROUTE)
+        subject = self._subject
+        if self._route == MILESTONE_ROUTE and subject and subject not in self._acceptance:
+            owed.append(MILESTONE_ACCEPTANCE_METHOD)
         return tuple(route for route in owed if route not in self._reading)
 
     def retarget(self, route: str) -> None:
@@ -349,6 +380,14 @@ class ProjectionSeam:
         if held is not None:
             self._held.move_to_end(route)
             self._connection = self._value_of(held)
+
+    def about(self, subject: str | None) -> None:
+        """Record the record the visible route is about, so its per-subject reads are owed."""
+        self._subject = subject
+
+    def acceptance_for(self, key: str | None) -> MilestoneAcceptanceRecord | None:
+        """Return the acceptance read held for Milestone *key*; ``None`` before its read."""
+        return None if key is None else self._acceptance.get(key)
 
     def watch(self, listener: PatchListener) -> None:
         """Call *listener* with the routes every applied patch changed."""
@@ -372,6 +411,8 @@ class ProjectionSeam:
             try:
                 if route == SETTINGS_ROUTE:
                     await self.load_settings()
+                elif route == MILESTONE_ACCEPTANCE_METHOD:
+                    await self.load_acceptance()
                 else:
                     await self.load(route)
             except Exception as exc:
@@ -487,6 +528,32 @@ class ProjectionSeam:
         self._settings = view
         logger.debug(f"load_settings leaves={len(view.leaves)}")
         return view
+
+    async def load_acceptance(self, key: str | None = None) -> MilestoneAcceptanceRecord:
+        """Read one Milestone's sealed bundle and bound approval, and hold the answer.
+
+        The Milestone frame is about one record, so what it was accepted at is read per
+        record; another Milestone's acceptance is never drawn under this one.
+
+        Args:
+            key: The Milestone to read; the visible route's subject when omitted.
+
+        Returns:
+            The record, with no bundle and no approval when none is held for it.
+
+        Raises:
+            ValueError: No Milestone was named and the visible route is about none.
+        """
+        key = key or self._subject
+        if not key:
+            raise ValueError("an acceptance read names the Milestone it is about")
+        answer = await self._binding.call(
+            MILESTONE_ACCEPTANCE_METHOD, {**self._params(), "milestone_key": key}
+        )
+        record = MilestoneAcceptanceRecord.model_validate(answer)
+        self._acceptance[key] = record
+        logger.debug(f"load_acceptance milestone={key} bundle={record.bundle is not None}")
+        return record
 
     async def reconnect(self) -> ReconnectOutcome:
         """Run the reconnect protocol from the cursor the console persisted.
@@ -794,6 +861,9 @@ class ProjectionSeam:
         held is skipped too, because there are no rows for the patch to replace; its
         first read will already include it. The watchers hear which routes changed.
         """
+        if any(entry.collection in _ACCEPTANCE_COLLECTIONS for entry in patch.entries):
+            # a moved Milestone or sealed question may change what it was accepted at
+            self._acceptance.clear()
         patched = self._fan_out(patch)
         if not patched:
             return
@@ -878,6 +948,7 @@ class ProjectionSeam:
         """
         for route in [route for route in self._held if route != self._route]:
             del self._held[route]
+        self._acceptance.clear()
 
     def _evict(self) -> None:
         """Drop the least recently shown unpinned routes until the cache fits.

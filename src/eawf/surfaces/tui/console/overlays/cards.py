@@ -404,7 +404,7 @@ def _region(view: View, st: StepRecord, name: str, focused: bool) -> list[str]:
             for item in st.produced
         ]
         table = _PRODUCTS
-    cap = 8 if w >= 160 else 5 if w >= 120 else 2
+    cap = 8 if view.xwide else 5 if view.wide else 2
     start = max(0, min(cursor - cap + 1, len(cells) - cap)) if cursor >= cap else 0
     out = [lab(label, head[13:])]
     if start:

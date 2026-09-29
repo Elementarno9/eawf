@@ -19,7 +19,6 @@ from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
-    counts,
     finish,
     label,
     more,
@@ -92,18 +91,22 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, "Recovery"),
-        summary=f"The console stopped · the daemon did not · {counts(model)}",
+        crumb_text=route_crumb(view, model, "Recovery"),
+        summary="The console stopped · the daemon did not",
     )
-    grid = Grid([13, 13, 44, 0])
+    # below the wide frame the connection a door leaves is stated once, on the CHOSEN
+    # line, so the three packet columns keep their room
+    wide = view.wide
+    grid = Grid([13, 13, 44, 0] if wide else [13, 13, 0])
+    heads = ["DOOR", "COSTS", "CANNOT RECOVER", *(["LEAVES YOU"] if wide else [])]
     body = [
-        label("HAPPENED", f"The console lost its projection after cursor {group(cursor)}."),
+        label("HAPPENED", f"The console lost its projection after event {group(cursor)}."),
         more(f"Agents kept working · {dv.plural(_active(model), 'run')} were active then"),
         thin(w),
-        grid.head(["DOOR", "COSTS", "CANNOT RECOVER", "LEAVES YOU"]),
+        grid.head(heads),
     ]
     body.extend(
-        grid.row([name, UNKNOWN_WORD, lost, leaves], i == s.sel, w)
+        grid.row([name, UNKNOWN_WORD, lost, *([leaves] if wide else [])], i == s.sel, w)
         for i, (name, lost, leaves) in enumerate(choices)
     )
     name, lost, leaves = choices[s.sel]

@@ -71,7 +71,7 @@ from eawf.surfaces.tui.console.keymap import route_keys
 from eawf.surfaces.tui.console.navigation import Ctx, go, open_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.milestone import NO_APPROVAL, NO_BUNDLE
+from eawf.surfaces.tui.console.renderers.milestone import NO_APPROVAL, NO_BUNDLE, short_digest
 from eawf.surfaces.tui.console.renderers.receipt import NO_RECEIPT
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
@@ -84,6 +84,7 @@ from eawf.workflow.projection.acceptance import (
     READINESS_SIGNALS,
     STATED_SIGNALS,
     AcceptanceBundleView,
+    MilestoneAcceptanceRecord,
     ReceiptCardView,
     ReleaseReadinessView,
     RunReportPlanView,
@@ -338,8 +339,13 @@ def test_the_console_composes_this_routes_read_model_from_the_seam(
 
 
 def test_the_console_carries_its_bundle_and_approval_into_the_milestone_model() -> None:
-    """The records the console was given reach the view, and no other route's."""
-    app = _app("milestone", acceptance_bundle=_bundle(), acceptance_approval=_approval())
+    """The records the seam read for the subject Milestone reach the view."""
+    app = _app("milestone")
+    assert app.seam is not None
+    app.seam._acceptance["MLS-0030"] = MilestoneAcceptanceRecord(
+        milestone_key="MLS-0030", bundle=_bundle(), approval=_approval()
+    )
+    app.session.subj_id = "MLS-0030"
     model = app.route_view()
     assert isinstance(model, AcceptanceBundleView)
     assert model.bundle_digest == _bundle().digest()
@@ -437,7 +443,7 @@ def test_the_milestone_frame_states_the_sealed_bundle_it_was_accepted_at() -> No
     """The frame names the revision and the digest, which is what an approval binds to."""
     bundle = _bundle()
     rows = _frame(_view("milestone", bundle=bundle), subject="MLS-0030")
-    assert any(bundle.digest() in row for row in rows)
+    assert any(f"digest {short_digest(bundle.digest())}" in row for row in rows)
     assert any(f"revision {bundle.revision}" in row for row in rows)
 
 
@@ -456,7 +462,7 @@ def test_the_approval_row_names_the_exact_head_it_binds() -> None:
     assert model.approval.tree_sha == TREE_SHA
     assert model.approval.approved_digest == _bundle().digest()
     rows = _frame(model, subject="MLS-0030")
-    assert any(HEAD_SHA in row and TREE_SHA in row for row in rows)
+    assert any(f"head {HEAD_SHA[:7]} · tree {TREE_SHA[:7]}" in row for row in rows)
 
 
 def test_an_approval_given_to_other_bytes_is_not_shown_against_this_bundle() -> None:

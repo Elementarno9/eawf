@@ -16,7 +16,7 @@ the place rather than its first row.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -86,6 +86,10 @@ class Ctx:
             key on it acts on the same record.
         principal: Who the console acts as, whose own top attention item ``!`` jumps to;
             ``None`` when it acts as nobody.
+        scope: The scope a linked console is attached to, by name else by id, which an
+            address names where no held row answers it; empty with no link.
+        gutter: The blank cells kept clear at each side of the frame, so a key that lays
+            the frame out again steps on the same terminal width the render did.
     """
 
     session: Session
@@ -104,6 +108,8 @@ class Ctx:
     rows: tuple[ProjectionRow, ...] = ()
     decisions: DecisionRecords | None = None
     principal: str | None = None
+    scope: str = ""
+    gutter: int = 0
 
     @property
     def s(self) -> Session:
@@ -153,6 +159,21 @@ def focused_region(session: Session) -> str | None:
     if not regions:
         return None
     return session.region if session.region in regions else regions[0]
+
+
+def cycle[T](items: Sequence[T], current: T, *, back: bool) -> T:
+    """Return the item after ``current`` in ``items``, or before it on ``back``, wrapping.
+
+    An item not in ``items`` counts as sitting before the first, so the step forward
+    lands on the first and the step back on the last.
+
+    Raises:
+        ValueError: ``items`` is empty.
+    """
+    if not items:
+        raise ValueError("there is nothing to cycle through")
+    at = items.index(current) if current in items else -1 if not back else 0
+    return items[(at + (-1 if back else 1)) % len(items)]
 
 
 def cycle_region(session: Session, *, back: bool = False) -> str | None:

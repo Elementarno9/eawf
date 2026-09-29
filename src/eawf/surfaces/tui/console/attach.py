@@ -16,18 +16,27 @@ read from the registry, never inferred.
 from __future__ import annotations
 
 import json
+import logging
 import shlex
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from eawf._version import __version__
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
 from eawf.kernel.migration.epoch2.errors import MigrationJournalBrokenError
+from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.migration.epoch2.journal import CutoverJournalRow, CutoverStage, read_journal
+from eawf.kernel.projection.compute import (
+    CANONICAL_SEQUENCE_FIELD,
+    RouteProjection,
+    build_route_projection,
+)
 from eawf.kernel.state.epoch2.authority import AuthorityGap, RootAuthority
+from eawf.kernel.store.compaction import read_document
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.registry import (
     WORKSPACE_AMBIGUOUS,
     Registry,
@@ -44,6 +53,8 @@ from eawf.surfaces.tui.console.tokens import TRUTH
 
 if TYPE_CHECKING:
     from eawf.surfaces.tui.console.navigation import Ctx
+
+logger = logging.getLogger(__name__)
 
 #: The cells an ordinary pane row gives its step or fact name before the value.
 _NAME_CELLS = 26
@@ -96,8 +107,33 @@ class EntryCommand:
     @property
     def line(self) -> str:
         """Return the command as a shell line, quoting any value the shell would split."""
-        words = [w if w.startswith("<") and w.endswith(">") else shlex.quote(w) for w in self.argv]
-        return " ".join(("eawf", *words))
+        return _shell(self.argv)
+
+    def shown(self, here: Path) -> str:
+        """Return the line as the frame prints it: a path at or under ``here`` made relative.
+
+        The operator runs the command from the shell the console was launched in, so the
+        folder they stand in reads as ``.`` rather than as a root too long for the frame.
+        Enter still copies :attr:`line`, whole.
+
+        Args:
+            here: The directory the console was launched from.
+        """
+        return _shell(tuple(_relative(word, here) for word in self.argv))
+
+
+def _shell(argv: Sequence[str]) -> str:
+    """Return ``eawf`` and ``argv`` as a shell line, placeholders left unquoted."""
+    words = [w if w.startswith("<") and w.endswith(">") else shlex.quote(w) for w in argv]
+    return " ".join(("eawf", *words))
+
+
+def _relative(word: str, here: Path) -> str:
+    """Return ``word`` relative to ``here`` when it is an absolute path at or under it."""
+    path = Path(word)
+    if not path.is_absolute() or not path.is_relative_to(here):
+        return word
+    return str(path.relative_to(here))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -171,13 +207,14 @@ def _fact(name: str, value: str) -> str:
 
 
 def _command_lines(commands: Sequence[EntryCommand]) -> tuple[str, ...]:
-    """Return each command's purpose, then the command on a line of its own.
+    """Return each command's purpose, then the command as printed on a line of its own.
 
     Each command gets its own line so a long root never shares the width with prose.
     """
+    here = Path.cwd()
     lines: list[str] = []
     for command in commands:
-        lines.extend((command.purpose, f"  {command.line}"))
+        lines.extend((command.purpose, f"  {command.shown(here)}"))
     return tuple(lines)
 
 
@@ -553,7 +590,7 @@ def onboarding_state(chrome: ConsoleChrome, root: Path, *, registered: bool) -> 
             "commands": (first.line, "", "", ""),
             "tail": (
                 "No workspace is registered on this machine.",
-                f"  {first.line}",
+                f"  {first.shown(Path.cwd())}",
                 "",
                 "No migration is applied and no agent is started here.",
             ),
@@ -781,6 +818,103 @@ def resolve_attach(chrome: ConsoleChrome, request: AttachRequest) -> AttachResul
     return AttachResult(entry=None, trace=(*steps, daemon))
 
 
+#: The entry state a launch lands in when the daemon answers nothing.
+OFFLINE: Final = "offline"
+
+#: The route the offline frame's rows are read for: scope home, one row per Track.
+_OFFLINE_ROUTE: Final = "scope.home"
+
+#: What the offline frame says when there is no snapshot to show.
+NO_SNAPSHOT: Final = "∅ no snapshot held · this console has read nothing from the tree yet"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OfflineSnapshot:
+    """The last state the tree committed, read from disk without the daemon.
+
+    Attributes:
+        projection: The scope-home rows built from the committed document.
+        committed_at: When that document was last written, which is what the rows are
+            as of.
+    """
+
+    projection: RouteProjection
+    committed_at: datetime
+
+
+def offline_snapshot(
+    authority: RootAuthority, *, scope_id: str, now: datetime
+) -> OfflineSnapshot | None:
+    """Return the tree's last committed scope home, read from its document; ``None`` if none.
+
+    Nothing is written and no daemon is asked: the selected generation's document is
+    the last state any commit left behind, so it is what an offline console can show.
+
+    Args:
+        authority: The tree's resolved authority.
+        scope_id: The scope the rows are stated for.
+        now: When the snapshot is read, which stamps the rows' projection.
+
+    Returns:
+        The snapshot, or ``None`` when the tree names no generation or its document
+        cannot be read as one.
+    """
+    target, generation = authority.target, authority.generation_id
+    if target is None or generation is None:
+        return None
+    path = target.generation_path(generation) / GENERATION_DOCUMENT
+    try:
+        document = read_document(path)
+        cursor = document.get(CANONICAL_SEQUENCE_FIELD, 0)
+        projection = build_route_projection(
+            route=_OFFLINE_ROUTE,
+            document=document,
+            cursor=cursor if isinstance(cursor, int) else 0,
+            scope_id=scope_id,
+            generated_at=now,
+        )
+        committed_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    except (OSError, ValueError) as error:
+        logger.info(f"offline_snapshot unreadable path={path.name} cause={error!s}")
+        return None
+    return OfflineSnapshot(projection=projection, committed_at=committed_at)
+
+
+def offline_state(chrome: ConsoleChrome, snapshot: OfflineSnapshot | None) -> EntryState:
+    """Return the offline frame: each outcome as the last snapshot held it, or its absence.
+
+    Args:
+        chrome: The packaged chrome.
+        snapshot: The last committed scope home; ``None`` when none could be read.
+
+    Returns:
+        The offline state, one row per Track with the Runs filed under it and the time
+        the snapshot is as of. What needs you is not read without the daemon, so that
+        cell is the unknown token rather than a count.
+    """
+    base = _base(chrome, OFFLINE)
+    if snapshot is None:
+        return base.model_copy(update={"rows": (), "tail": (NO_SNAPSHOT,)})
+    at = clock_time(snapshot.committed_at)[:5]
+    tracks = [row for row in snapshot.projection.rows if row.collection is Epoch2Collection.TRACK]
+    rows = tuple(
+        (
+            row.title or row.key,
+            row.facts.get("runs", "0"),
+            _UNAVAILABLE,
+            at,
+        )
+        for row in tracks
+    )
+    tail = (
+        "Everything here is a snapshot. Nothing is arriving, and no count",
+        f"can be called complete for the time since {at}.",
+        "Inspecting, moving around and copying all work.",
+        "Controls are gone until the daemon answers again.",
+    )
+    return base.model_copy(update={"rows": rows or None, "tail": tail if rows else (NO_SNAPSHOT,)})
+
+
 def with_entry_state(chrome: ConsoleChrome, state: EntryState) -> ConsoleChrome:
     """Return ``chrome`` with its entry state of the same id replaced by ``state``.
 
@@ -796,16 +930,21 @@ def with_entry_state(chrome: ConsoleChrome, state: EntryState) -> ConsoleChrome:
 
 
 __all__ = [
+    "NO_SNAPSHOT",
+    "OFFLINE",
     "ONBOARDING",
     "ONBOARDING_SKIPS",
     "AttachRequest",
     "AttachResult",
     "AttachStep",
     "EntryCommand",
+    "OfflineSnapshot",
     "ambiguous_state",
     "failed_state",
     "interrupted_state",
     "migration_state",
+    "offline_snapshot",
+    "offline_state",
     "onboarding_state",
     "resolve_attach",
     "resolving_state",

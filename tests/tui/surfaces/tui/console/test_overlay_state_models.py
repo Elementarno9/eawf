@@ -415,15 +415,19 @@ def test_con_131_a_pending_action_row_never_opens_the_question_detail() -> None:
     }
     held = ds.projection("attention", document)
     session = ds.opened("attention")
+    # the Attention frame publishes the row under its caret by id; Enter reads only that
+    session.sel_id = "ACT-0001"
     ds.press(session, "Enter", attention=held, decisions=QUESTIONS)
     assert (session.overlay, session.ov_subject) == ("consequence", "ACT-0001")
     assert session.sel_id == "ACT-0001"
 
 
-def test_con_131_live_a_real_pending_action_opens_its_action_detail_from_the_projection(
-    tmp_path: Path,
-) -> None:
-    """The canary walk seals a real acceptance approval; Enter on its row never asks it."""
+def test_con_131_j2_01_live_a_sealed_pending_action_opens_no_card(tmp_path: Path) -> None:
+    """The canary walk seals a real acceptance approval; Enter neither asks nor re-answers it.
+
+    A sealed action has nothing left to confirm, so the Attention frame lists no open row
+    and Enter opens neither the question detail nor an answer card over it.
+    """
     walk, runtime_root = walk_canary_isolated(tmp_path)
 
     async def body() -> tuple[str | None, str | None, str | None, str]:
@@ -440,12 +444,8 @@ def test_con_131_live_a_real_pending_action_opens_its_action_detail_from_the_pro
             return app.session.overlay, app.session.ov_subject, app.session.sel_id, header
 
     overlay, subject, selected, header = asyncio.run(body())
-    assert (overlay, subject, selected) == (
-        "consequence",
-        ATTENTION_ACTION_KEY,
-        ATTENTION_ACTION_KEY,
-    )
-    assert f"consequence · {ATTENTION_ACTION_KEY}" in header
+    assert (overlay, subject, selected) == (None, None, None)
+    assert "consequence" not in header
 
 
 @pytest.mark.parametrize(

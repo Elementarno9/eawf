@@ -17,7 +17,7 @@ from enum import StrEnum
 from typing import NamedTuple
 
 from eawf.surfaces.tui.console.format import seconds
-from eawf.surfaces.tui.console.session import Session, Toast
+from eawf.surfaces.tui.console.session import TOAST_DWELL, Session, Toast
 from eawf.surfaces.tui.console.tokens import Severity
 
 # How long an armed go prefix waits for its destination letter.
@@ -26,8 +26,10 @@ PREFIX_TIMEOUT = 1.5
 QUIT_FLOOR = 0.080
 # A second Escape later than this re-arms instead of quitting.
 QUIT_CEILING = 1.5
-# How long a toast stands after it was raised.
-TOAST_DWELL = 5.0
+# The one toast an armed quit guard raises; it stands exactly as long as the guard.
+QUIT_PROMPT = "Press again to exit."
+# How a disarming note opens, so the rack never repeats it as a toast.
+DISARMED = "quit disarmed"
 # The rack never holds more toasts than this; a newer one drops the oldest.
 RACK_MAX = 3
 # The key-log key (an em dash) a clock-driven change is recorded under, since no key
@@ -160,7 +162,13 @@ def disarm(session: Session, key: str) -> None:
     """Disarm an armed quit guard, saying so in the key log so the outcome is observable."""
     if session.last_esc:
         session.disarm_quit()
-        session.log_key("Esc", f"quit disarmed · {key} came between the presses")
+        session.toasts = [toast for toast in session.toasts if toast.text != QUIT_PROMPT]
+        session.log_key("Esc", f"{DISARMED} · {key} came between the presses")
+
+
+def prompt_quit(session: Session, clock: Clock) -> None:
+    """Raise the one quit prompt, standing for the guard's window and no longer."""
+    notify(session, clock, text=QUIT_PROMPT, title="", sev=Severity.INFO, dwell=QUIT_CEILING)
 
 
 def guarded_quit(session: Session, clock: Clock, *, outstanding: int) -> bool:
@@ -190,12 +198,28 @@ def guarded_quit(session: Session, clock: Clock, *, outstanding: int) -> bool:
         session.log_key("Esc", "too fast to be two presses — still armed")
     else:
         session.log_key("Esc", "at scope home · press again within 1.5s to quit")
+        prompt_quit(session, clock)
     return False
 
 
-def notify(session: Session, clock: Clock, *, text: str, title: str, sev: Severity) -> None:
-    """Raise a toast stamped with the console clock, dropping the oldest past the cap."""
-    session.toasts.append(Toast(title=title, text=text, sev=sev, at=clock.now()))
+def notify(
+    session: Session,
+    clock: Clock,
+    *,
+    text: str,
+    title: str,
+    sev: Severity,
+    dwell: float = TOAST_DWELL,
+) -> None:
+    """Raise a toast stamped with the console clock, dropping the oldest past the cap.
+
+    A toast saying what the newest one already says replaces it rather than stacking a
+    copy, so a key pressed again restarts the dwell of its answer instead of repeating it.
+    """
+    newest = session.toasts[-1] if session.toasts else None
+    if newest is not None and (newest.text, newest.sev) == (text, sev):
+        session.toasts.pop()
+    session.toasts.append(Toast(title=title, text=text, sev=sev, at=clock.now(), dwell=dwell))
     del session.toasts[:-RACK_MAX]
 
 
@@ -207,9 +231,10 @@ def sweep_toasts(session: Session, clock: Clock) -> list[Toast]:
     """
     now = clock.now()
     session.rack_last = now
-    gone = [toast for toast in session.toasts if now - toast.at >= TOAST_DWELL]
+    gone = [toast for toast in session.toasts if now - toast.at >= toast.dwell]
     if gone:
-        session.toasts = [toast for toast in session.toasts if now - toast.at < TOAST_DWELL]
+        session.toasts = [toast for toast in session.toasts if now - toast.at < toast.dwell]
         for toast in gone:
-            session.log_key(TICK_KEY, f"toast expired · {toast.title} · {seconds(TOAST_DWELL)}")
+            name = toast.title or toast.text
+            session.log_key(TICK_KEY, f"toast expired · {name} · {seconds(toast.dwell)}")
     return gone

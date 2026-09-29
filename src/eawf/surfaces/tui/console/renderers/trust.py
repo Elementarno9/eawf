@@ -94,7 +94,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, *steps),
+        crumb_text=route_crumb(view, model, *steps),
         summary=f"{scope} · {len(GROUPS)} truth-field groups · {counts(model)}",
     )
     body: list[str] = [_VERDICTS.head(["JURY", "VERDICT", "ANSWERED BY", "FRESHNESS"])]

@@ -94,6 +94,38 @@ NO_PRINCIPAL_REASON: Final = "no operator principal to act as · relaunch with -
 _ID_BYTES: Final = 8
 
 
+#: A chrome menu verb that is a per-entity lifecycle verb, by the daemon verb that carries it.
+SAME_VERB: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "retire track": "domain.track.retire",
+        "accept": "domain.milestone.accept",
+        "authorize merge": "domain.batch.merge",
+        "promote": "domain.task.promote",
+    }
+)
+
+
+def linked_refusal(kind: str, verb: str) -> str:
+    """Return why a chrome verb is refused on a console reading a live tree, or nothing.
+
+    The chrome's own availability and reasons describe the prototype's records, never the
+    tree on screen. A lifecycle verb is offered by the record it moves, so where no such
+    record is selected the chrome's copy of it is refused naming what it acts on; any other
+    verb is refused unless a daemon verb carries it.
+
+    Args:
+        kind: The route the verb is listed on.
+        verb: The verb's name, as the menu lists it.
+
+    Returns:
+        An empty string when a daemon verb carries the verb; otherwise the reason.
+    """
+    method = SAME_VERB.get(verb)
+    if method is not None:
+        return f"acts on a {MUTATIONS_BY_METHOD[method].entity.value} · open one to offer it"
+    return binding_refusal(kind, verb)
+
+
 def binding_refusal(kind: str, verb: str) -> str:
     """Return why ``verb`` on a ``kind`` target reaches no daemon mutator.
 
@@ -713,6 +745,7 @@ __all__ = [
     "QUESTION_OPTIONS",
     "RUN_CONTROLS",
     "RUN_KINDS",
+    "SAME_VERB",
     "SEAL_METHOD",
     "SETTING_LAYERS",
     "SETTING_SET_METHOD",
@@ -733,6 +766,7 @@ __all__ = [
     "address_setting",
     "binding_refusal",
     "exhausted",
+    "linked_refusal",
     "mint_lifecycle_id",
     "not_sent",
     "outcome_detail",

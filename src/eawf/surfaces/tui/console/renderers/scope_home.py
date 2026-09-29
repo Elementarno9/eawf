@@ -4,12 +4,14 @@ The outcomes pane is a tree a track expands to its milestones, and the cursor la
 leaves only. Tab moves to the attention list, and the pane that does not own the arrows
 recedes.
 
-The native frame draws the same two regions from the read model: every Track with the
-Milestones filed under it nested beneath, each with its title, status and progress, and
-the attention list under a thin rule. Progress is counted off rows the frame holds -- a
-Track's completed Milestones, a Milestone's completed Batches -- so it is exact rather than
-estimated. A Milestone filed under no Track this scope holds is drawn under a ``no track``
-group rather than dropped, and a column no producer states wears the unknown token.
+The native frame draws the same two regions from the read model: every Track, the one
+the cursor is in expanded to the Milestones filed under it, each with its title and
+status, and the attention list under a thin rule. A Track's progress is counted off rows
+the frame holds -- its completed Milestones -- so it is exact rather than estimated. A
+Milestone filed under no Track this scope holds is grouped under a ``no track`` heading
+rather than dropped, and a column no producer states wears the unknown token. The name
+column keeps the packet's width at 80 columns and widens to a cap beyond it, so the
+counts stay beside the names however wide the terminal is.
 """
 
 from __future__ import annotations
@@ -20,7 +22,6 @@ from eawf.kernel.projection.attention import AttentionItem, build_attention_view
 from eawf.kernel.projection.registers import UNWRITTEN_REASON, RegisterView
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthField
-from eawf.kernel.state.epoch2.batch import BatchStatus
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
@@ -35,6 +36,7 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
+    recede,
     route_keys_bar,
     snap_caret,
     thin,
@@ -53,7 +55,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     route_crumb,
 )
 from eawf.surfaces.tui.console.renderers.spine import held
-from eawf.surfaces.tui.console.width import cell_len, pad
+from eawf.surfaces.tui.console.width import cell_len, clip, pad
 
 ATTENTION_REGION = "attention"
 OUTCOMES_REGION = "outcomes"
@@ -68,13 +70,13 @@ def _tree(view: View, open_: list[Action], attn: bool) -> list[str]:
     s, fx, w = view.session, view.fixture, view.w
     ti = dv.home_track(s, fx)
     head = _TRACKS.head(["MILESTONES", "RUNS", "ATTENTION", "PROGRESS"])
-    rows: list[str] = [Fixed(pad(head, w)) if attn else head]
+    rows: list[str] = [recede(head, w) if attn else head]
     for i, track in enumerate(fx.proto.tracks):
         tn = sum(1 for a in open_ if a.track == track.id)
         on = not attn and i == ti and s.home_ms < 0
         cells = [track.id, str(track.runs), f"!{tn}" if tn else attn_cell(s, 0), track.prog]
         raw = snap_caret(_TRACKS.row(cells, on))
-        rows.append(Fixed(pad(raw, w)) if attn or on else raw)
+        rows.append(recede(raw, w) if attn else Fixed(pad(raw, w)) if on else raw)
         if i != ti:
             continue
         for k, milestone in enumerate(track.milestones):
@@ -82,7 +84,7 @@ def _tree(view: View, open_: list[Action], attn: bool) -> list[str]:
             leaf = snap_caret(
                 _MILESTONES.row([f"{milestone.id} {milestone.name}", milestone.state], onm)
             )
-            rows.append(Fixed(pad(leaf, w)) if attn or onm else leaf)
+            rows.append(recede(leaf, w) if attn else Fixed(pad(leaf, w)) if onm else leaf)
     return rows
 
 
@@ -98,25 +100,27 @@ def _attention(view: View, open_: list[Action], attn: bool) -> list[str]:
         if group != last:
             n = sum(1 for x in open_ if top_bucket(x.bucket) == group)
             head = f" {bucket_label(fx, group).upper()}  {n}"
-            rows.append(head if attn else Fixed(pad(head, w)))
+            rows.append(head if attn else recede(head, w))
             last = group
         on = attn and i == s.home_sel
         row = " " + ("▸ " if on else "  ") + pad(action.text, w - 3 - _DUE_W) + " " + action.due
         if cell_len(row) > w:
             row = row[:w]
-        rows.append(Fixed(pad(row, w)) if on or not attn else row)
+        rows.append(recede(row, w) if not attn else Fixed(pad(row, w)) if on else row)
     return rows
 
 
 #: What the group heading unfiled Milestones reads: they are drawn, never dropped.
-NO_TRACK = "∅ no track · filed under none held"
+NO_TRACK = "∅ no track"
 
 #: The attention rows the home frame lists before it counts the rest.
 _ATTENTION_ROWS = 4
 
-# The cells the RUNS, ATTENTION and PROGRESS columns take beside a tree row's name, and
-# the MINE column the attention count splits off under more than one principal.
-_RUNS_W, _ATTN_W, _PROGRESS_W, _MINE_W = 11, 16, 22, 7
+# The cells the RUNS and ATTENTION columns take beside a tree row's name, and the MINE
+# column the attention count splits off under more than one principal.
+_RUNS_W, _ATTN_W, _MINE_W, _ALL_W = 7, 12, 7, 16
+# The name column: the packet's width below 120 columns, and the cap it widens to above.
+_NAME_W, _NAME_CAP = 30, 48
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,30 +130,67 @@ class TreeRow:
     Attributes:
         row: The record drawn, or ``None`` for the group heading unfiled Milestones.
         depth: ``0`` for a Track or the group heading, ``1`` for a Milestone under it.
+        group: The offset of the group the row belongs to: a Track, or the unfiled group.
     """
 
     row: SpineRow | None
     depth: int
+    group: int = 0
+
+
+#: One group of the tree: its Track, ``None`` for the unfiled group, and its Milestones.
+Group = tuple[SpineRow | None, list[SpineRow]]
 
 
 def _of(spine: SpineView, collection: Epoch2Collection) -> list[SpineRow]:
     return [row for row in spine.rows if row.collection is collection]
 
 
-def tree_of(spine: SpineView) -> list[TreeRow]:
-    """Return the outcome tree: each Track, its Milestones under it, then the unfiled ones."""
+def groups_of(spine: SpineView) -> list[Group]:
+    """Return each Track with its Milestones, then the Milestones filed under no held Track."""
     tracks = _of(spine, Epoch2Collection.TRACK)
     milestones = _of(spine, Epoch2Collection.MILESTONE)
     held_keys = {track.key for track in tracks}
-    tree: list[TreeRow] = []
-    for track in tracks:
-        tree.append(TreeRow(track, 0))
-        tree.extend(TreeRow(m, 1) for m in milestones if m.parent_key == track.key)
+    groups: list[Group] = [(t, [m for m in milestones if m.parent_key == t.key]) for t in tracks]
     unfiled = [m for m in milestones if m.parent_key not in held_keys]
-    if unfiled:
-        tree.append(TreeRow(None, 0))
-        tree.extend(TreeRow(m, 1) for m in unfiled)
+    return [*groups, (None, unfiled)] if unfiled else groups
+
+
+def tree_of(groups: list[Group], focus: int) -> list[TreeRow]:
+    """Return the outcome tree: every group's heading, the focused group expanded under it."""
+    tree: list[TreeRow] = []
+    for index, (head, members) in enumerate(groups):
+        tree.append(TreeRow(head, 0, index))
+        if index == focus:
+            tree.extend(TreeRow(m, 1, index) for m in members)
     return tree
+
+
+def _focus(groups: list[Group], selected: str | None, last: int) -> int:
+    """Return the group the selected record sits in, else the group focused last."""
+    for index, (head, members) in enumerate(groups):
+        keys = {m.key for m in members} | ({head.key} if head is not None else set())
+        if selected in keys:
+            return index
+    return min(max(last, 0), max(len(groups) - 1, 0))
+
+
+def leaves_of(groups: list[Group]) -> list[str]:
+    """Return every Milestone the tree files, in reading order: the rows the cursor lands on.
+
+    A Track is a container rather than a destination, and the group heading of unfiled
+    Milestones names no record, so neither is ever selected.
+    """
+    return [member.key for _head, members in groups for member in members]
+
+
+def _filled(groups: list[Group], start: int) -> int:
+    """Return the first group from ``start`` on, wrapping, that files a Milestone."""
+    for step in range(len(groups)):
+        at = (start + step) % len(groups)
+        if groups[at][1]:
+            return at
+    return start
 
 
 def _done(rows: list[SpineRow], status: str) -> int:
@@ -157,17 +198,12 @@ def _done(rows: list[SpineRow], status: str) -> int:
 
 
 def progress(spine: SpineView, row: SpineRow) -> str:
-    """Return a tree row's progress, counted off the rows filed under it."""
-    if row.collection is Epoch2Collection.TRACK:
-        under = [m for m in _of(spine, Epoch2Collection.MILESTONE) if m.parent_key == row.key]
-        done, word = _done(under, str(MilestoneStatus.COMPLETED)), "milestone"
-    else:
-        under = [b for b in _of(spine, Epoch2Collection.BATCH) if b.parent_key == row.key]
-        done, word = _done(under, str(BatchStatus.COMPLETED)), "batch"
+    """Return a Track's progress, counted off the Milestones filed under it."""
+    under = [m for m in _of(spine, Epoch2Collection.MILESTONE) if m.parent_key == row.key]
     if not under:
-        return f"no {word} filed" if word == "milestone" else "no batch cut"
-    total = dv.plural(len(under), word, "es" if word == "batch" else "s")
-    return f"{done} of {total} done"
+        return "no milestone filed"
+    done = _done(under, str(MilestoneStatus.COMPLETED))
+    return f"{done} of {dv.plural(len(under), 'milestone')} done"
 
 
 def _word(field: TruthField[str]) -> str:
@@ -239,7 +275,12 @@ def _home_attention(view: View) -> HomeAttention:
 
 
 def _tree_lines(
-    view: View, spine: SpineView, tree: list[TreeRow], cursor: int, chrome: int
+    view: View,
+    spine: SpineView,
+    tree: list[TreeRow],
+    unfiled: list[SpineRow],
+    cursor: int | None,
+    chrome: int,
 ) -> list[str]:
     """Return the tree's head, the rows around the cursor, and its window line.
 
@@ -249,31 +290,35 @@ def _tree_lines(
     w = view.w
     attention = _home_attention(view)
     shared = len(attention.holders()) > 1
-    attn_w = _ATTN_W + (_MINE_W if shared else 0)
-    first = max(24, w - 3 - _RUNS_W - attn_w - _PROGRESS_W)
-    widths = [first, _RUNS_W, *([_MINE_W, _ATTN_W] if shared else [_ATTN_W]), 0]
+    first = _NAME_CAP if view.wide else _NAME_W
+    widths = [first, _RUNS_W, *([_MINE_W, _ALL_W] if shared else [_ATTN_W]), 0]
     tracks = Table(widths, 2)
-    leaves = Table([first - 2, _RUNS_W + attn_w, 0], 4)
+    # one grid for the whole tree: a Milestone's name sits two cells further in and ends
+    # where a Track's does, so its state sits under RUNS
+    leaves = Table([first - 2, 0], 4)
     heads = ["RUNS", *(["MINE", "ALL PRINCIPALS"] if shared else ["ATTENTION"])]
     lines = [tracks.head(["MILESTONES", *heads, "PROGRESS"])]
-    win = window_rows(view, total=len(tree), cursor=cursor, chrome=chrome + 2)
+    win = window_rows(view, total=len(tree), cursor=cursor or 0, chrome=chrome + 2)
     for index in range(win.start, win.stop):
         item, on = tree[index], index == cursor
         if item.row is None:
-            line = tracks.row([NO_TRACK], on)
+            filed = dv.plural(len(unfiled), "milestone")
+            line = tracks.row([NO_TRACK, "", *([""] if shared else []), "", f"{filed} filed"], on)
         elif item.depth == 0:
             row = item.row
             counts_ = [attention.cell(row.key, own=True)] if shared else []
             counts_.append(attention.cell(row.key, own=False))
-            line = tracks.row([_name(row), _runs(row), *counts_, progress(spine, row)], on)
+            name = clip(_name(row), first - 2)
+            line = tracks.row([name, _runs(row), *counts_, progress(spine, row)], on)
         else:
             row = item.row
-            status = value_cell(row.field("status")).slot
-            line = leaves.row([_name(row), status, progress(spine, row)], on)
+            name = clip(_name(item.row), first - 4)
+            line = leaves.row([name, value_cell(row.field("status")).slot], on)
         lines.append(line if on else Fixed(pad(line, w)))
     if not tree:
         lines.append("   this scope holds no record: no Track and no Milestone")
-    lines.append(win.line(complete=spine.complete))
+    if win.hides:
+        lines.append(win.line(complete=spine.complete))
     return lines
 
 
@@ -291,14 +336,17 @@ def principal_line(view: View) -> list[str]:
     return [f" PRINCIPAL  you are {who} · class {UNKNOWN_WORD} · {yours}"]
 
 
-def attention_lines(view: View, register: RegisterView | None) -> list[str]:
+def attention_lines(
+    view: View, register: RegisterView | None, focus: int | None = None
+) -> list[str]:
     """Return the home frame's attention region, read off the attention reducer.
 
     The list is this principal's: each open item in its audience, under the bucket that
     needs the operator, with what it asks and when it is due. An item addressed only to
     another principal is counted on a line of its own rather than listed. A register not
     read yet states no count: the region says so, rather than printing ``nothing is
-    waiting``, which would be a claim.
+    waiting``, which would be a claim. While the list holds the focus, ``focus`` is the
+    item its caret is on.
     """
     if register is None:
         return [f" ATTENTION  {UNKNOWN_WORD} · the attention register has not been read"]
@@ -317,11 +365,14 @@ def attention_lines(view: View, register: RegisterView | None) -> list[str]:
     w = view.w
     facts = {row.key: row.facts for row in register.rows}
     lines = [" ATTENTION", f" NEEDS OPERATOR  {group(len(mine))}"]
-    for item in mine[:_ATTENTION_ROWS]:
+    first = 0 if focus is None else max(0, focus - _ATTENTION_ROWS + 1)
+    for at, item in enumerate(mine[first : first + _ATTENTION_ROWS], start=first):
         fact = facts.get(item.key, {})
         text = f"{fact.get('subject', item.key)} {fact.get('question', '')}".rstrip()
-        lines.append(Fixed(pad("   " + pad(text, w - 3 - _DUE_W - 1) + " " + NO_DEADLINE, w)))
-    rest = len(mine) - _ATTENTION_ROWS
+        lead = " ▸ " if at == focus else "   "
+        line = lead + pad(text, w - 3 - _DUE_W - 1) + " " + NO_DEADLINE
+        lines.append(line if at == focus else Fixed(pad(line, w)))
+    rest = len(mine) - first - _ATTENTION_ROWS
     if rest > 0:
         lines.append(f"   … {rest} more on the Attention route")
     if elsewhere:
@@ -340,22 +391,55 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    tree = tree_of(spine)
+    groups = groups_of(spine)
+    focus = _focus(groups, s.sel_id, s.home_track)
+    tree = tree_of(groups, focus)
     keys = [item.row.key if item.row is not None else None for item in tree]
     found = keys.index(s.sel_id) if s.sel_id is not None and s.sel_id in keys else None
     index = found if found is not None else min(max(s.sel, 0), max(len(tree) - 1, 0))
-    if tree and keys[index] is None:
-        # the group heading holds no record, so the cursor steps onto its first Milestone
-        index = min(index + 1, len(tree) - 1)
-    s.sel = index
-    s.sel_id = keys[index] if tree else None
+    if tree and tree[index].group != focus:
+        # the cursor stepped onto another group's heading, which expands in its place
+        landed = tree[index]
+        focus = landed.group
+        tree = tree_of(groups, focus)
+        keys = [item.row.key if item.row is not None else None for item in tree]
+        index = tree.index(landed)
+    landing: int | None = index if tree else None
+    if tree and tree[index].depth == 0:
+        # a Track is a container, never a destination: the cursor lands on a Milestone of
+        # the group it stepped onto, or of the next group that files one
+        focus = _filled(groups, tree[index].group)
+        tree = tree_of(groups, focus)
+        keys = [item.row.key if item.row is not None else None for item in tree]
+        landing = next((i for i, item in enumerate(tree) if item.depth == 1), None)
+    s.home_track = focus
+    s.sel = landing or 0
+    s.sel_id = keys[landing] if landing is not None else None
+    unfiled = groups[-1][1] if groups and groups[-1][0] is None else []
+    mine = _home_attention(view).mine()
+    # the region the unfocused pane recedes by, which Tab moves when the list holds items
+    on_list = s.home_region == ATTENTION_REGION and bool(mine)
+    if on_list:
+        s.home_sel = max(0, min(len(mine) - 1, s.home_sel))
     top = [
-        *native_head(view, spine, crumb_text=route_crumb(spine), summary=counts(spine)),
+        *native_head(view, spine, crumb_text=route_crumb(view, spine), summary=counts(spine)),
         *principal_line(view),
     ]
-    below = [thin(w), *attention_lines(view, view.attention)]
-    rows = [*top, *_tree_lines(view, spine, tree, index, len(top) + len(below)), *below]
-    return build(view, rows, route_keys_bar(view, native_keys(s.route)))
+    listed = attention_lines(view, view.attention, s.home_sel if on_list else None)
+    # the pane that does not own the arrows recedes, so where the focus is reads at a glance
+    below = [thin(w), *(listed if on_list else [recede(line, w) for line in listed])]
+    caret = None if on_list else landing
+    lines = _tree_lines(view, spine, tree, unfiled, caret, len(top) + len(below))
+    if on_list:
+        lines = [recede(line, w) for line in lines]
+    rows = [*top, *lines, *below]
+    # the arrows walk the Milestones or the list the focus is on, never a Track row
+    s.nav_rows = len(mine) if on_list else len(leaves_of(groups))
+    # Tab only moves the focus when the attention list holds something to focus
+    entries = native_keys(s.route, windowed=s.windowed)
+    return build(
+        view, rows, route_keys_bar(view, [e for e in entries if mine or e.keys != ("Tab",)])
+    )
 
 
 def render(view: View) -> list[str]:
@@ -428,8 +512,8 @@ def _tree_key(ctx: Ctx, key: str) -> bool:
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Swap regions on Tab, walk the focused region on the arrows, open on Enter.
 
-    A native frame draws the spine's rows rather than the tree, so its keys fall through
-    to the dispatcher, which walks and pages those rows.
+    A native frame's keys are the drill module's, which reads the same tree this frame
+    draws, so this hook serves only the prototype registers.
     """
     s = ctx.s
     if s.route != "scope.home" or busy(s) or isinstance(ctx.projection, SpineView):

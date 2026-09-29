@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from eawf.kernel.projection.attention import top_item
+from eawf.kernel.projection.attention import build_attention_view, top_item
 from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
 from eawf.kernel.projection.registers import build_register_view
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, VerbWeight
@@ -162,6 +162,27 @@ def held_refusal(ctx: Ctx, k: str) -> bool:
     if refusal and row is not None:
         ctx.log(k, f"{row.key} refused — {refusal}")
     return bool(refusal)
+
+
+def selected_open_row(session: Session, held: RouteProjection) -> ProjectionRow | None:
+    """Return the held Attention row the caret names, while it is still open.
+
+    The row is found by the stable id the frame published, never by offset. A sealed
+    row has been answered, so it is nothing to act on, and a caret that names no row
+    selects nothing.
+
+    Args:
+        session: The session whose ``sel_id`` names the row.
+        held: The Attention projection the link holds.
+    """
+    if session.sel_id is None:
+        return None
+    row = next((r for r in held.rows if r.key == session.sel_id), None)
+    if row is None:
+        return None
+    register = build_register_view(held)
+    items = () if register.withheld else build_attention_view(register).items
+    return row if any(item.key == row.key for item in items) else None
 
 
 def top_key(

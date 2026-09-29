@@ -374,7 +374,8 @@ def test_con_085_home_names_the_principal_under_more_than_one() -> None:
     assert frame[3].startswith(f" PRINCIPAL  you are {ME} · class {UNKNOWN_WORD} · 1 action is")
     head = next(row for row in frame if "MILESTONES" in row)
     assert re.search(r"RUNS\s+MINE\s+ALL PRINCIPALS\s+PROGRESS", head)
-    track = _starts(frame, " ▸ TRK-CORE")
+    # a Track is a container, so its row never carries the caret
+    track = _starts(frame, "   TRK-CORE")
     # the Run count, then this principal's one open action, then both principals' two
     assert re.search(r"Core framework\s+2\s+!1\s+!2\s+0 of 1 milestone", track)
 
@@ -413,9 +414,11 @@ def test_con_084_the_empty_attention_route_names_its_revision_and_the_next_move(
     assert frame[1].startswith(f" {NOTHING_NEEDS_YOU}")
     nothing = _starts(frame, " NOTHING YET")
     assert "revision 41,208" in nothing
-    # the eight buckets: a count the register takes reads 0, one it cannot take its token
-    buckets = [row for row in frame if re.match(r"^   [a-z ]+\s+(0|\?)\s*$", row)]
+    # the eight buckets stay on the rail: a count the register takes reads 0, one it
+    # cannot take its token, and none of them is drawn as a body row
+    buckets = [row for row in frame if re.search(r"│ [ ▸][a-z][a-z ]+\s+(0|\?)\s*$", row)]
     assert len(buckets) == 8
+    assert not [row for row in frame if re.match(r"^   [a-z ]+\s+(0|\?)\s*$", row)]
     assert re.search(r"needs operator\s+0", _text(frame))
     assert ATTENTION_NEXT in _starts(frame, " WHAT TO DO")
 
@@ -473,11 +476,14 @@ def test_con_108_the_three_empty_frames_answer_three_questions() -> None:
 # ---------- CON-126 in the frame: an action another principal holds ----------
 
 
-def test_the_attention_route_lists_mine_then_all_principals_then_sealed() -> None:
+def test_j2_06_the_attention_route_groups_open_rows_by_bucket_and_lists_no_sealed_row() -> None:
     frame = _frame("attention")
     heads = [row.split("  ")[0].strip() for row in frame if re.match(r"^ [A-Z][A-Z ]+  \d", row)]
-    assert heads == ["MINE", "ALL PRINCIPALS", "SEALED"]
-    assert NOT_A_WORK_LIST in _starts(frame, " ALL PRINCIPALS")
+    assert heads == ["NEEDS OPERATOR"]
+    listed = [m.group(1) for row in frame if (m := re.match(r"^ [ ▸] (ACT-\d{4})", row))]
+    assert listed == ["ACT-0001", "ACT-0002"]
+    # the row another principal holds names its owner on the detail line, not a section
+    assert NOT_A_WORK_LIST in _text(frame)
 
 
 def test_an_action_another_principal_holds_is_refused_naming_who_holds_it() -> None:
@@ -494,7 +500,7 @@ def test_an_action_another_principal_holds_is_refused_naming_who_holds_it() -> N
 def test_con_082_disconnected_states_revision_age_known_and_cause() -> None:
     now = AT + timedelta(minutes=4, seconds=8)
     frame = _frame("activity", conn="DISCONNECTED", now=now)
-    assert frame[1].startswith(" 3 runs · cursor 41,208 · known")
+    assert frame[1].startswith(" 3 runs · known")
     assert _starts(frame, " ATTACHED").rstrip().endswith("revision 41,208 · 4m 08s old")
     assert "the daemon cannot be reached" in frame[1]
 
@@ -549,10 +555,7 @@ def test_con_089_the_run_frame_answers_the_same_at_every_width(label: str) -> No
 
 
 def test_con_089_the_attention_mine_count_does_not_change_with_width() -> None:
-    counts = {
-        next(row for row in _frame("attention", w=w) if row.startswith(" MINE")).split()[1]
-        for w, _h in SIZES
-    }
+    counts = {_frame("attention", w=w)[1].split()[0] for w, _h in SIZES}
     assert counts == {"1"}
 
 
@@ -623,7 +626,7 @@ def _backlog_document(*statuses: str) -> dict[str, Any]:
 
 def test_the_backlog_lists_its_drafts_and_its_deferred_tasks_with_their_facts() -> None:
     frame = _frame("backlog", document=_backlog_document("DRAFT", "DEFERRED", "PLANNED"))
-    assert frame[1].startswith(" 1 drafts · 1 deferred · cursor 41,208")
+    assert frame[1].rstrip() == " 1 drafts · 1 deferred"
     text = _text(frame)
     draft = _starts(frame, "            ▸ TSK-0100")
     assert "Queued task 0" in draft and "MLS-0100" in draft

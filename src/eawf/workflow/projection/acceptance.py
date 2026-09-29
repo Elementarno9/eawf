@@ -40,6 +40,8 @@ from datetime import datetime
 from types import MappingProxyType
 from typing import Any, Final
 
+from pydantic import BaseModel, ConfigDict
+
 from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.delivery.receipts import ProofReceipt
 from eawf.kernel.projection.compute import RouteProjection
@@ -54,6 +56,7 @@ from eawf.kernel.projection.route_view import (
     unstated,
 )
 from eawf.kernel.projection.truth import TruthField, TruthState
+from eawf.kernel.state.epoch2.base import NonEmptyStr
 from eawf.workflow.delivery.acceptance import AcceptanceApproval
 
 logger = logging.getLogger(__name__)
@@ -82,6 +85,11 @@ ACCEPTANCE_ROUTES: Final[tuple[str, ...]] = (
     RECEIPT_ROUTE,
     EXPORT_ROUTE,
 )
+
+#: The verb one Milestone's sealed bundle and bound approval are read through. The
+#: Milestone frame is about one record, so its process records are read per subject
+#: rather than carried for the whole console.
+MILESTONE_ACCEPTANCE_METHOD: Final = "projection.milestone.acceptance"
 
 #: Why a readiness signal of a release candidate is silent. The gates that would state
 #: it observe a published candidate, and nothing in this tree has published one.
@@ -136,6 +144,24 @@ ACCEPTANCE_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingProx
 
 
 check_field_tables(family=FAMILY, routes=ACCEPTANCE_ROUTES, fields=ACCEPTANCE_FIELDS)
+
+
+class MilestoneAcceptanceRecord(BaseModel):
+    """What the daemon holds of one Milestone's acceptance, as one read answers it.
+
+    Attributes:
+        milestone_key: The Milestone the answer is about.
+        bundle: The sealed bundle the Milestone was accepted at, else its latest sealed
+            revision; ``None`` when none was ever sealed.
+        approval: The sealed approval given to that bundle's own digest; ``None`` when
+            nobody approved those bytes.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    milestone_key: NonEmptyStr
+    bundle: MilestoneAcceptanceBundle | None = None
+    approval: AcceptanceApproval | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -601,6 +627,7 @@ __all__ = [
     "EXPORT_ROUTE",
     "FAMILY",
     "GATE_SIGNALS",
+    "MILESTONE_ACCEPTANCE_METHOD",
     "MILESTONE_ROUTE",
     "RC_GATE_REASON",
     "READINESS_MET",
@@ -615,6 +642,7 @@ __all__ = [
     "ApprovalBinding",
     "CriterionRow",
     "ExportReport",
+    "MilestoneAcceptanceRecord",
     "ReadinessSignal",
     "ReceiptCard",
     "ReceiptCardView",

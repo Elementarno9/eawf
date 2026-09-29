@@ -161,7 +161,7 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    wide = w >= 120
+    wide = view.wide
     checks = checks_of(model)
     # the cursor is kept by the check's name, so a reordered list keeps the same check
     names = [check.name for check in checks]
@@ -170,7 +170,7 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, "Health"),
+        crumb_text=route_crumb(view, model, "Health"),
         summary=f"Fleet health · every declared check · {counts(model)}",
     )
     # a column that folds the reason and the time names both in its head
@@ -186,6 +186,7 @@ def health_frame(view: View, model: HealthReadModel) -> list[str]:
     if wide:
         body += [thin(w), *tuple_rows(model.tuples, w)]
     focused = checks[s.sel] if checks else None
+    s.nav_rows = len(checks)
     return finish(view, top, body, _KEYS, foot=[thin(w), *_repair(focused)])
 
 

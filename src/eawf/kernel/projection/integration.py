@@ -83,7 +83,7 @@ FIRST_INTEGRATED_GENERATION: Final = BASE_GENERATION + 1
 #: The item whose producer would state the pull request a delivery was opened as. The
 #: daemon integrates in an isolated workspace and touches no remote, so nothing in this
 #: tree observes a review, its approvals or its checks.
-PULL_REQUEST_PRODUCER: Final = "DEL-041 pull-request observation"
+PULL_REQUEST_PRODUCER: Final = "pull-request observation"
 
 #: What each integration route renders per row, in column order. The first field of both
 #: is the status the Batch document states; the review columns name the producer they

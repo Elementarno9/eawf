@@ -158,7 +158,8 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
         "activity": (Epoch2Collection.RUN,),
         "attention": (Epoch2Collection.PENDING_ACTION,),
         "backlog": (Epoch2Collection.TASK,),
-        "batch.detail": (Epoch2Collection.BATCH,),
+        # a Batch frame lists the Tasks filed under it, so it reads them beside the Batch
+        "batch.detail": (Epoch2Collection.BATCH, Epoch2Collection.TASK),
         "campaign": (Epoch2Collection.CAMPAIGN,),
         # a step and an artifact card are sub-surfaces of the campaign: the record each
         # addresses is the campaign row and the artifact row the campaign produced
@@ -186,15 +187,23 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
         # a candidate's membership is the Milestones it carries, so the Release frame
         # renders the release register beside them
         "release": (Epoch2Collection.RELEASE, Epoch2Collection.MILESTONE),
-        "roadmap": (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
+        # the timeline draws one lane per Track and the release register beside them
+        "roadmap": (
+            Epoch2Collection.TRACK,
+            Epoch2Collection.MILESTONE,
+            Epoch2Collection.BATCH,
+            Epoch2Collection.RELEASE,
+        ),
         "run.detail": (Epoch2Collection.RUN,),
         "sandbox.log": (Epoch2Collection.SANDBOX_POLICY,),
         # home nests each Milestone under its Track and counts the Batches cut under
         # each Milestone, so its progress is read off rows it holds rather than guessed
         "scope.home": (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
         "search": DIAGNOSTICS_CORPUS,
-        "task.detail": (Epoch2Collection.TASK,),
-        "track": (Epoch2Collection.TRACK,),
+        # a Task frame lists the Runs of it, and a Track frame the Milestones filed under
+        # it with the Batches cut under each, all found by their parent key
+        "task.detail": (Epoch2Collection.TASK, Epoch2Collection.RUN),
+        "track": (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE, Epoch2Collection.BATCH),
         "transcript": (Epoch2Collection.RUN,),
         "trust": (Epoch2Collection.CLAIM,),
         "unattended": (Epoch2Collection.RUN,),

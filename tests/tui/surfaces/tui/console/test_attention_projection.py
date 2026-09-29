@@ -292,7 +292,7 @@ def test_ui_062_the_strip_the_rail_and_the_summary_are_one_derivation() -> None:
     """The strip's ``all``, the rail's rows and the summary line state the same numbers."""
     register = _attention()
     items = attention_renderer.bucket_items(register)
-    rail = attention_renderer.rail_lines(register)
+    rail = attention_renderer.rail_lines(register, None)
     assert items[0].n == 3
     assert [line.split()[-1] for line in rail[1:]] == [str(x.n) for x in items[1:]]
     assert "3 all principals" in attention_renderer.counts_line(register, principal="OP-0002")
@@ -316,8 +316,11 @@ def test_ui_062_a_bucket_filter_never_changes_a_rail_count() -> None:
         attention=register,
     )
     filtered = render_route(view)
+    # the caret moves to the chosen bucket; no count beside any bucket moves with it
     rail = [row.split("│ ", 1)[1] for row in unfiltered if "│ " in row]
-    assert rail == [row.split("│ ", 1)[1] for row in filtered if "│ " in row]
+    assert [row.replace("▸", " ") for row in rail] == [
+        row.split("│ ", 1)[1].replace("▸", " ") for row in filtered if "│ " in row
+    ]
 
 
 def test_ui_062_asking_another_route_for_attention_items_raises() -> None:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
-from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
+from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad, scope_label
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.renderers.read_model import native
@@ -49,7 +49,7 @@ def native_card(view: View, model: RunReportPlanView) -> list[str]:
     lines.extend(["", f"Plain text at digest {model.digest} — nothing leaves the machine."])
     return boxed(
         view,
-        crumb=f"Eä ▸ {model.scope_id} ▸ Export",
+        crumb=f"Eä ▸ {scope_label(view, model.scope_id)} ▸ Export",
         ctx=f"{model.route} · cursor {model.source_cursor}",
         pre=[],
         title="EXPORT · report this view",

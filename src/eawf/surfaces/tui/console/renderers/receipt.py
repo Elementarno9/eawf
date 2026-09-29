@@ -14,7 +14,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 from typing import Any
 
-from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed
+from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, scope_label
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import native
 from eawf.workflow.projection.acceptance import ReceiptCard, ReceiptCardView
@@ -73,7 +73,7 @@ def native_card(view: View, model: ReceiptCardView) -> list[str]:
     card = model.card(rid)
     return boxed(
         view,
-        crumb=f"Eä ▸ {model.scope_id} ▸ {rid}",
+        crumb=f"Eä ▸ {scope_label(view, model.scope_id)} ▸ {rid}",
         ctx=f"Receipt {rid} · cursor {model.source_cursor}",
         pre=[],
         title=f"RECEIPT · {rid}",

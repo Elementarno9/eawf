@@ -23,6 +23,8 @@ SIZES: tuple[tuple[int, int], ...] = ((80, 24), (120, 30), (160, 40))
 BACK_CAP = 32
 # The key log keeps this many entries, newest first.
 LOG_CAP = 9
+# How long a toast stands after it was raised, unless it names its own dwell.
+TOAST_DWELL = 5.0
 
 # The header label each of the nine wire values prints, in the packet's own words. A
 # console keeps this one translation rather than a second vocabulary for the link: the
@@ -137,7 +139,7 @@ class BackStack(BaseModel):
 
 
 class Toast(BaseModel):
-    """One rack notice and the console-clock time it was raised."""
+    """One rack notice, the console-clock time it was raised and how long it stands."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -145,6 +147,7 @@ class Toast(BaseModel):
     text: str
     sev: Severity
     at: float
+    dwell: float = TOAST_DWELL
 
 
 class LogEntry(BaseModel):
@@ -283,9 +286,21 @@ class Session(BaseModel):
     # published by the renderer during a render, read by the frame builder and dispatcher
     record_facts: list[str] | None = None
     record_nav: list[str | None] | None = None
+    # the bucket keys a native Activity or Attention frame drew, which Tab cycles; None
+    # when the frame drew the prototype's buckets
+    bucket_keys: list[str | None] | None = None
+    # the rows the frame's cursor walks; ``None`` when the frame walks no table
+    nav_rows: int | None = None
+    # the keys the frame's drawn keybar offers; ``None`` before a frame is built
+    bar_keys: frozenset[str] | None = None
     absent_frame: bool = False
     absent: bool = False
     reserved: int = 0
+    # whether a table this render drew was cut to its window, so paging has somewhere to go
+    windowed: bool = False
+    # the same for the last route frame drawn, which an overlay over it reads: the route
+    # is not drawn while the overlay is
+    route_windowed: bool = False
     # settings rail
     set_sec: int = 0
     set_key: int = 0

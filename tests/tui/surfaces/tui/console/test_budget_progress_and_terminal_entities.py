@@ -203,7 +203,8 @@ def test_con_081_a_finished_run_says_nothing_is_wrong(
     assert not any(row.startswith(" ATTACHED") for row in body)
     glyphs = {glyph.unicode for glyph in CONNECTION.values()}
     assert not any(ch in glyphs for row in body[2:] for ch in row)
-    assert " ".join(KEY["actions"].pair()) not in rows[-1]
+    # the Run's lifecycle is over, but its menu still opens its Git and its transcript
+    assert " ".join(KEY["actions"].pair()) in rows[-1]
 
 
 def test_con_081_the_finished_rows_carry_no_truth_mark(fixture: Fixture) -> None:

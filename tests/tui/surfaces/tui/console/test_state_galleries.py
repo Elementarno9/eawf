@@ -69,6 +69,7 @@ from eawf.kernel.state.epoch2.track import TrackStatus
 from eawf.kernel.state.epoch2.transitions import AMBIGUOUS_STATES, TERMINAL_STATUSES, statuses_of
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, ROUTE_RECONNECT_METHODS
 from eawf.surfaces.tui.console import lifecycle
+from eawf.surfaces.tui.console.action_menu import VerbWeight
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.cells import NO_VALUE as N
 from eawf.surfaces.tui.console.chrome import load_chrome
@@ -102,9 +103,12 @@ GALLERY_ROUTES: tuple[str, ...] = (*PLANNING_ROUTES, *DIAGNOSTICS_ROUTES)
 #: The gallery routes still drawn as the shared record table. Campaign, History diff and
 #: Search draw their packet layouts, each silent column a cell wearing the unknown token,
 #: and ``test_native_route_frames`` holds those three; the Backlog draws its two groups,
-#: which ``test_native_route_bodies`` holds.
+#: which ``test_native_route_bodies`` holds; the roadmap draws its lane chart and History
+#: its fact ledger, which ``test_spine_frames_jury`` holds.
 TABLE_ROUTES: tuple[str, ...] = tuple(
-    r for r in GALLERY_ROUTES if r not in ("campaign", "history.diff", "search", "backlog")
+    r
+    for r in GALLERY_ROUTES
+    if r not in ("campaign", "history.diff", "search", "backlog", "roadmap", "history")
 )
 
 #: One row per collection the gallery touches, so no route's register is empty by accident
@@ -236,7 +240,7 @@ def test_every_gallery_route_draws_the_rows_the_daemon_projected(route: str) -> 
     for row in spine.rows:
         assert row.key in body
         assert row.collection.value in body
-    assert "cursor 41,208" in body
+    assert "cursor 41,208" not in body
 
 
 @pytest.mark.parametrize("route", GALLERY_ROUTES)
@@ -400,37 +404,37 @@ def _stack(tree: Path, **leaf: Any) -> list[str]:
 def test_con_123_the_first_tier_is_the_nine_layers_winning_lens_and_on_this(tree: Path) -> None:
     frame = _stack(tree)
     head = next(
-        i for i, row in enumerate(frame) if re.match(r"^\s+LAYER\s+VALUE\s+KIND\s+WHERE", row)
+        i for i, row in enumerate(frame) if re.match(r"^│\s+LAYER\s+VALUE\s+KIND\s+WHERE", row)
     )
     layers = [row for row in frame[head + 1 : head + 10] if row.strip()]
     assert len(layers) == 9
-    for label in (" WINNING", " LENS", " ON THIS"):
-        assert any(row.startswith(label) for row in frame), label
+    for label in (" WINNING", " LENS", " LENS SETS"):
+        assert any(row.startswith(f"│{label}") for row in frame), label
     assert "effective revision" in frame[1]
 
 
 def test_con_123_an_empty_second_tier_draws_no_row(tree: Path) -> None:
     frame = _stack(tree)
     for label in (" DENIED BY", " CONSTRAINED BY", " NEEDS", " SECRET"):
-        assert not any(row.startswith(label) for row in frame), label
+        assert not any(row.startswith(f"│{label}") for row in frame), label
 
 
 def test_con_123_an_authority_denied_key_keeps_the_denied_token_in_its_value(tree: Path) -> None:
     frame = _stack(tree, deny_chain=("org.policy",))
-    assert any(row.startswith(" DENIED BY org.policy") for row in frame)
-    repo = next(row for row in frame if re.match(r"^\s+.?\s*repo\s", row))
+    assert any(row.startswith("│ DENIED BY org.policy") for row in frame)
+    repo = next(row for row in frame if re.match(r"^│\s+.?\s*repo\s", row))
     assert "⊘ strict" in repo
 
 
 def test_con_123_a_capability_degraded_key_names_its_requirement_and_state(tree: Path) -> None:
     frame = _stack(tree, capability_requirement="cap.prose", certification_state=None)
-    needs = next(row for row in frame if row.startswith(" NEEDS"))
+    needs = next(row for row in frame if row.startswith("│ NEEDS"))
     assert "cap.prose" in needs and "certification unknown" in needs
 
 
 def test_con_123_a_secret_is_named_by_its_reference_never_its_value(tree: Path) -> None:
     frame = _stack(tree, secret_ref="secret://vault/prose")
-    secret = next(row for row in frame if row.startswith(" SECRET"))
+    secret = next(row for row in frame if row.startswith("│ SECRET"))
     assert "secret://vault/prose" in secret and "never renders" in secret
 
 
@@ -669,8 +673,12 @@ def test_con_104_every_layout_changing_state_has_a_full_detail_frame(
         assert any(line.startswith(" WHAT IS NOT known") for line in frame)
         assert "   ROW " not in text, "an unknown state draws no record table"
     else:
-        assert any(line.startswith(" FINAL ") and state in line for line in frame), text
-        assert ". actions" not in frame[-1], "an ending offers no lifecycle verb"
+        assert any(line.lstrip().startswith("FINAL ") and state in line for line in frame), text
+        # an ending offers no lifecycle verb: its menu stays only for the light verbs,
+        # such as a Run's Git, and is neither offered nor bound where it has none
+        menu = Fixture.from_chrome(load_chrome()).menus.verbs(DETAIL_ROUTES[family])
+        light = any(verb.weight is VerbWeight.LIGHT for verb in menu)
+        assert (". actions" in frame[-1]) is light, "an ending offers only its light verbs"
 
 
 @pytest.mark.parametrize("family", [Family.TRACK, Family.BATCH, Family.TASK])
@@ -680,10 +688,11 @@ def test_con_104_a_chip_only_state_keeps_the_layout_and_states_its_subject(
     state = next(r.state for r in lifecycle.TREATMENTS[family] if r.layout is Layout.CHIP)
     frame = _detail(family, state)
     treated = lifecycle.treatment(family, state)
-    assert next(line for line in frame if line.startswith(" STATE ")).split()[1] == state
+    assert next(line for line in frame if line.lstrip().startswith("STATE ")).split()[1] == state
     assert treated.meaning in "\n".join(frame)
-    assert any(line.lstrip().startswith("ROW ") for line in frame), "the record table stays"
-    assert not any(line.startswith(" FINAL ") for line in frame)
+    children = {Family.TRACK: "MILESTONES", Family.BATCH: "TASKS", Family.TASK: "RUNS"}[family]
+    assert any(line.lstrip().startswith(children) for line in frame), "the child list stays"
+    assert not any(line.lstrip().startswith("FINAL ") for line in frame)
 
 
 def test_con_104_a_detail_frame_opens_with_the_cursor_on_its_subject() -> None:
@@ -702,7 +711,9 @@ def test_con_104_a_detail_frame_opens_with_the_cursor_on_its_subject() -> None:
         projection=build_spine_view(_projection("batch.detail", document=document)),
     )
     frame = render_route(view)
-    assert any(line.startswith(" ▸ BAT-0101") for line in frame)
+    # a Batch with no Task filed under it leaves the selection on the Batch itself
+    assert frame[1].startswith(" Batch BAT-0101 · ACTIVE")
+    assert not any("BAT-0100" in line for line in frame[1:]), "a sibling is not listed"
     assert session.sel_id == "BAT-0101"
 
 
@@ -746,7 +757,7 @@ def test_con_105_the_detail_frame_states_the_clock_its_state_allows(
     family: Family, state: str
 ) -> None:
     frame = _detail(family, state)
-    clock = next(line for line in frame if line.startswith(" CLOCK "))
+    clock = next(line for line in frame if line.lstrip().startswith("CLOCK "))
     words = lifecycle.ELAPSED_WORDS[lifecycle.treatment(family, state).elapsed]
     assert words in clock and "last moved 11:58:02" in clock
 
@@ -1040,7 +1051,6 @@ def test_con_104_the_live_detail_frames_draw_the_walked_trees_own_records(tmp_pa
         if treated.layout is Layout.UNKNOWN:
             assert any(line.startswith(" WHAT IS TRUE") for line in lines), route
             continue
-        subject_line = next(line for line in lines if line.startswith(" SUBJECT"))
-        assert subject.key in subject_line, route
-        state_line = next(line for line in lines if line.startswith(" STATE"))
+        assert subject.key in lines[1], route
+        state_line = next(line for line in lines if line.lstrip().startswith("STATE"))
         assert f"{treated.state} · {treated.meaning}" in state_line, route

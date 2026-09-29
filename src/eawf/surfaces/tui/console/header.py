@@ -3,8 +3,8 @@
 The right side is the same at every frame size: an attention count only when something
 needs the operator, then exactly one state value with its glyph. A session renders one of
 the nine connection values; the pre-session layer renders its process value and no count.
-A frame about an entity whose lifecycle has ended renders no connection value at all:
-terminal is a property of the entity, and a finished Run under a live chip reads as live.
+A frame about an entity whose lifecycle has ended keeps its connection value: terminal is
+a property of the entity, which the frame's own summary states, never a connection value.
 The breadcrumb starts at the brand, and while the back stack holds history its middle is
 that history, the path Escape walks, naming each place once. A crumb too wide for its room
 gives way from the middle, never at the brand, the scope or the leaf. A drawn header is
@@ -81,17 +81,18 @@ def attention_count(needs: int) -> str:
 
 
 def _history_chain(
-    session: Session, *, scope: str, leaf: str, registry: RouteRegistry
+    session: Session, *, scope: str, leaf: str, registry: RouteRegistry, prototype: bool
 ) -> list[str]:
-    """Return the crumb steps the back stack names, oldest first, each place once."""
+    """Return the crumb steps the back stack names, oldest first, each place once.
+
+    A step drawn from what a link read never names the prototype record a route's declared
+    leaf stands for; the prototype replay keeps it, because its goldens name it.
+    """
+    name = registry.step_leaf if prototype else registry.read_leaf
     entries = session.back.items()
     if entries and entries[0].route == HOME_ROUTE and not entries[0].subj:
         entries = entries[1:]
-    steps = [
-        registry.step_leaf(entry.route, entry.subj)
-        for entry in entries
-        if entry.route != session.route
-    ]
+    steps = [name(entry.route, entry.subj) for entry in entries if entry.route != session.route]
     named = {BRAND, scope, leaf}
     chain: list[str] = []
     for step in reversed(steps):
@@ -103,7 +104,12 @@ def _history_chain(
 
 
 def crumb_from_history(
-    session: Session, crumb: str, *, scope: str, registry: RouteRegistry = REGISTRY
+    session: Session,
+    crumb: str,
+    *,
+    scope: str,
+    registry: RouteRegistry = REGISTRY,
+    prototype: bool = False,
 ) -> str:
     """Return ``crumb`` with its middle replaced by the back stack, when there is one.
 
@@ -112,6 +118,8 @@ def crumb_from_history(
         crumb: The renderer's containment crumb; its last segment is the leaf.
         scope: The attached scope name, the step after the brand.
         registry: The route rows the step leaves come from.
+        prototype: Whether the frame replays the prototype registers, whose steps may
+            name the prototype records the routes' declared leaves stand for.
 
     Returns:
         ``crumb`` itself on an empty back stack, otherwise brand, scope, the history
@@ -120,7 +128,7 @@ def crumb_from_history(
     if not session.back:
         return crumb
     leaf = crumb.split(CRUMB_SEP)[-1]
-    chain = _history_chain(session, scope=scope, leaf=leaf, registry=registry)
+    chain = _history_chain(session, scope=scope, leaf=leaf, registry=registry, prototype=prototype)
     gutter = _GUTTER.match(crumb)
     lead = gutter.group(0) if gutter else ""
     return lead + CRUMB_SEP.join([BRAND, scope, *chain, leaf])
@@ -248,7 +256,7 @@ def header_row(
     w: int,
     process: ProcessValue | None = None,
     registry: RouteRegistry = REGISTRY,
-    terminal: bool = False,
+    prototype: bool = False,
 ) -> str:
     """Return the header row, exactly ``w`` cells.
 
@@ -262,8 +270,8 @@ def header_row(
         process: The pre-session process value; given exactly when the session is on the
             ``entry`` layer, where no count and no connection value render.
         registry: The route rows the history steps are named from.
-        terminal: Whether the frame's subject is an entity whose lifecycle has ended; its
-            header keeps the attention count and suppresses the connection value.
+        prototype: Whether the frame replays the prototype registers; see
+            :func:`crumb_from_history`.
 
     Raises:
         ValueError: ``process`` is given off the entry layer or missing on it, ``needs``
@@ -275,12 +283,12 @@ def header_row(
     if process is not None:
         slot = f"{process.glyph} {process.label}"
         return pad(crumb, w - cell_len(slot)) + slot
-    slot = attention_count(needs) + ("" if terminal else state_slot(session.conn))
+    slot = attention_count(needs) + state_slot(session.conn)
     room = w - cell_len(slot)
     full = crumb.replace(SCOPE_SLOT, f"{CRUMB_SEP}{scope}{CRUMB_SEP}")
     if cell_len(full) <= room:
         crumb = full
-    crumb = crumb_from_history(session, crumb, scope=scope, registry=registry)
+    crumb = crumb_from_history(session, crumb, scope=scope, registry=registry, prototype=prototype)
     if cell_len(crumb) > room:
         crumb = _fold(crumb, room)
     return pad(crumb, room) + slot

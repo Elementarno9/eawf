@@ -18,7 +18,8 @@ Requirement rows proved here, by test-name prefix:
 - UI-036: DEGRADED names only the connection; neither vocabulary admits the other's word.
 - UI-037: SNAPSHOT LOADING and SNAPSHOT REQUIRED stay distinct; a transfer preserves the
   selection and filters, and a failed one returns to the refusal.
-- UI-038: a terminal subject suppresses the header's connection value.
+- UI-038: TERMINAL is a property of the subject, stated in its summary, never a connection
+  value; the header keeps the link's own value on a terminal frame.
 - UI-060: DISCONNECTED is entered when the daemon dies, names its cause, dates its last
   revision, removes writes, and leaves by replay or by a snapshot refusal.
 - UI-061: every value but LIVE labels its counts known, draws the ATTACHED line, withdraws
@@ -96,7 +97,7 @@ from eawf.surfaces.tui.console.reads import (
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.seam import KNOWN_COUNT_LABEL, ProjectionSeam
 from eawf.surfaces.tui.console.session import Session, conn_label
-from eawf.surfaces.tui.console.tokens import CONNECTION, Severity
+from eawf.surfaces.tui.console.tokens import Severity
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     method_context,
     seed,
@@ -246,13 +247,11 @@ async def _until(condition: Callable[[], bool]) -> None:
         await asyncio.sleep(PROBE_SECONDS)
 
 
-def _header(conn: ConnectionValue, *, terminal: bool = False) -> str:
+def _header(conn: ConnectionValue) -> str:
     """Return the header a session drawn at ``conn`` renders."""
     session = Session()
     session.conn = conn_label(conn)
-    return header_row(
-        session, crumb=" Eä ▸ eawf-core", scope="eawf-core", needs=0, w=80, terminal=terminal
-    )
+    return header_row(session, crumb=" Eä ▸ eawf-core", scope="eawf-core", needs=0, w=80)
 
 
 def _announced(result: Any) -> tuple[str, Severity, str]:
@@ -609,7 +608,7 @@ def test_ui_037_a_transfer_keeps_the_selection_and_a_failed_one_restates_the_ref
     assert failed is ConnectionValue.SNAPSHOT_REQUIRED
 
 
-# ---------- UI-038: a terminal subject carries no connection value ----------
+# ---------- UI-038: terminal is the subject's property, never a connection value ----------
 
 
 def _status(value: str) -> TruthField[str]:
@@ -655,14 +654,15 @@ def _run_frame(fixture: Fixture, status: str, conn: ConnectionValue) -> list[str
 
 @pytest.mark.parametrize("status", ["COMPLETED", "FAILED", "CANCELLED"])
 @pytest.mark.parametrize("conn", [ConnectionValue.LIVE_COMPLETE, ConnectionValue.DISCONNECTED])
-def test_ui_038_a_terminal_run_suppresses_the_connection_chip(
+def test_ui_038_j4_13_a_terminal_run_keeps_the_link_and_states_its_end_below(
     fixture: Fixture, status: str, conn: ConnectionValue
 ) -> None:
-    header = _run_frame(fixture, status, conn)[0]
-    glyphs = {glyph.unicode for glyph in CONNECTION.values()}
+    frame = _run_frame(fixture, status, conn)
+    header = frame[0]
 
-    assert conn_label(conn) not in header
-    assert not any(ch in glyphs for ch in header)
+    assert header.endswith(state_slot(conn_label(conn)))
+    assert "TERMINAL" not in header
+    assert f"{status} · final" in frame[1]
     assert len(header) == 120
 
 
@@ -671,11 +671,10 @@ def test_ui_038_a_running_run_keeps_its_chip(fixture: Fixture) -> None:
     assert header.endswith(state_slot("DISCONNECTED"))
 
 
-def test_ui_038_terminal_keeps_the_attention_count() -> None:
+def test_ui_038_the_attention_count_sits_before_the_link() -> None:
     session = Session()
-    row = header_row(session, crumb=" Eä ▸ x", scope="x", needs=3, w=60, terminal=True)
-    assert row.endswith("!3 NEEDS YOU  ")
-    assert "LIVE" not in row
+    row = header_row(session, crumb=" Eä ▸ x", scope="x", needs=3, w=60)
+    assert row.endswith("!3 NEEDS YOU  ● LIVE")
 
 
 # ---------- UI-060: DISCONNECTED over a daemon that died ----------

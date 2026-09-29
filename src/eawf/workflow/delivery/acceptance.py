@@ -105,7 +105,7 @@ class AcceptanceApproval(Epoch2Model):
 
     The model only exists once every rule has held, so a caller holding
     one is holding the finished answer rather than the inputs to it.
-    Building it anywhere but :func:`require_sealed_acceptance` would be
+    Building it anywhere but :func:`sealed_approval` would be
     building the conclusion, which is why the resolver and the digest are
     both required and are checked against each other on the way in.
     """
@@ -223,6 +223,48 @@ def _require_complete_journey(bundle: MilestoneAcceptanceBundle) -> None:
         )
 
 
+def sealed_approval(
+    action: PendingAction, *, bundle: MilestoneAcceptanceBundle, milestone_ref: MilestoneUrn
+) -> AcceptanceApproval:
+    """Return the approval ``action`` sealed over ``bundle``, or refuse it.
+
+    Every rule an acceptance proceeds on is checked except where the
+    Milestone stands, so a reader shown an acceptance already given gets
+    the same answer the acceptance itself was allowed on.
+
+    Args:
+        action: The PendingAction the tree holds, read rather than presented.
+        bundle: The bundle the approval is claimed to cover.
+        milestone_ref: The Milestone the approval is claimed for.
+
+    Returns:
+        The approval, carrying who gave it and the exact digest it covers.
+
+    Raises:
+        AcceptanceRefusedError: The action is not a sealed protected
+            approval, its answer was not the approving one, it approves
+            another Milestone or another set of bytes, or a journey step
+            did not pass.
+    """
+    _require_sealed_protected(action)
+    _require_approving_answer(action)
+    approved = _require_bundle_binding(action, bundle, milestone_ref=milestone_ref)
+    _require_complete_journey(bundle)
+    resolver = action.resolution_actor
+    receipt = action.receipt_ref
+    assert resolver is not None, "a sealed action always records who answered"
+    assert receipt is not None, "a sealed action always records the receipt of the answer"
+    return AcceptanceApproval(
+        milestone_ref=milestone_ref,
+        bundle_revision=bundle.revision,
+        approved_digest=approved,
+        resolved_by=resolver,
+        receipt_ref=receipt,
+        accepted_binding=bundle.accepted_binding,
+        approved_at=action.updated_at,
+    )
+
+
 def require_sealed_acceptance(
     action: PendingAction,
     *,
@@ -262,27 +304,13 @@ def require_sealed_acceptance(
             f"{milestone_ref.entity_key} is {status.value}, and an acceptance is given in "
             f"{MilestoneStatus.ACCEPTANCE_REVIEW.value}",
         )
-    _require_sealed_protected(action)
-    _require_approving_answer(action)
-    approved = _require_bundle_binding(action, bundle, milestone_ref=milestone_ref)
-    _require_complete_journey(bundle)
-    resolver = action.resolution_actor
-    receipt = action.receipt_ref
-    assert resolver is not None, "a sealed action always records who answered"
-    assert receipt is not None, "a sealed action always records the receipt of the answer"
+    approval = sealed_approval(action, bundle=bundle, milestone_ref=milestone_ref)
     logger.info(
         f"require_sealed_acceptance milestone={milestone_ref.entity_key} "
-        f"action={action.id} revision={bundle.revision} resolver={resolver.principal_id}"
+        f"action={action.id} revision={bundle.revision} "
+        f"resolver={approval.resolved_by.principal_id}"
     )
-    return AcceptanceApproval(
-        milestone_ref=milestone_ref,
-        bundle_revision=bundle.revision,
-        approved_digest=approved,
-        resolved_by=resolver,
-        receipt_ref=receipt,
-        accepted_binding=bundle.accepted_binding,
-        approved_at=action.updated_at,
-    )
+    return approval
 
 
 def request_repair(
@@ -404,4 +432,5 @@ __all__ = [
     "evidence_view",
     "request_repair",
     "require_sealed_acceptance",
+    "sealed_approval",
 ]

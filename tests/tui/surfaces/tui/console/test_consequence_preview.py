@@ -29,7 +29,6 @@ from eawf.surfaces.tui.console.mutation import (
     CARD,
     ENTITY_ROUTES,
     NATIVE_KEYS,
-    SAME_VERB,
     Card,
     GateKind,
     answer_card,
@@ -41,6 +40,7 @@ from eawf.surfaces.tui.console.mutation import (
 )
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
+    SAME_VERB,
     LifecycleRequest,
     OperationResult,
     OperationStatus,

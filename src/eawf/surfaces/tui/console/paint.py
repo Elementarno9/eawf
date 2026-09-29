@@ -20,9 +20,11 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from itertools import pairwise
 from types import MappingProxyType
 
 from eawf.surfaces.tui.console.cells import Mark, spans
+from eawf.surfaces.tui.console.frame import Lensed, RailReceded, Receded
 from eawf.surfaces.tui.console.header import CrumbPart, crumb_runs
 from eawf.surfaces.tui.console.keybar import GAP
 from eawf.surfaces.tui.console.lifecycle import WORD_CLASSES
@@ -140,8 +142,20 @@ _LABEL_SURFACE: Mapping[str, str] = MappingProxyType(
         "RESOLVED": "info",
     }
 )
+# The classes the packet's stylesheet sets at weight 600 or 700: every run painted in one
+# of them is drawn bold, whichever rule painted it, so a state word, a severity token and
+# the accent carry the packet's weight as well as its colour.
+_HEAVY = frozenset({"ok", "info", "warn", "err", "brand", "live", "caret"})
 _RULES = re.compile(r"[═─┄]+")
+# A junction or corner joins a rail to a rule: it takes the rail's tone, as the packet's
+# join does, rather than the text colour no line around it is drawn in.
+_JUNCTIONS = re.compile(r"[├┤┬┴┼╤╧╪┌┐└┘]")
 _CURSOR_ROW = re.compile(rf"^\s*{CARET}")
+# A typed entity id is a link: a Run's eight hex digits, a Track's code, or any capital
+# prefix and dash before a key that starts with a digit (MLS-0100, EAWF-0042, EVT-2218).
+_TYPED_ID = re.compile(
+    r"(?<![\w-])(?:RUN-[0-9a-f]{8}|TRK-[A-Z0-9]+(?:-[A-Z0-9]+)*|[A-Z][A-Z0-9]*-\d[0-9A-Za-z]*)(?![\w-])"
+)
 _OUTSTANDING = re.compile(r"![1-9][\d,]*(?: NEEDS YOU)?")
 # The header's state slot: one glyph, a space, then the upper-case value, at the row's end.
 _STATE_SLOT = re.compile(r"(?<=\s)(\S) ([A-Z][A-Z /]*[A-Z])\s*$")
@@ -170,6 +184,7 @@ class _Canvas:
     def __init__(self, row: str) -> None:
         self.row = row
         self.surface: list[str | None] = [None for _ch in row]
+        self.ground: list[str | None] = [None for _ch in row]
         self.bold: list[bool] = [False for _ch in row]
         self.underline: list[bool] = [False for _ch in row]
         self.size = len(self.surface)
@@ -190,7 +205,7 @@ class _Canvas:
             self.bold[i] = self.bold[i] or bold
             self.underline[i] = self.underline[i] or underline
 
-    def strokes(self, *, ground: str | None) -> tuple[Stroke, ...]:
+    def strokes(self) -> tuple[Stroke, ...]:
         """Return the row as runs, a marked span always its own run."""
         marks: list[tuple[Mark | None, int]] = [(None, -1)] * self.size
         at = 0
@@ -204,6 +219,8 @@ class _Canvas:
                     self.bold[i] = False
                     self.underline[i] = False
             at = end
+        for i, surface in enumerate(self.surface):
+            self.bold[i] = self.bold[i] or surface in _HEAVY
         out: list[Stroke] = []
         start = 0
         for i in range(1, self.size + 1):
@@ -213,7 +230,7 @@ class _Canvas:
                 Stroke(
                     self.row[start:i],
                     surface=self.surface[start],
-                    ground=ground,
+                    ground=self.ground[start],
                     bold=self.bold[start],
                     underline=self.underline[start],
                     mark=marks[start][0],
@@ -222,8 +239,8 @@ class _Canvas:
             start = i
         return tuple(out)
 
-    def _key(self, i: int) -> tuple[str | None, bool, bool]:
-        return (self.surface[i], self.bold[i], self.underline[i])
+    def _key(self, i: int) -> tuple[str | None, str | None, bool, bool]:
+        return (self.surface[i], self.ground[i], self.bold[i], self.underline[i])
 
 
 def paint(row: str, part: Part) -> tuple[Stroke, ...]:
@@ -245,10 +262,61 @@ def paint(row: str, part: Part) -> tuple[Stroke, ...]:
         _header(canvas)
     elif part is Part.KEYBAR:
         _keybar(canvas)
+    elif isinstance(row, Receded):
+        _receded(canvas)
     elif not _block(canvas):
         _body(canvas)
-    cursor = part is Part.BODY and _CURSOR_ROW.match(row) is not None
-    return canvas.strokes(ground="cursor" if cursor else None)
+        _links(canvas)
+        _cursor(canvas)
+        if isinstance(row, RailReceded) and RAIL in row:
+            _receded(canvas, start=row.rindex(RAIL) + 1)
+    return canvas.strokes()
+
+
+def _links(canvas: _Canvas) -> None:
+    """Underline every typed entity id, which names a record the console can open."""
+    for found in _TYPED_ID.finditer(canvas.row):
+        canvas.put(found.start(), found.end(), None, underline=True)
+
+
+def _cursor(canvas: _Canvas) -> None:
+    """Ground the pane the caret marks, and no other pane of the row.
+
+    A row split by the rail carries two panes, and the caret of the narrow one marks a
+    section, not the row the arrows walk: only the widest pane is grounded, and only when
+    its own text starts at the caret.
+    """
+    row = canvas.row
+    start, end = 0, canvas.size
+    # a rail between two rule cells is a line crossing a lane, not a pane edge
+    edges = [i for i, ch in enumerate(row) if ch == RAIL and row[i - 1 : i + 2] != f"─{RAIL}─"]
+    if edges:
+        widest = (0, 0)
+        for left, right in pairwise([-1, *edges, canvas.size]):
+            if right - left - 1 > widest[1] - widest[0]:
+                widest = (left + 1, right)
+        start, end = widest
+    if _CURSOR_ROW.match(row[start:end]) is None:
+        return
+    for i in range(start, end):
+        canvas.ground[i] = "cursor"
+
+
+def _receded(canvas: _Canvas, start: int = 0) -> None:
+    """Draw a row, from ``start`` on, in the receded tone, keeping what needs the operator.
+
+    Recession never hides an outstanding count, so ``!N`` keeps its weight and colour,
+    and a pane label keeps its weight.
+    """
+    canvas.put(start, canvas.size, "recede")
+    for i in range(start, canvas.size):
+        canvas.bold[i] = False
+        canvas.underline[i] = False
+    label = _PANE_LABEL.match(canvas.row) if start == 0 else None
+    if label is not None:
+        canvas.put(label.start(1), label.end(1), None, bold=True)
+    for count in _OUTSTANDING.finditer(canvas.row, start):
+        canvas.put(count.start(), count.end(), "warn", bold=True)
 
 
 def _header(canvas: _Canvas) -> None:
@@ -340,9 +408,7 @@ def _body(canvas: _Canvas) -> None:
     row = canvas.row
     chip_row = _CHIP_ROW.search(row) is not None
     if not chip_row and not _heads(canvas):
-        label = _PANE_LABEL.match(row)
-        if label is not None:
-            canvas.put(label.start(1), label.end(1), _LABEL_SURFACE.get(label.group(1)), bold=True)
+        _pane_labels(canvas)
     for pattern, surface in (*_STATUS, *_LIFECYCLE):
         for found in pattern.finditer(row):
             canvas.put(found.start(), found.end(), surface)
@@ -350,11 +416,25 @@ def _body(canvas: _Canvas) -> None:
         canvas.put(count.start(), count.end(), "warn", bold=True)
     for rule in _RULES.finditer(row):
         canvas.put(rule.start(), rule.end(), "rule")
+    for joint in _JUNCTIONS.finditer(row):
+        canvas.put(joint.start(), joint.end(), "rail")
     for i, ch in enumerate(row):
         if ch == RAIL:
             canvas.put(i, i + 1, "rail")
         elif ch == CARET:
             canvas.put(i, i + 1, "caret", bold=True)
+    _settings(canvas)
+
+
+def _pane_labels(canvas: _Canvas) -> None:
+    """Bold the pane label that opens the row, and the one that opens the pane past a rail."""
+    row = canvas.row
+    offset = row.rfind(RAIL) + 1 if row.count(RAIL) == 1 else 0
+    for at in dict.fromkeys((0, offset)):
+        label = _PANE_LABEL.match(row[at:])
+        if label is not None:
+            surface = _LABEL_SURFACE.get(label.group(1))
+            canvas.put(at + label.start(1), at + label.end(1), surface, bold=True)
 
 
 def _heads(canvas: _Canvas) -> bool:
@@ -368,8 +448,61 @@ def _heads(canvas: _Canvas) -> bool:
             canvas.put(left.start(2), left.end(2), None, bold=True)
             canvas.put(offset + right.start(2), offset + right.end(2), None, bold=True)
             return True
+        # the pane right of the rail carries its own heads whatever the left pane holds
+        right = _HEADS.match(halves[1])
+        if right is not None:
+            offset = len(halves[0]) + len(RAIL)
+            canvas.put(offset + right.start(2), offset + right.end(2), None, bold=True)
+            return True
     whole = _HEADS.match(row)
     if whole is None:
         return False
     canvas.put(whole.start(2), whole.end(2), None, bold=True)
     return True
+
+
+# The settings rail: a category heading is an upper-case word at the row's start, the
+# selected section is the caret row, and either is followed by the rail's own column.
+_RAIL_CATEGORY = re.compile(r"^([A-Z][A-Z]+) +[│├]")
+_RAIL_SECTION = re.compile(rf"^{CARET} ([a-z][a-z0-9_]*) +[│├]")
+# A settings key row: after the rail, the cursor column, then the key's lens glyph.
+_KEY_GLYPH = re.compile(rf"│ [{CARET} ] ([=≠·–]) ")  # noqa: RUF001
+# The layer the lens writes to, bracketed in the writable chain.
+_LENS = re.compile(r"\[(?:global|workspace|repo|branch|local)\]")
+# What each lens glyph says: set here and winning, set here and shadowed, inherited, and
+# stated by no layer but the defaults.
+_GLYPH_SURFACE: Mapping[str, str] = MappingProxyType(
+    {"=": "ok", "≠": "warn", "·": "dim", "–": "dim"}  # noqa: RUF001
+)
+
+
+def _settings(canvas: _Canvas) -> None:
+    """Paint the settings rail headings and selection, the key glyphs and the lens."""
+    row = canvas.row
+    category = _RAIL_CATEGORY.match(row)
+    if category is not None:
+        canvas.put(category.start(1), category.end(1), "brand", bold=True)
+    section = _RAIL_SECTION.match(row)
+    if section is not None:
+        canvas.put(section.start(1), section.end(1), "brand")
+    for found in _KEY_GLYPH.finditer(row):
+        canvas.put(found.start(1), found.end(1), _GLYPH_SURFACE[found.group(1)])
+    for found in _LENS.finditer(row):
+        canvas.put(found.start(), found.end(), None, bold=True)
+    if isinstance(row, Lensed):
+        _lens_strip(canvas, row)
+
+
+# The lens strip: the layers a write may target, lowest precedence first.
+_LENS_STRIP = re.compile(r"global › workspace › repo › branch › local")  # noqa: RUF001
+_LAYER_WORD = re.compile(r"[a-z]+")
+
+
+def _lens_strip(canvas: _Canvas, row: Lensed) -> None:
+    """Draw the lens layer bold and each layer that sets the focused key in its surface."""
+    strip = _LENS_STRIP.search(row)
+    if strip is None:
+        return
+    for word in _LAYER_WORD.finditer(strip.group(0)):
+        start, end = strip.start() + word.start(), strip.start() + word.end()
+        canvas.put(start, end, row.layers.get(word.group(0)), bold=word.group(0) == row.lens)

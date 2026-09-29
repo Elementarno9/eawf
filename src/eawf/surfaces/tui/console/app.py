@@ -14,6 +14,7 @@ above it, which is the route's unknown frame only when the route itself is unhel
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
@@ -25,7 +26,6 @@ from textual.events import Click, Key, Resize
 from textual.strip import Strip
 from textual.widget import Widget
 
-from eawf.kernel.delivery.acceptance import MilestoneAcceptanceBundle
 from eawf.kernel.delivery.integration import IntegrationConflict, IntegrationGeneration
 from eawf.kernel.delivery.receipts import ProofReceipt
 from eawf.kernel.projection.attention import delivered_revisions, deliveries
@@ -39,7 +39,11 @@ from eawf.kernel.projection.registers import (
     build_register_view,
 )
 from eawf.kernel.projection.route_view import RouteReadModel
-from eawf.kernel.projection.settings import SETTINGS_ROUTES, EffectiveSettingsView
+from eawf.kernel.projection.settings import (
+    SETTINGS_ROUTES,
+    EffectiveSettingsView,
+    catalog_section_order,
+)
 from eawf.kernel.projection.spine import NATIVE_ROUTES, SpineView, build_spine_view
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, build_transcript_view
 from eawf.kernel.projection.verification import (
@@ -49,7 +53,15 @@ from eawf.kernel.projection.verification import (
 )
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.events import RunEventRecord
-from eawf.surfaces.tui.chassis.theme import EA_DARK, EA_THEMES
+from eawf.surfaces.tui.chassis.theme import (
+    DEFAULT_THEME,
+    EA_THEMES,
+    THEME_POLL_INTERVAL_S,
+    detect_auto_theme,
+    detect_os_appearance,
+    resolve_theme_name,
+)
+from eawf.surfaces.tui.console.attach import OFFLINE
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
@@ -57,17 +69,19 @@ from eawf.surfaces.tui.console.clock import (
     QuitStep,
     expire_prefix,
     notify,
+    prompt_quit,
     quit_step,
     sweep_toasts,
 )
 from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
+from eawf.surfaces.tui.console.drill import say_why
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, thin, unheld
 from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
 from eawf.surfaces.tui.console.keybar import keybar
-from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS
+from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
 from eawf.surfaces.tui.console.mutation import settle
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
@@ -83,7 +97,6 @@ from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
-from eawf.workflow.delivery.acceptance import AcceptanceApproval
 from eawf.workflow.projection.acceptance import ACCEPTANCE_ROUTES, build_acceptance_view
 
 if TYPE_CHECKING:
@@ -92,6 +105,9 @@ if TYPE_CHECKING:
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
 TICK_SECONDS = 0.25
+# The blank cells an operator's console keeps clear at each side of every row, so the
+# bands and rules stop short of the window edge the way the packet's canvas padding does.
+OUTER_GUTTER = 1
 GO_DRAWER = "go"
 # The worker group the seam's route reads run in.
 SEAM_WORKERS = "seam"
@@ -203,6 +219,10 @@ def compose_frame(view: View) -> list[str]:
     s, w, h = view.session, view.w, view.h
     s.record_facts = None
     s.record_nav = None
+    s.bucket_keys = None
+    s.windowed = False
+    s.nav_rows = None
+    s.bar_keys = None
     s.renders += 1
     overlay = s.overlay
     if s.prefix == "g":
@@ -213,6 +233,7 @@ def compose_frame(view: View) -> list[str]:
         rows = render_overlay(overlay, view)
     else:
         rows = render_route(view)
+        s.route_windowed = s.windowed
     for i, row in enumerate(rows):
         if cell_len(row) != w:
             raise ValueError(f"frame row {i} is {cell_len(row)} cells, not {w}")
@@ -334,7 +355,9 @@ class ConsoleApp(App[None]):
     """The operator console over the packaged chrome, or over one prototype fixture.
 
     The console registers the themes bound from the design packet's palette and opens on
-    the dark one; ``NO_COLOR`` still reduces every cell to grey through the toolkit.
+    the operator's ``ui.theme``; under ``auto`` it opens on the terminal's background and
+    then follows the system's light or dark appearance while it runs. ``NO_COLOR`` still
+    reduces every cell to grey through the toolkit.
 
     Args:
         fixture: The prototype registers the golden contract replays. A console given
@@ -357,22 +380,23 @@ class ConsoleApp(App[None]):
             given none draws no hunk and says the Batch is not blocked.
         run_events: The Run event lines the transcript draws, in any order. A console
             given none draws no block rather than a block that says nothing.
-        acceptance_bundle: The sealed bundle the Milestone frame draws. A bundle is a
-            process record rather than a document row, so it arrives beside the
-            projection under the same rule as the health verdicts.
-        acceptance_approval: The approval given to a bundle digest. It is drawn only
-            against the bundle whose digest it names, so a later revision never inherits
-            an earlier consent.
         proof_receipts: The receipts a receipt card may open, in record order. A console
             given none opens no card and says the receipt is not held.
         decision_records: The questions, pauses, claims and planning records the decision
             overlays and cards are bound to. They are process records rather than document
-            rows, so they arrive beside the projection under the same rule as the bundle.
+            rows, so they arrive beside the projection under the same rule as the verdicts.
         chrome: The static tables a console given no fixture draws; the packaged chrome
             when omitted. A fixture carries its own chrome, so passing both is refused.
+        gutter: The blank cells kept clear at each side of every row; the frame is laid
+            out at the terminal's width less both. ``0`` fills the terminal, which is
+            what the tracked golden contract records: each golden is the content grid.
+        theme: The logical theme: ``dark``, ``light``, ``cb`` or ``auto``. ``auto`` reads
+            the terminal's background here, before the toolkit takes the terminal, and
+            is refined from the system appearance once the console runs.
 
     Raises:
-        ValueError: both a fixture and a chrome were given.
+        ValueError: both a fixture and a chrome were given, ``gutter`` is negative, or
+            ``theme`` is not a logical theme name.
     """
 
     # The whole stylesheet is the token map rendered: no colour is chosen in this file.
@@ -390,17 +414,24 @@ class ConsoleApp(App[None]):
         integration_generations: Sequence[IntegrationGeneration] = (),
         integration_conflicts: Sequence[IntegrationConflict] = (),
         run_events: Sequence[RunEventRecord] = (),
-        acceptance_bundle: MilestoneAcceptanceBundle | None = None,
-        acceptance_approval: AcceptanceApproval | None = None,
         proof_receipts: Sequence[ProofReceipt] = (),
         decision_records: DecisionRecords | None = None,
+        gutter: int = 0,
+        theme: str = DEFAULT_THEME,
     ) -> None:
         if fixture is not None and chrome is not None:
             raise ValueError("a fixture carries its own chrome; pass a fixture or a chrome")
+        if gutter < 0:
+            raise ValueError(f"an outer gutter cannot be negative, got {gutter}")
+        if resolve_theme_name(theme) is None:
+            raise ValueError(f"{theme!r} is not a logical theme name")
         super().__init__()
-        for theme in EA_THEMES:
-            self.register_theme(theme)
-        self.theme = EA_DARK.name
+        self.gutter = gutter
+        for registered in EA_THEMES:
+            self.register_theme(registered)
+        self.follows_system = theme == "auto"
+        self.appearance = detect_auto_theme() if self.follows_system else theme
+        self.theme = str(resolve_theme_name(self.appearance))
         self.fixture = fixture or Fixture.from_chrome(chrome or load_chrome())
         self.console_clock: Clock = clock or Clock()
         self.verbose = verbose
@@ -411,8 +442,6 @@ class ConsoleApp(App[None]):
         self.integration_generations = tuple(integration_generations)
         self.integration_conflicts = tuple(integration_conflicts)
         self.run_events = tuple(run_events)
-        self.acceptance_bundle = acceptance_bundle
-        self.acceptance_approval = acceptance_approval
         self.proof_receipts = tuple(proof_receipts)
         self.decision_records = decision_records
         self.session = Session()
@@ -441,10 +470,27 @@ class ConsoleApp(App[None]):
 
     def on_mount(self) -> None:
         """Paint the first frame, read the routes it owes and, under a live clock, sweep."""
+        # the gutter is canvas, never band: the header and keybar grounds stop inside it
+        self.screen.add_class(SURFACES["canvas"].css_class)
+        self.screen.styles.padding = (0, self.gutter)
         self.render_frame()
         self._follow_route()
         if not self.held:
             self.set_interval(TICK_SECONDS, self.tick)
+            if self.follows_system:
+                self.set_interval(THEME_POLL_INTERVAL_S, self.follow_appearance)
+
+    async def follow_appearance(self) -> None:
+        """Take the system's light or dark appearance when it differs from the one shown.
+
+        The appearance is read off-thread from the platform setting, never from the
+        terminal the toolkit owns; an appearance that cannot be read changes nothing.
+        """
+        appearance = await asyncio.to_thread(detect_os_appearance)
+        if appearance is None or appearance == self.appearance:
+            return
+        self.appearance = appearance
+        self.theme = str(resolve_theme_name(appearance))
 
     def _follow_route(self) -> None:
         """Point the seam at the session's route and read whatever it now owes.
@@ -456,6 +502,7 @@ class ConsoleApp(App[None]):
         if seam is None:
             return
         seam.retarget(self.route_key)
+        seam.about(self.subject)
         if self.is_running and seam.owed():
             self.run_worker(self._load_owed(), group=SEAM_WORKERS)
 
@@ -467,6 +514,22 @@ class ConsoleApp(App[None]):
             self.deliver_attention()
             if self.is_running:
                 self.arrive()
+        elif not seam.held_routes and seam.settings is None and self.is_running:
+            self._land_offline()
+
+    def _land_offline(self) -> None:
+        """Open the offline entry frame: the daemon answered no read, so nothing is live.
+
+        The frame shows the snapshot the launch read from disk, or says none is held; it
+        is only ever opened over a console that has read nothing, so it never replaces a
+        frame an answer drew.
+        """
+        entry = self.fixture.proto.entry
+        index = next((i for i, state in enumerate(entry) if state.id == OFFLINE), None)
+        if index is None or self.session.route == ENTRY_ROUTE:
+            return
+        self.reset(SessionSetup(route=ENTRY_ROUTE, entrySel=index))
+        self.render_frame()
 
     def _on_seam_patched(self, routes: tuple[str, ...]) -> None:
         """Announce new attention, then repaint when the route on screen or the count moved.
@@ -480,6 +543,8 @@ class ConsoleApp(App[None]):
             return
         if self.route_key in routes or ATTENTION_ROUTE in routes:
             self.arrive()
+        # a patch may have dropped a per-subject read the frame draws; read it again
+        self._follow_route()
 
     def arrive(self) -> None:
         """Repaint for a projection event, which may never open, focus or navigate.
@@ -519,8 +584,12 @@ class ConsoleApp(App[None]):
             )
 
     def on_resize(self, event: Resize) -> None:
-        """Re-lay the frame at the new size."""
-        self.render_frame()
+        """Re-lay the frame at the new size.
+
+        This handler runs before the app records the new size, so ``self.size`` still
+        answers the old one here; the frame is laid once the new size is recorded.
+        """
+        self.call_next(self.render_frame)
 
     def quit(self) -> None:
         """End the console session."""
@@ -544,12 +613,16 @@ class ConsoleApp(App[None]):
             self.session.log_key("Ctrl+C", "too fast to be two presses - still armed")
         else:
             self.session.log_key("Ctrl+C", "press again within 1.5s to quit")
+            prompt_quit(self.session, self.console_clock)
         self.render_frame()
 
     @property
     def frame_size(self) -> tuple[int, int]:
-        """Return the frame size: the terminal's, or the session's before one is known."""
-        w, h = self.size.width, self.size.height
+        """Return the frame size: the terminal's less both gutters, else the session's.
+
+        The session's size stands in only before the terminal has reported one.
+        """
+        w, h = self.size.width - 2 * self.gutter, self.size.height
         if w <= 0 or h <= 0:
             return SIZES[self.session.size]
         return (w, h)
@@ -564,6 +637,11 @@ class ConsoleApp(App[None]):
         """
         spec = REGISTRY.by_id.get(self.session.route)
         return spec.key if spec is not None else self.session.route
+
+    @property
+    def subject(self) -> str | None:
+        """Return the record the session's route is about: its subject, else the caret's row."""
+        return self.session.subj_id or self.session.sel_id
 
     def _held_projection(self) -> RouteProjection | None:
         """Return the projection the seam holds for the session's own route.
@@ -604,10 +682,12 @@ class ConsoleApp(App[None]):
         if route == TRANSCRIPT_ROUTE:
             return build_transcript_view(projection, events=self.run_events)
         if route in ACCEPTANCE_ROUTES:
+            # the Milestone's bundle and approval are read for the subject on screen alone
+            held = self.seam.acceptance_for(self.subject) if self.seam is not None else None
             return build_acceptance_view(
                 projection,
-                bundle=self.acceptance_bundle,
-                approval=self.acceptance_approval,
+                bundle=held.bundle if held is not None else None,
+                approval=held.approval if held is not None else None,
                 receipts=self.proof_receipts,
             )
         return None
@@ -666,6 +746,8 @@ class ConsoleApp(App[None]):
             principal=self.principal(),
             # a held clock reads no wall time, so a held frame is its authored instant
             now=self.console_clock.wall() if self.seam is not None and not self.held else None,
+            scope_name=self.seam.scope_name if self.seam is not None else "",
+            gutter=self.gutter,
         )
 
     def principal(self) -> str | None:
@@ -684,10 +766,19 @@ class ConsoleApp(App[None]):
         return NO_PRINCIPAL_REASON if seam is not None and seam.operator is None else ""
 
     def reset(self, setup: SessionSetup | None) -> None:
-        """Restore the session from ``setup``; the one canonical reset."""
+        """Restore the session from ``setup``; the one canonical reset.
+
+        A linked console draws the kernel catalog's rail, whose sections differ from the
+        prototype catalog's, so the section cursor is placed in the order it will draw.
+        """
+        order = (
+            catalog_section_order()
+            if self.seam is not None
+            else self.fixture.settings.section_order
+        )
         self.session.reset(
             setup,
-            settings_section_order=self.fixture.settings.section_order,
+            settings_section_order=order,
             now=self.console_clock.now(),
         )
         self._follow_route()
@@ -733,13 +824,24 @@ class ConsoleApp(App[None]):
             rows=view.rows,
             decisions=view.decisions,
             principal=view.principal,
+            scope=self.seam.scope_name or self.seam.scope_id if self.seam is not None else "",
+            gutter=view.gutter,
         )
 
     def press_key(self, key: str, *, shift: bool = False) -> None:
-        """Dispatch one key by its dispatcher name and repaint."""
-        dispatch(self._ctx(), key, shift)
+        """Dispatch one key by its dispatcher name and repaint.
+
+        A key a handler claimed that left the frame as it was is answered with a toast
+        naming why, and the frame is painted again to show it.
+        """
+        before, head, toasts = self.frame_rows, self.session.log[:1], len(self.session.toasts)
+        ctx = self._ctx()
+        dispatch(ctx, key, shift)
         self._follow_route()
         self.render_frame()
+        still = self.frame_rows == before
+        if say_why(ctx, key, head=head, toasts=toasts, still=still):
+            self.render_frame()
 
     def activate_crumb(self, step: CrumbRun) -> None:
         """Walk the breadcrumb to ``step`` and repaint."""

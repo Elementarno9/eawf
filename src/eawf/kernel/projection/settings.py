@@ -514,6 +514,16 @@ def _rail(sections: Iterable[str]) -> tuple[SettingsCategory, ...]:
     )
 
 
+def catalog_section_order() -> tuple[str, ...]:
+    """Return every catalog section in rail order, the order a built view's rail lists them.
+
+    The rail is filed from the catalog alone, so a console can place its section cursor
+    before the daemon has served a view.
+    """
+    rail = _rail(entry.domain for entry in LEAF_KEY_REGISTRY.values())
+    return tuple(section for category in rail for section in category.sections)
+
+
 def build_settings_view(
     *,
     workspace: Path | None,
@@ -628,6 +638,7 @@ __all__ = [
     "SettingsLayerEntry",
     "SettingsLeaf",
     "build_settings_view",
+    "catalog_section_order",
     "category_assignment_defects",
     "layer_overlays",
     "render_value",

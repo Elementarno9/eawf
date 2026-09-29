@@ -21,6 +21,7 @@ import asyncio
 import os
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,8 @@ from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.registry import default_registry_path
 from eawf.surfaces.tui.console.attach import (
     AttachRequest,
+    offline_snapshot,
+    offline_state,
     resolve_attach,
     resolving_state,
     with_entry_state,
@@ -61,6 +64,33 @@ WORKSPACE_KEY_ENV = "EAWF_WORKSPACE_KEY"
 #: Printed before the epoch-1 app opens on an ordinary epoch-1 tree, so an operator who
 #: expected the native console knows why they did not get it.
 EPOCH1_NOTICE = "eawf tui: this tree is epoch-1; opening the classic console"
+
+
+def project_name(state_path: Path, repo_root: Path) -> str:
+    """Return the name the console header gives the tree: its project's slug.
+
+    The projection is addressed by the root's id, which no operator knows the project by,
+    so the header names the project the tree's state records instead. Only the project
+    record is validated, so a large state file costs one parse and no whole-state check.
+
+    Args:
+        state_path: The tree's ``state.json``.
+        repo_root: The repository the tree belongs to.
+
+    Returns:
+        The project's slug, else the repository directory's name when the state file
+        cannot be read or records no valid project.
+    """
+    import orjson
+    from pydantic import ValidationError
+
+    from eawf.kernel.state.models import Project
+
+    try:
+        payload = orjson.loads(state_path.read_bytes())
+        return Project.model_validate(payload["project"]).slug
+    except OSError, orjson.JSONDecodeError, KeyError, TypeError, ValidationError:
+        return repo_root.name
 
 
 def _entry_sel(chrome: ConsoleChrome, state_id: str) -> int:
@@ -230,20 +260,34 @@ def _launch_native(
 ) -> int:
     """Open the console over a live seam bound to the tree's epoch-2 authority."""
     from eawf.runtime.daemon.epoch2_root import RootIdentity
-    from eawf.surfaces.tui.console.app import ConsoleApp
+    from eawf.surfaces.tui.app import _persisted_theme
+    from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
     from eawf.surfaces.tui.console.clock import Clock
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
     scope_id = RootIdentity.of(authority.root).root_id
+    # the offline frame the console lands on if the daemon answers nothing is filled
+    # now, from the document on disk, because nothing can be read through it later
+    snapshot = offline_snapshot(authority, scope_id=scope_id, now=datetime.now(UTC))
+    chrome = with_entry_state(chrome, offline_state(chrome, snapshot))
+    # The daemon addresses a tree by its repository and appends ``.ea`` itself.
+    repo_root = authority.root.parent
     seam = ProjectionSeam(
         route=_HOME_ROUTE,
         scope_id=scope_id,
         state_path=state_path,
-        # The daemon addresses a tree by its repository and appends ``.ea`` itself.
-        repo_root=authority.root.parent,
+        repo_root=repo_root,
         operator=operator,
+        scope_name=project_name(state_path, repo_root),
     )
-    app = ConsoleApp(chrome=chrome, seam=seam, clock=Clock(), verbose=verbose)
+    app = ConsoleApp(
+        chrome=chrome,
+        seam=seam,
+        clock=Clock(),
+        verbose=verbose,
+        gutter=OUTER_GUTTER,
+        theme=_persisted_theme(repo_root),
+    )
     return _run_console(app, seam)
 
 
@@ -253,11 +297,14 @@ def _launch_entry(*, chrome: ConsoleChrome, state: EntryState, verbose: bool) ->
     A terminal state leaves its commands on stderr once the console closes and exits 4;
     any other state ends the process cleanly, not attached.
     """
-    from eawf.surfaces.tui.console.app import ConsoleApp
+    from eawf.surfaces.tui.app import _persisted_theme
+    from eawf.surfaces.tui.console.app import OUTER_GUTTER, ConsoleApp
     from eawf.surfaces.tui.console.clock import Clock
     from eawf.surfaces.tui.console.session import SessionSetup
 
-    app = ConsoleApp(chrome=chrome, clock=Clock(), verbose=verbose)
+    app = ConsoleApp(
+        chrome=chrome, clock=Clock(), verbose=verbose, gutter=OUTER_GUTTER, theme=_persisted_theme()
+    )
     app.reset(SessionSetup(route=_ENTRY_ROUTE, entrySel=_entry_sel(chrome, state.id)))
     _run_console(app, None)
     if state.exit == _TERMINAL_EXIT:
@@ -322,5 +369,6 @@ __all__ = [
     "WORKSPACE_KEY_ENV",
     "hand_over",
     "launch_tui",
+    "project_name",
     "resolve_operator",
 ]

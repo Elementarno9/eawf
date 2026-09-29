@@ -4,7 +4,7 @@ The native frame answers the palette's query over the entity registers the read 
 holds: a hit is a record whose key or title carries the query, sorted by kind then id, and
 each hit says what matched and where. The counts by kind are counted off the hits, so
 they are exact while the projection is complete and say ``known`` when it is not. An empty
-query matches every record, which is the register itself.
+query matches every record, which is the register itself, and the sub line says so once.
 """
 
 from __future__ import annotations
@@ -12,10 +12,12 @@ from __future__ import annotations
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
+from eawf.surfaces.tui.console.cells import NO_VALUE
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import Grid, View, g_frame, thin, window_rows
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import (
+    cursor_note,
     finish,
     label,
     native_head,
@@ -36,16 +38,17 @@ def matched(row: SpineRow, query: str) -> str | None:
         query: The palette query, compared without case; empty matches every record.
 
     Returns:
-        ``"key"`` or ``"title"``, the field the query was found in, or ``"every record"``
-        for an empty query.
+        ``"id"`` or ``"name"``, the field the query was found in, or the no-value mark for
+        an empty query, which matched nothing in particular; the frame's sub line says
+        once that every record is listed.
     """
     needle = query.strip().lower()
     if not needle:
-        return "every record"
+        return NO_VALUE
     if needle in row.key.lower():
-        return "key"
+        return "id"
     if row.title is not None and needle in row.title.lower():
-        return "title"
+        return "name"
     return None
 
 
@@ -68,15 +71,18 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     for row, _what in hits:
         kinds[row.collection.value] = kinds.get(row.collection.value, 0) + 1
     exact = "every count exact" if spine.complete else "every count known"
+    asked = f"query “{query}”" if query.strip() else "no query · every record"
     top = native_head(
         view,
         spine,
-        crumb_text=route_crumb(spine, "Search"),
-        summary=f"query “{query}” · entities only · {dv.plural(len(hits), 'hit')}"
-        f" · cursor {group(int(spine.source_cursor))}",
+        crumb_text=route_crumb(view, spine, "Search"),
+        summary=f"{asked} · entities only · {dv.plural(len(hits), 'hit')}" + cursor_note(spine),
     )
-    grid = Grid([18, 14, 0])
-    stated = " · ".join(noun(n, name) for name, n in kinds.items())
+    grid = Grid([18, 18, 0])
+    # each kind is named before its count; noun() owns the register plural at any count
+    stated = " · ".join(
+        f"{noun(2, name).partition(' ')[2]} {group(n)}" for name, n in kinds.items()
+    )
     body = [
         label("QUERY", f"{query}▏"),
         label("KINDS", stated or "0 hits in any register"),

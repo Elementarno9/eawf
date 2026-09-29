@@ -33,7 +33,9 @@ opens against the prototype registers, and the tracked golden contract is that m
 from __future__ import annotations
 
 import re
+import textwrap
 from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 from typing import Protocol
 
 from eawf.kernel.projection.registers import RegisterView
@@ -48,11 +50,14 @@ from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
     View,
+    acting_pairs,
     bar,
+    boxed,
     build,
     g_row,
     needs_count,
     route_keys_bar,
+    scope_label,
     thin,
     window_rows,
 )
@@ -63,7 +68,7 @@ from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, truth_cell
-from eawf.surfaces.tui.console.width import pad
+from eawf.surfaces.tui.console.width import cell_len, pad
 
 #: What a count with no register in this read model renders as. A register that was read
 #: and held nothing renders ``0``; this token says no register was read at all.
@@ -129,14 +134,37 @@ def crumb(view: View, model: Projected) -> str:
         The crumb, with its leading gutter.
     """
     session = view.session
-    leaf = REGISTRY.step_leaf(session.route, session.subj_id)
-    steps = [BRAND, model.scope_id, *([leaf] if leaf else [])]
+    leaf = REGISTRY.read_leaf(session.route, session.subj_id)
+    steps = [BRAND, scope_label(view, model.scope_id), *([leaf] if leaf else [])]
     return " " + CRUMB_SEP.join(steps)
+
+
+#: The operator's word, singular and plural, for a register whose collection name is a
+#: storage term rather than a noun.
+_REGISTER_NOUNS: Mapping[str, tuple[str, str]] = MappingProxyType(
+    {
+        "health_view": ("check", "checks"),
+        "sandbox_policy": ("sandbox policy", "sandbox policies"),
+        "pending_action": ("pending action", "pending actions"),
+    }
+)
 
 
 def noun(n: int, word: str) -> str:
     """Return ``n word`` in the plural a register name takes: ``16 batches``, ``13 runs``."""
+    if word in _REGISTER_NOUNS:
+        one, many = _REGISTER_NOUNS[word]
+        return f"{group(n)} {one if n == 1 else many}"
     return plural(n, word, "es" if word.endswith(("ch", "sh", "s", "x")) else "s")
+
+
+def cursor_note(model: Projected) -> str:
+    """Return ``· cursor N`` for a read that cannot claim every row, else nothing.
+
+    The cursor a read stopped at is provenance: a complete read is stated by its counts,
+    and only an incomplete one needs to say how far it got.
+    """
+    return "" if model.complete else f" · cursor {group(int(model.source_cursor))}"
 
 
 def counts(model: Projected) -> str:
@@ -146,14 +174,15 @@ def counts(model: Projected) -> str:
         model: The read model the counts are taken off.
 
     Returns:
-        The counts and the cursor, as the row under the header prints them.
+        The counts as the row under the header prints them. Only a read that cannot claim
+        every row adds the cursor it stopped at: a complete count needs no provenance.
     """
     parts = [noun(count, name) for name, count in model.counts.items()]
     if not parts:
-        parts = [UNAVAILABLE]
-    elif not model.complete:
-        parts.append(KNOWN)
-    return " · ".join([*parts, f"cursor {group(int(model.source_cursor))}"])
+        return UNAVAILABLE
+    if model.complete:
+        return " · ".join(parts)
+    return " · ".join([*parts, KNOWN]) + cursor_note(model)
 
 
 def unstated_rows(model: RouteReadModel) -> list[str]:
@@ -219,9 +248,21 @@ def more(text: str) -> str:
     return " " * (LABEL_W + 1) + text
 
 
-def route_crumb(model: Projected, *steps: str) -> str:
+def wrapped(name: str, text: str, w: int) -> list[str]:
+    """Return a labelled row whose ``text`` wraps under itself rather than being clipped.
+
+    Args:
+        name: The label in the gutter.
+        text: The value, wrapped at word boundaries to the room right of the gutter.
+        w: The frame width in cells.
+    """
+    lines = textwrap.wrap(text, max(8, w - LABEL_W - 2)) or [""]
+    return [label(name, lines[0]), *(more(line) for line in lines[1:])]
+
+
+def route_crumb(view: View, model: Projected, *steps: str) -> str:
     """Return a crumb from the projection's scope through ``steps``, with its leading gutter."""
-    return " " + CRUMB_SEP.join([BRAND, model.scope_id, *steps])
+    return " " + CRUMB_SEP.join([BRAND, scope_label(view, model.scope_id), *steps])
 
 
 def read_age(view: View, model: Projected) -> str:
@@ -252,9 +293,10 @@ def native_head(
         model: The read model the frame draws; its scope and cursor head the frame.
         crumb_text: The crumb, with its leading gutter.
         summary: The line under the header, without its leading gutter.
-        terminal: Whether the frame's subject is an entity whose lifecycle has ended. Its
-            header carries no connection value and no reads line is drawn, because a
-            finished record does not age with the link.
+        terminal: Whether the frame's subject is an entity whose lifecycle has ended. No
+            reads line is drawn, because a finished record does not age with the link;
+            the header still states the link, which is a fact about the console, not
+            about the record.
 
     Returns:
         The head rows, the rule under them last.
@@ -267,10 +309,9 @@ def native_head(
         header_row(
             session,
             crumb=crumb_text,
-            scope=model.scope_id,
+            scope=scope_label(view, model.scope_id),
             needs=needs_count(view),
             w=w,
-            terminal=terminal,
         ),
         Fixed(pad(line, w)),
         bar(w),
@@ -307,7 +348,9 @@ def finish(
     gap = view.h - 1 - len(top) - len(laid) - len(foot)
     filler = [Fixed(" " * w)] * max(0, gap) if foot else []
     tail = [row if isinstance(row, Fixed) else g_row(row, w) for row in foot]
-    return build(view, [*top, *laid, *filler, *tail], keybar(list(keys), w))
+    return build(
+        view, [*top, *laid, *filler, *tail], keybar(acting_pairs(view, keys), w, keep_actions=True)
+    )
 
 
 def record_rows(
@@ -348,8 +391,8 @@ def record_rows(
 def tuple_rows(tuples: tuple[RuntimeTupleRow, ...], w: int) -> list[str]:
     """Return the runtime-tuple section: one line per verdict, or the honest absence."""
     quarantined = sum(1 for row in tuples if row.quarantined)
-    head = f" TUPLES    {plural(len(tuples), 'runtime tuple')}"
-    rows = [f"{head} · {quarantined} quarantined" if tuples else f" TUPLES    {NO_VERDICT}"]
+    counted = f"{plural(len(tuples), 'runtime tuple')} · {quarantined} quarantined"
+    rows = [label("TUPLES", counted if tuples else NO_VERDICT)]
     if not tuples:
         return rows
     rows.append(_TUPLES.head(["CHECK", "RESULT", "STAGE", "ANSWERED BY", "TRIGGER"]))
@@ -388,7 +431,11 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     regions = REGISTRY.focus_regions.get(session.route, ())
     rows: list[str] = [
         header_row(
-            session, crumb=crumb(view, model), scope=model.scope_id, needs=needs_count(view), w=w
+            session,
+            crumb=crumb(view, model),
+            scope=scope_label(view, model.scope_id),
+            needs=needs_count(view),
+            w=w,
         ),
         " " + counts(model),
         bar(w),
@@ -405,7 +452,57 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     below += [thin(w), *unstated_rows(model)]
     rows.extend(record_rows(view, model, cursor, above=len(rows), below=len(below)))
     rows.extend(below)
-    return build(view, rows, route_keys_bar(view, native_keys(session.route)))
+    return build(
+        view, rows, route_keys_bar(view, native_keys(session.route, windowed=session.windowed))
+    )
+
+
+def absent_card(
+    view: View,
+    model: Projected,
+    *,
+    steps: Sequence[str],
+    what: str,
+    unstated: Sequence[str],
+    keys: Sequence[Pair],
+) -> list[str]:
+    """Return a card route's card when the read model holds no record for it to draw.
+
+    A step, an artifact or a rung is opened over its parent's frame as a card, so an
+    absent one is still that card -- its crumb, its box and the fields it would state,
+    each wearing the unknown token -- rather than a register table of nothing.
+
+    Args:
+        view: The render being built; its session's subject is the record asked for.
+        model: The read model the route was served, whose scope and counts head the card.
+        steps: The crumb steps under the scope, the card's own leaf last.
+        what: The record the card draws, in words (``step``, ``artifact``, ``rung``).
+        unstated: The fields the card would state, none of which a producer states yet.
+        keys: The keybar pairs the card still binds.
+
+    Returns:
+        The full frame, keybar last.
+    """
+    subject = view.session.subj_id
+    held_for = f" for {subject}" if subject else ""
+    labels = [name.replace("_", " ").upper() for name in unstated]
+    # one label column, wide enough that the longest field name keeps a gap before its value
+    width = max([LABEL_W, *(cell_len(label) + 2 for label in labels)])
+    lines = [
+        f"{'HELD':<{width}}{truth_cell('unavailable')} no {what} is held{held_for}",
+        "",
+        *(f"{label:<{width}}{UNKNOWN_WORD} · no producer states it yet" for label in labels),
+    ]
+    return boxed(
+        view,
+        crumb=route_crumb(view, model, *steps).lstrip(),
+        ctx=f"no {what} is held · {counts(model)}",
+        pre=[],
+        title=what.upper(),
+        lines=lines,
+        foot=f"{'an' if what[:1] in 'aeiou' else 'a'} {what} is drawn once a producer states it",
+        keys=keys,
+    )
 
 
 def native(view: View) -> RouteReadModel | None:

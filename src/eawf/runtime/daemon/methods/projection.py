@@ -18,6 +18,11 @@ gets no reconnect verb -- there is no ordinal to replay from. It is served here 
 because a console that had to reach for a second surface to draw one of its routes would
 have two answers to "what is in force" and no way to say which read is older.
 
+``projection.milestone.acceptance`` answers from the Milestone ledger beside the
+document: the sealed bundle one Milestone was accepted at and the sealed approval given
+to that bundle's own digest. It is read per Milestone, because the frame that draws it
+is about one record and another Milestone's acceptance is not this one's.
+
 ``projection.<route>.reconnect`` is the same idea for a client that went away and
 came back holding a cursor. It answers from retention alone: it walks the tree's
 firehose once, so it knows both which ordinals it still holds and which keyed
@@ -44,7 +49,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Final, Self
@@ -52,6 +57,7 @@ from typing import Any, Final, Self
 import orjson
 from pydantic import BaseModel, ConfigDict, ValidationError, model_validator
 
+from eawf.kernel.delivery.acceptance import AcceptanceBundleLedger, MilestoneAcceptanceBundle
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.compute import (
     CANONICAL_SEQUENCE_FIELD,
@@ -74,8 +80,9 @@ from eawf.kernel.projection.settings import (
 )
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import StrictNonNegativeInt
-from eawf.kernel.store.compaction import read_document
+from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt
+from eawf.kernel.state.epoch2.pending_action import PendingAction
+from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path, store_path
@@ -83,11 +90,19 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
+from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
 from eawf.runtime.daemon.native_guard import require_native_call
+from eawf.workflow.delivery.acceptance import (
+    AcceptanceApproval,
+    AcceptanceRefusedError,
+    sealed_approval,
+)
 from eawf.workflow.projection.acceptance import (
     ACCEPTANCE_ROUTES,
+    MILESTONE_ACCEPTANCE_METHOD,
     MILESTONE_ROUTE,
     ExportReport,
+    MilestoneAcceptanceRecord,
     build_acceptance_view,
     export_report,
 )
@@ -174,6 +189,21 @@ class ExportParams(BaseModel):
             stated = ", ".join(ACCEPTANCE_ROUTES)
             raise ValueError(f"route {self.route!r} is not reportable; reportable: {stated}")
         return self
+
+
+class AcceptanceParams(BaseModel):
+    """The parameters one Milestone acceptance read carries.
+
+    Attributes:
+        repo_root: The repository whose tree to answer for; the daemon's bound tree
+            when absent.
+        milestone_key: The Milestone whose bundle and approval to read.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    repo_root: str | None = None
+    milestone_key: NonEmptyStr
 
 
 def _document_path(authority: RootAuthority) -> Path:
@@ -298,6 +328,89 @@ def _report(*, route: str, authority: RootAuthority) -> ExportReport:
         FileNotFoundError: The selected generation carries no document.
     """
     return export_report(build_acceptance_view(_project(route=route, authority=authority)))
+
+
+def _milestone_fields(
+    *, authority: RootAuthority, document: dict[str, Any], key: str
+) -> Mapping[str, Any] | None:
+    """Return the Milestone row *key* names, from the document or, once terminal, its ledger.
+
+    A Milestone leaves the document on the commit that completes it, so an accepted one
+    is read back from the latest ledger line filed under its own key.
+    """
+    held = document_rows(document, Epoch2Collection.MILESTONE).get(key)
+    if isinstance(held, dict):
+        return held
+    path = ledger_path(_document_path(authority), Epoch2Collection.MILESTONE)
+    filed = [
+        record.payload
+        for record in effective_records(read_ledger_records(path))
+        if record.record_key == key and record.payload.get("key") == key
+    ]
+    return filed[-1] if filed else None
+
+
+def _sealed_bundle(
+    *, authority: RootAuthority, urn: str, revision: Any
+) -> MilestoneAcceptanceBundle | None:
+    """Return the bundle revision the Milestone was accepted at, else its latest sealed one.
+
+    Raises:
+        DaemonValidationError: The Milestone's filed revisions do not read back as one
+            chain, so no revision of it can be vouched for.
+    """
+    path = ledger_path(_document_path(authority), Epoch2Collection.MILESTONE)
+    payloads = [
+        record.payload
+        for record in read_ledger_records(path)
+        if record.record_key.startswith(BUNDLE_KEY_PREFIX)
+        and record.payload.get("milestone_ref") == urn
+    ]
+    try:
+        ledger = AcceptanceBundleLedger.model_validate({"milestone_ref": urn, "bundles": payloads})
+    except ValidationError as error:
+        raise DaemonValidationError(
+            f"validation_failed: {PROJECTION_UNREADABLE}: the bundle revisions of {urn} do not "
+            "read back as one chain"
+        ) from error
+    return ledger.at(revision) if isinstance(revision, int) else ledger.head
+
+
+def _bound_approval(
+    document: dict[str, Any], bundle: MilestoneAcceptanceBundle
+) -> AcceptanceApproval | None:
+    """Return the latest sealed approval given to *bundle*'s own bytes, else ``None``.
+
+    An action that does not read back, or that the acceptance rules refuse -- another
+    Milestone's, another digest's, unsealed or declined -- is no approval of this bundle.
+    """
+    found: list[AcceptanceApproval] = []
+    for key, row in document_rows(document, Epoch2Collection.PENDING_ACTION).items():
+        try:
+            action = PendingAction.model_validate(row)
+            found.append(sealed_approval(action, bundle=bundle, milestone_ref=bundle.milestone_ref))
+        except (ValidationError, AcceptanceRefusedError) as error:
+            logger.debug(f"_bound_approval passed over action={key!r} cause={error!s}")
+    return max(found, key=lambda item: item.approved_at) if found else None
+
+
+def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcceptanceRecord:
+    """Read one Milestone's sealed bundle and the approval bound to it.
+
+    Raises:
+        DaemonValidationError: The Milestone's bundle revisions do not read back.
+        FileNotFoundError: The selected generation carries no document.
+    """
+    document = read_document(_document_path(authority))
+    fields = _milestone_fields(authority=authority, document=document, key=key)
+    urn = fields.get("urn") if fields is not None else None
+    if fields is None or not isinstance(urn, str):
+        return MilestoneAcceptanceRecord(milestone_key=key)
+    bundle = _sealed_bundle(
+        authority=authority, urn=urn, revision=fields.get("acceptance_bundle_revision")
+    )
+    approval = None if bundle is None else _bound_approval(document, bundle)
+    return MilestoneAcceptanceRecord(milestone_key=key, bundle=bundle, approval=approval)
 
 
 def _retained(path: Path, *, route: str) -> tuple[set[int], dict[int, tuple[KeyedPatch, ...]]]:
@@ -535,6 +648,43 @@ async def read_export_report(ctx: MethodContext, params: dict[str, Any]) -> dict
     }
 
 
+@register(MILESTONE_ACCEPTANCE_METHOD)
+async def read_milestone_acceptance(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
+    """Return one Milestone's sealed acceptance bundle and the approval bound to it.
+
+    The Milestone frame is about one record, so what it was accepted at is read for that
+    record alone. Nothing is written.
+
+    Args:
+        ctx: Server context, whose bound state path is the tree fallback.
+        params: The request parameters, validated as :class:`AcceptanceParams`.
+
+    Returns:
+        The :class:`MilestoneAcceptanceRecord` as a JSON-mode mapping.
+
+    Raises:
+        NativeAuthorityRefusedError: The request addresses no epoch-2 tree.
+        DaemonValidationError: The parameters name no Milestone, or its bundle
+            revisions do not read back.
+    """
+    try:
+        args = AcceptanceParams.model_validate(params)
+    except ValidationError as error:
+        raise DaemonValidationError(
+            f"validation_failed: {PROJECTION_UNREADABLE}: {error.error_count()} bad "
+            f"parameter(s) for {MILESTONE_ACCEPTANCE_METHOD}"
+        ) from error
+    authority = require_native_call(ctx, params)
+    record = await asyncio.to_thread(
+        _milestone_acceptance, authority=authority, key=args.milestone_key
+    )
+    logger.debug(
+        f"read_milestone_acceptance milestone={args.milestone_key} "
+        f"bundle={record.bundle is not None} approval={record.approval is not None}"
+    )
+    return record.model_dump(mode="json")
+
+
 #: The read verbs this module registered, one per bound route.
 ROUTE_READ_METHODS: Final[tuple[str, ...]] = _register_route_verbs(
     READ_METHOD_TEMPLATE, _route_reader
@@ -558,8 +708,10 @@ __all__ = [
     "ROUTE_READ_METHODS",
     "ROUTE_RECONNECT_METHODS",
     "SETTINGS_READ_METHOD",
+    "AcceptanceParams",
     "ExportParams",
     "ReconnectParams",
     "read_export_report",
+    "read_milestone_acceptance",
     "read_settings",
 ]

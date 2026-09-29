@@ -262,7 +262,7 @@ def test_the_activity_frame_prints_the_derived_bucket_counts() -> None:
         assert any(
             line.strip().startswith(count.label) and line.rstrip().endswith(slot) for line in rail
         ), rail
-    assert "cursor 41,208" in rows[1]
+    assert "cursor" not in rows[1]
 
 
 def test_an_empty_activity_register_counts_zero_and_buckets_nothing() -> None:
@@ -416,11 +416,19 @@ def test_native_frame_header_prints_no_badge_when_no_register_is_held() -> None:
 
 
 def test_help_overlay_on_a_native_frame_lists_the_paging_keys() -> None:
-    """A native keybar pages, so its help names the keys in full, as the bar does."""
+    """A native keybar pages a windowed table, so its help names the keys in full."""
     view = _native_view("track", attention=None)
+    view.session.route_windowed = True
     rows = render_overlay("help", view)
     assert any("PageUp PageDown" in row and "page" in row for row in rows)
     assert any("Home End" in row and "ends" in row for row in rows)
+
+
+def test_help_overlay_on_a_whole_native_frame_lists_no_paging_key() -> None:
+    """A frame that shows every row pages nowhere, so its help teaches no paging key."""
+    view = _native_view("track", attention=None)
+    rows = render_overlay("help", view)
+    assert not any("PageUp PageDown" in row or "Home End" in row for row in rows)
 
 
 def test_help_overlay_on_a_prototype_frame_keeps_the_prototype_table() -> None:

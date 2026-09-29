@@ -15,9 +15,9 @@ import re
 import pytest
 
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
-from eawf.surfaces.tui.console.frame import MIN_WINDOW, View, window_rows
+from eawf.surfaces.tui.console.frame import MIN_WINDOW, Breadth, View, window_rows
 from eawf.surfaces.tui.console.renderers.campaign import ARTIFACTS, EVIDENCE, PLAN, caps, window
-from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
+from eawf.surfaces.tui.console.session import Session, SessionSetup
 from tests.tui.surfaces.tui.console.test_chrome_sweeps import (
     GOLDEN_ROOT,
     RENDERED,
@@ -62,13 +62,13 @@ def test_con_162_the_campaign_sections_at_80x24_are_each_three_rows() -> None:
     windows = _section_windows(RENDERED["route/campaign@80"])
     assert set(windows) == set(SECTIONS)
     for name, region in windows.items():
-        assert len(region) == MIN_WINDOW == caps(80)[name], (name, region)
+        assert len(region) == MIN_WINDOW == caps(Breadth.NARROW)[name], (name, region)
         assert _EDGE.search(region[-1]), (name, region)
 
 
-@pytest.mark.parametrize("w", [w for w, _h in SIZES])
-def test_con_162_no_campaign_section_cap_is_under_the_minimum(w: int) -> None:
-    assert min(caps(w).values()) >= MIN_WINDOW
+@pytest.mark.parametrize("breadth", list(Breadth))
+def test_con_162_no_campaign_section_cap_is_under_the_minimum(breadth: Breadth) -> None:
+    assert min(caps(breadth).values()) >= MIN_WINDOW
 
 
 @pytest.mark.parametrize("cap", [3, 4, 6])

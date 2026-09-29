@@ -53,6 +53,7 @@ from eawf.kernel.projection.read_models import (
     ReadModelKind,
     route_binding_mismatches,
 )
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import prototype as pt
 
 
@@ -157,7 +158,7 @@ class Rail:
 
     Attributes:
         name: What the rail lists, as the diagnostics log and the coverage grid name it.
-        min_width: The narrowest frame the rail renders at; a narrower frame folds it
+        min_width: The narrowest terminal the rail renders on; a narrower one folds it
             into the pane stack.
 
     Raises:
@@ -291,6 +292,20 @@ ROUTE_FOR_ID: tuple[tuple[str, str], ...] = (
     ("EVT-", "receipt"),
     ("CLM-", "evidence"),
     ("EVD-", "evidence"),
+)
+
+#: The route each record collection opens on: a drill goes where the row's own kind lives.
+#: The collection a read model states is the authority, because a key such as a Track's or
+#: an imported Task's carries no prefix :data:`ROUTE_FOR_ID` knows.
+COLLECTION_ROUTES: Mapping[Epoch2Collection, str] = MappingProxyType(
+    {
+        Epoch2Collection.TRACK: "track",
+        Epoch2Collection.MILESTONE: "milestone",
+        Epoch2Collection.BATCH: "batch.detail",
+        Epoch2Collection.TASK: "task.detail",
+        Epoch2Collection.RUN: "run.detail",
+        Epoch2Collection.CAMPAIGN: "campaign",
+    }
 )
 
 KIND: Mapping[str, str] = MappingProxyType(
@@ -638,6 +653,15 @@ class RouteRegistry:
             return self.step_leaves[route]
         return self.route_word(route)
 
+    def read_leaf(self, route: str, subj: str | None) -> str:
+        """Return the crumb leaf a place shows when drawn from what a link read.
+
+        A route with no subject whose declared leaf names a record names a prototype
+        record the tree does not hold, so the route's own word stands in its place.
+        """
+        leaf = self.step_leaf(route, subj)
+        return self.route_word(route) if subj is None and route_for_id(leaf) else leaf
+
     def subj_now(self, route: str, entity_id: str | None) -> str | None:
         """Return the subject ``route`` renders: the given id, else its fixed subject."""
         if entity_id:
@@ -653,14 +677,16 @@ class RouteRegistry:
         """
         return doors_of(self.by_id[route])
 
-    def rail_at(self, route: str, w: int) -> Rail | None:
-        """Return the rail ``route`` draws beside its pane stack in a ``w``-cell frame.
+    def rail_at(self, route: str, columns: int) -> Rail | None:
+        """Return the rail ``route`` draws beside its pane stack on a terminal this wide.
 
         A route whose row declares no rail draws none at any width, and a declared rail
-        folds into the stack below the width its row names.
+        folds into the stack below the width its row names. ``columns`` is the
+        terminal's width, gutters included, since the pack's breakpoints are terminal
+        sizes.
         """
         rail = self.rails.get(route)
-        return rail if rail is not None and w >= rail.min_width else None
+        return rail if rail is not None and columns >= rail.min_width else None
 
 
 def route_for_id(entity_id: str | None) -> str | None:
@@ -997,6 +1023,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         needs="one rung record in full",
         escape=Escape(route="evidence"),
         sub_surface_of="evidence",
+        step_leaf="Rung",
         overlay_backed=True,
         doors=(Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="evidence"),),
         read_model=_RM.EVIDENCE_RUNG_RECORD,
@@ -1071,6 +1098,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         needs="one step of the Campaign plan",
         escape=Escape(route="campaign"),
         sub_surface_of="campaign",
+        step_leaf="Step",
         overlay_backed=True,
         doors=(Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="campaign"),),
         read_model=_RM.CAMPAIGN_PLAN_STEP,
@@ -1083,6 +1111,7 @@ ROUTES: tuple[RouteSpec, ...] = (
         needs="one artifact rendered as text with its digest",
         escape=Escape(route="campaign"),
         sub_surface_of="campaign",
+        step_leaf="Artifact",
         overlay_backed=True,
         doors=(
             Door(kind=DoorKind.ROUTE_KEY, key="Enter", origin="campaign"),

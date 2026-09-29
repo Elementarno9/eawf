@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import re
 import textwrap
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.chrome import EntryState
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -69,6 +70,7 @@ from eawf.surfaces.tui.console.renderers import (
 )
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import TRUTH
+from eawf.workflow.projection.acceptance import AcceptanceBundleView
 
 Render = Callable[[View], list[str]]
 Seam = Callable[[Ctx, str, bool], bool]
@@ -101,15 +103,15 @@ ROUTE_MODULES: Mapping[str, RouteModule] = MappingProxyType(
         "batch.detail": RouteModule(render=batch_detail.render),
         "task.detail": RouteModule(render=task_detail.render),
         "git.pr": RouteModule(render=git_pr.render, seam=git_pr.seam),
-        "activity": RouteModule(render=activity.render),
+        "activity": RouteModule(render=activity.render, seam=activity.bucket_seam),
         "run.detail": RouteModule(render=run_detail.render),
-        "attention": RouteModule(render=attention.render),
+        "attention": RouteModule(render=attention.render, seam=activity.bucket_seam),
         "transcript": RouteModule(render=transcript.render, seam=transcript.seam),
         "cost.ceiling": RouteModule(render=cost_ceiling.render),
         "crash.recovery": RouteModule(render=crash_recovery.render),
         "milestone": RouteModule(render=milestone.render),
         "release": RouteModule(render=release.render),
-        "timeline": RouteModule(render=timeline.render, seam=timeline.seam),
+        "timeline": RouteModule(render=timeline.render),
         "backlog": RouteModule(render=backlog.render, seam=backlog.seam),
         "campaign": RouteModule(render=campaign.render, seam=campaign.seam),
         "history": RouteModule(render=history.render),
@@ -222,8 +224,43 @@ def _resolving(fixture: Fixture) -> EntryState:
     return next(state for state in fixture.proto.entry if state.id == RESOLVING_STATE)
 
 
-def copy_target(session: Session, fixture: Fixture) -> str:
-    """Return what ``y`` copies about the frame's subject."""
+def copy_for(ctx: Ctx) -> str:
+    """Return what ``y`` copies in the context of one keystroke."""
+    return copy_target(ctx.s, ctx.fixture, rows=ctx.rows, model=ctx.projection, scope=ctx.scope)
+
+
+def copy_target(
+    session: Session,
+    fixture: Fixture,
+    *,
+    rows: Sequence[ProjectionRow] = (),
+    model: object | None = None,
+    scope: str = "",
+) -> str:
+    """Return what ``y`` copies about the frame's subject.
+
+    A console holding no prototype rows copies only what its frame drew: the row under
+    the caret, else the subject, else the address of what is on screen. The Milestone's
+    digest is read off the bundle the frame rendered, and a Milestone with none held
+    copies its id like any other frame.
+
+    Args:
+        session: The session whose selection or subject is copied.
+        fixture: The registers; a prototype fixture replays the pack's own answers.
+        rows: The rows the link holds, which answer an address with the record's URN.
+        model: The read model the frame was drawn from.
+        scope: The scope a linked console is attached to.
+
+    Returns:
+        The text the clipboard receives.
+    """
+    if not fixture.prototype:
+        if isinstance(model, AcceptanceBundleView) and model.bundle_digest:
+            return f"digest {model.bundle_digest}"
+        if session.route == "scope.home" and session.overlay == "inspect":
+            # the scope drawer is about the tree, not the Milestone under the caret
+            return dv.scope_urn(rows) or dv.NO_SCOPE_URN
+        return session.sel_id or session.subj_id or dv.urn(session, fixture, rows=rows, scope=scope)
     module = ROUTE_MODULES.get(session.route)
     if module is not None and module.copy is not None:
         return module.copy(session, fixture)

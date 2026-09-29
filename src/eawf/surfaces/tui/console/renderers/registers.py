@@ -40,6 +40,7 @@ from eawf.surfaces.tui.console.frame import (
     build,
     needs_count,
     route_keys_bar,
+    scope_label,
     thin,
     window_rows,
 )
@@ -169,7 +170,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         header_row(
             session,
             crumb=crumb(view, register),
-            scope=register.scope_id,
+            scope=scope_label(view, register.scope_id),
             needs=needs_count(view),
             w=w,
         ),
@@ -194,4 +195,8 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         rows.append(line if index == cursor else Fixed(pad(line, w)))
     rows.append(win.line(complete=register.complete))
     rows.extend(below)
-    return build(view, rows, route_keys_bar(view, native_keys(register.route)))
+    return build(
+        view,
+        rows,
+        route_keys_bar(view, native_keys(register.route, windowed=view.session.windowed)),
+    )

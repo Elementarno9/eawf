@@ -19,9 +19,9 @@
     },
     "band": {
       "channel": "background",
-      "token": "panel",
+      "token": "band",
       "fg": "#c2c9d1",
-      "bg": "#12161b"
+      "bg": "#0d1818"
     },
     "hint": {
       "channel": "color",
@@ -49,14 +49,20 @@
     },
     "rail": {
       "channel": "color",
-      "token": "faint",
-      "fg": "#5b636d",
+      "token": "dim",
+      "fg": "#89919a",
       "bg": "#0c0e11"
     },
     "dim": {
       "channel": "color",
-      "token": "faint",
-      "fg": "#5b636d",
+      "token": "dim",
+      "fg": "#89919a",
+      "bg": "#0c0e11"
+    },
+    "recede": {
+      "channel": "color",
+      "token": "recede",
+      "fg": "#93989f",
       "bg": "#0c0e11"
     },
     "frame": {

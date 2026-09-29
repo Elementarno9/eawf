@@ -17,6 +17,7 @@ from typing import Final
 
 from eawf.kernel.state.epoch2.consequence import Refusal
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.surfaces.tui.console.attention import selected_open_row
 from eawf.surfaces.tui.console.decisions import (
     ArtifactRecord,
     ClaimRecord,
@@ -414,12 +415,10 @@ def open_held_row(ctx: Ctx) -> bool:
     if held is None:
         return False
     s = ctx.s
-    rows = held.rows
-    row = next((r for r in rows if r.key == s.sel_id), None) if s.sel_id else None
-    if row is None and rows:
-        row = rows[min(max(s.sel, 0), len(rows) - 1)]
+    row = selected_open_row(s, held)
     if row is None:
-        ctx.log("Enter", "no attention row is held here — nothing to open")
+        # nothing listed, or a sealed row: an answered action has nothing left to confirm
+        ctx.log("Enter", "no open attention row is selected — nothing to open")
         return True
     if row.collection is not Epoch2Collection.PENDING_ACTION:
         return False

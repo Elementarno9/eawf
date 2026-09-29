@@ -17,6 +17,7 @@ import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from enum import IntEnum
 from types import MappingProxyType
 
 from eawf.kernel.projection.attention import attention_mine
@@ -33,7 +34,16 @@ from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.header import ProcessValue, header_row
-from eawf.surfaces.tui.console.keybar import KEY, RECORD_FRAME_KEYS, KeyEntry, Pair, keybar
+from eawf.surfaces.tui.console.keybar import (
+    KEY,
+    KEY_NAMES,
+    RECORD_FRAME_KEYS,
+    ROUTE_KEYS,
+    KeyEntry,
+    Pair,
+    keybar,
+)
+from eawf.surfaces.tui.console.keymap import unserved
 from eawf.surfaces.tui.console.session import Session, Toast
 from eawf.surfaces.tui.console.tokens import RULE_HEAVY, RULE_THIN, Severity
 from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
@@ -43,6 +53,32 @@ CARET = "▸"
 MIN_WINDOW = 3
 _CARET_GAP = re.compile(r"^(\s*)▸(\s{2,})(\S)")
 _GUTTER = 13
+#: The terminal widths the layouts step at: from :data:`WIDE_FROM` columns a frame takes
+#: its wide layout and from :data:`XWIDE_FROM` its widest, as the pack's 80/120/160 do.
+WIDE_FROM = 120
+XWIDE_FROM = 160
+
+
+class Breadth(IntEnum):
+    """The layout a terminal's width selects, ordered so a wider one compares greater."""
+
+    NARROW = 0
+    WIDE = 1
+    XWIDE = 2
+
+
+def breadth_of(columns: int) -> Breadth:
+    """Return the layout a terminal ``columns`` wide takes.
+
+    Args:
+        columns: The terminal's width, gutters included -- never the frame's.
+
+    Returns:
+        The layout every width breakpoint of the frame steps on.
+    """
+    if columns >= XWIDE_FROM:
+        return Breadth.XWIDE
+    return Breadth.WIDE if columns >= WIDE_FROM else Breadth.NARROW
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -82,6 +118,11 @@ class View:
             ``None`` when it acts as nobody, which has no ``mine`` to count.
         now: The wall-clock instant the frame is drawn at, which an age or a running
             elapsed time is measured to; ``None`` states those as of the read instead.
+        scope_name: The name the header gives the attached scope, such as the project's
+            own name; empty names it by the id the projection was read for.
+        gutter: The blank cells the app keeps clear at each side of the frame. The frame
+            is ``w`` cells inside them, but a layout steps on the terminal's width, so a
+            120-column terminal takes the wide layout although its frame is 118 wide.
     """
 
     session: Session
@@ -101,6 +142,37 @@ class View:
     decisions: DecisionRecords | None = None
     principal: str | None = None
     now: datetime | None = None
+    scope_name: str = ""
+    gutter: int = 0
+
+    @property
+    def columns(self) -> int:
+        """Return the terminal's width: the frame plus both gutters."""
+        return self.w + 2 * self.gutter
+
+    @property
+    def breadth(self) -> Breadth:
+        """Return the layout the terminal's width selects."""
+        return breadth_of(self.columns)
+
+    @property
+    def wide(self) -> bool:
+        """Return whether the terminal takes the wide layout or a wider one."""
+        return self.breadth >= Breadth.WIDE
+
+    @property
+    def xwide(self) -> bool:
+        """Return whether the terminal takes the widest layout."""
+        return self.breadth is Breadth.XWIDE
+
+
+def scope_label(view: View, scope_id: str) -> str:
+    """Return the step the header names the scope by: its name, else ``scope_id``.
+
+    The id stays what the projection is addressed by; the crumb is read by an operator,
+    who knows the project by its name.
+    """
+    return view.scope_name or scope_id
 
 
 def unheld(view: View) -> bool:
@@ -117,10 +189,72 @@ def unheld(view: View) -> bool:
     )
 
 
+def from_read_model(view: View) -> bool:
+    """Return whether the frame is drawn from what a link read, not the prototype registers.
+
+    The golden contract replays the prototype registers verbatim, keybar included, so a
+    rule that trims a keybar to what the frame holds applies to read-model frames only.
+    """
+    return not view.fixture.prototype or view.projection is not None or view.register is not None
+
+
 class Fixed(str):
     """A row ``build`` neither snaps nor clips: it is already laid out."""
 
     __slots__ = ()
+
+
+class Receded(Fixed):
+    """A laid-out row of a pane that does not own the arrows, which the painter recedes.
+
+    Which pane holds the focus is a fact about the render, not about the words, so the
+    renderer that knows it marks the rows rather than the painter guessing from the text.
+    """
+
+    __slots__ = ()
+
+
+def recede(line: str, w: int) -> Receded:
+    """Return ``line`` laid out to ``w`` cells and marked as a receded pane's row."""
+    return Receded(pad(line, w))
+
+
+class RailReceded(Fixed):
+    """A laid-out row whose rail entry, the part after its last rail glyph, recedes.
+
+    A bucket rail shares its rows with the list beside it, so a bucket the filter leaves
+    out recedes on its own while the list row it sits beside is drawn as usual.
+    """
+
+    __slots__ = ()
+
+
+class Lensed(Fixed):
+    """A laid-out row holding the settings lens strip, which the painter marks by layer.
+
+    Which layer the lens writes to and which layers set the focused key are facts about
+    the render, not about the words, so the strip names the layers plainly and the row
+    carries the rest.
+
+    Attributes:
+        lens: The layer the lens writes to, drawn bold.
+        layers: The surface each layer that sets the focused key is drawn in.
+    """
+
+    # a str subclass can hold no non-empty slots, so these two live in the instance dict
+    lens: str
+    layers: Mapping[str, str]
+
+    def __new__(cls, text: str, *, lens: str, layers: Mapping[str, str]) -> Lensed:
+        row = super().__new__(cls, text)
+        row.lens = lens
+        row.layers = layers
+        return row
+
+
+def recede_rail(line: str, w: int) -> RailReceded:
+    """Return ``line`` laid out to ``w`` cells with its rail entry marked as receded."""
+    return RailReceded(pad(line, w))
 
 
 def bar(w: int) -> str:
@@ -174,7 +308,14 @@ def header(view: View, crumb: str) -> str:
         return header_row(
             session, crumb=crumb, scope=proto.scope, needs=0, w=view.w, process=process
         )
-    return header_row(session, crumb=crumb, scope=proto.scope, needs=needs_count(view), w=view.w)
+    return header_row(
+        session,
+        crumb=crumb,
+        scope=proto.scope,
+        needs=needs_count(view),
+        w=view.w,
+        prototype=view.fixture.prototype,
+    )
 
 
 def entry_state(view: View) -> EntryState:
@@ -229,7 +370,61 @@ def route_keys_bar(view: View, entries: Sequence[KeyEntry]) -> str:
     """Return a route keybar; a record frame with fewer than two rows drops ``↑↓ row``."""
     nav = view.session.record_nav
     one_row = nav is not None and len(nav) < 2
-    return keybar([e.pair() for e in entries if not (one_row and e == KEY["up"])], view.w)
+    pairs = [e.pair() for e in entries if not (one_row and e == KEY["up"])]
+    return keybar(acting_pairs(view, pairs), view.w, keep_actions=from_read_model(view))
+
+
+def acting_pairs(view: View, pairs: Sequence[Pair]) -> list[Pair]:
+    """Return the pairs whose keys act on what the frame drew; the rest are left off.
+
+    Keys shown are the keys that work, and this is the one rule every read-model keybar
+    passes through. Paging and the ends act only when a table on the frame was cut to its
+    window (``session.windowed``). A frame that walks rows publishes how many its cursor
+    walks as ``session.nav_rows``: with fewer than two the arrows have nothing to move
+    between, and with none Enter has no row to open. A key the route's native frame does
+    not serve at all is left off whatever it holds. The prototype replay keeps its whole
+    table, because its keybars are the golden ones.
+
+    The keys kept are published as ``session.bar_keys``: a motion key outside them has no
+    cursor on the frame to move, so it is refused rather than moving an undrawn one.
+    """
+    if not from_read_model(view):
+        return list(pairs)
+    session = view.session
+    idle = unserved(session.route, session.subj_id)
+    acting = [
+        (token, label)
+        for token, label in pairs
+        if not idle.intersection(_keys_of(token)) and _acts(token, session)
+    ]
+    session.bar_keys = frozenset(key for token, _label in acting for key in _keys_of(token))
+    return acting
+
+
+_KEY_OF_NAME: Mapping[str, str] = MappingProxyType({name: key for key, name in KEY_NAMES.items()})
+
+
+def _keys_of(token: str) -> list[str]:
+    """Return the dispatcher key names a keybar token prints, a glyph pair split in two."""
+    keys: list[str] = []
+    for word in token.split():
+        glyphs = list(word) if all(ch in _KEY_OF_NAME for ch in word) else [word]
+        keys.extend(_KEY_OF_NAME.get(glyph, glyph) for glyph in glyphs)
+    return keys
+
+
+def _acts(token: str, session: Session) -> bool:
+    """Return whether the keys ``token`` names act on the frame ``session`` published."""
+    if token in (KEY["page"].token, KEY["ends"].token):
+        return session.windowed
+    held = session.nav_rows
+    if held is None:
+        return True
+    if token == KEY["up"].token:
+        return held > 1
+    if token == KEY["enter"].token:
+        return held > 0
+    return True
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -246,6 +441,11 @@ class RowWindow:
     stop: int
     total: int
 
+    @property
+    def hides(self) -> bool:
+        """Whether a row of the table falls outside the window, which a ``WINDOW`` row owes."""
+        return self.start > 0 or self.stop < self.total
+
     def line(self, *, complete: bool = True) -> str:
         """Return the ``WINDOW`` row, which says how much of the table is off screen.
 
@@ -253,8 +453,16 @@ class RowWindow:
             complete: Whether the table claims every row; a partial one says ``known``,
                 because its total is a floor rather than a count.
         """
+        return f" WINDOW    {self.count(complete=complete)}"
+
+    def count(self, *, complete: bool = True) -> str:
+        """Return what the ``WINDOW`` row states after its label: the span and the total.
+
+        Args:
+            complete: Whether the table claims every row; a partial one says ``known``.
+        """
         span = f"{group(self.start + 1)}–{group(self.stop)}" if self.stop > self.start else "0"  # noqa: RUF001
-        return f" WINDOW    {span} of {group(self.total)}" + ("" if complete else " known")
+        return f"{span} of {group(self.total)}" + ("" if complete else " known")
 
 
 def window_rows(view: View, *, total: int, cursor: int, chrome: int) -> RowWindow:
@@ -280,6 +488,8 @@ def window_rows(view: View, *, total: int, cursor: int, chrome: int) -> RowWindo
     start = max(min(session.scroll, cursor), cursor - room + 1)
     start = max(0, min(start, total - room))
     session.scroll, session.visible = start, room
+    session.windowed = session.windowed or total > room
+    session.nav_rows = total
     return RowWindow(start=start, stop=min(total, start + room), total=total)
 
 
@@ -329,6 +539,44 @@ def make_room(body: Sequence[str], n: int) -> list[str] | None:
     return kept if not need else None
 
 
+def _laid(row: str, w: int) -> str:
+    """Return ``row`` at ``w`` cells: a fixed row padded as it is, a receded one kept so."""
+    if isinstance(row, (Receded, RailReceded)):
+        return type(row)(row + " " * max(0, w - cell_len(row)))
+    if isinstance(row, Fixed):
+        # a row already as wide as the frame keeps its type, and what its type tells
+        gap = w - cell_len(row)
+        return row + " " * gap if gap > 0 else row
+    return pad(snap_caret(row), w)
+
+
+#: Every token a keybar pair can open with, longest first so ``PageUp PageDown`` is read
+#: as one token rather than as ``PageUp`` and a label.
+_BAR_TOKENS: tuple[str, ...] = tuple(
+    sorted(
+        {e.token for table in ROUTE_KEYS.values() for e in table} | {e.token for e in KEY.values()},
+        key=len,
+        reverse=True,
+    )
+)
+
+
+def bar_keys(bar: str) -> frozenset[str]:
+    """Return the dispatcher keys a drawn keybar row offers.
+
+    A frame whose pairs passed :func:`acting_pairs` has published them already, before a
+    narrow bar gave up its paging pairs for width; any other frame's offer is read back
+    off the row it drew. A legend docked beside the pairs opens with no key token and is
+    skipped.
+    """
+    keys: set[str] = set()
+    for pair in re.split(r" {3,}", bar.strip()):
+        token = next((t for t in _BAR_TOKENS if pair.startswith(f"{t} ")), None)
+        if token is not None:
+            keys.update(_keys_of(token))
+    return frozenset(keys)
+
+
 def build(view: View, rows: Sequence[str], keys: str) -> list[str]:
     """Return the full frame: H rows of W cells, the keybar last.
 
@@ -343,11 +591,10 @@ def build(view: View, rows: Sequence[str], keys: str) -> list[str]:
     session, w, h = view.session, view.w, view.h
     session.absent_frame = session.absent
     keys = _swapped_keys(session, keys, w)
+    if session.bar_keys is None:
+        session.bar_keys = bar_keys(keys)
     session.absent = False
-    out: list[str] = [
-        row + " " * max(0, w - cell_len(row)) if isinstance(row, Fixed) else pad(snap_caret(row), w)
-        for row in rows[: h - 1]
-    ]
+    out: list[str] = [_laid(row, w) for row in rows[: h - 1]]
     out.extend(" " * w for _ in range(h - 1 - len(out)))
     if view.verbose:
         paint_verbose(session, out, w)
@@ -550,12 +797,14 @@ def toast_box(toast: Toast, w: int) -> list[str]:
 
     An error toast leads its title with the error kind's ``!``; the purged token ``✗`` is a
     value-column glyph and would read as a purged fact. Any other severity is carried by
-    its title word and the border's colour alone.
+    its title word and the border's colour alone. A toast with no title, such as the quit
+    prompt, draws its top border unbroken.
     """
     glyph = "! " if toast.sev == Severity.ERR else ""
     head = glyph + toast.title
+    top = "─" * (w - 2) if not head else "─ " + head + " " + "─" * max(1, w - 5 - cell_len(head))
     return [
-        "┌─ " + head + " " + "─" * max(1, w - 5 - cell_len(head)) + "┐",
+        "┌" + top + "┐",
         "│ " + pad(clip_words(toast.text, w - 4), w - 4) + " │",
         "└" + "─" * (w - 2) + "┘",
     ]

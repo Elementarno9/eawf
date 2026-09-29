@@ -186,6 +186,53 @@ _LIGHT_CHROME: Final[dict[str, str]] = {
 }
 
 
+#: How much of the accent tints the header and keybar bands, over the surface.
+BAND_ACCENT_SHARE: Final[float] = 0.06
+
+#: The share of text an unfocused pane keeps against the surface, per theme
+#: brightness. Recession stays readable: the pane is read to choose where to go.
+_RECEDE_TEXT_SHARE: Final[dict[bool, float]] = {True: 0.74, False: 0.78}
+
+#: The share of faint in the dim tone, the rest text, per theme brightness:
+#: raw faint misses AA on the tinted bands, so the dim tone is lifted toward text.
+_DIM_FAINT_SHARE: Final[dict[bool, float]] = {True: 0.55, False: 0.74}
+
+
+def mix(first: str, second: str, share: float) -> str:
+    """Return ``share`` of ``first`` over ``second``, as a lower-case six-digit hex.
+
+    Args:
+        first: A ``#rrggbb`` colour.
+        second: A ``#rrggbb`` colour.
+        share: The part of ``first`` in the mix, from ``0`` to ``1``.
+
+    Raises:
+        ValueError: ``share`` is outside ``0..1`` or a colour is not ``#rrggbb``.
+    """
+    if not 0.0 <= share <= 1.0:
+        raise ValueError(f"a mix share is between 0 and 1, got {share}")
+    channels = []
+    for i in (1, 3, 5):
+        a, b = int(first[i : i + 2], 16), int(second[i : i + 2], 16)
+        channels.append(round(a * share + b * (1 - share)))
+    return "#" + "".join(f"{c:02x}" for c in channels)
+
+
+def _derived(semantic: dict[str, str], chrome: dict[str, str], *, dark: bool) -> dict[str, str]:
+    """Return the chrome tones mixed from a theme's own palette.
+
+    ``band`` is the header and keybar ground, ``recede`` the text of a pane that does
+    not own the arrows, and ``dim`` the lifted faint tone; each is a mix so it moves
+    with the palette it is mixed from.
+    """
+    surface, text = chrome["surface"], chrome["foreground"]
+    return {
+        "band": mix(semantic["accent"], surface, BAND_ACCENT_SHARE),
+        "recede": mix(text, surface, _RECEDE_TEXT_SHARE[dark]),
+        "dim": mix(chrome["faint"], text, _DIM_FAINT_SHARE[dark]),
+    }
+
+
 def _build_theme(
     *, name: str, semantic: dict[str, str], chrome: dict[str, str], dark: bool
 ) -> Theme:
@@ -205,7 +252,8 @@ def _build_theme(
         dark: Whether the theme is a dark theme.
 
     Returns:
-        The theme, carrying ``chrome`` and ``semantic`` in one variables map.
+        The theme, carrying ``chrome``, ``semantic`` and the tones mixed from
+        them in one variables map.
     """
     return Theme(
         name=name,
@@ -218,7 +266,7 @@ def _build_theme(
         panel=chrome["panel"],
         foreground=chrome["foreground"],
         dark=dark,
-        variables={**chrome, **semantic},
+        variables={**chrome, **semantic, **_derived(semantic, chrome, dark=dark)},
     )
 
 

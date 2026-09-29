@@ -4,11 +4,13 @@ A Run other than the fixture's own renders its record from the register or state
 absence.
 
 The native frame draws one Run -- the session's subject, else the Run under the cursor --
-as the packet's labelled facts: its state, the Task it runs, its provider, its usage, its
-controls and its lineage, then its timeline. The register states the Run's status and its
-Task; every other fact belongs to a producer the console does not read yet, so it wears
-the unknown token with the reason rather than a blank. A Run whose lifecycle has ended
-says so, and offers no lifecycle verb.
+timeline first, then the packet's labelled facts: its state, the Task it runs, its
+provider, its usage, its controls and its lineage. No producer records a Run's semantic
+events where this frame reads, so the timeline pane says that and points at the
+transcript, which Enter opens. The register states the Run's status and its Task; every
+other fact belongs to a producer the console does not read yet, so it wears the unknown
+token with the reason rather than a blank. A Run whose lifecycle has ended says so, and
+offers no lifecycle verb.
 """
 
 from __future__ import annotations
@@ -25,10 +27,10 @@ from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.format import clock_time, group, span
 from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
-from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS
+from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.overlays.situations import LOST
-from eawf.surfaces.tui.console.renderers.detail import state_of, unknown_frame
+from eawf.surfaces.tui.console.renderers.detail import state_of, subject_line, unknown_frame
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
@@ -37,31 +39,45 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     native_head,
     route_crumb,
 )
-from eawf.surfaces.tui.console.renderers.spine import finished_rows, finished_subject, held, restore
+from eawf.surfaces.tui.console.renderers.spine import (
+    detail_keys,
+    finished_rows,
+    finished_subject,
+    held,
+    restore,
+)
 from eawf.surfaces.tui.console.width import cell_len
 
 OWN = pt.OWN_RUN
 # Cells the timeline's first two columns and their gutter take.
 TL_PREFIX = 38
 
+#: The timeline pane's head: its title and the priority legend its glyph rows are read by.
+TIMELINE_HEAD = f" {'TIMELINE':<18}P0  P1  P2"
 
-def tl_label(w: int) -> str:
-    """Return the priority column's head, abbreviated only below 120 columns."""
-    return "PRIORITY" if w >= 120 else "PRI"
-
-
-def tl_text(w: int) -> int:
-    """Return the cells the event detail column gets at width ``w``."""
-    return w - TL_PREFIX - 1 - cell_len(tl_label(w))
+#: What the timeline pane says while no producer records the Run's events for this frame.
+NO_EVENTS = "no events recorded yet · Enter opens the transcript"
 
 
-def tl_header(w: int) -> str:
+def tl_label(wide: bool) -> str:
+    """Return the priority column's head, abbreviated below the wide layout."""
+    return "PRIORITY" if wide else "PRI"
+
+
+def tl_text(w: int, wide: bool) -> int:
+    """Return the cells the event detail column gets in a ``w``-cell frame."""
+    return w - TL_PREFIX - 1 - cell_len(tl_label(wide))
+
+
+def tl_header(w: int, wide: bool) -> str:
     """Return the timeline head row.
 
     Raises:
         ValueError: the head does not fit ``w`` cells.
     """
-    line = Table([10, 23, tl_text(w) + 1, 0], 2).head(["TIMELINE", "EVENT", "DETAIL", tl_label(w)])
+    line = Table([10, 23, tl_text(w, wide) + 1, 0], 2).head(
+        ["TIMELINE", "EVENT", "DETAIL", tl_label(wide)]
+    )
     if cell_len(line) > w:
         raise ValueError(f"timeline header overruns the frame: {cell_len(line)}/{w}")
     return line
@@ -79,11 +95,21 @@ def _facts(view: View, rid: str) -> str:
 
 
 def _subject(view: View, spine: SpineView) -> SpineRow | None:
-    """Return the Run the frame is about: the session's subject, else the Run under the cursor."""
-    found = spine.index_of(view.session.subj_id)
-    if found is not None:
-        return spine.rows[found]
-    return spine.rows[restore(view.session, spine)] if spine.rows else None
+    """Return the Run the frame is about, pinning it as the subject when none was named.
+
+    A frame opened with no subject is about the Run it first drew, and stays about it: a
+    cursor move never re-derives the subject. A subject the register does not hold is
+    about nothing, never about whichever Run sits at the cursor.
+    """
+    s = view.session
+    if s.subj_id is not None:
+        found = spine.index_of(s.subj_id)
+        return spine.rows[found] if found is not None else None
+    if not spine.rows:
+        return None
+    run = spine.rows[restore(s, spine)]
+    s.subj_id = run.key
+    return run
 
 
 def _instant(run: SpineRow, name: str) -> datetime | None:
@@ -163,23 +189,26 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     key = run.key if run is not None else "no run"
     state = value_cell(run.field("status")).slot if run is not None else UNKNOWN_WORD
     finished = finished_subject(s, spine)
-    # a finished Run has no lifecycle left, so the lifecycle menu is not offered
-    keys = [e for e in native_keys(s.route) if finished is None or e != KEY["actions"]]
     if run is not None and lost(view, run):
-        return unknown_frame(view, spine, run, keys)
+        return unknown_frame(view, spine, run, detail_keys(view, spine))
     treated = state_of(run) if run is not None else None
     top = native_head(
         view,
         spine,
-        crumb_text=route_crumb(spine, *([run.parent_key] if run and run.parent_key else []), key),
-        summary=f"Run {key} · {state} · {counts(spine)}",
+        crumb_text=route_crumb(
+            view, spine, *([run.parent_key] if run and run.parent_key else []), key
+        ),
+        summary=_summary(run, state, spine, finished=finished is not None, w=w),
         terminal=finished is not None,
     )
     rows = list(top)
     if finished is not None:
-        rows += [*finished_rows(s.route, finished), thin(w)]
+        rows += [*finished_rows(s.route, finished, label), thin(w)]
+    pane = NO_EVENTS if run is not None else "no events · no Run is held to record them"
+    rows += [TIMELINE_HEAD, f"   {pane}", thin(w)]
     if run is None:
-        rows.append(label("RUN", "∅ this scope holds no Run"))
+        missing = f"∅ {s.subj_id} is not held in this scope" if s.subj_id else ""
+        rows.append(label("RUN", missing or "∅ this scope holds no Run"))
     else:
         facts = run.facts
         task = run.parent_key
@@ -219,12 +248,34 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
             label("CONTROLS", "no control sent from this console"),
             label("LINEAGE", f"{attempt} · forks are not read yet"),
         ]
-    rows += [
-        thin(w),
-        tl_header(w),
-        f"   {UNKNOWN_WORD} · the Run's events are read on its transcript route",
-    ]
-    return build(view, rows, route_keys_bar(view, keys))
+    # Enter opens the transcript the timeline pane names, so it sits beside the event keys
+    keys = detail_keys(view, spine)
+    at = keys.index(KEY["up_event"]) + 1 if KEY["up_event"] in keys else 0
+    enter = [KEY["transcript"]] if run is not None else []
+    # no producer states a Run's events yet, so the event keys have nothing to walk
+    shown = [e for e in [*keys[:at], *enter, *keys[at:]] if e != KEY["up_event"]]
+    return build(view, rows, route_keys_bar(view, shown))
+
+
+def _summary(run: SpineRow | None, state: str, spine: SpineView, *, finished: bool, w: int) -> str:
+    """Return the Run frame's summary: the Run, its state and the sequence it was read at.
+
+    With no Run to name, the frame says what it holds instead, as a list frame does.
+    """
+    if run is None:
+        return counts(spine)
+    said = f"{state} · final" if finished else state
+    return subject_line(run, f"{said} · seq {group(int(spine.source_cursor))}", w)
+
+
+def open_transcript(ctx: Ctx) -> None:
+    """Open the transcript of the Run the frame is about, which the timeline pane names."""
+    s = ctx.s
+    run = s.subj_id or s.sel_id
+    if not isinstance(ctx.projection, SpineView) or run is None:
+        ctx.noop("Enter")
+        return
+    go(ctx, "transcript", f"transcript · {run}", run)
 
 
 def render(view: View) -> list[str]:
@@ -245,9 +296,9 @@ def render(view: View) -> list[str]:
         header(view, f" Eä ▸ … ▸ {parent}{rid}"),
         f" Run {rid} · {_facts(view, rid)} · seq {group(proto.revision)}",
         bar(w),
-        tl_header(w),
+        tl_header(w, view.wide),
     ]
-    text_w = tl_text(w)
+    text_w = tl_text(w, view.wide)
     table = Table([10, 23, text_w + 1, 0], 2)
     for i, event in enumerate(proto.timeline):
         if cell_len(event[2]) > text_w:

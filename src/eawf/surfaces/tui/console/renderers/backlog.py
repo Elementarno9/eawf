@@ -6,8 +6,9 @@ Tab moves the focus between the groups, and the group without the cursor recedes
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any
 
 from eawf.kernel.projection.spine import SpineRow, SpineView
@@ -17,6 +18,7 @@ from eawf.surfaces.tui.console.frame import (
     Fixed,
     Grid,
     View,
+    acting_pairs,
     build,
     g_frame,
     g_row,
@@ -26,9 +28,14 @@ from eawf.surfaces.tui.console.frame import (
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.reads import reads
-from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, native_head, route_crumb
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    cursor_note,
+    native_head,
+    route_crumb,
+)
 from eawf.surfaces.tui.console.renderers.spine import held
-from eawf.surfaces.tui.console.width import cell_len, pad
+from eawf.surfaces.tui.console.width import cell_len, clip, pad
 
 _FIRST_INK = re.compile(r"\S")
 _KEYS = route_pairs("backlog")
@@ -63,6 +70,11 @@ def _group(view: View, name: str, heads: Sequence[str], rows: Sequence[Any]) -> 
 #: The groups the native backlog lists, and the status each one holds.
 GROUPS: tuple[tuple[str, str], ...] = ((_DRAFTS, "DRAFT"), (_DEFERRED, "DEFERRED"))
 
+#: What each group says when it holds no Task, so an empty group is not a dangling head.
+_NONE_IN: Mapping[str, str] = MappingProxyType(
+    {_DRAFTS: "∅ no draft Task", _DEFERRED: "∅ nothing deferred"}
+)
+
 #: The next move an empty backlog offers instead of a dead screen.
 EMPTY_NEXT = "a drafted Task lands here · g t shows what is planned"
 
@@ -80,29 +92,50 @@ def _native_rows(
 ) -> list[str]:
     """Return one group's Task rows in ``shown``: key, title, then the group's two columns."""
     s, w = view.session, view.w
+    grid = _native_grid(w)
     out: list[str] = []
     for i in shown:
         row = rows[i]
-        title = row.title or UNKNOWN_WORD
+        # a hard cut, so every clipped title ends in the same cell of its column
+        title = clip(row.title or UNKNOWN_WORD, grid.cols[2] - 1)
         if group == _DRAFTS:
             due = row.facts.get("due")
-            tail = [value_cell(row.field("status")).slot, due or "undated"]
+            tail = [promotion_needs(row), due or "undated"]
         else:
             tail = [value_cell(row.field("reason")).full, _date(row.facts.get("updated_at"))]
-        line = _caret(_native_grid(w).row(["", row.key, title, *tail], False, w), on and i == s.sel)
+        line = _caret(grid.row(["", row.key, title, *tail], False, w), on and i == s.sel)
         out.append(g_row(line, w) if on else Fixed(pad(line, w)))
     return out
 
 
 # The rows the unfocused group lists before it counts the rest.
 _PEEK = 2
-# The cells the native grid's key, status and due columns take; the title takes the rest.
-_KEY_W, _STATUS_W, _DUE_W = 11, 16, 12
+# The cells the native grid's key, status and due columns take; the title takes the rest
+# up to its cap, and a wider frame leaves the remainder empty rather than stretching it.
+_KEY_W, _STATUS_W, _DUE_W, _TITLE_MAX = 11, 24, 12, 48
+
+
+def promotion_needs(row: SpineRow) -> str:
+    """Return what a draft still needs before it can be promoted, or that it is ready.
+
+    A planned Task must hold criteria and a Batch, and a draft holds neither by
+    construction, so the column names what promotion still has to supply rather than
+    repeating the ``DRAFT`` its group already says.
+
+    Args:
+        row: A draft Task's row; its criteria count and its Batch are the promotion fields.
+
+    Returns:
+        ``needs criteria · batch`` naming each missing field, or ``ready to promote``.
+    """
+    held = (("criteria", row.facts.get("criteria")), ("batch", row.parent_key))
+    missing = [word for word, value in held if not value]
+    return f"needs {' · '.join(missing)}" if missing else "ready to promote"
 
 
 def _native_grid(w: int) -> Grid:
     """Return the backlog grid at width ``w``: the title narrows so the due never clips."""
-    title = max(16, w - 2 - 11 - _KEY_W - _STATUS_W - _DUE_W)
+    title = min(_TITLE_MAX, max(16, w - 2 - 11 - _KEY_W - _STATUS_W - _DUE_W))
     return Grid([11, _KEY_W, title, _STATUS_W, 0], 2)
 
 
@@ -134,8 +167,8 @@ def native_backlog(view: View, spine: SpineView) -> list[str]:
     top = native_head(
         view,
         spine,
-        crumb_text=route_crumb(spine, "Backlog"),
-        summary=f"{drafts} drafts · {deferred} deferred · cursor {group(int(spine.source_cursor))}",
+        crumb_text=route_crumb(view, spine, "Backlog"),
+        summary=f"{drafts} drafts · {deferred} deferred{cursor_note(spine)}",
     )
     body: list[str] = []
     if not drafts and not deferred:
@@ -150,7 +183,10 @@ def native_backlog(view: View, spine: SpineView) -> list[str]:
                 f"   no queued Task is known at revision {revision} · "
                 "this read cannot vouch for every Task",
             ]
-        return build(view, [*top, *body], keybar(list(_KEYS), w))
+        # with no group holding a Task there is no row to walk or open and no group to swap
+        s.nav_rows = 0
+        idle = [pair for pair in _KEYS if pair[0] != "Tab"]
+        return build(view, [*top, *body], keybar(acting_pairs(view, idle), w))
     other = next(name for name, _status in GROUPS if name != focus)
     peek = min(len(grouped[other]), _PEEK)
     # the focused group is windowed into what the other group and the heads leave
@@ -161,15 +197,19 @@ def native_backlog(view: View, spine: SpineView) -> list[str]:
         tail = raw[raw.index(name) + cell_len(name) :].rstrip()
         body.append(Fixed(pad(f" {name}  {tail}", w)))
         rows = grouped[name]
-        if name == focus:
+        if not rows:
+            body.append(Fixed(pad(f"   {_NONE_IN[name]}", w)))
+        elif name == focus:
             body += _native_rows(view, rows, name, True, range(win.start, win.stop))
-            body.append(win.line(complete=spine.complete))
+            if win.hides:
+                body.append(win.line(complete=spine.complete))
         else:
             body += _native_rows(view, rows, name, False, range(peek))
             if len(rows) > peek:
                 body.append(Fixed(pad(f"   … {len(rows) - peek} more · Tab walks them", w)))
         body.append(thin(w))
-    return build(view, [*top, *body], keybar(list(_KEYS), w))
+    s.nav_rows = len(shown)
+    return build(view, [*top, *body], keybar(acting_pairs(view, _KEYS), w))
 
 
 def render(view: View) -> list[str]:
@@ -205,7 +245,7 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     )
     cur = s.bl_group or _DRAFTS
     at = groups.index(cur) if cur in groups else -1
-    s.bl_group = groups[(at + 1) % len(groups)]
+    s.bl_group = groups[(at + (-1 if shift else 1)) % len(groups)]
     s.sel = 0
     ctx.log("Tab", f"group → {s.bl_group}")
     return True

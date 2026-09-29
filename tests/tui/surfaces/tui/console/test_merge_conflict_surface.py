@@ -289,12 +289,17 @@ def test_the_family_names_exactly_the_routes_this_wave_binds() -> None:
 
 
 @pytest.mark.parametrize("route", INTEGRATION_ROUTES)
-def test_the_frame_prints_the_derived_counts_and_the_cursor(route: str) -> None:
-    """Every count on the frame is one the view derived, and the cursor is beside it."""
+def test_the_frame_prints_the_derived_counts_and_no_cursor(route: str) -> None:
+    """Every count on the frame is one the view derived; a complete read names no cursor."""
     model = _view(route)
     body = "\n".join(_frame(route, model))
-    assert "cursor 41,208" in body
-    assert "1 batch" in body
+    assert "cursor 41,208" not in body
+    if route == GIT_PR_ROUTE:
+        # the Git surface's line names the Batch it is about, not a count of the register
+        assert "BAT-0001 · read only" in body
+        assert "1 batch" not in body
+    else:
+        assert "1 batch" in body
 
 
 # ---------- the head of a Batch is positional ----------

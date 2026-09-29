@@ -32,8 +32,11 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     restore,
     route_crumb,
 )
+from eawf.surfaces.tui.console.tokens import Severity
 
 _KEYS = route_pairs("sandbox.log")
+#: Why ``p`` opens no settings section on a live tree.
+NO_POLICY_SECTION = "no settings section holds the sandbox policy"
 RUNS: tuple[str, ...] = pt.SANDBOX_RUNS
 
 
@@ -85,15 +88,16 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
         The full frame, keybar last.
     """
     s, w = view.session, view.w
-    wide = w >= 120
+    wide = view.wide
     cursor = restore(s, model)
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, "Sandbox log"),
+        crumb_text=route_crumb(view, model, "Sandbox log"),
         summary=f"Authorisation decisions for every agent · {counts(model)}",
     )
-    decisions = Grid([7, 10, 17, 30, 0] if wide else [7, 10, 17, 0], 1)
+    # the head sits over the rows below it, in the same two-cell caret gutter
+    decisions = Grid([7, 10, 17, 30, 0] if wide else [7, 10, 17, 0])
     body = [
         label("WINDOW", f"{UNKNOWN_WORD} decisions · ? denied · 0 of ? shown"),
         decisions.head(["TIME", "DECISION", "RUN", "REASON", *(["REVISION"] if wide else [])]),
@@ -157,10 +161,28 @@ def render(view: View) -> list[str]:
     )
 
 
+def _no_policy_section(ctx: Ctx) -> None:
+    """Name the policy under the caret and say why ``p`` opens no settings section for it.
+
+    The sandbox policy is a record of its own; no settings section holds it, so opening
+    Settings would land on a section that says nothing about the policy.
+    """
+    model = ctx.projection if isinstance(ctx.projection, RouteReadModel) else None
+    rows = model.rows if model is not None else ()
+    row = next((r for r in rows if r.key == ctx.s.sel_id), rows[0] if rows else None)
+    held = f"{row.key} · {policy_reference(row.revision)}" if row else "no sandbox policy is held"
+    note = f"{held} · {NO_POLICY_SECTION}"
+    ctx.notify(note, "policy", Severity.WARN)
+    ctx.log("p", note)
+
+
 def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     """Open the policy on ``p`` and the decision's Run on Enter."""
     if busy(ctx.s):
         return False
+    if key == "p" and (isinstance(ctx.projection, RouteReadModel) or not ctx.fixture.prototype):
+        _no_policy_section(ctx)
+        return True
     if key == "p":
         ctx.notify("settings ▸ sandbox · pol-2026-08-11.3", "opened")
         go(ctx, "settings", "the policy these decisions were read against")

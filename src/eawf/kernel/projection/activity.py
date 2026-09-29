@@ -50,9 +50,9 @@ class ActivityExceptionBucket(StrEnum):
 
     NEEDS_OPERATOR = "needs operator"
     UNKNOWN_CONTROL_OUTCOME = "unknown control outcome"
-    LOST_STALE = "lost/stale"
+    LOST_STALE = "lost or stale"
     FAILED = "failed"
-    CHECKING_INTEGRATING = "checking/integrating"
+    CHECKING_INTEGRATING = "checking or integrating"
     RUNNING = "running"
     QUEUED = "queued"
     TERMINAL_RECENT = "terminal recent"

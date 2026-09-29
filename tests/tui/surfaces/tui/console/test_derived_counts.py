@@ -251,13 +251,20 @@ def test_a_single_row_register_counts_one() -> None:
 
 @pytest.mark.parametrize("route", SPINE_ROUTES)
 def test_the_frame_prints_the_derived_counts(route: str) -> None:
-    """Every count on the frame is one the view derived, and the cursor is beside them."""
+    """Every count on the frame is one the view derived; a complete read names no cursor.
+
+    A frame drawn for one record names that record rather than counting the register.
+    """
     spine = _view(route)
     rows, _session = _frame(spine)
     counts = rows[1]
+    if route == "run.detail":
+        assert counts.startswith(f" Run {spine.rows[0].key} · ")
+        assert "cursor" not in counts
+        return
     for name, count in spine.counts.items():
         assert re.search(rf"\b{count} {name}s?\b", counts), counts
-    assert "cursor 41,208" in counts
+    assert "cursor" not in counts
 
 
 def test_the_frame_states_the_unavailable_token_when_no_register_is_bound() -> None:
@@ -429,7 +436,7 @@ def test_con_126_the_row_names_who_may_act_on_it() -> None:
     at = next(i for i, row in enumerate(frame) if "ACT-0002" in row)
     assert frame[at].lstrip().startswith("▸ ACT-0002")
     assert f"{bodies.OTHER} only · you act as {bodies.ME}" in frame[at + 1]
-    under = max(i for i, row in enumerate(frame[:at]) if row.startswith(" ALL PRINCIPALS"))
+    under = max(i for i, row in enumerate(frame[:at]) if row.startswith(" NEEDS OPERATOR"))
     assert under < at
     # the keybar offers no verb on a row this principal may not act on
     for verb in ("a answer", "x deny", "z snooze", "v resolve"):

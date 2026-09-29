@@ -1,7 +1,8 @@
 """notifications: which classes may raise a toast, and which contract decided so.
 
 The route only reads: every row is one row of the presentation matrix the attention
-reducer states, over exactly its three columns. No class takes focus, opens a modal or
+reducer states, over exactly its three columns, in the same boxed card whether the console
+runs on the prototype or on a held register. No class takes focus, opens a modal or
 changes route; a toast is the one interruption any class may make.
 """
 
@@ -11,7 +12,7 @@ from eawf.kernel.projection.attention import NOTIFICATION_MATRIX, NotificationPo
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad
 from eawf.surfaces.tui.console.keybar import route_pairs
-from eawf.surfaces.tui.console.renderers.registers import native_frame
+from eawf.surfaces.tui.console.renderers.read_model import route_crumb
 
 _KEYS = route_pairs("notifications")
 
@@ -29,9 +30,11 @@ def class_name(row: NotificationPolicy) -> str:
 
 
 def render(view: View) -> list[str]:
-    """Return the Notifications card."""
-    if view.register is not None:
-        return native_frame(view, view.register)
+    """Return the Notifications card, over the held register's crumb when one is held.
+
+    The card is the presentation matrix whether or not a register is held: the Runs the
+    register carries are not classes, so the cursor walks the matrix and nothing else.
+    """
     s = view.session
     classes = NOTIFICATION_MATRIX.classes
     dv.sel_in(s, len(classes))
@@ -51,10 +54,19 @@ def render(view: View) -> list[str]:
         ]
     )
     row = classes[s.sel]
+    register = view.register
     return boxed(
         view,
-        crumb=f"Eä ▸ {view.fixture.scope} ▸ Notifications",
-        ctx="26 runs · following",
+        crumb=(
+            route_crumb(view, register, "Notifications").lstrip()
+            if register is not None
+            else f"Eä ▸ {view.fixture.scope} ▸ Notifications"
+        ),
+        ctx=(
+            f"{dv.plural(len(classes), 'notification class', 'es')} · what may interrupt you"
+            if register is not None
+            else "26 runs · following"
+        ),
         pre=[],
         title="NOTIFICATIONS · what may interrupt",
         lines=lines,

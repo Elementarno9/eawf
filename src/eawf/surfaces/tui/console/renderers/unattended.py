@@ -25,7 +25,6 @@ from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
-    counts,
     finish,
     label,
     more,
@@ -94,8 +93,10 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, "Unattended"),
-        summary=f"Dispatch queue · the daemon owns scheduling · {counts(model)}",
+        crumb_text=route_crumb(view, model, "Unattended"),
+        summary=(
+            f"Dispatch queue · the daemon owns scheduling · {dv.plural(len(queue), 'run')} in it"
+        ),
     )
     queued = sum(1 for row in queue if _state(row) == QUEUED)
     running = sum(1 for row in queue if _state(row) == RUNNING)
@@ -121,7 +122,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     )
     if not queue:
         body.append("   ∅ the queue holds no record: no Run whose lifecycle has not ended")
-    body.append(win.line(complete=model.complete))
+    body.append(label("WINDOW", win.count(complete=model.complete)))
     return finish(view, top, body, _KEYS, foot=foot)
 
 

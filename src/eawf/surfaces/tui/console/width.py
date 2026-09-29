@@ -86,6 +86,29 @@ def _head(text: str, cells: int) -> str:
     return text
 
 
+def clip(text: str, n: int) -> str:
+    """Shorten a value at exactly its column and mark the cut.
+
+    Unlike :func:`clip_words` the cut never backs up to a word, so every clipped value in
+    a column ends at the same cell -- what a grid of names needs to read as one column.
+
+    Args:
+        text: The value to fit.
+        n: The column width in cells.
+
+    Returns:
+        ``text`` itself when it fits, otherwise ``n - 1`` cells of it and an ellipsis.
+
+    Raises:
+        ValueError: ``n`` is negative.
+    """
+    if n < 0:
+        raise ValueError(f"column width must be non-negative, got {n}")
+    if cell_len(text) <= n:
+        return text
+    return _head(text, n - 1) + _ELLIPSIS if n else ""
+
+
 def clip_words(text: str, n: int) -> str:
     """Shorten a value at a word and mark the cut, so a clipped reason still reads as one.
 

@@ -118,10 +118,14 @@ def _claim(view: View, model: RouteReadModel) -> RouteRecord | None:
     return next((row for row in claims if row.key == subject), claims[0] if claims else None)
 
 
-def _rung_rows(view: View) -> list[str]:
-    """Return the ladder: one row per rung, wider frames adding when and what it ran over."""
+def _rung_rows(view: View, *, held: bool) -> list[str]:
+    """Return the ladder: one row per rung, wider frames adding when and what it ran over.
+
+    With no Claim held the rungs are about nothing, so no caret rests on one and the frame
+    publishes no row for the arrows or Enter to act on.
+    """
     s, w = view.session, view.w
-    wide, x = w >= 120, w >= 160
+    wide, x = view.wide, view.xwide
     heads = ["RUNG", "OUTCOME", "WHAT IT CHECKED"]
     cols = [13, 12]
     if x:
@@ -131,7 +135,7 @@ def _rung_rows(view: View) -> list[str]:
     checked_w = w - 3 - sum(cols) - (24 if x else 0) - (14 if wide else 0)
     grid = Grid([*cols, checked_w, *([24] if x else []), *([14] if wide else []), 0][: len(heads)])
     rows = [grid.head(heads)]
-    dv.sel_in(s, len(RUNGS))
+    dv.sel_in(s, len(RUNGS) if held else 0)
     for i, (name, checked) in enumerate(RUNGS):
         # no producer records a rung outcome yet, and a rung with none is unknown -- never
         # failed, and never inferred from the claim or from the rung above or below it
@@ -140,7 +144,7 @@ def _rung_rows(view: View) -> list[str]:
             cells.append(UNAVAILABLE)
         if wide:
             cells.append("open")
-        rows.append(grid.row(cells, i == s.sel, w))
+        rows.append(grid.row(cells, held and i == s.sel, w))
     return rows
 
 
@@ -161,7 +165,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     top = native_head(
         view,
         model,
-        crumb_text=route_crumb(model, "Evidence", *([claim.key] if claim else [])),
+        crumb_text=route_crumb(view, model, "Evidence", *([claim.key] if claim else [])),
         summary=f"{subject} · {len(RUNGS)} rungs · {UNCERTIFIED} · {counts(model)}",
     )
     if claim is None:
@@ -169,7 +173,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     else:
         title = claim.title or f"{UNAVAILABLE} · the claim states no title"
         body = [label("CLAIM", f"{claim.key} · {title}")]
-    body += [thin(w), *_rung_rows(view), thin(w)]
+    body += [thin(w), *_rung_rows(view, held=claim is not None), thin(w)]
     body += [
         label("LADDER", "Each rung is a harder test than the one below it."),
         more("Only the entailing rung certifies; a screen negative is advisory."),
@@ -178,11 +182,13 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     if claim is not None:
         body.append(more(f"lifecycle {value_cell(claim.field('status')).full}"))
     body.append(label("SUPPORTS", f"{UNAVAILABLE} · no finding cites this claim yet"))
-    if w >= 120:
+    if view.wide:
         evidence = [row.key for row in model.rows if row.collection is Epoch2Collection.EVIDENCE]
         held = " · ".join(evidence) if evidence else "no evidence record is held"
         body += [thin(w), label("GRAPH", f"{key} ← {held} · typed edges {UNKNOWN_WORD}")]
-    return finish(view, top, body, _KEYS)
+    # with no Claim there is no value to copy either, so only the way back is offered
+    keys = _KEYS if claim is not None else [pair for pair in _KEYS if pair[0] != "y"]
+    return finish(view, top, body, keys)
 
 
 def render(view: View) -> list[str]:
@@ -198,8 +204,8 @@ def render(view: View) -> list[str]:
     if s.subj_id and s.subj_id != OWN:
         return _absent(view, s.subj_id)
     rungs = view.fixture.registers.ev_rungs
-    wide = w >= 120
-    x = w >= 160
+    wide = view.wide
+    x = view.xwide
     room = w - 15
     if x:
         grid = Grid([13, 12, 38, 24, 0])

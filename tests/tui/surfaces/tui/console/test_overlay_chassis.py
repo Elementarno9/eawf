@@ -537,7 +537,9 @@ def test_live_overlay_over_a_held_route_draws_the_overlay_not_not_held(name: str
     rows = _live_frame("scope.home", name)
     text = "\n".join(rows)
     assert "NOT HELD" not in text
-    assert "TRK-7001" not in text, "the route beneath an overlay is not visible"
+    if name != "palette":
+        # the palette names every held record by id, the route's own among them
+        assert "TRK-7001" not in text, "the route beneath an overlay is not visible"
     assert f"Eä ▸ {SURFACES[name].title}" in rows[0]
 
 

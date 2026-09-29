@@ -264,15 +264,18 @@ def test_ui052_a_key_no_layer_states_has_no_source_and_reads_unknown(tree: Path)
     assert unstated.effective.value is None
 
 
+def _layer_cells(rows: list[str]) -> list[str]:
+    """Return the stack card's layer column, top to bottom, box and cursor stripped."""
+    head = next(i for i, row in enumerate(rows) if "LAYER" in row and "WHERE" in row)
+    return [row.strip("│ ").lstrip("▸").split()[0] for row in rows[head + 1 : head + 10]]
+
+
 def test_ui052_no_settings_frame_names_a_layer_the_enum_lacks(tree: Path, fixture: Fixture) -> None:
     """The stack card's layer column is exactly the enum, in precedence order."""
     view = _view(tree)
     rows = _frame(fixture, view, _on(_session("settings.stack"), view, BOOL_KEY))
-    drawn = [
-        row.split()[0] if not row.lstrip().startswith("▸") else row.split()[1] for row in rows[4:13]
-    ]
 
-    assert drawn == list(LAYER_ORDER)
+    assert _layer_cells(rows) == list(LAYER_ORDER)
 
 
 # ---------- UI-057: one route, six categories, every catalog section once ----------
@@ -315,9 +318,9 @@ def test_ui057_a_rail_name_is_never_clipped(tree: Path, fixture: Fixture) -> Non
     view = _view(tree)
     longest = max(len(section) for section in view.sections())
     rows = _frame(fixture, view, _session(), w=160, h=60)
-    rail = "\n".join(row[: rail_width(view)] for row in rows)
+    rail = "\n".join(row[: rail_width(view, wide=True)] for row in rows)
 
-    assert rail_width(view) == longest + 2
+    assert rail_width(view, wide=True) == max(17, longest + 2)
     for section in view.sections():
         assert f"  {section}" in rail or f"▸ {section}" in rail
 
@@ -327,13 +330,25 @@ def test_ui057_the_route_draws_at_every_size_with_the_packet_keybar(
     tree: Path, fixture: Fixture, w: int, h: int
 ) -> None:
     """The keybar reads as the packet states it, and the chain sits above the table."""
+    # unset removes the lens layer's own value, so the key is set at repo to offer it
+    _write(tree / ".ea" / "config.yaml", "config:\n  layers_visible: true\n")
     view = _view(tree)
     rows = _frame(fixture, view, _on(_session(), view, BOOL_KEY), w=w, h=h)
 
     assert len(rows) == h
-    assert rows[-1].strip() == ROUTE_KEYBAR
-    assert "global › workspace › [repo] › branch › local" in "\n".join(rows)  # noqa: RUF001
+    wide = "   i stack   \\ filter" if w >= 120 else ""
+    assert rows[-1].strip() == ROUTE_KEYBAR + wide
+    assert "global › workspace › repo › branch › local" in "\n".join(rows)  # noqa: RUF001
     assert f"{len(view.rail)} categories" in rows[1]
+
+
+def test_j4_06_unset_is_not_offered_on_a_key_the_lens_layer_does_not_set(
+    tree: Path, fixture: Fixture
+) -> None:
+    """A key with no value at the lens layer has nothing for ``x`` to remove."""
+    view = _view(tree)
+    rows = _frame(fixture, view, _on(_session(), view, BOOL_KEY), w=120, h=30)
+    assert rows[-1].strip().startswith(ROUTE_KEYBAR.replace("x unset   ", ""))
 
 
 def test_ui057_the_readout_names_type_meaning_and_allowed_values(
@@ -343,7 +358,7 @@ def test_ui057_the_readout_names_type_meaning_and_allowed_values(
     view = _view(tree)
     body = "\n".join(_frame(fixture, view, _on(_session(), view, LITERAL_KEY), w=120, h=30))
 
-    assert f"{LITERAL_KEY} · literal · one of loose | standard | strict" in body
+    assert "level · literal · one of loose | standard | strict" in body
     assert LEAF_KEY_REGISTRY[LITERAL_KEY].description[:40] in body
 
 
@@ -421,9 +436,10 @@ def test_ui053_the_stack_is_every_layer_with_kind_and_template_place(
 
     assert rows[-1].strip() == STACK_KEYBAR
     assert "effective revision 41,209" in rows[1]
+    assert _layer_cells(rows) == list(LAYER_ORDER)
     for layer in LAYER_ORDER:
         kind, where = LAYER_PLACES[Layer(layer)]
-        row = next(r for r in rows if r.split()[:1] == [layer] or r.split()[1:2] == [layer])
+        row = next(r for r in rows if f" {layer} " in r.replace("▸", " ") and kind.value in r)
         assert kind.value in row
         assert where[:20] in row
     assert str(tree) not in body
@@ -476,7 +492,7 @@ def test_ui053_the_stack_opens_on_i_and_reads_the_same_view(tree: Path, fixture:
 
     _press(fixture, view, session, ["i"])
     assert session.route == "settings.stack"
-    assert LITERAL_KEY in _frame(fixture, view, session)[1]
+    assert f"KEY       {LITERAL_KEY}" in "\n".join(_frame(fixture, view, session))
     _press(fixture, view, session, ["Escape"])
     assert session.route == "settings"
 
@@ -532,7 +548,8 @@ def test_edit_the_chooser_previews_the_write_before_it_is_sent(
 
     assert f"WRITES   {LITERAL_KEY} at repo · <repo>/.ea/config.yaml" in body
     assert "AFTER    strict from repo becomes the value in force" in body
-    assert "● strict" in body
+    assert "▸ ○ strict" in body
+    assert "● standard" in body
     assert _frame(fixture, view, session, w=120, h=30)[-1].strip().startswith("↑↓ choose")
 
 

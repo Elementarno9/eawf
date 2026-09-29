@@ -309,7 +309,6 @@ PORT_SPECS: Final[tuple[JourneySpec, ...]] = (
             "each id and the UNKNOWN pane"
         ),
         {"route": "scope.home"},
-        "ArrowDown",
         " ",
         "ArrowDown",
         " ",

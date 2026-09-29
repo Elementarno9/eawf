@@ -17,7 +17,7 @@ from __future__ import annotations
 from eawf.kernel.projection.integration import ConflictSideView, HunkView, MergeConflictReadModel
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.format import clock_time, group
-from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed
+from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, acting_pairs, boxed
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.renderers.read_model import counts, native
 
@@ -114,7 +114,7 @@ def native_frame(view: View, model: MergeConflictReadModel) -> list[str]:
         title=title if hunk is not None else "MERGE CONFLICT · none held",
         lines=lines,
         foot="y copies this hunk with both sides and their authorities.",
-        keys=_KEYS,
+        keys=acting_pairs(view, _KEYS),
     )
 
 

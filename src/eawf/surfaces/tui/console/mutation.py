@@ -35,7 +35,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, Literal
 
-from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, ProjectionRow, RouteProjection
+from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, ProjectionRow
 from eawf.kernel.projection.settings import SettingsLeaf
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.runtime.control import ControlDisposition
@@ -47,9 +47,13 @@ from eawf.kernel.state.epoch2.consequence import (
     consequence,
     if_stale,
 )
-from eawf.kernel.state.epoch2.transitions import AMBIGUOUS_STATES, LifecycleEntity
+from eawf.kernel.state.epoch2.transitions import (
+    AMBIGUOUS_STATES,
+    TERMINAL_STATUSES,
+    LifecycleEntity,
+)
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
-from eawf.surfaces.tui.console.attention import VERB
+from eawf.surfaces.tui.console.attention import VERB, selected_open_row
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keymap import allowlist
 from eawf.surfaces.tui.console.navigation import Ctx, leave_overlay, open_overlay
@@ -58,6 +62,7 @@ from eawf.surfaces.tui.console.operations import (
     ATTENTION_ROUTE,
     RUN_CONTROLS,
     RUN_KINDS,
+    SAME_VERB,
     AnswerRequest,
     ControlRequest,
     LifecycleRequest,
@@ -116,16 +121,6 @@ ENTITY_ROUTES: Final[Mapping[LifecycleEntity, frozenset[str]]] = MappingProxyTyp
         LifecycleEntity.DELIVERY_BATCH: frozenset({"scope.home", "milestone", "batch.detail"}),
         LifecycleEntity.TASK: frozenset({"task.detail", "backlog"}),
         LifecycleEntity.RUN: frozenset({"activity", "run.detail"}),
-    }
-)
-
-#: A chrome menu verb that is the lifecycle verb itself, which the native verb replaces.
-SAME_VERB: Final[Mapping[str, str]] = MappingProxyType(
-    {
-        "retire track": "domain.track.retire",
-        "accept": "domain.milestone.accept",
-        "authorize merge": "domain.batch.merge",
-        "promote": "domain.task.promote",
     }
 )
 
@@ -314,6 +309,12 @@ def entity_of(row: ProjectionRow) -> LifecycleEntity | None:
     return _ENTITIES.get(row.collection.value)
 
 
+def _ended(row: ProjectionRow) -> bool:
+    """Return whether ``row`` is a lifecycle record whose stated status has no way out."""
+    entity, status = entity_of(row), status_of(row)
+    return entity is not None and status is not None and status in TERMINAL_STATUSES[entity]
+
+
 def verbs_for(entity: LifecycleEntity) -> tuple[CanonicalMutation, ...]:
     """Return ``entity``'s lifecycle verbs, in the daemon's registration order."""
     return tuple(mutation for mutation in CANONICAL_MUTATIONS if mutation.entity is entity)
@@ -340,10 +341,13 @@ def selection(session: Session, rows: Sequence[ProjectionRow]) -> tuple[Projecti
 def menu_entity(session: Session, rows: Sequence[ProjectionRow]) -> LifecycleEntity | None:
     """Return the entity whose verbs the route's menu offers now, or ``None``.
 
-    The selection must be one entity and the route one where that entity's verbs belong.
+    The selection must be one entity and the route one where that entity's verbs belong,
+    and not every record in it may have finished: a record whose lifecycle has ended has no
+    verb left to offer.
     """
-    entities = {entity_of(row) for row in selection(session, rows)}
-    if len(entities) != 1:
+    selected = selection(session, rows)
+    entities = {entity_of(row) for row in selected}
+    if len(entities) != 1 or all(_ended(row) for row in selected):
         return None
     entity = entities.pop()
     if entity is None or session.route not in ENTITY_ROUTES.get(entity, frozenset()):
@@ -740,15 +744,6 @@ def open_setting(ctx: Ctx, request: SettingRequest, *, effect: str, token: str) 
     ctx.log(key, f"{request.target} · {effect} → consequence preview")
 
 
-def _selected(s: Session, held: RouteProjection) -> ProjectionRow | None:
-    rows = held.rows
-    if not rows:
-        return None
-    if s.sel_id is not None:
-        return next((row for row in rows if row.key == s.sel_id), None)
-    return rows[min(max(s.sel, 0), len(rows) - 1)]
-
-
 def adopt(ctx: Ctx) -> None:
     """Build the card a consequence overlay opened elsewhere needs, from what the link holds.
 
@@ -766,7 +761,7 @@ def adopt(ctx: Ctx) -> None:
     now = ctx.clock.now()
     target = s.c_target
     if target is None and s.route == ATTENTION_ROUTE and ctx.attention is not None:
-        row = _selected(s, ctx.attention)
+        row = selected_open_row(s, ctx.attention)
         if row is not None:
             s.mutation = answer_card(row, s.verb or "a", principal=principal_of(ctx), now=now)
         return
@@ -974,7 +969,10 @@ def select_key(ctx: Ctx, k: str) -> bool:
             for each in ctx.rows
             if each.collection.value in bound and entity_of(each) is entity
         ]
-        ctx.log("*", f"every {entity.value} in this register · {len(s.marked)} selected")
+        note = f"every {entity.value} in this register · {len(s.marked)} selected"
+        # the menu closes as the rows are marked, so the frame alone would not say so
+        ctx.notify(note, MARK_ALL_VERB)
+        ctx.log("*", note)
     return True
 
 

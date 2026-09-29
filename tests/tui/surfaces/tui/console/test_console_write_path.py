@@ -345,7 +345,9 @@ def test_two_consoles_with_two_receipts_answer_two_items() -> None:
 def _confirm_sends(fixture: Fixture, attention: RouteProjection | None) -> list[VerbRequest]:
     """Return what confirming an answer on the Attention route hands the link."""
     link = _Link()
-    session = _session("attention", overlay="consequence", verb="a")
+    # the Attention frame publishes the row under its caret by id, and the card answers it
+    selected = attention.rows[0].key if attention is not None and attention.rows else None
+    session = _session("attention", overlay="consequence", verb="a", sel_id=selected)
     ctx = Ctx(
         session=session, fixture=fixture, host=_Host(), w=120, h=30, send=link, attention=attention
     )

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -31,10 +32,14 @@ from eawf.surfaces.tui.console.chrome import (
     SettingsCatalog,
     States,
 )
+from eawf.surfaces.tui.console.operations import linked_refusal
 from eawf.surfaces.tui.console.tokens import TRUTH
 
 # The files a fixture directory holds, one per register.
 FIXTURE_FILES: tuple[str, ...] = ("proto.json", "detail.json", "g.json", "settings.json")
+
+#: How a verb that only fills the clipboard is named in the chrome's menus.
+_COPY_VERB = "copy "
 
 #: The scope a console holding no prototype rows names until a projection states one.
 UNKNOWN_SCOPE = TRUTH["unknown"].unicode
@@ -167,6 +172,29 @@ def menu_verb(columns: tuple[str, ...]) -> MenuVerb:
     )
 
 
+def linked_verb(route: str, verb: MenuVerb) -> MenuVerb:
+    """Return ``verb`` as a console holding no prototype rows lists it on ``route``.
+
+    A heavy verb opens a consequence card, and a card for a write no daemon verb carries
+    could only ever answer that nothing was written, so such a verb is listed refused with
+    that reason instead. A verb that only fills the clipboard needs no daemon at all and
+    acts at once, as a light verb does.
+
+    Args:
+        route: The route whose menu lists the verb.
+        verb: The verb as the chrome declares it.
+
+    Returns:
+        The verb, refused where no daemon verb carries it and light where it only copies.
+    """
+    if verb.weight is VerbWeight.LIGHT:
+        return verb
+    if not verb.mutates and verb.verb.startswith(_COPY_VERB):
+        return replace(verb, weight=VerbWeight.LIGHT, available=True, reason="")
+    refusal = linked_refusal(route, verb.verb)
+    return replace(verb, available=False, reason=refusal) if refusal else verb
+
+
 class Fixture:
     """Every register the console renders from, keyed for lookup.
 
@@ -220,7 +248,13 @@ class Fixture:
         self.fleet_by_run = {row.run: row for row in proto.fleet}
         self.attention_by_id = {row.id: row for row in proto.attention}
         self.menus = ActionMenus(
-            {route: [menu_verb(row) for row in rows] for route, rows in proto.actions.items()}
+            {
+                route: [
+                    menu_verb(row) if prototype else linked_verb(route, menu_verb(row))
+                    for row in rows
+                ]
+                for route, rows in proto.actions.items()
+            }
         )
 
     @classmethod

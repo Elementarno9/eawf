@@ -61,11 +61,14 @@ def _paths(state: EntryState, path_sel: int, w: int) -> list[str]:
     return rows
 
 
-def _disclosure(state: EntryState, w: int) -> list[str]:
-    """Return the labelled rows this width discloses, each block under a thin rule."""
+def _disclosure(state: EntryState, w: int, columns: int) -> list[str]:
+    """Return the labelled rows a terminal ``columns`` wide discloses, in a ``w``-cell frame.
+
+    Each block sits under a thin rule.
+    """
     rows: list[str] = []
     for min_width, label, text in state.disclosure:
-        if w < min_width:
+        if columns < min_width:
             continue
         gutter = max(_DISCLOSURE_GUTTER, cell_len(label) + 2)
         lines = textwrap.wrap(text, width=w - gutter - 2) or [""]
@@ -75,6 +78,20 @@ def _disclosure(state: EntryState, w: int) -> list[str]:
             for i, line in enumerate(lines)
         )
     return rows
+
+
+def _tail_rows(text: str, w: int) -> list[str]:
+    """Return one tail line wrapped under itself, so a long command is never clipped."""
+    if not text:
+        return [""]
+    indent = " " * (3 + cell_len(text) - cell_len(text.lstrip(" ")))
+    return textwrap.wrap(
+        text,
+        width=w - 1,
+        initial_indent="   ",
+        subsequent_indent=indent + "  ",
+        break_on_hyphens=False,
+    )
 
 
 def render_state(view: View, state: EntryState) -> list[str]:
@@ -89,8 +106,9 @@ def render_state(view: View, state: EntryState) -> list[str]:
     rows.extend(_table(state, s.path_sel))
     rows.extend(_paths(state, s.path_sel, w))
     rows.append(thin(w))
-    rows.extend(f"   {t}" if t else "" for t in state.tail)
-    rows.extend(_disclosure(state, w))
+    for text in state.tail:
+        rows.extend(_tail_rows(text, w))
+    rows.extend(_disclosure(state, w, view.columns))
     own = [KeyEntry(label, tuple(key.split())) for key, label in state.keys]
     pairs = [entry.pair() for entry in (*own, ATTACH_LATER)]
     return build(view, rows, keybar(pairs, w))
