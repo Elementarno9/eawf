@@ -197,12 +197,34 @@ PENDING_ACTION_EDGES: Final[Mapping[PendingActionStatus, frozenset[PendingAction
 }
 
 
+#: A concrete rendering of what choosing an option produces. Not stripped,
+#: because the leading spaces of a sketch are part of the sketch.
+PreviewStr = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=2000)]
+
+
 class PendingActionOption(_FrozenModel):
-    """One answer the question offers, and what choosing it does."""
+    """One answer the question offers, and what choosing it does.
+
+    ``consequence`` and ``preview`` are what a host surface shows beside
+    the label: the consequence in plain words, and a sketch of the result.
+    They are filed with the question rather than supplied by the surface,
+    so a question re-presented after its surface was lost shows the same
+    thing the first presentation did. A row filed before they existed
+    still reads back; the presenter refuses to show it.
+    """
 
     option_id: OptionId
     label: TitleStr
     effect: OptionEffect
+    consequence: NonEmptyStr | None = None
+    preview: PreviewStr | None = None
+
+
+class TermExpansion(_FrozenModel):
+    """One identifier or abbreviation the question uses, and what it stands for."""
+
+    term: TitleStr
+    expansion: NonEmptyStr
 
 
 class PrincipalDispositionRow(_FrozenModel):
@@ -272,6 +294,11 @@ class PendingAction(_FrozenModel):
     ``dispositions`` is the per-principal record beside ``status``: one
     row per principal who has answered, telling a caller who answered
     what without exposing the whole answer race as an error.
+
+    ``recommended_option_id`` and ``recommendation_rationale`` are the
+    asker's one recommendation and its one-sentence reason, and ``terms``
+    expands every identifier the question shows. A recommendation is not
+    consent: nothing reads it as an answer.
     """
 
     id: PendingActionKey
@@ -282,6 +309,9 @@ class PendingAction(_FrozenModel):
     bundle_digest: Sha256DigestStr | None = None
     options: tuple[PendingActionOption, ...] = Field(min_length=MIN_OPTIONS, max_length=MAX_OPTIONS)
     default_on_timeout: OptionId | None = None
+    recommended_option_id: OptionId | None = None
+    recommendation_rationale: NonEmptyStr | None = None
+    terms: tuple[TermExpansion, ...] = ()
     idempotency_key: IdempotencyKey
     status: PendingActionStatus
     revision: StrictPositiveInt = 1
@@ -373,8 +403,9 @@ class PendingAction(_FrozenModel):
 
         Raises:
             ValueError: Two options share an id, more than one option
-                approves, or the timeout default names an option the
-                question does not offer.
+                approves, the timeout default or the recommendation names
+                an option the question does not offer, or a recommendation
+                and its rationale are not filed together.
         """
         ids = [item.option_id for item in self.options]
         if len(set(ids)) != len(ids):
@@ -391,6 +422,13 @@ class PendingAction(_FrozenModel):
             raise ValueError(
                 f"default_on_timeout {self.default_on_timeout!r} is not one of {', '.join(ids)}"
             )
+        recommended = self.recommended_option_id
+        if recommended is not None and recommended not in ids:
+            raise ValueError(
+                f"recommended_option_id {recommended!r} is not one of {', '.join(ids)}"
+            )
+        if (recommended is None) != (self.recommendation_rationale is None):
+            raise ValueError("a recommendation and its rationale are filed together or not at all")
         return self
 
     @model_validator(mode="after")
@@ -677,5 +715,7 @@ __all__ = [
     "PendingActionKind",
     "PendingActionOption",
     "PendingActionStatus",
+    "PreviewStr",
     "PrincipalDispositionRow",
+    "TermExpansion",
 ]

@@ -25,6 +25,7 @@ from typing import Annotated, Any, Final, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 
+from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY, BudgetNoticePolicy
 from eawf.kernel.economics.prompt_budget import (
     DEFAULT_PROMPT_BUDGET,
     PromptBudgetOutcome,
@@ -328,10 +329,11 @@ DEFAULT_GOVERNOR: Final[InFlightGovernor] = InFlightGovernor(
 
 
 class EconomicsPolicy(RuntimeRecord):
-    """The validated ``economics`` table: the prompt budget and the governor."""
+    """The validated ``economics`` table: the prompt budget, the governor and notices."""
 
     prompt_budget: PromptBudgetPolicy = DEFAULT_PROMPT_BUDGET
     governor: InFlightGovernor = DEFAULT_GOVERNOR
+    notice_policy: BudgetNoticePolicy = DEFAULT_NOTICE_POLICY
 
 
 def economics_policy_from(merged: Mapping[str, Any]) -> EconomicsPolicy:

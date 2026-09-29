@@ -61,7 +61,7 @@ from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
 from eawf.surfaces.tui.widgets.seal import SEAL_ART_ID
 from eawf.workflow.agent_report.rollup import AgentReportRow, iter_agent_reports
-from eawf.workflow.estimation.buckets import wave_estimate_eu
+from eawf.workflow.estimation.buckets import EFFORT_EU
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -405,8 +405,7 @@ def _wave_joins(state: State | None) -> dict[str, tuple[str, float, bool, str]]:
 
     Returns:
         A wave-id to ``(title, eu, failed, status)`` map, where ``eu`` is the
-        bucket-derived effort-unit estimate for the wave (``0.0`` when the
-        wave has no effort bucket), ``failed`` is whether the wave's status is
+        wave's effort estimate (the one effort constant), ``failed`` is whether the wave's status is
         terminal-failed (:data:`_FAILED_WAVE_STATUSES`), and ``status`` is the
         wave's :class:`~eawf.kernel.state.enums.WaveStatus` value string.
     """
@@ -415,7 +414,7 @@ def _wave_joins(state: State | None) -> dict[str, tuple[str, float, bool, str]]:
     return {
         wave_id: (
             wave.title,
-            wave_estimate_eu(wave),
+            EFFORT_EU,
             wave.status in _FAILED_WAVE_STATUSES,
             wave.status.value,
         )

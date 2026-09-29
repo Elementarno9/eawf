@@ -318,10 +318,13 @@ DEFAULT_PROMPT_BUDGET: Final[PromptBudgetPolicy] = PromptBudgetPolicy(
         BudgetAllocation(
             class_id=BudgetClassId.TASK_PACKET, max_tokens=24_000, priority=90, measured=True
         ),
+        # The byte ceiling is the smallest certified project-document cap: a
+        # root over it never arrives whole, and the builtin rule set alone
+        # renders past a smaller ceiling. A configuration may lower it.
         BudgetAllocation(
             class_id=BudgetClassId.STEERING_ZONE1,
             max_tokens=12_000,
-            max_bytes=12_288,
+            max_bytes=32_768,
             priority=80,
             measured=True,
         ),

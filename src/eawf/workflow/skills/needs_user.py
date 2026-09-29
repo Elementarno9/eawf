@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import orjson
+from pydantic import ValidationError
 
 from eawf.kernel.state.enums import StoreKind, Urgency
 from eawf.kernel.state.urn import build as build_urn
@@ -42,6 +43,7 @@ from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.budget.notices import imported_pause_urns, load_notice_ledger, notices_path
 
 if TYPE_CHECKING:
     from eawf.workflow.skills.bodies.user_question import UserQuestion
@@ -354,13 +356,27 @@ def _decode_question(raw_question: object) -> UserQuestion | None:
     return None
 
 
+def _imported_as_notices(state_path: Path) -> frozenset[str]:
+    """Return the pauses the notice ledger imported; none when it cannot be read.
+
+    An unreadable ledger costs the tombstone, not the pause list: the
+    pauses show as they did before the import rather than not at all.
+    """
+    try:
+        return imported_pause_urns(load_notice_ledger(notices_path(state_path)))
+    except (OSError, ValidationError) as exc:
+        logger.warning(f"_imported_as_notices unreadable-notice-ledger error={exc!r}")
+        return frozenset()
+
+
 def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[OpenPause]:
     """Return unresolved pauses, newest last, optionally filtered by scope.
 
     Walks ``event.jsonl`` once, pairs every ``needs_user_pause`` row with
     its matching ``needs_user_resume`` row (by ``pause-urn``), and returns
     the pauses that have no resume. Rows whose stored question fails to
-    decode are skipped.
+    decode are skipped, and so are legacy over-budget pauses imported as
+    budget notices: those are notices now, never pauses as well.
 
     Args:
         state_path: Absolute path to ``state.json``.
@@ -369,7 +385,7 @@ def list_open_pauses(state_path: Path, *, scope_id: str | None = None) -> list[O
     Returns:
         Open :class:`OpenPause` records in append order (oldest first).
     """
-    resolved: set[str] = set()
+    resolved: set[str] = set(_imported_as_notices(state_path))
     pending: list[OpenPause] = []
     for env_scope, payload in _iter_event_payloads(store_path(state_path, StoreKind.EVENT)):
         urn = payload.extras.get(_PAUSE_URN_KEY)

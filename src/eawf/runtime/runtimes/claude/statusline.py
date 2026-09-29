@@ -7,9 +7,12 @@ as a ``status="failed"`` segment so the whole pipeline never crashes.
 
 Design notes:
 
-- Module order is fixed (left-to-right): ``state``, ``budget``, ``git``,
-  ``model_session_cwd``, ``context_tokens``, ``mcp_health``,
+- Module order is fixed (left-to-right): ``scope``, ``budget``, ``git``,
+  ``model_session_cwd``, ``context_tokens``, ``cost``, ``mcp_health``,
   ``hooks_plugins``, ``memory``, ``token_saving``.
+- Every segment carries a truth field naming its producer, freshness and
+  measurement quality; a value a module cannot source renders
+  ``<label>:n/a(<reason>)``, never a bare ``?`` or ``-``.
 - Every module signature is uniform: ``build(claude_payload, state_path) ->
   StatuslineSegment``. The orchestrator iterates the call list to keep the
   cold path tight (no introspection, no plugin loop).
@@ -50,32 +53,36 @@ from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
 from eawf.runtime.runtimes.claude.statusline_modules import (
     budget,
     context_tokens,
+    cost,
     git,
     hooks_plugins,
     mcp_health,
     memory,
     model_session_cwd,
-    state,
+    scope,
     token_saving,
 )
 from eawf.surfaces.cli.scope import resolve_state_path
 from eawf.surfaces.render.statusline import (
+    SegmentSource,
     StatuslineSegment,
     StatuslineTheme,
     load_themes,
     render_segments,
     resolve_theme,
+    unavailable_segment,
 )
 
 logger = logging.getLogger(__name__)
 
 
 _MODULE_ORDER: list[Any] = [
-    state,
+    scope,
     budget,
     git,
     model_session_cwd,
     context_tokens,
+    cost,
     mcp_health,
     hooks_plugins,
     memory,
@@ -159,10 +166,13 @@ def _build_segments(
         except Exception as exc:
             # Orchestrator must never crash — every module exception
             # collapses to a ``failed`` segment so the theme can decide
-            # whether to skip or render ``<module>:!``.
+            # whether to skip or render its ``n/a(render-failed)`` marker.
             logger.warning(f"_build_segments module-raised module={module_name!r} error={exc}")
+            source = SegmentSource(producer="eawf.statusline", provenance=module.__name__)
             segments.append(
-                StatuslineSegment(module=module_name, text=f"{module_name}:!", status="failed")
+                unavailable_segment(
+                    module_name, module_name, "render-failed", source, status="failed"
+                )
             )
             continue
         segments.append(segment)

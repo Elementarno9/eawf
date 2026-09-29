@@ -2,7 +2,7 @@
 
 Public API:
 
-* :func:`policy.classify` — pure advisory threshold check (warn/block).
+* :func:`policy.classify` — pure over-budget check.
 * :func:`policy.classify_enforcement` — typed soft/hard enforce verdict
   against the multiplier-scaled cap.
 * :func:`policy.effective_cap` — multiplier-scaled cap helper.
@@ -34,7 +34,6 @@ from eawf.runtime.budget.policy import (
     DEFAULT_ENFORCE,
     DEFAULT_MULTIPLIER,
     SEALED_BUDGET,
-    WARN_FRACTION,
     BudgetAction,
     BudgetConfig,
     BudgetDecision,
@@ -67,7 +66,6 @@ __all__ = [
     "DEFAULT_GRACE_SECONDS",
     "DEFAULT_MULTIPLIER",
     "SEALED_BUDGET",
-    "WARN_FRACTION",
     "BudgetAction",
     "BudgetConfig",
     "BudgetDecision",

@@ -565,7 +565,8 @@ def test_live_overlay_holding_nothing_takes_only_escape() -> None:
 def test_live_help_opens_and_closes_over_a_held_route() -> None:
     app = _live_app("scope.home")
     opened = _live_press(app, "?")
-    assert "Eä ▸ help · scope.home" in opened[0]
+    # a linked console names the route by its word, never by its route id
+    assert "Eä ▸ help · home" in opened[0]
     assert "NOT HELD" not in "\n".join(opened)
     _live_press(app, "Escape")
     assert app.session.overlay is None

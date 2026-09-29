@@ -1,14 +1,13 @@
-"""Bucket-derived estimate selection tests for P28-I02-W14."""
+"""Realized-EU accessor tests for P28-I02-W14."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 
 from eawf.kernel.state.enums import (
     ActualStatus,
-    Confidence,
     EffortBucket,
     IterStatus,
     PhaseStatus,
@@ -26,12 +25,9 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.workflow.estimation.buckets import (
-    BUCKET_EU,
     actual_eu_for_iter,
     actual_eu_for_phase,
     actual_eu_for_wave,
-    calibrate_buckets,
-    default_estimate_summary,
     resolve_wave_actual,
 )
 
@@ -108,155 +104,6 @@ def _actual(
         updated_at=updated_at,
         calibration_excluded=calibration_excluded,
     )
-
-
-def _state_with_samples(
-    samples: tuple[float, ...],
-    *,
-    bucket: EffortBucket = EffortBucket.M,
-) -> State:
-    """Return state with CLOSED waves whose actuals match *samples*."""
-    state = _empty_state()
-    actuals: dict[str, ActualSummary] = {}
-    for index, elapsed in enumerate(samples, start=1):
-        wave_id = f"P01-I01-W{index:02d}"
-        state.waves[wave_id] = _wave(
-            wave_id=wave_id,
-            effort_bucket=bucket,
-            status=WaveStatus.CLOSED,
-        )
-        actuals[wave_id] = _actual(
-            wave_id=wave_id,
-            elapsed_eu=elapsed,
-            updated_at=_T0 - timedelta(minutes=index),
-        )
-    state.actuals = actuals
-    return state
-
-
-def test_calibrate_buckets_populates_fitted_pessimistic_eu() -> None:
-    """Fitted rows carry the p90 pessimistic EU alongside the mean."""
-    state = _state_with_samples((1.0, 2.0, 3.0, 4.0, 5.0))
-
-    report = calibrate_buckets(state, now=_T0)
-    row = next(row for row in report.buckets if row.bucket == EffortBucket.M)
-
-    assert row.fitted_eu == pytest.approx(3.0)
-    assert row.fitted_pessimistic_eu == pytest.approx(5.0)
-
-
-def test_calibrate_buckets_drops_a_calibration_excluded_actual() -> None:
-    """An excluded actual clears every other filter and still never re-fits.
-
-    The row is CLOSED, bucketed, inside the window and carries positive
-    elapsed EU — the four conditions the re-fit tests — so only the
-    exclusion flag can keep it out. Its EU is far off the clean samples'
-    centroid, which is what makes the assertion falsify when the filter
-    is removed.
-    """
-    state = _state_with_samples((1.0, 2.0, 3.0, 4.0, 5.0))
-    excluded_id = "P01-I01-W99"
-    state.waves[excluded_id] = _wave(
-        wave_id=excluded_id,
-        effort_bucket=EffortBucket.M,
-        status=WaveStatus.CLOSED,
-    )
-    state.actuals[excluded_id] = _actual(
-        wave_id=excluded_id,
-        elapsed_eu=100.0,
-        calibration_excluded=True,
-    )
-
-    report = calibrate_buckets(state, now=_T0)
-    row = next(row for row in report.buckets if row.bucket == EffortBucket.M)
-
-    assert row.sample_count == 5
-    assert row.fitted_eu == pytest.approx(3.0)
-    assert row.fitted_pessimistic_eu == pytest.approx(5.0)
-
-
-def test_default_estimate_summary_prefers_config_override() -> None:
-    """Explicit config override wins over fitted samples."""
-    state = _state_with_samples((1.0, 1.1, 1.2, 1.3, 1.4))
-    wave = _wave(wave_id="P01-I01-W99", effort_bucket=EffortBucket.M)
-    config = {
-        "estimation": {
-            "buckets": {
-                "overrides": {
-                    "M": {
-                        "expected_eu": 2.75,
-                        "pessimistic_eu": 7.5,
-                    }
-                }
-            }
-        }
-    }
-
-    estimate = default_estimate_summary(wave, now=_T0, state=state, config=config)
-
-    assert estimate is not None
-    assert estimate.expected_eu == pytest.approx(2.75)
-    assert estimate.pessimistic_eu == pytest.approx(7.5)
-    assert estimate.confidence == Confidence.HIGH
-    assert "bucket-config" in estimate.current_store_record_id
-
-
-def test_default_estimate_summary_uses_fitted_eu_at_n_min() -> None:
-    """Five in-window samples trigger fitted expected EU with MEDIUM confidence."""
-    state = _state_with_samples((0.8, 1.0, 1.2, 1.4, 1.6))
-    wave = _wave(wave_id="P01-I01-W99", effort_bucket=EffortBucket.M)
-
-    estimate = default_estimate_summary(wave, now=_T0, state=state)
-
-    assert estimate is not None
-    assert estimate.expected_eu == pytest.approx(1.2)
-    assert estimate.pessimistic_eu == pytest.approx(1.6)
-    assert estimate.confidence == Confidence.MEDIUM
-    assert "bucket-fitted" in estimate.current_store_record_id
-
-
-def test_default_estimate_summary_high_confidence_at_30_samples() -> None:
-    """Thirty samples promote fitted estimates to HIGH confidence."""
-    state = _state_with_samples(tuple(1.5 for _ in range(30)))
-    wave = _wave(wave_id="P01-I01-W99", effort_bucket=EffortBucket.M)
-
-    estimate = default_estimate_summary(wave, now=_T0, state=state)
-
-    assert estimate is not None
-    assert estimate.expected_eu == pytest.approx(1.5)
-    assert estimate.confidence == Confidence.HIGH
-
-
-def test_default_estimate_summary_falls_back_below_n_min() -> None:
-    """Fewer than five samples keep the static bucket fallback."""
-    state = _state_with_samples((1.5, 1.5, 1.5, 1.5))
-    wave = _wave(wave_id="P01-I01-W99", effort_bucket=EffortBucket.M)
-
-    estimate = default_estimate_summary(wave, now=_T0, state=state)
-
-    assert estimate is not None
-    assert estimate.expected_eu == pytest.approx(BUCKET_EU[EffortBucket.M])
-    assert estimate.confidence == Confidence.LOW
-    assert "bucket-fitted" not in estimate.current_store_record_id
-
-
-def test_bucket_eu_is_canonical_table() -> None:
-    """BUCKET_EU stays pinned to the code-canonical XS..XL calibration.
-
-    A silent edit to the centroid table shifts every estimate and the drift
-    calibration baseline, so the canonical values are pinned here: XS=0.25,
-    S=0.5, M=1.0, L=2.0, XL=3.5 (1 EU ~= 30 min). The keys also stay exactly
-    the five closed buckets — no bucket added or dropped without updating this
-    pin.
-    """
-    assert {
-        EffortBucket.XS: pytest.approx(0.25),
-        EffortBucket.S: pytest.approx(0.5),
-        EffortBucket.M: pytest.approx(1.0),
-        EffortBucket.L: pytest.approx(2.0),
-        EffortBucket.XL: pytest.approx(3.5),
-    } == BUCKET_EU
-    assert set(BUCKET_EU) == set(EffortBucket)
 
 
 def _iter(*, iter_id: str, phase_id: str) -> Iter:
@@ -406,25 +253,3 @@ def test_actual_eu_for_phase_zero_for_empty_phase() -> None:
 
     assert actual_eu_for_phase(state, "P02") == pytest.approx(0.0)
     assert actual_eu_for_phase(state, "P99") == pytest.approx(0.0)
-
-
-def test_actual_eu_per_bucket_matches_calibration_centroid() -> None:
-    """Each bucket's single-wave realized EU reads back its BUCKET_EU centroid.
-
-    Builds one CLOSED wave per bucket whose actual elapsed EU equals the
-    canonical centroid, then asserts the per-wave accessor returns exactly
-    that centroid — pinning the accessor against every bucket's EU.
-    """
-    state = _empty_state()
-    waves: dict[str, Wave] = {}
-    actuals: dict[str, ActualSummary] = {}
-    for index, bucket in enumerate(EffortBucket, start=1):
-        wave_id = f"P01-I01-W{index:02d}"
-        waves[wave_id] = _wave(wave_id=wave_id, effort_bucket=bucket, status=WaveStatus.CLOSED)
-        actuals[wave_id] = _actual(wave_id=wave_id, elapsed_eu=BUCKET_EU[bucket])
-    state.waves = waves
-    state.actuals = actuals
-
-    for index, bucket in enumerate(EffortBucket, start=1):
-        wave_id = f"P01-I01-W{index:02d}"
-        assert actual_eu_for_wave(state, wave_id) == pytest.approx(BUCKET_EU[bucket])

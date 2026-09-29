@@ -15,7 +15,8 @@ def swap_root_logging_to_textual() -> list[logging.Handler]:
     logger for the duration of the Textual run: every root handler whose
     ``stream`` is :data:`sys.stderr` / :data:`sys.stdout` is removed, and a
     :class:`textual.logging.TextualHandler` (which routes to Textual's
-    devtools console, never the screen) is installed in its place. The
+    devtools console, never the screen, and drops a record while no app is
+    running) is installed in its place. The
     :class:`~eawf.observability.logging.scrub.SensitiveScrubber` is not needed on this
     path because the TextualHandler never reaches a terminal.
 
@@ -33,7 +34,9 @@ def swap_root_logging_to_textual() -> list[logging.Handler]:
     for handler in saved:
         if isinstance(handler, logging.StreamHandler) and handler.stream in terminal_streams:
             root.removeHandler(handler)
-    textual_handler = TextualHandler()
+    # a record raised while no app is running -- as the launch reads the tree, or as the
+    # app is torn down -- is dropped, since it would print on the terminal the app takes
+    textual_handler = TextualHandler(stderr=False)
     # Timestamp the TUI-routed console log too (matching the CLI + daemon log
     # shape) so a line captured in the dev console carries its own clock.
     log_format = "%(asctime)s %(levelname)s %(name)s %(message)s"

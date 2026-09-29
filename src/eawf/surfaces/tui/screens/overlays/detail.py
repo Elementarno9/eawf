@@ -104,7 +104,7 @@ from eawf.workflow.agent_report.rollup import (
     iter_agent_reports,
     per_wave_attempt_rollup,
 )
-from eawf.workflow.estimation.buckets import BUCKET_EU
+from eawf.workflow.estimation.buckets import EFFORT_EU
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import SessionAttempt, State, Wave
@@ -527,10 +527,10 @@ def _wave_metrics(wave: Wave, cost_rollup: WaveSessionRollup | None) -> tuple[tu
       :class:`~eawf.kernel.state.models.SessionAttempt` spans -- the honest
       :data:`~eawf.surfaces.tui.widgets.eu_bar.EMPTY_STATE` sentinel when no
       session has ended.
-    - ``estimate`` is the effort-bucket EU estimate
-      (:data:`~eawf.workflow.estimation.buckets.BUCKET_EU`) the actual is
-      measured against. It is a plan figure independent of runtime, so it
-      shows whenever a bucket is set -- even before any session lands.
+    - ``estimate`` is the one effort constant
+      (:data:`~eawf.workflow.estimation.buckets.EFFORT_EU`) the actual is
+      measured against. It is a plan figure independent of runtime and of
+      the size label, so it shows even before any session lands.
     - ``tokens`` is the ACTUAL consumed tokens summed off the wave's session
       rollup (the same rollup the ``cost`` tab prices), with the token budget
       appended when one is set. This replaces the former budget-vs-consumed
@@ -565,8 +565,7 @@ def _wave_metrics(wave: Wave, cost_rollup: WaveSessionRollup | None) -> tuple[tu
             ),
         )
     )
-    if wave.effort_bucket is not None:
-        rows.append(("estimate", f"{BUCKET_EU[wave.effort_bucket]:.2f} EU"))
+    rows.append(("estimate", f"{EFFORT_EU:.2f} EU"))
     rollup_consumed = (
         None
         if cost_rollup is None

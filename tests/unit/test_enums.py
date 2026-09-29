@@ -53,7 +53,7 @@ def test_project_status_rejects_unknown() -> None:
 
 
 def test_track_status_values() -> None:
-    expected = {"active", "planned", "deferred", "retired"}
+    expected = {"active", "retired"}
     actual = {m.value for m in enums.TrackStatus}
     assert actual == expected
 

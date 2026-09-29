@@ -388,15 +388,17 @@ def _parent_refs(spec: Epoch2Model) -> tuple[QualifiedUrn, ...]:
     """Return the records *spec* is placed under, among the driven machines.
 
     A Run's scope names its subject through a field spelled after the scope
-    kind; only a subject one of the five machines governs is returned,
-    because no other kind has a document row this tree admits.
+    kind, and a delegated Run is placed under its parent as well; only a
+    subject one of the five machines governs is returned, because no other
+    kind has a document row this tree admits.
     """
     if isinstance(spec, MilestoneCreateSpec):
         refs: tuple[QualifiedUrn, ...] = (spec.primary_track_ref,)
     elif isinstance(spec, BatchCreateSpec):
         refs = (spec.milestone_ref,)
     elif isinstance(spec, RunCreateSpec):
-        refs = (getattr(spec.scope, f"{spec.scope.scope_kind}_ref"),)
+        scope_ref = getattr(spec.scope, f"{spec.scope.scope_kind}_ref")
+        refs = (scope_ref,) if spec.parent_run_ref is None else (scope_ref, spec.parent_run_ref)
     else:
         refs = ()
     return tuple(ref for ref in refs if ref.kind in LIFECYCLE_ENTITIES)

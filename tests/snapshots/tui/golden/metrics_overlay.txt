@@ -15,9 +15,9 @@
       │  │ no data              │ │ consumed 0.00 EU      │ │ median 0.0m           │ │ no metered sessions   │  │
       │  ╰──────────────────────╯ ╰───────────────────────╯ ╰───────────────────────╯ ╰───────────────────────╯  │
       │                                                                                                          │
-      │  ╭─ Cache health ───────╮ ╭─ Switchover freq ─────╮ ╭─ Role calibration ────╮                            │
-      │  │ no data              │ │ no data               │ │ no per-role           │                            │
-      │  ╰──────────────────────╯ ╰───────────────────────╯ ╰───────────────────────╯                            │
+      │  ╭─ Cache health ───────╮ ╭─ Switchover freq ─────╮                                                      │
+      │  │ no data              │ │ no data               │                                                      │
+      │  ╰──────────────────────╯ ╰───────────────────────╯                                                      │
       │                                                                                                          │
       │  honest-negative · lights up after EU capture                                                            │
       │                                                                                                          │

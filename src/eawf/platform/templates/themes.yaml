@@ -3,7 +3,7 @@
 # Each theme overrides:
 #   - separator: string joined between rendered segments (e.g. " | ").
 #   - skip_failed: when true, modules that raised are dropped from output;
-#     when false they render "<module>:!".
+#     when false they render "<module>:n/a(render-failed)".
 #   - colors: mapping from segment status to an ANSI escape sequence (or
 #     null/empty to disable color for that status). The renderer prepends
 #     the literal ESC byte () to every non-empty value at runtime so
@@ -24,10 +24,11 @@ default:
     degraded: "[31m"  # red
     reset: "[0m"
   glyph:
-    state: ""
+    scope: ""
     git: ""
     model_session_cwd: ""
     context_tokens: ""
+    cost: ""
     mcp_health: ""
     hooks_plugins: ""
     memory: ""
@@ -43,10 +44,11 @@ powerline:
     degraded: "[38;5;196m"
     reset: "[0m"
   glyph:
-    state: "P"
+    scope: "P"
     git: "G"
     model_session_cwd: "M"
     context_tokens: "C"
+    cost: "U"
     mcp_health: "X"
     hooks_plugins: "H"
     memory: "R"
@@ -62,10 +64,11 @@ ascii-fallback:
     degraded: ""
     reset: ""
   glyph:
-    state: ""
+    scope: ""
     git: ""
     model_session_cwd: ""
     context_tokens: ""
+    cost: ""
     mcp_health: ""
     hooks_plugins: ""
     memory: ""

@@ -8,8 +8,8 @@ progress:  ▒▒▒▒▒▒▒▒      0/1
 ◆ worktrees: 0 active
 
 EFFORT
-effort:    — no data
-precision: — no data
+effort:    1.2/0.8  ████████  150%
+precision: +50.0%
 velocity:  ▁▁▁▁▁▁█
 eta:       —
 

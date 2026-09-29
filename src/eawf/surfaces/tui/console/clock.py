@@ -132,7 +132,7 @@ class QuitCheck(NamedTuple):
     gap_ms: int
 
 
-def quit_step(session: Session, clock: Clock) -> QuitCheck:
+def quit_step(session: Session, clock: Clock, *, at: float | None = None) -> QuitCheck:
     """Apply one Escape to the guarded double-Escape quit.
 
     A disarmed guard arms. An armed guard quits when the second press lands strictly
@@ -140,10 +140,16 @@ def quit_step(session: Session, clock: Clock) -> QuitCheck:
     re-arms on a press past the ceiling. The caller decides the press is eligible (scope
     home, nothing open, empty back stack).
 
+    Args:
+        session: The session whose guard is stepped.
+        clock: The console clock, read when the press carries no arrival time.
+        at: When the press arrived, on the console clock. A press is judged on its
+            arrival, because the keys of one terminal burst can be handled far apart.
+
     Returns:
         The step taken and the gap it was judged on.
     """
-    now = clock.now()
+    now = clock.now() if at is None else at
     if not session.last_esc:
         session.last_esc = now
         return QuitCheck(QuitStep.ARMED, 0)
@@ -171,7 +177,9 @@ def prompt_quit(session: Session, clock: Clock) -> None:
     notify(session, clock, text=QUIT_PROMPT, title="", sev=Severity.INFO, dwell=QUIT_CEILING)
 
 
-def guarded_quit(session: Session, clock: Clock, *, outstanding: int) -> bool:
+def guarded_quit(
+    session: Session, clock: Clock, *, outstanding: int, at: float | None = None
+) -> bool:
     """Apply one Escape at a quiet scope home to the guard, logging the step it took.
 
     An operation the daemon has not answered holds the guard disarmed, so the console is
@@ -181,6 +189,7 @@ def guarded_quit(session: Session, clock: Clock, *, outstanding: int) -> bool:
         session: The session whose guard and key log are used.
         clock: The console clock the gap is judged on.
         outstanding: How many sent operations still await the daemon's answer.
+        at: When the press arrived, on the console clock; ``None`` reads the clock.
 
     Returns:
         Whether the console should quit now.
@@ -189,7 +198,7 @@ def guarded_quit(session: Session, clock: Clock, *, outstanding: int) -> bool:
         session.disarm_quit()
         session.log_key("Esc", f"{outstanding} outstanding · quit waits for the daemon's answer")
         return False
-    check = quit_step(session, clock)
+    check = quit_step(session, clock, at=at)
     if check.step is QuitStep.QUIT:
         note = f"quit — guarded: scope home, nothing open, {check.gap_ms}ms apart"
         session.log_key("Esc Esc", note)

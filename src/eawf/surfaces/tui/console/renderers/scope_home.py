@@ -435,6 +435,9 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     rows = [*top, *lines, *below]
     # the arrows walk the Milestones or the list the focus is on, never a Track row
     s.nav_rows = len(mine) if on_list else len(leaves_of(groups))
+    # a page or an end jumps between the tree's leaves, so it has somewhere to go whenever
+    # there is more than one leaf, whether or not the tree was cut to fit
+    s.windowed = s.windowed or (not on_list and s.nav_rows > 1)
     # Tab only moves the focus when the attention list holds something to focus
     entries = native_keys(s.route, windowed=s.windowed)
     return build(

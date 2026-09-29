@@ -66,7 +66,7 @@ def test_git_module_detached_head_renders_short_sha(
     assert seg.status == "ok"
 
 
-def test_git_module_missing_git_binary_renders_dash(
+def test_git_module_missing_git_binary_names_why(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     def fake_run(*_: Any, **__: Any) -> subprocess.CompletedProcess[str]:
@@ -74,7 +74,7 @@ def test_git_module_missing_git_binary_renders_dash(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     seg = git_module.build({"cwd": str(tmp_path)}, None)
-    assert seg.text == "git:-"
+    assert seg.text == "git:n/a(not-a-repository)"
     assert seg.status == "missing"
 
 

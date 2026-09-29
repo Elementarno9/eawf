@@ -4,7 +4,7 @@
 
 ## Summary
 - waves: 6 (3 pending, 1 in_progress, 1 closed, 1 failed)
-- effort: sum_wave_eu=0, critical_path_eu=0, actual_elapsed_eu=0
+- effort: sum_wave_eu=4.8, critical_path_eu=3.2, actual_elapsed_eu=0
 - checks: 3/4 passed
 - risks: 4 open
 - blocked: P05-I01-W02, P05-I01-W03, P05-I01-W05
@@ -35,12 +35,12 @@ flowchart LR
 ## Waves
 | Wave | Status | Bucket | Role | Estimate EU | Success criteria | Files |
 | --- | --- | --- | --- | ---: | --- | --- |
-| [x] **P05-I01-W00** Bootstrap | closed | - | - | 0 | - | src/cpr/init.py |
-| [ ] **P05-I01-W01** Stage A | in_progress; deps: W00 | - | - | 0 | - | src/cpr/a.py |
-| [ ] **P05-I01-W02** Cycle node B | pending; deps: W03 | - | - | 0 | - | src/cpr/b.py |
-| [ ] **P05-I01-W03** Cycle node C | pending; deps: W02 | - | - | 0 | - | src/cpr/c.py |
-| [ ] **P05-I01-W04** Failure | failed; deps: W01 | - | - | 0 | - | - |
-| [ ] **P05-I01-W05** Final | pending; deps: W04 | - | - | 0 | - | - |
+| [x] **P05-I01-W00** Bootstrap | closed | - | - | 0.8 | - | src/cpr/init.py |
+| [ ] **P05-I01-W01** Stage A | in_progress; deps: W00 | - | - | 0.8 | - | src/cpr/a.py |
+| [ ] **P05-I01-W02** Cycle node B | pending; deps: W03 | - | - | 0.8 | - | src/cpr/b.py |
+| [ ] **P05-I01-W03** Cycle node C | pending; deps: W02 | - | - | 0.8 | - | src/cpr/c.py |
+| [ ] **P05-I01-W04** Failure | failed; deps: W01 | - | - | 0.8 | - | - |
+| [ ] **P05-I01-W05** Final | pending; deps: W04 | - | - | 0.8 | - | - |
 
 ## Checks
 - [x] **ruff_clean** (iter audit AU-ITER) — passed

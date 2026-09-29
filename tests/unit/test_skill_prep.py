@@ -342,7 +342,7 @@ def test_prep_dag_task_carries_agent_role_effort_bucket_estimate(state_dir: Path
 
 
 def test_prep_dag_task_role_fields_default_none_when_wave_untagged(state_dir: Path) -> None:
-    """An untagged wave projects to (None, None, 0.0) — no crash, clean defaults."""
+    """An untagged wave projects to (None, None, 0.8) — the effort constant."""
     _write_state(state_dir)  # default wave has no agent_role / bucket
     skill = PrepSkill()
     ctx = _ctx()
@@ -353,7 +353,7 @@ def test_prep_dag_task_role_fields_default_none_when_wave_untagged(state_dir: Pa
     task = body.dag[0]
     assert task.agent_role is None
     assert task.effort_bucket is None
-    assert task.estimate_eu == 0.0
+    assert task.estimate_eu == pytest.approx(0.8)
 
 
 def test_prep_body_plan_text_uses_canonical_plan_view(state_dir: Path) -> None:

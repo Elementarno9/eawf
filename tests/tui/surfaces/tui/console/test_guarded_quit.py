@@ -9,12 +9,24 @@ prints. The keys go through the production dispatcher on a held clock.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
+from textual._time import get_time
+from textual.constants import ESCAPE_DELAY
+from textual.events import Key
 
-from eawf.surfaces.tui.console.app import compose_frame
-from eawf.surfaces.tui.console.clock import QUIT_CEILING, QUIT_FLOOR, FakeClock
+from eawf.surfaces.tui.console.app import ConsoleApp, compose_frame
+from eawf.surfaces.tui.console.clock import (
+    QUIT_CEILING,
+    QUIT_FLOOR,
+    QUIT_PROMPT,
+    FakeClock,
+    QuitStep,
+    prompt_quit,
+    quit_step,
+)
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
@@ -173,3 +185,93 @@ def test_con040_there_is_no_q_binding(key: str) -> None:
     _press(session, host, key)
     assert host.quits == 0
     assert session.trace == f"{key} → unclaimed"
+
+
+# ---------- K-04 and K-07: only presses at a quiet scope home quit ----------
+
+
+def _armed_elsewhere(route: str) -> tuple[Session, _Host]:
+    """Return a session on ``route`` with home behind it and the guard armed, as Ctrl+C arms."""
+    session = Session()
+    session.route = HOME
+    compose_frame(View(session=session, fixture=FIXTURE, w=80, h=24))
+    session.back.record(BackEntry(route=HOME, sel=0, subj=None))
+    session.route = route
+    compose_frame(View(session=session, fixture=FIXTURE, w=80, h=24))
+    host = _Host()
+    assert quit_step(session, host.clock).step is QuitStep.ARMED
+    prompt_quit(session, host.clock)
+    return session, host
+
+
+def _prompts(session: Session) -> int:
+    return sum(1 for toast in session.toasts if toast.text == QUIT_PROMPT)
+
+
+def test_k_04_an_escape_that_steps_back_disarms_and_withdraws_the_prompt() -> None:
+    """K-04: Ctrl+C on Activity, Esc back to home, Esc -- the last Esc arms, it never quits."""
+    session, host = _armed_elsewhere("activity")
+    host.clock.advance(0.35)
+    _press(session, host, "Escape")
+    assert (session.route, session.last_esc, _prompts(session)) == (HOME, 0.0, 0)
+    host.clock.advance(0.35)
+    _press(session, host, "Escape")
+    assert host.quits == 0
+    assert _prompts(session) == 1
+    host.clock.advance(0.35)
+    _press(session, host, "Escape")
+    assert host.quits == 1
+
+
+@pytest.mark.parametrize(
+    ("setup", "left"),
+    [("help", "overlay"), ("bucket", "bucket"), ("g", "prefix")],
+    ids=["closes-an-overlay", "clears-a-bucket", "cancels-the-prefix"],
+)
+def test_ruling_1_an_escape_that_closes_something_disarms(setup: str, left: str) -> None:
+    """Ruling 1: an Escape that closes or clears something is not a quit press."""
+    session, host = _armed_elsewhere("attention" if setup == "bucket" else HOME)
+    if setup == "help":
+        session.overlay = "help"
+    elif setup == "bucket":
+        session.bucket = "needs operator"
+    else:
+        session.prefix, session.prefix_deadline = "g", host.clock.now() + 1.0
+    host.clock.advance(0.3)
+    _press(session, host, "Escape")
+    assert getattr(session, left) is None
+    assert (session.last_esc, _prompts(session), host.quits) == (0.0, 0, 0)
+
+
+def test_k_07_a_press_is_judged_on_its_arrival_not_on_its_handling() -> None:
+    """K-07: two presses 30ms apart are a burst even when the second is handled 300ms later."""
+    session = _home()
+    host = _Host()
+    arrived = host.clock.now()
+    assert quit_step(session, host.clock, at=arrived).step is QuitStep.ARMED
+    host.clock.advance(0.3)
+    check = quit_step(session, host.clock, at=arrived + 0.03)
+    assert check.step is QuitStep.BURST
+    assert check.gap_ms < 80
+    assert quit_step(session, host.clock, at=arrived + 0.5).step is QuitStep.QUIT
+
+
+def test_k_07_two_escapes_the_parser_held_together_are_one_burst() -> None:
+    """K-07: Escapes stamped within the toolkit's escape delay of each other never quit."""
+
+    async def body() -> list[bool]:
+        app = ConsoleApp(FIXTURE, FakeClock())
+        exits: list[bool] = []
+        async with app.run_test(size=(80, 24)) as pilot:
+            app.reset(None)
+            # stamped in the past, as a key the parser emitted is by the time it is handled
+            start = get_time() - 1.0
+            for offset in (0.0, ESCAPE_DELAY - 0.01, ESCAPE_DELAY + 0.4):
+                event = Key("escape", "\x1b")
+                event.time = start + offset
+                app.on_key(event)
+                await pilot.pause()
+                exits.append(app.return_code is not None)
+        return exits
+
+    assert asyncio.run(body()) == [False, False, True]

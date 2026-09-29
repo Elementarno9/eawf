@@ -63,7 +63,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
 from eawf.surfaces.tui.widgets.heartbeat import PULSE_INTERVAL_S, pulse_glyph
 from eawf.surfaces.tui.widgets.markup import escape_markup, style_labeled_line
 from eawf.surfaces.tui.widgets.variance_tile import render_variance_plain
-from eawf.workflow.estimation.buckets import wave_estimate_eu
+from eawf.workflow.estimation.buckets import sum_wave_eu
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import Audit, State, Wave
@@ -317,14 +317,10 @@ def _effort_eu(state: State | None) -> tuple[float, float]:
 
     The numerator sums :attr:`~eawf.kernel.state.models.ActualSummary.elapsed_eu`
     over the actuals whose ``scope_id`` is one of the active phase's waves.
-    The denominator is a **live** bucket-aggregate:
-    ``Σ wave_estimate_eu(w)`` over every active-phase wave regardless of
-    status, so PENDING / PLANNED waves count and the estimate grows the
-    moment a wave is added — it does not wait for the claim-time estimate
-    bucket to be seeded. A wave with no ``effort_bucket`` contributes ``0``
-    (:func:`~eawf.workflow.estimation.buckets.wave_estimate_eu` returns ``0`` when
-    the bucket is unset), so an all-unbucketed phase yields a ``0.0``
-    estimate; the caller treats a non-positive estimate as the empty state.
+    The denominator is a **live** aggregate:
+    :func:`~eawf.workflow.estimation.buckets.sum_wave_eu` over every
+    active-phase wave regardless of status, so PENDING / PLANNED waves count
+    and the estimate grows the moment a wave is added.
 
     Args:
         state: The bound state, or ``None``.
@@ -341,7 +337,7 @@ def _effort_eu(state: State | None) -> tuple[float, float]:
     consumed = sum(
         a.elapsed_eu for a in (state.actuals or {}).values() if a.scope_id in phase_wave_ids
     )
-    estimate = sum(wave_estimate_eu(w) for w in phase_waves)
+    estimate = sum_wave_eu(phase_waves)
     return consumed, estimate
 
 

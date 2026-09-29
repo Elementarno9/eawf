@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -31,7 +32,12 @@ from typing import Final, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.kernel.runtime.provider import Digest
-from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt, StrictPositiveInt
+from eawf.kernel.state.epoch2.base import (
+    NonEmptyStr,
+    PrincipalKey,
+    StrictNonNegativeInt,
+    StrictPositiveInt,
+)
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.writer import atomic_write_json_locked
 from eawf.runtime.lock import portalock
@@ -51,8 +57,16 @@ NoticeSeverity = Literal["info", "warning", "critical"]
 #: Terminal statuses stay terminal: a late crossing never reopens them.
 NoticeStatus = Literal["OPEN", "RESOLVED", "CLEARED", "SUPERSEDED", "EXPIRED"]
 
-#: The metered resource dimension. Tokens are the one axis metered today.
-BudgetAxis = Literal["tokens"]
+#: The metered resource dimension: tokens spent, or wall seconds elapsed.
+BudgetAxis = Literal["tokens", "wall_seconds"]
+
+#: What a principal, or the source policy, did to a notice.
+NoticeAction = Literal["seen", "acknowledged", "snoozed", "resolved", "cleared"]
+
+#: Who an epoch-1 root's notices are for. That root records no principals,
+#: so its one operator is the audience of last resort rather than whichever
+#: client happens to connect first.
+LOCAL_OPERATOR: Final[str] = "OPERATOR"
 
 _BAND_RANK: Final[dict[str, int]] = {"approaching": 0, "limit_reached": 1}
 
@@ -96,6 +110,23 @@ def notice_key_for(
     return f"sha256:{digest}"
 
 
+def budget_window_digest(claim_ref: str) -> str:
+    """Return the budget-window reference a claim folds into a notice's identity.
+
+    A wave re-claimed after a release is a new attempt at the same budget,
+    so its crossing is a new notice; a restart inside one claim is not, and
+    cannot invent a new window because the claim reference is unchanged.
+
+    Args:
+        claim_ref: What identifies the claim: its session id, or its
+            start stamp where no session was recorded.
+
+    Returns:
+        ``sha256:<hex>`` over the claim reference.
+    """
+    return f"sha256:{hashlib.sha256(f'claim\x1f{claim_ref}'.encode()).hexdigest()}"
+
+
 def severity_for(basis: NoticeBasis, band: NoticeBand) -> NoticeSeverity:
     """Return the severity a notice of *basis* carries at *band*.
 
@@ -109,6 +140,49 @@ def severity_for(basis: NoticeBasis, band: NoticeBand) -> NoticeSeverity:
     return _SEVERITY[(basis, band)]
 
 
+class RecipientState(BaseModel):
+    """Where one recipient stands with one notice.
+
+    Delivery is not acknowledgement and opening is not resolution, so each
+    is its own revision; a restart reads them and cannot re-deliver a
+    revision already delivered.
+
+    Attributes:
+        delivered_revision: The revision last delivered to this recipient.
+        seen_revision: The revision this recipient last opened.
+        acknowledged_revision: The revision this recipient acknowledged.
+        snoozed_until: When this recipient's snooze lapses.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    delivered_revision: StrictPositiveInt | None = None
+    seen_revision: StrictPositiveInt | None = None
+    acknowledged_revision: StrictPositiveInt | None = None
+    snoozed_until: UtcDatetime | None = None
+
+
+class NoticeHistoryEntry(BaseModel):
+    """One disposition a notice received, kept in the order it happened.
+
+    Attributes:
+        action: What was done.
+        revision: The notice revision it was done to.
+        at: When.
+        principal: Who did it, or ``None`` for an imported legacy fact.
+        reason: Why, where the action came from a source policy or a
+            legacy import rather than a principal.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action: NoticeAction
+    revision: StrictPositiveInt
+    at: UtcDatetime
+    principal: PrincipalKey | None = None
+    reason: NonEmptyStr | None = None
+
+
 class BudgetCrossing(BaseModel):
     """One observation that a scope's consumption reached a threshold band.
 
@@ -118,10 +192,13 @@ class BudgetCrossing(BaseModel):
         basis: What the budget was set on.
         band: The highest band the observation reached.
         observed_value: The consumption observed.
-        budget_value: The budget it was measured against.
+        budget_value: The budget it was measured against, or ``None`` when
+            the observation recorded none.
         observed_at: When the producer read the consumption.
         contract_digest: The compiled contract a Run's ceiling came from,
-            or ``None`` for a scope that has none.
+            the budget window of a claim, or ``None`` for neither.
+        audience: The principals a notice this crossing creates is for.
+        provenance: The legacy identifiers the observation came from.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -131,9 +208,11 @@ class BudgetCrossing(BaseModel):
     basis: NoticeBasis
     band: NoticeBand
     observed_value: StrictNonNegativeInt
-    budget_value: StrictNonNegativeInt
+    budget_value: StrictNonNegativeInt | None
     observed_at: UtcDatetime
     contract_digest: Digest | None = None
+    audience: tuple[PrincipalKey, ...] = ()
+    provenance: tuple[NonEmptyStr, ...] = ()
 
     @property
     def notice_key(self) -> str:
@@ -166,6 +245,11 @@ class BudgetThresholdNotice(BaseModel):
         last_observed_at: When the latest escalation was recorded.
         resolved_at: When the notice reached a terminal status.
         contract_digest: The compiled contract a Run's ceiling came from.
+        audience: The principals the notice is for, resolved at creation.
+        recipients: Each recipient's delivery and disposition state.
+        history: Every disposition, oldest first.
+        provenance: The legacy identifiers the notice was imported from.
+        resolved_by: The principal who resolved it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -179,12 +263,17 @@ class BudgetThresholdNotice(BaseModel):
     highest_band: NoticeBand
     severity: NoticeSeverity
     observed_value: StrictNonNegativeInt
-    budget_value: StrictNonNegativeInt
+    budget_value: StrictNonNegativeInt | None
     status: NoticeStatus = "OPEN"
     revision: StrictPositiveInt = 1
     opened_at: UtcDatetime
     last_observed_at: UtcDatetime
     resolved_at: UtcDatetime | None = None
+    audience: tuple[PrincipalKey, ...] = ()
+    recipients: dict[PrincipalKey, RecipientState] = Field(default_factory=dict)
+    history: tuple[NoticeHistoryEntry, ...] = ()
+    provenance: tuple[NonEmptyStr, ...] = ()
+    resolved_by: PrincipalKey | None = None
 
     @model_validator(mode="after")
     def _check_derived_fields(self) -> Self:
@@ -194,7 +283,8 @@ class BudgetThresholdNotice(BaseModel):
             ValueError: The key does not address this condition, the
                 severity is not the one the basis and band derive, the
                 last observation precedes the opening, or ``resolved_at``
-                disagrees with whether the status is terminal.
+                disagrees with whether the status is terminal, or a
+                recipient is outside the audience.
         """
         expected_key = notice_key_for(
             scope_id=self.scope_id,
@@ -213,6 +303,9 @@ class BudgetThresholdNotice(BaseModel):
             raise ValueError("last_observed_at precedes opened_at")
         if (self.status == "OPEN") != (self.resolved_at is None):
             raise ValueError("resolved_at is set exactly when the status is terminal")
+        strangers = sorted(set(self.recipients) - set(self.audience))
+        if strangers:
+            raise ValueError(f"recipients outside the audience: {strangers}")
         return self
 
 
@@ -239,10 +332,11 @@ class BudgetNoticeLedger(BaseModel):
 class UpsertOutcome(StrEnum):
     """What one crossing did to the ledger.
 
-    ``CREATED`` and ``ESCALATED`` are the only outcomes that write.
+    ``CREATED`` and ``ESCALATED`` are the only outcomes that move a notice.
     ``UNCHANGED`` is a repeat of the band already on file; ``RETAINED`` is
     a lower band, or any crossing against a terminal notice, which never
-    regresses or reopens it.
+    regresses or reopens it. Either writes only the legacy identifiers it
+    brought that the notice did not already hold.
     """
 
     CREATED = "created"
@@ -292,26 +386,57 @@ def apply_crossing(
             budget_value=crossing.budget_value,
             opened_at=crossing.observed_at,
             last_observed_at=crossing.observed_at,
+            audience=crossing.audience,
+            provenance=crossing.provenance,
         )
         outcome = UpsertOutcome.CREATED
-    elif existing.status != "OPEN" or _BAND_RANK[crossing.band] < _BAND_RANK[existing.highest_band]:
-        return ledger, NoticeUpsert(notice=existing, outcome=UpsertOutcome.RETAINED)
-    elif crossing.band == existing.highest_band:
-        return ledger, NoticeUpsert(notice=existing, outcome=UpsertOutcome.UNCHANGED)
     else:
-        notice = existing.model_copy(
-            update={
-                "highest_band": crossing.band,
-                "severity": severity_for(existing.basis, crossing.band),
-                "observed_value": crossing.observed_value,
-                "budget_value": crossing.budget_value,
-                "revision": existing.revision + 1,
-                "last_observed_at": max(existing.last_observed_at, crossing.observed_at),
-            }
-        )
-        outcome = UpsertOutcome.ESCALATED
+        # A lower, late or repeated band never moves the notice, but the
+        # legacy identifiers it carries are kept: every source row stays
+        # traceable to the one notice it collapsed into.
+        added = tuple(ref for ref in crossing.provenance if ref not in existing.provenance)
+        if (
+            existing.status != "OPEN"
+            or _BAND_RANK[crossing.band] <= _BAND_RANK[existing.highest_band]
+        ):
+            outcome = (
+                UpsertOutcome.UNCHANGED
+                if existing.status == "OPEN" and crossing.band == existing.highest_band
+                else UpsertOutcome.RETAINED
+            )
+            if not added:
+                return ledger, NoticeUpsert(notice=existing, outcome=outcome)
+            notice = existing.model_copy(update={"provenance": existing.provenance + added})
+        else:
+            notice = existing.model_copy(
+                update={
+                    "highest_band": crossing.band,
+                    "severity": severity_for(existing.basis, crossing.band),
+                    "observed_value": crossing.observed_value,
+                    "budget_value": crossing.budget_value,
+                    "revision": existing.revision + 1,
+                    "last_observed_at": max(existing.last_observed_at, crossing.observed_at),
+                    "provenance": existing.provenance + added,
+                }
+            )
+            outcome = UpsertOutcome.ESCALATED
     updated = BudgetNoticeLedger(notices={**ledger.notices, key: notice})
     return updated, NoticeUpsert(notice=notice, outcome=outcome)
+
+
+def imported_pause_urns(ledger: BudgetNoticeLedger) -> frozenset[str]:
+    """Return every legacy pause a notice on *ledger* was imported from.
+
+    These pauses are notices now, so the pause projection leaves them out:
+    nothing appears both as a pause and as a notice.
+
+    Args:
+        ledger: The notice ledger.
+
+    Returns:
+        The pause URNs carried as notice provenance.
+    """
+    return frozenset(urn for notice in ledger.notices.values() for urn in notice.provenance)
 
 
 def notices_path(state_path: Path) -> Path:
@@ -346,12 +471,42 @@ def load_notice_ledger(path: Path) -> BudgetNoticeLedger:
     return BudgetNoticeLedger.model_validate_json(path.read_bytes())
 
 
+def rewrite_ledger[T](
+    path: Path, change: Callable[[BudgetNoticeLedger], tuple[BudgetNoticeLedger, T]]
+) -> T:
+    """Apply *change* to the ledger at *path* as one locked read-modify-write.
+
+    Every writer of the ledger goes through here, so a producer's upsert
+    and a recipient's disposition serialize on the one lock rather than
+    overwriting each other.
+
+    Args:
+        path: The notice ledger file (see :func:`notices_path`).
+        change: Returns the ledger to keep -- the same object when nothing
+            changed, which writes nothing -- and the caller's result.
+
+    Returns:
+        What *change* returned beside the ledger.
+
+    Raises:
+        eawf.runtime.lock.portalock.LockTimeout: The ledger lock was not
+            acquired in time.
+        pydantic.ValidationError: The ledger on disk is corrupt.
+    """
+    with portalock.acquire(path, timeout=_LOCK_TIMEOUT_SECONDS):
+        ledger = load_notice_ledger(path)
+        updated, result = change(ledger)
+        if updated is not ledger:
+            atomic_write_json_locked(path, updated.model_dump(mode="json"))
+    return result
+
+
 def upsert_notice(path: Path, crossing: BudgetCrossing) -> NoticeUpsert:
     """Upsert the notice for *crossing* into the ledger at *path*, atomically.
 
     The load, fold and write run under the ledger's exclusive lock, so
     concurrent producers of the same crossing yield one row at one
-    revision, and only a created or escalated notice is written.
+    revision, and a crossing that changes nothing writes nothing.
 
     Args:
         path: The notice ledger file (see :func:`notices_path`).
@@ -365,11 +520,7 @@ def upsert_notice(path: Path, crossing: BudgetCrossing) -> NoticeUpsert:
             acquired in time.
         pydantic.ValidationError: The ledger on disk is corrupt.
     """
-    with portalock.acquire(path, timeout=_LOCK_TIMEOUT_SECONDS):
-        ledger = load_notice_ledger(path)
-        updated, result = apply_crossing(ledger, crossing)
-        if result.outcome in (UpsertOutcome.CREATED, UpsertOutcome.ESCALATED):
-            atomic_write_json_locked(path, updated.model_dump(mode="json"))
+    result = rewrite_ledger(path, lambda ledger: apply_crossing(ledger, crossing))
     logger.info(
         f"upsert_notice scope={crossing.scope_id} band={crossing.band} "
         f"outcome={result.outcome} revision={result.notice.revision}"
@@ -378,20 +529,27 @@ def upsert_notice(path: Path, crossing: BudgetCrossing) -> NoticeUpsert:
 
 
 __all__ = [
+    "LOCAL_OPERATOR",
     "BudgetAxis",
     "BudgetCrossing",
     "BudgetNoticeLedger",
     "BudgetThresholdNotice",
+    "NoticeAction",
     "NoticeBand",
     "NoticeBasis",
+    "NoticeHistoryEntry",
     "NoticeSeverity",
     "NoticeStatus",
     "NoticeUpsert",
+    "RecipientState",
     "UpsertOutcome",
     "apply_crossing",
+    "budget_window_digest",
+    "imported_pause_urns",
     "load_notice_ledger",
     "notice_key_for",
     "notices_path",
+    "rewrite_ledger",
     "severity_for",
     "upsert_notice",
 ]

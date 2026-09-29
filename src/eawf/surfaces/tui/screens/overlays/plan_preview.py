@@ -41,7 +41,7 @@ from textual.widgets import Static, Tree
 
 from eawf.surfaces.tui.chassis import sigils
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
-from eawf.workflow.estimation.buckets import wave_estimate_eu
+from eawf.workflow.estimation.buckets import sum_wave_eu
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -80,10 +80,8 @@ class PlanIterRow:
         iter_id: The iter id (e.g. ``P26-I01``).
         title: The iter title.
         waves: Ordered wave rows under this iter.
-        eu: Summed planned effort (EU) across the iter's waves, derived
-            from each wave's ``effort_bucket`` via the canonical
-            :data:`~eawf.workflow.estimation.buckets.BUCKET_EU` mapping. A
-            wave with no bucket contributes ``0``.
+        eu: Summed planned effort (EU) across the iter's waves; every
+            wave costs the one effort constant.
     """
 
     iter_id: str
@@ -146,9 +144,8 @@ def build_plan_tree(
 
     Walks the phase's ``iter_ids`` and each iter's ``wave_ids`` in their
     stored order, building the hierarchical row aggregate the overlay
-    renders. Each iter row carries its summed planned EU (the per-wave
-    ``effort_bucket`` resolved through the canonical
-    :func:`~eawf.workflow.estimation.buckets.wave_estimate_eu`), and the
+    renders. Each iter row carries its summed planned EU
+    (:func:`~eawf.workflow.estimation.buckets.sum_wave_eu`), and the
     tree carries the propose lint's dropped-detail findings. An
     unresolvable phase (or a ``None`` state) yields a tree with the phase
     id and no children so the preview stays total even when the state and
@@ -178,20 +175,16 @@ def build_plan_tree(
         iteration = state.iters.get(iter_id)
         if iteration is None:
             continue
-        wave_rows: list[PlanWaveRow] = []
-        iter_eu = 0.0
-        for wave_id in iteration.wave_ids:
-            wave = state.waves.get(wave_id)
-            if wave is None:
-                continue
-            wave_rows.append(PlanWaveRow(wave_id=wave.id, title=wave.title, deps=tuple(wave.deps)))
-            iter_eu += wave_estimate_eu(wave)
+        waves = [wave for wave_id in iteration.wave_ids if (wave := state.waves.get(wave_id))]
+        wave_rows = [
+            PlanWaveRow(wave_id=wave.id, title=wave.title, deps=tuple(wave.deps)) for wave in waves
+        ]
         iter_rows.append(
             PlanIterRow(
                 iter_id=iteration.id,
                 title=iteration.title,
                 waves=tuple(wave_rows),
-                eu=round(iter_eu, 2),
+                eu=sum_wave_eu(waves),
             )
         )
     return PlanTree(

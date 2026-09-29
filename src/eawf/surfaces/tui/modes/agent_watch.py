@@ -94,7 +94,6 @@ from eawf.kernel.state.enums import (
     AgentReportVerdict,
     AgentSessionRole,
     AgentSessionStatus,
-    EffortBucket,
     ReportSource,
     WaveStatus,
 )
@@ -117,7 +116,7 @@ from eawf.surfaces.tui.widgets.footer import Footer, render_hint_label
 from eawf.surfaces.tui.widgets.markup import escape_markup
 from eawf.surfaces.tui.widgets.output_tail import OutputTail, format_agent_output_lines
 from eawf.surfaces.tui.widgets.status_tint import BAND_HEX
-from eawf.workflow.estimation.buckets import BUCKET_EU, EU_MINUTES
+from eawf.workflow.estimation.buckets import EFFORT_MINUTES
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -614,9 +613,6 @@ class WatchTarget:
     #: The watched session's start time, the anchor the liveness heartbeat's
     #: elapsed clock counts from (G5). ``None`` when the session row is unknown.
     started_at: datetime | None = None
-    #: The watched wave's effort bucket, from which the heartbeat derives the
-    #: expected wall-clock (G6). ``None`` when the wave carries no bucket.
-    effort_bucket: EffortBucket | None = None
     #: The watched session's agent role -- surfaced in the header + roster
     #: so the operator reads WHAT kind of agent is streaming (executor /
     #: researcher / auditor), not only its scope. Defaults to EXECUTOR so the
@@ -754,7 +750,6 @@ def _session_watch_target(state: State, session: AgentSession) -> WatchTarget:
         wave_status=_wave_status(state, session.scope_id),
         subprocess_pid=attempt_row.subprocess_pid if attempt_row is not None else None,
         started_at=session.started_at,
-        effort_bucket=wave.effort_bucket if wave is not None else None,
         agent_role=session.role,
         runtime_session_id=(
             session.runtime_session_id
@@ -977,28 +972,13 @@ def _format_duration(seconds: float) -> str:
     return f"{secs}s"
 
 
-def _expected_minutes(bucket: EffortBucket | None) -> float | None:
-    """Return the expected wall-clock minutes for an effort bucket (G6).
-
-    Args:
-        bucket: The watched wave's effort bucket, or ``None``.
-
-    Returns:
-        The bucket centroid EU converted to minutes, or ``None`` when the wave
-        carries no bucket.
-    """
-    if bucket is None:
-        return None
-    return BUCKET_EU[bucket] * EU_MINUTES
-
-
 def render_liveness_line(target: WatchTarget, *, turns: int, now: datetime) -> str:
     """Render the in-flight liveness heartbeat for a non-terminal watched session.
 
     Surfaces ``thinking · <elapsed>/~<expected> · <turns> turns · pid <pid>`` so
     a spawn reads as alive and on-track rather than hung: the elapsed clock
-    counts from the session start (G5), the effort-aware ``/~<expected>`` derives
-    from the wave's effort bucket so a long L/XL wave still reads on-track (G6),
+    counts from the session start (G5), the ``/~<expected>`` is the one effort
+    constant in minutes, whatever size label the wave carries (G6),
     ``turns`` is the count of streamed output updates, and the pid names the live
     child. Returns ``""`` when the wave is terminal (the stream is a recorded
     replay, so there is no live heartbeat).
@@ -1016,11 +996,7 @@ def render_liveness_line(target: WatchTarget, *, turns: int, now: datetime) -> s
     parts = ["thinking"]
     if target.started_at is not None:
         elapsed = _format_duration((now - target.started_at).total_seconds())
-        expected = _expected_minutes(target.effort_bucket)
-        if expected is not None:
-            parts.append(f"{elapsed}/~{_format_duration(expected * 60)}")
-        else:
-            parts.append(elapsed)
+        parts.append(f"{elapsed}/~{_format_duration(EFFORT_MINUTES * 60)}")
     parts.append(f"{turns} turns")
     if target.subprocess_pid is not None:
         parts.append(f"pid {target.subprocess_pid}")

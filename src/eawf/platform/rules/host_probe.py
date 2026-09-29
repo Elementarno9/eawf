@@ -25,7 +25,7 @@ from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.rules.carriers import CARRIER_DIRECTORY
 
 #: Runtimes that discover skills in a directory, and the file each skill is.
-_SKILL_DISCOVERY: Final[Mapping[RuntimeName, str]] = {"claude": f"{CARRIER_DIRECTORY}/*/SKILL.md"}
+SKILL_DISCOVERY: Final[Mapping[RuntimeName, str]] = {"claude": f"{CARRIER_DIRECTORY}/*/SKILL.md"}
 
 
 def host_loaded_files(
@@ -57,7 +57,7 @@ def host_loaded_files(
             loaded.update(
                 target for kind in record.reads if (root / (target := projections[kind])).is_file()
             )
-        pattern = _SKILL_DISCOVERY.get(record.runtime)
+        pattern = SKILL_DISCOVERY.get(record.runtime)
         if pattern is not None:
             loaded.update(path.relative_to(root).as_posix() for path in root.glob(pattern))
     return tuple(sorted(loaded))
@@ -89,4 +89,4 @@ def _import_chain(root: Path, entry: str) -> set[str]:
     return chain
 
 
-__all__ = ["host_loaded_files"]
+__all__ = ["SKILL_DISCOVERY", "host_loaded_files"]

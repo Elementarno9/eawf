@@ -112,6 +112,7 @@ GLOBAL_KEYS: tuple[GlobalKey, ...] = (
     GlobalKey("y", "copy the value · answers in the notification rack", ("y",)),
     GlobalKey("Y", "copy the stable URN", ("Y",)),
     GlobalKey("-", "dismiss the notifications — nothing else clears them", ("-",)),
+    GlobalKey("!", "jump to your top attention item", ("!",)),
     GlobalKey("i", "inspect the focused field", ("i",), Where.INSPECT),
     GlobalKey("u", "up to the containment parent", ("u",), Where.DEPTH),
     GlobalKey("[ ]", "previous / next sibling at this depth", ("[", "]"), Where.DEPTH),
@@ -129,8 +130,7 @@ SELECTION_ROUTES: frozenset[str] = frozenset(
 CARD_KEYS: frozenset[str] = frozenset({"Enter", "Escape", "ArrowUp", "ArrowDown", "k", "j", "n"})
 HELP_KEY = "?"
 # The key the header's ``!N NEEDS YOU`` badge stands for: it jumps to the top attention
-# item from any route. The badge on every frame is what teaches it, so help spends no row
-# on it where 80x24 has none to spare; the gates admit it everywhere all the same.
+# item from any route, and help lists it among the global keys.
 ATTENTION_JUMP_KEY = "!"
 # Keys the dispatcher names but that act only as part of another key; every gate passes them.
 MODIFIERS: frozenset[str] = frozenset({"Shift", "Control", "Alt", "Meta", "CapsLock"})
@@ -287,6 +287,6 @@ def allowlist(session: Session, fixture: Fixture) -> frozenset[str]:
     keys: set[str] = {key for entry in route_keys(session, fixture) for key in entry.keys}
     keys.update(key for global_key in GLOBAL_KEYS for key in global_key.keys)
     keys.update(MOTION | MODIFIERS)
-    keys.update((HELP_KEY, ATTENTION_JUMP_KEY))
+    keys.add(HELP_KEY)
     keys.update(alias for alias, key in ALIASES.items() if key in keys)
     return frozenset(keys)

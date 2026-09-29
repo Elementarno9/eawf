@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Annotated
 
 import typer
 
+from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
 from eawf.kernel.state.enums import ArtifactKind, StoreKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
@@ -31,22 +32,6 @@ draft_app = typer.Typer(
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)?$")
 
-# Canonical kind -> subdir router. Each promotable draft kind has exactly one
-# home under ``.ea/artifacts/``; placement resolves through this map instead of
-# treating the singular kind token as the subdir (which produced ``audit/``
-# rather than the canonical ``audits/``). The map IS the source of truth for
-# both the promotable-kind set and the subdir layout, so adding a kind means
-# adding one row here.
-_KIND_SUBDIR: dict[str, str] = {
-    "research": "research",
-    "audit": "audits",
-    "plan": "plans",
-    "hypothesis": "hypotheses",
-    "decision": "decisions",
-    "incident": "incidents",
-}
-_PROMOTABLE_KINDS = frozenset(_KIND_SUBDIR)
-
 
 def _flags(ctx: typer.Context) -> GlobalFlags:
     flags = ctx.obj
@@ -64,7 +49,7 @@ def _draft_path(root: Path, kind: str, slug: str) -> Path:
 def _artifact_path(root: Path, kind: str, slug: str) -> Path:
     artifacts = root / ".ea" / "artifacts"
     if "/" in slug:
-        return artifacts / _KIND_SUBDIR[kind] / f"{slug}.md"
+        return artifacts / ARTIFACT_KIND_SUBDIR[kind] / f"{slug}.md"
     return artifacts / f"{kind}-{slug}.md"
 
 
@@ -73,7 +58,7 @@ def _artifact_id(kind: str, slug: str) -> str:
 
 
 def _validate_kind_slug(kind: str, slug: str) -> None:
-    if kind not in _PROMOTABLE_KINDS:
+    if kind not in ARTIFACT_KIND_SUBDIR:
         raise cli_errors.UserError(f"unsupported draft kind: {kind!r}", kind="InvalidInput")
     if not _SLUG_RE.match(slug):
         raise cli_errors.UserError(f"invalid slug: {slug!r}", kind="InvalidInput")
@@ -188,7 +173,7 @@ def _strip_yaml_frontmatter(text: str) -> str:
 @draft_app.command("new")
 def draft_new(
     ctx: typer.Context,
-    kind: Annotated[str, typer.Argument(help="research/audit/plan/hypothesis/decision/incident")],
+    kind: Annotated[str, typer.Argument(help="/".join(ARTIFACT_KIND_SUBDIR))],
     slug: Annotated[str, typer.Argument(help="Portable draft slug.")],
     title: Annotated[str | None, typer.Option("--title", help="Draft title.")] = None,
     force: Annotated[bool, typer.Option("--force", help="Overwrite existing draft.")] = False,

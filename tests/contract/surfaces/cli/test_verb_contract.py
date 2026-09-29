@@ -186,7 +186,7 @@ def test_surf_080_unmounted_groups_are_the_known_gap() -> None:
     """Pin the declared groups not yet mounted at the root, so a new mount is seen.
 
     ``campaign`` and ``question`` still live under ``research``, ``ui`` is the
-    ``tui`` command, ``action`` has no group, and ``reflect`` is not built.
+    ``tui`` command, and ``action`` has no group.
     """
     mounted = set(_root().commands)
     declared = verb_contract.ENTITY_GROUPS + verb_contract.CROSS_CUTTING_GROUPS
@@ -195,7 +195,6 @@ def test_surf_080_unmounted_groups_are_the_known_gap() -> None:
         "question",
         "action",
         "ui",
-        "reflect",
     }
 
 

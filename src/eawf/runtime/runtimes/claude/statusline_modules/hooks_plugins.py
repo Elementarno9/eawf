@@ -2,9 +2,10 @@
 
 Counts entries under ``state.plugins`` and inspects the local
 ``.claude/hooks/`` directory (when reachable from the workspace root).
-Renders ``hooks:<n> plugins:<m>``. When the state file is missing or
-unreadable, the segment collapses to ``hooks:- plugins:-`` with
-``status="missing"``.
+Renders ``hooks:<n> plugins:<m>``. When no workspace resolves the segment
+renders ``hooks:n/a(no-state)``; when the epoch-1 document is unreadable or
+frozen the hook count still shows and the plugins half renders
+``plugins:n/a(<reason>)``.
 
 The count is *informational only*: it reports how many ``.sh`` files sit
 on disk, not whether any of them ran or exited cleanly. The module never
@@ -25,11 +26,25 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import orjson
-
-from eawf.surfaces.render.statusline import StatuslineSegment
+from eawf.runtime.runtimes.claude.statusline_modules._document import (
+    DocumentGap,
+    document_source,
+    read_legacy_document,
+)
+from eawf.surfaces.render.statusline import (
+    UNAVAILABLE_MARK,
+    SegmentSource,
+    StatuslineSegment,
+    sourced_segment,
+    unavailable_segment,
+)
 
 logger = logging.getLogger(__name__)
+
+_MODULE = "hooks_plugins"
+_LABEL = "hooks"
+_HOOKS_SOURCE = SegmentSource(producer="workspace-filesystem", provenance=".claude/hooks")
+_PLUGINS_SOURCE = document_source("plugins")
 
 
 def _count_plugins(payload: dict[str, Any]) -> int:
@@ -71,41 +86,24 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
 
     Returns:
         A :class:`StatuslineSegment` with ``module="hooks_plugins"``.
-        ``status="missing"`` when state is unreadable; ``status="degraded"``
+        ``status="missing"`` when no workspace resolves; ``status="degraded"``
         for any other case (the counts are informational — never a health
         claim — because the module never inspects a hook exit code).
     """
     del claude_payload  # accepted for uniform signature
-    if state_path is None or not state_path.exists():
-        return StatuslineSegment(
-            module="hooks_plugins",
-            text="hooks:- plugins:-",
-            status="missing",
-        )
-    try:
-        raw = state_path.read_bytes()
-        payload = orjson.loads(raw)
-    except (OSError, orjson.JSONDecodeError) as exc:
-        logger.debug(f"build hooks-read-decode-failed error={exc}")
-        return StatuslineSegment(
-            module="hooks_plugins",
-            text="hooks:- plugins:-",
-            status="missing",
-        )
-    if not isinstance(payload, dict):
-        return StatuslineSegment(
-            module="hooks_plugins",
-            text="hooks:- plugins:-",
-            status="missing",
-        )
-    plugins = _count_plugins(payload)
+    if state_path is None:
+        return unavailable_segment(_MODULE, _LABEL, DocumentGap.NO_STATE.value, _HOOKS_SOURCE)
     hooks = _count_hooks(state_path)
+    payload = read_legacy_document(state_path)
+    plugins = (
+        f"{UNAVAILABLE_MARK}({payload.value})"
+        if isinstance(payload, DocumentGap)
+        else _count_plugins(payload)
+    )
     # Informational only: a raw file count is not a health signal (no exit
     # code is read), so the segment stays "degraded" rather than claiming ok.
-    return StatuslineSegment(
-        module="hooks_plugins",
-        text=f"hooks:{hooks} plugins:{plugins}",
-        status="degraded",
+    return sourced_segment(
+        _MODULE, _LABEL, f"{hooks} plugins:{plugins}", _HOOKS_SOURCE, status="degraded"
     )
 
 

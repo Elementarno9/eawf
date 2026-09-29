@@ -58,7 +58,6 @@ from eawf.surfaces.tui.modes.trust import (
     NO_DATA,
     TrustModeScreen,
     is_data_starved,
-    render_eu_calibration,
     render_output_labels,
     render_overview,
     render_store_counts,
@@ -71,7 +70,6 @@ from eawf.surfaces.tui.snapshot import (
     settle_screen,
 )
 from eawf.workflow.estimation.trust_scorecard import (
-    EuCalibrationMetric,
     OutputTrustLabel,
     TrustScorecard,
     TrustTierCounts,
@@ -88,16 +86,9 @@ _T0 = datetime(2026, 5, 27, 12, 0, tzinfo=UTC)
 
 
 def _starved_scorecard() -> TrustScorecard:
-    """A scorecard with no signal: no labels, empty stores, no samples."""
+    """A scorecard with no signal: no labels, empty stores."""
     return TrustScorecard(
         window="all",
-        eu_calibration=EuCalibrationMetric(
-            sample_count=0,
-            nudged_bucket_count=0,
-            max_drift_pct=None,
-            bucket_drift=False,
-            drift_badge="no-data",
-        ),
         store_record_counts={
             StoreKind.ESTIMATE.value: 0,
             StoreKind.ACTUAL.value: 0,
@@ -116,16 +107,9 @@ def _starved_scorecard() -> TrustScorecard:
 
 
 def _populated_scorecard() -> TrustScorecard:
-    """A scorecard backed by labels, store rows, samples, and residuals."""
+    """A scorecard backed by labels, store rows, and residuals."""
     return TrustScorecard(
         window="all",
-        eu_calibration=EuCalibrationMetric(
-            sample_count=4,
-            nudged_bucket_count=1,
-            max_drift_pct=42.5,
-            bucket_drift=True,
-            drift_badge="bucket-drift",
-        ),
         store_record_counts={
             StoreKind.ESTIMATE.value: 3,
             StoreKind.ACTUAL.value: 2,
@@ -164,7 +148,7 @@ def _populated_scorecard() -> TrustScorecard:
 
 
 def test_is_data_starved_true_when_no_signal_at_all() -> None:
-    """An empty scorecard (no labels, stores, samples) is data-starved."""
+    """An empty scorecard (no labels, stores) is data-starved."""
     assert is_data_starved(_starved_scorecard()) is True
 
 
@@ -174,22 +158,9 @@ def test_is_data_starved_false_when_labels_present() -> None:
 
 
 def test_is_data_starved_false_when_only_store_rows_present() -> None:
-    """A single store row (no labels, no samples) lifts the starved verdict."""
+    """A single store row (no labels) lifts the starved verdict."""
     scorecard = _starved_scorecard()
     scorecard.store_record_counts[StoreKind.EVIDENCE.value] = 1
-    assert is_data_starved(scorecard) is False
-
-
-def test_is_data_starved_false_when_only_calibration_samples_present() -> None:
-    """A calibration sample alone (no labels, no store rows) is not starved."""
-    scorecard = _starved_scorecard()
-    scorecard.eu_calibration = EuCalibrationMetric(
-        sample_count=1,
-        nudged_bucket_count=0,
-        max_drift_pct=10.0,
-        bucket_drift=False,
-        drift_badge="ok",
-    )
     assert is_data_starved(scorecard) is False
 
 
@@ -242,19 +213,6 @@ def test_render_store_counts_populated_surfaces_each_n() -> None:
     assert "evidence n=5" in body
     assert "estimate n=3" in body
     assert "actual n=2" in body
-
-
-def test_render_eu_calibration_starved_renders_no_data() -> None:
-    """A zero-sample calibration metric renders the no-data sentinel."""
-    assert NO_DATA in render_eu_calibration(_starved_scorecard())
-
-
-def test_render_eu_calibration_populated_surfaces_residual_and_n() -> None:
-    """Populated calibration surfaces the drift residual and the sample size."""
-    body = render_eu_calibration(_populated_scorecard())
-    assert "samples 4" in body
-    assert "max drift 42.5%" in body
-    assert "bucket-drift" in body
 
 
 def test_render_verifier_reliability_starved_shows_note_not_rate() -> None:

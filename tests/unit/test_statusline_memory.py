@@ -17,16 +17,16 @@ def _seed_state(tmp_path: Path, payload: dict[str, object]) -> Path:
     return state_path
 
 
-def test_no_state_path_returns_dash() -> None:
+def test_no_state_path_names_why() -> None:
     seg = memory_module.build({}, None)
-    assert seg.text == "mem:-"
+    assert seg.text == "mem:n/a(no-state)"
     assert seg.status == "missing"
 
 
-def test_empty_index_returns_dash(tmp_path: Path) -> None:
+def test_empty_index_names_why(tmp_path: Path) -> None:
     state_path = _seed_state(tmp_path, {})
     seg = memory_module.build({}, state_path)
-    assert seg.text == "mem:-"
+    assert seg.text == "mem:n/a(no-memory-index)"
     assert seg.status == "missing"
 
 
@@ -57,10 +57,10 @@ def test_size_reflects_jsonl_bytes(tmp_path: Path) -> None:
     assert seg.text == "mem:1@2KiB"
 
 
-def test_malformed_state_returns_dash(tmp_path: Path) -> None:
+def test_malformed_state_names_why(tmp_path: Path) -> None:
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir()
     state_path.write_bytes(b"not-json")
     seg = memory_module.build({}, state_path)
-    assert seg.text == "mem:-"
+    assert seg.text == "mem:n/a(state-unreadable)"
     assert seg.status == "missing"

@@ -16,8 +16,10 @@ This rule walks the git-tracked ``.ea/artifacts/**/*.md`` set and flags
 any file that violates either convention. A grandfather baseline carries
 the pre-convention legacy artifacts (named before the date-stem rule
 landed) so the clean tree passes while every new artifact is held to the
-convention. The same per-kind contract is enforced at the model boundary
-by :data:`eawf.kernel.spec.common.ArtifactPathStr`.
+convention. The kind sub-directories are read from
+:data:`eawf.kernel.spec.common.ARTIFACT_KIND_SUBDIR`, the one declaration
+the draft promoter and :data:`eawf.kernel.spec.common.ArtifactPathStr`
+read as well.
 """
 
 from __future__ import annotations
@@ -25,31 +27,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
+
 RULE_CODE = "EAWF023"
 
 #: Repo-relative prefix every durable artifact lives beneath.
 ARTIFACTS_ROOT = ".ea/artifacts/"
-
-#: Canonical kind sub-directories under ``.ea/artifacts/``. Mirrors the
-#: ``_KIND_SUBDIR`` router values in
-#: :mod:`eawf.surfaces.cli.commands.draft` (the promote-side source of
-#: truth for kind -> sub-directory placement) so the lint and the
-#: promoter never drift on which sub-directory a kind files into.
-ARTIFACT_KIND_SUBDIRS: frozenset[str] = frozenset(
-    {
-        "audits",
-        "research",
-        "plans",
-        "hypotheses",
-        "decisions",
-        "incidents",
-        # Recorded validation-run evidence (live-drive recordings etc.,
-        # P30-I23-W33) — machine-checked excerpt bundles, not prose briefs.
-        "evidence",
-        # Multi-agent review artifacts (pre-ship reviews, P30-I23-W35).
-        "reviews",
-    }
-)
 
 #: A conforming artifact filename stem leads with a ``YYYY-MM-DD-`` date.
 DATE_STEM_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-")
@@ -137,7 +120,8 @@ def check_artifact_path(
     The two binary checks, in order:
 
     1. The first path segment after ``.ea/artifacts/`` must be a
-       canonical kind sub-directory in :data:`ARTIFACT_KIND_SUBDIRS`.
+       canonical kind sub-directory, a value of
+       :data:`eawf.kernel.spec.common.ARTIFACT_KIND_SUBDIR`.
     2. The filename stem must lead with a ``YYYY-MM-DD-`` date prefix
        (:data:`DATE_STEM_RE`).
 
@@ -164,8 +148,9 @@ def check_artifact_path(
                 f"artifact must live under a kind sub-directory, not directly in {ARTIFACTS_ROOT}"
             ),
         )
-    if head not in ARTIFACT_KIND_SUBDIRS:
-        allowed = ", ".join(sorted(ARTIFACT_KIND_SUBDIRS))
+    subdirs = frozenset(ARTIFACT_KIND_SUBDIR.values())
+    if head not in subdirs:
+        allowed = ", ".join(sorted(subdirs))
         return ArtifactPlacementViolation(
             path=norm,
             reason=f"sub-directory {head!r} is not a canonical artifact kind (allowed: {allowed})",

@@ -664,14 +664,19 @@ def urn(
         scope: The scope a linked console is attached to, named where no row answers.
 
     Returns:
-        The record's own URN when the link holds it. Else a console holding no prototype
-        rows names the tree's own URN, in the one scheme its records are addressed by, and
-        the prototype replay names the route's address.
+        The record's own URN when the link holds it, rendered by the identity module's
+        formatter so every copy of one record reads the same. Else a console holding no
+        prototype rows names the tree's own URN, in the one scheme its records are
+        addressed by, and the prototype replay names the route's address.
     """
     wanted = (session.sel_id, session.subj_id) if rows else ()
     held = next((row.urn for key in wanted if key for row in rows if row.key == key), None)
     if held is not None:
-        return held
+        try:
+            return str(parse_qualified_urn(held))
+        except IdentityError:
+            # a record whose URN the scheme cannot parse is still addressed by what it holds
+            return held
     if not fixture.prototype:
         return scope_urn(rows) or NO_SCOPE_URN
     tail = f":{session.subj_id}" if session.subj_id else ""

@@ -79,13 +79,16 @@ class UnresolvedReason(StrEnum):
 
     ``NO_CONVERTER`` is a row whose collection has a declared conversion
     that no importer rule implements yet. ``ROW_SCHEMA_INVALID`` is a row
-    the census could not read through its declared schema. Both refuse
-    the apply; neither is silently skipped, because a skipped row is a
+    the census could not read through its declared schema.
+    ``DROPPED_STATUS`` is a row still in a status epoch 2 dropped rather
+    than mapped, such as a Track left ``planned`` or ``deferred``. All three
+    refuse the apply; none is silently skipped, because a skipped row is a
     row the target census can never reconcile against the source.
     """
 
     NO_CONVERTER = "no_converter"
     ROW_SCHEMA_INVALID = "row_schema_invalid"
+    DROPPED_STATUS = "dropped_status"
 
 
 class RollbackBoundary(StrEnum):

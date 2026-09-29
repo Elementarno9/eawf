@@ -92,3 +92,17 @@ def rewrite_text(text: str) -> str:
     for _kind, pattern, replacement in _PATTERNS:
         rewritten = pattern.sub(replacement, rewritten)
     return rewritten
+
+
+def redact_text(text: str) -> str:
+    """Return *text* with every token :func:`scan_text` would flag replaced.
+
+    :func:`rewrite_text` leaves emails alone, so text it rewrote can still fail the
+    scan; this also replaces every email outside the default allowlist, so what it
+    returns passes :func:`scan_text` with that allowlist.
+    """
+    allowed = {email.casefold() for email in DEFAULT_EMAIL_ALLOWLIST}
+    return _EMAIL_RE.sub(
+        lambda match: match.group(0) if match.group(0).casefold() in allowed else "<email>",
+        rewrite_text(text),
+    )

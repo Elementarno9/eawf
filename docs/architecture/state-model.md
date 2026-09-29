@@ -248,13 +248,7 @@ process can observe it. Calibration uses `done` scopes only;
 interrupted, blocked, abandoned, failed, and superseded scopes feed
 risk / fallback statistics.
 
-Estimation by scope: wave (direct, highest quality) → iter (rollup of
-waves) → phase (rollup of iters). Wave plans may carry an
-`effort_bucket` (`XS=0.25`, `S=0.5`, `M=1.0`, `L=2.0`, `XL=3.5` EU)
-so plan renderers can show both `sum_wave_eu` and `critical_path_eu`.
-Closed wave timestamps derive a provisional `actual_elapsed_eu` until
-richer actual-segment instrumentation is present. Roadmap-level shows
-directional envelopes only.
+Estimation by scope: wave (direct, highest quality) → iter (rollup of waves) → phase (rollup of iters). Every wave is costed at one effort constant of 0.8 EU (24 minutes, measured p10 8.8, p50 23.9, p90 123.1 minutes), so plan renderers can show both `sum_wave_eu` and `critical_path_eu`. A wave's `effort_bucket` label is a narrative annotation with no scheduling meaning: nothing multiplies by it. Closed wave timestamps derive a provisional `actual_elapsed_eu` until richer actual-segment instrumentation is present. Roadmap-level shows directional envelopes only.
 
 ## Large entity handling
 

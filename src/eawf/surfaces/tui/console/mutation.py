@@ -85,6 +85,8 @@ NO_LINK_REASON: Final = "the console holds no daemon link · no request can be i
 #: shifted key may act, because a menu letter carries no case meaning.
 MARK_ALL: Final = "*"
 MARK_ALL_VERB: Final = "select all shown"
+#: What a selection key says where the cursor names no record a bulk verb can act on.
+NOTHING_TO_MARK: Final = "nothing under the cursor can be marked here"
 #: A stamp that has not happened.
 NO_STAMP: Final = "—"
 
@@ -117,7 +119,7 @@ NATIVE_KEYS: Final[Mapping[str, str]] = MappingProxyType(
 ENTITY_ROUTES: Final[Mapping[LifecycleEntity, frozenset[str]]] = MappingProxyType(
     {
         LifecycleEntity.TRACK: frozenset({"scope.home", "track"}),
-        LifecycleEntity.MILESTONE: frozenset({"scope.home", "milestone"}),
+        LifecycleEntity.MILESTONE: frozenset({"scope.home", "track", "milestone"}),
         LifecycleEntity.DELIVERY_BATCH: frozenset({"scope.home", "milestone", "batch.detail"}),
         LifecycleEntity.TASK: frozenset({"task.detail", "backlog"}),
         LifecycleEntity.RUN: frozenset({"activity", "run.detail"}),
@@ -682,8 +684,12 @@ def menu_key(ctx: Ctx, k: str) -> bool:
     if ctx.fixture.prototype:
         return False
     if k == MARK_ALL and menu_entity(s, ctx.rows) is not None:
-        leave_overlay(s)
-        return select_key(ctx, k)
+        if select_key(ctx, k):
+            leave_overlay(s)
+        else:
+            # the menu stays open: nothing was marked, and closing it would say otherwise
+            ctx.log(k, NOTHING_TO_MARK)
+        return True
     mutation = native_mutation(s, ctx.rows, k)
     if mutation is None:
         return False
@@ -936,9 +942,18 @@ def card_key(ctx: Ctx, k: str) -> None:
 
 
 def select(ctx: Ctx, k: str, pane: bool) -> None:
-    """Run a selection key from the route's key path, or record it unclaimed."""
-    if pane or not select_key(ctx, k):
+    """Run a selection key from the route's key path, or say why nothing was marked.
+
+    Help teaches the selection keys on a linked console's record lists, so where the row
+    under the cursor cannot be marked the key answers rather than doing nothing.
+    """
+    if pane:
         ctx.noop(k)
+    elif not select_key(ctx, k):
+        if ctx.fixture.prototype:
+            ctx.noop(k)
+        else:
+            ctx.log(k, NOTHING_TO_MARK)
 
 
 def select_key(ctx: Ctx, k: str) -> bool:

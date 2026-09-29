@@ -16,6 +16,7 @@ import pytest
 
 from eawf.surfaces.render.bars import BLOCK_EIGHTHS, BLOCK_EMPTY
 from eawf.surfaces.render.statusline import (
+    SegmentSource,
     StatuslineTheme,
     context_usage_segment,
     rate_window_segment,
@@ -32,6 +33,8 @@ _THEME = StatuslineTheme(name="snapshot", separator=" | ")
 #: The set of valid block-eighths cells a rendered bar may contain.
 _BAR_CELLS = set(BLOCK_EIGHTHS) | {BLOCK_EMPTY}
 
+_SOURCE = SegmentSource(producer="snapshot", provenance="snapshot#ratio")
+
 _CONTEXT_RATIO = 0.42
 _RATE_RATIO = 0.875
 _WIDTH = 8
@@ -39,8 +42,8 @@ _WIDTH = 8
 
 def _render() -> str:
     segments = [
-        context_usage_segment(_CONTEXT_RATIO, width=_WIDTH),
-        rate_window_segment(_RATE_RATIO, width=_WIDTH),
+        context_usage_segment(_CONTEXT_RATIO, _SOURCE, width=_WIDTH),
+        rate_window_segment(_RATE_RATIO, _SOURCE, width=_WIDTH),
     ]
     return render_segments(segments, _THEME)
 
@@ -63,7 +66,7 @@ def test_bars_render_matches_golden() -> None:
 
 def test_context_usage_segment_is_block_eighths_bar() -> None:
     # measurable_signal: the context-usage segment is a block-eighths bar.
-    segment = context_usage_segment(_CONTEXT_RATIO, width=_WIDTH)
+    segment = context_usage_segment(_CONTEXT_RATIO, _SOURCE, width=_WIDTH)
     assert segment.module == "context_usage"
     assert len(segment.text) == _WIDTH
     assert set(segment.text) <= _BAR_CELLS
@@ -71,7 +74,7 @@ def test_context_usage_segment_is_block_eighths_bar() -> None:
 
 def test_rate_window_segment_is_block_eighths_bar() -> None:
     # measurable_signal: the rate-window segment is a block-eighths bar.
-    segment = rate_window_segment(_RATE_RATIO, width=_WIDTH)
+    segment = rate_window_segment(_RATE_RATIO, _SOURCE, width=_WIDTH)
     assert segment.module == "rate_window"
     assert len(segment.text) == _WIDTH
     assert set(segment.text) <= _BAR_CELLS
@@ -88,23 +91,23 @@ def test_usage_bar_matches_bars_primitive() -> None:
 
 def test_full_bar_is_all_full_blocks() -> None:
     # boundary: a fully-used window renders every cell as the full block.
-    segment = context_usage_segment(1.0, width=_WIDTH)
+    segment = context_usage_segment(1.0, _SOURCE, width=_WIDTH)
     assert segment.text == BLOCK_EIGHTHS[-1] * _WIDTH
 
 
 def test_empty_bar_is_all_blank_cells() -> None:
     # boundary: a zero-fill window renders every cell blank.
-    segment = rate_window_segment(0.0, width=_WIDTH)
+    segment = rate_window_segment(0.0, _SOURCE, width=_WIDTH)
     assert segment.text == BLOCK_EMPTY * _WIDTH
 
 
 def test_usage_bar_rejects_out_of_range_ratio() -> None:
     # error-path: a ratio outside [0, 1] is rejected by the bar primitive.
     with pytest.raises(ValueError, match="ratio out of range"):
-        context_usage_segment(1.5, width=_WIDTH)
+        context_usage_segment(1.5, _SOURCE, width=_WIDTH)
 
 
 def test_usage_bar_rejects_non_positive_width() -> None:
     # error-path: a non-positive width is rejected by the bar primitive.
     with pytest.raises(ValueError, match="width must be positive"):
-        rate_window_segment(0.5, width=0)
+        rate_window_segment(0.5, _SOURCE, width=0)

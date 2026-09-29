@@ -93,9 +93,9 @@
     ],
     "check_count": 3,
     "check_passed": 2,
-    "critical_path_eu": 0.0,
+    "critical_path_eu": 2.4,
     "risk_count": 0,
-    "sum_wave_eu": 0.0,
+    "sum_wave_eu": 3.2,
     "wave_count": 4,
     "wave_status_counts": {
       "abandoned": 0,
@@ -113,7 +113,7 @@
       "commit": null,
       "deps": [],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cp/init.py"
       ],
@@ -131,7 +131,7 @@
         "P05-I01-W00"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cp/a.py"
       ],
@@ -149,7 +149,7 @@
         "P05-I01-W00"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cp/b.py"
       ],
@@ -168,7 +168,7 @@
         "P05-I01-W02"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cp/merge.py"
       ],

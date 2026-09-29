@@ -218,6 +218,56 @@ def coverage_defects(manifest: CoverageManifest) -> tuple[str, ...]:
     return tuple(defects)
 
 
+#: The routes the grid may list as holes, each owed by a named wave. Empty: every
+#: projectable route is served. A hole the regenerated grid carries that is not named
+#: here is an undeclared hole, and a name here the grid no longer carries is stale.
+DECLARED_HOLES: frozenset[str] = frozenset()
+
+
+def regenerate_grid(recorded: CoverageManifest) -> CoverageManifest:
+    """Return the grid the console's own tables produce, in route order.
+
+    Every binding is derived: ``bound`` from the collection table, ``served_off_document``
+    from the settings routes, ``unprojectable`` for the entry layer and ``hole`` for every
+    other route. Only what a table cannot know is carried over from ``recorded``: the
+    unprojectable route's reason and the wave a hole names. A recorded grid that differs
+    from its regeneration was patched by hand, or has drifted from the console.
+
+    Args:
+        recorded: The grid as it is recorded.
+
+    Returns:
+        The regenerated grid.
+
+    Raises:
+        pydantic.ValidationError: A hole the recorded grid does not declare, which
+            regenerates as a hole naming no wave.
+    """
+    carried = {row.route: row for row in recorded.routes}
+    rows: list[CoverageRow] = []
+    for spec in sorted(REGISTRY.routes, key=lambda spec: spec.id):
+        prior = carried.get(spec.id)
+        if spec.key in ROUTE_COLLECTIONS:
+            binding, extra = "bound", {}
+        elif spec.id in OFF_DOCUMENT_ROUTES:
+            binding, extra = "served_off_document", {}
+        elif spec.id == UNPROJECTABLE_ROUTE:
+            binding, extra = "unprojectable", {"reason": prior.reason if prior else None}
+        else:
+            binding, extra = "hole", {"bound_by": prior.bound_by if prior else None}
+        rows.append(
+            CoverageRow.model_validate(
+                {
+                    "route": spec.id,
+                    "read_model": REGISTRY.read_models[spec.id],
+                    "binding": binding,
+                    **extra,
+                }
+            )
+        )
+    return CoverageManifest(schema_version=recorded.schema_version, routes=tuple(rows))
+
+
 def _fixture() -> Fixture:
     """Return the tracked prototype registers the epoch-1 mode renders from."""
     return load_fixture(FIXTURE_ROOT)
@@ -311,6 +361,12 @@ def test_the_recorded_grid_has_no_defects() -> None:
     assert coverage_defects(load_manifest()) == ()
 
 
+def test_the_recorded_grid_is_its_own_regeneration() -> None:
+    """The file is what the generator writes, so it was not patched by hand."""
+    recorded = load_manifest()
+    assert regenerate_grid(recorded) == recorded
+
+
 @pytest.mark.parametrize("route", sorted(REGISTRY.ids))
 def test_every_row_names_the_read_model_its_route_renders(route: str) -> None:
     """The grid repeats the registry binding, and a drifted row fails here."""
@@ -353,7 +409,7 @@ def test_the_grid_records_no_hole() -> None:
     itself, and proved on a fabricated hole by the validation cases below.
     """
     rows = load_manifest().routes
-    assert [row.route for row in rows if row.binding == "hole"] == []
+    assert {row.route for row in rows if row.binding == "hole"} == DECLARED_HOLES
     assert all(row.bound_by is None for row in rows)
 
 

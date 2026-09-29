@@ -44,9 +44,15 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_validator
 
 from eawf.kernel.runtime.compiled import BoundedText
-from eawf.kernel.runtime.provider import ArtifactUrn, CommandFamilyId, RuntimeRecord
+from eawf.kernel.runtime.provider import (
+    ArtifactUrn,
+    CommandFamilyId,
+    DelegationRequestUrn,
+    RuntimeRecord,
+)
 from eawf.kernel.runtime.usage import BudgetPayload, UsagePayload
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
 
@@ -349,6 +355,61 @@ class ReasoningSummaryPayload(RuntimeRecord):
         return self
 
 
+class MessageSummaryPayload(RuntimeRecord):
+    """One message of the episode, in the words its author used.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        message_role: Who said it.
+        summary: The message, cut to the bound a transcript block holds.
+        content_artifact_ref: The stored full message, when one was kept.
+        truncated: Whether ``summary`` is shorter than what was said, so a
+            reader never takes a cut message for the whole of it.
+    """
+
+    payload_kind: Literal["message_summary"] = "message_summary"
+    message_role: Literal["user", "assistant", "tool", "system"]
+    summary: BoundedText
+    content_artifact_ref: ArtifactUrn | None = None
+    truncated: StrictBool = False
+
+
+class ChildRunPayload(RuntimeRecord):
+    """A delegation this Run made, at one phase of it.
+
+    The child is work happening elsewhere: its words live on its own
+    stream, and this line only says that it was asked for, started, or
+    ended.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        child_run_ref: The child Run, once one exists to name.
+        delegation_request_ref: The request the delegation answers.
+        phase: ``requested``, ``started`` or ``terminal``.
+        terminal_status: How the child ended, at ``terminal`` only.
+    """
+
+    payload_kind: Literal["child_run"] = "child_run"
+    child_run_ref: RunUrn | None
+    delegation_request_ref: DelegationRequestUrn
+    phase: Literal["requested", "started", "terminal"]
+    terminal_status: RunStatus | None = None
+
+    @model_validator(mode="after")
+    def _status_belongs_to_the_terminal_phase(self) -> Self:
+        """Require the child's end status exactly where the phase makes it a fact.
+
+        Raises:
+            ValueError: A terminal event names no status, or an earlier
+                phase names one it cannot know yet.
+        """
+        if self.phase == "terminal" and self.terminal_status is None:
+            raise ValueError("a terminal child_run event names how the child ended")
+        if self.phase != "terminal" and self.terminal_status is not None:
+            raise ValueError(f"a {self.phase} child_run event has no terminal status yet")
+        return self
+
+
 class CommandPayload(RuntimeRecord):
     """One command execution, at one phase of it.
 
@@ -449,7 +510,13 @@ class EventGapPayload(RuntimeRecord):
 
 #: The payload variants that exist today, discriminated on payload kind.
 RunEventPayload = Annotated[
-    ReasoningSummaryPayload | CommandPayload | EventGapPayload | UsagePayload | BudgetPayload,
+    ReasoningSummaryPayload
+    | MessageSummaryPayload
+    | ChildRunPayload
+    | CommandPayload
+    | EventGapPayload
+    | UsagePayload
+    | BudgetPayload,
     Field(discriminator="payload_kind"),
 ]
 
@@ -457,6 +524,8 @@ RunEventPayload = Annotated[
 _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
     {
         EventPayloadKind.REASONING_SUMMARY,
+        EventPayloadKind.MESSAGE_SUMMARY,
+        EventPayloadKind.CHILD_RUN,
         EventPayloadKind.COMMAND,
         EventPayloadKind.EVENT_GAP,
         EventPayloadKind.USAGE,
@@ -539,6 +608,7 @@ __all__ = [
     "EVENT_CONTRACTS",
     "EVENT_PAYLOADS",
     "SUPPORTED_EVENT_KINDS",
+    "ChildRunPayload",
     "CommandExecutionId",
     "CommandPayload",
     "EventContract",
@@ -546,6 +616,7 @@ __all__ = [
     "EventGapPayload",
     "EventPayloadKind",
     "EventProvenance",
+    "MessageSummaryPayload",
     "QuarantineReason",
     "ReasoningSummaryPayload",
     "RunEventId",

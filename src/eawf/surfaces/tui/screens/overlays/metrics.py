@@ -1,7 +1,7 @@
 """``MetricsModal`` — the V7 ``/metrics`` 4x2 dashboard overlay.
 
 The ``/metrics`` palette verb opens a 4x2 grid of metric tiles backed by
-the daemon's telemetry projection. The seven tiles, in grid order, are:
+the daemon's telemetry projection. The six tiles, in grid order, are:
 
 1. **Precision** (top row) — estimate-vs-actual EU delta per effort bucket
    (labelled "precision" on the surface; "variance" misread as statistical).
@@ -12,7 +12,6 @@ the daemon's telemetry projection. The seven tiles, in grid order, are:
 5. **Cache health** (bottom row) — cache-create vs cache-read token ratio.
 6. **Switchover frequency** (bottom row) — ``runtime_switched`` counts
    per cause over the rolling window.
-7. **Role calibration** (bottom row) — per-agent-role bucket fit grid.
 
 The modal computes the projection from the current read-only state snapshot
 and, when present, the local telemetry DB. State-backed tiles still render
@@ -46,7 +45,6 @@ from eawf.kernel.state.models import State
 from eawf.observability.telemetry.metrics_projection import (
     MetricsProjection,
     MetricsWindow,
-    RoleCalibrationProjection,
     compute_metrics_projection,
 )
 from eawf.observability.telemetry.models import TelemetrySession
@@ -57,10 +55,6 @@ from eawf.surfaces.tui.chassis.sigils import chrome
 from eawf.surfaces.tui.screens.overlays.detail_cost import (
     aggregate_session_cost,
     render_cost_tile,
-)
-from eawf.surfaces.tui.widgets.calibration_table import (
-    render_role_calibration_drilldown,
-    render_role_calibration_tile,
 )
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.variance_tile import render_variance_markup
@@ -151,7 +145,7 @@ class TileSpec:
 
 #: The 4x2 tile inventory in grid order (row-major: top-left → bottom-
 #: right). The grid is ``grid-size: 4 2`` so the first four specs fill the
-#: top row and the next three the bottom row (the eighth cell is empty).
+#: top row and the next two the bottom row.
 #: The Cost tile (``tile-cost``) carries the wave-detail ``$`` tab's
 #: aggregate so the dashboard and the per-wave cost view agree.
 TILE_SPECS: tuple[TileSpec, ...] = (
@@ -161,7 +155,6 @@ TILE_SPECS: tuple[TileSpec, ...] = (
     TileSpec("tile-cost", "Cost"),
     TileSpec("tile-cache", "Cache health"),
     TileSpec("tile-switchover", "Switchover freq"),
-    TileSpec("tile-role-calibration", "Role calibration", drill="role-calibration"),
 )
 
 
@@ -223,8 +216,6 @@ def render_projection_tile(projection: MetricsProjection | None, tile_id: str) -
         return _render_cache_projection(projection)
     if tile_id == "tile-switchover":
         return _render_switchover_projection(projection)
-    if tile_id == "tile-role-calibration":
-        return _render_role_calibration_projection(projection)
     if tile_id == "tile-tokens":
         return _render_tokens_projection(projection)
     return _NO_DATA
@@ -308,11 +299,6 @@ def _render_tokens_projection(projection: MetricsProjection) -> str:
     return "\n".join(lines)
 
 
-def _render_role_calibration_projection(projection: MetricsProjection) -> str:
-    """Render the per-agent-role bucket fit grid."""
-    return render_role_calibration_tile(projection.per_role_calibration)
-
-
 def render_variance_drilldown(projection: MetricsProjection | None) -> str:
     """Render bucket-level variance drilldown rows."""
     if projection is None:
@@ -374,7 +360,7 @@ def parse_metrics_args(args: str) -> MetricsArgs:
 class MetricsModal(ModalScreen[None]):
     """4x2 grid of metric tiles (Esc to close); dashboard overlay.
 
-    Composes the seven :data:`TILE_SPECS` tiles in a ``grid-size: 4 2``
+    Composes the six :data:`TILE_SPECS` tiles in a ``grid-size: 4 2``
     grid, renders each tile from the current telemetry projection (the Cost
     tile reads its aggregate from the priced sessions), and arms the
     :data:`METRICS_REFRESH_S` refresh seam. Built with a pre-parsed
@@ -439,7 +425,7 @@ class MetricsModal(ModalScreen[None]):
     ]
 
     #: Index of the focused tile; starts on the sole drillable tile.
-    selected: reactive[int] = reactive(5)
+    selected: reactive[int] = reactive(0)
 
     def __init__(self, metrics_args: MetricsArgs | None = None) -> None:
         """Construct the dashboard for the parsed verb args.
@@ -452,7 +438,7 @@ class MetricsModal(ModalScreen[None]):
         super().__init__()
         self._args = metrics_args or MetricsArgs(window=DEFAULT_WINDOW, scope_filter=None)
         self.selected = next(
-            (index for index, spec in enumerate(TILE_SPECS) if spec.drill == "role-calibration"),
+            (index for index, spec in enumerate(TILE_SPECS) if spec.drill is not None),
             0,
         )
 
@@ -653,7 +639,7 @@ class MetricsModal(ModalScreen[None]):
             return None
 
     def action_move(self, delta: int) -> None:
-        """Move tile focus by *delta*, clamped to the seven-tile grid."""
+        """Move tile focus by *delta*, clamped to the six-tile grid."""
         self.selected = max(0, min(self.selected + delta, len(TILE_SPECS) - 1))
 
     def action_drill(self) -> None:
@@ -661,16 +647,9 @@ class MetricsModal(ModalScreen[None]):
         if not (0 <= self.selected < len(TILE_SPECS)):
             return
         spec = TILE_SPECS[self.selected]
-        if spec.drill not in {"role-calibration", "variance"}:
+        if spec.drill != "variance":
             return
-        projection = self._current_projection()
-        if spec.drill == "variance":
-            modal: ModalScreen[None] = VarianceDrillModal(projection, metrics_args=self._args)
-        else:
-            modal = CalibrationDrillModal(
-                projection.per_role_calibration if projection is not None else (),
-                metrics_args=self._args,
-            )
+        modal = VarianceDrillModal(self._current_projection(), metrics_args=self._args)
         push_modal = getattr(self.app, "push_modal", None)
         if callable(push_modal):
             pushed = bool(push_modal(modal))
@@ -681,73 +660,6 @@ class MetricsModal(ModalScreen[None]):
 
     def action_close(self) -> None:
         """Dismiss the dashboard (``Esc``)."""
-        self.dismiss(None)
-
-
-class CalibrationDrillModal(ModalScreen[None]):
-    """Full per-role calibration drilldown opened from the metrics dashboard."""
-
-    DEFAULT_CSS: ClassVar[str] = """
-    CalibrationDrillModal {
-        align: center middle;
-    }
-    CalibrationDrillModal > #calibration-card {
-        width: 80%;
-        max-width: 120;
-        height: 75%;
-        border: round $accent;
-        background: $surface;
-        padding: 1 2;
-    }
-    CalibrationDrillModal .calibration-title {
-        text-style: bold;
-        color: $accent;
-        height: 1;
-    }
-    CalibrationDrillModal .calibration-body {
-        height: auto;
-    }
-    CalibrationDrillModal .calibration-hint {
-        color: $text-muted;
-        height: 1;
-        margin-top: 1;
-    }
-    """
-
-    BINDINGS: ClassVar[list[BindingType]] = [
-        Binding("escape", "close", "close", show=False),
-    ]
-
-    def __init__(
-        self,
-        rows: tuple[RoleCalibrationProjection, ...],
-        *,
-        metrics_args: MetricsArgs,
-    ) -> None:
-        """Construct the drilldown for precomputed role calibration rows."""
-        super().__init__()
-        self._rows = rows
-        self._args = metrics_args
-
-    def compose(self) -> ComposeResult:
-        """Yield the title, calibration grid, details, and close hint."""
-        scope_suffix = f" · {self._args.scope_filter}" if self._args.scope_filter else ""
-        mode: RenderMode = getattr(self.app, "render_mode", DEFAULT_RENDER_MODE)
-        overview = chrome("overview", mode=mode)
-        with VerticalScroll(id="calibration-card"):
-            yield Static(
-                f"[$accent]{overview}[/] Role calibration · window "
-                f"{self._args.window}{scope_suffix}",
-                classes="calibration-title",
-            )
-            yield Static(
-                render_role_calibration_drilldown(self._rows, mode=mode),
-                classes="calibration-body",
-            )
-            yield Static("[ Esc close ]", classes="calibration-hint")
-
-    def action_close(self) -> None:
-        """Dismiss the drilldown overlay."""
         self.dismiss(None)
 
 
@@ -847,7 +759,6 @@ __all__ = [
     "METRICS_REFRESH_S",
     "METRIC_WINDOWS",
     "TILE_SPECS",
-    "CalibrationDrillModal",
     "MetricsArgs",
     "MetricsModal",
     "TileSpec",

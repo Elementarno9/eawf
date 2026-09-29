@@ -43,8 +43,8 @@ def _all_agent_paths(target_dir: Path) -> list[Path]:
 
 
 def _installed_hook_specs() -> list:
-    """Only handler-backed events (SESSION_START, SESSION_END) are installed; the rest would
-    be idle no-op wrappers, so the installer no longer writes them to disk."""
+    """Only handler-backed events (the session and subagent pairs) are installed; the rest
+    would be idle no-op wrappers, so the installer no longer writes them to disk."""
     return [spec for spec in HOOK_REGISTRY if spec.has_handler]
 
 
@@ -222,17 +222,21 @@ def test_install_plugin_renders_hook_with_correct_event(tmp_path: Path) -> None:
 
 
 def test_install_plugin_omits_handler_less_hooks(tmp_path: Path) -> None:
-    """Only SESSION_START and SESSION_END are installed; handler-less events are absent."""
+    """Only the session and subagent pairs are installed; handler-less events are absent."""
     install_plugin(tmp_path)
     hooks_dir = tmp_path / ".claude" / "hooks"
     on_disk = {p.name for p in hooks_dir.iterdir()}
-    assert on_disk == {"session_start.sh", "session_end.sh"}
+    assert on_disk == {
+        "session_start.sh",
+        "session_end.sh",
+        "subagent_start.sh",
+        "subagent_stop.sh",
+    }
     for event in (
         "pre_commit",
         "post_commit",
         "pre_push",
         "post_push",
-        "subagent_stop",
         "pre_compact",
         "agent_end",
     ):

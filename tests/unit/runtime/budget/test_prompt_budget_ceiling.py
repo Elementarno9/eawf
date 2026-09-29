@@ -53,7 +53,11 @@ from eawf.runtime.runtimes.claude import statusline as statusline_orchestrator
 from eawf.runtime.runtimes.claude.plugin_install import _patch_settings_json
 from eawf.runtime.runtimes.claude.statusline_modules import budget as budget_module
 from eawf.runtime.runtimes.metering import UsageSample
-from eawf.surfaces.render.statusline import budget_segment, budget_unavailable_segment
+from eawf.surfaces.render.statusline import (
+    SegmentSource,
+    budget_segment,
+    budget_unavailable_segment,
+)
 from eawf.workflow.lifecycle._claim_guards import (
     CLAIM_BUDGET_CEILING_REACHED,
     validate_claim_budget,
@@ -311,6 +315,8 @@ def test_in_flight_run_meter_crossing_the_sealed_ceiling_cancels_the_run(
 
 # ---------- the statusline draws spent over limit ----------
 
+_SEGMENT_SOURCE = SegmentSource(producer="test", provenance="test#waves.token_budget")
+
 
 def test_statusline_render_pipeline_shows_spent_over_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -333,7 +339,7 @@ def test_statusline_render_pipeline_shows_spent_over_limit(
 def test_budget_segment_matches_spent_over_limit(
     spent: int, limit: int, notice: bool, text: str
 ) -> None:
-    segment = budget_segment(spent=spent, limit=limit, notice_open=notice)
+    segment = budget_segment(spent=spent, limit=limit, notice_open=notice, source=_SEGMENT_SOURCE)
     assert segment.text == text
     assert segment.status == ("warn" if notice else "ok")
     assert re.match(SPENT_OVER_LIMIT, segment.text)
@@ -341,13 +347,13 @@ def test_budget_segment_matches_spent_over_limit(
 
 def test_budget_segment_negative_spend_raises() -> None:
     with pytest.raises(ValueError, match="non-negative"):
-        budget_segment(spent=-1, limit=10, notice_open=False)
+        budget_segment(spent=-1, limit=10, notice_open=False, source=_SEGMENT_SOURCE)
 
 
 @pytest.mark.parametrize("reason", ["", "two words"])
 def test_budget_unavailable_segment_refuses_a_bad_reason(reason: str) -> None:
     with pytest.raises(ValueError, match="one non-empty token"):
-        budget_unavailable_segment(reason)
+        budget_unavailable_segment(reason, _SEGMENT_SOURCE)
 
 
 def test_budget_module_names_why_it_cannot_draw(tmp_path: Path) -> None:

@@ -60,6 +60,7 @@ from eawf.kernel.config.layered import merge_config
 from eawf.kernel.runtime.budget_notice import BudgetNotice
 from eawf.kernel.state.models import State, Wave
 from eawf.runtime.budget.notices import (
+    LOCAL_OPERATOR,
     BudgetCrossing,
     NoticeBasis,
     NoticeUpsert,
@@ -186,6 +187,7 @@ def emit_budget_notice(
     ceiling: PromptBudgetCeiling | None,
     observed_at: datetime,
     contract_digest: str | None = None,
+    audience: tuple[str, ...] = (LOCAL_OPERATOR,),
 ) -> NoticeUpsert | None:
     """Upsert *scope_id*'s budget notice once *consumed* reached *ceiling*.
 
@@ -204,6 +206,8 @@ def emit_budget_notice(
         observed_at: When the consumption was read.
         contract_digest: The compiled contract a Run's ceiling came from,
             part of the notice's identity; ``None`` for a wave.
+        audience: The principals the notice is for; an epoch-1 wave's is
+            its root's one operator.
 
     Returns:
         The upsert result, or ``None`` when the ceiling was not reached or
@@ -225,6 +229,7 @@ def emit_budget_notice(
         budget_value=ceiling.tokens,
         observed_at=observed_at,
         contract_digest=contract_digest,
+        audience=audience,
     )
     try:
         return upsert_notice(notices_file, crossing)
@@ -283,7 +288,11 @@ def consume_against_ceiling(
 
 
 def emit_termination_notice(
-    notices_file: Path, receipt: BudgetNotice, *, contract_digest: str | None
+    notices_file: Path,
+    receipt: BudgetNotice,
+    *,
+    contract_digest: str | None,
+    audience: tuple[str, ...],
 ) -> NoticeUpsert | None:
     """Upsert the one notice a Run's budget termination reports.
 
@@ -299,6 +308,7 @@ def emit_termination_notice(
         receipt: The termination receipt the run ledger holds.
         contract_digest: The contract the Run was bound to, or ``None``
             for a Run metered without a dispatch binding.
+        audience: The principals the notice is for.
 
     Returns:
         The upsert result, or ``None`` when the ledger could not be written.
@@ -310,6 +320,7 @@ def emit_termination_notice(
         ceiling=PromptBudgetCeiling(tokens=receipt.cap_tokens, enforce="hard"),
         observed_at=receipt.noticed_at,
         contract_digest=contract_digest,
+        audience=audience,
     )
 
 

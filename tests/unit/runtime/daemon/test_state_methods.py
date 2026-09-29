@@ -444,8 +444,9 @@ def test_state_digest_publishes_wave_elapsed_update_once_per_minute(tmp_path: Pa
     wave["effort_bucket"] = "M"  # type: ignore[index]
     # The elapsed publisher anchors on claimed_at (work-start), not
     # opened_at (plan/creation), so a wave planned long before it is
-    # claimed never inflates its elapsed clock.
-    wave["claimed_at"] = (datetime.now(UTC) - timedelta(minutes=45, seconds=5)).isoformat()  # type: ignore[index]
+    # claimed never inflates its elapsed clock. 130 minutes is past the
+    # ~123-minute p90 budget every unestimated wave is held to.
+    wave["claimed_at"] = (datetime.now(UTC) - timedelta(minutes=130, seconds=5)).isoformat()  # type: ignore[index]
     ctx, _state_path, event_path, _wal_dir = _build_ctx(tmp_path=tmp_path, state_payload=payload)
     bus = ctx.bus
     assert isinstance(bus, EventBus)
@@ -462,7 +463,7 @@ def test_state_digest_publishes_wave_elapsed_update_once_per_minute(tmp_path: Pa
         assert payload["event_kind"] == "wave_elapsed_update"
         assert payload["status"] == "error"
         assert payload["extras"]["wave_id"] == "P24-I01-W09"
-        assert payload["extras"]["elapsed_minute"] >= 45
+        assert payload["extras"]["elapsed_minute"] >= 130
         assert payload["extras"]["elapsed_band"] == "err"
         assert len(sub.queue) == 1
 

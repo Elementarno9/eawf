@@ -206,12 +206,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # invocation) to skip the proposal and dispatch the plan inline.
         "auto_plan": False,
     },
-    # Operator planner + AskUserQuestion defaults. Each value is a closed
-    # enum (see :mod:`eawf.kernel.config.schema`); the planner / AUQ
-    # consumers read these in a later wave.
+    # AskUserQuestion auto-pick default; a closed enum (see
+    # :mod:`eawf.kernel.config.schema`).
     "preferences": {
-        "solution_bias": "balanced",
-        "scope_size": "M",
         "auto_choose": "off",
     },
     # Doc-clarity prose-lint stack knobs (see ``ProseConfig`` in
@@ -251,11 +248,6 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
             "eu_quantum": 0.25,
             "time_quantum_under_2h_minutes": 15,
             "time_quantum_over_2h_minutes": 30,
-        },
-        "buckets": {
-            "overrides": {},
-            "n_min": 5,
-            "high_confidence_n": 30,
         },
     },
     "audit": {

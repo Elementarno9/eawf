@@ -36,23 +36,23 @@ def test_dict_model_uses_id_then_name() -> None:
     assert seg.text.startswith("model:Opus 4.7 ")
 
 
-def test_empty_payload_renders_dashes_with_missing_status() -> None:
+def test_empty_payload_names_why_with_missing_status() -> None:
     seg = model_session_cwd.build({}, None)
-    assert seg.text == "model:- ses:- cwd:-"
+    assert seg.text == "model:n/a(no-host-payload)"
     assert seg.status == "missing"
 
 
 def test_partial_payload_status_ok() -> None:
     seg = model_session_cwd.build({"model": "haiku"}, None)
-    assert seg.text == "model:haiku ses:- cwd:-"
+    assert seg.text == "model:haiku ses:n/a(absent) cwd:n/a(absent)"
     # At least one populated field flips to ``ok``.
     assert seg.status == "ok"
 
 
-def test_dict_model_unknown_keys_falls_back_to_dash() -> None:
+def test_dict_model_unknown_keys_renders_absent() -> None:
     seg = model_session_cwd.build({"model": {"vendor": "anthropic"}, "cwd": "/z"}, None)
-    # cwd present, model dict has no known keys → model:- ses:- cwd:z
-    assert seg.text == "model:- ses:- cwd:z"
+    # cwd present, model dict has no known keys → each missing field names why
+    assert seg.text == "model:n/a(absent) ses:n/a(absent) cwd:z"
     assert seg.status == "ok"
 
 

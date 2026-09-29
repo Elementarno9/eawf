@@ -26,6 +26,7 @@ from eawf.surfaces.tui.console.frame import (
     window_rows,
 )
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
+from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.navigation import Ctx, busy
 from eawf.surfaces.tui.console.reads import reads
 from eawf.surfaces.tui.console.renderers.read_model import (
@@ -209,7 +210,9 @@ def native_backlog(view: View, spine: SpineView) -> list[str]:
                 body.append(Fixed(pad(f"   … {len(rows) - peek} more · Tab walks them", w)))
         body.append(thin(w))
     s.nav_rows = len(shown)
-    return build(view, [*top, *body], keybar(acting_pairs(view, _KEYS), w))
+    # a group cut to its window pages as well as steps, and its bar says so
+    pairs = [entry.pair() for entry in native_keys("backlog", windowed=s.windowed)]
+    return build(view, [*top, *body], keybar(acting_pairs(view, pairs), w))
 
 
 def render(view: View) -> list[str]:

@@ -1258,10 +1258,10 @@ def test_render_bar_plain_matches_wave_row_ascii() -> None:
     asyncio.run(body())
 
 
-def test_burn_marker_warns_at_80_and_errors_at_100() -> None:
-    """Time/token burn markers flip at the W15 80% and 100% bands."""
-    assert _burn_marker(79, 100) == "."
-    assert _burn_marker(80, 100) == "~"
+def test_burn_marker_flips_only_once_the_budget_is_reached() -> None:
+    """A burn marker reports an observed crossing, never a fraction short of it."""
+    assert _burn_marker(80, 100) == "."
+    assert _burn_marker(99, 100) == "."
     assert _burn_marker(100, 100) == "!"
 
 

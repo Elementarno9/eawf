@@ -16,11 +16,13 @@ from typing import Any
 import pytest
 
 from eawf.surfaces.tui.console.app import compose_frame
+from eawf.surfaces.tui.console.clock import QUIT_PROMPT, FakeClock, notify
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.drawers import focused, inspect_rows, raw_rows
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.tokens import Severity
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 from tests.tui.surfaces.tui.console.test_console_verbs import _Host
 
@@ -107,3 +109,37 @@ def test_con_100_with_no_record_under_the_cursor_nothing_is_inspected() -> None:
     view = bodies._view("run.detail", subject=RUN, document={"run": {}})
     render_route(view)
     assert focused(view) is None
+
+
+# ---------- K-02: the rack is the console's, so no drawer hides it ----------
+
+
+def _below(frame: list[str]) -> list[str]:
+    """Return the count of route rows the drawer's cut hid, as its edge line states it."""
+    return [row.split(" · ")[0] for row in frame if " more row" in row and " below" in row]
+
+
+@pytest.mark.parametrize("surface", ["inspect", "raw", "actions", "prefix"])
+def test_k_02_a_toast_stands_over_an_open_drawer_and_hides_no_row(surface: str) -> None:
+    view = _view(None if surface == "prefix" else surface)
+    if surface == "prefix":
+        view.session.prefix = "g"
+    quiet = compose_frame(view)
+    notify(view.session, FakeClock(), text=QUIT_PROMPT, title="", sev=Severity.INFO)
+    frame = compose_frame(view)
+    assert sum(QUIT_PROMPT in row for row in frame) == 1
+    # the rack is never counted as route rows the drawer's cut hid
+    assert _below(frame) == _below(quiet)
+
+
+# ---------- K-13: the selection line counts its results in words ----------
+
+
+@pytest.mark.parametrize(("marked", "said"), [(1, "1 result"), (2, "2 results")])
+def test_k_13_the_selection_line_pluralises_its_results(marked: int, said: str) -> None:
+    view = bodies._view("activity")
+    render_route(view)
+    view.session.marked = ["RUN-00000001", "RUN-00000002"][:marked]
+    view.session.overlay = "actions"
+    line = next(row for row in compose_frame(view) if row.startswith(" SELECTED"))
+    assert line.rstrip().endswith(f"one preview, {said}")

@@ -61,7 +61,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from eawf.kernel.config.defaults import CONFIG_SCHEMA_VERSION
 from eawf.kernel.config.profile import _atomic_write_yaml, _materialise_state_keys
-from eawf.kernel.config.schema import BucketEstimateOverride
 from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.enums import GoalStatus, ProjectStatus, ScopeKind
 from eawf.kernel.state.ids import RE_PROJECT_CODE
@@ -84,7 +83,6 @@ from eawf.surfaces.render.agents_md import render_agents_md
 from eawf.surfaces.render.claude_shim import render_claude_md
 from eawf.surfaces.render.manifest import Manifest
 from eawf.surfaces.render.manifest import save_atomic as save_manifest_atomic
-from eawf.workflow.estimation.buckets import BUCKET_EU
 
 logger = logging.getLogger(__name__)
 
@@ -467,17 +465,6 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
     return base
 
 
-def _bucket_override_defaults() -> dict[str, dict[str, Any]]:
-    """Return explicit bootstrap bucket overrides from the canonical EU table."""
-    return {
-        bucket.value: BucketEstimateOverride(expected_eu=expected_eu).model_dump(
-            mode="json",
-            exclude_none=True,
-        )
-        for bucket, expected_eu in BUCKET_EU.items()
-    }
-
-
 def _ensure_bootstrap_config_defaults(
     payload: dict[str, Any],
     *,
@@ -493,15 +480,6 @@ def _ensure_bootstrap_config_defaults(
             )
         ]
 
-    estimation = payload.get("estimation")
-    if not isinstance(estimation, dict):
-        return
-    buckets = estimation.get("buckets")
-    if not isinstance(buckets, dict):
-        return
-    if not buckets.get("overrides"):
-        buckets["overrides"] = _bucket_override_defaults()
-
 
 def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
     """Serialise ``answers`` into the canonical ``.ea/config.yaml`` shape.
@@ -514,7 +492,6 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
           "project":    {"code": "...", "title": "...", "goals": [...]},
           "runtime":    {"adapters": [...], "preference": [...]},
           "acceptance": {"tests": True, "lint": True, "typecheck": True},
-          "estimation": {"buckets": {"overrides": {...}}},
           "mcp":        {"enabled": [...]},
         }
 
@@ -560,11 +537,6 @@ def _build_config_yaml(answers: WizardAnswers) -> dict[str, Any]:
             "tests": answers.acceptance_tests,
             "lint": answers.acceptance_lint,
             "typecheck": answers.acceptance_typecheck,
-        },
-        "estimation": {
-            "buckets": {
-                "overrides": _bucket_override_defaults(),
-            },
         },
         "mcp": {"enabled": list(answers.mcp)},
     }

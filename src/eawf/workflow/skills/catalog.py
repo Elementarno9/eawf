@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
+from eawf.kernel.economics.prompt_budget import BudgetClassId
+
 if TYPE_CHECKING:
     from eawf.surfaces.render.skills.render import SkillSpec
 
@@ -155,7 +157,12 @@ def _report_model(schema_name: str, skill_id: str, outcomes: tuple[str, ...]) ->
 
 
 class SkillCatalogEntry(BaseModel):
-    """One presented skill: identity, audience, grammar, effects and output."""
+    """One presented skill: identity, audience, grammar, effects and output.
+
+    ``budget_class`` is the prompt-budget class the skill's bytes are charged
+    to. A skill loads on demand, so it can never declare the always-on zone-1
+    class and enlarge what every session carries.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -164,12 +171,15 @@ class SkillCatalogEntry(BaseModel):
     audience: InvocationAudience
     operator_only_actions: tuple[str, ...] = ()
     description: str = Field(min_length=1, max_length=160)
+    budget_class: BudgetClassId
     grammar: InvocationGrammar
     effects: EffectsBoundary
     output: OutputSchema
 
     @model_validator(mode="after")
     def _grammar_and_audience_agree(self) -> SkillCatalogEntry:
+        if self.budget_class is BudgetClassId.STEERING_ZONE1:
+            raise ValueError(f"skill {self.skill_id!r} cannot load into the always-on zone 1")
         if not self.grammar.usage.startswith(f"/{self.skill_id}"):
             raise ValueError(f"usage {self.grammar.usage!r} must start with /{self.skill_id}")
         unknown = set(self.operator_only_actions) - set(self.grammar.actions)
@@ -316,6 +326,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="accept",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description=(
             "Decide a Milestone acceptance bundle: prepare, accept, reject or request repair."
@@ -347,6 +358,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="attend",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("resolve",),
         description="Work the Attention queue: pending actions, open questions and open pauses.",
@@ -388,6 +400,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="backlog",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("drop",),
         description="Add, prioritize, defer, drop or propose promotion of draft Tasks.",
@@ -423,6 +436,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="campaign",
         skill_class="investigation",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description="Run a complete Campaign from definition through terminal synthesis.",
         grammar=_grammar(
@@ -470,6 +484,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="decide",
         skill_class="knowledge",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("ratify", "reject", "supersede", "obsolete"),
         description="Propose, ratify, reject, supersede or obsolete a Decision.",
@@ -507,6 +522,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="dispatch",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Coordinate one Delivery Batch: bring its ready Tasks to a candidate.",
         grammar=_grammar(
@@ -536,6 +552,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="integrate",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("apply", "retry"),
         description=("Prepare or execute one daemon-owned integration action on a Delivery Batch."),
@@ -573,6 +590,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="memory",
         skill_class="knowledge",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("promote", "forget"),
         description="Search, write, promote or forget memory entries.",
@@ -604,6 +622,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="milestone",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description="Define, activate, revise, repair or cancel a Milestone.",
         grammar=_grammar(
@@ -638,6 +657,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="mockup",
         skill_class="engineering",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Build and compare operator-visible design options.",
         grammar=_grammar(
@@ -657,6 +677,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="plan",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("approve", "apply"),
         description="Propose, validate, revise, approve and apply a PlanRevision.",
@@ -696,6 +717,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="refactor",
         skill_class="engineering",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Inspect or apply a bounded structural refactor.",
         grammar=_grammar(
@@ -714,6 +736,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="reflect",
         skill_class="knowledge",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description=(
             "Report where effort, time and money actually went, without mutating canonical state."
@@ -738,6 +761,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="release",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description="Prove, preflight, approve, publish, observe and recover a release.",
         grammar=_grammar(
@@ -782,6 +806,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="research",
         skill_class="investigation",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Answer one question with a swift one-page investigation; no Campaign.",
         grammar=_grammar(
@@ -803,6 +828,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="spike",
         skill_class="investigation",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Build, test, independently verify and present a local proof of concept.",
         grammar=_grammar(
@@ -828,6 +854,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="test",
         skill_class="engineering",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Design, add, repair or run a bounded test contract.",
         grammar=_grammar(
@@ -850,6 +877,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="track",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description="Create a Track, set its policy, or retire it.",
         grammar=_grammar(
@@ -877,6 +905,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="verify",
         skill_class="lifecycle",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Verify one Delivery Batch at one exact revision, as auditor or as reviewer.",
         grammar=_grammar(
@@ -903,6 +932,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="why",
         skill_class="knowledge",
+        budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Explain the provenance of an entity; read-only.",
         grammar=_grammar(

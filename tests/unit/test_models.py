@@ -571,16 +571,16 @@ def test_project_track_ids_links_track() -> None:
     assert project.track_ids == ["QR-X", "QR-Y"]
 
 
-def test_track_status_accepts_planned_active_lifecycle() -> None:
-    """Track.status mirrors the Phase lifecycle via the TrackStatus enum."""
-    planned = models.Track(
-        id="QR-P",
+def test_track_status_accepts_active_retired_lifecycle() -> None:
+    """Track.status carries the two-state Track lifecycle via TrackStatus."""
+    retired = models.Track(
+        id="QR-R",
         code="QR",
         slug="quant-research",
         title="Quant Research",
         kind="strategy",
         domains=["quant"],
-        status="planned",
+        status="retired",
     )
     active = models.Track(
         id="QR-A",
@@ -591,7 +591,7 @@ def test_track_status_accepts_planned_active_lifecycle() -> None:
         domains=["quant"],
         status="active",
     )
-    assert planned.status.value == "planned"
+    assert retired.status.value == "retired"
     assert active.status.value == "active"
 
 

@@ -1,14 +1,11 @@
-"""``token_saving`` statusline module — prompt-cache hit ratio fallback.
+"""``token_saving`` statusline module — prompt-cache hit ratio.
 
-When Claude includes ``cache_read_input_tokens`` / ``cache_creation_input_tokens``
-in the payload (Claude Code surfaces this on session metadata) we render
-``save:<pct>%``. Otherwise the segment falls back to ``save:-`` with
-``status="missing"`` per the W06 acceptance contract.
+Computes ``cache_read / (cache_read + cache_creation + input)`` over the last
+call's usage the host reports under ``context_window.current_usage`` and
+renders ``save:<pct>%``, the share of the context not re-billed at the full
+input rate. A payload without that usage renders ``save:n/a(<reason>)``.
 
-This module is intentionally minimal in v0.1 — Phase 5+ may add a deeper
-heuristic that cross-references actual rolling tokens spent vs an
-estimated baseline. v0.1 only honors what the Claude payload already
-carries.
+The module reads only the host payload.
 """
 
 from __future__ import annotations
@@ -17,70 +14,59 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eawf.surfaces.render.statusline import StatuslineSegment
+from eawf.kernel.projection.truth import Precision, TruthKind
+from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
+from eawf.runtime.runtimes.claude.statusline_modules._host import host_source
+from eawf.surfaces.render.statusline import (
+    StatuslineSegment,
+    sourced_segment,
+    unavailable_segment,
+)
 
 logger = logging.getLogger(__name__)
 
-
-def _extract_cache_ratio(payload: dict[str, Any]) -> float | None:
-    """Return the prompt-cache hit ratio as a float in ``[0.0, 1.0]`` or ``None``.
-
-    Probes (in order):
-
-    1. ``payload["token_usage"]`` mapping — primary location from Claude
-       Code's session info hook.
-    2. ``payload["usage"]`` mapping.
-    3. The flat payload itself (legacy shape).
-
-    Computes ``cache_read / (cache_read + cache_creation + input)`` so the
-    ratio reflects "tokens not re-billed" — matching how Anthropic
-    documents prompt caching savings.
-    """
-    candidates: list[dict[str, Any]] = []
-    raw = payload.get("token_usage")
-    if isinstance(raw, dict):
-        candidates.append(raw)
-    raw = payload.get("usage")
-    if isinstance(raw, dict):
-        candidates.append(raw)
-    candidates.append(payload)
-
-    for cand in candidates:
-        cache_read = cand.get("cache_read_input_tokens")
-        cache_create = cand.get("cache_creation_input_tokens")
-        plain_input = cand.get("input_tokens")
-        if not isinstance(cache_read, int) or cache_read < 0:
-            continue
-        cache_create_v = cache_create if isinstance(cache_create, int) and cache_create >= 0 else 0
-        plain_v = plain_input if isinstance(plain_input, int) and plain_input >= 0 else 0
-        total = cache_read + cache_create_v + plain_v
-        if total == 0:
-            continue
-        return cache_read / total
-    return None
+_MODULE = "token_saving"
+_LABEL = "save"
+_SOURCE = host_source(
+    "context_window.current_usage",
+    truth_kind=TruthKind.DERIVED,
+    precision=Precision.APPROXIMATE,
+)
 
 
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
-    """Return the ``save:<pct>%`` (or ``save:-``) segment.
+    """Return the ``save:<pct>%`` segment, or the marker naming why not.
 
     Args:
         claude_payload: Decoded Claude stdin JSON.
         state_path: Unused — kept for the uniform module signature.
 
     Returns:
-        A :class:`StatuslineSegment` with ``module="token_saving"``.
-        ``status="ok"`` when a ratio was computed, ``missing`` on fallback.
+        The ratio segment; ``save:n/a(no-current-usage)`` when the host reports
+        no usage, ``save:n/a(partial-usage)`` when it omits one of the three
+        input classes (a missing class is not a zero), and
+        ``save:n/a(no-input-tokens)`` when every class is zero, so there is no
+        ratio to take.
     """
     del state_path  # accepted for uniform signature
-    ratio = _extract_cache_ratio(claude_payload)
-    if ratio is None:
-        return StatuslineSegment(module="token_saving", text="save:-", status="missing")
-    pct = round(ratio * 100)
-    return StatuslineSegment(
-        module="token_saving",
-        text=f"save:{pct}%",
-        status="ok",
+    counters = parse_runtime_counters(claude_payload)
+    cache_read, cache_creation, plain = (
+        (
+            counters.cache_read_input_tokens,
+            counters.cache_creation_input_tokens,
+            counters.input_tokens,
+        )
+        if counters is not None
+        else (None, None, None)
     )
+    if cache_read is None and cache_creation is None and plain is None:
+        return unavailable_segment(_MODULE, _LABEL, "no-current-usage", _SOURCE)
+    if cache_read is None or cache_creation is None or plain is None:
+        return unavailable_segment(_MODULE, _LABEL, "partial-usage", _SOURCE)
+    total = cache_read + cache_creation + plain
+    if total == 0:
+        return unavailable_segment(_MODULE, _LABEL, "no-input-tokens", _SOURCE)
+    return sourced_segment(_MODULE, _LABEL, f"{round(cache_read / total * 100)}%", _SOURCE)
 
 
 __all__ = ["build"]

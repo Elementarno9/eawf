@@ -1,28 +1,26 @@
-"""Background over-budget wave detector for daemon-owned operator prompts.
+"""Background estimate-crossing producer for active waves.
 
-The detector is intentionally advisory: it appends a needs_user pause
-event when an active wave crosses a size-relative over-budget band,
-publishes that event to live subscribers, and never mutates
-``state.json``. Any real wave lifecycle action remains an operator choice
-routed through the normal daemon mutator surfaces.
+Each active wave is measured against its own estimate: an explicit
+estimate row, else its effort bucket's default, else a generous absolute
+window for a wave that has neither. Short of the notice policy's notify
+fraction nothing happens at all -- no event, no notice, no prompt -- and
+the elapsed fraction stays readable in the effort gauge.
 
-The advisory is SIZE-RELATIVE, not a flat wall-clock window: each active
-wave is banded against its own pessimistic time budget (the effort-bucket
-EU default, or an explicit estimate row), so an XS wave flags at a far
-smaller elapsed than an XL wave. The two band boundaries are the SAME
-constants the TUI effort gauge reads (``OK_BAND_CEILING`` / 0.8x and
-``OVER_BUDGET_CEILING`` / 1.0x), so the gauge band and this modal cannot
-drift apart. Each band fires ONCE per wave (escalating one-shot: the 0.8x
-warn fires once, then the 1.0x error fires once), and a single generous
-absolute backstop catches a genuinely abandoned wave that has no
-projectable budget to band against.
+At the notify fraction the estimate has been passed. That is recorded
+once per claim as an activity event and nothing more, because passing an
+estimate proves elapsed-time arithmetic, not that anything is wrong. Only
+once no progress has been observed for the policy's grace period does the
+crossing open a budget notice, and a notice never pauses, asks or opens
+anything: it is one non-blocking row in the notice ledger, upserted so a
+restart or a second sweep leaves the same one row.
 
-The elapsed clock anchors on ``Wave.claimed_at`` (work-start). A wave
-that has not been claimed (``claimed_at is None``) has no work-start fact
-to elapse from, so it never goes stale.
+Progress is any event the wave's own work wrote -- a claim, an agent's
+output -- rather than the daemon's own bookkeeping about it. The elapsed
+clock anchors on ``Wave.claimed_at``; a wave that was never claimed has no
+work-start fact to elapse from.
 
-True idle detection via a no-progress heartbeat is deferred to the I04
-AgentSession work and is intentionally NOT built here.
+On start the loop also imports the over-budget pauses the detector used
+to raise, so each lands once as a notice instead of lingering as a pause.
 """
 
 from __future__ import annotations
@@ -30,7 +28,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -38,76 +36,77 @@ from typing import Final
 
 import orjson
 
+from eawf.kernel.economics.notice_policy import EstimatedTimeNotice
 from eawf.kernel.state.enums import StoreKind, WaveStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
-from eawf.workflow.estimation.thresholds import (
-    OK_BAND_CEILING,
-    OVER_BUDGET_CEILING,
-    OverBudgetBand,
-    classify_band,
-    wave_budget_minutes,
+from eawf.runtime.budget.legacy_notices import import_legacy_notices
+from eawf.runtime.budget.notices import (
+    LOCAL_OPERATOR,
+    BudgetCrossing,
+    UpsertOutcome,
+    budget_window_digest,
+    notices_path,
+    upsert_notice,
 )
+from eawf.runtime.daemon.admission import load_economics
+from eawf.workflow.estimation.thresholds import wave_budget_minutes
 from eawf.workflow.evidence._io import load_state
-from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
-from eawf.workflow.skills.needs_user import PAUSE_EVENT_TYPE, build_pause_urn
 
 logger = logging.getLogger(__name__)
 
 
-#: Generous absolute backstop, in seconds, for a genuinely abandoned wave.
-#: A wave that has no projectable pessimistic budget (no estimate row and
-#: no effort bucket) cannot be banded size-relatively, so it flags once it
-#: has been claimed for this long. The window is deliberately wide -- it is
-#: a safety net for orphaned waves, not the primary signal -- so a normal
-#: budgeted wave reaches its 0.8x / 1.0x bands long before this.
-DEFAULT_ABSOLUTE_BACKSTOP_SECONDS: Final[int] = 8 * 60 * 60
 DEFAULT_SWEEP_SECONDS: Final[int] = 60
+
+#: The activity event recording that a wave passed its estimate.
+ESTIMATE_PASSED_EVENT_TYPE: Final = "runtime.budget_notice.estimate_passed"
+
+#: The activity event recording that the crossing opened a notice.
+NOTICE_OPENED_EVENT_TYPE: Final = "runtime.budget_notice.opened"
 
 _ACTIVE_WAVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
     {WaveStatus.CLAIMED, WaveStatus.IN_PROGRESS}
 )
+_CLOSED_WAVE_STATUSES: Final[frozenset[WaveStatus]] = frozenset(
+    {WaveStatus.CLOSED, WaveStatus.FAILED, WaveStatus.ABANDONED}
+)
 
-#: Over-budget bands that raise an advisory, escalating order. ``ok`` is
-#: intentionally absent -- an in-budget wave raises nothing. The
-#: ``backstop`` band is the abandoned-wave safety net for a wave with no
-#: projectable budget; it shares the ``err`` severity but is tracked as a
-#: distinct one-shot so it fires independently of the size-relative bands.
-_ADVISORY_BANDS: Final[tuple[str, ...]] = ("warn", "err", "backstop")
+#: Event types the daemon writes about a wave rather than the wave's own
+#: work doing anything; none of them is progress.
+_NOT_PROGRESS: Final[frozenset[str]] = frozenset(
+    {ESTIMATE_PASSED_EVENT_TYPE, NOTICE_OPENED_EVENT_TYPE, "wave_elapsed_update"}
+)
 
-_PAUSE_URN_KEY: Final[str] = "pause_urn"
-_QUESTION_KEY: Final[str] = "user_question"
-_SESSION_KEY: Final[str] = "session"
-_STALE_WAVE_ID_KEY: Final[str] = "wave_id"
-_ADVISORY_BAND_KEY: Final[str] = "advisory_band"
+_WAVE_ID_KEY: Final = "wave_id"
+_CLAIM_KEY: Final = "claim_ref"
 
 
 @dataclass(frozen=True)
-class StaleWave:
-    """One active wave that crossed a size-relative over-budget band.
+class EstimateCrossing:
+    """One active wave whose elapsed time passed its estimate.
 
-    ``advisory_band`` is the band this detection raises (``"warn"`` at the
-    0.8x soft-over boundary, ``"err"`` at the 1.0x hard-over boundary, or
-    ``"backstop"`` for an abandoned wave with no projectable budget).
-    ``budget_minutes`` is the wave's pessimistic time budget, or ``None``
-    when the detection is a pure absolute-backstop flag.
+    Attributes:
+        wave_id: The wave.
+        scope_id: The state URN the activity event is filed under.
+        claim_ref: What identifies this claim of the wave.
+        anchor: When the claim started.
+        elapsed_seconds: Wall seconds since the claim.
+        estimate_seconds: The estimate those seconds passed.
+        last_progress_at: When the wave's own work last wrote an event.
+        grace_met: Whether no progress was seen for the grace period.
     """
 
     wave_id: str
     scope_id: str
-    session: str
+    claim_ref: str
     anchor: datetime
     elapsed_seconds: float
-    advisory_band: str
-    budget_minutes: float | None
-
-    @property
-    def elapsed_minutes(self) -> float:
-        """Return elapsed wall-clock minutes since :attr:`anchor`."""
-        return self.elapsed_seconds / 60.0
+    estimate_seconds: float
+    last_progress_at: datetime
+    grace_met: bool
 
 
 def _now() -> datetime:
@@ -140,298 +139,245 @@ def _iter_event_payloads(events_path: Path) -> list[tuple[str | None, EventPaylo
     return out
 
 
-def _notified_bands(events_path: Path) -> dict[str, set[str]]:
-    """Return the over-budget bands already advised per wave id.
+def _wave_of(scope_id: str | None) -> str | None:
+    """Return the wave an event's scope names: the wave itself or a lane of it."""
+    if scope_id is None:
+        return None
+    return scope_id.split("::", 1)[0]
 
-    Scans prior ``stale_wave_detected`` events and groups the recorded
-    :data:`_ADVISORY_BAND_KEY` per wave, so each band fires once: a wave
-    that already raised ``warn`` skips a second ``warn`` but still raises
-    ``err`` when it later crosses the 1.0x boundary. Rows written before
-    the banded model (no ``advisory_band`` extra) are treated as having
-    advised every band -- the legacy flat alarm was a terminal one-shot,
-    so honouring it as fully-advised preserves the no-duplicate contract.
 
-    Args:
-        events_path: Event store path to scan.
-
-    Returns:
-        Mapping of wave id to the set of bands already advised.
-    """
-    out: dict[str, set[str]] = {}
-    for scope_id, payload in _iter_event_payloads(events_path):
-        if payload.event_kind != "stale_wave_detected":
+def _last_progress(events: Iterable[tuple[str | None, EventPayload]]) -> dict[str, datetime]:
+    """Return, per wave, when its own work last wrote an event."""
+    out: dict[str, datetime] = {}
+    for scope_id, payload in events:
+        wave_id = _wave_of(scope_id)
+        if wave_id is None or payload.event_type in _NOT_PROGRESS:
             continue
-        wave_id = payload.extras.get(_STALE_WAVE_ID_KEY)
-        if not isinstance(wave_id, str):
-            wave_id = scope_id if isinstance(scope_id, str) else None
-        if wave_id is None:
-            continue
-        band = payload.extras.get(_ADVISORY_BAND_KEY)
-        bands = out.setdefault(wave_id, set())
-        if isinstance(band, str):
-            bands.add(band)
-        else:
-            bands.update(_ADVISORY_BANDS)
+        stamp = payload.timestamp
+        if wave_id not in out or stamp > out[wave_id]:
+            out[wave_id] = stamp
     return out
 
 
-def _elapsed_seconds(anchor: datetime, reference: datetime) -> float:
-    """Return non-negative elapsed seconds from *anchor* to *reference*."""
-    return max((reference - anchor).total_seconds(), 0.0)
+def _recorded_crossings(events: Iterable[tuple[str | None, EventPayload]]) -> set[tuple[str, str]]:
+    """Return the ``(wave, claim)`` pairs whose crossing is already on file."""
+    out: set[tuple[str, str]] = set()
+    for _scope, payload in events:
+        if payload.event_type != ESTIMATE_PASSED_EVENT_TYPE:
+            continue
+        wave_id, claim = payload.extras.get(_WAVE_ID_KEY), payload.extras.get(_CLAIM_KEY)
+        if isinstance(wave_id, str) and isinstance(claim, str):
+            out.add((wave_id, claim))
+    return out
 
 
-def _pending_band(
-    *,
-    elapsed_seconds: float,
-    budget_minutes: float | None,
-    absolute_backstop_seconds: int,
-    already: set[str],
-) -> str | None:
-    """Return the highest not-yet-advised band for one wave, or ``None``.
-
-    Bands the wave already advised are skipped (escalating one-shot). When
-    a budget is projectable, the size-relative ``warn`` / ``err`` bands are
-    considered first; the absolute ``backstop`` is the safety net that
-    flags an abandoned wave with no projectable budget (or a budgeted wave
-    parked far past any band). The highest pending band wins so a wave that
-    has been idle past 1.0x raises ``err`` directly rather than re-raising
-    ``warn`` first.
-
-    Args:
-        elapsed_seconds: Non-negative elapsed work-clock seconds.
-        budget_minutes: Pessimistic budget in minutes, or ``None`` when no
-            budget can be projected.
-        absolute_backstop_seconds: Abandoned-wave absolute window.
-        already: Bands this wave has already advised.
-
-    Returns:
-        ``"err"`` / ``"warn"`` / ``"backstop"`` for the band to raise, or
-        ``None`` when no new band has been crossed.
-    """
-    over_backstop = elapsed_seconds >= absolute_backstop_seconds
-    if budget_minutes is not None and budget_minutes > 0:
-        fraction = (elapsed_seconds / 60.0) / budget_minutes
-        band = classify_band(fraction)
-        if band == "err" and "err" not in already:
-            return "err"
-        if band == "warn" and "warn" not in already:
-            return "warn"
-        if over_backstop and "backstop" not in already:
-            return "backstop"
-        return None
-    if over_backstop and "backstop" not in already:
-        return "backstop"
-    return None
-
-
-def plan_stale_waves(
+def plan_estimate_crossings(
     state: State,
     *,
-    events_path: Path,
-    absolute_backstop_seconds: int = DEFAULT_ABSOLUTE_BACKSTOP_SECONDS,
+    events: list[tuple[str | None, EventPayload]],
+    policy: EstimatedTimeNotice,
     now: datetime | None = None,
-    notified_bands: dict[str, set[str]] | None = None,
-) -> list[StaleWave]:
-    """Return active waves that crossed a new over-budget band.
-
-    Each active, claimed wave is banded against its own pessimistic time
-    budget: an advisory is raised the first time it crosses the 0.8x
-    (``warn``) and 1.0x (``err``) boundaries, plus a generous absolute
-    backstop for an abandoned wave with no projectable budget. A wave with
-    ``claimed_at is None`` has no work-start clock and is never stale.
+) -> list[EstimateCrossing]:
+    """Return every active, claimed wave that passed its estimate.
 
     Args:
         state: Validated state document.
-        events_path: Event store path used to read the bands already
-            advised per wave.
-        absolute_backstop_seconds: Abandoned-wave absolute window. Defaults
-            to :data:`DEFAULT_ABSOLUTE_BACKSTOP_SECONDS`.
+        events: The event store's payloads, read for progress.
+        policy: When an estimate is passed and when its grace is met.
         now: Reference time; defaults to wall-clock UTC.
-        notified_bands: Optional daemon-local cache of already advised
-            bands per wave, merged with the on-disk scan.
 
     Returns:
-        Stale-wave rows in state iteration order, one per newly crossed
-        band.
-
-    Raises:
-        ValueError: When ``absolute_backstop_seconds`` is non-positive.
+        One crossing per wave at or past the notify fraction, in state
+        iteration order; nothing for a wave short of it.
     """
-    if absolute_backstop_seconds <= 0:
-        raise ValueError(
-            f"absolute_backstop_seconds must be positive: {absolute_backstop_seconds!r}"
-        )
     reference = now or _now()
-    advised: dict[str, set[str]] = {k: set(v) for k, v in (notified_bands or {}).items()}
-    for wave_id, bands in _notified_bands(events_path).items():
-        advised.setdefault(wave_id, set()).update(bands)
-    stale: list[StaleWave] = []
+    progress = _last_progress(events)
+    crossings: list[EstimateCrossing] = []
     for wave in state.waves.values():
         if wave.status not in _ACTIVE_WAVE_STATUSES or wave.claimed_at is None:
             continue
         anchor = wave.claimed_at
-        elapsed_seconds = _elapsed_seconds(anchor, reference)
-        budget_minutes = wave_budget_minutes(state, wave.id)
-        band = _pending_band(
-            elapsed_seconds=elapsed_seconds,
-            budget_minutes=budget_minutes,
-            absolute_backstop_seconds=absolute_backstop_seconds,
-            already=advised.get(wave.id, set()),
-        )
-        if band is None:
+        elapsed = max((reference - anchor).total_seconds(), 0.0)
+        estimate = wave_budget_minutes(state, wave.id) * 60
+        if not policy.passed(elapsed_seconds=elapsed, estimate_seconds=estimate):
             continue
-        stale.append(
-            StaleWave(
+        last_progress = max(anchor, progress.get(wave.id, anchor))
+        crossings.append(
+            EstimateCrossing(
                 wave_id=wave.id,
                 scope_id=state.urn,
-                session=wave.claim_session_id or "",
+                claim_ref=wave.claim_session_id or anchor.isoformat(),
                 anchor=anchor,
-                elapsed_seconds=elapsed_seconds,
-                advisory_band=band,
-                budget_minutes=budget_minutes,
+                elapsed_seconds=elapsed,
+                estimate_seconds=estimate,
+                last_progress_at=last_progress,
+                grace_met=policy.grace_met(last_progress_at=last_progress, now=reference),
             )
         )
-    return stale
+    return crossings
 
 
-def _band_clause(plan: StaleWave) -> str:
-    """Return the human-readable over-budget clause for *plan*'s band."""
-    if plan.advisory_band == "backstop":
-        return "parked well past any time budget"
-    if plan.budget_minutes is None:
-        return "over its time budget"
-    if plan.advisory_band == "err":
-        pct = int(OVER_BUDGET_CEILING * 100)
-        return f"past {pct}% of its ~{plan.budget_minutes:g}-minute budget"
-    pct = int(OK_BAND_CEILING * 100)
-    return f"past {pct}% of its ~{plan.budget_minutes:g}-minute budget"
-
-
-def _stale_wave_question(plan: StaleWave) -> UserQuestion:
-    elapsed_minutes = round(plan.elapsed_minutes, 1)
-    return UserQuestion(
-        question=(
-            f"over-budget advisory: Wave {plan.wave_id} has been active for {elapsed_minutes:g} "
-            f"minutes ({_band_clause(plan)})."
-        ),
-        options=[
-            UserQuestionOption(
-                label="keep",
-                description="Keep it active; I will handle follow-up manually.",
-            ),
-            UserQuestionOption(
-                label="release",
-                description="Record intent to release; lifecycle mutation stays operator-run.",
-            ),
-            UserQuestionOption(
-                label="defer",
-                description="Leave the question for later without changing wave state.",
-            ),
-        ],
-    )
-
-
-def build_stale_wave_envelope(
-    plan: StaleWave,
-    *,
-    now: datetime | None = None,
+def _activity_envelope(
+    crossing: EstimateCrossing, *, event_type: str, message: str, now: datetime
 ) -> Envelope:
-    """Build the needs_user pause envelope for one over-budget wave.
-
-    The envelope scope is the state URN so the existing TUI needs_user
-    overlay discovers it with its active-scope filter. The wave id and the
-    raised band stay in scalar extras for consumers that need to route the
-    operator's choice or dedup the band.
-    """
-    timestamp = now or _now()
-    pause_urn = build_pause_urn(plan.scope_id)
-    question = _stale_wave_question(plan)
-    elapsed_minutes = round(plan.elapsed_minutes, 4)
-    args_key = f"{plan.wave_id}:{plan.advisory_band}:{int(plan.anchor.timestamp())}"
-    extras: dict[str, str | int | float | bool] = {
-        _PAUSE_URN_KEY: pause_urn,
-        _SESSION_KEY: plan.session,
-        _QUESTION_KEY: question.model_dump_json(),
-        _STALE_WAVE_ID_KEY: plan.wave_id,
-        _ADVISORY_BAND_KEY: plan.advisory_band,
-        "elapsed_minutes": elapsed_minutes,
-    }
-    if plan.budget_minutes is not None:
-        extras["budget_minutes"] = round(plan.budget_minutes, 4)
-        extras["elapsed_ratio"] = round(plan.elapsed_minutes / plan.budget_minutes, 4)
+    """Build one activity event about *crossing*; it asks and pauses nothing."""
     payload = EventPayload(
-        timestamp=timestamp,
-        event_type=PAUSE_EVENT_TYPE,
-        event_kind="stale_wave_detected",
+        timestamp=now,
+        event_type=event_type,
         actor="daemon",
         command="stale_wave.sweep",
-        args_hash=uuid.uuid5(uuid.NAMESPACE_URL, args_key).hex[:16],
-        status="needs_user",
-        message=question.question,
-        extras=extras,
+        args_hash=uuid.uuid5(
+            uuid.NAMESPACE_URL, f"{event_type}:{crossing.wave_id}:{crossing.claim_ref}"
+        ).hex[:16],
+        status="ok",
+        message=message,
+        extras={
+            _WAVE_ID_KEY: crossing.wave_id,
+            _CLAIM_KEY: crossing.claim_ref,
+            "elapsed_seconds": round(crossing.elapsed_seconds, 1),
+            "estimate_seconds": round(crossing.estimate_seconds, 1),
+        },
     ).model_dump(mode="json")
     return Envelope(
         id=f"EV-{uuid.uuid4().hex[:12]}",
         kind=StoreKind.EVENT,
-        scope_id=plan.scope_id,
-        created_at=timestamp,
+        scope_id=crossing.scope_id,
+        created_at=now,
         updated_at=None,
-        summary=(
-            f"stale_wave_detected wave={plan.wave_id} band={plan.advisory_band} "
-            f"elapsed_minutes={elapsed_minutes}"
-        ),
+        summary=f"{event_type} wave={crossing.wave_id}",
         payload=payload,
         blob_refs=[],
         artifact_ids=[],
     )
 
 
+def _passed_message(crossing: EstimateCrossing) -> str:
+    """Say what the crossing establishes and nothing more."""
+    minutes = round(crossing.estimate_seconds / 60, 1)
+    return f"Wave {crossing.wave_id} exceeded its {minutes:g}-minute estimate; execution continues"
+
+
+def _opened_message(crossing: EstimateCrossing, grace_seconds: int) -> str:
+    """Say what the crossing and the missing progress establish together."""
+    minutes = round(crossing.estimate_seconds / 60, 1)
+    return (
+        f"Wave {crossing.wave_id} exceeded its {minutes:g}-minute estimate and no progress was "
+        f"observed for {grace_seconds // 60} minutes; execution continues"
+    )
+
+
 async def sweep_once(
     *,
     state_path: Path,
+    policy: EstimatedTimeNotice,
     event_path: Path | None = None,
-    absolute_backstop_seconds: int = DEFAULT_ABSOLUTE_BACKSTOP_SECONDS,
     publish: Callable[[Envelope], None] | None = None,
     now: datetime | None = None,
-    notified_bands: dict[str, set[str]] | None = None,
-) -> list[StaleWave]:
-    """Run one over-budget sweep and append prompts for new band crossings."""
+) -> list[EstimateCrossing]:
+    """Run one sweep: record new crossings, and open a notice past the grace.
+
+    Args:
+        state_path: The ``state.json`` the waves are read from.
+        policy: When an estimate is passed and when its grace is met.
+        event_path: The event store; defaults to the one beside the state.
+        publish: Called with every event appended, after the append.
+        now: Reference time; defaults to wall-clock UTC.
+
+    Returns:
+        Every crossing the sweep saw, recorded before or now.
+    """
     if not state_path.exists():
         logger.debug(f"sweep_once skip state-missing path={state_path!s}")
         return []
+    reference = now or _now()
     events_path = event_path or store_path(state_path, StoreKind.EVENT)
-    state = load_state(state_path)
-    plans = plan_stale_waves(
-        state,
-        events_path=events_path,
-        absolute_backstop_seconds=absolute_backstop_seconds,
-        now=now,
-        notified_bands=notified_bands,
+    events = _iter_event_payloads(events_path)
+    crossings = plan_estimate_crossings(
+        load_state(state_path),
+        events=events,
+        policy=policy,
+        now=reference,
     )
-    emitted: list[StaleWave] = []
-    for plan in plans:
-        envelope = build_stale_wave_envelope(plan, now=now)
-        append_envelope(events_path, envelope)
-        if notified_bands is not None:
-            notified_bands.setdefault(plan.wave_id, set()).add(plan.advisory_band)
-        if publish is not None:
-            publish(envelope)
-        emitted.append(plan)
-    if emitted:
-        logger.info(f"sweep_once stale_waves={len(emitted)}")
-    return emitted
+    recorded = _recorded_crossings(events)
+    for crossing in crossings:
+        appended: list[Envelope] = []
+        if (crossing.wave_id, crossing.claim_ref) not in recorded:
+            appended.append(
+                _activity_envelope(
+                    crossing,
+                    event_type=ESTIMATE_PASSED_EVENT_TYPE,
+                    message=_passed_message(crossing),
+                    now=reference,
+                )
+            )
+        if crossing.grace_met:
+            upsert = upsert_notice(
+                notices_path(state_path),
+                BudgetCrossing(
+                    scope_id=crossing.wave_id,
+                    axis="wall_seconds",
+                    basis="estimate",
+                    band="limit_reached",
+                    observed_value=int(crossing.elapsed_seconds),
+                    budget_value=int(crossing.estimate_seconds),
+                    observed_at=reference,
+                    contract_digest=budget_window_digest(crossing.claim_ref),
+                    audience=(LOCAL_OPERATOR,),
+                ),
+            )
+            if upsert.outcome is UpsertOutcome.CREATED:
+                appended.append(
+                    _activity_envelope(
+                        crossing,
+                        event_type=NOTICE_OPENED_EVENT_TYPE,
+                        message=_opened_message(crossing, policy.require_no_progress_for),
+                        now=reference,
+                    )
+                )
+        for envelope in appended:
+            append_envelope(events_path, envelope)
+            if publish is not None:
+                publish(envelope)
+    if crossings:
+        logger.info(f"sweep_once estimate_crossings={len(crossings)}")
+    return crossings
+
+
+def import_legacy_pauses(state_path: Path, *, event_path: Path | None = None) -> int:
+    """Import the legacy over-budget pauses beside *state_path* as notices.
+
+    Args:
+        state_path: The ``state.json`` whose waves say which subjects closed.
+        event_path: The event store; defaults to the one beside the state.
+
+    Returns:
+        How many notices the import added.
+    """
+    if not state_path.exists():
+        return 0
+    state = load_state(state_path)
+    closed = frozenset(
+        wave.id for wave in state.waves.values() if wave.status in _CLOSED_WAVE_STATUSES
+    )
+    events = _iter_event_payloads(event_path or store_path(state_path, StoreKind.EVENT))
+    return import_legacy_notices(
+        notices_path(state_path), (payload for _scope, payload in events), closed_waves=closed
+    )
 
 
 async def run_sweep_loop(
     *,
     state_path: Path,
     event_path: Path | None = None,
-    absolute_backstop_seconds: int = DEFAULT_ABSOLUTE_BACKSTOP_SECONDS,
     interval_seconds: int = DEFAULT_SWEEP_SECONDS,
     publish: Callable[[Envelope], None] | None = None,
     stop_event: asyncio.Event | None = None,
 ) -> None:
-    """Run over-budget sweeps until *stop_event* is set.
+    """Import the legacy pauses once, then sweep until *stop_event* is set.
+
+    The notice policy is read from the repository's ``economics`` table on
+    every sweep, so an edited policy applies without a restart and an
+    invalid one is reported each sweep rather than silently defaulted.
 
     Raises:
         ValueError: When ``interval_seconds`` is non-positive.
@@ -439,18 +385,21 @@ async def run_sweep_loop(
     if interval_seconds <= 0:
         raise ValueError(f"interval_seconds must be positive: {interval_seconds!r}")
     stop = stop_event or asyncio.Event()
-    notified_bands: dict[str, set[str]] = {}
+    try:
+        import_legacy_pauses(state_path, event_path=event_path)
+    except Exception:
+        logger.exception("run_sweep_loop legacy advisory import failed")
     while not stop.is_set():
         try:
+            economics = load_economics(state_path.parent.parent)
             await sweep_once(
                 state_path=state_path,
+                policy=economics.notice_policy.estimated_time,
                 event_path=event_path,
-                absolute_backstop_seconds=absolute_backstop_seconds,
                 publish=publish,
-                notified_bands=notified_bands,
             )
         except Exception:
-            logger.exception("run_sweep_loop over-budget sweep failed; will retry next tick")
+            logger.exception("run_sweep_loop estimate sweep failed; will retry next tick")
         try:
             await asyncio.wait_for(stop.wait(), timeout=interval_seconds)
         except TimeoutError:
@@ -460,12 +409,12 @@ async def run_sweep_loop(
 
 
 __all__ = [
-    "DEFAULT_ABSOLUTE_BACKSTOP_SECONDS",
     "DEFAULT_SWEEP_SECONDS",
-    "OverBudgetBand",
-    "StaleWave",
-    "build_stale_wave_envelope",
-    "plan_stale_waves",
+    "ESTIMATE_PASSED_EVENT_TYPE",
+    "NOTICE_OPENED_EVENT_TYPE",
+    "EstimateCrossing",
+    "import_legacy_pauses",
+    "plan_estimate_crossings",
     "run_sweep_loop",
     "sweep_once",
 ]

@@ -304,9 +304,8 @@ class Track(_StrictModel):
     :attr:`status` carries the Track lifecycle as a closed
     :class:`~eawf.kernel.state.enums.TrackStatus`, mirroring how
     :attr:`Phase.status` carries the phase lifecycle: a Track opens
-    :attr:`~eawf.kernel.state.enums.TrackStatus.PLANNED`, advances to
-    :attr:`~eawf.kernel.state.enums.TrackStatus.ACTIVE` when focused, and
-    settles on a terminal value. The lifecycle is dormant: no lifecycle
+    :attr:`~eawf.kernel.state.enums.TrackStatus.ACTIVE` and settles on
+    :attr:`~eawf.kernel.state.enums.TrackStatus.RETIRED`. The lifecycle is dormant: no lifecycle
     step (phase / iter / wave open or close) requires a Track, so the
     ``track.add`` / ``track.switch`` mutator pair sets :attr:`status` and the
     :attr:`CurrentPointers.track_id` cursor without gating any other

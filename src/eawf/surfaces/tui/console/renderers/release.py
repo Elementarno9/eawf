@@ -147,6 +147,9 @@ def native_frame(view: View, model: ReleaseReadinessView) -> list[str]:
     session.sel_id = members[session.sel].key if members else None
     on_readiness = (session.rel_reg or MEMBERSHIP) == READINESS
     session.rel_sel = max(0, min(len(model.signals) - 1, session.rel_sel))
+    if on_readiness:
+        # the arrows walk the region in focus, so the bar offers them for its signals
+        session.nav_rows = len(model.signals)
     leaf = session.subj_id or (release.key if release is not None else "Release")
     if release is not None:
         state = status.value.upper() if status is not None else UNKNOWN_WORD

@@ -38,7 +38,7 @@ from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.session import reset_registry
 from eawf.runtime.daemon.session_ttl import DEFAULT_TTL_SECONDS
-from eawf.runtime.daemon.stale_wave import DEFAULT_ABSOLUTE_BACKSTOP_SECONDS
+from eawf.runtime.daemon.stale_wave import ESTIMATE_PASSED_EVENT_TYPE
 from eawf.runtime.daemon.wal import WalRecord, mark_applied, write_pending
 
 pytestmark = pytest.mark.unit
@@ -156,11 +156,10 @@ def _build_state_with_expired_session(*, wave_id: str) -> dict[str, object]:
 def _build_state_with_stale_wave(*, wave_id: str) -> dict[str, object]:
     """Build a minimal state payload with one over-budget active wave.
 
-    The wave is an XS bucket (a ~7.5-minute pessimistic budget) claimed
-    well past the absolute backstop, so it reliably crosses the 1.0x
-    over-budget band regardless of the exact band boundary.
+    The wave has no estimate row, so its estimate is the ~123-minute p90 of
+    the effort constant; claimed a day ago, it has long passed it.
     """
-    claimed = _now() - timedelta(seconds=DEFAULT_ABSOLUTE_BACKSTOP_SECONDS + 600)
+    claimed = _now() - timedelta(days=1)
     wave = Wave.model_validate(
         {
             "id": wave_id,
@@ -451,8 +450,8 @@ def test_schedule_stale_wave_sweep_returns_none_without_state(tmp_path: Path) ->
     _run(body)
 
 
-def test_schedule_stale_wave_sweep_publishes_needs_user_pause(tmp_path: Path) -> None:
-    """Scheduled stale-wave sweep appends + publishes a needs_user prompt."""
+def test_schedule_stale_wave_sweep_publishes_the_estimate_crossing(tmp_path: Path) -> None:
+    """The scheduled sweep records the crossing as activity, never as a pause."""
     state_path = tmp_path / "state.json"
     payload = _build_state_with_stale_wave(wave_id="P24-I02-W20")
     state_path.write_bytes(orjson.dumps(payload))
@@ -475,10 +474,10 @@ def test_schedule_stale_wave_sweep_publishes_needs_user_pause(tmp_path: Path) ->
         ctx.shutdown_event.set()
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.wait_for(task, timeout=2.0)
-        assert len(published) == 1
-        assert published[0].payload["event_type"] == "needs_user_pause"
-        assert published[0].payload["event_kind"] == "stale_wave_detected"
-        assert ctx.last_event_id == published[0].id
+        assert published
+        assert published[0].payload["event_type"] == ESTIMATE_PASSED_EVENT_TYPE
+        assert published[0].payload["status"] == "ok"
+        assert ctx.last_event_id == published[-1].id
 
     _run(body)
 

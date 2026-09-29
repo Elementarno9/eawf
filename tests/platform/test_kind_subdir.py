@@ -1,7 +1,7 @@
 """Canonical kind->subdir router for promotable draft artifacts.
 
 The draft builder routes a slash-bearing slug to its artifact home through
-the explicit ``_KIND_SUBDIR`` map (e.g. ``audit`` -> ``audits/``) rather than
+the explicit ``ARTIFACT_KIND_SUBDIR`` map (e.g. ``audit`` -> ``audits/``) rather than
 treating the singular kind token as the subdir. These tests pin both the
 per-kind placement and the totality of the map over the promotable-kind set.
 """
@@ -12,40 +12,41 @@ from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.cli.commands.draft import (
-    _KIND_SUBDIR,
-    _PROMOTABLE_KINDS,
-    _artifact_path,
-)
+from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
+from eawf.surfaces.cli.commands.draft import _artifact_path
 
 
-@pytest.mark.parametrize("kind", sorted(_PROMOTABLE_KINDS))
+@pytest.mark.parametrize("kind", sorted(ARTIFACT_KIND_SUBDIR))
 def test_builder_places_kind_in_canonical_subdir(kind: str) -> None:
     """A nested (slash-bearing) slug lands under the kind's canonical subdir."""
     root = Path("/repo")
     slug = "long-term/2026-06-10-topic"
     dest = _artifact_path(root, kind, slug)
-    expected = root / ".ea" / "artifacts" / _KIND_SUBDIR[kind] / "long-term" / "2026-06-10-topic.md"
+    expected = (
+        root
+        / ".ea"
+        / "artifacts"
+        / ARTIFACT_KIND_SUBDIR[kind]
+        / "long-term"
+        / "2026-06-10-topic.md"
+    )
     assert dest == expected
     # The canonical subdir is the first path segment under ``artifacts/``.
     rel = dest.relative_to(root / ".ea" / "artifacts")
-    assert rel.parts[0] == _KIND_SUBDIR[kind]
-
-
-def test_kind_subdir_covers_every_promotable_kind() -> None:
-    """Every promotable kind has a subdir row (no kind left unmapped)."""
-    assert set(_KIND_SUBDIR) == set(_PROMOTABLE_KINDS)
+    assert rel.parts[0] == ARTIFACT_KIND_SUBDIR[kind]
 
 
 def test_kind_subdir_uses_canonical_artifact_tree_names() -> None:
     """Subdir names match the committed ``.ea/artifacts/`` tree layout."""
-    assert _KIND_SUBDIR == {
+    assert ARTIFACT_KIND_SUBDIR == {
         "research": "research",
         "audit": "audits",
         "plan": "plans",
         "hypothesis": "hypotheses",
         "decision": "decisions",
         "incident": "incidents",
+        "evidence": "evidence",
+        "review": "reviews",
     }
 
 

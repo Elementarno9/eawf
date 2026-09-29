@@ -4,9 +4,9 @@ Drives the Typer app via :class:`CliRunner` with synthetic Claude JSON on
 stdin and asserts:
 
 1. ``eawf cc statusline`` emits a single line on stdout with exit ``0``.
-2. The line contains expected segment markers (``state:``, ``git:``,
-   ``model:``, ``ses:``, ``cwd:``, ``ctx:``, ``mcp:``, ``hooks:``,
-   ``mem:``, ``save:``).
+2. The line contains expected segment markers (``scope:``, ``git:``,
+   ``model:``, ``ses:``, ``cwd:``, ``ctx:``, ``cost:``, ``mcp:``, ``hooks:``,
+   ``mem:``, ``save:``), each unavailable one naming why.
 3. ``--theme ascii-fallback`` honors the env var precedence (flag wins).
 4. ``eawf cc statusline prewarm`` writes a cache file at the expected
    path; subsequent ``statusline`` invocations with the same session id
@@ -54,7 +54,15 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
         "session_id": "ses-int-001",
         "model": "claude-opus-4-7",
         "cwd": str(tmp_path),
-        "token_usage": {"input_tokens": 1000, "output_tokens": 200},
+        "context_window": {
+            "context_window_size": 200_000,
+            "current_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 200,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+            },
+        },
     }
     # Pass ``--workspace tmp_path`` so the state resolver scopes to the empty
     # tmp dir (which has no ``.ea/state.json`` and no ``.claude/hooks/``).
@@ -79,16 +87,17 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
     # Each module's prefix is present (ascii-fallback drops colour, keeps
     # the segment text verbatim).
     for marker in (
-        "state:",
-        "git:-",
+        "scope:n/a(epoch1-undeclared)",
+        "git:n/a(not-a-repository)",
         "model:claude-opus-4-7",
         "ses:ses-int-",
         "cwd:",
-        "ctx:1000/200",
-        "mcp:?",
-        "hooks:- plugins:-",
-        "mem:-",
-        "save:",
+        "ctx:1.0k/200.0k",
+        "cost:n/a(no-cost-reported)",
+        "mcp:n/a(no-state)",
+        "hooks:0 plugins:n/a(no-state)",
+        "mem:n/a(no-state)",
+        "save:0%",
     ):
         assert marker in line, f"missing marker {marker!r} in line: {line!r}"
 

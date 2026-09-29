@@ -125,6 +125,9 @@ SchemaUrn = Annotated[str, _ref("schema")]
 InstallationUrn = Annotated[str, _ref("installation")]
 ExecutableComponentUrn = Annotated[str, _ref("component")]
 ArtifactUrn = Annotated[str, _ref("artifact")]
+#: The request a delegation answered: a host's own spawn call when the
+#: harness, not Eawf, started the child.
+DelegationRequestUrn = Annotated[str, _ref("delegation")]
 WorkflowUrn = Annotated[str, _ref("workflow")]
 EnvironmentClassUrn = Annotated[str, _ref("environment")]
 SecretBrokerUrn = Annotated[str, _ref("secrets")]

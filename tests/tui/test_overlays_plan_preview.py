@@ -13,6 +13,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from eawf.platform.lint.eawf022_propose_coverage import CoverageGapViolation
 from eawf.surfaces.tui.app import EaApp
 from eawf.surfaces.tui.screens.overlays.plan_preview import (
@@ -230,21 +232,21 @@ def _state_with_buckets() -> object:
     )
 
 
-def test_build_plan_tree_sums_iter_eu_from_buckets() -> None:
+def test_build_plan_tree_sums_iter_eu_from_the_effort_constant() -> None:
     state = _state_with_buckets()
     tree = build_plan_tree(state, "P01")  # type: ignore[arg-type]
     assert len(tree.iters) == 1
-    # Two M-bucket waves at 1.0 EU each roll up to 2.0 EU on the iter row.
-    assert tree.iters[0].eu == 2.0
-    assert tree.total_eu == 2.0
+    # Two waves at the 0.8 EU constant roll up to 1.6 EU; their M labels count for nothing.
+    assert tree.iters[0].eu == pytest.approx(1.6)
+    assert tree.total_eu == pytest.approx(1.6)
 
 
-def test_build_plan_tree_unbucketed_waves_roll_up_to_zero() -> None:
-    # The bare fixture wave carries no effort_bucket, so the iter EU is 0.
+def test_build_plan_tree_unlabelled_wave_costs_the_effort_constant() -> None:
+    # The bare fixture wave carries no effort_bucket and still costs 0.8 EU.
     state = _load_state()
     phase_id = next(iter(state.phases))  # type: ignore[attr-defined]
     tree = build_plan_tree(state, phase_id)  # type: ignore[arg-type]
-    assert tree.total_eu == 0.0
+    assert tree.total_eu == pytest.approx(0.8)
 
 
 def test_build_plan_tree_maps_dropped_detail_findings() -> None:

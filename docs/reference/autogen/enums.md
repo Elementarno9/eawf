@@ -57,7 +57,7 @@ Auto-generated from `eawf.kernel.state.enums`. Every `StrEnum` defined in that m
 | `SpecStatus` | `draft`, `ready`, `implemented`, `archived` |
 | `StoreKind` | `research`, `audit`, `incident`, `estimate`, `actual`, `memory`, `decision`, `event`, `evidence`, `flow`, `researcher_report`, `planner_report`, `executor_report`, `auditor_report`, `reviewer_report`, `polisher_report`, `operator_report`, `domain_specialist_report`, `subscription_lag`, `config_updated`, `registry_updated`, `spec_updated`, `research_campaign`, `research_round`, `operator_input`, `jury_ballot`, `gate_receipt`, `gate_rereceipt`, `legacy_audit_disposition`, `commit_repin`, `release`, `release_record`, `release_checkpoint_receipt`, `release_train_advance`, `conformance_stage`, `conduct_deviation` |
 | `TrackKind` | `strategy`, `model`, `target`, `feature`, `service` |
-| `TrackStatus` | `active`, `planned`, `deferred`, `retired` |
+| `TrackStatus` | `active`, `retired` |
 | `Urgency` | `low`, `normal`, `high`, `urgent` |
 | `UserDecisionKind` | `pause`, `fleet_fork` |
 | `WaveIntegrationKind` | `land`, `adopt`, `repair` |

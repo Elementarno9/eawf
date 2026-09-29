@@ -17,16 +17,16 @@ def _seed_state(tmp_path: Path, payload: dict[str, object]) -> Path:
     return state_path
 
 
-def test_no_state_path_returns_question() -> None:
+def test_no_state_path_names_why() -> None:
     seg = mcp_health.build({}, None)
-    assert seg.text == "mcp:?"
+    assert seg.text == "mcp:n/a(no-state)"
     assert seg.status == "missing"
 
 
-def test_state_without_mcp_servers_returns_question(tmp_path: Path) -> None:
+def test_state_without_mcp_servers_names_why(tmp_path: Path) -> None:
     state_path = _seed_state(tmp_path, {})
     seg = mcp_health.build({}, state_path)
-    assert seg.text == "mcp:?"
+    assert seg.text == "mcp:n/a(no-mcp-servers)"
     assert seg.status == "missing"
 
 
@@ -75,10 +75,10 @@ def test_all_down_renders_degraded(tmp_path: Path) -> None:
     assert seg.status == "degraded"
 
 
-def test_malformed_state_returns_question(tmp_path: Path) -> None:
+def test_malformed_state_names_why(tmp_path: Path) -> None:
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir()
     state_path.write_bytes(b"{invalid")
     seg = mcp_health.build({}, state_path)
-    assert seg.text == "mcp:?"
+    assert seg.text == "mcp:n/a(state-unreadable)"
     assert seg.status == "missing"

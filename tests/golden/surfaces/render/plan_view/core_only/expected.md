@@ -4,7 +4,7 @@
 
 ## Summary
 - waves: 2 (1 in_progress, 1 closed)
-- effort: sum_wave_eu=0, critical_path_eu=0, actual_elapsed_eu=0
+- effort: sum_wave_eu=1.6, critical_path_eu=1.6, actual_elapsed_eu=0
 - checks: 1/1 passed
 - risks: 0 open
 - blocked: none
@@ -26,8 +26,8 @@ flowchart LR
 ## Waves
 | Wave | Status | Bucket | Role | Estimate EU | Success criteria | Files |
 | --- | --- | --- | --- | ---: | --- | --- |
-| [x] **P05-I01-W00** Bootstrap | closed | - | - | 0 | - | src/core/__init__.py |
-| [ ] **P05-I01-W01** Implement core | in_progress; deps: W00 | - | - | 0 | - | src/core/run.py |
+| [x] **P05-I01-W00** Bootstrap | closed | - | - | 0.8 | - | src/core/__init__.py |
+| [ ] **P05-I01-W01** Implement core | in_progress; deps: W00 | - | - | 0.8 | - | src/core/run.py |
 
 ## Checks
 - [x] **ok** (P05-I01-W00 outcome) — passed

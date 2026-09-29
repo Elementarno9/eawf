@@ -197,6 +197,8 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     SideEffectRow("eawf.surfaces.cli.commands.wave_ci"),
     SideEffectRow("eawf.surfaces.cli.commands.pr_review"),
     SideEffectRow("eawf.surfaces.cli.commands.wave_policy"),
+    # The plain-text report of one Run, attached onto the mounted run group.
+    SideEffectRow("eawf.surfaces.cli.commands.run_report"),
     # File-impact graph.
     CommandRow(
         "impact",
@@ -222,20 +224,19 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
         "why_cmd",
         "Explain why an EAWF entity has its current trust tier.",
     ),
-    # Daemon + spec + bench + telemetry + snapshot + migrate + backup +
-    # calibrate.
+    # Daemon + spec + bench + telemetry + snapshot + migrate + backup.
     GroupRow("daemon", "eawf.surfaces.cli.commands.daemon", "daemon_app"),
     GroupRow("spec", "eawf.surfaces.cli.commands.spec", "spec_app"),
     GroupRow("jury", "eawf.surfaces.cli.commands.jury", "jury_app"),
     GroupRow("bench", "eawf.surfaces.cli.commands.bench", "bench_app"),
     GroupRow("telemetry", "eawf.surfaces.cli.commands.telemetry", "telemetry_app"),
+    GroupRow("reflect", "eawf.surfaces.cli.commands.reflect", "reflect_app"),
     GroupRow("snapshot", "eawf.surfaces.cli.commands.snapshot", "snapshot_app"),
     GroupRow("vfl", "eawf.surfaces.cli.commands.vfl", "vfl_app"),
     GroupRow("migrate", "eawf.surfaces.cli.commands.migrate", "migrate_app"),
     # Generalized entity-title backfill (all five lifecycle / decision kinds).
     GroupRow("backfill", "eawf.surfaces.cli.commands.backfill", "backfill_app"),
     GroupRow("backup", "eawf.surfaces.cli.commands.backup", "backup_app"),
-    GroupRow("calibrate", "eawf.surfaces.cli.commands.calibrate", "calibrate_app"),
     # Completion + prose help topics.
     GroupRow("completion", "eawf.surfaces.cli.commands.completion", "completion_app"),
     GroupRow("help", "eawf.surfaces.cli.commands.help", "help_app"),

@@ -20,14 +20,15 @@ from eawf.kernel.runtime.control import ControlDisposition
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.drawers import action_rows
-from eawf.surfaces.tui.console.mutation import CARD, RECONCILABLE, Card, settle
+from eawf.surfaces.tui.console.frame import MARKED, paint_marks
+from eawf.surfaces.tui.console.mutation import CARD, NOTHING_TO_MARK, RECONCILABLE, Card, settle
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     OperationResult,
     OperationStatus,
     VerbRequest,
 )
-from eawf.surfaces.tui.console.renderers.activity import MARKED
+from eawf.surfaces.tui.console.session import Session
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 from tests.tui.surfaces.tui.console.test_console_verbs import _Host
 
@@ -243,3 +244,60 @@ def test_con_148_leaving_a_card_with_an_unknown_row_says_it_stays_unknown() -> N
     journey.press("Escape")
     assert journey.session.overlay is None
     assert "1 unknown rows stay unknown until reconcile answers" in journey.session.log[0].note
+
+
+# ---------- K-06: every route that marks a row draws the mark ----------
+
+
+def _marked_rows(frame: list[str], *keys: str) -> list[str]:
+    return [row for row in frame if any(f"{MARKED}{key} " in row for key in keys)]
+
+
+def test_k_06_space_on_scope_home_draws_the_mark_on_each_marked_leaf() -> None:
+    journey = _Journey("scope.home", MS_FIRST)
+    journey.mark_two()
+    assert journey.session.marked == [MS_FIRST, MS_SECOND]
+    assert len(_marked_rows(journey.frame, MS_FIRST, MS_SECOND)) == 2
+
+
+def test_k_06_space_on_a_track_marks_the_milestone_under_the_cursor() -> None:
+    journey = _Journey("track")
+    journey.session.subj_id = "TRK-CORE"
+    journey.frame = compose_frame(journey.view)
+    row = journey.session.sel_id
+    assert row in (MS_FIRST, MS_SECOND)
+    journey.press(" ")
+    assert journey.session.marked == [row]
+    assert len(_marked_rows(journey.frame, row)) == 1
+
+
+def test_k_06_space_with_no_row_under_the_cursor_says_why_rather_than_nothing() -> None:
+    journey = _Journey()
+    journey.session.sel_id = None
+    journey.press(" ")
+    assert journey.session.marked == []
+    assert journey.session.log[0].note == NOTHING_TO_MARK
+
+
+def test_k_06_the_mark_goes_only_beside_a_marked_key_that_opens_its_row() -> None:
+    session = Session()
+    session.marked = [FIRST]
+    rows = [
+        f" Eä ▸ EAWF ▸ {FIRST}",
+        f"   ▸ {FIRST} running",
+        f"   {SECOND} running",
+        f"   note about {FIRST}",
+    ]
+    paint_marks(session, rows)
+    assert rows == [
+        f" Eä ▸ EAWF ▸ {FIRST}",
+        f"   ▸{MARKED}{FIRST} running",
+        f"   {SECOND} running",
+        f"   note about {FIRST}",
+    ]
+
+
+def test_k_06_no_mark_leaves_every_row_as_it_was() -> None:
+    rows = [" head", f"   {FIRST} running"]
+    paint_marks(Session(), rows)
+    assert rows == [" head", f"   {FIRST} running"]

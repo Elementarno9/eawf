@@ -56,10 +56,10 @@ from eawf.kernel.state.enums import AuditVerdict, IterTrigger, WaveStatus
 from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import Iter, State, Wave
 from eawf.workflow.estimation.buckets import (
+    EFFORT_EU,
     critical_path_eu,
     resolve_wave_actual,
     sum_wave_eu,
-    wave_estimate_eu,
 )
 
 # Schema version for the JSON envelope. Bump only when fields change in a
@@ -352,7 +352,7 @@ def _queue_wall_clock_eu(waves: list[Wave], *, max_parallel_waves: int) -> float
         while ready and len(running) < max_parallel_waves:
             wave_id = ready.pop(0)
             waiting.remove(wave_id)
-            finish_eu = now_eu + wave_estimate_eu(by_id[wave_id])
+            finish_eu = now_eu + EFFORT_EU
             heappush(running, (finish_eu, natural_key(wave_id), wave_id))
 
         if not running:

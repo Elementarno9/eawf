@@ -597,6 +597,8 @@ def test_plugin_doctor_drift_skip_json(tmp_path: Path) -> None:
         "eawf019-math-facets",
         "eawf023-artifact-placement",
         "eawf024-test-tier-contract",
+        "eawf026-settings-categories",
+        "eawf027-citation-scope",
         "plugin-doctor-drift",
     ],
 )
@@ -604,6 +606,28 @@ def test_hook_subcommands_registered(name: str) -> None:
     result = runner.invoke(app, ["hook", "--help"])
     assert result.exit_code == 0
     assert name in result.stdout
+
+
+# --- eawf026-settings-categories (LINT-042) ---------------------------------
+
+
+def test_lint_042_eawf026_hook_is_clean_on_the_shipped_catalog() -> None:
+    result = runner.invoke(app, ["hook", "eawf026-settings-categories"])
+    assert result.exit_code == 0, result.stdout
+    assert result.stdout.startswith("eawf026-settings-categories: clean")
+
+
+def test_lint_042_eawf026_hook_reds_on_an_unplaced_section(monkeypatch: pytest.MonkeyPatch) -> None:
+    from eawf.platform.lint import eawf026_settings_categories as eawf026
+
+    unplaced = tuple(
+        (name, tuple(s for s in members if s != "agents"))
+        for name, members in eawf026.SETTINGS_CATEGORIES
+    )
+    monkeypatch.setattr(eawf026, "SETTINGS_CATEGORIES", unplaced)
+    result = runner.invoke(app, ["hook", "eawf026-settings-categories"])
+    assert result.exit_code == 1
+    assert "  EAWF026 section 'agents' is filed under no category" in result.stdout
 
 
 # --- eawf002-log-key ------------------------------------------------------

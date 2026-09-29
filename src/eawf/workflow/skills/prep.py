@@ -183,7 +183,7 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
         A two-tuple ``(dag, waves)`` of the projected tasks and wave groups.
         Both are empty when the phase has no PENDING waves.
     """
-    from eawf.workflow.estimation.buckets import wave_estimate_eu
+    from eawf.workflow.estimation.buckets import EFFORT_EU
 
     pending_wave_ids = {
         wave_id
@@ -204,7 +204,6 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
             wave = state.waves.get(wave_id)
             if wave is None or wave.status != WaveStatus.PENDING:
                 continue
-            estimate_eu = wave_estimate_eu(wave)
             dag.append(
                 PrepDagTask(
                     task_id=wave.id,
@@ -215,11 +214,11 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
                     risk="low",
                     agent_role=wave.agent_role.value if wave.agent_role else None,
                     effort_bucket=wave.effort_bucket.value if wave.effort_bucket else None,
-                    estimate_eu=estimate_eu,
+                    estimate_eu=EFFORT_EU,
                 )
             )
             iter_task_ids.append(wave.id)
-            iter_estimate_eu += estimate_eu
+            iter_estimate_eu += EFFORT_EU
         if iter_task_ids:
             waves.append(
                 PrepWave(

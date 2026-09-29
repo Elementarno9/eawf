@@ -62,6 +62,7 @@ from eawf.kernel.state.models import Project
 from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.install.gitignore_writer import plan_gitignore_block
 from eawf.platform.rules.carriers import carrier_stamp_matches_body, render_role_carriers
+from eawf.platform.rules.chain_budget import ChainBudgetReport
 from eawf.platform.rules.compile import (
     CompiledRule,
     RuleGraph,
@@ -283,6 +284,8 @@ class ProjectionManifest(RuleModel):
         unmeasured_delivery_facts: The delivery facts no runtime has
             measured, so a reader of the manifest sees which parts of
             delivery the render could not check.
+        prompt_budget: Each runtime's loaded chain against the prompt-budget
+            ceiling; ``None`` only in a manifest older than the check.
     """
 
     schema_version: Literal[1] = 1
@@ -292,6 +295,7 @@ class ProjectionManifest(RuleModel):
     generated: tuple[str, ...] = ()
     stale_host_facts: tuple[StaleHostFact, ...] = ()
     unmeasured_delivery_facts: tuple[UnmeasuredDeliveryFact, ...] = ()
+    prompt_budget: ChainBudgetReport | None = None
 
     @property
     def host_fact_warnings(self) -> tuple[str, ...]:
@@ -481,8 +485,10 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         RuleSourceError: When a rule source fails to load.
         RuleCompileError: When the rules fail compilation.
         RuleProjectionBudgetError: When a projection exceeds the smallest
-            certified cap among the runtimes that read it, or none of them
-            has a certified cap.
+            certified cap among the runtimes that read it, none of them has
+            a certified cap, or a host's loaded chain is over a ceiling of
+            the configured prompt budget.
+        RuleProjectionModelNamingError: When an output names a model.
         RuleProjectionError: When a brief source is unreadable.
         HostFactError: When the shipped host-fact record is untrustworthy.
         RuleViewStartupImportError: When a runtime's shim would import a
@@ -492,7 +498,9 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
             procedure path the repository does not have.
     """
     # The shim renderer lives with the runtime adapters; importing it lazily
-    # keeps that module free to import this package's view refusal.
+    # keeps that module free to import this package's view refusal. The
+    # render checks read this module's models.
+    from eawf.platform.rules.render_checks import budgeted_chains, refuse_model_naming
     from eawf.surfaces.render.claude_shim import render_import_shim
 
     host_facts = load_host_facts()
@@ -530,6 +538,11 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         ),
     )
     _validate_shadow(repo_root, policy_graph)
+    outputs = {
+        **{p.record.target: p.text for p in projections},
+        **{g.target: g.text for g in generated},
+    }
+    refuse_model_naming(outputs)
     sources = sorted(
         {*card_graph.sources, *policy_graph.sources},
         key=lambda source: (source.kind, source.locator, source.digest),
@@ -545,6 +558,7 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         generated=tuple(g.target for g in generated),
         stale_host_facts=stale_host_facts(host_facts, today=datetime.now(UTC).date()),
         unmeasured_delivery_facts=unmeasured_delivery_facts(host_facts),
+        prompt_budget=budgeted_chains(repo_root, outputs, host_facts),
     )
     return ProjectionPlan(projections=projections, generated=generated, manifest=manifest)
 

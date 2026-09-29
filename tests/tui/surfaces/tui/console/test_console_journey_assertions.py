@@ -320,12 +320,13 @@ def test_prx_057_j4_a_mutation_refuses_under_offline_snapshot_naming_why() -> No
     answer, deny, menu = harness.sent[0], harness.sent[1], harness.sent[2]
     for entry in (answer, deny):
         assert entry.logged
-        assert "unavailable — the daemon cannot be reached" in entry.response
+        assert "unavailable — OFFLINE SNAPSHOT · the daemon cannot be reached" in entry.response
     # the verb stays in the menu, with the live reason beside it
     menu_rows = shots[3].split("\n")
     assert menu.logged
     answer_row = next(row for row in menu_rows if re.match(r"^\s+a\s+answer\s", row))
-    assert "the daemon cannot be reached" in answer_row
+    # the reason names the state that refused it; at 80 columns its tail is clipped
+    assert "OFFLINE SNAPSHOT · the daemon cannot be" in answer_row
     assert "OFFLINE SNAPSHOT" in menu_rows[0]
 
 

@@ -35,7 +35,8 @@ from eawf.surfaces.tui.console.action_menu import menu_rows
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.attention import menu_verbs, verb_available
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
-from eawf.surfaces.tui.console.dispatch import NO_LINK, dispatch
+from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.enter_keys import NO_LINK
 from eawf.surfaces.tui.console.fixture import Detail, Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx

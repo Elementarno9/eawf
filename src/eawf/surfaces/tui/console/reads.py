@@ -21,8 +21,9 @@ from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.session import Session
 
-# The connection states a write may be sent in.
-MUTABLE: frozenset[str] = frozenset({"LIVE", "LIVE / PARTIAL", "DEGRADED"})
+# The connection states a write may be sent in. Only a complete live read vouches for the
+# rows a write is previewed from, so a partial or degraded read refuses like any other.
+MUTABLE: frozenset[str] = frozenset({"LIVE"})
 # The connection states under which no request can leave the console at all.
 TRANSPORT_LOSS: frozenset[str] = frozenset({"DISCONNECTED", "OFFLINE SNAPSHOT"})
 
@@ -118,10 +119,10 @@ def transport_lost(session: Session) -> bool:
 
 
 def mut_reason(session: Session, fixture: Fixture) -> str:
-    """Return the live reason a write is refused in the session's connection state."""
+    """Return the live reason a write is refused, naming the connection state that refuses it."""
     conn = session.conn
     refusal = fixture.proto.states.refuse.get(conn) or _PORT_REFUSALS.get(conn)
-    return refusal or "not permitted in this connection state"
+    return f"{conn} · {refusal or 'not permitted in this connection state'}"
 
 
 def write_refusal(

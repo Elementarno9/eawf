@@ -33,7 +33,10 @@ from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS, KeyKind
 from eawf.surfaces.tui.console.keymap import native_keys, unserved
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.renderers import render_route
+from eawf.surfaces.tui.console.renderers.scope_home import groups_of, leaves_of
 from eawf.surfaces.tui.console.session import Session
+from tests.tui.surfaces.tui.console import test_native_drills as drills
+from tests.tui.surfaces.tui.console import test_native_route_frames as nrf
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
@@ -492,3 +495,38 @@ def test_j4_06_a_native_frame_leaves_off_what_it_does_not_serve() -> None:
     assert "Enter" in unserved("crash.recovery", None)
     assert "Tab" in unserved("track", None)
     assert "Tab" not in unserved("track", "TRK-0001")
+
+
+# ---------- K-11: paging is advertised where it acts, and acts where advertised ----------
+
+
+def _drafts(n: int) -> dict[str, Any]:
+    """Return ``n`` draft Tasks, keyed so they sort in the order written."""
+    return {
+        f"TSK-{i:04d}": {
+            "urn": f"urn:eawf:{SCOPE}:task:TSK-{i:04d}",
+            "revision": 1,
+            "status": "DRAFT",
+        }
+        for i in range(n)
+    }
+
+
+@pytest.mark.parametrize(("drafts", "paged"), [(3, False), (60, True)])
+def test_k_11_a_backlog_cut_to_its_window_advertises_paging(drafts: int, paged: bool) -> None:
+    session = Session()
+    session.route = "backlog"
+    spine = build_spine_view(_projection("backlog", {"task": _drafts(drafts)}))
+    view = View(session=session, fixture=_fixture(), w=160, h=40, projection=spine)
+    bar = render_route(view)[-1]
+    assert (KEY["page"].token in bar) is paged
+    assert ("PageDown" in (session.bar_keys or ())) is paged
+
+
+def test_k_11_home_end_lands_on_the_last_leaf_and_home_on_the_first() -> None:
+    view = drills._open("scope.home", document=nrf.DOCUMENT)
+    leaves = leaves_of(groups_of(view.projection))
+    assert len(leaves) > 1
+    assert {"End", "Home"} <= (view.session.bar_keys or frozenset())
+    assert drills._press(view, "End", document=nrf.DOCUMENT).sel_id == leaves[-1]
+    assert drills._press(view, "Home", document=nrf.DOCUMENT).sel_id == leaves[0]

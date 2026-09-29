@@ -81,13 +81,21 @@ RUN_DOCUMENT: dict[str, Any] = {
 }
 
 
+class _Clipped(ConsoleApp):
+    """A console that is never run, whose clipboard takes a copy as a terminal's would."""
+
+    def copy_text(self, text: str) -> bool:
+        """Take ``text``; a console that is not running has no terminal of its own."""
+        return bool(text)
+
+
 def _linked(route: str, document: dict[str, Any], *, subject: str | None = None) -> ConsoleApp:
     """Return a console linked to a seam already holding ``route``'s projection."""
     seam = ProjectionSeam(
         route=route, scope_id=SCOPE, state_path=None, clock=lambda: AT, scope_name="eawf"
     )
     seam._projection = ds.projection(route, document)
-    app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
+    app = _Clipped(chrome=load_chrome(), seam=seam, clock=FakeClock())
     app.session.route = route
     app.session.subj_id = subject
     return app

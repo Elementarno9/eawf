@@ -34,6 +34,8 @@ from eawf.surfaces.tui.console.tokens import Severity
 
 # The key-log key a navigation that no key names directly is recorded under.
 NAV_KEY = "—"
+#: What a copy says when no clipboard took the text, so the rack never claims a copy.
+NOT_COPIED = "no clipboard is reachable from this console"
 #: The depth keys: Enter drills, Escape returns, ``u`` climbs the containment chain, and
 #: ``[`` and ``]`` walk the siblings at the current depth. Breadth is the ``g`` prefix.
 DEPTH_KEYS: tuple[str, ...] = ("Enter", "Escape", "u", "[", "]")
@@ -90,6 +92,10 @@ class Ctx:
             address names where no held row answers it; empty with no link.
         gutter: The blank cells kept clear at each side of the frame, so a key that lays
             the frame out again steps on the same terminal width the render did.
+        clipboard: Puts text on the operator's clipboard, answering whether it was
+            written; ``None`` for a console with no terminal to copy through.
+        pressed_at: When the key arrived, on the console clock; ``None`` reads the clock
+            when the key is handled. The quit guard judges a press on its arrival.
     """
 
     session: Session
@@ -110,6 +116,8 @@ class Ctx:
     principal: str | None = None
     scope: str = ""
     gutter: int = 0
+    clipboard: Callable[[str], bool] | None = None
+    pressed_at: float | None = None
 
     @property
     def s(self) -> Session:
@@ -124,6 +132,25 @@ class Ctx:
     def notify(self, text: str, title: str = "done", sev: Severity = Severity.INFO) -> None:
         """Raise a toast on the rack."""
         notify(self.session, self.clock, text=text, title=title, sev=sev)
+
+    def copy(self, text: str, title: str = "copied", *, shown: str | None = None) -> bool:
+        """Put ``text`` on the clipboard, then say so in the rack, or say it was not.
+
+        Args:
+            text: What the clipboard receives.
+            title: The toast's title once the text was written.
+            shown: How the toast names what was copied, where the text itself is too
+                long to stand in a toast; ``None`` shows the text.
+
+        Returns:
+            Whether the clipboard took the text.
+        """
+        named = text if shown is None else shown
+        if self.clipboard is not None and self.clipboard(text):
+            self.notify(named, title)
+            return True
+        self.notify(f"{named} · {NOT_COPIED}", "not copied", Severity.WARN)
+        return False
 
     def log(self, key: str, note: str = "") -> None:
         """Record the handler that claimed ``key``."""
@@ -143,6 +170,11 @@ class Ctx:
             Whether a link took the verb; ``False`` when there is no link to take it.
         """
         return self.send is not None and self.send(request)
+
+
+def copied(written: bool) -> str:
+    """Return how the key log records a copy: written to the clipboard, or not."""
+    return "copied" if written else "not copied"
 
 
 def regions_of(route: str) -> tuple[str, ...]:

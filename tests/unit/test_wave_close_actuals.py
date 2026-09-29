@@ -1,8 +1,4 @@
-"""Default estimate on claim + token-only auto-actual on close.
-
-Claiming a wave seeds a default :class:`~eawf.kernel.state.models.EstimateSummary`
-from its effort bucket (the estimate side of the learning loop, unchanged
-since P27-I05-W28).
+"""Token-only auto-actual on close.
 
 Closing a wave upserts an :class:`ActualSummary` carrying the
 close-time ``actual_tokens`` tally from :attr:`Wave.tokens_consumed`
@@ -35,6 +31,7 @@ from eawf.kernel.state.enums import (
 )
 from eawf.kernel.state.models import (
     CurrentPointers,
+    EstimateSummary,
     Project,
     RuntimeBaseline,
     RuntimeCarry,
@@ -43,7 +40,6 @@ from eawf.kernel.state.models import (
 )
 from eawf.observability.telemetry.join import DEFAULT_TOKENS_PER_EU
 from eawf.runtime.runtimes.claude.runtime_counters import RuntimeCounters
-from eawf.workflow.estimation.buckets import default_estimate_summary
 from eawf.workflow.estimation.metrics import compute_estimate_actual_variance
 from eawf.workflow.lifecycle import _claim_session as claim_session
 from eawf.workflow.lifecycle._errors import LifecycleError
@@ -109,37 +105,6 @@ def _seed_wave(
     )
     if effort_bucket is None:
         state.waves[wave_id].effort_bucket = None
-
-
-# ---- default_estimate_summary (pure helper) ---------------------------------
-
-
-def test_default_estimate_summary_from_bucket_fields() -> None:
-    state = _empty_state()
-    _seed_wave(state, effort_bucket=EffortBucket.M)
-    wave = state.waves["P01-I01-W01"]
-    now = datetime(2026, 5, 22, 12, 0, 0, tzinfo=UTC)
-
-    est = default_estimate_summary(wave, now=now)
-
-    assert est is not None
-    assert est.scope_id == "P01-I01-W01"
-    assert est.id == "EST-P01-I01-W01"
-    # M bucket centroid is 1.0 EU; pessimistic applies the 3.6 ratio.
-    assert est.expected_eu == pytest.approx(1.0)
-    assert est.pessimistic_eu == pytest.approx(3.6)
-    assert est.expected_minutes == pytest.approx(30.0)
-    assert est.confidence == Confidence.LOW
-    assert est.reference_class == "bucket:M"
-    assert est.updated_at == now
-
-
-def test_default_estimate_summary_no_bucket_returns_none() -> None:
-    state = _empty_state()
-    _seed_wave(state, effort_bucket=None)
-    wave = state.waves["P01-I01-W01"]
-
-    assert default_estimate_summary(wave, now=datetime.now(UTC)) is None
 
 
 # ---- claim_wave leaves the estimate map alone -------------------------------
@@ -703,8 +668,18 @@ def test_metrics_variance_empty_without_measured_elapsed_eu() -> None:
     state = _empty_state()
     _seed_wave(state, effort_bucket=EffortBucket.M)
     claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
-    estimate = default_estimate_summary(state.waves["P01-I01-W01"], now=datetime.now(UTC))
-    assert estimate is not None
+    estimate = EstimateSummary(
+        id="EST-P01-I01-W01",
+        scope_id="P01-I01-W01",
+        expected_eu=1.0,
+        pessimistic_eu=3.6,
+        expected_minutes=30.0,
+        pessimistic_minutes=108.0,
+        display="1.0 EU",
+        confidence=Confidence.LOW,
+        current_store_record_id="EST-P01-I01-W01-test",
+        updated_at=datetime.now(UTC),
+    )
     state.estimates = {"P01-I01-W01": estimate}
     state.waves["P01-I01-W01"].opened_at = datetime.now(UTC) - timedelta(minutes=45)
     close_wave(state, wave_id="P01-I01-W01", outcome="ok")
@@ -712,7 +687,7 @@ def test_metrics_variance_empty_without_measured_elapsed_eu() -> None:
     metric = compute_estimate_actual_variance(state)
 
     # One sample (the token-only auto-actual), but zero actual_eu means
-    # the aggregate variance is -100% (close came in under the M-bucket
+    # the aggregate variance is -100% (close came in under the authored
     # planned estimate of 1.0 EU because no measured elapsed_eu landed).
     assert metric.sample_count == 1
     assert metric.actual_eu == pytest.approx(0.0)

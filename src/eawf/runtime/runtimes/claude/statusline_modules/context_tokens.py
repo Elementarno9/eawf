@@ -1,12 +1,13 @@
-"""``context_tokens`` statusline module — input/output token usage.
+"""``context_tokens`` statusline module — context-window occupancy.
 
-Claude's hook payload may carry a ``token_usage`` (or ``usage``) sub-object
-with ``input_tokens`` and ``output_tokens`` keys. When present, the segment
-renders ``ctx:<in>/<out>``; when absent, the segment degrades to ``ctx:-``
-with ``status="missing"``.
+Claude Code's statusline payload carries the last call's usage under
+``context_window.current_usage`` and the window size under
+``context_window.context_window_size``. The segment renders the tokens the
+context holds (input plus both cache classes) against that size as
+``ctx:<used>/<size>``, or ``ctx:<used>`` when the host names no size.
 
-The module reads only from the Claude payload — no on-disk lookup — so
-the segment is cheap (microseconds) and always safe.
+The module reads only the host payload — no transcript, no on-disk lookup —
+so the segment is cheap and never disagrees with what the host shows.
 """
 
 from __future__ import annotations
@@ -15,63 +16,65 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from eawf.surfaces.render.statusline import StatuslineSegment
+from eawf.kernel.projection.truth import Precision
+from eawf.runtime.runtimes.claude.runtime_counters import parse_runtime_counters
+from eawf.runtime.runtimes.claude.statusline_modules._host import host_source
+from eawf.surfaces.render.statusline import (
+    StatuslineSegment,
+    sourced_segment,
+    unavailable_segment,
+)
+from eawf.surfaces.render.units import format_tokens
 
 logger = logging.getLogger(__name__)
 
+_MODULE = "context_tokens"
+_LABEL = "ctx"
+# The counts are exact; the rendered figure is rounded to a tenth of a thousand.
+_SOURCE = host_source("context_window.current_usage", precision=Precision.APPROXIMATE)
 
-def _extract_usage(payload: dict[str, Any]) -> tuple[int, int] | None:
-    """Pull ``(input, output)`` token counts from *payload* if present.
 
-    Recognised shapes (try in order):
-
-    1. ``payload["token_usage"] = {"input_tokens": int, "output_tokens": int}``.
-    2. ``payload["usage"] = {"input_tokens": int, "output_tokens": int}``.
-    3. ``payload["input_tokens"] = int`` and ``payload["output_tokens"] = int``
-       (flat shape, used by some early Claude payload versions).
-
-    Returns ``None`` if no recognised shape is found, or any of the values
-    is the wrong type (negative integers and floats are coerced via ``int``
-    when finite, otherwise dropped to ``None``).
-    """
-    candidates: list[dict[str, Any]] = []
-    raw = payload.get("token_usage")
-    if isinstance(raw, dict):
-        candidates.append(raw)
-    raw = payload.get("usage")
-    if isinstance(raw, dict):
-        candidates.append(raw)
-    candidates.append(payload)
-    for cand in candidates:
-        in_val = cand.get("input_tokens")
-        out_val = cand.get("output_tokens")
-        if isinstance(in_val, int) and isinstance(out_val, int) and in_val >= 0 and out_val >= 0:
-            return (in_val, out_val)
-    return None
+def _window_size(claude_payload: dict[str, Any]) -> int | None:
+    """Return the host's context-window size, or ``None`` when it names none."""
+    window = claude_payload.get("context_window")
+    size = window.get("context_window_size") if isinstance(window, dict) else None
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        return None
+    return size
 
 
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
-    """Return the ``ctx:<in>/<out>`` (or ``ctx:-``) segment.
+    """Return the ``ctx:<used>/<size>`` segment, or the marker naming why not.
 
     Args:
-        claude_payload: Decoded Claude stdin JSON. Read for ``token_usage``
-            / ``usage`` / flat token fields.
-        state_path: Unused — the module reads only from the Claude payload.
+        claude_payload: Decoded Claude stdin JSON.
+        state_path: Unused — the module reads only from the host payload.
 
     Returns:
-        A :class:`StatuslineSegment` with ``module="context_tokens"`` and
-        ``status="ok"`` when usage is present, ``missing`` otherwise.
+        The occupancy segment; ``ctx:n/a(no-current-usage)`` when the host has
+        not reported a call yet, ``ctx:n/a(partial-usage)`` when it reports only
+        some of the three input classes, since a missing class is not a zero.
     """
     del state_path  # accepted for uniform signature
-    usage = _extract_usage(claude_payload)
-    if usage is None:
-        return StatuslineSegment(module="context_tokens", text="ctx:-", status="missing")
-    in_tok, out_tok = usage
-    return StatuslineSegment(
-        module="context_tokens",
-        text=f"ctx:{in_tok}/{out_tok}",
-        status="ok",
+    counters = parse_runtime_counters(claude_payload)
+    classes = (
+        (
+            counters.input_tokens,
+            counters.cache_creation_input_tokens,
+            counters.cache_read_input_tokens,
+        )
+        if counters is not None
+        else (None, None, None)
     )
+    present = [count for count in classes if count is not None]
+    if not present:
+        return unavailable_segment(_MODULE, _LABEL, "no-current-usage", _SOURCE)
+    if len(present) != len(classes):
+        return unavailable_segment(_MODULE, _LABEL, "partial-usage", _SOURCE)
+    used = format_tokens(sum(present))
+    size = _window_size(claude_payload)
+    value = used if size is None else f"{used}/{format_tokens(size)}"
+    return sourced_segment(_MODULE, _LABEL, value, _SOURCE)
 
 
 __all__ = ["build"]

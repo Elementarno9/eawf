@@ -1,6 +1,6 @@
 """Canonical event-envelope construction for the state-method family.
 
-Every state mutation, elapsed tick, and drift alarm converges on the same
+Every state mutation and elapsed tick converges on the same
 on-disk ``StoreKind.EVENT`` row shape, so a subscriber cannot tell whether
 an envelope came from the daemon or the in-process fallback. This module
 owns those builders plus the advisory extras they carry.
@@ -76,25 +76,6 @@ MUTATION_EVENT_KIND: Final[dict[MutationKind, EventKind]] = {
     MutationKind.ITER_CLOSE: "iter_closed",
     MutationKind.PHASE_CLOSE: "phase_closed",
 }
-
-
-def bucket_drift_extras(state: State) -> dict[str, str | int | float | bool]:
-    """Return bucket calibration drift extras, or empty when no drift fires."""
-    from eawf.workflow.estimation.buckets import calibrate_buckets
-
-    report = calibrate_buckets(state)
-    nudged = [row for row in report.buckets if row.nudge]
-    if not nudged:
-        return {}
-    max_drift = max(row.drift_pct or 0.0 for row in nudged)
-    sample_count = sum(row.sample_count for row in report.buckets)
-    return {
-        "bucket_drift": True,
-        "bucket_drift_count": len(nudged),
-        "bucket_drift_max_pct": max_drift,
-        "bucket_drift_samples": sample_count,
-        "bucket_drift_buckets": ",".join(row.bucket.value for row in nudged),
-    }
 
 
 def _wave_elapsed_cache(ctx: MethodContext) -> dict[str, int]:
@@ -279,43 +260,6 @@ def build_event_envelope(
         status="ok",
         message=summary,
         extras=dict(extras) if extras else {},
-    ).model_dump(mode="json")
-    return Envelope(
-        schema_version="1.0",
-        id=f"EV-{uuid.uuid4().hex[:12]}",
-        kind=StoreKind.EVENT,
-        scope_id=mutation.scope_id,
-        created_at=now,
-        updated_at=None,
-        summary=summary,
-        payload=payload,
-        blob_refs=[],
-        artifact_ids=[],
-    )
-
-
-def build_bucket_drift_envelope(
-    *,
-    mutation: Mutation,
-    before_version: str,
-    after_version: str,
-    extras: dict[str, str | int | float | bool],
-) -> Envelope:
-    """Build the ``bucket_drift_detected`` event envelope."""
-    now = datetime.now(UTC)
-    summary = f"bucket_drift_detected scope={mutation.scope_id}"
-    payload = EventPayload(
-        timestamp=now,
-        event_type="bucket_drift_detected",
-        event_kind="bucket_drift_detected",
-        actor="daemon",
-        command=f"state.mutate.{mutation.kind.value}",
-        args_hash=args_hash(mutation),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        status="warn",
-        message=summary,
-        extras=extras,
     ).model_dump(mode="json")
     return Envelope(
         schema_version="1.0",

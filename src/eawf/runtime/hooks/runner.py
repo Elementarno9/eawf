@@ -558,6 +558,74 @@ def stamp_session_end_on_exit(
     )
 
 
+#: The harness each hook runtime reports its subagents under. A runtime not
+#: listed has no subagent mechanism Eawf adopts.
+_HOST_HARNESSES: dict[str, str] = {"claude": "claude-code", "codex": "codex"}
+
+#: The adoption verb each subagent event calls.
+_HOST_SUBAGENT_METHODS: dict[HookEventType, str] = {
+    HookEventType.SUBAGENT_START: "runtime.host.subagent.start",
+    HookEventType.SUBAGENT_STOP: "runtime.host.subagent.stop",
+}
+
+
+def adopt_host_subagent(
+    event: HookEvent,
+    *,
+    daemon_client_factory: DaemonClientFactory | None = None,
+    repo_root: Path | None = None,
+) -> HookResult:
+    """Adopt a harness-spawned subagent as a Run, or name why it was not.
+
+    The start event admits and starts the Run; the stop event bridges the
+    subagent's own transcript into it and completes it. The daemon writes the
+    Run, so every outcome is either that durable row or the daemon's typed
+    refusal -- a tree still in epoch 1 answers ``native_authority_required``
+    -- and the hook never blocks the host over it.
+
+    Args:
+        event: The SUBAGENT_START or SUBAGENT_STOP event.
+        daemon_client_factory: Opens the daemon client; the default one when
+            ``None``.
+        repo_root: The repository the harness runs in; the process working
+            directory when ``None``.
+
+    Returns:
+        A non-blocking :class:`HookResult` naming the adopted Run, or the
+        reason no Run was written.
+    """
+    name = "runtime.host_subagent"
+    harness = _HOST_HARNESSES.get(event.runtime)
+    if harness is None:
+        return HookResult(name=name, output=f"{name} skipped: {event.runtime} spawns no subagent")
+    payload = _session_end_payload(event)
+    agent_id = payload.get("agent_id")
+    if not isinstance(agent_id, str) or not agent_id:
+        return HookResult(name=name, output=f"{name} skipped: missing agent_id")
+    params: dict[str, Any] = {
+        "harness": harness,
+        "agent_id": agent_id,
+        "repo_root": str(repo_root if repo_root is not None else Path.cwd()),
+    }
+    session_id = payload.get("session_id")
+    if isinstance(session_id, str) and session_id:
+        params["host_session_id"] = session_id
+    transcript = payload.get("agent_transcript_path")
+    if (
+        event.event_type is HookEventType.SUBAGENT_STOP
+        and isinstance(transcript, str)
+        and transcript
+    ):
+        params["transcript_path"] = transcript
+    factory = daemon_client_factory or _default_daemon_client_factory
+    try:
+        with factory() as client:
+            answer = client.call(_HOST_SUBAGENT_METHODS[event.event_type], params)
+    except Exception as exc:
+        return HookResult(name=name, output=repr(exc))
+    return HookResult(name=name, output=f"{name} ok run={answer.get('run_ref')}")
+
+
 def register_runtime_capture_hooks(
     runner: HookRunner,
     *,
@@ -593,11 +661,34 @@ def register_runtime_capture_hooks(
         )
     runner.register(HookEventType.SESSION_END, _hook, name="runtime.capture")
 
+    def _host_subagent_hook(event: HookEvent) -> HookResult:
+        return adopt_host_subagent(
+            event, daemon_client_factory=daemon_client_factory, repo_root=repo_root
+        )
+
+    for subagent_event_type in _HOST_SUBAGENT_METHODS:
+        runner.register(subagent_event_type, _host_subagent_hook, name="runtime.host_subagent")
+
     def _end_stamp_hook(event: HookEvent) -> HookResult:
         return stamp_session_end_on_exit(event, repo_root=repo_root)
 
     for exit_event_type in (HookEventType.SESSION_END, HookEventType.AGENT_END):
         runner.register(exit_event_type, _end_stamp_hook, name="session.end_stamp")
+
+
+def registered_handler_event_types() -> frozenset[HookEventType]:
+    """Return every event type with at least one runner-registered handler.
+
+    Builds a scratch :class:`HookRunner` and registers the real handler set
+    via :func:`register_runtime_capture_hooks` rather than hand-listing event
+    names, so a packager's check reads off the actual registry instead of a
+    second hand-kept list.
+    """
+    scratch = HookRunner()
+    register_runtime_capture_hooks(scratch)
+    return frozenset(
+        event_type for event_type in HookEventType if any(scratch.hooks_for(event_type))
+    )
 
 
 def _coerce_result(name: str, raw: Any, duration_ms: float) -> HookResult:
@@ -734,9 +825,11 @@ __all__ = [
     "HookCallable",
     "HookResult",
     "HookRunner",
+    "adopt_host_subagent",
     "append_event_idempotent",
     "capture_codex_lifecycle",
     "capture_runtime_on_session_end",
     "register_runtime_capture_hooks",
+    "registered_handler_event_types",
     "stamp_session_end_on_exit",
 ]

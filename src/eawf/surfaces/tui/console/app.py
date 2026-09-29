@@ -15,13 +15,18 @@ above it, which is the route's unknown frame only when the route itself is unhel
 from __future__ import annotations
 
 import asyncio
+import shutil
+import subprocess
+import sys
 from collections.abc import Mapping, Sequence
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.segment import Segment
 from rich.style import Style
+from textual._time import get_time
 from textual.app import App, ComposeResult
+from textual.constants import ESCAPE_DELAY
 from textual.events import Click, Key, Resize
 from textual.strip import Strip
 from textual.widget import Widget
@@ -78,7 +83,7 @@ from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.drill import say_why
 from eawf.surfaces.tui.console.fixture import Fixture
-from eawf.surfaces.tui.console.frame import View, thin, unheld
+from eawf.surfaces.tui.console.frame import View, paint_rack, thin, unheld
 from eawf.surfaces.tui.console.header import CrumbRun, crumb_at
 from eawf.surfaces.tui.console.keybar import keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_PAIRS, ENTRY_ROUTE
@@ -161,6 +166,13 @@ TOOLKIT_KEYS: Mapping[str, str] = MappingProxyType(
     }
 )
 _SHIFT = "shift+"
+# How far past the toolkit's escape delay a second Escape's stamp may land and still be
+# the pair the parser held back together: the scheduling jitter of emitting it.
+ESCAPE_SLACK = 0.02
+# The macOS clipboard command. macOS Terminal ignores the OSC 52 copy sequence, so a
+# console running there also hands the text to the system clipboard directly.
+PBCOPY = "pbcopy"
+PBCOPY_TIMEOUT = 1.0
 
 
 def dispatcher_key(toolkit_key: str, character: str | None) -> tuple[str, bool] | None:
@@ -187,11 +199,18 @@ def dispatcher_key(toolkit_key: str, character: str | None) -> tuple[str, bool] 
 
 
 def _drawer_frame(view: View, name: str) -> list[str]:
-    """Return the route frame cut to make room for drawer ``name`` below it."""
+    """Return the route frame cut to make room for drawer ``name`` below it.
+
+    The rack is the console's, not the route's: it is left out of the route frame, so the
+    cut never hides it or counts it as a hidden row, and is painted over the kept rows just
+    above the drawer's rule.
+    """
     s, w, h = view.session, view.w, view.h
     inline = DRAWERS[name](view)
     s.reserved = len(inline) + 2
+    toasts, s.toasts = s.toasts, []
     base = render_route(view)
+    s.toasts = toasts
     s.reserved = 0
     body_rows = base[: h - 1]
     last_content = max((i for i, row in enumerate(body_rows) if row.strip()), default=-1)
@@ -202,6 +221,7 @@ def _drawer_frame(view: View, name: str) -> list[str]:
         hidden = last_content + 1 - len(body)
         rows = "row" if hidden == 1 else "rows"
         body.append(pad(f"   {hidden} more {rows} below · Esc closes the pane", w))
+    paint_rack(s, body, w, verbose=False)
     return [
         *body,
         pad(thin(w), w),
@@ -234,6 +254,7 @@ def compose_frame(view: View) -> list[str]:
     else:
         rows = render_route(view)
         s.route_windowed = s.windowed
+        s.route_bar_keys = s.bar_keys
     for i, row in enumerate(rows):
         if cell_len(row) != w:
             raise ValueError(f"frame row {i} is {cell_len(row)} cells, not {w}")
@@ -245,6 +266,25 @@ def compose_frame(view: View) -> list[str]:
 # What only the operator may change: the route and its subject, what is open, where the
 # focus is, and whether a prefix or a text input holds the keyboard.
 _STANCE_FIELDS: tuple[str, ...] = ("route", "subj_id", "overlay", "region", "prefix", "typing")
+
+
+# Where a key can move the focus without changing a character of the frame: the region,
+# group, section or bucket a Tab cycles, which the frame shows by colour alone.
+_FOCUS_FIELDS: tuple[str, ...] = (
+    "region",
+    "home_region",
+    "track_group",
+    "rel_reg",
+    "tl_reg",
+    "section",
+    "bucket",
+    "set_sec",
+)
+
+
+def focus_of(session: Session) -> tuple[object, ...]:
+    """Return where the session's focus stands, colour-only moves included."""
+    return tuple(getattr(session, name) for name in _FOCUS_FIELDS)
 
 
 def stance(session: Session) -> dict[str, object]:
@@ -448,6 +488,8 @@ class ConsoleApp(App[None]):
         # the attention revisions already announced to this principal; ``None`` until the
         # first read, which seeds it so nothing already open is toasted after a restart
         self._delivered: set[tuple[str, int]] | None = None
+        # the arrival of the key before this one, while that key was an Escape
+        self._escape_at: float | None = None
         self.reset(None)
         self.frame_rows: list[str] = []
         self.render_count = 0
@@ -595,7 +637,7 @@ class ConsoleApp(App[None]):
         """End the console session."""
         self.exit()
 
-    def _ctrl_c_quit(self) -> None:
+    def _ctrl_c_quit(self, at: float | None = None) -> None:
         """Apply the guarded quit to Ctrl+C, honoured on every route, overlay and drawer.
 
         Ctrl+C is the operator's interrupt reflex, so unlike Escape (whose first meaning
@@ -603,9 +645,12 @@ class ConsoleApp(App[None]):
         double-press guard Esc Esc uses at scope home, so a stray Ctrl+C from a terminal
         burst cannot end the session on its own, and the two guards share one arming
         timestamp so a Ctrl+C followed by an Esc Esc (or the reverse) still completes it.
+
+        Args:
+            at: When the press arrived, on the console clock; ``None`` reads the clock.
         """
         self.session.keys += 1
-        check = quit_step(self.session, self.console_clock)
+        check = quit_step(self.session, self.console_clock, at=at)
         if check.step is QuitStep.QUIT:
             self.session.log_key("Ctrl+C", f"quit - guarded, {check.gap_ms}ms apart")
             self.quit()
@@ -804,7 +849,7 @@ class ConsoleApp(App[None]):
         if expire_prefix(self.session, self.console_clock) or changed:
             self.render_frame()
 
-    def _ctx(self) -> Ctx:
+    def _ctx(self, pressed_at: float | None = None) -> Ctx:
         """Return the context one keystroke or pointer activation acts in."""
         view = self.view()
         return Ctx(
@@ -826,20 +871,64 @@ class ConsoleApp(App[None]):
             principal=view.principal,
             scope=self.seam.scope_name or self.seam.scope_id if self.seam is not None else "",
             gutter=view.gutter,
+            clipboard=self.copy_text,
+            pressed_at=pressed_at,
         )
 
-    def press_key(self, key: str, *, shift: bool = False) -> None:
+    def copy_text(self, text: str) -> bool:
+        """Put ``text`` on the operator's clipboard; the console's one clipboard seam.
+
+        The text goes out as the terminal's OSC 52 copy sequence, which reaches the system
+        clipboard through the terminal, tmux and SSH alike. On macOS it also goes to the
+        system clipboard command, since macOS Terminal ignores that sequence. A headless
+        console, such as a test's, writes to no clipboard of the machine it runs on.
+
+        Returns:
+            Whether the text was written; ``False`` before the console has a terminal.
+        """
+        if not self.is_running:
+            return False
+        self.copy_to_clipboard(text)
+        command = shutil.which(PBCOPY) if sys.platform == "darwin" else None
+        if command is not None and not self.is_headless:
+            subprocess.run([command], input=text.encode(), timeout=PBCOPY_TIMEOUT, check=False)
+        return True
+
+    def _arrival(self, event: Key) -> float:
+        """Return when ``event`` arrived, on the console clock.
+
+        The toolkit stamps a key when its parser emits it. The parser holds a lone Escape
+        for its escape delay, and emits the first of two Escapes closer than that delay
+        only when the second arrives, so such a pair is stamped one delay apart whatever
+        its real gap. A second Escape stamped within that delay of the first is therefore
+        given the first one's arrival: the guard cannot tell it from one terminal burst.
+        """
+        at = self.console_clock.now() - max(0.0, get_time() - event.time)
+        last = self._escape_at
+        escape = event.key == "escape"
+        self._escape_at = at if escape else None
+        if escape and last is not None and at - last <= ESCAPE_DELAY + ESCAPE_SLACK:
+            return last
+        return at
+
+    def press_key(self, key: str, *, shift: bool = False, at: float | None = None) -> None:
         """Dispatch one key by its dispatcher name and repaint.
 
         A key a handler claimed that left the frame as it was is answered with a toast
         naming why, and the frame is painted again to show it.
+
+        Args:
+            key: The key, named the way the dispatcher matches it.
+            shift: Whether Shift was held.
+            at: When the key arrived, on the console clock; ``None`` reads the clock.
         """
         before, head, toasts = self.frame_rows, self.session.log[:1], len(self.session.toasts)
-        ctx = self._ctx()
+        focus = focus_of(self.session)
+        ctx = self._ctx(at)
         dispatch(ctx, key, shift)
         self._follow_route()
         self.render_frame()
-        still = self.frame_rows == before
+        still = self.frame_rows == before and focus_of(self.session) == focus
         if say_why(ctx, key, head=head, toasts=toasts, still=still):
             self.render_frame()
 
@@ -891,9 +980,10 @@ class ConsoleApp(App[None]):
         """
         event.stop()
         event.prevent_default()
+        at = self._arrival(event)
         if event.key == "ctrl+c":
-            self._ctrl_c_quit()
+            self._ctrl_c_quit(at)
             return
         named = dispatcher_key(event.key, event.character)
         if named is not None:
-            self.press_key(named[0], shift=named[1])
+            self.press_key(named[0], shift=named[1], at=at)

@@ -147,8 +147,8 @@ class _ConfigSchema(BaseModel):
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     language: dict[str, Any] = Field(default_factory=dict)
     verify: VerifyConfig = Field(default_factory=VerifyConfig)
-    # ``preferences`` carries the operator-preference knobs (solution_bias,
-    # scope_size, auto_choose). Value-shape validation lives in the leaf
+    # ``preferences`` carries the operator-preference knob (auto_choose).
+    # Value-shape validation lives in the leaf
     # catalog + PreferencesConfig; the composed schema only needs to accept
     # the section so a default-bearing merge does not trip extra="forbid".
     preferences: dict[str, Any] = Field(default_factory=dict)

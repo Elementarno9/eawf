@@ -205,50 +205,61 @@ def launch_tui(
 
         return emit_status(workspace=workspace, no_input=no_input, plain=plain)
 
-    started = time.monotonic()
-    state_path, _reason = resolve_with_reason(workspace=workspace)
-    # A tree declares its epoch inside its ``.ea`` directory, beside the state file.
-    authority = resolve_authority(state_path.parent)
-    chrome = load_chrome()
-    env_state = os.environ.get("EA_STATE")
-    named_by = "EA_STATE" if env_state else ("--workspace" if workspace is not None else None)
-    attached = resolve_attach(
-        chrome,
-        AttachRequest(
-            repo_root=state_path.parent.parent,
-            authority=authority,
-            state_path=state_path,
-            named_by=named_by,
-            workspace_key=os.environ.get(WORKSPACE_KEY_ENV) or None,
-            registry_path=default_registry_path(),
-        ),
-    )
-    entry = attached.entry
-
-    if entry is not None and entry.exit == _TERMINAL_EXIT and not tty:
-        print(hand_over(entry), file=sys.stderr)
-        return TERMINAL_ENTRY_EXIT_CODE
-
-    if no_input or plain or not tty:
-        from eawf.surfaces.tui.chassis.offline import emit_status
-
-        return emit_status(workspace=workspace, no_input=no_input, plain=plain)
-
-    if entry is not None:
-        return _launch_entry(chrome=with_entry_state(chrome, entry), state=entry, verbose=verbose)
-
-    if authority.epoch == 2:
-        resolving = resolving_state(chrome, attached.trace, elapsed=time.monotonic() - started)
-        return _launch_native(
-            authority=authority,
-            state_path=state_path,
-            chrome=with_entry_state(chrome, resolving),
-            verbose=verbose,
-            operator=operator,
+    # An interactive launch reads the tree before the console takes the terminal. The
+    # CLI's stderr log handler would print what that read logs beneath the console, where
+    # it still stands once the console exits, so the terminal carries no log line from here
+    # on; a scripted caller keeps its stderr log.
+    saved = swap_root_logging_to_textual() if tty else None
+    try:
+        started = time.monotonic()
+        state_path, _reason = resolve_with_reason(workspace=workspace)
+        # A tree declares its epoch inside its ``.ea`` directory, beside the state file.
+        authority = resolve_authority(state_path.parent)
+        chrome = load_chrome()
+        env_state = os.environ.get("EA_STATE")
+        named_by = "EA_STATE" if env_state else ("--workspace" if workspace is not None else None)
+        attached = resolve_attach(
+            chrome,
+            AttachRequest(
+                repo_root=state_path.parent.parent,
+                authority=authority,
+                state_path=state_path,
+                named_by=named_by,
+                workspace_key=os.environ.get(WORKSPACE_KEY_ENV) or None,
+                registry_path=default_registry_path(),
+            ),
         )
+        entry = attached.entry
 
-    print(EPOCH1_NOTICE, file=sys.stderr)
-    return _launch_epoch1(state_path=state_path)
+        if entry is not None and entry.exit == _TERMINAL_EXIT and not tty:
+            print(hand_over(entry), file=sys.stderr)
+            return TERMINAL_ENTRY_EXIT_CODE
+
+        if no_input or plain or not tty:
+            from eawf.surfaces.tui.chassis.offline import emit_status
+
+            return emit_status(workspace=workspace, no_input=no_input, plain=plain)
+
+        if entry is not None:
+            return _launch_entry(
+                chrome=with_entry_state(chrome, entry), state=entry, verbose=verbose
+            )
+
+        if authority.epoch == 2:
+            resolving = resolving_state(chrome, attached.trace, elapsed=time.monotonic() - started)
+            return _launch_native(
+                authority=authority,
+                state_path=state_path,
+                chrome=with_entry_state(chrome, resolving),
+                verbose=verbose,
+                operator=operator,
+            )
+
+        print(EPOCH1_NOTICE, file=sys.stderr)
+        return _launch_epoch1(state_path=state_path)
+    finally:
+        if saved is not None:
+            restore_root_logging(saved)
 
 
 def _launch_native(
@@ -337,13 +348,9 @@ def _run_console(app: ConsoleApp, seam: ProjectionSeam | None) -> int:
             if seam is not None:
                 await seam.disconnect()
 
-    # The CLI's stderr log handler would keep writing after Textual owns the
-    # screen; a daemon auto-spawn during connect is enough to tear the frame.
-    saved = swap_root_logging_to_textual()
-    try:
-        asyncio.run(_drive())
-    finally:
-        restore_root_logging(saved)
+    # the caller has already taken the CLI's stderr log handler off the terminal: a
+    # daemon auto-spawn during connect is enough to tear the frame
+    asyncio.run(_drive())
     return 0
 
 

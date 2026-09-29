@@ -53,9 +53,9 @@
     "blocked_waves": [],
     "check_count": 1,
     "check_passed": 1,
-    "critical_path_eu": 0.0,
+    "critical_path_eu": 1.6,
     "risk_count": 0,
-    "sum_wave_eu": 0.0,
+    "sum_wave_eu": 1.6,
     "wave_count": 2,
     "wave_status_counts": {
       "abandoned": 0,
@@ -73,7 +73,7 @@
       "commit": null,
       "deps": [],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/core/__init__.py"
       ],
@@ -91,7 +91,7 @@
         "P05-I01-W00"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/core/run.py"
       ],

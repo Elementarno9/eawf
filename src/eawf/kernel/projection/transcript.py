@@ -57,8 +57,10 @@ from eawf.kernel.projection.truth import (
     TruthState,
 )
 from eawf.kernel.runtime.events import (
+    ChildRunPayload,
     CommandPayload,
     EventGapPayload,
+    MessageSummaryPayload,
     ReasoningSummaryPayload,
     RunEventKind,
     RunEventRecord,
@@ -238,7 +240,7 @@ def _purged_field(purged: PurgedRange, *, urn: str) -> TruthField[str]:
 def block_text(event: RunEventRecord) -> TruthField[str]:
     """Return what one observed event says, or the cell naming why it says nothing.
 
-    The payload union is declared to grow: forty event kinds are canonical and three
+    The payload union is declared to grow: forty event kinds are canonical and only some
     payload shapes exist. A kind whose payload states no sentence the transcript can
     read aloud comes back unknown with :data:`NO_TEXT_REASON` rather than blank, so the
     console keeps drawing a stream that has outgrown it instead of refusing to.
@@ -259,7 +261,24 @@ def block_text(event: RunEventRecord) -> TruthField[str]:
         if payload.outcome is not None:
             detail += f" · {payload.outcome}"
         return _derived(detail, urn=urn)
+    if isinstance(payload, MessageSummaryPayload):
+        return _derived(payload.summary, urn=urn)
+    if isinstance(payload, ChildRunPayload):
+        return _derived(_child_text(payload), urn=urn)
     return unknown_field(urn=urn, revision=BLOCK_REVISION, reason=NO_TEXT_REASON)
+
+
+def _child_text(payload: ChildRunPayload) -> str:
+    """Return what a delegation block says: which child, and that it works elsewhere.
+
+    The child's own words are never folded in here; they live on the child's stream,
+    which is the whole point of drawing the delegation as one block.
+    """
+    child = "a subagent" if payload.child_run_ref is None else payload.child_run_ref.entity_key
+    detail = f"{child} · {payload.phase}"
+    if payload.terminal_status is not None:
+        detail += f" · {payload.terminal_status.value.lower()}"
+    return f"{detail} · working elsewhere"
 
 
 def _purged_range(payload: EventGapPayload) -> PurgedRange:

@@ -312,32 +312,27 @@ def test_dispatch_tui_delegates_to_launch_tui(
     }
 
 
-class _HandlerProbe:
-    """Stands in for the console and records the root handlers while it runs."""
-
-    def __init__(self) -> None:
-        self.during: list[logging.Handler] = []
-
-    async def run_async(self) -> None:
-        self.during = list(logging.getLogger().handlers)
-
-
 def test_native_console_keeps_log_records_off_the_terminal(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """While the console owns the screen no root handler writes to the terminal,
     and the CLI's terminal handler is back once the console exits."""
+    _activate_epoch2(tmp_path / ".ea")
+    monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
+    _set_isatty(monkeypatch, value=True)
     terminal = io.StringIO()
     monkeypatch.setattr(sys, "stderr", terminal)
     root = logging.getLogger()
     handler = logging.StreamHandler(stream=sys.stderr)
     root.addHandler(handler)
-    probe = _HandlerProbe()
+    during: list[logging.Handler] = []
+    monkeypatch.setattr(launch, "_run_console", lambda app, seam: during.extend(root.handlers) or 0)
     try:
-        launch._run_console(probe, None)  # type: ignore[arg-type]
-        assert handler not in probe.during
+        launch.launch_tui(workspace=None, no_input=False, plain=False, verbose=False)
+        assert during
+        assert handler not in during
         assert not any(
-            isinstance(h, logging.StreamHandler) and h.stream is terminal for h in probe.during
+            isinstance(h, logging.StreamHandler) and h.stream is terminal for h in during
         )
         assert handler in root.handlers
     finally:
@@ -362,3 +357,33 @@ def test_native_console_restores_the_terminal_handler_when_the_run_raises(
         assert handler in root.handlers
     finally:
         root.removeHandler(handler)
+
+
+# --------------------------------------------------------------------------
+# K-14: an interactive launch prints no log line on the terminal it takes.
+# --------------------------------------------------------------------------
+
+
+def test_k_14_an_interactive_launch_keeps_info_logs_off_the_terminal(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _activate_epoch2(tmp_path / ".ea")
+    monkeypatch.setenv("EA_STATE", str(tmp_path / ".ea" / "state.json"))
+    _set_isatty(monkeypatch, value=True)
+    monkeypatch.setattr(launch, "_run_console", lambda app, seam: 0)
+    root = logging.getLogger()  # noqa: EAWF003 (the CLI's root-logger sink, as it installs it)
+    sink = logging.StreamHandler(stream=sys.stderr)
+    root.addHandler(sink)
+    level = root.level
+    root.setLevel(logging.INFO)
+    try:
+        launch.launch_tui(workspace=None, no_input=False, plain=False, verbose=False)
+        # the sink is the CLI's again once the console has exited
+        assert sink in root.handlers
+        logging.getLogger("eawf.kernel.migration.epoch2.canary").info("after the console")
+    finally:
+        root.removeHandler(sink)
+        root.setLevel(level)
+    err = capsys.readouterr().err
+    assert "require root=" not in err
+    assert "after the console" in err

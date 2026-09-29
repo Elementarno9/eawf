@@ -1,11 +1,10 @@
-"""Tests for the daemon over-budget (banded) wave detector.
+"""Tests for the daemon's estimate-crossing producer.
 
-The detector is SIZE-RELATIVE: each active wave is banded against its own
-pessimistic budget (the effort-bucket EU default, or an explicit estimate
-row), so an XS wave flags at a far smaller elapsed than an XL wave. The
-0.8x ``warn`` and 1.0x ``err`` boundaries are the SAME constants the TUI
-effort gauge reads, each band fires once, and a generous absolute backstop
-catches an abandoned wave with no projectable budget.
+Each active wave is measured against its own estimate (an explicit
+estimate row, else its effort bucket's default, else the absolute
+backstop). Short of the estimate nothing is written; at it the crossing is
+recorded once per claim as activity; and only after the no-progress grace
+does it open one budget notice. Nothing it writes is a pause.
 """
 
 from __future__ import annotations
@@ -19,21 +18,27 @@ from typing import Any
 import orjson
 import pytest
 
+from eawf.kernel.economics.notice_policy import DEFAULT_NOTICE_POLICY
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State
+from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
+from eawf.runtime.budget.notices import load_notice_ledger, notices_path
 from eawf.runtime.daemon.stale_wave import (
-    DEFAULT_ABSOLUTE_BACKSTOP_SECONDS,
-    build_stale_wave_envelope,
-    plan_stale_waves,
+    ESTIMATE_PASSED_EVENT_TYPE,
+    NOTICE_OPENED_EVENT_TYPE,
+    EstimateCrossing,
+    plan_estimate_crossings,
+    run_sweep_loop,
     sweep_once,
 )
-from eawf.surfaces.tui.widgets.eu_bar import OK_THRESHOLD, WARN_THRESHOLD
-from eawf.workflow.estimation.buckets import BUCKET_EU, EU_MINUTES
-from eawf.workflow.estimation.thresholds import OK_BAND_CEILING, OVER_BUDGET_CEILING
+from eawf.workflow.estimation.buckets import EFFORT_DISPERSION_MINUTES
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
 from eawf.workflow.skills.needs_user import (
     AUTO_RESOLVED_CHOICE,
+    PAUSE_EVENT_TYPE,
     list_open_pauses,
     retract_wave_pauses,
 )
@@ -41,17 +46,16 @@ from eawf.workflow.skills.needs_user import (
 pytestmark = pytest.mark.unit
 
 _WAVE_ID = "P28-I02-W20"
+_POLICY = DEFAULT_NOTICE_POLICY.estimated_time
+_GRACE = timedelta(seconds=_POLICY.require_no_progress_for)
 
 
 def _now() -> datetime:
     return datetime(2026, 5, 27, 12, 0, 0, tzinfo=UTC)
 
 
-def _bucket_budget_minutes(bucket: str) -> float:
-    """Return the pessimistic budget in minutes for an effort *bucket*."""
-    from eawf.kernel.state.enums import EffortBucket
-
-    return BUCKET_EU[EffortBucket(bucket)] * EU_MINUTES
+#: The estimate of a wave with no estimate row, whatever its size label.
+_BUDGET = EFFORT_DISPERSION_MINUTES["p90"]
 
 
 def _state_payload(
@@ -158,316 +162,312 @@ def _run(body: Callable[[], Awaitable[None]]) -> None:
     asyncio.run(body())
 
 
-# ---- band thresholds shared with the gauge ---------------------------------
+def _state(payload: dict[str, Any]) -> State:
+    return State.model_validate(payload)
 
 
-def test_stale_detector_reuses_gauge_band_thresholds() -> None:
-    # The whole point of the rework: gauge and modal read one constant, so
-    # the two cannot drift apart.
-    assert OK_THRESHOLD is OK_BAND_CEILING
-    assert WARN_THRESHOLD is OVER_BUDGET_CEILING
-    assert (OK_BAND_CEILING, OVER_BUDGET_CEILING) == (0.80, 1.00)
+def _claimed_at(fraction: float) -> datetime:
+    """Return the claim stamp that puts the wave at *fraction* of its estimate now."""
+    return _now() - timedelta(minutes=_BUDGET * fraction)
 
 
-# ---- size-relativity (the core behaviour) ----------------------------------
+def _plan(
+    payload: dict[str, Any], events: list[tuple[str | None, EventPayload]] | None = None
+) -> list[EstimateCrossing]:
+    return plan_estimate_crossings(_state(payload), events=events or [], policy=_POLICY, now=_now())
 
 
-def test_plan_stale_waves_xs_warns_at_smaller_elapsed_than_xl() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    xs_budget = _bucket_budget_minutes("XS")  # 0.25 EU * 30 = 7.5 min
-    xl_budget = _bucket_budget_minutes("XL")  # 3.5 EU * 30 = 105 min
-    # Elapsed just above the XS warn boundary (0.8 * 7.5 = 6 min) but far
-    # below the XL warn boundary (0.8 * 105 = 84 min): only the XS flags.
-    claimed = _now() - timedelta(minutes=xs_budget * OK_BAND_CEILING + 0.5)
-
-    xs_state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket="XS"))
-    xl_state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket="XL"))
-
-    xs_stale = plan_stale_waves(xs_state, events_path=events, now=_now())
-    xl_stale = plan_stale_waves(xl_state, events_path=events, now=_now())
-
-    assert [row.advisory_band for row in xs_stale] == ["warn"]
-    assert xl_stale == []
-    # Sanity on the projection used: XS budget is far smaller than XL.
-    assert xs_budget < xl_budget
-
-
-def test_plan_stale_waves_warns_above_80pct_of_budget() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    budget = _bucket_budget_minutes("M")  # 1.0 EU * 30 = 30 min
-    claimed = _now() - timedelta(minutes=budget * OK_BAND_CEILING + 0.5)
-    state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket="M"))
-
-    stale = plan_stale_waves(state, events_path=events, now=_now())
-
-    assert [(row.wave_id, row.advisory_band) for row in stale] == [(_WAVE_ID, "warn")]
-
-
-def test_plan_stale_waves_quiet_at_or_below_80pct_boundary() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    budget = _bucket_budget_minutes("M")
-    # Exactly at the 0.8x boundary is still ``ok`` (inclusive upper bound).
-    claimed = _now() - timedelta(minutes=budget * OK_BAND_CEILING)
-    state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket="M"))
-
-    assert plan_stale_waves(state, events_path=events, now=_now()) == []
-
-
-def test_plan_stale_waves_errors_above_full_budget() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    budget = _bucket_budget_minutes("M")
-    claimed = _now() - timedelta(minutes=budget * OVER_BUDGET_CEILING + 0.5)
-    state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket="M"))
-
-    stale = plan_stale_waves(state, events_path=events, now=_now())
-
-    assert [row.advisory_band for row in stale] == ["err"]
-
-
-def test_plan_stale_waves_prefers_estimate_over_bucket_default() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    # Bucket M defaults to a 30-min budget, but an explicit 600-min estimate
-    # must win: 200 min elapsed is over M's budget yet far inside the
-    # estimate, so no advisory fires.
-    claimed = _now() - timedelta(minutes=200)
-    state = State.model_validate(
-        _state_payload(
-            claimed_at=claimed,
-            effort_bucket="M",
-            estimate_pessimistic_minutes=600.0,
-        )
+def _event(scope_id: str, event_type: str, at: datetime) -> tuple[str | None, EventPayload]:
+    return scope_id, EventPayload(
+        timestamp=at,
+        event_type=event_type,
+        actor="agent",
+        command="x",
+        args_hash="0" * 16,
+        status="ok",
+        message="m",
     )
 
-    assert plan_stale_waves(state, events_path=events, now=_now()) == []
+
+def _event_types(state_path: Path) -> list[str]:
+    path = store_path(state_path, StoreKind.EVENT)
+    if not path.exists():
+        return []
+    return [orjson.loads(r)["payload"]["event_type"] for r in path.read_bytes().splitlines()]
 
 
-# ---- claimed_at anchoring --------------------------------------------------
+# ---- when an estimate counts as passed -------------------------------------
 
 
-def test_plan_stale_waves_skips_unclaimed_wave() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    # No claimed_at -> no work-start clock -> never stale, even though the
-    # wave was opened 12h ago (the opened_at in the fixture).
-    state = State.model_validate(_state_payload(claimed_at=None, effort_bucket="XS"))
-
-    assert plan_stale_waves(state, events_path=events, now=_now()) == []
+@pytest.mark.parametrize("fraction", [0.5, 0.8, 0.999])
+def test_auth_036_plan_is_quiet_short_of_the_estimate(fraction: float) -> None:
+    """The former 0.8x warning fraction, and anything short of 1.0x, is a prediction."""
+    assert _plan(_state_payload(claimed_at=_claimed_at(fraction))) == []
 
 
-def test_plan_stale_waves_skips_inactive_status() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    claimed = _now() - timedelta(hours=4)
-    state = State.model_validate(
-        _state_payload(claimed_at=claimed, status="closed", effort_bucket="XS")
+@pytest.mark.parametrize("fraction", [1.0, 1.001, 3.0])
+def test_plan_crosses_at_and_past_the_estimate(fraction: float) -> None:
+    (crossing,) = _plan(_state_payload(claimed_at=_claimed_at(fraction)))
+
+    assert crossing.wave_id == _WAVE_ID
+    assert crossing.estimate_seconds == pytest.approx(_BUDGET * 60)
+
+
+@pytest.mark.parametrize("label", ["XS", "XL", None])
+def test_auth_041_no_size_label_moves_the_estimate(label: str | None) -> None:
+    """An XS, an XL and an unlabelled wave share the p90 of the effort constant."""
+    inside = _plan(_state_payload(claimed_at=_claimed_at(0.99), effort_bucket=label))
+    (past,) = _plan(_state_payload(claimed_at=_claimed_at(1.01), effort_bucket=label))
+
+    assert inside == []
+    assert past.estimate_seconds == pytest.approx(_BUDGET * 60)
+
+
+def test_plan_prefers_the_estimate_row_over_the_constant_default() -> None:
+    payload = _state_payload(
+        claimed_at=_now() - timedelta(minutes=20), estimate_pessimistic_minutes=15.0
     )
 
-    assert plan_stale_waves(state, events_path=events, now=_now()) == []
+    (crossing,) = _plan(payload)
+
+    assert crossing.estimate_seconds == pytest.approx(15.0 * 60)
 
 
-# ---- absolute backstop (abandoned, no projectable budget) ------------------
+def test_plan_measures_each_wave_against_its_own_estimate_row() -> None:
+    """A short estimate row crosses where a long one, at the same elapsed, does not."""
+    claimed = _now() - timedelta(minutes=20)
+
+    short = _plan(_state_payload(claimed_at=claimed, estimate_pessimistic_minutes=15.0))
+    long = _plan(_state_payload(claimed_at=claimed, estimate_pessimistic_minutes=60.0))
+
+    assert [c.wave_id for c in short] == [_WAVE_ID]
+    assert long == []
 
 
-def test_plan_stale_waves_backstop_flags_abandoned_wave_without_budget() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    # No effort_bucket and no estimate -> no projectable budget. The wave
-    # only flags once it crosses the generous absolute backstop.
-    claimed = _now() - timedelta(seconds=DEFAULT_ABSOLUTE_BACKSTOP_SECONDS + 60)
-    state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket=None))
-
-    stale = plan_stale_waves(state, events_path=events, now=_now())
-
-    assert [row.advisory_band for row in stale] == ["backstop"]
-    assert stale[0].budget_minutes is None
+def test_plan_skips_an_unclaimed_wave() -> None:
+    assert _plan(_state_payload(claimed_at=None)) == []
 
 
-def test_plan_stale_waves_no_budget_quiet_before_backstop() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    claimed = _now() - timedelta(seconds=DEFAULT_ABSOLUTE_BACKSTOP_SECONDS - 60)
-    state = State.model_validate(_state_payload(claimed_at=claimed, effort_bucket=None))
-
-    assert plan_stale_waves(state, events_path=events, now=_now()) == []
+@pytest.mark.parametrize("status", ["pending", "closed", "failed", "abandoned"])
+def test_plan_skips_an_inactive_wave(status: str) -> None:
+    assert _plan(_state_payload(claimed_at=_claimed_at(5.0), status=status)) == []
 
 
-# ---- error path ------------------------------------------------------------
+# ---- progress and the grace -------------------------------------------------
 
 
-def test_plan_stale_waves_rejects_non_positive_backstop() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    state = State.model_validate(_state_payload(claimed_at=_now() - timedelta(hours=1)))
+def test_plan_meets_the_grace_when_nothing_was_written_since_the_claim() -> None:
+    (crossing,) = _plan(_state_payload(claimed_at=_claimed_at(2.0)))
 
-    with pytest.raises(ValueError, match="absolute_backstop_seconds must be positive"):
-        plan_stale_waves(state, events_path=events, absolute_backstop_seconds=0, now=_now())
-
-
-# ---- envelope shape --------------------------------------------------------
+    assert crossing.last_progress_at == _claimed_at(2.0)
+    assert crossing.grace_met
 
 
-def test_build_stale_wave_envelope_is_needs_user_pause() -> None:
-    events = store_path(Path("/nonexistent") / "state.json", StoreKind.EVENT)
-    budget = _bucket_budget_minutes("M")
-    claimed = _now() - timedelta(minutes=budget * OVER_BUDGET_CEILING + 0.5)
-    state = State.model_validate(_state_payload(claimed_at=claimed, status="in_progress"))
-    plan = plan_stale_waves(state, events_path=events, now=_now())[0]
+def test_plan_reads_a_lane_event_as_progress() -> None:
+    recent = _now() - _GRACE / 2
+    events = [_event(f"{_WAVE_ID}::executor", "agent.output.chunk", recent)]
 
-    envelope = build_stale_wave_envelope(plan, now=_now())
+    (crossing,) = _plan(_state_payload(claimed_at=_claimed_at(2.0)), events)
 
-    assert envelope.scope_id == state.urn
-    assert envelope.payload["event_type"] == "needs_user_pause"
-    assert envelope.payload["event_kind"] == "stale_wave_detected"
-    assert envelope.payload["status"] == "needs_user"
-    assert envelope.payload["extras"]["wave_id"] == _WAVE_ID
-    assert envelope.payload["extras"]["advisory_band"] == "err"
-    assert envelope.payload["message"].startswith("over-budget advisory:")
-    assert "user_question" in envelope.payload["extras"]
+    assert crossing.last_progress_at == recent
+    assert not crossing.grace_met
 
 
-# ---- sweep: append, publish, preserve state --------------------------------
+@pytest.mark.parametrize(
+    "event_type",
+    [ESTIMATE_PASSED_EVENT_TYPE, NOTICE_OPENED_EVENT_TYPE, "wave_elapsed_update"],
+)
+def test_plan_never_reads_the_daemons_own_events_as_progress(event_type: str) -> None:
+    events = [_event(_WAVE_ID, event_type, _now())]
+
+    (crossing,) = _plan(_state_payload(claimed_at=_claimed_at(2.0)), events)
+
+    assert crossing.grace_met
 
 
-def test_sweep_once_appends_publishes_and_preserves_state(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    budget = _bucket_budget_minutes("M")
-    claimed = _now() - timedelta(minutes=budget * OVER_BUDGET_CEILING + 0.5)
-    payload = _state_payload(claimed_at=claimed, status="in_progress")
-    _write_state(state_path, payload)
-    before = state_path.read_bytes()
+def test_plan_ignores_another_waves_progress() -> None:
+    events = [_event("P28-I02-W99::executor", "agent.output.chunk", _now())]
+
+    (crossing,) = _plan(_state_payload(claimed_at=_claimed_at(2.0)), events)
+
+    assert crossing.grace_met
+
+
+# ---- the sweep --------------------------------------------------------------
+
+
+def _sweep(state_path: Path, *, now: datetime) -> list[Envelope]:
     published: list[Envelope] = []
 
     async def body() -> None:
-        plans = await sweep_once(state_path=state_path, publish=published.append, now=_now())
-        assert [plan.wave_id for plan in plans] == [_WAVE_ID]
+        await sweep_once(state_path=state_path, policy=_POLICY, publish=published.append, now=now)
+
+    _run(body)
+    return published
+
+
+def test_sweep_short_of_the_estimate_writes_nothing(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.8)))
+
+    assert _sweep(state_path, now=_now()) == []
+    assert _event_types(state_path) == []
+    assert not notices_path(state_path).exists()
+
+
+def test_sweep_records_a_crossing_once_per_claim_and_no_pause(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(1.2), status="in_progress"))
+    before = state_path.read_bytes()
+
+    first = _sweep(state_path, now=_now())
+    again = _sweep(state_path, now=_now() + timedelta(minutes=1))
+
+    assert first[0].payload["event_type"] == ESTIMATE_PASSED_EVENT_TYPE
+    assert first[0].payload["extras"]["claim_ref"] == "SES-test"
+    assert again == []
+    assert PAUSE_EVENT_TYPE not in _event_types(state_path)
+    assert list_open_pauses(state_path) == []
+    assert state_path.read_bytes() == before
+
+
+def test_sweep_records_a_new_claim_as_a_new_crossing(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    payload = _state_payload(claimed_at=_claimed_at(1.2))
+    _write_state(state_path, payload)
+    _sweep(state_path, now=_now())
+    payload["waves"][_WAVE_ID]["claim_session_id"] = "SES-second"
+    _write_state(state_path, payload)
+
+    second = _sweep(state_path, now=_now())
+
+    assert second[0].payload["extras"]["claim_ref"] == "SES-second"
+    assert _event_types(state_path).count(ESTIMATE_PASSED_EVENT_TYPE) == 2
+
+
+def test_sweep_opens_one_notice_once_the_grace_is_met(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(2.0)))
+
+    first = _sweep(state_path, now=_now())
+    again = _sweep(state_path, now=_now() + timedelta(minutes=5))
+
+    assert [e.payload["event_type"] for e in first] == [
+        ESTIMATE_PASSED_EVENT_TYPE,
+        NOTICE_OPENED_EVENT_TYPE,
+    ]
+    assert "no progress was observed" in first[1].payload["message"]
+    assert again == []
+    (notice,) = load_notice_ledger(notices_path(state_path)).notices.values()
+    assert (notice.scope_id, notice.axis, notice.basis) == (_WAVE_ID, "wall_seconds", "estimate")
+
+
+def test_sweep_over_a_missing_state_returns_nothing(tmp_path: Path) -> None:
+    async def body() -> None:
+        assert await sweep_once(state_path=tmp_path / "absent.json", policy=_POLICY) == []
 
     _run(body)
 
-    assert state_path.read_bytes() == before
-    events_path = store_path(state_path, StoreKind.EVENT)
-    rows = events_path.read_text(encoding="utf-8").strip().splitlines()
-    assert len(rows) == 1
-    on_disk = orjson.loads(rows[0])
-    assert on_disk["payload"]["event_kind"] == "stale_wave_detected"
-    assert len(published) == 1
-    assert published[0].id == on_disk["id"]
-    pauses = list_open_pauses(state_path, scope_id="urn:eawf:v1:state:ABC")
-    assert len(pauses) == 1
-    assert pauses[0].question.options[0].label == "keep"
+
+def test_run_sweep_loop_rejects_a_non_positive_interval(tmp_path: Path) -> None:
+    async def body() -> None:
+        await run_sweep_loop(state_path=tmp_path / "state.json", interval_seconds=0)
+
+    with pytest.raises(ValueError, match="interval_seconds must be positive"):
+        _run(body)
 
 
-# ---- retract-on-close: the advisory clears when the wave closes ------------
-
-
-def _sweep_one_stale_pause(state_path: Path) -> None:
-    """Drive a single err-band advisory into the store for ``_WAVE_ID``."""
-    budget = _bucket_budget_minutes("M")
-    claimed = _now() - timedelta(minutes=budget * OVER_BUDGET_CEILING + 0.5)
-    _write_state(state_path, _state_payload(claimed_at=claimed, status="in_progress"))
+def test_run_sweep_loop_imports_legacy_pauses_before_sweeping(tmp_path: Path) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
+    _append_legacy_pause(state_path)
+    stop = asyncio.Event()
+    stop.set()
 
     async def body() -> None:
-        await sweep_once(state_path=state_path, now=_now())
+        await run_sweep_loop(state_path=state_path, stop_event=stop)
 
     _run(body)
+
+    (notice,) = load_notice_ledger(notices_path(state_path)).notices.values()
+    assert notice.provenance == ("urn:legacy:1",)
+    assert list_open_pauses(state_path) == []
+
+
+# ---- legacy pauses: still listed and retracted until imported ----------------
+
+
+def _append_legacy_pause(state_path: Path, *, wave_id: str = _WAVE_ID) -> None:
+    """Append one over-budget pause row as the retired detector wrote it."""
+    question = UserQuestion(
+        question="over-budget advisory",
+        options=[
+            UserQuestionOption(label="keep", description="Keep it active."),
+            UserQuestionOption(label="defer", description="Leave it for later."),
+        ],
+    )
+    payload = EventPayload(
+        timestamp=_now(),
+        event_type=PAUSE_EVENT_TYPE,
+        event_kind="stale_wave_detected",
+        actor="daemon",
+        command="stale_wave.sweep",
+        args_hash="1" * 16,
+        status="needs_user",
+        message=question.question,
+        extras={
+            "pause_urn": "urn:legacy:1",
+            "session": "SES-test",
+            "user_question": question.model_dump_json(),
+            "wave_id": wave_id,
+            "advisory_band": "err",
+            "elapsed_minutes": 45.0,
+            "budget_minutes": 30.0,
+        },
+    )
+    append_envelope(
+        store_path(state_path, StoreKind.EVENT),
+        Envelope(
+            id="EV-000000000001",
+            kind=StoreKind.EVENT,
+            scope_id="urn:eawf:v1:state:ABC",
+            created_at=_now(),
+            updated_at=None,
+            summary="stale_wave_detected",
+            payload=payload.model_dump(mode="json"),
+            blob_refs=[],
+            artifact_ids=[],
+        ),
+    )
 
 
 def test_list_open_pauses_exposes_subject_wave_id(tmp_path: Path) -> None:
-    # The advisory pause carries its subject wave so a surface can drop it
-    # once that wave is terminal, and the close path can retract it by wave.
     state_path = tmp_path / ".ea" / "state.json"
-    _sweep_one_stale_pause(state_path)
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
+    _append_legacy_pause(state_path)
 
     pauses = list_open_pauses(state_path)
 
-    assert len(pauses) == 1
-    assert pauses[0].wave_id == _WAVE_ID
+    assert [p.wave_id for p in pauses] == [_WAVE_ID]
 
 
 def test_retract_wave_pauses_clears_the_open_advisory(tmp_path: Path) -> None:
-    # The operator's bug: a closed wave kept surfacing its over-budget
-    # prompt. Retracting on close pairs the open pause with a resume so it
-    # stops surfacing.
     state_path = tmp_path / ".ea" / "state.json"
-    _sweep_one_stale_pause(state_path)
-    assert len(list_open_pauses(state_path)) == 1
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
+    _append_legacy_pause(state_path)
     published: list[Envelope] = []
 
     resolved = retract_wave_pauses(state_path, wave_id=_WAVE_ID, publish=published.append)
 
-    assert len(resolved) == 1
+    assert resolved == ["urn:legacy:1"]
     assert list_open_pauses(state_path) == []
-    # A resume envelope was published so live subscribers drop the pause.
-    assert len(published) == 1
     assert published[0].payload["extras"]["choice"] == AUTO_RESOLVED_CHOICE
 
 
 def test_retract_wave_pauses_leaves_other_waves_advisories(tmp_path: Path) -> None:
-    # Retraction is keyed on the subject wave: closing one wave must not
-    # clear a sibling wave's open advisory.
     state_path = tmp_path / ".ea" / "state.json"
-    _sweep_one_stale_pause(state_path)
+    _write_state(state_path, _state_payload(claimed_at=_claimed_at(0.5)))
+    _append_legacy_pause(state_path)
 
-    resolved = retract_wave_pauses(state_path, wave_id="P28-I02-W99")
-
-    assert resolved == []
+    assert retract_wave_pauses(state_path, wave_id="P28-I02-W99") == []
     assert len(list_open_pauses(state_path)) == 1
-
-
-# ---- escalating one-shot per band ------------------------------------------
-
-
-def test_sweep_once_warn_fires_once_not_repeatedly(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    budget = _bucket_budget_minutes("M")
-    claimed = _now() - timedelta(minutes=budget * OK_BAND_CEILING + 0.5)
-    _write_state(state_path, _state_payload(claimed_at=claimed, status="in_progress"))
-
-    async def body() -> None:
-        first = await sweep_once(state_path=state_path, now=_now())
-        assert [row.advisory_band for row in first] == ["warn"]
-        # A later tick still inside the warn band must not re-raise warn.
-        later = await sweep_once(state_path=state_path, now=_now() + timedelta(minutes=1))
-        assert later == []
-
-    _run(body)
-
-    rows = store_path(state_path, StoreKind.EVENT).read_text(encoding="utf-8").strip().splitlines()
-    assert len(rows) == 1
-
-
-def test_sweep_once_error_fires_once(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    budget = _bucket_budget_minutes("M")
-    claimed = _now() - timedelta(minutes=budget * OVER_BUDGET_CEILING + 0.5)
-    _write_state(state_path, _state_payload(claimed_at=claimed, status="in_progress"))
-
-    async def body() -> None:
-        first = await sweep_once(state_path=state_path, now=_now())
-        assert [row.advisory_band for row in first] == ["err"]
-        later = await sweep_once(state_path=state_path, now=_now() + timedelta(minutes=5))
-        assert later == []
-
-    _run(body)
-
-    rows = store_path(state_path, StoreKind.EVENT).read_text(encoding="utf-8").strip().splitlines()
-    assert len(rows) == 1
-
-
-def test_sweep_once_warn_then_error_escalates_each_once(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    budget = _bucket_budget_minutes("M")  # 30 min
-    warn_claimed = _now() - timedelta(minutes=budget * OK_BAND_CEILING + 0.5)
-    _write_state(state_path, _state_payload(claimed_at=warn_claimed, status="in_progress"))
-
-    async def body() -> None:
-        warn = await sweep_once(state_path=state_path, now=_now())
-        assert [row.advisory_band for row in warn] == ["warn"]
-        # Push elapsed past the 1.0x boundary: err escalates once.
-        err_now = warn_claimed + timedelta(minutes=budget * OVER_BUDGET_CEILING + 1)
-        err = await sweep_once(state_path=state_path, now=err_now)
-        assert [row.advisory_band for row in err] == ["err"]
-        # No third advisory once both bands have fired.
-        again = await sweep_once(state_path=state_path, now=err_now + timedelta(minutes=10))
-        assert again == []
-
-    _run(body)
-
-    rows = store_path(state_path, StoreKind.EVENT).read_text(encoding="utf-8").strip().splitlines()
-    assert len(rows) == 2
-    bands = [orjson.loads(r)["payload"]["extras"]["advisory_band"] for r in rows]
-    assert bands == ["warn", "err"]

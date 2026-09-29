@@ -5,9 +5,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
-from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
+from eawf.kernel.state.enums import AgentSessionRole
 
 CommitSubjectStyle = Literal["bracket", "trailer"]
 #: The unit of one verified delivery commit: under ``batch`` the daemon
@@ -23,20 +23,6 @@ VerifyWaiverMode = Literal["A", "B", "C", "disabled"]
 
 #: Wildcard key under ``agents.extra_tools`` whose grant applies to every role.
 ALL_ROLES: str = "*"
-
-
-class SolutionBias(StrEnum):
-    """Planner bias toward solution complexity under ``preferences``.
-
-    The planner consults this preference when sizing a wave DAG: a
-    ``SIMPLE`` bias favours fewer, smaller waves (lean toward YAGNI),
-    ``THOROUGH`` favours broader coverage, and ``BALANCED`` is the
-    neutral default.
-    """
-
-    SIMPLE = "simple"
-    BALANCED = "balanced"
-    THOROUGH = "thorough"
 
 
 class AutoChoose(StrEnum):
@@ -84,34 +70,6 @@ class VcsConventionsConfig(BaseModel):
     release: VcsReleaseConventionsConfig = Field(default_factory=VcsReleaseConventionsConfig)
 
 
-class BucketEstimateOverride(BaseModel):
-    """Operator-provided estimate centroid for one effort bucket."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    expected_eu: float = Field(gt=0.0)
-    pessimistic_eu: float | None = Field(default=None, gt=0.0)
-
-
-class BucketFitConfig(BaseModel):
-    """Config knobs for using fitted effort-bucket centroids."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    overrides: dict[EffortBucket, BucketEstimateOverride] = Field(default_factory=dict)
-    n_min: int = Field(default=5, ge=1)
-    high_confidence_n: int = Field(default=30, ge=1)
-
-    @model_validator(mode="after")
-    def _validate_threshold_order(self) -> BucketFitConfig:
-        if self.high_confidence_n < self.n_min:
-            raise ValueError(
-                f"bucket high_confidence_n must be >= n_min: "
-                f"{self.high_confidence_n} < {self.n_min}"
-            )
-        return self
-
-
 class EstimationDisplayConfig(BaseModel):
     """Display preferences under the ``estimation`` config section."""
 
@@ -138,22 +96,17 @@ class EstimationConfig(BaseModel):
     calibration_profile: str = "eawf_v0_lockbox_2026_05"
     idle_policy: str = "D30_non_agent_gap"
     display: EstimationDisplayConfig = Field(default_factory=EstimationDisplayConfig)
-    buckets: BucketFitConfig = Field(default_factory=BucketFitConfig)
 
 
 class PreferencesConfig(BaseModel):
     """Strict typed model for the ``preferences`` config section.
 
-    Operator-tunable planner + AskUserQuestion defaults. Every field is a
-    closed enum so an unknown value fails validation at the loader
-    boundary. These keys ADD the validated preference surface; the
-    planner / AUQ consumers read them in a later wave.
+    The AskUserQuestion auto-pick default. The field is a closed enum so an
+    unknown value fails validation at the loader boundary.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    solution_bias: SolutionBias = SolutionBias.BALANCED
-    scope_size: EffortBucket = EffortBucket.M
     auto_choose: AutoChoose = AutoChoose.OFF
 
 
@@ -439,8 +392,6 @@ __all__ = [
     "AgentDrivenReleasePolicy",
     "AgentsConfig",
     "AutoChoose",
-    "BucketEstimateOverride",
-    "BucketFitConfig",
     "CommitSubjectStyle",
     "EstimationConfig",
     "EstimationDisplayConfig",
@@ -452,7 +403,6 @@ __all__ = [
     "ReleaseCadence",
     "RuntimeLivenessConfig",
     "RuntimeModelsConfig",
-    "SolutionBias",
     "TaskReference",
     "VcsConventionsConfig",
     "VcsReleaseConventionsConfig",

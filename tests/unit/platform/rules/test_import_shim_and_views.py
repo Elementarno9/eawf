@@ -9,6 +9,7 @@ import pydantic
 import pytest
 import yaml
 
+from eawf.kernel.economics.prompt_budget import DEFAULT_PROMPT_BUDGET, BudgetClassId
 from eawf.platform.rules import builtin_rule_modules, render
 from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
 from eawf.platform.rules.host_facts import load_host_facts
@@ -155,6 +156,14 @@ def test_plan_rule_projections_shim_imports_every_projection_its_runtime_reads(
 ) -> None:
     """The shim's imports follow the host fact, so a fixed import list reds this."""
     _claude_reading_card_and_policy(monkeypatch)
+    # Importing both projections loads both, so the chain needs a zone-1
+    # ceiling that holds their sum.
+    policy = DEFAULT_PROMPT_BUDGET.model_dump(mode="json")
+    for row in policy["allocations"]:
+        if row["class_id"] == BudgetClassId.STEERING_ZONE1:
+            row["max_bytes"] = 65_536
+    config = {"schema_version": "1.0", "economics": {"prompt_budget": policy}}
+    (repo / ".ea" / "config.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
     plan = plan_rule_projections(repo)
     (shim,) = (g for g in plan.generated if g.target == CLAUDE_SHIM_TARGET)
     assert shim.text == f"@{CARD_TARGET}\n@{POLICY_TARGET}\n"

@@ -124,6 +124,8 @@ from eawf.workflow.delivery.acceptance_approval import (
     seal_question,
     standing_question,
 )
+from eawf.workflow.host_question import QuestionPresentationError, present_pending_action
+from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 logger = logging.getLogger(__name__)
 
@@ -276,6 +278,9 @@ class ApprovalAnswer(BaseModel):
             resolved on.
         dispositions: Every principal's own outcome of the action so far,
             the loser's row beside the winner's.
+        host_question: The multiple-choice question a host shows for a
+            waiting action, bound to it and read from the committed row;
+            ``None`` once the action is sealed, or for a seal answer.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -292,6 +297,7 @@ class ApprovalAnswer(BaseModel):
     reason: str
     receipt_ref: str | None = None
     dispositions: tuple[PrincipalDispositionRow, ...] = ()
+    host_question: UserQuestion | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -532,6 +538,7 @@ def _answer(
     receipt: MutationReceipt | None,
     outcome: AnswerOutcome | None = None,
     reason: str,
+    host_question: UserQuestion | None = None,
 ) -> ApprovalAnswer:
     """Build the answer one open or seal returns."""
     return ApprovalAnswer(
@@ -547,7 +554,23 @@ def _answer(
         reason=reason,
         receipt_ref=None if action.receipt_ref is None else str(action.receipt_ref),
         dispositions=action.dispositions,
+        host_question=host_question,
     )
+
+
+def _presented(action: PendingAction) -> UserQuestion | None:
+    """Return the host question for *action* while it waits, ``None`` once sealed.
+
+    Raises:
+        DaemonValidationError: A waiting action is not presentable as it
+            stands, so no surface may show it.
+    """
+    if action.status is PendingActionStatus.SEALED:
+        return None
+    try:
+        return present_pending_action(action)
+    except QuestionPresentationError as error:
+        raise DaemonValidationError(f"validation_failed: {error}") from error
 
 
 def _bundle_to_ask_about(
@@ -629,6 +652,7 @@ def open_acceptance_approval(
                     bundle=bundle,
                     receipt=None,
                     reason=f"{standing.id} already asks about revision {bundle.revision}",
+                    host_question=_presented(standing),
                 )
             )
         envelopes: list[Envelope] = []
@@ -645,6 +669,10 @@ def open_acceptance_approval(
             assignee=args.assignee,
             at=now,
         )
+        # Presented before the commit so an unpresentable question is never
+        # filed, and returned only after it, so no surface shows a question
+        # the tree does not hold.
+        host_question = _presented(action)
         request = ActionCommitRequest(
             urn=urn,
             idempotency_key=action.idempotency_key,
@@ -673,6 +701,7 @@ def open_acceptance_approval(
             bundle=bundle,
             receipt=committed.receipt,
             reason=f"{action.id} asks the operator to accept revision {bundle.revision}",
+            host_question=host_question,
         ),
         envelopes=(*envelopes, committed.envelope),
     )

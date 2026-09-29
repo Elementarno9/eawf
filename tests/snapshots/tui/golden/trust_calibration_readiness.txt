@@ -4,22 +4,22 @@
   │ window all                                            │ │ no data                                               │
   │ labelled outputs 1                                    │ ╰───────────────────────────────────────────────────────╯
   ╰───────────────────────────────────────────────────────╯
-                                                            ╭─ EU CALIBRATION ──────────────────────────────────────╮
-  ╭─ JURY AUTHORITY ──────────────────────────────────────╮ │ no data                                               │
-  │ △ jury held advisory until validated                  │ ╰───────────────────────────────────────────────────────╯
-  │ Fleiss kappa -- need cohort                           │
-  │ ECE -- starved                                        │ ╭─ CALIBRATION READINESS ───────────────────────────────╮
-  │ variance -- starved                                   │ │ captured waves 3 / 5                                  │
-  │ known-bad catch -- need labels                        │ │ calibration not-ready                                 │
+                                                            ╭─ CALIBRATION READINESS ───────────────────────────────╮
+  ╭─ JURY AUTHORITY ──────────────────────────────────────╮ │ captured waves 3 / 5                                  │
+  │ △ jury held advisory until validated                  │ │ calibration not-ready                                 │
+  │ Fleiss kappa -- need cohort                           │ ╰───────────────────────────────────────────────────────╯
+  │ ECE -- starved                                        │
+  │ variance -- starved                                   │ ╭─ VERIFIER RELIABILITY ────────────────────────────────╮
+  │ known-bad catch -- need labels                        │ │ no deterministic verifier evidence in window          │
   │ Wilson-LB 0.00 / 0.75                                 │ ╰───────────────────────────────────────────────────────╯
   │ authority advisory ◐ overridden -- veto logged, close │
-  │ proceeds                                              │ ╭─ VERIFIER RELIABILITY ────────────────────────────────╮
-  │ validation reducer [needs I07]                        │ │ no deterministic verifier evidence in window          │
+  │ proceeds                                              │ ╭─ OUTPUT LABELS ───────────────────────────────────────╮
+  │ validation reducer [needs I07]                        │ │ P01-I01-W01 deferred_outcome wave not yet closed      │
   ╰───────────────────────────────────────────────────────╯ ╰───────────────────────────────────────────────────────╯
 
-  ╭─ TIERS ───────────────────────────────────────────────╮ ╭─ OUTPUT LABELS ───────────────────────────────────────╮
-  │ verified 0                                            │ │ P01-I01-W01 deferred_outcome wave not yet closed      │
-  │ attested 0                                            │ ╰───────────────────────────────────────────────────────╯
+  ╭─ TIERS ───────────────────────────────────────────────╮
+  │ verified 0                                            │
+  │ attested 0                                            │
   │ deferred 1                                            │
   │ unavailable 0                                         │
   ╰───────────────────────────────────────────────────────╯

@@ -404,3 +404,52 @@ def test_j2_19_enter_on_a_campaign_route_holding_nothing_names_the_absence() -> 
     dispatch(ctx, "Enter", False)
     assert session.route == "campaign"
     assert session.log[0].note == "nothing to open · no campaign is held"
+
+
+# ---------- K-05: the readiness region offers and walks its arrows ----------
+
+
+def test_k_05_the_readiness_region_offers_the_arrows_and_they_walk_its_signals() -> None:
+    view = _view("release")
+    view.session.rel_reg = "READINESS"
+    bar = render_route(view)[-1]
+    assert bar.lstrip().startswith("↑↓")
+    ctx = Ctx(
+        session=view.session,
+        fixture=view.fixture,
+        host=_Host(),
+        w=view.w,
+        h=view.h,
+        projection=view.projection,
+    )
+    dispatch(ctx, "ArrowDown", False)
+    assert view.session.rel_sel == 1
+    dispatch(ctx, "ArrowUp", False)
+    assert view.session.rel_sel == 0
+
+
+# ---------- K-10: the filter row says what its keys do as it stands ----------
+
+
+def test_k_10_a_kept_filter_stops_promising_that_escape_clears_it() -> None:
+    view = _view("activity")
+    render_route(view)
+    ctx = Ctx(
+        session=view.session,
+        fixture=view.fixture,
+        host=_Host(),
+        w=view.w,
+        h=view.h,
+        projection=view.projection,
+    )
+
+    def filter_row() -> str:
+        return next(row for row in render_route(view) if row.startswith(" FILTER"))
+
+    for key in ("\\", "R"):
+        dispatch(ctx, key, False)
+    assert "Esc clears · Enter keeps" in filter_row()
+    dispatch(ctx, "Enter", False)
+    kept = filter_row()
+    assert "Esc clears" not in kept
+    assert "kept · \\ starts a new filter" in kept

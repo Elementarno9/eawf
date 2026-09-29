@@ -297,6 +297,11 @@ jobs:
       - name: Requirement trace check
         run: uv run python tools/requirement_trace.py check --require-owned
 
+      - name: Packet census lint
+        # The proposal packet is local and gitignored, so here the lint states
+        # that it is absent and passes; it scans wherever the packet exists.
+        run: uv run python tools/packet_census.py
+
   skill-eval:
     name: Skill envelope evals
     # The eval marker is excluded from the default pytest run, so without
@@ -465,6 +470,13 @@ jobs:
         # Markdown the PR adds/changes; --strict makes any composed finding
         # exit non-zero and block the PR.
         run: uv run eawf hook validate-prose --strict --base "${{ github.event.pull_request.base.sha }}"
+
+      - name: Citation scope (EAWF027) over the tree and the PR body
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s\n' "${PR_BODY}" > "${RUNNER_TEMP}/pr-body.md"
+          uv run eawf hook eawf027-citation-scope --pr-body "${RUNNER_TEMP}/pr-body.md"
 
   windows:
     name: Windows named-pipe transport (win32 test set)

@@ -89,10 +89,10 @@ from eawf.surfaces.tui.console.operations import (
 )
 from eawf.surfaces.tui.console.reads import (
     DISCONNECTED_CAUSE,
-    MUTABLE,
     can_mutate,
     mut_reason,
     reads,
+    write_refusal,
 )
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.seam import KNOWN_COUNT_LABEL, ProjectionSeam
@@ -743,7 +743,9 @@ def test_ui_060_the_disconnected_attention_frame_removes_writes_and_labels_known
     assert "4 known" in rows[1]
     assert "fleet-wide" not in rows[1]
     assert not can_mutate(session)
-    assert mut_reason(session, fixture) == f"{DISCONNECTED_CAUSE} · no request can be issued"
+    assert mut_reason(session, fixture) == (
+        f"DISCONNECTED · {DISCONNECTED_CAUSE} · no request can be issued"
+    )
     assert "a answer" not in rows[-1]
     assert "x deny" not in rows[-1]
 
@@ -771,11 +773,7 @@ def test_ui_061_a_count_outside_live_is_known_and_dated(
         assert attached.rstrip() == " ATTACHED  revision 41,208"
 
 
-@pytest.mark.parametrize(
-    "value",
-    [v for v in _NOT_LIVE if conn_label(v) not in MUTABLE],
-    ids=[v.value for v in _NOT_LIVE if conn_label(v) not in MUTABLE],
-)
+@pytest.mark.parametrize("value", _NOT_LIVE, ids=[v.value for v in _NOT_LIVE])
 def test_ui_061_a_state_that_refuses_writes_withdraws_the_verbs_and_says_why(
     fixture: Fixture, value: ConnectionValue
 ) -> None:
@@ -785,9 +783,35 @@ def test_ui_061_a_state_that_refuses_writes_withdraws_the_verbs_and_says_why(
     reason = mut_reason(session, fixture)
 
     assert not can_mutate(session)
-    assert reason != "not permitted in this connection state"
+    assert reason.startswith(f"{session.conn} · ")
+    assert not reason.endswith("not permitted in this connection state")
     assert " ".join(KEY["actions"].pair()) in rows[-1]
     assert "a answer" not in rows[-1]
+
+
+@pytest.mark.parametrize("value", list(ConnectionValue), ids=[v.value for v in ConnectionValue])
+def test_c_03_every_write_verb_refuses_outside_live_naming_the_state(
+    fixture: Fixture, value: ConnectionValue
+) -> None:
+    """C-03: of the nine connection values only LIVE admits a write; each other refuses.
+
+    The refusal comes from the one write gate, so the same words answer a keybar verb, a
+    menu verb and an overlay verb, and they name the connection state that refused it.
+    """
+    session = Session()
+    session.conn = conn_label(value)
+    refusals = {
+        write_refusal(session, fixture, verb=verb)
+        for verb in ("answer", "approve", "cancel", "promote", "defer")
+    }
+
+    if value is ConnectionValue.LIVE_COMPLETE:
+        assert can_mutate(session)
+        assert refusals == {""}
+    else:
+        assert not can_mutate(session)
+        assert refusals == {mut_reason(session, fixture)}
+        assert refusals.pop().startswith(f"{session.conn} · ")
 
 
 @pytest.mark.parametrize("value", _NOT_LIVE, ids=[v.value for v in _NOT_LIVE])

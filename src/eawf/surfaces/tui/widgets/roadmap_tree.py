@@ -80,6 +80,7 @@ from eawf.surfaces.tui.widgets.eu_bar import (
     render_size_bar,
 )
 from eawf.surfaces.tui.widgets.status_tint import STATUS_COLOURS, status_colour
+from eawf.workflow.estimation.thresholds import wave_budget_minutes
 
 if TYPE_CHECKING:
     from textual.events import Resize
@@ -99,10 +100,11 @@ logger = logging.getLogger(__name__)
 #: width so the block-fill maths stay one home.
 COMPLETION_BAR_CELLS: int = CANONICAL_BAR_CELLS
 
-#: Active-wave elapsed burn bands. The row marker uses ``~`` at/above the
-#: warning threshold and ``!`` at/above the error threshold so the status is
-#: visible even when the plain bar is colourless inside a Rich tree label.
-TIME_WARN_FRACTION: float = 0.8
+#: Active-wave elapsed burn band. The row marker turns ``!`` once the budget
+#: has been reached so the status is visible even when the plain bar is
+#: colourless inside a Rich tree label. There is no warning band short of the
+#: budget: a fraction of an estimate is a prediction, and the bar already
+#: shows how much of it has been used.
 TIME_ERROR_FRACTION: float = 1.0
 
 #: Minimum blank cells kept between a (possibly truncated) row title and a
@@ -351,28 +353,12 @@ def _burn_marker(consumed: float, total: float) -> str:
     fraction = consumed / total if total > 0 else 0.0
     if fraction >= TIME_ERROR_FRACTION:
         return "!"
-    if fraction >= TIME_WARN_FRACTION:
-        return "~"
     return "."
 
 
 def _burn_bar_with_band(label: str, consumed: float, total: float, *, mode: RenderMode) -> str:
     """Return ``<label><band>:<bar>`` for a time or token burn gauge."""
     return f"{label}{_burn_marker(consumed, total)}:{render_bar_plain(consumed, total, mode=mode)}"
-
-
-def _wave_time_budget_minutes(state: State, wave: Wave) -> float | None:
-    """Return a wave's elapsed-time budget in minutes, preferring estimates."""
-    estimates = state.estimates or {}
-    estimate = estimates.get(wave.id)
-    if estimate is not None and estimate.pessimistic_minutes > 0:
-        return estimate.pessimistic_minutes
-    if wave.effort_bucket is None:
-        return None
-    from eawf.workflow.estimation.buckets import EU_MINUTES, wave_estimate_eu
-
-    minutes = wave_estimate_eu(wave) * EU_MINUTES
-    return minutes if minutes > 0 else None
 
 
 @dataclass(slots=True)
@@ -893,16 +879,13 @@ class RoadmapTree(Tree[str]):
             return None
         if wave.claimed_at is None:
             return None
-        budget_minutes = _wave_time_budget_minutes(state, wave)
-        if budget_minutes is None:
-            return None
         elapsed_seconds = (datetime.now(UTC) - wave.claimed_at).total_seconds()
         if elapsed_seconds < 0:
             return None
         return _burn_bar_with_band(
             "T",
             elapsed_seconds / 60.0,
-            budget_minutes,
+            wave_budget_minutes(state, wave.id),
             mode=self._render_mode(),
         )
 

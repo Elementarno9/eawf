@@ -1000,13 +1000,10 @@ def claim_wave(
     # successful claim. This both records the new claimant and repairs stale
     # pointer rows without letting a stale pointer weaken the repo-wide cap.
     state.current.active_wave_ids = active_wave_ids(state)
-    # No estimate row is seeded here. A bucket centroid is derivable from
-    # ``wave.effort_bucket`` at read time, so persisting it made
-    # ``state.estimates`` a cache of a pure function that grew by one row
-    # per claim and could go stale the moment the bucket was revised. The
-    # map now holds only operator-authored estimates (``eawf estimate
-    # set``); readers that want a bucket default call
-    # ``default_estimate_summary`` themselves.
+    # No estimate row is seeded here. Every wave costs the one effort
+    # constant, so persisting it would make ``state.estimates`` a cache of a
+    # constant that grew by one row per claim. The map holds only
+    # operator-authored estimates (``eawf estimate set``).
     logger.info(f"claim_wave id={wave_id} session={session_id} out_of_order={out_of_order}")
     return wave
 

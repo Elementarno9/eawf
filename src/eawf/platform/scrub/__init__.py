@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from eawf.platform.scrub.scan import ScrubFinding, rewrite_text, scan_text
+from eawf.platform.scrub.scan import ScrubFinding, redact_text, rewrite_text, scan_text
 
-__all__ = ["ScrubFinding", "rewrite_text", "scan_text"]
+__all__ = ["ScrubFinding", "redact_text", "rewrite_text", "scan_text"]

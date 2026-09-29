@@ -38,9 +38,9 @@ from eawf.kernel.projection.registers import (
 )
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.runtime.budget.notices import load_notice_ledger, notices_path
-from eawf.runtime.budget.policy import BLOCK_FRACTION, WARN_FRACTION, PromptBudgetCeiling
+from eawf.runtime.budget.policy import BLOCK_FRACTION, PromptBudgetCeiling
 from eawf.runtime.budget.service import emit_budget_notice
-from eawf.surfaces.render.statusline import budget_segment
+from eawf.surfaces.render.statusline import SegmentSource, budget_segment
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 CEILING = PromptBudgetCeiling(tokens=1000, enforce="soft")
@@ -52,7 +52,7 @@ def _ledger(tmp_path: Path) -> Path:
     return notices_path(tmp_path / ".ea" / "state.json")
 
 
-@pytest.mark.parametrize("fraction", [0.5, WARN_FRACTION, 0.8, 0.999])
+@pytest.mark.parametrize("fraction", [0.5, 0.75, 0.8, 0.999])
 def test_ui_029_a_fraction_short_of_the_ceiling_writes_no_notice(
     tmp_path: Path, fraction: float
 ) -> None:
@@ -67,7 +67,12 @@ def test_ui_029_a_fraction_short_of_the_ceiling_writes_no_notice(
     )
     assert not ledger.exists()
     assert load_notice_ledger(ledger).notices == {}
-    segment = budget_segment(spent=consumed, limit=CEILING.tokens, notice_open=False)
+    segment = budget_segment(
+        spent=consumed,
+        limit=CEILING.tokens,
+        notice_open=False,
+        source=SegmentSource(producer="test", provenance="test#waves.token_budget"),
+    )
     assert "!limit" not in segment.text
     assert str(consumed) in segment.text
 

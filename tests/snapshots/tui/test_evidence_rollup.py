@@ -6,7 +6,7 @@ wave label, a ``role`` column carrying the producing agent role in its own
 column, a ``verdict`` column carrying the ratified verdict sigil from the
 extended ``status_sigil`` home (pass -> filled circle, fail -> multiplication
 cross, blocked -> warn-tinted withheld mark), and an ``eu`` column carrying the
-wave's bucket-derived effort-unit estimate.
+wave's effort-unit estimate (the one effort constant).
 
 Two paths are pinned:
 
@@ -147,7 +147,7 @@ def _state_with_wave(
 
     Uses the lifecycle transition helpers so every phase/iter/wave model
     carries its required fields without a hand-built dict that drifts as the
-    schema grows. The effort bucket drives the EU column.
+    schema grows. The EU column is the effort constant, whatever the label.
     """
     state = _empty_state()
     open_phase(state, phase_id="P30", title="phase")
@@ -365,7 +365,7 @@ def test_evidence_rollup_snapshot(tmp_path: Path) -> None:
     Mounts the evidence screen over a seeded report store and snapshots the
     frame so a layout regression on the wave-keyed table is caught. The
     verdict column renders tinted lifecycle sigils, the report column the
-    wave-keyed identity, and the EU column the wave's bucket EU.
+    wave-keyed identity, and the EU column the wave's effort estimate.
     """
 
     async def body() -> None:
@@ -405,8 +405,8 @@ def test_evidence_rollup_snapshot(tmp_path: Path) -> None:
             assert glyph(Sigil.CLOSED, mode=app.render_mode) in frame
             blocked_mark = status_sigil(AgentReportVerdict.BLOCKED).render(mode=app.render_mode)
             assert blocked_mark in frame
-            # EU column: the M bucket's EU.
-            assert "1.00" in frame
+            # EU column: the effort constant, whatever the M label says.
+            assert "0.80" in frame
             assert EMPTY_NOTICE not in frame
             assert_screen_snapshot(app, _GOLDEN / "evidence_rollup.txt")
 

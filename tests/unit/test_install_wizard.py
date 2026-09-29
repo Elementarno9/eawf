@@ -17,7 +17,6 @@ from eawf.platform.install.wizard import (
     quick_project_code_for_target,
     run_wizard_no_input,
 )
-from eawf.workflow.estimation.buckets import BUCKET_EU
 
 
 def _answers(runtime: str = "claude-code") -> WizardAnswers:
@@ -69,15 +68,10 @@ def test_config_yaml_seeds_project_goals_after_template_merge() -> None:
     assert body["project"]["goals"] == ["Establish Demo project intent"]
 
 
-def test_config_yaml_seeds_bucket_overrides_after_template_merge() -> None:
-    """Empty template bucket overrides cannot wipe canonical EU defaults."""
-    answers = _answers().model_copy(
-        update={"template_extras": {"estimation": {"buckets": {"overrides": {}}}}}
-    )
-    body = _build_config_yaml(answers)
-    assert body["estimation"]["buckets"]["overrides"] == {
-        bucket.value: {"expected_eu": expected_eu} for bucket, expected_eu in BUCKET_EU.items()
-    }
+def test_config_yaml_seeds_no_effort_calibration_table() -> None:
+    """The bootstrap config carries no per-label effort table to calibrate."""
+    body = _build_config_yaml(_answers())
+    assert "estimation" not in body
 
 
 def test_runtime_choices_accept_codex() -> None:

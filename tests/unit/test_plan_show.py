@@ -561,7 +561,8 @@ def test_render_roadmap_markdown_consumes_eu_view_density_and_fields() -> None:
 
     assert "| Phase | Metric | EU | Hours |" in md
     assert "| Phase | Metric | EU | Hours | Detail |" not in md
-    assert "| `P05` | realistic | 2 | 2 |" in md
+    # Two waves at the 0.8 EU constant, serial under one worker, at 60 min/EU.
+    assert "| `P05` | realistic | 1.6 | 1.6 |" in md
     assert "work-sum" not in md
 
 

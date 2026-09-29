@@ -2,9 +2,10 @@
 
 Two layers live here, both I/O-free and state-free:
 
-* **Advisory thresholds** (pre-existing): warn at 75 %, block at 100 %.
-  :func:`classify` returns ``None`` below the warn band, :data:`WARN_TAG`
-  in the warn band, and :data:`BLOCK_TAG` at or above the cap. The
+* **Observed crossing**: :func:`classify` returns :data:`BLOCK_TAG` once
+  consumption has reached the budget and ``None`` below it. There is no
+  warning band short of the budget: a fraction of a budget is a
+  prediction, and only a crossing that already happened is reported. The
   classifier short-circuits to ``None`` when no budget is configured so
   callers treat a missing budget as a no-op.
 
@@ -37,10 +38,8 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-WARN_FRACTION: float = 0.75
 BLOCK_FRACTION: float = 1.0
 
-WARN_TAG: str = "warn:75-percent"
 BLOCK_TAG: str = "block:over-budget"
 
 #: Enforcement modes for ``flow.budget.enforce``. ``soft`` (default) warns
@@ -236,7 +235,7 @@ def budget_config_from(merged: Mapping[str, Any]) -> BudgetConfig:
 
 
 def classify(consumed: int, budget: int | None) -> str | None:
-    """Classify a (consumed, budget) pair against the advisory thresholds.
+    """Classify a (consumed, budget) pair as over budget or not.
 
     Args:
         consumed: Cumulative tokens spent so far on the wave (>= 0).
@@ -244,9 +243,8 @@ def classify(consumed: int, budget: int | None) -> str | None:
             has been configured.
 
     Returns:
-        ``None`` when no budget is set or consumption is below the warn
-        threshold (75 %). :data:`WARN_TAG` between warn and block. :data:`BLOCK_TAG`
-        at or above 100 %.
+        ``None`` when no budget is set or consumption is below it;
+        :data:`BLOCK_TAG` at or above 100 %.
     """
     if budget is None:
         return None
@@ -258,8 +256,6 @@ def classify(consumed: int, budget: int | None) -> str | None:
     fraction = consumed / budget
     if fraction >= BLOCK_FRACTION:
         return BLOCK_TAG
-    if fraction >= WARN_FRACTION:
-        return WARN_TAG
     return None
 
 

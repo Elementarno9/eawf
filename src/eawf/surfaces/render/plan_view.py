@@ -68,9 +68,9 @@ from eawf.kernel.state.models import (
     Wave,
 )
 from eawf.workflow.estimation.buckets import (
+    EFFORT_EU,
     critical_path_eu,
     sum_wave_eu,
-    wave_estimate_eu,
 )
 from eawf.workflow.estimation.metrics import (
     RealisticWallClockMetric,
@@ -587,7 +587,7 @@ def build_view(state: State, iter_id: str) -> PlanView:
             success_criteria=[c.text for c in w.success_criteria],
             agent_role=w.agent_role.value if w.agent_role else None,
             effort_bucket=w.effort_bucket.value if w.effort_bucket else None,
-            estimate_eu=wave_estimate_eu(w),
+            estimate_eu=EFFORT_EU,
             claim_session_id=w.claim_session_id,
             commit=derive_wave_sha(w.id),
             outcome=w.outcome,

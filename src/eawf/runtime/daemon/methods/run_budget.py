@@ -325,6 +325,7 @@ class _BudgetLedger:
             notices_path(self._context.identity.tree_root / _STATE_FILENAME),
             recorded,
             contract_digest=contract,
+            audience=(self._args.actor,),
         )
         self._opened = True
         logger.info(

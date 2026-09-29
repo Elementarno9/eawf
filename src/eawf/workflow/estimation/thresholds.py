@@ -11,8 +11,8 @@ they classify against the SAME two constants here.
   ``warn`` band -- above it the gauge is ``err`` (over budget).
 
 It also owns :func:`wave_budget_minutes`, the one wave-id ->
-pessimistic-minutes projection (estimate row first, else the
-effort-bucket EU default), so every elapsed-time reader -- the gauge, the
+pessimistic-minutes projection (estimate row first, else the measured p90
+of the one effort constant), so every elapsed-time reader -- the gauge, the
 digest publisher, and the stale detector -- shares one budget semantics
 instead of re-deriving it.
 """
@@ -66,36 +66,29 @@ def classify_band(fraction: float) -> OverBudgetBand:
     return "err"
 
 
-def wave_budget_minutes(state: State, wave_id: str) -> float | None:
-    """Return a wave's pessimistic time budget in minutes, or ``None``.
+def wave_budget_minutes(state: State, wave_id: str) -> float:
+    """Return a wave's pessimistic time budget in minutes.
 
     The single wave-id -> budget-minutes projection shared by the gauge,
     the digest elapsed publisher, and the stale-wave advisory. Prefers an
     explicit estimate row's ``pessimistic_minutes`` and falls back to the
-    effort-bucket EU default (``wave_estimate_eu * EU_MINUTES``). Returns
-    ``None`` when the wave is absent, has no effort bucket, and has no
-    positive estimate -- the caller then has no budget to band against and
-    leans on the absolute backstop instead.
+    measured p90 of the effort constant, whatever size label the wave
+    carries.
 
     Args:
         state: Loaded typed state snapshot (read-only).
         wave_id: The wave whose time budget is wanted.
 
     Returns:
-        The pessimistic budget in minutes (``> 0``), or ``None`` when no
-        budget can be projected.
+        The pessimistic budget in minutes (``> 0``).
     """
     estimates = state.estimates or {}
     estimate = estimates.get(wave_id)
     if estimate is not None and estimate.pessimistic_minutes > 0:
         return estimate.pessimistic_minutes
-    wave = state.waves.get(wave_id)
-    if wave is None or wave.effort_bucket is None:
-        return None
-    from eawf.workflow.estimation.buckets import EU_MINUTES, wave_estimate_eu
+    from eawf.workflow.estimation.buckets import EFFORT_DISPERSION_MINUTES
 
-    minutes = wave_estimate_eu(wave) * EU_MINUTES
-    return minutes if minutes > 0 else None
+    return EFFORT_DISPERSION_MINUTES["p90"]
 
 
 __all__ = [

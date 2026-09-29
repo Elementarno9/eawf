@@ -130,15 +130,6 @@ Perf bench harness — seed corpora, time harnesses, flag regressions.
 | `run` | Seed a corpus in-memory and time each harness against it. |
 | `turn-cost` | Render wall clock + cost per completed unit of work, or check it. |
 
-### `eawf calibrate`
-
-Re-fit estimation parameters from recorded actuals.
-
-| Verb | Summary |
-|---|---|
-| `apply` | Apply one fitted bucket centroid to layered config after confirmation. |
-| `buckets` | Re-fit the XS..XL effort buckets from 90-day actuals and nudge on drift. |
-
 ### `eawf cc`
 
 Claude Code adapter (statusline, plugin, hooks).
@@ -315,6 +306,8 @@ Dispatch hook events through the Eä hook runner.
 | `eawf023-artifact-placement` | Reject misplaced or date-stem-less artifacts under ``.ea/artifacts/``. |
 | `eawf024-test-tier-contract` | Reject non-unit imports in ``tests/unit/`` and mis-tiered kind markers. |
 | `eawf025-test-placement` | Reject a newly added test filed outside its taxonomy address. |
+| `eawf026-settings-categories` | Reject a configuration catalog section the settings rail cannot reach. |
+| `eawf027-citation-scope` | Reject committed text quoting a reflection row it may not. |
 | `email-leak-lint` | Reject email addresses outside the canonical author/no-reply allowlist. |
 | `log-format-lint` | Run the EAWF001 log-format rule over changed library modules. |
 | `path-leak-lint` | Reject home-directory path literals (macOS, Windows, and Linux home roots). |
@@ -512,6 +505,18 @@ Append audit, decision and artifact records to an epoch-2 tree.
 | `append` | Append one audit, decision or artifact to the generation's ledger. |
 | `evidence` | File one evidence row an acceptance step or answer may cite. |
 
+### `eawf reflect`
+
+Report where effort, time and money went; no canonical write.
+
+| Verb | Summary |
+|---|---|
+| `export` | Write the newest report as a static page that opens from the filesystem. |
+| `prune` | Remove local reports and cached titles past their retention class. |
+| `run` | Read the tree's Runs, fill their titles, and write the report. |
+| `serve` | Serve the local collection read-only on loopback until interrupted. |
+| `show` | Print the newest report in the local collection. |
+
 ### `eawf release`
 
 Tag releases and drive the release train's checkpoint records.
@@ -601,6 +606,7 @@ Run lifecycle (create, start, finish, fail).
 | `create` | Admit a QUEUED Run against the scope its create document names. |
 | `fail` | Fail a RUNNING Run; the payload carries the reason, ended_at and failure. |
 | `finish` | Complete a RUNNING Run once its report is bound; updates carry ended_at. |
+| `report` | Write the plain-text report of one Run; no record moves. |
 | `start` | Start a QUEUED Run; the payload's updates carry started_at. |
 
 ### `eawf schema`

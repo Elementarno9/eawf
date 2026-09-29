@@ -29,7 +29,7 @@ from eawf.surfaces.tui.console.decisions import (
 )
 from eawf.surfaces.tui.console.keymap import DISMISS, allowlist
 from eawf.surfaces.tui.console.mutation import Card, Item, Kind
-from eawf.surfaces.tui.console.navigation import Ctx, close_overlay, open_overlay
+from eawf.surfaces.tui.console.navigation import Ctx, close_overlay, copied, open_overlay
 from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.overlays.bound import (
     CARD_ROUTES,
@@ -217,9 +217,8 @@ def _cursor_key(ctx: Ctx, k: str, rows: int, copy: Callable[[int], str] | None) 
         s.sel = max(0, min(rows - 1, s.sel + (1 if k in _DOWN else -1)))
         ctx.log(k, f"row {s.sel + 1} of {rows}")
     elif k == "y" and copy is not None:
-        copied = copy(s.sel)
-        ctx.notify(copied, "copied")
-        ctx.log("y", f"copied — {copied}")
+        text = copy(s.sel)
+        ctx.log("y", f"{copied(ctx.copy(text))} — {text}")
     else:
         _escape_only(ctx, k, "reading changes nothing")
 
@@ -354,9 +353,8 @@ def _draft_key(ctx: Ctx, d: DraftRecord, k: str) -> None:
 def _card_key(ctx: Ctx, card: object, k: str) -> None:
     s = ctx.s
     if k == "y":
-        copied = _card_copy(card)
-        ctx.notify(copied, "copied")
-        ctx.log("y", f"copied — {copied}")
+        text = _card_copy(card)
+        ctx.log("y", f"{copied(ctx.copy(text))} — {text}")
     elif isinstance(card, ArtifactRecord) and k in _UP | _DOWN:
         win = file_window(s, len(card.lines), ctx.h)
         if not (win.above or win.below):

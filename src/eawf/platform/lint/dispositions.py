@@ -110,6 +110,10 @@ RULE_DISPOSITIONS: Final[tuple[RuleDisposition, ...]] = (
     RuleDisposition("EAWF024", "test-tier contract for the unit tier", Disposition.REWRITE),
     RuleDisposition("EAWF025", "test placement under the kind taxonomy", Disposition.CARRY),
     RuleDisposition(
+        "EAWF026", "every settings section filed under one category", Disposition.CARRY
+    ),
+    RuleDisposition("EAWF027", "committed text quotes only quotable rows", Disposition.CARRY),
+    RuleDisposition(
         "commit-prefix",
         "commit subject and trailer grammar",
         Disposition.REWRITE,

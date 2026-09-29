@@ -13,7 +13,7 @@ import pytest
 
 from eawf.kernel.state.enums import ScopeKind, WaveStatus
 from eawf.kernel.state.models import State, Wave
-from eawf.runtime.budget.policy import BLOCK_TAG, WARN_TAG
+from eawf.runtime.budget.policy import BLOCK_TAG
 from eawf.runtime.budget.service import (
     check_budget,
     record_consumption,
@@ -75,12 +75,12 @@ def test_set_budget_unknown_wave_raises_key_error() -> None:
         set_budget(state, "P09-I09-W09", 1000)
 
 
-def test_record_consumption_returns_warning_at_75() -> None:
+def test_record_consumption_returns_nothing_short_of_the_budget() -> None:
     state = _state_with_wave()
     set_budget(state, "P01-I01-W01", 1000)
     wave, tag = record_consumption(state, "P01-I01-W01", 750)
     assert wave.tokens_consumed == 750
-    assert tag == WARN_TAG
+    assert tag is None
 
 
 def test_record_consumption_returns_block_at_100() -> None:
@@ -113,11 +113,11 @@ def test_record_consumption_unknown_wave_raises_key_error() -> None:
 def test_check_budget_readonly() -> None:
     state = _state_with_wave()
     set_budget(state, "P01-I01-W01", 1000)
-    record_consumption(state, "P01-I01-W01", 800)
+    record_consumption(state, "P01-I01-W01", 1000)
     # Repeated check does not mutate.
-    assert check_budget(state, "P01-I01-W01") == WARN_TAG
-    assert check_budget(state, "P01-I01-W01") == WARN_TAG
-    assert state.waves["P01-I01-W01"].tokens_consumed == 800
+    assert check_budget(state, "P01-I01-W01") == BLOCK_TAG
+    assert check_budget(state, "P01-I01-W01") == BLOCK_TAG
+    assert state.waves["P01-I01-W01"].tokens_consumed == 1000
 
 
 def test_check_budget_unknown_wave_raises_key_error() -> None:

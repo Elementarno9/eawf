@@ -301,6 +301,8 @@ class Session(BaseModel):
     # the same for the last route frame drawn, which an overlay over it reads: the route
     # is not drawn while the overlay is
     route_windowed: bool = False
+    # the keys the last route frame's keybar offered, which the help card over it teaches
+    route_bar_keys: frozenset[str] | None = None
     # settings rail
     set_sec: int = 0
     set_key: int = 0

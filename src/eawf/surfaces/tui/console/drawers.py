@@ -110,7 +110,11 @@ def action_rows(view: View) -> list[str]:
     selected = len(s.marked)
     if selected:
         rows.insert(
-            0, pad(f" SELECTED  {selected} selected · one preview, {selected} results", view.w)
+            0,
+            pad(
+                f" SELECTED  {selected} selected · one preview, {dv.plural(selected, 'result')}",
+                view.w,
+            ),
         )
     if not fx.prototype and decided.kind is GateKind.TRANSPORT and menu_entity(s, view.rows):
         rows.append(pad(f" WRITES    not offered · {decided.reason}", view.w))

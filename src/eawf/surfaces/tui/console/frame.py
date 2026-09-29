@@ -45,7 +45,7 @@ from eawf.surfaces.tui.console.keybar import (
 )
 from eawf.surfaces.tui.console.keymap import unserved
 from eawf.surfaces.tui.console.session import Session, Toast
-from eawf.surfaces.tui.console.tokens import RULE_HEAVY, RULE_THIN, Severity
+from eawf.surfaces.tui.console.tokens import BRAND, CRUMB_SEP, RULE_HEAVY, RULE_THIN, Severity
 from eawf.surfaces.tui.console.width import cell_len, clip_words, pad
 
 CARET = "▸"
@@ -328,14 +328,35 @@ def header(view: View, crumb: str) -> str:
         return header_row(
             session, crumb=crumb, scope=proto.scope, needs=0, w=view.w, process=process
         )
+    scope = proto.scope
+    if not view.fixture.prototype and view.scope_name:
+        # a linked console knows the project it is open in and names it on every frame
+        scope = view.scope_name
+        crumb = _scoped(crumb, scope, proto.scope)
     return header_row(
         session,
         crumb=crumb,
-        scope=proto.scope,
+        scope=scope,
         needs=needs_count(view),
         w=view.w,
         prototype=view.fixture.prototype,
     )
+
+
+def _scoped(crumb: str, scope: str, placeholder: str) -> str:
+    """Return ``crumb`` naming the attached project as the step after the brand.
+
+    An overlay's crumb is written from the brand to the overlay; on a linked console the
+    project it is open in is named before it, as on every route frame, and a crumb that
+    names the chrome's placeholder scope names the project instead.
+    """
+    lead, _, rest = crumb.partition(BRAND)
+    steps = rest.split(CRUMB_SEP)[1:] if rest.startswith(CRUMB_SEP) else []
+    if not steps or steps[0] == scope:
+        return crumb
+    if steps[0] == placeholder:
+        steps = steps[1:]
+    return lead + CRUMB_SEP.join([BRAND, scope, *steps])
 
 
 def entry_state(view: View) -> EntryState:
@@ -634,6 +655,7 @@ def build(view: View, rows: Sequence[str], keys: str) -> list[str]:
     if view.gutter and out:
         out[0] = _inset(out[0])
     out.extend(" " * w for _ in range(h - 1 - len(out)))
+    paint_marks(session, out)
     if view.verbose:
         paint_verbose(session, out, w)
     paint_rack(session, out, w, verbose=view.verbose)
@@ -854,6 +876,34 @@ def overlay_row(out: list[str], row: int, col: int, text: str) -> None:
         return
     base = out[row]
     out[row] = base[:col] + text + base[col + cell_len(text) :]
+
+
+#: The gutter mark a record marked for a bulk verb carries, in the cell left of its key.
+MARKED = "+"
+_CARET = "▸"
+
+
+def paint_marks(session: Session, out: list[str]) -> None:
+    """Mark each body row that opens with a record marked for a bulk verb.
+
+    The mark is text in the gutter cell left of the record's key, so a marked row says so
+    in plain mode too, and on every route that lists the records the marks are taken from.
+
+    Args:
+        session: The session whose marks are painted.
+        out: The body rows, painted in place; the header row is never a record's row.
+    """
+    if not session.marked:
+        return
+    marked = set(session.marked)
+    for i in range(1, len(out)):
+        row = out[i]
+        # the leading blanks are one cell each, so their width is the key's string offset
+        at = cell_len(row) - cell_len(row.lstrip(" "))
+        if row[at : at + 1] == _CARET:
+            at += 2
+        if at and row[at - 1] == " " and row[at:].split(" ", 1)[0] in marked:
+            out[i] = f"{row[: at - 1]}{MARKED}{row[at:]}"
 
 
 def paint_rack(session: Session, out: list[str], w: int, *, verbose: bool) -> None:

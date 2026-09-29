@@ -3,7 +3,7 @@
 The watch surface showed no liveness heartbeat or elapsed-versus-expected and
 squeezed the stream pane so long JSON read as cut off. This wave adds a
 ``thinking · <elapsed>/~<expected> · <turns> turns · pid <pid>`` heartbeat
-(G5/G6, effort-aware from the wave's bucket) and gives the stream pane the
+(G5/G6, the expected time is the one effort constant) and gives the stream pane the
 majority of the body height with a fuller backfill (G10). These tests pin the
 pure formatting + the layout constants.
 """
@@ -12,11 +12,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from eawf.kernel.state.enums import AgentSessionStatus, EffortBucket, WaveStatus
+from eawf.kernel.state.enums import AgentSessionStatus, WaveStatus
 from eawf.surfaces.tui.modes.agent_watch import (
     _OUTPUT_BACKFILL_LIMIT,
     WatchTarget,
-    _expected_minutes,
     _format_duration,
     render_liveness_line,
     render_watch_header,
@@ -28,7 +27,6 @@ _T0 = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 def _target(
     *,
     wave_status: WaveStatus | None = WaveStatus.IN_PROGRESS,
-    effort_bucket: EffortBucket | None = EffortBucket.L,
     subprocess_pid: int | None = 4242,
     started_at: datetime | None = _T0,
 ) -> WatchTarget:
@@ -41,7 +39,6 @@ def _target(
         wave_status=wave_status,
         subprocess_pid=subprocess_pid,
         started_at=started_at,
-        effort_bucket=effort_bucket,
     )
 
 
@@ -54,29 +51,21 @@ def test_format_duration_units() -> None:
     assert _format_duration(-5) == "0s"
 
 
-def test_expected_minutes_from_bucket() -> None:
-    """Expected wall-clock is the bucket centroid EU in minutes (L = 60)."""
-    assert _expected_minutes(EffortBucket.L) == 60.0
-    assert _expected_minutes(EffortBucket.M) == 30.0
-    assert _expected_minutes(None) is None
-
-
 def test_liveness_line_shows_thinking_elapsed_expected_turns_pid() -> None:
     """The heartbeat carries thinking, elapsed/~expected, turns, and pid."""
     now = _T0.replace(minute=2, second=14)  # 2m14s after start
     line = render_liveness_line(_target(), turns=6, now=now)
     assert "thinking" in line
-    assert "2m14s/~1h00m" in line
+    assert "2m14s/~24m00s" in line
     assert "6 turns" in line
     assert "pid 4242" in line
 
 
-def test_liveness_line_without_bucket_omits_expected() -> None:
-    """With no effort bucket the heartbeat shows bare elapsed, no /~expected."""
-    now = _T0.replace(minute=1, second=0)
-    line = render_liveness_line(_target(effort_bucket=None), turns=1, now=now)
-    assert "1m00s" in line
+def test_liveness_line_without_start_omits_the_clock() -> None:
+    """With no session start there is no elapsed clock to compare."""
+    line = render_liveness_line(_target(started_at=None), turns=1, now=_T0)
     assert "/~" not in line
+    assert "1 turns" in line
 
 
 def test_liveness_line_empty_for_terminal_wave() -> None:

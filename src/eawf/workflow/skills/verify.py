@@ -16,8 +16,9 @@ pass names a Milestone and the Batch clears, it opens the protected
 approval the acceptance is taken on, presenting what the acceptance
 journey showed and the exact tree it was shown on. The daemon files that
 journey as the Milestone's acceptance bundle and binds the question to
-its digest; the pass reports both and never answers the question, which
-is a person's to seal.
+its digest; the pass reports both, carries the question the daemon
+presented from the filed row as the report's ``user_question`` for the
+host to ask, and never answers it, which is a person's to seal.
 The gate mode does not: judging one Task's completion needs the exact
 base binding, the Run's report verdict, the gate specifications its
 criteria reference and the runtime facts its proofs ran under, and no
@@ -281,6 +282,7 @@ class VerifySkill(Skill):
             bundle_digest=approval.get("bundle_digest"),
             acceptance_bundle=approval.get("acceptance_bundle"),
             unresolved_request_fields=list(unresolved),
+            user_question=approval.get("host_question"),
             outcome=outcome,
             reason=str(
                 answer.get(

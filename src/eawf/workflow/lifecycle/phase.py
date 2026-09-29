@@ -32,7 +32,7 @@ from eawf.observability.metrics.odr import (
     drift_budget_pulse,
 )
 from eawf.runtime.vcs.checkpoint import checkpoint_commit_blocker
-from eawf.workflow.estimation.buckets import wave_estimate_eu
+from eawf.workflow.estimation.buckets import EFFORT_EU
 from eawf.workflow.lifecycle._audit_acceptance import (
     AuditAcceptanceIssue,
     assess_close_audit,
@@ -362,8 +362,7 @@ def _phase_closed_wave_plan_rows(state: State, *, phase_id: str) -> list[WavePla
     so its plan-row count is taken as the delivered count and the wave can
     never read as thin (the conservative reading -- a missing plan is not
     evidence of drift). The delivered count is ``len(wave.success_criteria)``
-    and the per-wave EU comes from
-    :func:`eawf.workflow.estimation.buckets.wave_estimate_eu`.
+    and the per-wave EU is :data:`eawf.workflow.estimation.buckets.EFFORT_EU`.
 
     Args:
         state: The state holding the iter / wave rows.
@@ -391,7 +390,7 @@ def _phase_closed_wave_plan_rows(state: State, *, phase_id: str) -> list[WavePla
                 wave_id=wave.id,
                 planned_criteria=planned,
                 delivered_criteria=delivered,
-                eu=wave_estimate_eu(wave),
+                eu=EFFORT_EU,
             )
         )
     return rows

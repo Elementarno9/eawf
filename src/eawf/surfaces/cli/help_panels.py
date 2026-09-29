@@ -112,13 +112,13 @@ COMMAND_PANELS: dict[str, str] = {
     "validate": "audit",
     "vfl": "audit",
     # estimation: EU estimates / actuals, impact graph, rolling metrics,
-    # perf bench harness, effort-bucket calibration.
+    # perf bench harness.
     "actual": "estimation",
     "bench": "estimation",
-    "calibrate": "estimation",
     "estimate": "estimation",
     "impact": "estimation",
     "metrics": "estimation",
+    "reflect": "estimation",
     "telemetry": "estimation",
     # planning: roadmap / wave / iter / phase nouns + research + memory.
     "agent-report": "planning",

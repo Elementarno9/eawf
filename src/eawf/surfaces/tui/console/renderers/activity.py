@@ -49,6 +49,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     native_head,
     route_crumb,
 )
+from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 RAIL_W = 29
@@ -57,6 +58,15 @@ _COUNT_W = 4
 _AS_OF_W = 6
 _FOOTER = 2
 _COL_HEAD = 1
+#: What the filter row says its keys do: Esc and Enter answer only while it is typed into;
+#: a kept filter stays until ``\\`` starts a new one, since Esc then leaves the route.
+FILTER_TYPING = "Esc clears · Enter keeps"
+FILTER_KEPT = "kept · \\ starts a new filter"
+
+
+def _filter_hint(s: Session) -> str:
+    """Return the filter row's key hint for the field as it stands."""
+    return FILTER_TYPING if s.typing else FILTER_KEPT
 
 
 def _rows(view: View) -> list[FleetRow]:
@@ -84,10 +94,7 @@ def _head(view: View, wide: bool) -> list[str]:
         rows.append(f" ATTACHED  {prototype_attached(rd, fx)}")
     if s.typing or dv.filter_of(s):
         rows.append(
-            " FILTER    \\"
-            + dv.filter_of(s)
-            + ("▏" if s.typing else "")
-            + "   Esc clears · Enter keeps"
+            " FILTER    \\" + dv.filter_of(s) + ("▏" if s.typing else "") + f"   {_filter_hint(s)}"
         )
     if not wide:
         items = [dv.StripItem(None, "all", len(proto.fleet))] + [
@@ -233,8 +240,6 @@ _STATUS_REASON: Mapping[str, str] = MappingProxyType(
     {"QUEUED": "waiting for a slot", "COMPLETED": "run finished", "CANCELLED": "cancelled"}
 )
 
-#: The gutter mark a Run marked for a bulk verb carries beside the caret.
-MARKED = "+"
 
 #: The next move an empty Activity route offers: nothing executes until a Task is claimed.
 EMPTY_NEXT = "g b shows the backlog · a Run starts when a Task is dispatched"
@@ -347,7 +352,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     )
     if s.typing or dv.filter_of(s):
         typed = "▏" if s.typing else ""
-        top.append(label("FILTER", f"\\{dv.filter_of(s)}{typed}   Esc clears · Enter keeps"))
+        top.append(label("FILTER", f"\\{dv.filter_of(s)}{typed}   {_filter_hint(s)}"))
     items = bucket_items(grouping)
     s.bucket_keys = [item.key for item in items]
     if not wide:
@@ -369,9 +374,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             pad(run_reason(row), cols[3] - 1),
             as_of(row),
         ]
-        line = table.row(cells, index == cursor)
-        # a Run marked for a bulk verb says so in text, in the gutter beside the caret
-        body.append(f"{line[:2]}{MARKED}{line[3:]}" if row.key in s.marked else line)
+        body.append(table.row(cells, index == cursor))
     if not shown:
         body.extend(empty_lines(view, register))
     if wide:

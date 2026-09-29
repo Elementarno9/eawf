@@ -94,9 +94,8 @@ fallback ladder rather than fake completion.
    artifact.
 6. Partition into waves: parallel only for disjoint / controlled scopes;
    assign worktree policy.
-7. Estimate each wave with effort buckets and roll up
-   `sum_wave_eu` / `critical_path_eu`; do not recalibrate coefficients
-   during the run.
+7. Estimate each wave at the one effort constant and roll up
+   `sum_wave_eu` / `critical_path_eu`; a size label changes no figure.
 8. Allocate IDs: `eawf iter open P13` auto-allocates next `P13-Ixx`;
    explicit `P13-I04` infers parent.
 9. Write plan / spec artifact, state wave stubs, and estimate records.

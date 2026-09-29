@@ -1,9 +1,7 @@
 """P29-I02-W03: strict validation for the ``preferences`` config section.
 
-Covers the three operator-tunable preference keys added by this wave —
-``preferences.solution_bias`` / ``preferences.scope_size`` /
-``preferences.auto_choose`` — across the surfaces that enforce their
-closed-enum contract:
+Covers the one operator-tunable preference key, ``preferences.auto_choose``,
+across the surfaces that enforce its closed-enum contract:
 
 - :class:`~eawf.kernel.config.schema.PreferencesConfig` — the strict
   section model. Valid enum values are accepted, an unknown enum value
@@ -13,10 +11,10 @@ closed-enum contract:
 - An old-shape config body without a ``preferences`` block defaults
   cleanly (the section model materialises from an empty mapping and the
   legacy migration leaves the body untouched).
-- The leaf catalog (:data:`LEAF_KEY_REGISTRY`) resolves the three rows
-  via the registry accessors.
+- The leaf catalog (:data:`LEAF_KEY_REGISTRY`) resolves the row via the
+  registry accessors.
 - The operator-facing menu registry (:data:`CONFIG_REGISTRY`) carries
-  the three rows and :func:`coerce_and_validate` rejects an out-of-enum
+  the row and :func:`coerce_and_validate` rejects an out-of-enum
   value with :class:`InvalidInput`.
 """
 
@@ -35,19 +33,10 @@ from eawf.kernel.config.registry import (
     leaf_keys_by_domain,
     registry_lookup,
 )
-from eawf.kernel.config.schema import (
-    AutoChoose,
-    PreferencesConfig,
-    SolutionBias,
-)
-from eawf.kernel.state.enums import EffortBucket
+from eawf.kernel.config.schema import AutoChoose, PreferencesConfig
 from eawf.surfaces.cli.errors import UserError
 
-_PREFERENCE_KEYS = (
-    "preferences.solution_bias",
-    "preferences.scope_size",
-    "preferences.auto_choose",
-)
+_PREFERENCE_KEYS = ("preferences.auto_choose",)
 
 
 # --- PreferencesConfig: defaults --------------------------------------------
@@ -56,30 +45,16 @@ _PREFERENCE_KEYS = (
 def test_preferences_config_defaults_applied_when_omitted() -> None:
     """Omitting every field falls back to the documented enum defaults."""
     cfg = PreferencesConfig()
-    assert cfg.solution_bias is SolutionBias.BALANCED
-    assert cfg.scope_size is EffortBucket.M
     assert cfg.auto_choose is AutoChoose.OFF
 
 
 def test_preferences_config_defaults_from_empty_mapping() -> None:
     """An empty mapping materialises the same defaults (old-shape round-trip)."""
     cfg = PreferencesConfig.model_validate({})
-    assert cfg.solution_bias is SolutionBias.BALANCED
-    assert cfg.scope_size is EffortBucket.M
     assert cfg.auto_choose is AutoChoose.OFF
 
 
 # --- PreferencesConfig: valid enum values -----------------------------------
-
-
-def test_preferences_config_accepts_valid_solution_bias() -> None:
-    cfg = PreferencesConfig.model_validate({"solution_bias": "thorough"})
-    assert cfg.solution_bias is SolutionBias.THOROUGH
-
-
-def test_preferences_config_accepts_valid_scope_size() -> None:
-    cfg = PreferencesConfig.model_validate({"scope_size": "XL"})
-    assert cfg.scope_size is EffortBucket.XL
 
 
 def test_preferences_config_accepts_valid_auto_choose() -> None:
@@ -88,17 +63,6 @@ def test_preferences_config_accepts_valid_auto_choose() -> None:
 
 
 # --- PreferencesConfig: error paths -----------------------------------------
-
-
-def test_preferences_config_rejects_unknown_solution_bias() -> None:
-    """An out-of-enum solution_bias value fails at the model boundary."""
-    with pytest.raises(ValidationError, match="solution_bias"):
-        PreferencesConfig.model_validate({"solution_bias": "bogus"})
-
-
-def test_preferences_config_rejects_unknown_scope_size() -> None:
-    with pytest.raises(ValidationError, match="scope_size"):
-        PreferencesConfig.model_validate({"scope_size": "HUGE"})
 
 
 def test_preferences_config_rejects_unknown_auto_choose() -> None:
@@ -118,14 +82,10 @@ def test_preferences_config_rejects_unknown_key() -> None:
 def test_built_in_defaults_carry_preferences_block() -> None:
     """The built-in defaults expose a ``preferences`` block matching the model."""
     block = built_in_defaults()["preferences"]
-    assert block == {
-        "solution_bias": "balanced",
-        "scope_size": "M",
-        "auto_choose": "off",
-    }
+    assert block == {"auto_choose": "off"}
     # The block round-trips through the strict model unchanged.
     cfg = PreferencesConfig.model_validate(block)
-    assert cfg.solution_bias is SolutionBias.BALANCED
+    assert cfg.auto_choose is AutoChoose.OFF
 
 
 def test_legacy_body_without_preferences_normalizes_runtime_id() -> None:
@@ -160,7 +120,7 @@ def test_leaf_catalog_resolves_every_preference_key() -> None:
 
 
 def test_leaf_keys_by_domain_groups_preferences() -> None:
-    """The domain filter returns exactly the three preference rows."""
+    """The domain filter returns exactly the preference row."""
     rows = leaf_keys_by_domain("preferences")
     assert {row.key for row in rows} == set(_PREFERENCE_KEYS)
 
@@ -173,17 +133,11 @@ def test_leaf_catalog_preference_defaults_are_declared_choices() -> None:
         assert entry.default in entry.choices
 
 
-def test_leaf_catalog_scope_size_choices_match_effort_bucket() -> None:
-    """``scope_size`` reuses the canonical effort-bucket value set."""
-    entry = leaf_key_lookup("preferences.scope_size")
-    assert entry.choices == tuple(b.value for b in EffortBucket)
-
-
 # --- menu registry (eawf config surface) ------------------------------------
 
 
 def test_menu_registry_carries_every_preference_key() -> None:
-    """The operator-facing menu registry exposes the three preference rows."""
+    """The operator-facing menu registry exposes the preference row."""
     for key in _PREFERENCE_KEYS:
         entry = registry_lookup(key)
         assert entry is not None
@@ -192,14 +146,14 @@ def test_menu_registry_carries_every_preference_key() -> None:
 
 
 def test_menu_registry_accepts_valid_preference_value() -> None:
-    entry = registry_lookup("preferences.solution_bias")
+    entry = registry_lookup("preferences.auto_choose")
     assert entry is not None
-    assert coerce_and_validate(entry, "simple") == "simple"
+    assert coerce_and_validate(entry, "recommended") == "recommended"
 
 
 def test_menu_registry_rejects_invalid_preference_value() -> None:
     """A bogus enum value is rejected with the canonical InvalidInput error."""
-    entry = registry_lookup("preferences.solution_bias")
+    entry = registry_lookup("preferences.auto_choose")
     assert entry is not None
     with pytest.raises(UserError, match="not in choices"):
         coerce_and_validate(entry, "bogus")

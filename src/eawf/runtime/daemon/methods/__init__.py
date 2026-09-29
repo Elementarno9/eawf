@@ -375,7 +375,9 @@ def register(name: str) -> Callable[[Handler], Handler]:
 #: become part of the surface.
 _METHOD_MODULES: Final[tuple[str, ...]] = (
     "agent",
+    "bulk",
     "daemon",
+    "budget_notice",
     "candidate",
     "close",
     "close_hosted",
@@ -396,6 +398,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "event",
     "evidence",
     "fleet",
+    "host_subagent",
     "integration",
     "jury",
     "migration",

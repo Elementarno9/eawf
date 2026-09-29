@@ -473,6 +473,11 @@ def _cleanup_legacy_keys(payload: dict[str, Any]) -> bool:
         ("polish", "deletion_policy"),
         ("vcs", "auto_push"),
         ("vcs", "pr_open"),
+        # Behaviourally dead leaves, deleted rather than wired to a consumer.
+        ("preferences", "solution_bias"),
+        ("preferences", "scope_size"),
+        # The effort-ladder calibration retired with the ladder itself.
+        ("estimation", "buckets"),
     ):
         changed = _pop_leaf(payload, section, key) or changed
 

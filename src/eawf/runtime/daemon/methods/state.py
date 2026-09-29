@@ -152,8 +152,6 @@ from eawf.runtime.daemon.methods.state_context import (
 )
 from eawf.runtime.daemon.methods.state_events import (
     MUTATION_EVENT_KIND,
-    bucket_drift_extras,
-    build_bucket_drift_envelope,
     build_event_envelope,
     mutation_event_extras,
     publish_wave_elapsed_updates,
@@ -987,23 +985,12 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # extras. Wave-close only; non-wave mutations get an empty
             # extras dict so the envelope shape stays uniform.
             extras = mutation_event_extras(state, mutation)
-            drift_extras: dict[str, str | int | float | bool] = {}
 
             envelope = build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
                 extras=extras,
-            )
-            drift_envelope = (
-                build_bucket_drift_envelope(
-                    mutation=mutation,
-                    before_version=before_version,
-                    after_version=after_version,
-                    extras=drift_extras,
-                )
-                if drift_extras
-                else None
             )
 
             # Outcome-WAL pending record carries the post-apply envelope
@@ -1032,15 +1019,11 @@ async def mutate(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             ctx.note_state_written(state_path, updated_at=state.updated_at)
             wal.mark_applied(wal_path, mutation.mutation_id)
             append_envelope(event_path, envelope)
-            if drift_envelope is not None:
-                append_envelope(event_path, drift_envelope)
             wal.mark_fsynced(wal_path, mutation.mutation_id)
 
             bus = bus_for_root(ctx, state_path)
             if bus is not None:
                 bus.publish(envelope)
-                if drift_envelope is not None:
-                    bus.publish(drift_envelope)
             ctx.last_event_id = envelope.id
 
             logger.info(
@@ -1315,22 +1298,11 @@ async def _mutate_wave_close(
                 readiness=wave_close_readiness,
                 actual_written_auto=actual_written_auto,
             )
-            drift_extras = bucket_drift_extras(state)
             envelope = build_event_envelope(
                 mutation=mutation,
                 before_version=before_version,
                 after_version=after_version,
                 extras=extras,
-            )
-            drift_envelope = (
-                build_bucket_drift_envelope(
-                    mutation=mutation,
-                    before_version=before_version,
-                    after_version=after_version,
-                    extras=drift_extras,
-                )
-                if drift_extras
-                else None
             )
             record = WalRecord(
                 record_id=mutation.mutation_id,
@@ -1348,8 +1320,6 @@ async def _mutate_wave_close(
             ctx.note_state_written(state_path, updated_at=state.updated_at)
             wal.mark_applied(wal_path, mutation.mutation_id)
             append_envelope(event_path, envelope)
-            if drift_envelope is not None:
-                append_envelope(event_path, drift_envelope)
             wal.mark_fsynced(wal_path, mutation.mutation_id)
     finally:
         ctx.active_lock_handle = None
@@ -1360,8 +1330,6 @@ async def _mutate_wave_close(
     bus = bus_for_root(ctx, state_path)
     if bus is not None:
         bus.publish(envelope)
-        if drift_envelope is not None:
-            bus.publish(drift_envelope)
     retract_closed_wave_advisories(state_path, wave_id=wave_id, bus=bus)
     ctx.last_event_id = envelope.id
 

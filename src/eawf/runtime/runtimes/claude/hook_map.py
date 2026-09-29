@@ -4,8 +4,8 @@ The Claude Code plugin tree emitted by
 :func:`eawf.runtime.runtimes.claude.plugin_package.package_plugin` carries a
 ``hooks.json`` manifest that subscribes only to **session-level** Claude
 Code events that are also handler-backed (see
-:func:`handler_backed_plugin_hooks`) — today ``SESSION_START`` and
-``SESSION_END``.
+:func:`handler_backed_plugin_hooks`) — today ``SESSION_START``,
+``SESSION_END``, ``SUBAGENT_START`` and ``SUBAGENT_STOP``.
 Workflow-internal lifecycle events (``wave_*``, ``iter_*``, ``phase_*``,
 ``*_audit``) stay fired by explicit ``eawf hook run`` calls from the
 lifecycle surfaces — Claude Code's ``UserPromptSubmit`` matcher cannot
@@ -22,6 +22,7 @@ HookEventType       CC event               Matcher
 ==================  =====================  ====================================
 ``SESSION_START``   ``SessionStart``       (none)
 ``SESSION_END``     ``Stop``               (none)
+``SUBAGENT_START``  ``SubagentStart``      (none)
 ``PRE_COMMIT``      ``PreToolUse``         ``Bash`` (cmd starts ``git commit``)
 ``POST_COMMIT``     ``PostToolUse``        ``Bash`` (cmd starts ``git commit``)
 ``PRE_PUSH``        ``PreToolUse``         ``Bash`` (cmd starts ``git push``)
@@ -51,6 +52,7 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from eawf.runtime.hooks.event import HookEventType
+from eawf.runtime.hooks.runner import registered_handler_event_types
 from eawf.surfaces.render.hooks import HOOK_REGISTRY
 
 logger = logging.getLogger(__name__)
@@ -91,6 +93,7 @@ class PluginHookSpec:
 PLUGIN_HOOK_REGISTRY: tuple[PluginHookSpec, ...] = (
     PluginHookSpec(event_type=HookEventType.SESSION_START, cc_event="SessionStart"),
     PluginHookSpec(event_type=HookEventType.SESSION_END, cc_event="Stop"),
+    PluginHookSpec(event_type=HookEventType.SUBAGENT_START, cc_event="SubagentStart"),
     PluginHookSpec(event_type=HookEventType.SUBAGENT_STOP, cc_event="SubagentStop"),
     PluginHookSpec(event_type=HookEventType.PRE_COMPACT, cc_event="PreCompact"),
     PluginHookSpec(event_type=HookEventType.PRE_COMMIT, cc_event="PreToolUse", matcher="Bash"),
@@ -110,14 +113,28 @@ def _command_path(spec: PluginHookSpec) -> str:
 
 
 # Events with a real runner-registered handler (:data:`HookSpec.has_handler`
-# in :mod:`eawf.surfaces.render.hooks`) — today ``SESSION_START`` and
-# ``SESSION_END``. Every
+# in :mod:`eawf.surfaces.render.hooks`) — today ``SESSION_START``,
+# ``SESSION_END`` and the two subagent events. Every
 # other :data:`PLUGIN_HOOK_REGISTRY` entry would render an idle wrapper (exit
 # 0, empty result list), so the packaged tree subscribes only this subset;
 # see :func:`handler_backed_plugin_hooks`.
 _HANDLER_BACKED_EVENT_TYPES: Final[frozenset[HookEventType]] = frozenset(
     spec.event_type for spec in HOOK_REGISTRY if spec.has_handler
 )
+
+# ``has_handler`` is a hand-kept flag, so it is checked against the real
+# runner registrations: an event flagged handler-backed with nothing
+# registered would ship a wrapper that exits 0 having done nothing, which is
+# the idle contract the flag exists to keep out of the manifest.
+_UNREGISTERED_EVENTS: Final[frozenset[HookEventType]] = (
+    _HANDLER_BACKED_EVENT_TYPES - registered_handler_event_types()
+)
+if _UNREGISTERED_EVENTS:  # pragma: no cover - boot guard
+    raise RuntimeError(
+        "claude hook_map flags events handler-backed with no registered handler: "
+        f"{sorted(e.value for e in _UNREGISTERED_EVENTS)}; "
+        "register a handler or clear HookSpec.has_handler"
+    )
 
 
 def handler_backed_plugin_hooks() -> tuple[PluginHookSpec, ...]:

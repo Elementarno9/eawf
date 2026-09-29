@@ -18,9 +18,12 @@ from pathlib import Path
 from eawf.kernel.state.enums import StoreKind, WaveStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.store.append import append_envelope
+from eawf.kernel.store.envelope import Envelope
+from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.paths import store_path
-from eawf.runtime.daemon.stale_wave import StaleWave, build_stale_wave_envelope
 from eawf.surfaces.tui.app import EaApp
+from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.needs_user import PAUSE_EVENT_TYPE
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid"
 _PHASE_ITER_WAVE = _FIXTURES / "03-phase-iter-wave-active.json"
@@ -38,17 +41,46 @@ def _seed_state_with_advisory(tmp_path: Path, *, wave_status: WaveStatus) -> Pat
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(state.model_dump_json(), encoding="utf-8")
 
-    plan = StaleWave(
-        wave_id=wave_id,
-        scope_id=state.urn,
-        session="urn:eawf:v1:session:cli/SES-tui",
-        anchor=_NOW,
-        elapsed_seconds=9000.0,
-        advisory_band="err",
-        budget_minutes=60.0,
+    # The legacy detector's pause row, as a store written before it retired.
+    question = UserQuestion(
+        question=f"over-budget advisory: Wave {wave_id} has been active for 150 minutes.",
+        options=[
+            UserQuestionOption(label="keep", description="Keep it active."),
+            UserQuestionOption(label="defer", description="Leave it for later."),
+        ],
+    )
+    payload = EventPayload(
+        timestamp=_NOW,
+        event_type=PAUSE_EVENT_TYPE,
+        event_kind="stale_wave_detected",
+        actor="daemon",
+        command="stale_wave.sweep",
+        args_hash="0" * 16,
+        status="needs_user",
+        message=question.question,
+        extras={
+            "pause_urn": f"{state.urn}/needs-user-legacy",
+            "session": "urn:eawf:v1:session:cli/SES-tui",
+            "user_question": question.model_dump_json(),
+            "wave_id": wave_id,
+            "advisory_band": "err",
+            "elapsed_minutes": 150.0,
+            "budget_minutes": 60.0,
+        },
     )
     append_envelope(
-        store_path(state_path, StoreKind.EVENT), build_stale_wave_envelope(plan, now=_NOW)
+        store_path(state_path, StoreKind.EVENT),
+        Envelope(
+            id="EV-000000000001",
+            kind=StoreKind.EVENT,
+            scope_id=state.urn,
+            created_at=_NOW,
+            updated_at=None,
+            summary="stale_wave_detected",
+            payload=payload.model_dump(mode="json"),
+            blob_refs=[],
+            artifact_ids=[],
+        ),
     )
     return state_path
 

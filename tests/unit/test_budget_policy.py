@@ -1,14 +1,13 @@
 """Unit tests for :mod:`eawf.runtime.budget.policy`.
 
-Covers the boundary conditions of the warn/block threshold classifier:
-no-budget, well-under, exactly-at-warn, exactly-at-block, over-block.
+Covers the boundary conditions of the over-budget classifier: no-budget,
+well-under, just-under, exactly-at-block, over-block.
 """
 
 from __future__ import annotations
 
 from eawf.runtime.budget.policy import (
     BLOCK_TAG,
-    WARN_TAG,
     classify,
 )
 
@@ -18,16 +17,10 @@ def test_classify_none_budget_returns_none() -> None:
     assert classify(consumed=10_000, budget=None) is None
 
 
-def test_classify_under_warn() -> None:
-    # 74.9% — still under the warn threshold.
-    assert classify(consumed=749, budget=1000) is None
+def test_classify_under_budget_returns_none() -> None:
     assert classify(consumed=0, budget=1000) is None
-
-
-def test_classify_at_75_percent_returns_warn() -> None:
-    assert classify(consumed=750, budget=1000) == WARN_TAG
-    # mid-range warn band.
-    assert classify(consumed=900, budget=1000) == WARN_TAG
+    assert classify(consumed=750, budget=1000) is None
+    assert classify(consumed=999, budget=1000) is None
 
 
 def test_classify_at_100_percent_returns_block() -> None:

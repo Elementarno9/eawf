@@ -142,9 +142,9 @@
     ],
     "check_count": 4,
     "check_passed": 3,
-    "critical_path_eu": 0.0,
+    "critical_path_eu": 3.2,
     "risk_count": 4,
-    "sum_wave_eu": 0.0,
+    "sum_wave_eu": 4.8,
     "wave_count": 6,
     "wave_status_counts": {
       "abandoned": 0,
@@ -162,7 +162,7 @@
       "commit": null,
       "deps": [],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cpr/init.py"
       ],
@@ -180,7 +180,7 @@
         "P05-I01-W00"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cpr/a.py"
       ],
@@ -198,7 +198,7 @@
         "P05-I01-W03"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cpr/b.py"
       ],
@@ -216,7 +216,7 @@
         "P05-I01-W02"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [
         "src/cpr/c.py"
       ],
@@ -234,7 +234,7 @@
         "P05-I01-W01"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [],
       "id": "P05-I01-W04",
       "outcome": "failed_lock",
@@ -250,7 +250,7 @@
         "P05-I01-W04"
       ],
       "effort_bucket": null,
-      "estimate_eu": 0.0,
+      "estimate_eu": 0.8,
       "file_scopes": [],
       "id": "P05-I01-W05",
       "outcome": null,

@@ -45,6 +45,7 @@ _CLAUDE_TO_EAWF: dict[str, HookEventType] = {
     "SessionStart": HookEventType.SESSION_START,
     "SessionEnd": HookEventType.SESSION_END,
     "Stop": HookEventType.SESSION_END,
+    "SubagentStart": HookEventType.SUBAGENT_START,
     "SubagentStop": HookEventType.SUBAGENT_STOP,
     "PreCompact": HookEventType.PRE_COMPACT,
 }

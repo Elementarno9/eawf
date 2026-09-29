@@ -71,6 +71,11 @@ def frame(
     return compose_frame(view)
 
 
+def _accepts(text: str) -> bool:
+    """Take a copy as a terminal's clipboard would, so the rack names what was copied."""
+    return bool(text)
+
+
 def press(
     session: Session,
     *keys: str,
@@ -94,6 +99,7 @@ def press(
             send=link,
             attention=attention,
             decisions=decisions,
+            clipboard=_accepts,
         )
         dispatch(ctx, key, False)
 

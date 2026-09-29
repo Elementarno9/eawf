@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, get_args, get_type_hints
@@ -43,6 +42,7 @@ from eawf.kernel.projection.settings import (
     SettingsLeaf,
     build_settings_view,
 )
+from eawf.platform.lint.eawf026_settings_categories import category_assignment_defects
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
@@ -282,43 +282,21 @@ def test_ui052_no_settings_frame_names_a_layer_the_enum_lacks(tree: Path, fixtur
 # ---------- UI-057: one route, six categories, every catalog section once ----------
 
 
-def _category_assignment_defects(sections: Iterable[str]) -> tuple[str, ...]:
-    """Return every way the category table fails to file ``sections`` exactly once.
-
-    Args:
-        sections: The catalog's sections.
-
-    Returns:
-        One message per section the table does not file, files twice, or files although
-        the catalog has no such section; empty when the assignment is total.
-    """
-    filed = [section for _name, members in SETTINGS_CATEGORIES for section in members]
-    wanted = set(sections)
-    defects = [f"section {s!r} is filed under no category" for s in sorted(wanted - set(filed))]
-    defects += [
-        f"section {s!r} is filed twice" for s in sorted({s for s in filed if filed.count(s) > 1})
-    ]
-    defects += [
-        f"category table files {s!r}, which the catalog lacks" for s in sorted(set(filed) - wanted)
-    ]
-    return tuple(defects)
-
-
 def test_ui057_every_catalog_section_is_filed_exactly_once() -> None:
     """The category table is total over the kernel's catalog, the lint the rail relies on."""
     domains = {entry.domain for entry in LEAF_KEY_REGISTRY.values()}
 
-    assert _category_assignment_defects(domains) == ()
+    assert category_assignment_defects(domains) == ()
 
 
 def test_ui057_the_assignment_lint_names_each_way_it_fails() -> None:
     """Missing, doubled and phantom sections are each named rather than passed."""
     filed = {s for _name, members in SETTINGS_CATEGORIES for s in members}
 
-    assert _category_assignment_defects(filed | {"newsection"}) == (
+    assert category_assignment_defects(filed | {"newsection"}) == (
         "section 'newsection' is filed under no category",
     )
-    assert _category_assignment_defects(filed - {"vcs"}) == (
+    assert category_assignment_defects(filed - {"vcs"}) == (
         "category table files 'vcs', which the catalog lacks",
     )
 

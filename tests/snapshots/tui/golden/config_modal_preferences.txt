@@ -8,9 +8,9 @@
       │                                                                                                          │
       │   audit  daemon  estimation  flow  planning  preferences  prose  research  review  runtime  ship  statu  │
       │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
-      │  >  preferences.auto_choose   [choice]       <off>                                                       │
-      │     preferences.scope_size    [choice]       <M>                                                         │
-      │     preferences.solution_bias [choice]       <balanced>                                                  │
+      │  >  preferences.auto_choose  [choice]       <off>                                                        │
+      │                                                                                                          │
+      │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │
       │                                                                                                          │

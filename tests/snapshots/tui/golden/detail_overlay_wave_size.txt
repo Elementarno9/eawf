@@ -18,7 +18,7 @@
             │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━━━━━━╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━  │
             │  size:     L                                                                                 │
             │  eu:       unavailable — no ended runtime attempt                                            │
-            │  estimate: 2.00 EU                                                                           │
+            │  estimate: 0.80 EU                                                                           │
             │  tokens:   unavailable — no runtime measurement recorded                                     │
             │  cost:     unavailable — no runtime measurement recorded                                     │
             │                                                                                              │

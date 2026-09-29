@@ -22,7 +22,6 @@ from eawf.kernel.state.models import ActualSummary, State
 from eawf.observability.telemetry.metrics_projection import (
     CacheHealthProjection,
     MetricsProjection,
-    RoleCalibrationProjection,
     RuntimeTokensProjection,
     SwitchoverFrequencyProjection,
     VarianceBucketProjection,
@@ -38,7 +37,6 @@ from eawf.surfaces.tui.screens.overlays.metrics import (
     METRICS_CAPTURE_LIVE,
     METRICS_HONEST_NEGATIVE,
     TILE_SPECS,
-    CalibrationDrillModal,
     MetricsArgs,
     MetricsModal,
     VarianceDrillModal,
@@ -48,7 +46,6 @@ from eawf.surfaces.tui.screens.overlays.metrics import (
     render_variance_drilldown,
     render_wave_elapsed_tile,
 )
-from eawf.workflow.estimation.buckets import BucketCalibration, CalibrationReport
 from eawf.workflow.estimation.metrics import (
     EstimateActualVarianceMetric,
     WaveElapsedMetric,
@@ -73,9 +70,9 @@ def _load_state() -> State:
 # --------------------------------------------------------------------------
 
 
-def test_tile_specs_count_is_seven() -> None:
-    # 4x2 grid — six original tiles plus the W13 Cost tile.
-    assert len(TILE_SPECS) == 7
+def test_tile_specs_count_is_six() -> None:
+    # 4x2 grid — five metric tiles plus the W13 Cost tile.
+    assert len(TILE_SPECS) == 6
 
 
 def test_tile_specs_ids_are_unique() -> None:
@@ -85,7 +82,7 @@ def test_tile_specs_ids_are_unique() -> None:
 
 def test_tile_specs_cover_the_v7_metric_surface() -> None:
     titles = " ".join(spec.title.lower() for spec in TILE_SPECS)
-    for needle in ("precision", "burn", "elapsed", "cost", "cache", "switchover", "role"):
+    for needle in ("precision", "burn", "elapsed", "cost", "cache", "switchover"):
         assert needle in titles
 
 
@@ -212,26 +209,6 @@ def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
                 cache_create_tokens=20,
             ),
         ),
-        per_role_calibration=(
-            RoleCalibrationProjection(
-                agent_role="executor",
-                report=CalibrationReport(
-                    window_days=90,
-                    drift_threshold_pct=25.0,
-                    buckets=[
-                        BucketCalibration(
-                            bucket="M",
-                            configured_eu=1.0,
-                            fitted_eu=1.5,
-                            fitted_pessimistic_eu=1.5,
-                            sample_count=1,
-                            drift_pct=50.0,
-                            nudge=True,
-                        )
-                    ],
-                ),
-            ),
-        ),
     )
 
     bodies = {spec.tile_id: render_projection_tile(projection, spec.tile_id) for spec in TILE_SPECS}
@@ -240,8 +217,6 @@ def test_render_projection_tile_binds_all_six_metric_tiles() -> None:
     assert "median 30.0m" in bodies["tile-elapsed"]
     assert "claude 80%" in bodies["tile-cache"]
     assert "RUNTIME_TIMEOUT 1" in bodies["tile-switchover"]
-    assert "executor" in bodies["tile-role-calibration"]
-    assert "1.5!" in bodies["tile-role-calibration"]
 
 
 def test_render_variance_drilldown_lists_buckets_and_waves() -> None:
@@ -288,7 +263,6 @@ def test_render_variance_drilldown_lists_buckets_and_waves() -> None:
         cache_health=(),
         switchover_frequency=(),
         per_runtime_tokens=(),
-        per_role_calibration=(),
     )
 
     body = render_variance_drilldown(projection)
@@ -302,7 +276,7 @@ def test_render_variance_drilldown_lists_buckets_and_waves() -> None:
 # --------------------------------------------------------------------------
 
 
-def test_metrics_modal_mounts_seven_tiles() -> None:
+def test_metrics_modal_mounts_six_tiles() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
         async with app.run_test(size=(140, 48)) as pilot:
@@ -312,9 +286,9 @@ def test_metrics_modal_mounts_seven_tiles() -> None:
             await pilot.pause()
             assert isinstance(app.screen, MetricsModal)
             tiles = [app.screen.query_one(f"#{spec.tile_id}", Static) for spec in TILE_SPECS]
-            assert len(tiles) == 7
+            assert len(tiles) == 6
             assert tiles[0].border_title == TILE_SPECS[0].title
-            assert tiles[-1].border_title == "Role calibration"
+            assert tiles[-1].border_title == "Switchover freq"
             assert "median 0.0m" in _text(app.screen.query_one("#tile-elapsed", Static))
             # The Cost tile mounts and, with no telemetry DB, reads the honest
             # absence line rather than a fabricated dollar figure.
@@ -442,24 +416,6 @@ def test_metrics_modal_esc_closes() -> None:
     asyncio.run(body())
 
 
-def test_metrics_modal_enter_opens_role_calibration_drilldown() -> None:
-    async def body() -> None:
-        app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
-        async with app.run_test(size=(140, 48)) as pilot:
-            await pilot.pause()
-            await app.workers.wait_for_complete()
-            app.push_modal(MetricsModal())
-            await pilot.pause()
-            assert isinstance(app.screen, MetricsModal)
-            await pilot.press("enter")
-            await pilot.pause()
-            assert isinstance(app.screen, CalibrationDrillModal)
-            assert app.modal_depth() == 2
-            assert "Role calibration" in _text(app.screen.query_one(".calibration-title", Static))
-
-    asyncio.run(body())
-
-
 def test_metrics_modal_enter_opens_variance_drilldown() -> None:
     async def body() -> None:
         app = EaApp(scope="repo", state_path=_PHASE_ITER_WAVE)
@@ -469,7 +425,7 @@ def test_metrics_modal_enter_opens_variance_drilldown() -> None:
             app.push_modal(MetricsModal())
             await pilot.pause()
             assert isinstance(app.screen, MetricsModal)
-            app.screen.selected = 0
+            assert app.screen.selected == 0
             await pilot.press("enter")
             await pilot.pause()
             assert isinstance(app.screen, VarianceDrillModal)

@@ -1552,6 +1552,68 @@ def eawf023_artifact_placement(
     )
 
 
+@hook_app.command(name="eawf026-settings-categories")
+def eawf026_settings_categories(ctx: typer.Context) -> None:
+    """Reject a configuration catalog section the settings rail cannot reach.
+
+    Runs the EAWF026 rule over the shipped leaf catalog and the settings
+    category table: every catalog section must be filed under exactly one
+    of the six orientation categories. Exits 1 naming each unfiled,
+    doubly filed or phantom section and each unknown category, 0 when
+    the assignment is total.
+    """
+    from eawf.platform.lint import eawf026_settings_categories as eawf026
+
+    sections = eawf026.catalog_sections()
+    defects = eawf026.category_assignment_defects(sections)
+    _emit_static_lint_result(
+        hook_name="eawf026-settings-categories",
+        rows=[f"  {eawf026.RULE_CODE} {defect}" for defect in defects],
+        scanned=len(sections),
+        flags=ctx.obj,
+        blocking=True,
+    )
+
+
+@hook_app.command(name="eawf027-citation-scope")
+def eawf027_citation_scope(
+    ctx: typer.Context,
+    pr_body: Annotated[
+        Path | None,
+        typer.Option(
+            "--pr-body",
+            exists=True,
+            dir_okay=False,
+            help="A pull-request body to scan beside the tree.",
+        ),
+    ] = None,
+) -> None:
+    """Reject committed text quoting a reflection row it may not.
+
+    Runs the EAWF027 citation-scope rule over every tracked artifact,
+    rendered document and rule projection, the local proposal packet
+    where it exists, and the pull-request body when one is named. Exits
+    1 naming the file, line and mark of each non-quotable or unmarked
+    row and each ``scrubbed_extract`` title, 0 when none is quoted.
+    """
+    from eawf.platform.lint import eawf027_citation_scope as eawf027
+
+    flags: GlobalFlags = ctx.obj
+    cwd = (flags.workspace or Path.cwd()).resolve()
+    paths = [*eawf027.committed_scope(cwd), *eawf027.packet_scope(cwd)]
+    findings = eawf027.scan_paths(cwd, paths)
+    if pr_body is not None:
+        body = pr_body.read_text(encoding="utf-8")
+        findings += eawf027.scan_text("pull-request body", body)
+    _emit_static_lint_result(
+        hook_name="eawf027-citation-scope",
+        rows=[f"  {finding.render()}" for finding in findings],
+        scanned=len(paths) + (pr_body is not None),
+        flags=flags,
+        blocking=True,
+    )
+
+
 def _git_tracked_tests(*, cwd: Path) -> list[str]:
     """Return git-tracked ``tests/**/*.py`` paths under ``cwd``.
 

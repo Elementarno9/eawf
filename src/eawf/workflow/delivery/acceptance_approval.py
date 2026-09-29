@@ -45,6 +45,7 @@ from eawf.kernel.state.epoch2.pending_action import (
     PendingActionKind,
     PendingActionOption,
     PendingActionStatus,
+    TermExpansion,
 )
 from eawf.kernel.state.epoch2.urns import BatchUrn, EvidenceUrn, PendingActionUrn
 from eawf.kernel.state.epoch2.values import ExactRevisionBinding
@@ -69,13 +70,57 @@ VERIFIED_BATCH_STATUSES: Final[frozenset[BatchStatus]] = frozenset(
 #: while declining leaves the Milestone where it stands.
 ACCEPTANCE_OPTIONS: Final[tuple[PendingActionOption, ...]] = (
     PendingActionOption(
-        option_id="approve", label="Accept the Milestone", effect=OptionEffect.APPROVE
+        option_id="approve",
+        label="Accept the Milestone",
+        effect=OptionEffect.APPROVE,
+        consequence=(
+            "The Milestone is recorded as accepted on exactly this bundle. "
+            "A later change needs a new acceptance."
+        ),
     ),
-    PendingActionOption(option_id="decline", label="Do not accept it", effect=OptionEffect.DECLINE),
     PendingActionOption(
-        option_id="repair", label="Ask for changes", effect=OptionEffect.REQUEST_REPAIR
+        option_id="decline",
+        label="Do not accept it",
+        effect=OptionEffect.DECLINE,
+        consequence="The Milestone stays in review and is not accepted. Nothing else changes.",
+    ),
+    PendingActionOption(
+        option_id="repair",
+        label="Ask for changes",
+        effect=OptionEffect.REQUEST_REPAIR,
+        consequence=(
+            "The Milestone stays in review and a repair is requested. "
+            "The next bundle revision is verified and asked about again."
+        ),
     ),
 )
+
+#: Why accepting is the recommendation: verify asks only once every Batch
+#: stands on a verified head and the journey it presents passed.
+ACCEPTANCE_RATIONALE: Final = (
+    "Every Batch stands on a verified head and the journey passed, so accepting records "
+    "what the evidence already shows."
+)
+
+#: What each answer turns the Milestone into, keyed by option id; filled
+#: with the Milestone key and the bundle revisions the question is about.
+_ACCEPTANCE_PREVIEWS: Final[dict[str, str]] = {
+    "approve": (
+        "Milestone {key}\n"
+        "  before: in acceptance review\n"
+        "  after:  accepted on bundle revision {revision}"
+    ),
+    "decline": (
+        "Milestone {key}\n"
+        "  before: in acceptance review\n"
+        "  after:  in acceptance review, not accepted"
+    ),
+    "repair": (
+        "Milestone {key}\n"
+        "  before: bundle revision {revision} awaits acceptance\n"
+        "  after:  repair requested; bundle revision {successor} is verified next"
+    ),
+}
 
 #: How many hex digits of the bundle digest name the question's
 #: idempotency key: enough that two bundles of one Milestone do not
@@ -311,6 +356,11 @@ def acceptance_question(
 ) -> PendingAction:
     """Return the protected approval asking to accept exactly *bundle*.
 
+    The question is filed presentable: each answer carries its consequence
+    and a before-and-after of the Milestone, accepting is recommended, and
+    the Milestone key is expanded, so the host shows it without asking the
+    operator to look anything up.
+
     The question is born ``WAITING``: committing it into the document is
     what puts it in front of the attention projection, so there is no
     moment at which it exists and nobody could be shown it.
@@ -329,6 +379,16 @@ def acceptance_question(
         The waiting question.
     """
     milestone_key = bundle.milestone_ref.entity_key
+    options = tuple(
+        option.model_copy(
+            update={
+                "preview": _ACCEPTANCE_PREVIEWS[option.option_id].format(
+                    key=milestone_key, revision=bundle.revision, successor=bundle.revision + 1
+                )
+            }
+        )
+        for option in ACCEPTANCE_OPTIONS
+    )
     return PendingAction(
         id=key,
         urn=urn,
@@ -336,7 +396,15 @@ def acceptance_question(
         subject_ref=bundle.milestone_ref,
         question=f"Accept {milestone_key} on revision {bundle.revision} of its acceptance bundle?",
         bundle_digest=bundle.digest(),
-        options=ACCEPTANCE_OPTIONS,
+        options=options,
+        recommended_option_id="approve",
+        recommendation_rationale=ACCEPTANCE_RATIONALE,
+        terms=(
+            TermExpansion(
+                term=milestone_key,
+                expansion="the Milestone, a planned delivery goal, you are asked to accept",
+            ),
+        ),
         idempotency_key=approval_idempotency_key(bundle),
         status=PendingActionStatus.WAITING,
         requested_by=requested_by,
@@ -396,6 +464,7 @@ def seal_question(
 
 __all__ = [
     "ACCEPTANCE_OPTIONS",
+    "ACCEPTANCE_RATIONALE",
     "VERIFIED_BATCH_STATUSES",
     "ApprovalRefusal",
     "ApprovalRefusedError",

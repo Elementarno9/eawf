@@ -8,7 +8,8 @@ lifecycle names from leaking into ``hooks/hooks.json``.
 Every event in :data:`CODEX_HOOK_EVENT_NAMES` genuinely has a runner
 callable under the Codex runtime: ``runtime.codex_lifecycle`` handles
 SESSION_START / SUBAGENT_START / SUBAGENT_STOP unconditionally on
-``register_runtime_capture_hooks``, and SESSION_END is handled by both
+``register_runtime_capture_hooks`` (the two subagent events also adopt the
+subagent as a Run through ``runtime.host_subagent``), and SESSION_END is handled by both
 ``runtime.capture`` and ``session.end_stamp``. A module-level boot guard
 verifies this against the real runner registrations rather than trusting
 this dict by inspection, so an event added here with no registered
@@ -20,7 +21,7 @@ from __future__ import annotations
 from typing import Final
 
 from eawf.runtime.hooks.event import HookEventType
-from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
+from eawf.runtime.hooks.runner import registered_handler_event_types
 
 CODEX_HOOK_EVENT_NAMES: Final[dict[HookEventType, str]] = {
     HookEventType.SESSION_START: "SessionStart",
@@ -30,23 +31,6 @@ CODEX_HOOK_EVENT_NAMES: Final[dict[HookEventType, str]] = {
 }
 
 CODEX_HOOK_EVENT_TYPES: Final[tuple[HookEventType, ...]] = tuple(CODEX_HOOK_EVENT_NAMES)
-
-
-def registered_handler_event_types() -> frozenset[HookEventType]:
-    """Return every event type with at least one runner-registered handler.
-
-    Builds a scratch :class:`~eawf.runtime.hooks.runner.HookRunner` and
-    registers the real handler set via
-    :func:`~eawf.runtime.hooks.runner.register_runtime_capture_hooks`
-    rather than hand-listing event names here, so the check below (and any
-    caller cross-checking a packaged hook set) reads off the actual
-    registry instead of a second hand-kept list.
-    """
-    scratch = HookRunner()
-    register_runtime_capture_hooks(scratch)
-    return frozenset(
-        event_type for event_type in HookEventType if any(scratch.hooks_for(event_type))
-    )
 
 
 _UNBACKED_EVENTS: Final[frozenset[HookEventType]] = (

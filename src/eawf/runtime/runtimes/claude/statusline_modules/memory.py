@@ -2,8 +2,8 @@
 
 Reads ``state.memory_index`` (cache projection) for the entry count and
 sums the byte size of ``store/memory.jsonl`` for the total. Output is
-``mem:<count>@<bytes>``. Missing state collapses to ``mem:-`` with
-``status="missing"``.
+``mem:<count>@<bytes>``. An unreadable or frozen epoch-1 document, or an
+empty index, renders ``mem:n/a(<reason>)`` with ``status="missing"``.
 """
 
 from __future__ import annotations
@@ -12,11 +12,22 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import orjson
-
-from eawf.surfaces.render.statusline import StatuslineSegment
+from eawf.runtime.runtimes.claude.statusline_modules._document import (
+    DocumentGap,
+    document_source,
+    read_legacy_document,
+)
+from eawf.surfaces.render.statusline import (
+    StatuslineSegment,
+    sourced_segment,
+    unavailable_segment,
+)
 
 logger = logging.getLogger(__name__)
+
+_MODULE = "memory"
+_LABEL = "mem"
+_SOURCE = document_source("memory_index")
 
 
 def _format_bytes(num: int) -> str:
@@ -49,7 +60,7 @@ def _memory_size(state_path: Path) -> int:
 
 
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
-    """Return the ``mem:<count>@<size>`` (or ``mem:-``) segment.
+    """Return the ``mem:<count>@<size>`` (or ``mem:n/a(<reason>)``) segment.
 
     Args:
         claude_payload: Unused — kept for the uniform module signature.
@@ -61,25 +72,16 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
         otherwise.
     """
     del claude_payload  # accepted for uniform signature
-    if state_path is None or not state_path.exists():
-        return StatuslineSegment(module="memory", text="mem:-", status="missing")
-    try:
-        raw = state_path.read_bytes()
-        payload = orjson.loads(raw)
-    except (OSError, orjson.JSONDecodeError) as exc:
-        logger.debug(f"build memory-read-decode-failed error={exc}")
-        return StatuslineSegment(module="memory", text="mem:-", status="missing")
-    if not isinstance(payload, dict):
-        return StatuslineSegment(module="memory", text="mem:-", status="missing")
+    if state_path is None:
+        return unavailable_segment(_MODULE, _LABEL, DocumentGap.NO_STATE.value, _SOURCE)
+    payload = read_legacy_document(state_path)
+    if isinstance(payload, DocumentGap):
+        return unavailable_segment(_MODULE, _LABEL, payload.value, _SOURCE)
     count = _memory_count(payload)
     if count == 0:
-        return StatuslineSegment(module="memory", text="mem:-", status="missing")
+        return unavailable_segment(_MODULE, _LABEL, "no-memory-index", _SOURCE)
     size = _memory_size(state_path)
-    return StatuslineSegment(
-        module="memory",
-        text=f"mem:{count}@{_format_bytes(size)}",
-        status="ok",
-    )
+    return sourced_segment(_MODULE, _LABEL, f"{count}@{_format_bytes(size)}", _SOURCE)
 
 
 __all__ = ["build"]

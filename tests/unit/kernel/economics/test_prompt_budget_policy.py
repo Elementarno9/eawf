@@ -234,9 +234,11 @@ def test_econ_003_bytes_without_tokens_leave_the_token_ceiling_unavailable() -> 
 
 
 def test_econ_003_a_byte_ceiling_binds_where_bytes_were_measured() -> None:
+    ceiling = DEFAULT_PROMPT_BUDGET.allocation(BudgetClassId.STEERING_ZONE1).max_bytes
+    assert ceiling is not None
     judged = evaluate_prompt_budget(
         DEFAULT_PROMPT_BUDGET,
-        [RenderedSize(class_id=BudgetClassId.STEERING_ZONE1, bytes=12_289)],
+        [RenderedSize(class_id=BudgetClassId.STEERING_ZONE1, bytes=ceiling + 1)],
     )
     assert judged.exhausted == (BudgetClassId.STEERING_ZONE1,)
 

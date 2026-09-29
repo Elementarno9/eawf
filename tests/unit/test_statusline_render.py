@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+from typing import Final
+
 from eawf.surfaces.render.statusline import (
+    SegmentSource,
     StatuslineSegment,
     StatuslineTheme,
     load_themes,
     render_segments,
     resolve_theme,
+    sourced_segment,
+    unavailable_segment,
 )
+
+_SOURCE: Final = SegmentSource(producer="test", provenance="test#field")
+_SCOPE: Final = sourced_segment("scope", "scope", "P04", _SOURCE)
 
 
 def test_load_themes_returns_default_powerline_ascii() -> None:
@@ -38,11 +46,11 @@ def test_resolve_theme_falls_back_to_default() -> None:
 def test_render_segments_joins_with_separator() -> None:
     theme = StatuslineTheme(name="t", separator=" || ")
     segs = [
-        StatuslineSegment(module="state", text="state:P04", status="ok"),
-        StatuslineSegment(module="git", text="git:main", status="ok"),
+        _SCOPE,
+        sourced_segment("git", "git", "main", _SOURCE),
     ]
     line = render_segments(segs, theme)
-    assert line == "state:P04 || git:main"
+    assert line == "scope:P04 || git:main"
 
 
 def test_render_segments_applies_color_and_reset_when_present() -> None:
@@ -51,24 +59,28 @@ def test_render_segments_applies_color_and_reset_when_present() -> None:
         separator=" | ",
         colors={"ok": "\x1b[32m", "reset": "\x1b[0m"},
     )
-    seg = StatuslineSegment(module="state", text="state:P04", status="ok")
-    line = render_segments([seg], theme)
-    assert line == "\x1b[32mstate:P04\x1b[0m"
+    line = render_segments([_SCOPE], theme)
+    assert line == "\x1b[32mscope:P04\x1b[0m"
 
 
 def test_render_segments_skips_failed_when_theme_says_skip() -> None:
     theme_skip = StatuslineTheme(name="ascii", skip_failed=True)
     theme_keep = StatuslineTheme(name="default", skip_failed=False)
     segs = [
-        StatuslineSegment(module="state", text="state:P04", status="ok"),
-        StatuslineSegment(module="boom", text="boom:!", status="failed"),
+        _SCOPE,
+        unavailable_segment("boom", "boom", "render-failed", _SOURCE, status="failed"),
     ]
-    assert render_segments(segs, theme_skip) == "state:P04"
-    assert render_segments(segs, theme_keep) == "state:P04 | boom:!"
+    assert render_segments(segs, theme_skip) == "scope:P04"
+    assert render_segments(segs, theme_keep) == "scope:P04 | boom:n/a(render-failed)"
 
 
 def test_render_segments_applies_glyph_prefix_when_set() -> None:
-    theme = StatuslineTheme(name="t", glyph={"state": "P"})
-    seg = StatuslineSegment(module="state", text="state:P04", status="ok")
-    line = render_segments([seg], theme)
-    assert line == "P state:P04"
+    theme = StatuslineTheme(name="t", glyph={"scope": "P"})
+    line = render_segments([_SCOPE], theme)
+    assert line == "P scope:P04"
+
+
+def test_segment_carries_its_truth_field() -> None:
+    assert isinstance(_SCOPE, StatuslineSegment)
+    assert _SCOPE.truth.value == "P04"
+    assert _SCOPE.truth.producer == "test"

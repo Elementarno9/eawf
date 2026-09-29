@@ -61,6 +61,14 @@ PROJECT_URN = "eawf://EAWF/EAWF/_/project/EAWF"
 ROOT_ID = "root-0123456789abcdef"
 
 
+class _Clipped(ConsoleApp):
+    """A console that is never run, whose clipboard takes a copy as a terminal's would."""
+
+    def copy_text(self, text: str) -> bool:
+        """Take ``text``; a console that is not running has no terminal of its own."""
+        return bool(text)
+
+
 def _linked(route: str, *, subject: str | None = None, sel: str | None = None) -> ConsoleApp:
     """Return a console linked to a seam holding ``route``'s projection over the probe tree."""
     seam = ProjectionSeam(
@@ -69,7 +77,7 @@ def _linked(route: str, *, subject: str | None = None, sel: str | None = None) -
     seam._projection = build_route_projection(
         route=route, document=nrf.DOCUMENT, cursor=nrf.CURSOR, scope_id=ROOT_ID, generated_at=AT
     )
-    app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
+    app = _Clipped(chrome=load_chrome(), seam=seam, clock=FakeClock())
     app.session.route = route
     app.session.subj_id = subject
     app.session.sel_id = sel

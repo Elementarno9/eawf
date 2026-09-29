@@ -122,6 +122,7 @@ DIRTY: dict[str, Any] = {
     "reserved": 2,
     "windowed": True,
     "route_windowed": True,
+    "route_bar_keys": frozenset({"Tab"}),
     "set_sec": 4,
     "set_key": 3,
     "set_filter": "vcs",

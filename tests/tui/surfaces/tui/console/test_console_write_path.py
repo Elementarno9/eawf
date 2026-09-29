@@ -32,7 +32,7 @@ from eawf.kernel.projection.compute import (
 )
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
-from eawf.surfaces.tui.console import dispatch as dispatch_mod
+from eawf.surfaces.tui.console import enter_keys
 from eawf.surfaces.tui.console import frame as frame_mod
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.attention import (
@@ -389,7 +389,7 @@ def test_a_planted_prototype_fallback_reds_the_check(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(frame_mod, "needs_count", planted_count)
     assert not _reads_only_what_is_held(fixture)
     monkeypatch.undo()
-    monkeypatch.setattr(dispatch_mod, "_confirm", planted_confirm)
+    monkeypatch.setattr(enter_keys, "confirm", planted_confirm)
     assert not _reads_only_what_is_held(fixture)
 
 

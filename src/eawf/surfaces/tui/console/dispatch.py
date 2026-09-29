@@ -1,5 +1,3 @@
-# noqa: EAWF010 one keystroke's whole path: the overlay, drawer and focus gates compose in
-# a single ordered dispatch, and the Enter and Tab tables split into a sibling module next
 """The dispatcher: one keystroke, through the route's own keys and then the console's.
 
 The order is fixed. An expired go prefix is dropped first. Then the frame-level keys run:
@@ -16,7 +14,6 @@ import re
 from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
-from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import drill
@@ -30,6 +27,7 @@ from eawf.surfaces.tui.console.clock import (
     guarded_quit,
     prompt_quit,
 )
+from eawf.surfaces.tui.console.enter_keys import DRAFT_FIELDS, enter, refused, send_verb
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.header import CrumbRun
 from eawf.surfaces.tui.console.keybar import KEY
@@ -40,57 +38,42 @@ from eawf.surfaces.tui.console.navigation import (
     Ctx,
     busy,
     close_overlay,
-    cycle,
-    cycle_region,
+    copied,
     focus_target,
     go,
     has_renderer,
     leave_overlay,
     open_overlay,
     recall,
-    regions_of,
     remember,
     return_focus,
 )
 from eawf.surfaces.tui.console.operations import (
-    ANSWER_OPTIONS,
     QUESTION_OPTIONS,
-    RUN_CONTROLS,
-    RUN_KINDS,
     AnswerRequest,
-    ControlRequest,
-    VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays import is_overlay
-from eawf.surfaces.tui.console.overlays.bound_keys import bound_key, open_held_row
+from eawf.surfaces.tui.console.overlays.bound_keys import bound_key
 from eawf.surfaces.tui.console.overlays.chassis import holds, unheld_keys
-from eawf.surfaces.tui.console.overlays.evidence import claim_id
 from eawf.surfaces.tui.console.overlays.palette import palette_hits
 from eawf.surfaces.tui.console.overlays.pause import RUN as _PAUSE_RUN
 from eawf.surfaces.tui.console.overlays.pause import TARGETS as _PAUSE_TARGETS
 from eawf.surfaces.tui.console.overlays.question import ANSWERS
-from eawf.surfaces.tui.console.overlays.resolution import Ending
-from eawf.surfaces.tui.console.reads import write_refusal
 from eawf.surfaces.tui.console.registry import (
     DRILL_PREFIXES,
     OVERLAY_ARROWS,
     REGISTRY,
-    SECTIONS,
     route_for_id,
 )
 from eawf.surfaces.tui.console.renderers import (
     copy_for,
-    cost_ceiling,
-    history,
     seam_for,
-    track,
 )
 from eawf.surfaces.tui.console.renderers import timeline as tl
 from eawf.surfaces.tui.console.session import FocusTarget, Session
+from eawf.surfaces.tui.console.tab_keys import TAB, owns_region_cycle, tab, tab_region
 from eawf.surfaces.tui.console.tokens import Severity
 
-# Why a confirmed verb went nowhere: the console was started without a daemon link.
-NO_LINK = "the console holds no daemon link · nothing was written"
 REPLY_LIMIT = 2000
 HOME = "scope.home"
 # The key-log key a breadcrumb activation is recorded under: it is a pointer, not a key.
@@ -113,7 +96,6 @@ _RECORD_NEEDS: Mapping[str, str] = MappingProxyType(
 # What still acts while the action drawer is open, beside its verb letters: its toggle,
 # Escape, and the modifiers the key count ignores.
 _PANE_KEYS: frozenset[str] = frozenset({".", "Escape", *km.MODIFIERS})
-_DRAFT_FIELDS: tuple[str, ...] = ("criteria", "owner", "batch")
 
 
 def dispatch(ctx: Ctx, key: str, shift: bool = False) -> None:
@@ -197,7 +179,7 @@ def _record_key(ctx: Ctx, k: str) -> bool:
         to = nav[s.sel]
         go(ctx, route_for_id(to) or "milestone", f"record · {to}", to)
         return True
-    if k == "Tab" and _owns_region_cycle(s):
+    if k == "Tab" and owns_region_cycle(s):
         # a route that declares regions tabs between them whatever its record holds
         return False
     need = _RECORD_NEEDS.get(k)
@@ -232,14 +214,16 @@ def _reply_key(ctx: Ctx, k: str) -> bool:
 def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
     s = ctx.s
     if k == "Tab" and shift:
-        handler = None if busy(s) else _TAB.get(s.route)
+        handler = None if busy(s) else TAB.get(s.route)
         if handler is not None:
             handler(ctx, back=True)
-        elif not (_owns_region_cycle(s) and _tab_region(ctx, back=True)):
+        elif not (owns_region_cycle(s) and tab_region(ctx, back=True)):
             drill.no_cycle(ctx, back=True)
         return
     s.keys += 1
-    if k != "Escape":
+    if k != "Escape" or not _quit_press(s):
+        # an Escape that closes or goes back is not a quit press: the prompt promised the
+        # next press at a quiet scope home would quit, and a back-step is not that press
         disarm(s, k)
     if s.overlay == "palette" and _palette_key(ctx, k):
         return
@@ -254,6 +238,11 @@ def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
     if _surface_claims(ctx, k):
         return
     _route_independent(ctx, k, pane=s.overlay == "actions")
+
+
+def _quit_press(s: Session) -> bool:
+    """Return whether an Escape now is a press of the guarded quit: at a quiet scope home."""
+    return s.route == HOME and not s.back and not busy(s) and s.reply is None
 
 
 def _console_claims(ctx: Ctx, k: str) -> bool:
@@ -311,11 +300,6 @@ def _unheld_overlay_key(ctx: Ctx, overlay: str, k: str) -> bool:
         return False
     ctx.noop(k)
     return True
-
-
-def _owns_region_cycle(s: Session) -> bool:
-    """Return whether Tab walks this route's declared regions rather than a register."""
-    return not busy(s) and s.route not in _TAB and len(regions_of(s.route)) > 1
 
 
 def _keyboard_owner(s: Session) -> Callable[[Ctx, str], None] | None:
@@ -411,7 +395,7 @@ def _question_key(ctx: Ctx, k: str) -> None:
         leave_overlay(s)
         choice = int(k) - 1
         answer = AnswerRequest(target=q.id, option_id=QUESTION_OPTIONS[choice])
-        _send_verb(ctx, k, answer, f"answer · {ANSWERS[choice]} ·")
+        send_verb(ctx, k, answer, f"answer · {ANSWERS[choice]} ·")
     elif k == "x":
         if att.gated(
             s, fx, key="x", verb="decline", row=q, principal_refusal=ctx.principal_refusal
@@ -483,9 +467,8 @@ def _drawer_key(ctx: Ctx, k: str) -> None:
         close_overlay(s)
         ctx.log("Esc", "close pane")
     elif k == "y":
-        copied = copy_for(ctx)
-        ctx.notify(copied, "copied")
-        ctx.log("y", f"copied — {copied}")
+        text = copy_for(ctx)
+        ctx.log("y", f"{copied(ctx.copy(text))} — {text}")
     elif k in km.MODIFIERS:
         s.keys -= 1
     else:
@@ -568,9 +551,8 @@ def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
     s.pane_sel = 0
     to = verb.target
     if not to:
-        copied = copy_for(ctx)
-        ctx.notify(copied, "copied")
-        ctx.log(k, f"{verb.verb} · {copied}")
+        text = copy_for(ctx)
+        ctx.log(k, f"{verb.verb} · {copied(ctx.copy(text))} · {text}")
         return
     if not has_renderer(to):
         ctx.notify(f"{to} is designed but not bound here", "unavailable", Severity.ERR)
@@ -588,11 +570,6 @@ def fire_light(ctx: Ctx, verb: MenuVerb, k: str) -> None:
 
 
 # ---------- the route-independent keys ----------
-
-
-def _nav_at_cursor(s: Session) -> str | None:
-    nav = s.record_nav or []
-    return nav[s.sel] if s.sel < len(nav) else None
 
 
 def _move(ctx: Ctx, k: str, pane: bool) -> None:
@@ -621,7 +598,7 @@ def _move_in_region(ctx: Ctx, k: str, down: bool) -> bool:
     step = 1 if down else -1
     if s.overlay == "draft":
         s.draft_field = max(0, min(2, s.draft_field + step))
-        ctx.log(k, _DRAFT_FIELDS[s.draft_field])
+        ctx.log(k, DRAFT_FIELDS[s.draft_field])
         return True
     if s.route == "timeline" and (s.tl_reg or tl.LANES) != tl.LANES:
         rows = (s.tl_regs or {}).get(s.tl_reg, [])
@@ -651,299 +628,6 @@ def _move_entry(ctx: Ctx, k: str, down: bool) -> None:
         ctx.log(k, "this state has no rows")
 
 
-def _send_verb(ctx: Ctx, k: str, request: VerbRequest, verb: str) -> None:
-    """Hand a confirmed verb to the daemon link; nothing the console holds changes here.
-
-    The daemon's answer, and the patch its commit pushes, are the only things that move
-    the frame afterwards, so a verb the daemon never heard of cannot look done.
-    """
-    s = ctx.s
-    refusal = write_refusal(s, ctx.fixture, verb=verb, principal_refusal=ctx.principal_refusal)
-    if refusal:
-        ctx.log(k, f"{verb} {request.target} refused — {refusal}")
-        return
-    if ctx.dispatch_write(request):
-        ctx.log(k, f"{verb} {request.target} sent to the daemon · waiting for its answer")
-        return
-    ctx.notify(NO_LINK, "not sent", Severity.WARN)
-    ctx.log(k, f"{verb} {request.target} not sent — {NO_LINK}")
-
-
-def _confirm(ctx: Ctx) -> None:
-    """Confirm the consequence card: its verb is sent to the daemon, or refused with why.
-
-    An answer is addressed only to the selected row of the Attention projection the
-    link holds. The prototype registers are never read here: a console holding them and
-    no projection has nothing it could answer, so it sends nothing.
-    """
-    s = ctx.s
-    leave_overlay(s)
-    target = s.c_target
-    if target:
-        s.c_target = None
-        _confirm_target(ctx, target)
-        return
-    held = ctx.attention
-    row = _selected_row(s, held.rows) if held is not None else None
-    if row is None:
-        ctx.log("Enter", "no attention row is held here — nothing was sent")
-        return
-    action_id = row.key
-    verb = att.VERB[s.verb or "a"]
-    refusal = write_refusal(s, ctx.fixture, verb=verb.name, kind=att.ATTENTION_ROUTE)
-    option = ANSWER_OPTIONS.get(verb.name)
-    if refusal or option is None:
-        ctx.log("Enter", f"{verb.name} {action_id} refused — {refusal}")
-        return
-    _send_verb(ctx, "Enter", AnswerRequest(target=action_id, option_id=option), verb.name)
-
-
-def _selected_row(s: Session, rows: tuple[ProjectionRow, ...]) -> ProjectionRow | None:
-    """Return the held row the cursor selects, by stable id only.
-
-    A selection whose id the rows no longer hold, or a frame whose caret names no row,
-    selects nothing, rather than sliding onto whichever row sits at the cursor's offset.
-    """
-    if s.sel_id is None:
-        return None
-    return next((row for row in rows if row.key == s.sel_id), None)
-
-
-def _confirm_target(ctx: Ctx, target: Mapping[str, str]) -> None:
-    """Send a Run control the card previewed, or say why its verb reaches no daemon."""
-    verb, kind, target_id = target["verb"], target["kind"], target["id"]
-    refusal = write_refusal(ctx.s, ctx.fixture, verb=verb, kind=kind)
-    control = RUN_CONTROLS.get(verb) if kind in RUN_KINDS else None
-    if refusal or control is None:
-        ctx.log("Enter", f"{verb} on {target_id} — nothing was written · {refusal}")
-        return
-    _send_verb(ctx, "Enter", ControlRequest(target=target_id, control=control), verb)
-
-
-def _enter_overlay(ctx: Ctx) -> bool:
-    """Act on Enter inside an overlay that owns it."""
-    s = ctx.s
-    if s.overlay == "draft":
-        field = _DRAFT_FIELDS[s.draft_field]
-        if not _refused(ctx, "Enter", f"set {field}"):
-            ctx.log("Enter", f"set {field} · the field the cursor is on")
-        return True
-    if s.overlay == "consequence":
-        _confirm(ctx)
-        return True
-    return False
-
-
-def _enter_track(ctx: Ctx) -> None:
-    s = ctx.s
-    drills = track.group_of(s.track_group).drills
-    entity_id, dest = drills[min(s.sel, len(drills) - 1)]
-    s.back.record(remember(s))
-    s.region = None
-    s.route = dest
-    s.sel = 0
-    s.subj_id = entity_id
-    s.sel_id = None
-    ctx.log("Enter", f"drill → {dest} · {entity_id}")
-
-
-def _enter_release(ctx: Ctx) -> None:
-    s = ctx.s
-    if s.rel_reg == "READINESS":
-        open_overlay(s, "readiness", subject=s.subj_id)
-        ctx.log("Enter", "readiness matrix · on the signal you were reading")
-        return
-    target = _nav_at_cursor(s)
-    drill.drill_to(ctx, route_for_id(target) or "milestone", target)
-
-
-def _enter_entry(ctx: Ctx) -> None:
-    s = ctx.s
-    state = ctx.fixture.proto.entry[s.entry_sel]
-    if state.commands:
-        # One command per path or row, else the primary command first.
-        at = s.path_sel if (state.paths or state.rows) else 0
-        command = state.commands[min(at, len(state.commands) - 1)]
-        if command:
-            ctx.notify(command, "copied")
-            ctx.log("Enter", f"copied: {command} · shown, never run here")
-        else:
-            ctx.log("Enter", "no declared command runs this step yet")
-        return
-    first_cell = (
-        (state.rows or (("",),))[s.path_sel][0] if state.id in ("ambiguous", "offline") else ""
-    )
-    notes = {
-        "ambiguous": f"attach to {first_cell} · remembered for this session only",
-        "failed": "copied: eawf workspace register .",
-        "schema": "copied: eawf export --read-only",
-        "offline": f"drill → {first_cell} · read-only, controls are gone",
-    }
-    if state.paths:
-        command = state.paths[s.path_sel][0].replace(" ", "-")
-        ctx.log("Enter", f"eawf migrate --{command} · shown, never auto-applied")
-    else:
-        ctx.log("Enter", notes.get(state.id, "nothing to run while attaching"))
-
-
-def _enter_timeline(ctx: Ctx) -> None:
-    s = ctx.s
-    region = s.tl_reg or tl.LANES
-    if region == tl.LANES:
-        lane = tl.lane_name(s.sel)
-        if s.timeline_marker is None:
-            ctx.log("Enter", f"no marker on the {lane} lane · nothing to open")
-            return
-        open_overlay(s, "marker", subject=s.timeline_marker)
-        s.marker_card = {
-            "id": s.timeline_marker,
-            "lane": lane,
-            "glyph": tl.marker_glyph(lane, s.mark),
-        }
-        ctx.log("Enter", f"marker detail · {s.marker_card['id']} on the {lane} lane")
-        return
-    rows = (s.tl_regs or {}).get(region, [])
-    pick = rows[s.tl_sel] if s.tl_sel < len(rows) else None
-    if not pick:
-        ctx.log("Enter", f"nothing to open in {region}")
-        return
-    s.back.record(remember(s))
-    s.region = None
-    s.route = "milestone" if region == tl.UNDATED else "release"
-    s.subj_id = pick[0]
-    s.sel = 0
-    if region == tl.UNDATED:
-        ctx.log("Enter", f"→ {pick[0]} · {pick[1]}")
-    else:
-        ctx.log("Enter", f"→ {pick[0]} {pick[1]} · {str(pick[3]).lower()}")
-
-
-def _enter_milestone(ctx: Ctx) -> None:
-    s = ctx.s
-    target = _nav_at_cursor(s)
-    if not target:
-        open_overlay(s, "acceptance", subject=s.subj_id)
-        s.sel = 0
-        ctx.log("Enter", "acceptance evidence at this digest")
-        return
-    s.back.record(remember(s))
-    s.region = None
-    s.route = route_for_id(target) or "batch.detail"
-    s.sel = 0
-    s.subj_id = target
-    s.sel_id = None
-    ctx.log("Enter", f"drill → {s.route} · {target}")
-
-
-def _enter_attention(ctx: Ctx) -> None:
-    s = ctx.s
-    if att.held_refusal(ctx, "Enter") or open_held_row(ctx):
-        return
-    rows = att.attn_list(s, ctx.fixture)
-    row = rows[s.sel] if s.sel < len(rows) else (rows[0] if rows else None)
-    row_id = row.id if row else ""
-    if row is not None and "question" in row.kind:
-        open_overlay(s, "question", subject=row_id)
-        ctx.log("Enter", f"question detail · {row_id}")
-    elif row is not None and row.bucket == "lost":
-        open_overlay(s, "pause", subject=row_id)
-        ctx.log("Enter", "pause detail · the outcome is unknown")
-    elif att.is_notice(row):
-        # a notice has nothing to confirm, so its detail is the notifications record form
-        go(ctx, "notifications", f"notice detail · {row_id}")
-    else:
-        open_overlay(s, "consequence", subject=row_id or None)
-        ctx.log("Enter", f"action detail · {row_id}")
-
-
-def _enter_overlay_route(overlay: str, note: str) -> Callable[[Ctx], None]:
-    def enter(ctx: Ctx) -> None:
-        open_overlay(ctx.s, overlay)
-        ctx.log("Enter", note)
-
-    return enter
-
-
-def _enter_campaign(ctx: Ctx) -> None:
-    """Open the evidence viewer on the claim under the cursor, its receipts from the top."""
-    s = ctx.s
-    open_overlay(s, "evidence", subject=claim_id(s.sel))
-    s.sel = 0
-    ctx.log("Enter", "evidence viewer · the receipts behind this claim")
-
-
-def _enter_history(ctx: Ctx) -> None:
-    """Open the resolution card on the fact under the cursor, with the ending it records."""
-    s = ctx.s
-    if ctx.unheld:
-        ctx.noop("Enter")
-        return
-    facts = history.filtered_facts(dv.filter_of(s))
-    fact = facts[s.sel] if 0 <= s.sel < len(facts) else None
-    target = fact[0].split(" ")[0] if fact is not None else None
-    open_overlay(s, "resolution", subject=target)
-    if fact is not None and fact[2] == "retention":
-        s.resolution_ending = Ending.PURGED.value
-    ctx.log("Enter", "resolution card — what happened to this target")
-
-
-def _enter_note(note: str) -> Callable[[Ctx], None]:
-    def enter(ctx: Ctx) -> None:
-        ctx.log("Enter", note)
-
-    return enter
-
-
-def _enter_nav(default: str) -> Callable[[Ctx], None]:
-    def enter(ctx: Ctx) -> None:
-        target = _nav_at_cursor(ctx.s)
-        drill.drill_to(ctx, route_for_id(target) or default, target)
-
-    return enter
-
-
-def _enter_activity(ctx: Ctx) -> None:
-    row = dv.current_fleet_row(ctx.s, ctx.fixture)
-    drill.drill_to(ctx, "run.detail", row.run if row else None)
-
-
-def _enter_cost_ceiling(ctx: Ctx) -> None:
-    """Open the Run the cursor sits on in the stopped list, which the footer promises."""
-    drill.drill_to(ctx, "run.detail", cost_ceiling.stopped_run(ctx.s))
-
-
-_ENTER: Mapping[str, Callable[[Ctx], None]] = MappingProxyType(
-    {
-        HOME: _enter_note("nothing to drill"),
-        "track": _enter_track,
-        "task.detail": _enter_nav("run.detail"),
-        "release": _enter_release,
-        ENTRY_ROUTE: _enter_entry,
-        "campaign": _enter_campaign,
-        "backlog": _enter_overlay_route("draft", "draft detail · what it still needs"),
-        "timeline": _enter_timeline,
-        "history": _enter_history,
-        "settings": _enter_note("the WHY pane below already shows this chain"),
-        "milestone": _enter_milestone,
-        "activity": _enter_activity,
-        "batch.detail": _enter_nav("task.detail"),
-        "attention": _enter_attention,
-        "cost.ceiling": _enter_cost_ceiling,
-    }
-)
-
-
-def _enter(ctx: Ctx, k: str, pane: bool) -> None:
-    if pane:
-        ctx.noop("Enter")
-        return
-    if _enter_overlay(ctx):
-        return
-    handler = _ENTER.get(ctx.s.route)
-    if handler is not None:
-        handler(ctx)
-
-
 def _escape(ctx: Ctx, k: str, pane: bool) -> None:
     """Close an overlay, clear a bucket, guard the quit at home, or go back one step."""
     s, fx = ctx.s, ctx.fixture
@@ -963,7 +647,7 @@ def _escape(ctx: Ctx, k: str, pane: bool) -> None:
         ctx.log("Esc", "bucket cleared — every bucket shows")
         return
     if s.route == HOME and not s.back:
-        if guarded_quit(s, ctx.clock, outstanding=ctx.outstanding):
+        if guarded_quit(s, ctx.clock, outstanding=ctx.outstanding, at=ctx.pressed_at):
             ctx.host.quit()
         return
     if not _step_back(ctx):
@@ -1133,87 +817,6 @@ def _record_subject(fixture: Fixture, subject: str, route: str, via: str) -> str
     return dv.track_id_of(fixture, value) if route == "track" else None
 
 
-def _tab(ctx: Ctx, k: str, pane: bool) -> None:
-    """Cycle what Tab owns on this route: its own register, else its declared regions."""
-    handler = _TAB.get(ctx.s.route)
-    if handler is not None:
-        handler(ctx, back=False)
-    elif not _tab_region(ctx, back=False):
-        drill.no_cycle(ctx, back=False)
-
-
-def _tab_region(ctx: Ctx, *, back: bool) -> bool:
-    """Move the focus to the next declared region; ``False`` where the route has one."""
-    region = cycle_region(ctx.s, back=back)
-    if region is None:
-        return False
-    ctx.log("S-Tab" if back else "Tab", f"focus → {region}")
-    return True
-
-
-def _tab_release(ctx: Ctx, *, back: bool) -> None:
-    s = ctx.s
-    s.rel_reg = cycle(("MEMBERSHIP", "READINESS"), s.rel_reg or "MEMBERSHIP", back=back)
-    s.rel_sel = 0
-    ctx.log("S-Tab" if back else "Tab", f"region → {s.rel_reg}")
-
-
-def _tab_timeline(ctx: Ctx, *, back: bool) -> None:
-    s = ctx.s
-    s.tl_reg = cycle(list(tl.REGIONS), s.tl_reg or tl.LANES, back=back)
-    s.tl_sel = 0
-    ctx.log("S-Tab" if back else "Tab", f"region → {s.tl_reg}")
-
-
-def _tab_activity(ctx: Ctx, *, back: bool) -> None:
-    s = ctx.s
-    keys: list[str | None] = [None, *(b.key for b in ctx.fixture.proto.buckets)]
-    s.bucket = cycle(keys, s.bucket if s.bucket in keys else None, back=back)
-    s.sel = 0
-    s.scroll = 0
-    ctx.log("S-Tab" if back else "Tab", f"bucket → {s.bucket or 'all'}")
-
-
-def _tab_attention(ctx: Ctx, *, back: bool) -> None:
-    s, fx = ctx.s, ctx.fixture
-    keys: list[str | None] = [None]
-    for bucket in fx.proto.xbuckets:
-        keys.append(bucket.key)
-        keys.extend(sub.key for sub in bucket.sub or ())
-    s.bucket = cycle(keys, s.bucket if s.bucket in keys else None, back=back)
-    s.sel = 0
-    s.scroll = 0
-    label = att.bucket_label(fx, s.bucket) if s.bucket else "all"
-    ctx.log("S-Tab" if back else "Tab", f"bucket → {label}")
-
-
-def _tab_milestone(ctx: Ctx, *, back: bool) -> None:
-    s = ctx.s
-    s.section = SECTIONS.index(cycle(SECTIONS, SECTIONS[s.section], back=back))
-    ctx.log("S-Tab" if back else "Tab", f"section → {SECTIONS[s.section]}")
-
-
-def _tab_track(ctx: Ctx, *, back: bool) -> None:
-    s = ctx.s
-    groups = list(track.GROUP_IDS)
-    s.track_group = cycle(groups, s.track_group or groups[0], back=back)
-    s.sel = 0
-    s.scroll = 0
-    ctx.log("S-Tab" if back else "Tab", f"group → {s.track_group}")
-
-
-_TAB: Mapping[str, Callable[..., None]] = MappingProxyType(
-    {
-        "release": _tab_release,
-        "timeline": _tab_timeline,
-        "activity": _tab_activity,
-        "attention": _tab_attention,
-        "milestone": _tab_milestone,
-        "track": _tab_track,
-    }
-)
-
-
 def _page(ctx: Ctx, k: str, pane: bool) -> None:
     s = ctx.s
     s.sel = s.sel + s.visible if k == "PageDown" else max(0, s.sel - s.visible)
@@ -1274,24 +877,12 @@ def _drawer(name: str, note: str) -> Callable[[Ctx, str, bool], None]:
     return toggle
 
 
-def _refused(ctx: Ctx, k: str, verb: str) -> bool:
-    """Return whether the connection gate refuses ``verb``, logging the gate's own reason.
-
-    An overlay's verb passes the same gate as the route's, with the same words, so an
-    overlay is never a way around a refusal.
-    """
-    refusal = write_refusal(ctx.s, ctx.fixture, verb=verb)
-    if refusal:
-        ctx.log(k, f"{verb} is unavailable — {refusal}")
-    return bool(refusal)
-
-
 def _promote(ctx: Ctx, k: str, pane: bool) -> None:
     s = ctx.s
     if s.overlay != "draft":
         ctx.noop(k)
         return
-    if _refused(ctx, k, "promote"):
+    if refused(ctx, k, "promote"):
         return
     missing = s.draft_miss or []
     if missing:
@@ -1307,7 +898,7 @@ def _promote(ctx: Ctx, k: str, pane: bool) -> None:
 def _defer(ctx: Ctx, k: str, pane: bool) -> None:
     s = ctx.s
     if s.overlay == "draft":
-        if _refused(ctx, k, "defer"):
+        if refused(ctx, k, "defer"):
             return
         text = "Deferred · it keeps its due scope and leaves the drafts list."
         ctx.notify(text, "DEFERRED")
@@ -1319,15 +910,13 @@ def _defer(ctx: Ctx, k: str, pane: bool) -> None:
 
 
 def _copy(ctx: Ctx, k: str, pane: bool) -> None:
-    copied = copy_for(ctx)
-    ctx.notify(copied, "copied")
-    ctx.log("y", f"copied — {copied}")
+    text = copy_for(ctx)
+    ctx.log("y", f"{copied(ctx.copy(text))} — {text}")
 
 
 def _copy_urn(ctx: Ctx, k: str, pane: bool) -> None:
     urn = dv.urn(ctx.s, ctx.fixture, rows=ctx.rows, scope=ctx.scope)
-    ctx.notify(urn, "copied URN")
-    ctx.log("Y", f"copied URN — {urn}")
+    ctx.log("Y", f"{copied(ctx.copy(urn, 'copied URN'))} URN — {urn}")
 
 
 def _dismiss(ctx: Ctx, k: str, pane: bool) -> None:
@@ -1430,7 +1019,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
         "ArrowUp": _move,
         "j": _move,
         "k": _move,
-        "Enter": _enter,
+        "Enter": enter,
         "Escape": _escape,
         "m": _readiness,
         ".": _actions,
@@ -1447,7 +1036,7 @@ _KEYS: Mapping[str, Callable[[Ctx, str, bool], None]] = MappingProxyType(
         "\\": _filter,
         "ctrl+f": _filter,
         "g": _arm,
-        "Tab": _tab,
+        "Tab": tab,
         "u": _up,
         "[": _sibling,
         "]": _sibling,

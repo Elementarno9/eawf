@@ -386,6 +386,37 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-commit]
+      - id: eawf026-settings-categories
+        name: eawf026-settings-categories
+        entry: uv run eawf hook eawf026-settings-categories
+        language: system
+        # EAWF026: every configuration catalog section is filed under exactly
+        # one of the six settings categories, so none is unreachable from the
+        # Settings rail. Runs when the catalog or the category table changes.
+        files: ^src/eawf/kernel/(config/registry/|projection/settings\.py)
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: eawf027-citation-scope
+        name: eawf027-citation-scope
+        entry: uv run eawf hook eawf027-citation-scope
+        language: system
+        # EAWF027: no committed artifact, rendered document or rule projection
+        # (and not the local proposal packet, where present) quotes a
+        # reflection row marked non-quotable or unmarked, or a scrubbed_extract
+        # session title. Scans the whole scope, so it runs on any text change.
+        files: \.(md|txt|json|ya?ml)$
+        pass_filenames: false
+        stages: [pre-commit]
+      - id: emitted-page-execution
+        name: emitted-page-execution
+        entry: uv run pytest -q -p no:randomly tests/integration/observability/reflect/test_emitted_page_execution.py
+        language: system
+        # A change to the exported reflection page runs its scripts against
+        # real exported data in a minimal DOM (Node, no browser) and fails on
+        # a thrown, rejected or logged error or on a page that draws nothing.
+        files: ^(src/eawf/observability/reflect/|tests/integration/observability/reflect/)
+        pass_filenames: false
+        stages: [pre-commit]
       - id: eawf024-test-tier-contract
         name: eawf024-test-tier-contract
         entry: uv run eawf hook eawf024-test-tier-contract

@@ -851,3 +851,64 @@ def test_con_169_the_epoch_one_feed_renders_a_waiting_question_and_its_estimate_
     question = next(r for r in _rows(frame) if "? question" in r)
     assert re.search(r"waiting \d+m \d\ds", question)
     assert "estimate" not in frame
+
+
+# ---------- K-09: an empty transcript answers truthfully ----------
+
+
+@pytest.mark.parametrize(("key", "verb"), [("y", "copy"), ("Enter", "fold")])
+def test_k_09_a_transcript_with_no_block_names_that_nothing_is_there(key: str, verb: str) -> None:
+    model = _view()
+    assert model.blocks == ()
+    session = Session()
+    session.route = TRANSCRIPT_ROUTE
+    copied: list[str] = []
+
+    def clipboard(text: str) -> bool:
+        copied.append(text)
+        return True
+
+    ctx = Ctx(
+        session=session,
+        fixture=_fixture(),
+        host=_Host(),
+        w=80,
+        h=30,
+        projection=model,
+        clipboard=clipboard,
+    )
+    assert transcript.seam(ctx, key, False)
+    toast = session.toasts[-1].text
+    assert toast == f"no block to {verb} · this Run has produced no event"
+    assert "block 1" not in toast
+    assert copied == []
+    view = View(session=session, fixture=_fixture(), w=80, h=30, projection=model)
+    bar = render_route(view)[-1]
+    assert " y copy" not in f" {bar}"
+
+
+def test_k_01_y_on_a_held_block_puts_the_block_text_on_the_clipboard() -> None:
+    model = _view(_long_summary())
+    session = Session()
+    session.route = TRANSCRIPT_ROUTE
+    session.tr_sel = 1
+    copied: list[str] = []
+
+    def clipboard(text: str) -> bool:
+        copied.append(text)
+        return True
+
+    ctx = Ctx(
+        session=session,
+        fixture=_fixture(),
+        host=_Host(),
+        w=80,
+        h=30,
+        projection=model,
+        clipboard=clipboard,
+    )
+    assert transcript.seam(ctx, "y", False)
+    block = model.block_at(1)
+    assert block is not None
+    assert copied == [block.text.value]
+    assert session.toasts[-1].title == "copied"

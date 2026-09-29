@@ -17,8 +17,6 @@ class ProjectStatus(StrEnum):
 
 class TrackStatus(StrEnum):
     ACTIVE = "active"
-    PLANNED = "planned"
-    DEFERRED = "deferred"
     RETIRED = "retired"
 
 

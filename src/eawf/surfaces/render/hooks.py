@@ -4,8 +4,8 @@
 for any :class:`~eawf.runtime.hooks.event.HookEventType`. Which events an
 installer actually writes to disk is the installer's decision — the Claude
 installer subscribes only handler-backed events (:attr:`HookSpec.has_handler`,
-today ``SESSION_START`` and ``SESSION_END``), while the Codex installer renders every event
-with ``runtime="codex"``.
+today ``SESSION_START``, ``SESSION_END``, ``SUBAGENT_START`` and ``SUBAGENT_STOP``), while
+the Codex installer renders every event with ``runtime="codex"``.
 
 The output is a small POSIX-bash wrapper that:
 
@@ -71,8 +71,10 @@ class HookSpec:
             consumes this event: :data:`HookEventType.SESSION_END` has
             ``runtime.capture``, wired by
             :func:`eawf.runtime.hooks.runner.register_runtime_capture_hooks`,
-            and :data:`HookEventType.SESSION_START` has the rule-projection
-            staleness check ``eawf hook run`` registers. Every other
+            :data:`HookEventType.SESSION_START` has the rule-projection
+            staleness check ``eawf hook run`` registers, and the two subagent
+            events have ``runtime.host_subagent``, which adopts a
+            harness-spawned subagent as a Run. Every other
             event's wrapper exits ``0`` with an empty result list (an idle
             contract), so the Claude installer subscribes
             only handler-backed events and never wires the operator's
@@ -186,8 +188,16 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(event_type=HookEventType.PHASE_OPEN, claude_event_name="phase_open"),
     HookSpec(event_type=HookEventType.PHASE_CLOSE, claude_event_name="phase_close"),
     HookSpec(event_type=HookEventType.AGENT_END, claude_event_name="agent_end"),
-    HookSpec(event_type=HookEventType.SUBAGENT_START, claude_event_name="SubagentStart"),
-    HookSpec(event_type=HookEventType.SUBAGENT_STOP, claude_event_name="SubagentStop"),
+    HookSpec(
+        event_type=HookEventType.SUBAGENT_START,
+        claude_event_name="SubagentStart",
+        has_handler=True,
+    ),
+    HookSpec(
+        event_type=HookEventType.SUBAGENT_STOP,
+        claude_event_name="SubagentStop",
+        has_handler=True,
+    ),
     HookSpec(event_type=HookEventType.PRE_COMPACT, claude_event_name="PreCompact"),
 )
 

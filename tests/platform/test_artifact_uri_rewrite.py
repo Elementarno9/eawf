@@ -2,7 +2,7 @@
 
 Wave P30-I14-W07 relocated the legacy loose-root artifacts (those that sat
 directly under ``.ea/artifacts/`` rather than inside a kind subdir) under their
-canonical kind subdir from the ``_KIND_SUBDIR`` map (e.g. ``A29-P23-ship-gate``
+canonical kind subdir from the ``ARTIFACT_KIND_SUBDIR`` map (e.g. ``A29-P23-ship-gate``
 -> ``audits/``, ``research-2026-05-30-tui-chassis`` -> ``research/``) and
 rewrote the doc/code references that named the old paths.
 
@@ -19,18 +19,14 @@ from pathlib import Path
 
 import pytest
 
-from eawf.surfaces.cli.commands.draft import _KIND_SUBDIR
+from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ARTIFACTS_DIR = _REPO_ROOT / ".ea" / "artifacts"
 
-# Canonical first-path-segment subdirs under ``.ea/artifacts/``: the promotable
-# kind subdirs from the single-source-of-truth map, plus the renderer-owned
-# ``rendered/`` output tree (not a promotable artifact kind, never loose).
-# ``evidence`` is a recorded-validation-bundle kind, not a
-# draft-promotable prose kind, so it extends the set here alongside the
-# render-only ``rendered`` tree.
-_CANONICAL_SUBDIRS = frozenset(_KIND_SUBDIR.values()) | {"rendered", "evidence", "reviews"}
+# Canonical first-path-segment subdirs under ``.ea/artifacts/``, read from the one
+# kind map rather than restated here.
+_CANONICAL_SUBDIRS = frozenset(ARTIFACT_KIND_SUBDIR.values())
 
 
 def _tracked_artifact_markdown() -> list[str]:
@@ -60,8 +56,7 @@ def test_no_loose_root_artifact_remains() -> None:
     A *loose-root* artifact is one whose path is ``.ea/artifacts/<file>.md`` with
     no intervening kind subdir. After the W07 relocation none should remain: each
     tracked artifact's first path segment under ``artifacts/`` is a canonical
-    subdir (``audits``, ``research``, ``plans``, ``hypotheses``, ``decisions``,
-    ``incidents``, or the renderer-owned ``rendered``).
+    subdir, a value of the one kind map.
     """
     loose: list[str] = []
     uncanonical: list[str] = []

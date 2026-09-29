@@ -46,7 +46,7 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
-from eawf.surfaces.tui.console.navigation import Ctx, busy
+from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
 from eawf.surfaces.tui.console.renderers.read_model import (
     crumb,
     native,
@@ -559,8 +559,10 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     rows = [*opening, *(Fixed(pad(strip_chips(row), w)) for row in body), *closing]
     session.nav_rows = len(model.blocks)
     folded = native_hidden(view, model, sel) if model.block_at(sel) is not None else 0
-    # Enter folds the block under the caret, so a block with nothing folded offers nothing
-    pairs = [pair for pair in _KEYS if folded or pair[0] != "Enter"]
+    # Enter folds the block under the caret, so a block with nothing folded offers nothing,
+    # and y copies it, so a Run with no block offers no copy
+    held = model.block_at(sel) is not None
+    pairs = [pair for pair in _KEYS if (folded or pair[0] != "Enter") and (held or pair[0] != "y")]
     return build(view, rows, keybar(acting_pairs(view, pairs), w))
 
 
@@ -570,6 +572,15 @@ def render(view: View) -> list[str]:
     if isinstance(model, TranscriptReadModel):
         return native_frame(view, model)
     return _proto_frame(view)
+
+
+#: What Enter and ``y`` answer on a transcript that holds no block to fold or copy.
+_EMPTY_ANSWERS: Mapping[str, str] = MappingProxyType(
+    {
+        "Enter": "no block to fold · this Run has produced no event",
+        "y": "no block to copy · this Run has produced no event",
+    }
+)
 
 
 def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
@@ -583,6 +594,11 @@ def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
         s.follow = False
         block = model.block_at(s.tr_sel)
         ctx.log(key, f"{block.lane} · {clock_time(block.at)}" if block else "no block")
+        return True
+    block = model.block_at(sel)
+    if key in _EMPTY_ANSWERS and block is None:
+        ctx.notify(_EMPTY_ANSWERS[key], key)
+        ctx.log(key, _EMPTY_ANSWERS[key])
         return True
     if key == "Enter":
         view = View(session=s, fixture=ctx.fixture, w=ctx.w, h=ctx.h, gutter=ctx.gutter)
@@ -600,11 +616,10 @@ def _native_seam(ctx: Ctx, key: str, model: TranscriptReadModel) -> bool:
             s.tr_sel = max(0, total - 1)
         ctx.log("f", "following the tail" if s.follow else "held where you are")
         return True
-    if key == "y":
-        block = model.block_at(sel)
-        what = f"{block.lane} at {clock_time(block.at)}" if block else f"block {sel + 1}"
-        ctx.notify(what, "copied")
-        ctx.log("y", "copied the block under the cursor")
+    if key == "y" and block is not None:
+        what = f"{block.lane} at {clock_time(block.at)}"
+        written = ctx.copy(block.text.value or what, shown=what)
+        ctx.log("y", f"{copied(written)} the block under the cursor")
         return True
     return False
 
@@ -644,9 +659,9 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
         ctx.log("f", "following the tail" if s.follow else "held where you are")
         return True
     if key == "y":
-        copied = blocks[sel] if sel < len(blocks) else None
-        what = f"{copied['k']} at {copied['at']}" if copied else f"block {sel + 1}"
-        ctx.notify(f"{RUN_ID} · {what}", "copied")
-        ctx.log("y", "copied the block under the cursor")
+        picked = blocks[sel] if sel < len(blocks) else None
+        what = f"{picked['k']} at {picked['at']}" if picked else f"block {sel + 1}"
+        written = ctx.copy(f"{RUN_ID} · {what}")
+        ctx.log("y", f"{copied(written)} the block under the cursor")
         return True
     return False

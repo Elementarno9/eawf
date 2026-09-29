@@ -460,14 +460,10 @@ def test_surfaced_int_key_range_rejects_below_minimum() -> None:
 # Curated preferences.* + research.* coverage
 # ---------------------------------------------------------------------------
 
-#: The ``preferences.*`` keys curated into ``CONFIG_REGISTRY`` so they appear
-#: under the ``preferences`` tab. Each is a closed ``choice`` enum (the
-#: planner / AUQ knobs); the full leaf catalog is NOT browsed.
-_PREFERENCES_KEYS: tuple[str, ...] = (
-    "preferences.solution_bias",
-    "preferences.scope_size",
-    "preferences.auto_choose",
-)
+#: The ``preferences.*`` key curated into ``CONFIG_REGISTRY`` so it appears
+#: under the ``preferences`` tab. It is a closed ``choice`` enum (the AUQ
+#: knob); the full leaf catalog is NOT browsed.
+_PREFERENCES_KEYS: tuple[str, ...] = ("preferences.auto_choose",)
 
 #: The ``research.*`` keys curated into ``CONFIG_REGISTRY`` so they appear
 #: under the ``research`` tab — a deliberate subset (depth / sources / count /
@@ -527,9 +523,9 @@ def test_research_keys_default_matches_leaf_registry() -> None:
 
 
 def test_preferences_enums_render_as_choice_fields() -> None:
-    """``solution_bias`` / ``scope_size`` / ``auto_choose`` are ``choice`` widgets.
+    """``auto_choose`` is a ``choice`` widget.
 
-    The three preferences enums must surface as choice fields (forward-cycled
+    The preferences enum must surface as a choice field (forward-cycled
     on ``Enter``), so :func:`enter_action` resolves ``cycle`` and each row
     declares a non-empty ``choices`` set mirroring its leaf registry choices.
     """
@@ -569,10 +565,10 @@ def test_preferences_choice_edit_validates_via_coerce_and_validate() -> None:
     """A preferences choice key coerces a declared value and rejects an undeclared one."""
     import pytest
 
-    entry = registry_lookup("preferences.solution_bias")
+    entry = registry_lookup("preferences.auto_choose")
     assert entry is not None and entry.type == "choice"
     # Boundary: a declared choice round-trips unchanged.
-    assert coerce_and_validate(entry, "thorough") == "thorough"
+    assert coerce_and_validate(entry, "always") == "always"
     # Error path: an undeclared choice is rejected.
     with pytest.raises(UserError):
         coerce_and_validate(entry, "reckless")
@@ -606,19 +602,19 @@ def test_research_int_key_range_rejects_out_of_range() -> None:
 
 
 def test_preferences_cycle_choice_forward_wraps() -> None:
-    """Forward-cycling ``preferences.solution_bias`` steps its choices and wraps."""
-    entry = registry_lookup("preferences.solution_bias")
+    """Forward-cycling ``preferences.auto_choose`` steps its choices and wraps."""
+    entry = registry_lookup("preferences.auto_choose")
     assert entry is not None and entry.choices is not None
     choices = list(entry.choices)
-    merged = {"preferences": {"solution_bias": choices[-1]}}
+    merged = {"preferences": {"auto_choose": choices[-1]}}
     # Cycling forward from the last choice wraps to the first.
-    assert cycle_choice(entry, merged, {}, step=1) == {"preferences.solution_bias": choices[0]}
+    assert cycle_choice(entry, merged, {}, step=1) == {"preferences.auto_choose": choices[0]}
 
 
 def test_curated_keys_stay_subset_of_leaf_catalog() -> None:
     """The new keys ride the curated registry, not a full-leaf dump.
 
-    All seven preferences / research keys live in the full
+    All five preferences / research keys live in the full
     :data:`LEAF_KEY_REGISTRY` and are mirrored into the curated
     :data:`CONFIG_REGISTRY`, which stays strictly smaller than the catalog —
     the modal shows a deliberate subset, never every leaf.
@@ -1101,7 +1097,7 @@ def test_preferences_choice_edit_flushes_to_writable_layer() -> None:
     """Cycling a ``preferences`` choice then ``s`` flushes to the chosen layer.
 
     Exercises the end-to-end stage -> flush path: focus the preferences tab,
-    ``Enter`` to cycle ``solution_bias``, ``s`` to save. The layered-writer
+    ``Enter`` to cycle ``auto_choose``, ``s`` to save. The layered-writer
     seam is called with the staged value targeting the repo-layer YAML — never
     ``state.json`` (AGENTS rule 4).
     """
@@ -1114,19 +1110,19 @@ def test_preferences_choice_edit_flushes_to_writable_layer() -> None:
             modal = _push_config(app, save_fn=lambda **k: calls.append(k))
             await pilot.pause()
             _goto_tab(modal, "preferences")
-            # Anchor on solution_bias regardless of within-tab order.
+            # Anchor on auto_choose regardless of within-tab order.
             fields = keys_for_tab("preferences")
-            modal.field_index = [e.key for e in fields].index("preferences.solution_bias")
+            modal.field_index = [e.key for e in fields].index("preferences.auto_choose")
             await pilot.pause()
             entry = modal._active_field()
-            assert entry is not None and entry.key == "preferences.solution_bias"
+            assert entry is not None and entry.key == "preferences.auto_choose"
             await pilot.press("enter")  # cycle to the next choice
             await pilot.pause()
-            staged = modal._view.dirty.get("preferences.solution_bias")
+            staged = modal._view.dirty.get("preferences.auto_choose")
             assert staged is not None
             await pilot.press("s")  # flush through the layered writer
             await pilot.pause()
-            saved = [call for call in calls if call["key"] == "preferences.solution_bias"]
+            saved = [call for call in calls if call["key"] == "preferences.auto_choose"]
             assert len(saved) == 1
             assert saved[0]["value"] == staged
             assert str(saved[0]["target_path"]).endswith(".yaml")

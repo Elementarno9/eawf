@@ -16,6 +16,7 @@ from eawf.surfaces.tui.console.keymap import (
     native_keys,
     route_keys,
 )
+from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.width import cell_len, pad
 
 # The token column's narrowest width; the card's longest token widens the whole column.
@@ -26,21 +27,35 @@ def _route_table(view: View) -> tuple[KeyEntry, ...]:
     """Return the keys the frame under the overlay advertises.
 
     A frame drawn from a held read model lists the native table its keybar draws from
-    rather than the prototype table it replaced, and like the bar it teaches paging only
-    while a table of the frame is cut to its window, since nothing else pages.
+    rather than the prototype table it replaced, and only the keys that bar offered: a key
+    the frame gave up because it has nothing to act on -- paging on an uncut table, Tab
+    with no second region, a copy with nothing to copy -- is not taught either.
     """
     s = view.session
     native = view.projection is not None or view.register is not None
     if native and s.route != ENTRY_ROUTE and s.route in ROUTE_KEYS:
-        return native_keys(s.route, windowed=s.route_windowed)
+        table = native_keys(s.route, windowed=s.route_windowed)
+        offered = s.route_bar_keys
+        if offered is None:
+            return table
+        return tuple(entry for entry in table if offered.intersection(entry.keys))
     return route_keys(s, view.fixture)
+
+
+def _route_named(view: View) -> str:
+    """Return how the crumb names the route under the card: by its word on a linked console.
+
+    The prototype replay keeps the route id its recorded crumb names.
+    """
+    route = view.session.route
+    return route if view.fixture.prototype else REGISTRY.route_word(route)
 
 
 def render(view: View) -> list[str]:
     """Return the help overlay."""
     s, w = view.session, view.w
     rows = [
-        header(view, f" Eä ▸ help · {s.route}"),
+        header(view, f" Eä ▸ help · {_route_named(view)}"),
         " the keymap for THIS route, not a global cheat sheet",
         bar(w),
         " THIS ROUTE",
@@ -74,8 +89,8 @@ def render(view: View) -> list[str]:
     rows.extend(
         [
             thin(w),
-            " Esc Esc quits only at scope home, with nothing open and no",
-            " outstanding control — and only if the presses are 80ms to 1.5s apart.",
+            # one line, so the 80x24 card keeps every global key and this rule together
+            " Esc Esc quits only at scope home, nothing open or pending, 80ms to 1.5s apart.",
         ]
     )
     return build(view, rows, keybar([("Esc", "close")], w))

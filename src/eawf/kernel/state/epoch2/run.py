@@ -317,12 +317,14 @@ class RunCreateSpec(Epoch2Model):
     """The strict create document for a Run.
 
     A Run is created ``QUEUED``: it has not started, so it carries no
-    clock, no suspension reason and no failure. Only the key and the scope
-    it will execute against are the caller's to say.
+    clock, no suspension reason and no failure. Only the key, the scope
+    it will execute against and the Run that delegated it are the
+    caller's to say.
     """
 
     key: RunKey
     scope: RunScope
+    parent_run_ref: RunUrn | None = None
 
 
 class Run(Epoch2Record):
@@ -333,12 +335,15 @@ class Run(Epoch2Record):
     session id; capture reads counters only through it.
     ``counter_baseline`` is the reading taken when the Run started and
     ``captured_runtime`` what the stop reading made of it.
+    ``parent_run_ref`` is the Run that delegated this one, which is how a
+    delegation tree is read back: lineage only, never a shared transcript.
     """
 
     key: RunKey
     urn: RunUrn
     scope: RunScope
     status: RunStatus
+    parent_run_ref: RunUrn | None = None
     started_at: UtcDatetime | None = None
     ended_at: UtcDatetime | None = None
     suspension_reason: SuspensionReason | None = None
@@ -358,6 +363,17 @@ class Run(Epoch2Record):
         if self.suspension_reason is None:
             return None
         return SUSPENSION_ACTIVITY_BUCKETS[self.suspension_reason]
+
+    @model_validator(mode="after")
+    def _parent_is_another_run(self) -> Self:
+        """Refuse a Run named as its own delegator.
+
+        Raises:
+            ValueError: ``parent_run_ref`` is this Run's own URN.
+        """
+        if self.parent_run_ref is not None and self.parent_run_ref == self.urn:
+            raise ValueError("parent_run_ref must name another Run")
+        return self
 
     @model_validator(mode="after")
     def _suspension_reason_matches_status(self) -> Self:

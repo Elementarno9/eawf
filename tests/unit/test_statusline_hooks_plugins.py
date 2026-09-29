@@ -17,9 +17,9 @@ def _seed_state(tmp_path: Path, payload: dict[str, object]) -> Path:
     return state_path
 
 
-def test_no_state_path_returns_dash() -> None:
+def test_no_state_path_names_why() -> None:
     seg = hooks_plugins.build({}, None)
-    assert seg.text == "hooks:- plugins:-"
+    assert seg.text == "hooks:n/a(no-state)"
     assert seg.status == "missing"
 
 
@@ -57,10 +57,10 @@ def test_hooks_directory_count_added(tmp_path: Path) -> None:
     assert seg.text == "hooks:2 plugins:1"
 
 
-def test_malformed_state_returns_dash(tmp_path: Path) -> None:
+def test_malformed_state_keeps_the_hook_count(tmp_path: Path) -> None:
     state_path = tmp_path / ".ea" / "state.json"
     state_path.parent.mkdir()
     state_path.write_bytes(b"not-json")
     seg = hooks_plugins.build({}, state_path)
-    assert seg.text == "hooks:- plugins:-"
-    assert seg.status == "missing"
+    assert seg.text == "hooks:0 plugins:n/a(state-unreadable)"
+    assert seg.status == "degraded"

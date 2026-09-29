@@ -10,11 +10,15 @@ screen says why in a toast. Each test names the confirmation-jury finding it clo
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from eawf.kernel.projection.spine import build_spine_view
 from eawf.kernel.projection.verification import build_verification_view
+from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.drawers import action_rows
 from eawf.surfaces.tui.console.drill import NOTHING_CYCLES, say_why
@@ -28,6 +32,7 @@ from eawf.surfaces.tui.console.session import Session, Toast
 from eawf.surfaces.tui.console.tokens import Severity
 from eawf.workflow.projection.acceptance import build_acceptance_view
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
+from tests.tui.surfaces.tui.console.test_jury_round3 import _linked
 from tests.tui.surfaces.tui.console.test_native_drills import (
     PROTOTYPE_IDS,
     W,
@@ -349,3 +354,27 @@ def test_c2_08_a_finished_batch_with_no_light_verb_neither_offers_nor_binds_the_
     session = _press(view, ".", document=document)
     assert session.overlay is None
     assert session.trace is not None and session.trace.endswith("unclaimed")
+
+
+# ---------- K-08: a Tab that moved the focus acted, whatever the frame's text ----------
+
+
+def test_k_08_tab_between_empty_groups_raises_no_toast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tab across empty groups moves the focus by colour alone, which is still acting."""
+    # the seam already holds the route; following it would ask a daemon for the rest
+    monkeypatch.setattr(ConsoleApp, "_follow_route", lambda self: None)
+
+    async def body() -> tuple[list[str | None], int]:
+        app = _linked("track", subject="TRK-CORE")
+        groups: list[str | None] = []
+        async with app.run_test(size=(120, 30)) as pilot:
+            await pilot.pause()
+            for _ in range(3):
+                app.press_key("Tab")
+                await pilot.pause()
+                groups.append(app.session.track_group)
+            return groups, len(app.session.toasts)
+
+    groups, toasts = asyncio.run(body())
+    assert len(set(groups)) == 3
+    assert toasts == 0

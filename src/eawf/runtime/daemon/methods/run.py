@@ -897,7 +897,7 @@ def _grant(context: Epoch2RootContext, args: _ToolGrantParams) -> ToolGrantAnswe
     )
 
 
-def _append_event(
+def append_run_event(
     context: Epoch2RootContext, args: RunEventAppend, *, now: datetime
 ) -> RunEventAnswer:
     """Order one observed event into the Run's stream.
@@ -1128,7 +1128,7 @@ async def _append_run_event(
     """
     args = _params(RunEventAppend, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(_append_event, context, args, now=datetime.now(UTC))
+    answer = await asyncio.to_thread(append_run_event, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 
 
@@ -1185,4 +1185,5 @@ __all__ = [
     "RunStallAnswer",
     "ToolGrantAnswer",
     "WorkerHelloAnswer",
+    "append_run_event",
 ]

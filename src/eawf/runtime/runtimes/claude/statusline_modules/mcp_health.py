@@ -1,8 +1,8 @@
 """``mcp_health`` statusline module — MCP server up/down summary.
 
-Inspects ``state.mcp_servers`` (Pydantic-validated server records) on disk
-and emits ``mcp:<up>/<total>``. Missing state file or empty mcp_servers
-collapses to ``mcp:?`` with ``status="missing"``.
+Inspects ``state.mcp_servers`` in the epoch-1 document and emits
+``mcp:<up>/<total>``. An unreadable or frozen document, or no declared
+server, renders ``mcp:n/a(<reason>)`` with ``status="missing"``.
 
 Status meaning:
 
@@ -18,11 +18,22 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import orjson
-
-from eawf.surfaces.render.statusline import StatuslineSegment
+from eawf.runtime.runtimes.claude.statusline_modules._document import (
+    DocumentGap,
+    document_source,
+    read_legacy_document,
+)
+from eawf.surfaces.render.statusline import (
+    StatuslineSegment,
+    sourced_segment,
+    unavailable_segment,
+)
 
 logger = logging.getLogger(__name__)
+
+_MODULE = "mcp_health"
+_LABEL = "mcp"
+_SOURCE = document_source("mcp_servers")
 
 
 def _count_servers(payload: dict[str, Any]) -> tuple[int, int]:
@@ -44,7 +55,7 @@ def _count_servers(payload: dict[str, Any]) -> tuple[int, int]:
 
 
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
-    """Return the ``mcp:<up>/<total>`` (or ``mcp:?``) segment.
+    """Return the ``mcp:<up>/<total>`` (or ``mcp:n/a(<reason>)``) segment.
 
     Args:
         claude_payload: Unused — Claude does not propagate MCP health on
@@ -56,25 +67,18 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
         derived status (see module docstring).
     """
     del claude_payload  # accepted for uniform signature
-    if state_path is None or not state_path.exists():
-        return StatuslineSegment(module="mcp_health", text="mcp:?", status="missing")
-    try:
-        raw = state_path.read_bytes()
-        payload = orjson.loads(raw)
-    except (OSError, orjson.JSONDecodeError) as exc:
-        logger.debug(f"build mcp-read-decode-failed error={exc}")
-        return StatuslineSegment(module="mcp_health", text="mcp:?", status="missing")
-    if not isinstance(payload, dict):
-        return StatuslineSegment(module="mcp_health", text="mcp:?", status="missing")
+    payload = read_legacy_document(state_path)
+    if isinstance(payload, DocumentGap):
+        return unavailable_segment(_MODULE, _LABEL, payload.value, _SOURCE)
     up, total = _count_servers(payload)
     if total == 0:
-        return StatuslineSegment(module="mcp_health", text="mcp:?", status="missing")
-    text = f"mcp:{up}/{total}"
+        return unavailable_segment(_MODULE, _LABEL, "no-mcp-servers", _SOURCE)
+    value = f"{up}/{total}"
     if up == total:
-        return StatuslineSegment(module="mcp_health", text=text, status="ok")
+        return sourced_segment(_MODULE, _LABEL, value, _SOURCE)
     if up == 0:
-        return StatuslineSegment(module="mcp_health", text=text, status="degraded")
-    return StatuslineSegment(module="mcp_health", text=text, status="warn")
+        return sourced_segment(_MODULE, _LABEL, value, _SOURCE, status="degraded")
+    return sourced_segment(_MODULE, _LABEL, value, _SOURCE, status="warn")
 
 
 __all__ = ["build"]

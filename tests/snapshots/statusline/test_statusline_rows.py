@@ -14,9 +14,11 @@ from pathlib import Path
 import pytest
 
 from eawf.surfaces.render.statusline import (
+    SegmentSource,
     StatuslineSegment,
     StatuslineTheme,
     render_rows,
+    sourced_segment,
 )
 
 _GOLDEN_DIR = Path(__file__).parent / "golden"
@@ -26,19 +28,28 @@ _GOLDEN_PATH = _GOLDEN_DIR / "three_rows.txt"
 #: the golden is stable across terminals.
 _THEME = StatuslineTheme(name="snapshot", separator=" | ")
 
+_SOURCE = SegmentSource(producer="snapshot", provenance="snapshot#fixed")
+
+
+def _segment(module: str, text: str) -> StatuslineSegment:
+    """Return a fixed segment rendering exactly *text*."""
+    truth = sourced_segment(module, module, text, _SOURCE).truth
+    return StatuslineSegment(module=module, text=text, truth=truth)
+
+
 #: Three rows of fixed segments -- one row per statusline line.
 _ROWS_OF_SEGMENTS: list[list[StatuslineSegment]] = [
     [
-        StatuslineSegment(module="state", text="P29-I13-W38"),
-        StatuslineSegment(module="git", text="feature/eawf-v0.5-p29"),
+        _segment("state", "P29-I13-W38"),
+        _segment("git", "feature/eawf-v0.5-p29"),
     ],
     [
-        StatuslineSegment(module="context_tokens", text="ctx 42%"),
-        StatuslineSegment(module="token_saving", text="rate 18%"),
+        _segment("context_tokens", "ctx 42%"),
+        _segment("token_saving", "rate 18%"),
     ],
     [
-        StatuslineSegment(module="mcp_health", text="mcp ok"),
-        StatuslineSegment(module="memory", text="mem 3"),
+        _segment("mcp_health", "mcp ok"),
+        _segment("memory", "mem 3"),
     ],
 ]
 

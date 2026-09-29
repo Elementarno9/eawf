@@ -1496,12 +1496,12 @@ def _session_rollup(
 
 
 def test_resolve_detail_wave_metrics_actual_tokens_eu_and_estimate() -> None:
-    """A rollup wave renders actual tokens, actual EU, and the bucket estimate.
+    """A rollup wave renders actual tokens, actual EU, and the effort estimate.
 
     The metrics tab reads the ACTUAL consumed tokens off the session rollup
     (1200 + 340 + 80 + 20 = 1640), the ACTUAL runtime EU from the two 5min +
-    4min session spans (9min -> 0.30 EU at 30 min/EU), and the effort-bucket
-    EU estimate (bucket M -> 1.00 EU) the actual is measured against.
+    4min session spans (9min -> 0.30 EU at 30 min/EU), and the EU estimate
+    (the 0.80 EU constant, whatever the label) the actual is measured against.
     """
     state, wave_id = _state_with_attempted_wave()
     bucketed = state.waves[wave_id].model_copy(update={"effort_bucket": EffortBucket.M})
@@ -1519,8 +1519,8 @@ def test_resolve_detail_wave_metrics_actual_tokens_eu_and_estimate() -> None:
     assert format_tokens(1640) in metrics["tokens"]
     # The EU actual is the 9-minute session span at 30 min/EU.
     assert metrics["eu"] == "0.30 EU"
-    # The estimate row carries the bucket-M EU estimate beside the actual.
-    assert metrics["estimate"] == "1.00 EU"
+    # The estimate row carries the effort constant beside the actual.
+    assert metrics["estimate"] == "0.80 EU"
 
 
 def test_resolve_detail_wave_metrics_actual_tokens_show_budget_when_set() -> None:

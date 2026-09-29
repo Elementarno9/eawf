@@ -78,6 +78,7 @@ def _entry(**overrides: object) -> dict[str, object]:
     base: dict[str, object] = {
         "skill_id": "demo",
         "skill_class": "lifecycle",
+        "budget_class": "steering_zone2",
         "audience": "both",
         "description": "Demo skill.",
         "grammar": {"usage": "/demo <go|stop>", "actions": ("go", "stop")},

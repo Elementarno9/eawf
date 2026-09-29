@@ -83,8 +83,9 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 # wrapper that exits 0 with an empty result list, so installing it would
 # subscribe the operator's session to a no-op script (and paint a false-green
 # "hooks:<n>" in the statusline). SESSION_START (the rule-projection
-# staleness check) and SESSION_END (runtime.capture) are the handler-backed
-# events today — see HookSpec.has_handler.
+# staleness check), SESSION_END (runtime.capture) and the two subagent events
+# (runtime.host_subagent) are the handler-backed events today — see
+# HookSpec.has_handler.
 _INSTALLED_HOOKS: tuple[HookSpec, ...] = tuple(spec for spec in HOOK_REGISTRY if spec.has_handler)
 _INSTALLED_EVENTS: frozenset[HookEventType] = frozenset(
     spec.event_type for spec in _INSTALLED_HOOKS
@@ -278,9 +279,9 @@ def _eawf_settings_hooks() -> dict[str, list[dict[str, Any]]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for spec in PLUGIN_HOOK_REGISTRY:
         if spec.event_type not in _INSTALLED_EVENTS:
-            # Skip the handler-less events (pre/post commit+push, session_start,
-            # subagent_stop, pre_compact): wiring CC to their no-op wrappers is
-            # the idle-contract this installer stops emitting.
+            # Skip the handler-less events (pre/post commit+push, pre_compact):
+            # wiring CC to their no-op wrappers is the idle contract this
+            # installer stops emitting.
             continue
         command = f"$CLAUDE_PROJECT_DIR/.claude/hooks/{spec.event_type.value}.sh"
         grouped.setdefault(spec.cc_event, []).append(

@@ -4,20 +4,18 @@ Companion to ``tests/contract/test_runtime_resolution_contract.py``, which
 pins the same invariant for the local installers (``eawf plugin install
 <runtime>``). This module pins it for the standalone marketplace-tree
 packagers (``eawf plugin package <runtime>``) that ship to npm users. The
-Claude packager used to wire every ``PLUGIN_HOOK_REGISTRY`` event (eight
-wrappers) even though only ``SESSION_END`` has a real runner-registered
-handler, so every ``Bash`` tool call in an installed session fired seven
-idle no-op hooks.
+Claude packager used to wire every ``PLUGIN_HOOK_REGISTRY`` event (nine
+wrappers) even though most had no real runner-registered handler, so every
+``Bash`` tool call in an installed session fired idle no-op hooks.
 
 "Handler-backed" means the event has a real callable registered by
 ``register_runtime_capture_hooks``:
 
 - Claude: :data:`HookSpec.has_handler` on
   :data:`eawf.surfaces.render.hooks.HOOK_REGISTRY` (today ``SESSION_START``,
-  whose rule-projection staleness check runs for every runtime, and
-  ``SESSION_END`` -- the Claude runtime never sets ``event.runtime ==
-  "codex"``, so the Codex-lifecycle callable registered for
-  SUBAGENT_START / SUBAGENT_STOP is a live no-op there).
+  whose rule-projection staleness check runs for every runtime,
+  ``SESSION_END``, and SUBAGENT_START / SUBAGENT_STOP, whose
+  ``runtime.host_subagent`` callable adopts the subagent as a Run).
 - Codex: every event in
   :data:`eawf.runtime.runtimes.codex.hook_map.CODEX_HOOK_EVENT_TYPES` is
   genuinely handled, since the Codex packager always sets
@@ -62,12 +60,12 @@ def _assert_emitted_are_handler_backed(emitted: set[str], handler_backed: frozen
 
 
 def test_claude_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None:
-    """``eawf plugin package claude`` wires only SESSION_START and SESSION_END."""
+    """``eawf plugin package claude`` wires only the session and subagent pairs."""
     target = tmp_path / "claude-pkg"
     claude_package_plugin(target)
     emitted = {p.stem for p in (target / "hooks").iterdir()}
     _assert_emitted_are_handler_backed(emitted, _CLAUDE_HANDLER_BACKED)
-    assert emitted == {"session_start", "session_end"}
+    assert emitted == {"session_start", "session_end", "subagent_start", "subagent_stop"}
 
 
 def test_codex_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None:
@@ -98,12 +96,12 @@ def test_unbacked_hook_entry_reds_the_check() -> None:
     """Gate-fire proof: an event with no registered handler fails the shared check.
 
     Simulates the original defect directly -- a packager also emitting a
-    ``subagent_stop.sh`` wrapper under the Claude runtime, where it has no
+    ``pre_compact.sh`` wrapper under the Claude runtime, where it has no
     live handler -- without mutating any production registry, proving the
     assertion helper the two tests above rely on actually has teeth.
     """
-    seeded = set(_CLAUDE_HANDLER_BACKED) | {"subagent_stop"}
-    with pytest.raises(AssertionError, match="subagent_stop"):
+    seeded = set(_CLAUDE_HANDLER_BACKED) | {"pre_compact"}
+    with pytest.raises(AssertionError, match="pre_compact"):
         _assert_emitted_are_handler_backed(seeded, _CLAUDE_HANDLER_BACKED)
 
 

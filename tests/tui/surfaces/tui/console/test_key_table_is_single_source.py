@@ -303,7 +303,7 @@ def test_con031_pick_names_only_labels_the_table_holds() -> None:
     assert pick("receipt") == []
 
 
-# ---------- CON-033: lowercase verbs, and only ? and Y shifted ----------
+# ---------- CON-033: lowercase verbs, and only ?, Y and ! shifted ----------
 
 
 def _all_entries() -> list[KeyEntry]:
@@ -319,13 +319,15 @@ def test_con033_every_mutation_and_answer_key_is_a_lowercase_letter() -> None:
 
 
 def test_con033_only_help_and_copy_urn_are_shifted_anywhere_a_frame_shows_keys() -> None:
-    """CON-033: the only shifted keys are ``?`` and ``Y``; ``*`` only inside the action menu."""
+    """CON-033: only ``?``, ``Y`` and help's ``!`` jump are shifted; ``*`` only in the menu."""
     shown = {key for entry in _all_entries() for key in entry.keys}
     shown |= {key for global_key in GLOBAL_KEYS for key in global_key.keys}
     shown |= {HELP_KEY}
     shown |= {key for keys in OVERLAY_KEYS.values() for key in keys}
     shown |= {key for name, keys in DRAWER_KEYS.items() if name != "actions" for key in keys}
-    assert {key for key in shown if is_shifted(key)} <= ADMITTED_SHIFTED
+    # help lists the global attention jump, which moves the frame and mutates nothing; no
+    # key table may bind it, which the declaration check below still refuses
+    assert {key for key in shown if is_shifted(key)} <= ADMITTED_SHIFTED | {ATTENTION_JUMP_KEY}
     assert {key for key in DRAWER_KEYS["actions"] if is_shifted(key)} == {"*"}
 
 
@@ -548,7 +550,7 @@ def test_con048_only_the_reads_module_judges_the_connection_state() -> None:
 
 def test_con048_offline_refuses_from_one_place_by_key_menu_and_card() -> None:
     """CON-048: the letter, the menu and the confirmed card all name the same reason."""
-    reason = FIXTURE.proto.states.refuse["OFFLINE SNAPSHOT"]
+    reason = f"OFFLINE SNAPSHOT · {FIXTURE.proto.states.refuse['OFFLINE SNAPSHOT']}"
     by_key = _session("attention")
     by_key.conn = "OFFLINE SNAPSHOT"
     by_key.sel = 1

@@ -2,9 +2,9 @@
 
 Emits ``git:<branch>`` (clean) or ``git:<branch>*`` (dirty). Detached HEAD
 renders ``git:HEAD@<sha7>``. When ``git`` is missing or any subprocess
-invocation fails, the segment degrades to ``git:-`` with
+invocation fails, the segment renders ``git:n/a(<reason>)`` with
 ``status="missing"`` so the orchestrator's contract holds (modules never
-crash; missing instruments degrade to a single ``-``).
+crash; a missing instrument names why it has no value).
 """
 
 from __future__ import annotations
@@ -15,9 +15,17 @@ from pathlib import Path
 from typing import Any
 
 from eawf.platform.subprocess_detach import no_window_kwargs
-from eawf.surfaces.render.statusline import StatuslineSegment
+from eawf.surfaces.render.statusline import (
+    SegmentSource,
+    StatuslineSegment,
+    sourced_segment,
+    unavailable_segment,
+)
 
 logger = logging.getLogger(__name__)
+
+_MODULE = "git"
+_SOURCE = SegmentSource(producer="git", provenance="git:HEAD")
 
 
 _GIT_TIMEOUT: float = 2.0
@@ -85,10 +93,10 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
     else:
         cwd = _git_cwd_for(state_path)
     if not cwd.exists():
-        return StatuslineSegment(module="git", text="git:-", status="missing")
+        return unavailable_segment(_MODULE, _MODULE, "no-worktree", _SOURCE)
     branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd)
     if branch is None:
-        return StatuslineSegment(module="git", text="git:-", status="missing")
+        return unavailable_segment(_MODULE, _MODULE, "not-a-repository", _SOURCE)
     if branch == "HEAD":
         sha = _run_git(["rev-parse", "--short=7", "HEAD"], cwd)
         label = f"HEAD@{sha}" if sha else "HEAD"
@@ -96,12 +104,10 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
         label = branch
     porcelain = _run_git(["status", "--porcelain"], cwd)
     if porcelain is None:
-        return StatuslineSegment(module="git", text=f"git:{label}", status="ok")
-    dirty = bool(porcelain)
-    suffix = "*" if dirty else ""
-    if dirty:
-        return StatuslineSegment(module="git", text=f"git:{label}{suffix}", status="warn")
-    return StatuslineSegment(module="git", text=f"git:{label}{suffix}", status="ok")
+        return sourced_segment(_MODULE, _MODULE, label, _SOURCE)
+    if porcelain:
+        return sourced_segment(_MODULE, _MODULE, f"{label}*", _SOURCE, status="warn")
+    return sourced_segment(_MODULE, _MODULE, label, _SOURCE)
 
 
 __all__ = ["build"]

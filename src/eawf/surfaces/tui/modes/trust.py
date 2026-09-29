@@ -3,21 +3,19 @@
 The Trust mode (digit ``2``) renders the estimation trust scorecard
 (:func:`eawf.workflow.estimation.trust_scorecard.compute_trust_scorecard`)
 as an honest provenance surface: the per-tier output counts, the
-sample sizes (store record counts), the EU-calibration drift residual,
-the verifier-reliability pass-rate, and the per-output trust labels that
-say what backs each tier.
+sample sizes (store record counts), the verifier-reliability pass-rate,
+and the per-output trust labels that say what backs each tier.
 
 Honesty contract
 ----------------
 The scorecard is a *trust* signal, so the pane never fabricates one. When
-the project is data-starved -- no closed waves produced an output label,
-every append-only store is empty, and the EU-calibration metric has no
-samples -- :func:`is_data_starved` reports the starved state and the pane
-renders an honest-negative banner ("insufficient data for a trust
-signal") instead of a green score from no data. A score / tier line only
-appears once a tier label, a store row, or a calibration sample actually
-backs it. Every populated tier surfaces its residuals: the calibration
-drift percent, the verifier pass-rate, and the per-output evidence refs.
+the project is data-starved -- no closed waves produced an output label
+and every append-only store is empty -- :func:`is_data_starved` reports
+the starved state and the pane renders an honest-negative banner
+("insufficient data for a trust signal") instead of a green score from no
+data. A score / tier line only appears once a tier label or a store row
+actually backs it. Every populated tier surfaces its residuals: the
+verifier pass-rate and the per-output evidence refs.
 
 The jury-authority section is the same honesty discipline applied to the
 cross-vendor jury: the jury is held ADVISORY (its veto is logged, the close
@@ -61,7 +59,7 @@ from eawf.surfaces.tui.modals.calibration_drill import (
 from eawf.surfaces.tui.scopes import ScopeScreen
 from eawf.surfaces.tui.widgets.eu_bar import DEFAULT_RENDER_MODE, RenderMode
 from eawf.surfaces.tui.widgets.footer import render_hint_label
-from eawf.workflow.estimation.buckets import FIT_N_MIN, resolve_wave_actual
+from eawf.workflow.estimation.buckets import resolve_wave_actual
 from eawf.workflow.estimation.trust_scorecard import (
     TrustScorecard,
     compute_trust_scorecard,
@@ -70,7 +68,7 @@ from eawf.workflow.estimation.trust_scorecard import (
 logger = logging.getLogger(__name__)
 
 #: Honest-negative banner shown when the scorecard has no signal to back a
-#: trust verdict (no output labels, empty stores, no calibration samples).
+#: trust verdict (no output labels, empty stores).
 #: The pane renders this -- never a fabricated green score -- so a
 #: data-starved project reads as "no signal yet", not "trusted".
 DATA_STARVED_NOTICE: str = "insufficient data for a trust signal"
@@ -169,32 +167,29 @@ NO_ESCAPES_NOTICE: str = "no escaped criteria"
 #: the section; an overflow count is appended past the cap.
 _MAX_ESCAPE_ROWS: int = 12
 
-#: Minimum count of closed waves with captured elapsed EU before the
-#: bucket re-fit (B069) can run. Mirrors :data:`eawf.workflow.estimation.buckets.FIT_N_MIN`
-#: so the readiness tile and the calibration fit agree on the same floor.
-_CALIBRATION_READY_THRESHOLD: int = FIT_N_MIN
+#: Minimum count of closed waves with captured elapsed EU before the effort
+#: mapping may be re-fitted. Below it a fit stamps a revision on noise.
+_CALIBRATION_READY_THRESHOLD: int = 100
 
 
 def is_data_starved(scorecard: TrustScorecard) -> bool:
     """Return whether *scorecard* lacks any signal to back a trust verdict.
 
-    A scorecard is data-starved when all three signal sources are empty:
-    no per-output trust labels (no closed wave produced one), every
-    append-only store record count is zero, and the EU-calibration metric
-    has no samples. In that state the pane renders the honest-negative
+    A scorecard is data-starved when both signal sources are empty: no
+    per-output trust labels (no closed wave produced one), and every
+    append-only store record count is zero. In that state the pane renders the honest-negative
     banner rather than a fabricated score.
 
     Args:
         scorecard: The computed trust scorecard.
 
     Returns:
-        ``True`` when no label, store row, or calibration sample backs a
-        trust signal; ``False`` when at least one source carries data.
+        ``True`` when no label or store row backs a trust signal;
+        ``False`` when at least one source carries data.
     """
     has_labels = bool(scorecard.output_labels)
     has_store_rows = any(count > 0 for count in scorecard.store_record_counts.values())
-    has_calibration = scorecard.eu_calibration.sample_count > 0
-    return not (has_labels or has_store_rows or has_calibration)
+    return not (has_labels or has_store_rows)
 
 
 @dataclass(frozen=True)
@@ -360,14 +355,13 @@ def render_escape_ledger(escapes: tuple[EscapedCriterion, ...]) -> str:
 
 @dataclass(frozen=True)
 class CalibrationReadiness:
-    """Whether enough captured elapsed EU backs a bucket re-fit (B069).
+    """Whether enough captured elapsed EU backs a re-fit of the effort mapping.
 
-    The bucket-drift re-fit reads each closed wave's measured
-    ``ActualSummary.elapsed_eu`` (the close path now records it from the
-    session runtime); the re-fit is only trustworthy once a floor of waves
-    carries that signal. This tile counts the captured waves against the
-    floor so the operator reads "how close is the calibration to having
-    enough data to act on".
+    A re-fit reads each closed wave's measured ``ActualSummary.elapsed_eu``
+    (the close path records it from the session runtime); it is only
+    trustworthy once a floor of waves carries that signal. This tile counts
+    the captured waves against the floor so the operator reads "how close
+    is the calibration to having enough data to act on".
 
     Attributes:
         captured_waves: Count of closed waves whose actual records a
@@ -420,7 +414,7 @@ def render_calibration_readiness(readiness: CalibrationReadiness) -> str:
     """Render the calibration-readiness tile body.
 
     Shows the captured-wave count against the floor plus a ready /
-    not-ready verdict so the operator reads whether the bucket re-fit has
+    not-ready verdict so the operator reads whether a mapping re-fit has
     enough captured elapsed EU to act on. The verdict colour reflects the
     state: ready is the green target, not-ready is the muted "collecting"
     state (not a warning -- it is the expected early state).
@@ -457,7 +451,7 @@ def render_overview(scorecard: TrustScorecard) -> str:
         return (
             f"window {scorecard.window}\n"
             f"[$warn]{DATA_STARVED_NOTICE}[/]\n"
-            f"[$muted]no closed waves, store rows, or calibration samples yet[/]"
+            f"[$muted]no closed waves or store rows yet[/]"
         )
     total = len(scorecard.output_labels)
     return f"window {scorecard.window}\nlabelled outputs {total}"
@@ -558,33 +552,6 @@ def render_store_counts(scorecard: TrustScorecard) -> str:
     return "\n".join(f"{name} n={count}" for name, count in sorted(counts.items()))
 
 
-def render_eu_calibration(scorecard: TrustScorecard) -> str:
-    """Render the EU-calibration drift residual + its sample size.
-
-    Surfaces the calibration badge, the sample count behind it, and the
-    max bucket-drift percent (the residual) when present. A no-data badge
-    with zero samples renders the muted sentinel so an unbacked badge is
-    not mistaken for a measured one.
-
-    Args:
-        scorecard: The computed trust scorecard.
-
-    Returns:
-        A content-markup string describing the calibration residual.
-    """
-    metric = scorecard.eu_calibration
-    if metric.sample_count == 0:
-        return f"[$muted]{NO_DATA}[/]"
-    lines = [
-        f"badge {_badge_markup(metric.drift_badge)}",
-        f"samples {metric.sample_count}",
-        f"nudged buckets {metric.nudged_bucket_count}",
-    ]
-    if metric.max_drift_pct is not None:
-        lines.append(f"max drift {metric.max_drift_pct:.1f}%")
-    return "\n".join(lines)
-
-
 def render_verifier_reliability(scorecard: TrustScorecard) -> str:
     """Render the verifier-reliability pass-rate + its sample size.
 
@@ -666,28 +633,11 @@ def _tier_markup(tier: str) -> str:
     return f"[{palette.get(tier, '$muted')}]{tier}[/]"
 
 
-def _badge_markup(badge: str) -> str:
-    """Return the calibration *badge* wrapped in its palette-var span.
-
-    Args:
-        badge: One of ``ok`` / ``bucket-drift`` / ``no-data``.
-
-    Returns:
-        The badge wrapped in the matching ``theme.tcss`` palette var.
-    """
-    palette = {
-        "ok": "$ok",
-        "bucket-drift": "$warn",
-        "no-data": "$muted",
-    }
-    return f"[{palette.get(badge, '$muted')}]{badge}[/]"
-
-
 class TrustModeScreen(ScopeScreen):
     """Trust mode pane over ``compute_trust_scorecard`` (honest provenance).
 
     Composes the scorecard sections -- overview, tier counts, store
-    sample sizes, EU-calibration residual, verifier reliability, and the
+    sample sizes, verifier reliability, and the
     per-output trust labels -- inside the shared :class:`ScopeScreen`
     chassis. Reads the host app's read-only ``state`` + ``_state_path``
     and computes the scorecard exactly as the ``eawf trust`` CLI does.
@@ -753,7 +703,6 @@ class TrustModeScreen(ScopeScreen):
         ("trust-section-determinism", "ORACLE DETERMINISM"),
         ("trust-section-escapes", "ESCAPE LEDGER"),
         ("trust-section-stores", "SAMPLE SIZES"),
-        ("trust-section-calibration", "EU CALIBRATION"),
         ("trust-section-calibration-readiness", "CALIBRATION READINESS"),
         ("trust-section-verifier", "VERIFIER RELIABILITY"),
         ("trust-section-labels", "OUTPUT LABELS"),
@@ -845,7 +794,6 @@ class TrustModeScreen(ScopeScreen):
         "trust-section-overview": render_overview,
         "trust-section-tiers": render_tier_counts,
         "trust-section-stores": render_store_counts,
-        "trust-section-calibration": render_eu_calibration,
         "trust-section-verifier": render_verifier_reliability,
         "trust-section-labels": render_output_labels,
     }
@@ -1143,7 +1091,6 @@ __all__ = [
     "is_data_starved",
     "render_calibration_readiness",
     "render_escape_ledger",
-    "render_eu_calibration",
     "render_jury_authority",
     "render_oracle_determinism",
     "render_output_labels",

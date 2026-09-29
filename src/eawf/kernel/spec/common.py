@@ -14,7 +14,7 @@ import re
 from enum import IntEnum, StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from eawf.kernel.state.models import IdStr
 
@@ -54,12 +54,11 @@ BriefPathStr = Annotated[
 ]
 
 
-# Canonical artifact kind -> sub-directory under .ea/artifacts/. The map IS the
-# placement contract: an artifact of a given kind lives under exactly one
-# sub-directory and nowhere else. Mirrors the promote-side `_KIND_SUBDIR` router
-# in `eawf.surfaces.cli.commands.draft` so the model boundary and the promoter
-# never drift on where a kind files. The EAWF023 placement lint enforces the
-# same contract over the whole git-tracked artifact tree.
+# Canonical artifact kind -> sub-directory under .ea/artifacts/. This map is the
+# one declaration of the placement contract: an artifact of a given kind lives
+# under exactly one sub-directory and nowhere else. The draft promoter routes
+# through it, the EAWF023 placement lint reads its values, and both path types
+# below derive from it, so adding a kind is one row here and nothing else.
 ARTIFACT_KIND_SUBDIR: dict[str, str] = {
     "research": "research",
     "audit": "audits",
@@ -67,6 +66,8 @@ ARTIFACT_KIND_SUBDIR: dict[str, str] = {
     "hypothesis": "hypotheses",
     "decision": "decisions",
     "incident": "incidents",
+    "evidence": "evidence",
+    "review": "reviews",
 }
 
 
@@ -100,20 +101,27 @@ def artifact_path_str(kind: str) -> Any:
     return Annotated[str, Field(min_length=1, pattern=pattern)]
 
 
+def _check_artifact_path(value: str) -> str:
+    """Return ``value`` when it is a dated artifact under a canonical kind sub-directory.
+
+    The sub-directories are read from :data:`ARTIFACT_KIND_SUBDIR` at validation
+    time, not frozen at import, so the map stays the one place a kind is declared.
+
+    Raises:
+        ValueError: ``value`` is not under a canonical kind sub-directory or its
+            filename stem does not lead with a ``YYYY-MM-DD-`` date.
+    """
+    subdirs = "|".join(re.escape(subdir) for subdir in sorted(ARTIFACT_KIND_SUBDIR.values()))
+    if not re.fullmatch(rf"\.ea/artifacts/({subdirs})/(.+/)?\d{{4}}-\d{{2}}-\d{{2}}-.+\.md", value):
+        raise ValueError(f"{value!r} is not a dated artifact under a canonical kind sub-directory")
+    return value
+
+
 # Repo-relative path to any durable artifact: a file under one of the canonical
 # kind sub-directories whose filename stem leads with a YYYY-MM-DD- date prefix.
 # The generic (kind-agnostic) twin of :func:`artifact_path_str`; use the factory
 # when a field is pinned to one kind, this when any artifact path is acceptable.
-ArtifactPathStr = Annotated[
-    str,
-    Field(
-        min_length=1,
-        pattern=(
-            r"^\.ea/artifacts/(audits|research|plans|hypotheses|decisions|incidents)/"
-            r"(.+/)?\d{4}-\d{2}-\d{2}-.+\.md$"
-        ),
-    ),
-]
+ArtifactPathStr = Annotated[str, Field(min_length=1), AfterValidator(_check_artifact_path)]
 
 
 # Repo-relative path under tests/. Extension is intentionally loose so the

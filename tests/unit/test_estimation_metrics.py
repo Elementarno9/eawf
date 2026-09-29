@@ -327,12 +327,13 @@ def test_compute_realistic_wall_clock_uses_critical_path_queue_and_pessimism() -
         eu_minutes=60.0,
     )
 
-    assert result.work_sum_eu == pytest.approx(5.0)
-    assert result.critical_path_eu == pytest.approx(1.0)
-    assert result.queue_wall_clock_eu == pytest.approx(3.0)
+    # Every wave costs the 0.8 EU effort constant, whatever its label.
+    assert result.work_sum_eu == pytest.approx(4.0)
+    assert result.critical_path_eu == pytest.approx(0.8)
+    assert result.queue_wall_clock_eu == pytest.approx(2.4)
     assert result.pessimism_multiplier == pytest.approx(1.5)
-    assert result.realistic_wall_clock_eu == pytest.approx(4.5)
-    assert result.realistic_wall_clock_hours == pytest.approx(4.5)
+    assert result.realistic_wall_clock_eu == pytest.approx(3.6)
+    assert result.realistic_wall_clock_hours == pytest.approx(3.6)
 
 
 def test_compute_realistic_wall_clock_dependency_chain_sets_lower_bound() -> None:
@@ -354,9 +355,9 @@ def test_compute_realistic_wall_clock_dependency_chain_sets_lower_bound() -> Non
 
     result = compute_realistic_wall_clock(waves, max_parallel_waves=4)
 
-    assert result.critical_path_eu == pytest.approx(3.0)
-    assert result.queue_wall_clock_eu == pytest.approx(3.0)
-    assert result.realistic_wall_clock_eu == pytest.approx(3.0)
+    assert result.critical_path_eu == pytest.approx(2.4)
+    assert result.queue_wall_clock_eu == pytest.approx(2.4)
+    assert result.realistic_wall_clock_eu == pytest.approx(2.4)
 
 
 @pytest.mark.parametrize(

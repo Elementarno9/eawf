@@ -892,6 +892,12 @@ def _unresolved_rows(
     return tuple(rows)
 
 
+#: Epoch-1 Track statuses dropped at cutover rather than folded into the
+#: two-state Track lifecycle. The drop rests on a census that finds no row in
+#: either, so a row still in one refuses the apply by name.
+DROPPED_TRACK_STATUSES: frozenset[str] = frozenset({"planned", "deferred"})
+
+
 def _unresolved_in(
     *, collection: str, document: Mapping[str, Any], placed: frozenset[str]
 ) -> Iterable[UnresolvedRow]:
@@ -922,15 +928,44 @@ def _unresolved_in(
                 detail=detail,
             ),
         )
+    rows = _keyed_rows(document, collection)
     return tuple(
-        UnresolvedRow(
+        _unresolved_row(collection=collection, row_id=row_id, row=rows[row_id], detail=detail)
+        for row_id in sorted(rows)
+        if row_id not in placed
+    )
+
+
+def _unresolved_row(
+    *, collection: str, row_id: str, row: Mapping[str, Any], detail: str
+) -> UnresolvedRow:
+    """Name one unplaced keyed row, and the dropped status it holds if any.
+
+    Args:
+        collection: The epoch-1 top-level key.
+        row_id: The row's key.
+        row: The source row.
+        detail: The no-converter explanation used when no status is dropped.
+
+    Returns:
+        The unresolved row.
+    """
+    status = row.get("status")
+    if collection == "tracks" and status in DROPPED_TRACK_STATUSES:
+        return UnresolvedRow(
             address=f"{collection}/{row_id}",
             source_collection=collection,
-            reason=UnresolvedReason.NO_CONVERTER,
-            detail=detail,
+            reason=UnresolvedReason.DROPPED_STATUS,
+            detail=(
+                f"track {row_id!r} is {status!r}, a status epoch 2 drops rather than "
+                "folding into ACTIVE; activate or retire it before the cutover"
+            ),
         )
-        for row_id in sorted(_keyed_rows(document, collection))
-        if row_id not in placed
+    return UnresolvedRow(
+        address=f"{collection}/{row_id}",
+        source_collection=collection,
+        reason=UnresolvedReason.NO_CONVERTER,
+        detail=detail,
     )
 
 
@@ -1258,6 +1293,7 @@ def _assemble_manifest(
 
 __all__ = [
     "DEFAULT_TRACK_FLAG",
+    "DROPPED_TRACK_STATUSES",
     "EPOCH2_PLAN_METHOD",
     "PLAN_STEPS",
     "Epoch2PlanRequest",
