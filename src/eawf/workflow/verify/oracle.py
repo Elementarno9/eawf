@@ -41,6 +41,7 @@ from typing import Annotated, Literal
 from pydantic import Field, field_validator
 
 from eawf.kernel.spec.common import (
+    GATE_RUN_EVIDENCE_KINDS,
     CriterionSpec,
     GateSpec,
     OracleTier,
@@ -652,7 +653,7 @@ async def run_oracle(
         f"evidence_kind={criterion.evidence_kind!r}"
     )
 
-    if criterion.evidence_kind == "deterministic":
+    if criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS:
         deterministic = await _run_deterministic_gates(
             criterion,
             ordered,

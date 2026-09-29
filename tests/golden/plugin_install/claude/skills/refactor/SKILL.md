@@ -13,6 +13,7 @@ Inspect or apply a bounded structural refactor.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Operates on: repository code, through no lifecycle route; this is an explicit skill contract.
 - Effects: Leased workspace edits only in apply mode; no canonical RPC.
 - Allowed RPCs: none. This skill calls no daemon RPC.
 - Canonical state: never mutated by this skill.
@@ -72,4 +73,4 @@ The obligations the effective rule graph holds for activities `implement`. They 
 
 Output one RefactorReport containing baseline, invariant, chosen pattern, files, declared contract changes, verification receipts, residual risks, and terminal outcome.
 
-The report validates against `RefactorReport`, and its terminal outcome is exactly one of `plan_ready`, `applied`, `verified`, `failed`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `RefactorReport`, and its terminal outcome is exactly one of `plan_ready`, `applied`, `verified`, `failed`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /refactor` before returning it.

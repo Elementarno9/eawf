@@ -9,8 +9,10 @@ Build, test, independently verify and present a local proof of concept.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Effects: Writes only under the resolved local spike folder; separate builder and verifier Runs; extracted contracts are submitted for promotion.
-- Allowed RPCs: `retrieve_source`, `run.dispatch`, `submit_report`, `submit_evidence`. Any other RPC is denied before it reaches a handler.
+- Operates on: proof of concept, through `runtime.run.dispatch`, `runtime.evidence.spike_report.file`.
+- Effects: Writes only under the resolved local spike folder; separate builder and verifier Runs; the report is filed and its contracts submitted for promotion.
+- Allowed RPCs: `runtime.run.dispatch`, `runtime.evidence.spike_report.file`. Any other RPC is denied before it reaches a handler.
+- Run tools: `repo_read`, `submit_report`, `submit_evidence`.
 - Canonical state: never mutated by this skill.
 - Local write root: `.ea/local/spikes`; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -26,7 +28,7 @@ Resolve the subject before acting. Name every entity with its identifier and its
 Build the smallest runnable proof of concept that discriminates the stated idea. This is local experimental work, not a Campaign and not product implementation.
 
 ```text
-/spike <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]
+/spike <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--provider <id>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>]
 ```
 
 ## 4. Method
@@ -34,7 +36,7 @@ Build the smallest runnable proof of concept that discriminates the stated idea.
 1. Allocate `.ea/local/spikes/<date>-<slug>/` or the validated resume folder. Never write canonical stores, tracked product paths, or another local root.
 2. Before coding, write `spike.yaml` with question, hypothesis, observable confirm and reject conditions, inputs, exclusions, safety/network policy, and hard budget.
 3. Build real source or scripts, fixtures, and a runnable entrypoint. Optimize only for the stated discriminator; do not grow production architecture around the experiment.
-4. Run the exact verification commands and capture bounded machine-readable observations, logs, environment assumptions, and result receipts. Then extract contracts from those observations: for each probed surface, state what it is, what it accepts and returns, and its non-empty boundary - the conditions under which the observation stops holding. An observation records that a run printed something; a contract records what the surface is. Emit each as a MeasuredContract and promote it through the evidence-promotion path so it becomes a canonical artifact a plan can cite by ArtifactUrn. A contract with an empty boundary is not extracted.
+4. Run the exact verification commands and capture bounded machine-readable observations, logs, environment assumptions, and result receipts. When an observation depends on which provider ran it, set each contract environment's `provider_tuple` to the sorted, distinct providers the probe ran through, from `--provider` or the dispatch provider set; leave it empty when the measurement does not depend on the provider, because a non-empty tuple restricts where the contract transfers. Then extract contracts from those observations: for each probed surface, state what it is, what it accepts and returns, and its non-empty boundary - the conditions under which the observation stops holding. An observation records that a run printed something; a contract records what the surface is. Emit each as a MeasuredContract and promote it through the evidence-promotion path so it becomes a canonical artifact a plan can cite by ArtifactUrn. A contract with an empty boundary is not extracted.
 5. Stop building when confirm/reject condition is observed, the cap is reached, a safety boundary blocks work, or further progress requires production engineering.
 6. Dispatch a fresh verifier agent with the folder, manifest, and commands but no producer transcript. The verifier reruns from clean instructions and returns pass, fail, or inconclusive.
 7. The builder may repair within the remaining budget and request one fresh verification. READY requires an independent pass; self-verification never suffices.
@@ -58,7 +60,7 @@ The obligations the effective rule graph holds for activities `research`, `test`
 
 Output one SpikeReport containing folder, hypothesis, commands, observations, contracts, verdict, limitations, independent verifier result, operator demo, retention, and stop reason.
 
-The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `SpikeReport`, and its terminal outcome is exactly one of `ready`, `inconclusive`, `failed`, `cancelled`, `blocked`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /spike` before returning it.
 
-<!-- argument hint: <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>] -->
+<!-- argument hint: <idea...> [--hypothesis <text>] [--confirm <condition>] [--reject <condition>] [--from <ref>...] [--constraint <text>...] [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>] [--verify <command>...] [--fixture <ref>...] [--provider <id>...] [--agents <2..8>] [--budget <spec>] [--slug <slug>] [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>] [--retention <keep|expire-after-review>] [--resume <folder>] -->
 ARGUMENTS: $ARGUMENTS

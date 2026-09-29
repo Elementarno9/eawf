@@ -26,6 +26,7 @@ from eawf.kernel.projection.attention import (
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.registers import UNWRITTEN_REASON, RegisterView
 from eawf.kernel.projection.truth import TruthState
+from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.attention import (
     NEEDS,
@@ -42,6 +43,7 @@ from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Action
 from eawf.surfaces.tui.console.format import group as group_n
 from eawf.surfaces.tui.console.frame import (
+    RowWindow,
     Table,
     View,
     bar,
@@ -54,6 +56,12 @@ from eawf.surfaces.tui.console.frame import (
 )
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry
 from eawf.surfaces.tui.console.keymap import native_keys
+from eawf.surfaces.tui.console.notices import (
+    NOTICE_BUCKET,
+    NOTICE_VERBS,
+    notice_cells,
+    notice_detail,
+)
 from eawf.surfaces.tui.console.reads import can_mutate, prototype_attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers.activity import beside
@@ -181,6 +189,9 @@ EMPTY_NEXT = "nothing. Runs continue without you. g a shows what is executing."
 #: What the frame states about the all-principals count, so it is never read as a queue.
 NOT_A_WORK_LIST = "an all-principals count is not a work list"
 
+#: What a notice's second line says in place of who may answer it.
+NOTICE_LINE = "a notice · nothing answers it, and it counts toward no one"
+
 #: What an absent deadline renders as: the register states none, which is not a zero.
 NO_DEADLINE = "due –"  # noqa: RUF001
 
@@ -190,6 +201,7 @@ _KIND_WORDS: Mapping[str, str] = MappingProxyType(
         "protected_approval": "approval",
         "operator_decision": "decision",
         "provider_permission": "permission",
+        "child_ceiling_breach": "ceiling breach",
     }
 )
 
@@ -302,6 +314,8 @@ def _selected_lines(
     row: ProjectionRow, item: AttentionItem, principal: str | None, holders: int
 ) -> list[str]:
     """Return the selected row's second lines: its kind and who may act, then any authority."""
+    if item.read_only:
+        return [_KIND_INDENT + f"{kind_word(row)} · {NOTICE_LINE}"]
     lines = [_KIND_INDENT + f"{kind_word(row)} · {eligibility_line(row, principal, holders)}"]
     if item.need is AttentionNeedKind.PERMISSION:
         lines.extend(_KIND_INDENT + line for line in permission_lines(row))
@@ -355,11 +369,12 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     items = build_attention_view(register).items if not register.withheld else ()
     by_key = {row.key: row for row in register.rows}
     listed = [item for item in items if _in_bucket(item, s.bucket) and item.key in by_key]
-    found = next((i for i, item in enumerate(listed) if item.key == s.sel_id), None)
-    cursor = found if found is not None else min(max(s.sel, 0), max(len(listed) - 1, 0))
-    s.sel, s.sel_id = cursor, (listed[cursor].key if listed else None)
+    # a budget notice lands in the over-budget bucket, so a filter on another hides it
+    notices = list(view.notices) if s.bucket in (None, AttentionBucket.OVER_BUDGET.value) else []
+    keys = [item.key for item in listed] + [notice.notice_key for notice in notices]
+    cursor = dv.restore_by_id(s, keys)
     # a frame that lists no row gives the cursor nothing to walk and Enter nothing to open
-    s.nav_rows = len(listed)
+    s.nav_rows = len(keys)
     wide = REGISTRY.rail_at(s.route, view.columns) is not None
     col = w - RAIL_W - 1 if wide else w
     top = native_head(
@@ -376,20 +391,22 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     body: list[str] = []
     if register.withheld:
         body.append(label("ACTIONS", f"{UNKNOWN_WORD} · {UNWRITTEN_REASON}"))
-    elif not listed:
+    elif not keys:
         body.extend(_empty_lines(register, s.bucket))
     else:
         holders = len({row.assignee_ref for row in register.rows} - {None} | {principal} - {None})
         # a key column fits the longest key listed: a PERM- key is one wider than an ACT- one
-        key_w = max(9, *(cell_len(item.key) + 1 for item in listed))
+        key_w = max([9, *(cell_len(item.key) + 1 for item in listed)])
         table = Table([key_w, max(30, col - 23 - key_w), 10, 0], 2)
-        win = window_rows(view, total=len(listed), cursor=cursor, chrome=len(top) + 5)
+        win = window_rows(view, total=len(keys), cursor=cursor, chrome=len(top) + 5)
         last: AttentionBucket | None = None
-        for index in range(win.start, win.stop):
+        for index in range(win.start, min(win.stop, len(listed))):
             item = listed[index]
             row = by_key[item.key]
             if item.bucket is not last:
                 n = sum(1 for x in listed if x.bucket is item.bucket)
+                # a ceiling breach and a budget notice are both over budget: one heading
+                n += len(notices) if item.bucket is AttentionBucket.OVER_BUDGET else 0
                 body.append(f" {item.bucket.value.upper()}  {group_n(n)}")
                 last = item.bucket
             subject = row.facts.get("subject", UNKNOWN_WORD)
@@ -398,6 +415,16 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             body.append(table.row(cells, index == cursor))
             if index == cursor:
                 body.extend(_selected_lines(row, item, principal, holders))
+        body.extend(
+            _notice_lines(
+                notices,
+                table,
+                first=len(listed),
+                win=win,
+                cursor=cursor,
+                headed=last is AttentionBucket.OVER_BUDGET,
+            )
+        )
         others = sum(1 for item in listed if audience_refusal(item.assignee_ref, principal))
         if others:
             held = "is" if others == 1 else "are"
@@ -412,16 +439,61 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
             + " "
             + " · ".join(f"{name} {UNKNOWN_WORD}" for name in register.withheld),
         ]
-    selected = by_key[listed[cursor].key] if listed else None
+    # a ceiling breach is read-only: it is listed, but no verb is offered on it
+    acts = cursor < len(listed) and not listed[cursor].read_only
+    selected = by_key[listed[cursor].key] if acts else None
+    on_notice = cursor >= len(listed) and bool(notices)
+    return build(view, rows, route_keys_bar(view, _bar_keys(view, selected, on_notice=on_notice)))
+
+
+def _notice_lines(
+    notices: Sequence[BudgetThresholdNotice],
+    table: Table,
+    *,
+    first: int,
+    win: RowWindow,
+    cursor: int,
+    headed: bool,
+) -> list[str]:
+    """Return the notices the window shows, after the actions, under their bucket heading.
+
+    Args:
+        notices: The notices listed after the actions.
+        table: The table the actions were drawn in, so the columns line up.
+        first: The offset of the first notice in the whole list.
+        win: The window of the whole list the frame draws.
+        cursor: The offset the caret sits on.
+        headed: Whether the window already drew the over-budget heading above them,
+            over a ceiling breach, so the notices continue under it.
+    """
+    lines: list[str] = []
+    for index in range(max(win.start, first), win.stop):
+        notice = notices[index - first]
+        if index in (first, win.start) and not headed:
+            lines.append(f" {NOTICE_BUCKET}  {group_n(len(notices))}")
+        lines.append(table.row(notice_cells(notice), index == cursor))
+        if index == cursor:
+            lines.append(_KIND_INDENT + notice_detail(notice))
+    return lines
+
+
+def _bar_keys(view: View, selected: ProjectionRow | None, *, on_notice: bool) -> list[KeyEntry]:
+    """Return the keybar's keys: the verbs only on a row this principal may act on.
+
+    A notice asks nothing, so on one only its own two verbs are offered.
+    """
+    s, principal = view.session, view.principal
+    writable = principal is not None and can_mutate(s)
     offered = (
-        selected is not None
-        and principal is not None
-        and not audience_refusal(selected.assignee_ref, principal)
-        and can_mutate(s)
+        writable and selected is not None and not audience_refusal(selected.assignee_ref, principal)
     )
     verbs = set(_VERB_KEYS.values())
-    keys = [key for key in native_keys(s.route, windowed=s.windowed) if offered or key not in verbs]
-    return build(view, rows, route_keys_bar(view, keys))
+    notice_verbs = {_VERB_KEYS[key] for key in NOTICE_VERBS} if writable and on_notice else set()
+    return [
+        key
+        for key in native_keys(s.route, windowed=s.windowed)
+        if offered or key not in verbs or key in notice_verbs
+    ]
 
 
 def render(view: View) -> list[str]:

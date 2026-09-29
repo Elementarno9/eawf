@@ -40,9 +40,8 @@ from eawf.surfaces.tui.console.dispatch import dispatch, siblings_of
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.keybar import KEY_NAMES
-from eawf.surfaces.tui.console.keymap import route_keys
+from eawf.surfaces.tui.console.keymap import allowlist, route_keys
 from eawf.surfaces.tui.console.navigation import (
-    DEPTH_KEYS,
     Ctx,
     cycle_region,
     focused_region,
@@ -59,7 +58,7 @@ from eawf.surfaces.tui.console.registry import (
     RouteRegistry,
 )
 from eawf.surfaces.tui.console.renderers import render_route
-from eawf.surfaces.tui.console.renderers.spine import restore
+from eawf.surfaces.tui.console.renderers.read_model import restore
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import BACK_CAP, BackEntry, Session
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
@@ -614,9 +613,17 @@ def test_con_016_depth_keys_do_nothing_while_an_overlay_owns_the_keys() -> None:
     )
 
 
-def test_con_016_the_depth_keys_are_the_declared_four() -> None:
-    """CON-016: Enter, Escape, ``u`` and the bracket pair, and no other."""
-    assert DEPTH_KEYS == ("Enter", "Escape", "u", "[", "]")
+#: The depth keys: Enter drills, Escape returns, ``u`` climbs the containment chain, and
+#: ``[`` and ``]`` walk the siblings at the current depth. Breadth is the ``g`` prefix.
+DEPTH_KEYS: tuple[str, ...] = ("Enter", "Escape", "u", "[", "]")
+
+
+@pytest.mark.parametrize("route", ["track", "milestone", "batch.detail"])
+def test_con_016_the_depth_keys_are_bound_on_every_detail_route(route: str) -> None:
+    """CON-016: Enter, Escape, ``u`` and the bracket pair move through depth."""
+    session = Session()
+    session.route = route
+    assert set(DEPTH_KEYS) <= allowlist(session, _fixture())
 
 
 def test_con_017_no_climb_or_sibling_step_lands_on_a_global_route() -> None:

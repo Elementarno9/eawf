@@ -108,7 +108,12 @@ def _assert_total(
 
 
 _assert_total(CriterionSpec.model_fields, CRITERION_FIELD_ROUTES, "CriterionSpec")
-_assert_total(GateSpec.model_fields, GATE_FIELD_ROUTES, "GateSpec")
+# A field excluded from serialization is never stored, so it has nothing to import.
+_assert_total(
+    (name for name, field in GateSpec.model_fields.items() if not field.exclude),
+    GATE_FIELD_ROUTES,
+    "GateSpec",
+)
 
 
 class ImportedCriterion(StrictMigrationModel):

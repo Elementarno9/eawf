@@ -41,6 +41,7 @@ from eawf.workflow.skills.bodies.integrate import (
     IntegrateBody,
     IntegrateOutcome,
 )
+from eawf.workflow.skills.catalog import resolve_skill
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.workflow.skills.lifecycle_rpc import (
     OutputRendering,
@@ -55,6 +56,9 @@ from eawf.workflow.skills.registry import register
 
 logger = logging.getLogger(__name__)
 
+
+#: The catalog row this skill's allowlist and grammar are read from.
+_ENTRY: Final = resolve_skill("/integrate")
 
 #: The Batch read model an integration binds its subject at.
 BATCH_READ_METHOD: Final = "projection.batch.detail.read"
@@ -71,29 +75,12 @@ DELIVERY_ASSEMBLE_METHOD: Final = "runtime.delivery.assemble"
 #: The verb that turns a Batch's sealed candidates into one delivery.
 DELIVERY_INTEGRATE_METHOD: Final = "runtime.delivery.integrate"
 
-#: Every JSON-RPC method this skill may address. A call outside the set
-#: is refused before the transport is touched.
-RPC_SCOPE: Final = RpcScope(
-    skill="/integrate",
-    methods=(
-        BATCH_READ_METHOD,
-        CONFLICT_READ_METHOD,
-        CANDIDATE_REPORT_BIND_METHOD,
-        DELIVERY_ASSEMBLE_METHOD,
-        DELIVERY_INTEGRATE_METHOD,
-    ),
-)
+#: Every JSON-RPC method this skill may address: the catalog row's allowlist.
+#: A call outside the set is refused before the transport is touched.
+RPC_SCOPE: Final = RpcScope(skill="/integrate", methods=_ENTRY.effects.rpcs)
 
 #: The complete accepted invocation, brackets optional and ``...`` repeatable.
-INVOCATION_GRAMMAR: Final = (
-    "/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> "
-    "[--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] "
-    "[--verify-after] [--reason <text>] [--base <revision-binding>] "
-    "[--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] "
-    "[--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] "
-    "[--verdict <verdict>] [--resulting-tree-digest <digest>] "
-    "[--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]"
-)
+INVOCATION_GRAMMAR: Final = _ENTRY.grammar.usage
 
 #: What this skill may cause, stated as the boundary it never crosses.
 EFFECTS: Final = (
@@ -122,6 +109,7 @@ _INTEGRATE_REFERENCES: Final[tuple[tuple[str, str], ...]] = (
     ("base", "base"),
     ("exit_refs", "exit"),
     ("diagnostic_ref", "diagnostic"),
+    ("expected_revision", "expected_revision"),
 )
 
 #: The references a seal request needs that no record holds, as the
@@ -133,6 +121,7 @@ _INTEGRATE_REFERENCES: Final[tuple[tuple[str, str], ...]] = (
 _SEAL_REFERENCES: Final[tuple[tuple[str, str], ...]] = (
     ("urn", "run"),
     ("resulting_tree_digest", "resulting_tree_digest"),
+    ("expected_revision", "expected_revision"),
 )
 
 #: Why a selection cannot be computed from what a caller can read.
@@ -181,7 +170,10 @@ class IntegrateArgs(BaseModel):
         report_digest: The digest of the accepted report body, the same.
         verdict: The verdict the accepted report carried, the same.
         resulting_tree_digest: The tree the accepted report was about.
-        expected_revision: The Batch revision the caller read.
+        expected_revision: The revision the caller read the anchored subject
+            at: the Run for ``seal``, the Batch for ``apply`` and ``retry``.
+            Every mutating request carries it, so a subject that moved
+            since the caller read it is refused rather than acted on.
         idempotency_key: This request's name; derived from the Run and the
             candidate when omitted.
         repo_root: The tree to address, when not the daemon's own.
@@ -312,7 +304,7 @@ class IntegrateSkill(Skill):
                 unresolved=unresolved,
                 reason=(
                     "sealing binds a Run's accepted report to the named candidate, and this "
-                    "invocation does not present the Run and the resulting tree the request "
+                    f"invocation does not present {', '.join(unresolved)}, which the request "
                     "always needs"
                 ),
             )
@@ -333,6 +325,7 @@ class IntegrateSkill(Skill):
                 "report_digest": args.report_digest,
                 "verdict": args.verdict,
                 "resulting_tree_digest": args.resulting_tree_digest,
+                "expected_revision": args.expected_revision,
             },
         )
         sealed = bool(answer.get("sealed", False))
@@ -371,7 +364,11 @@ class IntegrateSkill(Skill):
                 "diagnostic_ref": args.diagnostic,
             },
         )
-        answer = RPC_SCOPE.call(caller, DELIVERY_INTEGRATE_METHOD, {**params, **request})
+        answer = RPC_SCOPE.call(
+            caller,
+            DELIVERY_INTEGRATE_METHOD,
+            {**params, **request, "expected_revision": args.expected_revision},
+        )
         delivered = bool(answer.get("delivered", False))
         blocked_on = answer.get("blocked_on")
         outcome: IntegrateOutcome = "integrated" if delivered else "conflicted"

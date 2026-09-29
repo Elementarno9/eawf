@@ -257,6 +257,10 @@ class Session(BaseModel):
     cam_sec: str = "PLAN"
     artifact: int = 0
     art_scroll: int = 0
+    # the help card's first table row, how far it can scroll (0 when it fits) and its page
+    help_top: int = 0
+    help_max: int = 0
+    help_page: int = 0
     cam_step: int = 0
     step_reg: str = "HISTORY"
     hist_sel: int = 0

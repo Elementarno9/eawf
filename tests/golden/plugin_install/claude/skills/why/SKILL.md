@@ -13,8 +13,10 @@ Explain the provenance of an entity; read-only.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Operates on: any canonical entity, through `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`.
 - Effects: Read-only provenance queries.
-- Allowed RPCs: `read_entity`, `query_evidence`, `semantic.result.read`, `run.events.read`, `operation.status`. Any other RPC is denied before it reaches a handler.
+- Allowed RPCs: `projection.history.read`, `projection.evidence.read`, `semantic.result.read`, `runtime.run.events.read`. Any other RPC is denied before it reaches a handler.
+- Run tools: `eawf_state_query`.
 - Canonical state: never mutated by this skill.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -53,4 +55,4 @@ No rule in the effective rule graph is scoped to this skill, which selects no ac
 
 Output one WhyReport containing answer, subject revision, provenance path, nodes, active-versus-historical distinctions, gaps, references, coverage, and stop reason.
 
-The report validates against `WhyReport`, and its terminal outcome is exactly one of `explained`, `partial`, `not_found`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `WhyReport`, and its terminal outcome is exactly one of `explained`, `partial`, `not_found`, `blocked`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /why` before returning it.

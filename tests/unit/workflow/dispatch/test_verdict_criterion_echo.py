@@ -172,10 +172,10 @@ def test_build_auditor_prompt_durable_contract_names_closed_field_set() -> None:
     assert all(f"`{name}`" in rule for name in body_fields)
     assert "`report_source`" not in flat
     assert "A `criteria` row accepts only `criterion`, `passed` and `evidence_refs`" in flat
-    assert "an evidence entry accepts only `kind`, `ref` and `note`" in flat
+    assert "an evidence entry accepts only `kind`, `ref`, `note` and `population`" in flat
     assert "Any other field, such as `findings`, is rejected" in flat
     assert list(CriterionVerdict.model_fields) == ["criterion", "passed", "evidence_refs"]
-    assert list(AgentReportEvidenceRef.model_fields) == ["kind", "ref", "note"]
+    assert list(AgentReportEvidenceRef.model_fields) == ["kind", "ref", "note", "population"]
 
 
 def test_build_auditor_prompt_without_durable_context_omits_field_rule() -> None:

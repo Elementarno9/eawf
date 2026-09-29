@@ -6,8 +6,8 @@ flips a spec from DRAFT to READY via the
 the READY flip lands on disk this module runs the
 *persistence-layer* argv-policy check: every :class:`GateSpec` whose
 ``kind`` is in :data:`ARGV_BEARING_GATE_KINDS` has its ``args["argv"]``
-routed through :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv`
-with the resolved allowlist. A reject raises
+checked against the registered command family the gate names through
+:func:`eawf.runtime.sandbox.argv_policy.validate_family_argv`. A reject raises
 :class:`SpecPromoteValidationError` and the promote handler must NOT
 flip the cache entry — atomicity is "validate first, then write" so a
 bad spec stays in its prior status.
@@ -21,13 +21,8 @@ construction check stops bad-shaped rows at parse time; the persistence
 check stops a bad row that was constructed in code (bypassing the
 parser) from reaching READY.
 
-Allowlist resolution is deliberately conservative for v0.4.0 — the
-caller may pass an explicit ``allowlist`` to override the
-module-level default :data:`DEFAULT_GATE_ARGV_ALLOWLIST`. A later wave
-(P28-I01-W10) lands the profile-fed allowlist on
-``ProfileBody.verify.argv_allowlist``; until then the default tuple is
-the source of truth, held to the dev-loop wrappers, the tools the
-gauntlet already runs, and the project's own CLI + task runner.
+The heads a gate may run are the registered command families of
+:mod:`eawf.runtime.sandbox.command_families`, not a head-keyed allowlist.
 """
 
 from __future__ import annotations
@@ -40,7 +35,7 @@ from eawf.kernel.spec.common import GateSpec
 from eawf.kernel.spec.falsifiability import unfalsifiable_argv
 from eawf.runtime.sandbox.argv_policy import (
     ArgvPolicyError,
-    validate_gate_argv,
+    validate_family_argv,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,33 +50,6 @@ logger = logging.getLogger(__name__)
 ARGV_BEARING_GATE_KINDS: Final[frozenset[str]] = frozenset({"command_exit_zero"})
 
 
-#: Default argv-policy allowlist used when the caller does not supply one.
-#:
-#: TODO: once the profile schema lands the
-#: ``ProfileBody.verify.argv_allowlist`` field, the promote handler reads
-#: the allowlist from the resolved profile and passes it through to
-#: :func:`validate_argv_gates`.
-#:
-#: Beyond the dev-loop wrappers + gate tools the local gauntlet already
-#: invokes, the floor admits the project's own CLI (``eawf``) and task
-#: runner (``just``) so a wave gate can assert a CLI exit code directly
-#: instead of laundering every check through ``pytest``. Admitting bare
-#: argv heads is interim: the epoch-2 gate contract replaces raw heads
-#: with a registered command family, and this widening retires with it.
-DEFAULT_GATE_ARGV_ALLOWLIST: Final[tuple[str, ...]] = (
-    "uv",
-    "uvx",
-    "run",
-    "pytest",
-    "ruff",
-    "mypy",
-    "pre-commit",
-    "git",
-    "eawf",
-    "just",
-)
-
-
 class SpecPromoteValidationError(ValueError):
     """Raised when an embedded gate's argv fails policy at promote time.
 
@@ -94,17 +62,13 @@ class SpecPromoteValidationError(ValueError):
     """
 
 
-def validate_argv_gates(
-    gates: Iterable[GateSpec],
-    *,
-    allowlist: Iterable[str] | None = None,
-) -> None:
+def validate_argv_gates(gates: Iterable[GateSpec]) -> None:
     """Validate every argv-bearing gate's argv vector through L0 policy.
 
     Walks *gates* and for each entry whose ``kind`` is in
     :data:`ARGV_BEARING_GATE_KINDS` extracts ``args["argv"]`` and routes
-    it through :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv`
-    with the resolved allowlist. A missing or non-list ``argv`` value on
+    it through :func:`eawf.runtime.sandbox.argv_policy.validate_family_argv`
+    against the command family the gate names. A missing or non-list ``argv`` value on
     a kind that requires one raises
     :class:`SpecPromoteValidationError` naming the gate id. A
     :class:`eawf.runtime.sandbox.argv_policy.ArgvPolicyError` from the
@@ -119,8 +83,6 @@ def validate_argv_gates(
     Args:
         gates: Iterable of :class:`GateSpec` rows to inspect. Non-argv
             kinds are skipped.
-        allowlist: Optional iterable of permitted argv heads. Defaults
-            to :data:`DEFAULT_GATE_ARGV_ALLOWLIST` when ``None``.
 
     A surviving argv is then checked for falsifiability via
     :func:`eawf.kernel.spec.falsifiability.unfalsifiable_argv`: an argv
@@ -135,13 +97,6 @@ def validate_argv_gates(
             The message names the offending gate id and the underlying
             reason so callers can re-emit it verbatim.
     """
-    # The annotation is load-bearing: a ``Final`` tuple of string literals
-    # narrows to its literal element types, so an unannotated ``list(...)``
-    # of it builds a ``list[Literal[...]]`` that invariance refuses to pass
-    # as the ``list[str]`` the validator declares.
-    resolved_allowlist: list[str] = (
-        list(allowlist) if allowlist is not None else list(DEFAULT_GATE_ARGV_ALLOWLIST)
-    )
     for gate in gates:
         if gate.kind not in ARGV_BEARING_GATE_KINDS:
             continue
@@ -155,7 +110,7 @@ def validate_argv_gates(
                 f"gate {gate.id!r} kind={gate.kind!r} missing required args['argv']"
             )
         try:
-            validate_gate_argv(argv, allowlist=resolved_allowlist)
+            validate_family_argv(argv, family_ref=gate.command_family_ref)
         except ArgvPolicyError as exc:
             reason = str(exc)
             logger.warning(
@@ -177,7 +132,6 @@ def validate_argv_gates(
 
 __all__ = [
     "ARGV_BEARING_GATE_KINDS",
-    "DEFAULT_GATE_ARGV_ALLOWLIST",
     "SpecPromoteValidationError",
     "validate_argv_gates",
 ]

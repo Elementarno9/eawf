@@ -27,6 +27,7 @@ from eawf.surfaces.tui.console.navigation import Ctx, go
 from eawf.surfaces.tui.console.registry import REGISTRY, RouteGroup
 from eawf.surfaces.tui.console.renderers import copy_target, render_route
 from eawf.surfaces.tui.console.session import Session
+from tests.tui.surfaces.tui.console.test_route_registry_closure import SUB_SURFACES
 
 SIZES = ((80, 24), (120, 30), (160, 40))
 
@@ -82,8 +83,8 @@ def _at(route: str) -> Session:
 
 def test_ui050_the_sub_surface_set_is_the_registrys_and_names_each_parent() -> None:
     """The set is counted from the registry rows, never kept beside them."""
-    assert dict(REGISTRY.sub_surfaces) == NAMED
-    assert len(REGISTRY.sub_surfaces) == 7
+    assert dict(SUB_SURFACES) == NAMED
+    assert len(SUB_SURFACES) == 7
 
 
 @pytest.mark.parametrize(("route", "parent"), sorted(NAMED.items()))
@@ -101,7 +102,7 @@ def test_ui050_a_sub_surface_takes_its_parents_group_and_is_never_a_global_door(
 
 def test_ui050_notifications_is_a_global_diagnostics_route_not_a_sub_surface() -> None:
     """It has no subject, so it opens from the go prefix and the palette."""
-    assert "notifications" not in REGISTRY.sub_surfaces
+    assert "notifications" not in SUB_SURFACES
     assert REGISTRY.by_id["notifications"].group is RouteGroup.DIAGNOSTICS
     assert "notifications" in REGISTRY.go_map.values()
     assert "notifications" in REGISTRY.route_list

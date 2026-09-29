@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from eawf.kernel.state.models import McpServer
+from eawf.runtime.harness.host_keys import HostDocument, require_recorded
 from eawf.runtime.mcp.env_ref import assert_no_expansion, render_env_block
 from eawf.surfaces.render._atomic import atomic_write_text
 
@@ -52,12 +53,6 @@ _OPENCODE_MCP_KEY: str = "mcp"
 _OWNER_MARKER_KEY: str = "__eawf_owner"
 _OWNER_MARKER_VALUE: str = "eawf"
 _MANAGED_AT_KEY: str = "__eawf_managed_at"
-
-# Hard-coded transport for v0.1. The Claude MCP schema also accepts
-# ``"sse"`` and ``"http"``; deferred to v0.1.1 (spec §9). When the
-# schema bumps, v0.1.1 adds a ``transport`` field to McpServer; the
-# default for existing rows must remain ``"stdio"``.
-_TRANSPORT_STDIO: str = "stdio"
 
 # Stable timestamp default — matches ``plugin_install.py:65``. The
 # CLI handler may override with ``datetime.now(UTC).isoformat()``;
@@ -186,6 +181,13 @@ def _settings_path(runtime: str, target_dir: Path) -> Path:
     return target_dir / ".mcp.json"
 
 
+def _json_document(runtime: str) -> HostDocument:
+    """Return the host document a JSON runtime's MCP config is."""
+    if runtime == "opencode":
+        return "opencode_config"
+    return "claude_mcp"
+
+
 def _json_mcp_key(runtime: str) -> str:
     """Return the top-level MCP map key for a JSON runtime config."""
     if runtime == "opencode":
@@ -241,7 +243,6 @@ def _build_entry_body(server: McpServer, *, timestamp: str) -> dict[str, Any]:
         "command": server.command,
         "args": list(server.args),
         "env": env_block,
-        "transport": _TRANSPORT_STDIO,
         _OWNER_MARKER_KEY: _OWNER_MARKER_VALUE,
         _MANAGED_AT_KEY: timestamp,
     }
@@ -280,7 +281,7 @@ def _grant_fields(body: dict[str, Any]) -> tuple[str, list[str], dict[str, str]]
 
     Verification compares only the grant content — the launcher command,
     its argv tail, and the literal env-ref block. Bookkeeping keys
-    (``transport``, ``__eawf_owner``, ``__eawf_managed_at``) are excluded
+    (``__eawf_owner``, ``__eawf_managed_at``) are excluded
     so a timestamp difference never trips the verify guard.
     """
     return (
@@ -322,9 +323,9 @@ def _verify_json_entry(
 # transport implied by command/args/env). Eä owns a single marker-wrapped
 # region holding every owner=eawf table; user-authored TOML outside the
 # markers is preserved verbatim. The marker text is distinct from the
-# plugin installer's ``__eawf_managed`` block (which carries
-# ``[plugins.eawf] enabled = true`` in the same file) so the two managed
-# regions never collide.
+# plugin installer's ``__eawf_managed`` block (which carries the
+# ``[agents]`` fan-out keys in the same file) so the two managed regions
+# never collide.
 _CODEX_MCP_TABLE_KEY: str = "mcp_servers"
 _CODEX_MCP_BEGIN: str = "# ---- __eawf_mcp begin ----"
 _CODEX_MCP_END: str = "# ---- __eawf_mcp end ----"
@@ -538,8 +539,10 @@ def _install_codex_entry(
             "remove the table from config.toml manually first"
         )
 
+    body = _codex_body_from_server(server, timestamp=timestamp)
+    require_recorded("codex_config", (f"{_CODEX_MCP_TABLE_KEY}.*.{key}" for key in body))
     bodies = _codex_eawf_bodies(servers)
-    bodies[server.id] = _codex_body_from_server(server, timestamp=timestamp)
+    bodies[server.id] = body
     new_text = _splice_codex_block(raw, bodies)
     payload = new_text.encode("utf-8")
     action = _classify(config_path, payload)
@@ -663,6 +666,9 @@ def install_runtime_entry(
             for the same id and *force* is ``False``.
         VerifyFailure: The post-write read-back does not match the
             intended grant.
+        UnrecordedHostKeyError: The entry would carry a key no probe has
+            seen the runtime honour, as every OpenCode key is; nothing is
+            written.
     """
     if runtime == "codex":
         return _install_codex_entry(
@@ -687,6 +693,9 @@ def install_runtime_entry(
         )
 
     new_body = _build_entry_body(server, timestamp=timestamp)
+    require_recorded(
+        _json_document(runtime), (block_key, *(f"{block_key}.*.{key}" for key in new_body))
+    )
     mcp_servers[server.id] = new_body
     parsed[block_key] = mcp_servers
 

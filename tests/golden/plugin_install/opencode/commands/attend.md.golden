@@ -9,9 +9,10 @@ Work the Attention queue: pending actions, open questions and open pauses.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operator-only actions: `resolve`. An agent that reaches one prepares a PendingAction and stops; it never chooses the recommended option itself.
-- Effects: Attention read and preparation plus the protected resolution RPC when explicitly selected.
-- Allowed RPCs: `read_entity`, `query_evidence`, `operations.pending_action.resolve`, `operations.pending_action.hold`, `operations.pending_action.cancel`, `research.question.answer`, `research.question.drop`, `operations.pause.hold`, `operations.pause.resume`, `operations.pause.cancel`. Any other RPC is denied before it reaches a handler.
+- Operates on: PendingAction, through `projection.attention.read`, `projection.notifications.read`, `runtime.delivery.seal_acceptance_approval`, `runtime.permission.decide`, `runtime.question.open_decision`.
+- Operator-only actions: `resolve`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself.
+- Effects: Attention reads plus the approval and permission verbs that answer a pending action, when resolve is explicitly selected.
+- Allowed RPCs: `projection.attention.read`, `projection.notifications.read`, `runtime.delivery.seal_acceptance_approval`, `runtime.permission.decide`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -27,10 +28,10 @@ Resolve the subject before acting. Name every entity with its identifier and its
 You triage the Attention queue for one scope and prepare each item for the operator. You resolve nothing that requires their authority.
 
 ```text
-/attend [<list|prepare|resolve|defer|watch>] [<item-ref>] [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>] [--option <id>] [--answer <text>] [--until <datetime>] [--limit <N>] [--scope <urn>] [--dry-run]
+/attend [<list|prepare|resolve>] [<item-ref>] [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>] [--option <id>] [--answer <text>] [--limit <N>] [--scope <urn>] [--dry-run]
 ```
 
-Select exactly one action: `list`, `prepare`, `resolve`, `defer`, `watch`. An option the selected action does not declare is refused before you start.
+Select exactly one action: `list`, `prepare`, `resolve`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
@@ -61,7 +62,7 @@ The obligations the effective rule graph holds for activities `operate`. They bi
 
 A prepared attention set: per item, its kind, subject, exact revision, options with consequences, evidence, recommendation, and what happens on no answer.
 
-The report validates against `AttentionSkillReport`, and its terminal outcome is exactly one of `listed`, `prepared`, `resolved`, `deferred`, `watching`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `AttentionSkillReport`, and its terminal outcome is exactly one of `listed`, `prepared`, `resolved`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /attend` before returning it.
 
-<!-- argument hint: [<list|prepare|resolve|defer|watch>] [<item-ref>] [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>] [--option <id>] [--answer <text>] [--until <datetime>] [--limit <N>] [--scope <urn>] [--dry-run] -->
+<!-- argument hint: [<list|prepare|resolve>] [<item-ref>] [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>] [--option <id>] [--answer <text>] [--limit <N>] [--scope <urn>] [--dry-run] -->
 ARGUMENTS: $ARGUMENTS

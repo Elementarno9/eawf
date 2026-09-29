@@ -18,7 +18,10 @@ What a timeout may do. An option chosen because nobody answered is an
 answer nobody gave. That is tolerable for an operator's routing choice
 and never for a protected approval, so :attr:`PendingAction.kind` decides
 whether :attr:`PendingAction.default_on_timeout` may be set at all, and a
-protected approval carrying one does not validate.
+protected approval carrying one does not validate. A default is filed
+with the window in which an answer still overrides it and the policy
+that permitted it, because a default nobody can see coming is the same
+silent answer by another name.
 
 The record is minimal on purpose: what is being asked, the two-to-four
 answers offered, the exact digest the answer is bound to, and the seal.
@@ -299,6 +302,11 @@ class PendingAction(_FrozenModel):
     asker's one recommendation and its one-sentence reason, and ``terms``
     expands every identifier the question shows. A recommendation is not
     consent: nothing reads it as an answer.
+
+    ``override_until`` and ``default_policy`` travel with a timeout
+    default: until when an answer still overrides it, and the persisted
+    policy that permitted it. Neither means anything without a default,
+    so either one filed alone is refused.
     """
 
     id: PendingActionKey
@@ -309,6 +317,8 @@ class PendingAction(_FrozenModel):
     bundle_digest: Sha256DigestStr | None = None
     options: tuple[PendingActionOption, ...] = Field(min_length=MIN_OPTIONS, max_length=MAX_OPTIONS)
     default_on_timeout: OptionId | None = None
+    override_until: UtcDatetime | None = None
+    default_policy: NonEmptyStr | None = None
     recommended_option_id: OptionId | None = None
     recommendation_rationale: NonEmptyStr | None = None
     terms: tuple[TermExpansion, ...] = ()
@@ -437,6 +447,7 @@ class PendingAction(_FrozenModel):
 
         Raises:
             ValueError: A protected approval carries a timeout default,
+                an override window or policy is filed without a default,
                 or a digest-bound kind names no digest, so the answer
                 would not say what it approved.
         """
@@ -445,6 +456,10 @@ class PendingAction(_FrozenModel):
                 f"a {self.kind.value} cannot carry default_on_timeout: an approval that lapses "
                 "into a yes is the approval nobody gave"
             )
+        if self.default_on_timeout is None and (
+            self.override_until is not None or self.default_policy is not None
+        ):
+            raise ValueError("override_until and default_policy belong to a default_on_timeout")
         if self.kind in DIGEST_BOUND_KINDS and self.bundle_digest is None:
             raise ValueError(f"a {self.kind.value} requires the bundle_digest it approves")
         return self

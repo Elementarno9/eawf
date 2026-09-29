@@ -22,6 +22,7 @@ from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain as domain_cmd
 from eawf.surfaces.cli.commands import domain_integration as integration_cmd
+from eawf.surfaces.cli.commands.operation import OPERATION_SUBMIT
 
 pytestmark = pytest.mark.integration
 
@@ -88,6 +89,15 @@ def _invoke(tmp_path: Path, *argv: str) -> Any:
     return runner.invoke(app, ["--workspace", str(tmp_path), *argv])
 
 
+def _operation(answer: dict[str, Any]) -> dict[str, Any]:
+    """Return a waited submission whose work answered *answer*."""
+    return {
+        "operation_ref": "operation://00000000-0000-0000-0000-000000000001",
+        "operation": {"state": "succeeded", "result": answer},
+        "replayed": False,
+    }
+
+
 def _json(tmp_path: Path, name: str, payload: Any) -> Path:
     """Write *payload* to a JSON file under *tmp_path*."""
     path = tmp_path / name
@@ -151,12 +161,16 @@ def test_task_seal_forwards_the_candidate_and_exits_nonzero_when_unsealed(
 
 def test_task_prove_sends_the_gates_file(tmp_path: Path) -> None:
     gates = [{"id": "G-01", "criterion_id": "CR-001"}]
-    _FakeClient.answers[integration_cmd.DELIVERY_PROVE] = {
-        "task_ref": _TASK,
-        "legs": [{"gate_id": "G-01", "head_sha": _SHA, "result": "pass", "receipt_id": "RCP-0001"}],
-        "passed": True,
-        "reason": "every leg passes",
-    }
+    _FakeClient.answers[OPERATION_SUBMIT] = _operation(
+        {
+            "task_ref": _TASK,
+            "legs": [
+                {"gate_id": "G-01", "head_sha": _SHA, "result": "pass", "receipt_id": "RCP-0001"}
+            ],
+            "passed": True,
+            "reason": "every leg passes",
+        }
+    )
     result = _invoke(
         tmp_path,
         "task", "prove", _TASK,
@@ -164,10 +178,13 @@ def test_task_prove_sends_the_gates_file(tmp_path: Path) -> None:
         "--idempotency-key", "prove-1",
         "--actor", "OPERATOR",
         "--gates", str(_json(tmp_path, "gates.json", {"gates": gates})),
+        "--wait",
     )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output
-    method, params = _FakeClient.calls[0]
-    assert method == integration_cmd.DELIVERY_PROVE
+    method, submitted = _FakeClient.calls[0]
+    assert method == OPERATION_SUBMIT
+    assert submitted["method"] == integration_cmd.DELIVERY_PROVE
+    params = submitted["params"]
     assert params["gates"] == gates
     assert params["expected_revision"] == 2
     assert '"receipt_id":"RCP-0001"' in result.output
@@ -175,15 +192,15 @@ def test_task_prove_sends_the_gates_file(tmp_path: Path) -> None:
 
 def test_task_prove_without_gates_reruns_the_filed_ones(tmp_path: Path) -> None:
     """Boundary: no gates file sends no gates key, so the daemon reuses the filed ones."""
-    _FakeClient.answers[integration_cmd.DELIVERY_PROVE] = {
+    _FakeClient.answers[OPERATION_SUBMIT] = _operation({
         "task_ref": _TASK, "legs": [], "passed": False, "reason": "a leg failed",
-    }  # fmt: skip
+    })  # fmt: skip
     result = _invoke(
         tmp_path, "task", "prove", _TASK, "--expected-revision", "2",
-        "--idempotency-key", "prove-1", "--actor", "OPERATOR",
+        "--idempotency-key", "prove-1", "--actor", "OPERATOR", "--wait",
     )  # fmt: skip
     assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
-    assert "gates" not in _FakeClient.calls[0][1]
+    assert "gates" not in _FakeClient.calls[0][1]["params"]
 
 
 def _assessment(*, completable: bool) -> dict[str, Any]:
@@ -228,15 +245,17 @@ def test_task_assess_exits_nonzero_while_a_leg_is_unproven(tmp_path: Path) -> No
 def test_batch_integrate_assembles_then_integrates(tmp_path: Path) -> None:
     request = {"urn": _BATCH, "actor": "OPERATOR", "idempotency_key": "assembled-1"}
     _FakeClient.answers[integration_cmd.DELIVERY_ASSEMBLE] = request
-    _FakeClient.answers[integration_cmd.DELIVERY_INTEGRATE] = {
-        "batch_ref": _BATCH,
-        "candidates": [],
-        "manifest_ids": [],
-        "generation_ids": ["ING-000002"],
-        "commit_messages": [],
-        "delivered": True,
-        "reason": "delivered",
-    }
+    _FakeClient.answers[OPERATION_SUBMIT] = _operation(
+        {
+            "batch_ref": _BATCH,
+            "candidates": [],
+            "manifest_ids": [],
+            "generation_ids": ["ING-000002"],
+            "commit_messages": [],
+            "delivered": True,
+            "reason": "delivered",
+        }
+    )
     refs = {"base": {"head_sha": _BASE}, "exit_refs": {}, "diagnostic_ref": "EVD"}
     result = _invoke(
         tmp_path,
@@ -244,15 +263,18 @@ def test_batch_integrate_assembles_then_integrates(tmp_path: Path) -> None:
         "--expected-batch-revision", "1",
         "--actor", "OPERATOR",
         "--from-spec", str(_json(tmp_path, "refs.json", refs)),
+        "--wait",
     )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output
     assert [call[0] for call in _FakeClient.calls] == [
         integration_cmd.DELIVERY_ASSEMBLE,
-        integration_cmd.DELIVERY_INTEGRATE,
+        OPERATION_SUBMIT,
     ]
     assert _FakeClient.calls[0][1]["base"] == {"head_sha": _BASE}
-    assert _FakeClient.calls[1][1]["idempotency_key"] == "assembled-1"
-    assert _FakeClient.calls[1][1]["expected_revision"] == 1
+    submitted = _FakeClient.calls[1][1]
+    assert submitted["method"] == integration_cmd.DELIVERY_INTEGRATE
+    assert submitted["idempotency_key"] == "assembled-1"
+    assert submitted["params"]["expected_revision"] == 1
     assert "expected_revision" not in _FakeClient.calls[0][1]
 
 

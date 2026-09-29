@@ -31,7 +31,7 @@ from pathlib import Path
 
 import orjson
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import GATE_RUN_EVIDENCE_KINDS, CriterionSpec, GateSpec
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.gate_receipt import GateReceipt
@@ -109,7 +109,7 @@ def obliged_gate_ids(
     deterministic_required = {
         criterion.id
         for criterion in criteria
-        if criterion.required and criterion.evidence_kind == "deterministic"
+        if criterion.required and criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS
     }
     return frozenset(
         gate.id

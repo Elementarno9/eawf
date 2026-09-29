@@ -84,6 +84,7 @@ from eawf.workflow.agent_report.store import (
     append_agent_report,
     scrub_finding_kinds,
 )
+from eawf.workflow.dispatch.audit_evidence import require_row_evidence
 from eawf.workflow.dispatch.llm_assist import (
     DEFAULT_MAX_ATTEMPTS,
     LLMAssistResult,
@@ -230,12 +231,18 @@ class WaveVerdictResult:
 
 @dataclass(frozen=True)
 class DurableAuditCriterion:
-    """One required criterion and its exact deterministic proof bindings."""
+    """One required criterion and its exact deterministic proof bindings.
+
+    ``rendered_run`` marks a claim about what a reader of a rendered
+    artifact sees: its row may cite a source scan beside the rendered
+    run's receipt, never instead of it.
+    """
 
     criterion_id: str
     text: str
     deterministic: bool
     gate_receipt_urns: tuple[str, ...] = field(default_factory=tuple)
+    rendered_run: bool = False
 
 
 @dataclass(frozen=True)
@@ -487,6 +494,8 @@ def _durable_audit_context_block(context: DurableAuditContext) -> str:
     for criterion in context.criteria:
         lines.append(f"- `{criterion.criterion_id}` criterion: {_json_string(criterion.text)}")
         lines.append(f"  - deterministic: {str(criterion.deterministic).lower()}")
+        if criterion.rendered_run:
+            lines.append("  - rendered run: true")
         if criterion.gate_receipt_urns:
             lines.extend(f"  - mapped GateReceipt: `{urn}`" for urn in criterion.gate_receipt_urns)
         else:
@@ -669,7 +678,12 @@ def build_auditor_prompt(
             'evidence kind: cite it as `{"kind":"store_record","ref":"'
             '<mapped GateReceipt URN>"}`, never with `kind: "gate_receipt"`. For a\n'
             "deterministic row, at least one entry MUST cite one of that\n"
-            "criterion's mapped GateReceipt URNs exactly. The aggregate\n"
+            "criterion's mapped GateReceipt URNs exactly. A `rendered run` row\n"
+            "is a claim about what a reader sees: a source scan, a stylesheet\n"
+            "grep or the implementer's report never discharges it alone. An\n"
+            "entry whose `note` quotes a rate (a percentage) MUST carry a\n"
+            "`population` object naming the `selector` and `filter` that\n"
+            "produced it. The aggregate\n"
             "verdict MUST agree with those rows: pass / pass-with-followups\n"
             "requires every row to pass; fail / blocked requires at least one\n"
             "row to fail. A close-ready verdict cannot carry refutations.\n"
@@ -715,7 +729,8 @@ def _validate_durable_auditor_body(
 
     Raises:
         ValueError: When the target, the row count, a criterion echo, the
-            per-row evidence or the aggregate verdict breaks the contract.
+            per-row evidence (see :func:`require_row_evidence`) or
+            the aggregate verdict breaks the contract.
     """
     if body.target_id != context.wave_id:
         raise ValueError(
@@ -741,24 +756,7 @@ def _validate_durable_auditor_body(
             if row.criterion == criterion.text
             else row.model_copy(update={"criterion": criterion.text})
         )
-        if not row.evidence_refs:
-            raise ValueError(
-                f"durable audit criterion requires evidence_refs: {criterion.criterion_id!r}"
-            )
-        if criterion.deterministic:
-            mapped = set(criterion.gate_receipt_urns)
-            if not mapped:
-                raise ValueError(
-                    f"deterministic criterion has no GateReceipt binding: "
-                    f"{criterion.criterion_id!r}"
-                )
-            if not any(
-                ref.kind == "store_record" and ref.ref in mapped for ref in row.evidence_refs
-            ):
-                raise ValueError(
-                    f"deterministic criterion must cite a mapped GateReceipt URN: "
-                    f"{criterion.criterion_id!r}"
-                )
+        require_row_evidence(row, criterion)
     _validate_durable_auditor_aggregate(body)
     if rows == body.criteria:
         return body

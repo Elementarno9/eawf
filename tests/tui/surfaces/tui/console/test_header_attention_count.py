@@ -427,8 +427,9 @@ def test_help_overlay_on_a_native_frame_lists_the_paging_keys() -> None:
 def test_help_overlay_on_a_whole_native_frame_lists_no_paging_key() -> None:
     """A frame that shows every row pages nowhere, so its help teaches no paging key."""
     view = _native_view("track", attention=None)
-    rows = render_overlay("help", view)
-    assert not any("PageUp PageDown" in row or "Home End" in row for row in rows)
+    # the card's own keybar may page the card; the table it teaches pages nothing
+    table = render_overlay("help", view)[:-2]
+    assert not any("PageUp PageDown" in row or "Home End" in row for row in table)
 
 
 def test_help_overlay_on_a_prototype_frame_keeps_the_prototype_table() -> None:

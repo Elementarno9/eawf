@@ -28,6 +28,7 @@ from pydantic import ConfigDict, Field, model_validator
 
 from eawf.kernel.delivery.receipts import canonical_digest
 from eawf.kernel.spec.common import (
+    GATE_RUN_EVIDENCE_KINDS,
     SINGLE_SITE_GATE_KINDS,
     UNIVERSAL_SCOPE_TOKENS,
     CriterionEvidenceKind,
@@ -292,7 +293,7 @@ def _gate_coverage_findings(
         message = f"a {criterion.evidence_kind} criterion binds no gate"
     elif (
         criterion.required
-        and criterion.evidence_kind == "deterministic"
+        and criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS
         and bound
         and not any(gate.required and gate.policy == "block" for gate in bound)
     ):
@@ -324,7 +325,7 @@ def _oracle_findings(
         owner = criterion_by_id.get(gate.criterion_id)
         if (
             owner is not None
-            and owner.evidence_kind == "deterministic"
+            and owner.evidence_kind in GATE_RUN_EVIDENCE_KINDS
             and not _compiles(gate, owner)
         ):
             findings.append(
@@ -376,7 +377,7 @@ def _criterion_oracle_findings(
     judgment = [
         value for value in (tier, authored) if value is not None and value >= OracleTier.T6_APPROVAL
     ]
-    if criterion.evidence_kind == "deterministic" and judgment:
+    if criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS and judgment:
         findings.append(
             _finding(
                 AuthoringRule.DETERMINISTIC_JURY_ROUTE,
@@ -612,7 +613,7 @@ class ExecutionContract(_FrozenModel):
         """
         if self.oracle_tier != gate_kind_oracle_tier(self.gate.kind):
             raise ValueError(f"contract {self.gate.id!r} carries a tier the mapping does not give")
-        deterministic = self.evidence_kind == "deterministic"
+        deterministic = self.evidence_kind in GATE_RUN_EVIDENCE_KINDS
         if deterministic != (self.check is not None):
             raise ValueError(
                 f"contract {self.gate.id!r} needs a runnable check exactly when deterministic"

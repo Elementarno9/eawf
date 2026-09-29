@@ -31,6 +31,9 @@ def _attempt(status: str) -> dict[str, Any]:
 class _CloseClient:
     calls: ClassVar[list[str]] = []
 
+    def __init__(self, **_options: Any) -> None:
+        return None
+
     def __enter__(self) -> _CloseClient:
         return self
 

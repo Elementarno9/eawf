@@ -20,6 +20,8 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator, model_validator
 
+from eawf.observability.telemetry.models import RuntimeName
+
 #: Narrow Literal of supported leaf-key value shapes. Mirrors the YAML
 #: scalars the loader writes; ``mapping`` covers dict-typed leaves
 #: (e.g. ``workspace.repos``, ``profiles.trusted``); ``any`` is the
@@ -37,6 +39,21 @@ LeafKeyType = Literal[
     "literal",
 ]
 ConsumerKind = Literal["engine", "skill", "declarative", "deprecated", "reserved"]
+
+
+class LeafDeny(BaseModel):
+    """One value of a leaf that an engine refuses while a boolean leaf withholds it.
+
+    Attributes:
+        value: The leaf's value, as the settings view renders it, that is refused.
+        unless: The boolean leaf whose ``true`` lifts the refusal; the layer that sets
+            it is the layer the refusal comes from.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    value: Annotated[str, StringConstraints(min_length=1)]
+    unless: Annotated[str, StringConstraints(min_length=1, max_length=128)]
 
 
 class LeafKey(BaseModel):
@@ -64,6 +81,15 @@ class LeafKey(BaseModel):
             engine, skill, declarative, deprecated, or reserved.
         reserved: Whether the leaf is hidden from editing because it is
             deprecated or reserved. A leaf cannot be both consumed and reserved.
+        deny: The value an engine refuses for this leaf, and the leaf that
+            lifts the refusal; ``None`` when nothing refuses a value.
+        value_range: The inclusive ``(minimum, maximum)`` the interactive
+            config registry holds a numeric value to, either end ``None``
+            when open; ``None`` when the registry states no range.
+        runtime: The runtime the leaf takes effect on, whose certification
+            it therefore needs; ``None`` for a runtime-neutral leaf.
+        secret_refs: Whether the leaf's value names credentials, which it
+            may do only by ``${ENV:NAME}`` reference.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -78,6 +104,10 @@ class LeafKey(BaseModel):
     consumer: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] | None = None
     consumer_kind: ConsumerKind = "declarative"
     reserved: bool = False
+    deny: LeafDeny | None = None
+    value_range: tuple[float | None, float | None] | None = None
+    runtime: RuntimeName | None = None
+    secret_refs: bool = False
 
     @field_validator("writable_layers")
     @classmethod
@@ -141,4 +171,4 @@ _WRITABLE_RUNTIME_PREFERENCE: tuple[str, ...] = (
 _WRITABLE_NONE: tuple[str, ...] = ()  # locked / code-only
 
 
-__all__ = ["ConsumerKind", "LeafKey", "LeafKeyType"]
+__all__ = ["ConsumerKind", "LeafDeny", "LeafKey", "LeafKeyType"]

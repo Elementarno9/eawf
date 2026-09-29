@@ -227,8 +227,16 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
         "why_cmd",
         "Explain why an EAWF entity has its current trust tier.",
     ),
+    CommandRow(
+        "verbs",
+        "eawf.surfaces.cli.commands.verbs",
+        "verbs_cmd",
+        "List every verb with its entity, parameters, typed errors and effect class.",
+    ),
     # Daemon + spec + bench + telemetry + snapshot + migrate + backup.
     GroupRow("daemon", "eawf.surfaces.cli.commands.daemon", "daemon_app"),
+    # Streams any submitted operation, whichever entity verb submitted it.
+    CommandRow("follow", "eawf.surfaces.cli.commands.operation", "follow_cmd", None),
     GroupRow("spec", "eawf.surfaces.cli.commands.spec", "spec_app"),
     GroupRow("jury", "eawf.surfaces.cli.commands.jury", "jury_app"),
     GroupRow("bench", "eawf.surfaces.cli.commands.bench", "bench_app"),

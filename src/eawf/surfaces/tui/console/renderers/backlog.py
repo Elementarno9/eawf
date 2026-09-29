@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from datetime import datetime
 from types import MappingProxyType
 from typing import Any
 
 from eawf.kernel.projection.spine import SpineRow, SpineView
+from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import value_cell
-from eawf.surfaces.tui.console.format import day, group
+from eawf.surfaces.tui.console.format import day, group, instant
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Grid,
@@ -82,10 +82,8 @@ EMPTY_NEXT = "a drafted Task lands here · g t shows what is planned"
 
 def _date(stamp: str | None) -> str:
     """Return the day a stored instant falls on, or the unknown token when it states none."""
-    try:
-        return day(datetime.fromisoformat(stamp)) if stamp else UNKNOWN_WORD
-    except ValueError:
-        return UNKNOWN_WORD
+    at = instant(stamp)
+    return day(at) if at is not None else UNKNOWN_WORD
 
 
 def _native_rows(
@@ -161,9 +159,7 @@ def native_backlog(view: View, spine: SpineView) -> list[str]:
     }
     focus = s.bl_group if s.bl_group in grouped else _DRAFTS
     shown = grouped[focus]
-    at = next((i for i, row in enumerate(shown) if row.key == s.sel_id), None)
-    s.sel = at if at is not None else min(max(s.sel, 0), max(len(shown) - 1, 0))
-    s.sel_id = shown[s.sel].key if shown else None
+    dv.restore_by_id(s, [row.key for row in shown])
     drafts, deferred = (len(grouped[name]) for name, _status in GROUPS)
     top = native_head(
         view,

@@ -62,6 +62,7 @@ PROFILE_FIELD_DISPOSITIONS: Final[Mapping[str, LegacyDispositionKind | Literal["
             "extends": "rejected",
             "conflicts_with": "rejected",
             "overrides": "rejected",
+            "certification": "rejected",
             "state_extensions": "domain_policy",
             "instrument_requirements": "tool_policy",
             "render_blocks": PER_BLOCK,

@@ -37,13 +37,10 @@ from eawf.surfaces.tui.console.frame import (
     View,
     bar,
     build,
-    needs_count,
     route_keys_bar,
-    scope_label,
     thin,
     window_rows,
 )
-from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import KEY, KeyEntry
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS, Layout
@@ -51,7 +48,6 @@ from eawf.surfaces.tui.console.reads import attached, reads
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers.children import Record, lrow, status
 from eawf.surfaces.tui.console.renderers.detail import (
-    GUTTER,
     at,
     state_of,
     subject_line,
@@ -64,7 +60,10 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     cell,
     counts,
     crumb,
+    label,
     native_head,
+    native_header,
+    restore,
     route_crumb,
 )
 from eawf.surfaces.tui.console.session import Session
@@ -72,11 +71,6 @@ from eawf.surfaces.tui.console.width import pad
 
 _ROWS = Table([34, 12, 0], 2)
 _EMPTY = "   this scope holds no record the read model renders"
-
-
-def _label(name: str, text: str) -> str:
-    """Return a row in the gutter the generic spine frame's subject rows sit in."""
-    return f" {name:<{GUTTER}}{text}"
 
 
 def finished_subject(session: Session, model: SpineView | RouteReadModel) -> Record | None:
@@ -219,25 +213,6 @@ def held(view: View) -> SpineView | None:
     return model if isinstance(model, SpineView) else None
 
 
-def restore(session: Session, spine: SpineView) -> int:
-    """Return the row the cursor sits on, restored by stable id, and publish that id.
-
-    Args:
-        session: The session whose ``sel_id`` names the row the cursor was on and whose
-            ``sel`` is the offset the frame draws the caret at.
-        spine: The read model the frame draws.
-
-    Returns:
-        The row offset the caret goes on; ``0`` for an empty read model, which draws no
-        caret at all.
-    """
-    found = spine.index_of(session.sel_id)
-    index = found if found is not None else min(max(session.sel, 0), max(len(spine.rows) - 1, 0))
-    session.sel = index
-    session.sel_id = spine.rows[index].key if spine.rows else None
-    return index
-
-
 def native_frame(view: View, spine: SpineView) -> list[str]:
     """Return one spine route's frame, drawn from the read model the daemon served.
 
@@ -264,19 +239,13 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     cursor = restore(session, spine)
     regions = REGISTRY.focus_regions.get(session.route, ())
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=crumb(view, spine),
-            scope=scope_label(view, spine.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, crumb(view, spine), spine.scope_id),
         " " + (counts(spine) if subject is None else _subject_summary(subject, finished, w)),
         bar(w),
     ]
     rd = reads(session)
     if finished is not None:
-        rows.extend([*finished_rows(session.route, finished, _label), thin(w)])
+        rows.extend([*finished_rows(session.route, finished, label), thin(w)])
     elif not rd.complete:
         rows.extend(
             [f" ATTACHED  {attached(rd, revision=group(int(spine.source_cursor)))}", thin(w)]

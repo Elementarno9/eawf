@@ -35,6 +35,7 @@ from eawf.kernel.state.enums import AgentSessionRole
 from eawf.kernel.state.epoch2.run import MUTATING_PURPOSES, RunPurpose
 from eawf.kernel.state.epoch2.urns import RepositoryUrn
 from eawf.kernel.state.types import UtcDatetime
+from eawf.runtime.sandbox.command_families import CommandFamilyId
 
 
 class RuntimeRecord(BaseModel):
@@ -134,7 +135,6 @@ SemVer = Annotated[
 Digest = Sha256DigestStr
 CapabilityId = Annotated[str, _grammar(r"^[a-z][a-z0-9_]{0,63}$")]
 ToolCapabilityId = Annotated[str, _grammar(r"^[a-z][a-z0-9_]{0,63}$")]
-CommandFamilyId = Annotated[str, _grammar(r"^[a-z][a-z0-9_-]{0,63}$")]
 ModelId = Annotated[str, _grammar(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$")]
 EnvironmentVariableName = Annotated[str, _grammar(r"^[A-Z_][A-Z0-9_]{0,127}$")]
 #: A capability level. Strings are bounded so a level cannot smuggle a

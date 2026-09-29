@@ -152,24 +152,23 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         method=(
             "Read the queue and the scopes it references. An item whose due scope has passed is"
             " overdue and is surfaced first.",
-            "Add, re-prioritize, defer, or drop as instructed. Deferral and drop each require a"
-            " durable reason; the reason is what makes the decision recoverable later.",
+            "Add a draft as instructed: one line of intent, a priority, and the criteria and"
+            " ownership claims already known. A draft with neither is still a real Task, and the"
+            " report says what it lacks.",
             "Promotion is a plan act, not a queue act. To promote, the Task needs criteria,"
             " ownership claims, and a Batch, and it goes through a PlanRevision. If those are"
             " missing, say what is missing rather than promoting a shell.",
-            "Report the queue's shape: counts by priority, what is overdue, what has been"
-            " deferred more than once. A row deferred repeatedly is a decision nobody is making,"
-            " and naming it is more useful than carrying it.",
+            "Report the queue's shape: counts by priority, what is overdue, and what has sat in"
+            " the queue longest. A row nobody promotes is a decision nobody is making, and naming"
+            " it is more useful than carrying it.",
         ),
         constraints=(
             "A draft is never dispatchable. Every dispatch guard requires a planned Task.",
-            "Dropping is terminal and keeps the row readable, so the decision not to do"
-            " something stays recoverable.",
             "Do not invent criteria to make a draft promotable. Missing criteria mean the work"
             " is not understood yet.",
         ),
         output=(
-            "The queue after your changes, plus the overdue set and the repeatedly-deferred set"
+            "The queue after your changes, plus the overdue set and the longest-waiting set"
             " called out by name."
         ),
         activities=("plan",),
@@ -241,13 +240,10 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "For propose, frame one choice with stable option keys, at least two real"
             " alternatives, consequences, conflicts, and evidence. Do not recommend an option"
             " without supporting evidence.",
-            "For ratify, revalidate evidence and applicability, render persisted options"
-            " unchanged, and create a protected operator action. The agent never supplies the"
-            " chosen key.",
-            "For supersede, create and ratify the replacement first; the daemon then links the"
-            " old ACTIVE Decision atomically. For obsolete, prove applicability ended and"
-            " preserve the reason.",
-            "Submit only the selected Decision RPC with expected revision and idempotency key.",
+            "For supersede, record the replacement first, then link the old Decision to it."
+            " Superseding is the operator's act; an agent prepares it and stops.",
+            "For show, list the scope's Decisions and their supersession graph without mutation.",
+            "Run only the selected decision verb and return what it recorded.",
         ),
         constraints=(
             "Stop on stale revision, unresolved evidence, hidden plan/scope change, conflicting"
@@ -365,10 +361,9 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " canonical state. Reject secrets, machine-local identifiers, transcripts, current"
             " blockers, and duplicated lifecycle facts.",
             "Promote requires resolving evidence, deduplication, review date, and protected"
-            " authority. Forget preserves a tombstone/reason according to retention policy rather"
-            " than silently erasing provenance.",
-            "Submit the selected memory RPC and return the durable receipt. Never let memory"
-            " content override a newer canonical fact.",
+            " authority.",
+            "Run the selected memory verb and return what it recorded. Never let memory content"
+            " override a newer canonical fact.",
         ),
         constraints=(
             "Stop on forbidden content, duplicate/conflict, stale revision, missing promotion"
@@ -382,8 +377,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
     SkillPrompt(
         skill_id="milestone",
         task=(
-            "You operate one Milestone through the selected define, show, activate, revise,"
-            " repair, or cancel action."
+            "You operate one Milestone through the selected define, show, activate, or cancel"
+            " action."
         ),
         context=(
             "One Milestone, named by `<milestone-ref>` or defined by this invocation, within its"
@@ -392,14 +387,12 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         method=(
             "Resolve its Track, exact revision, outcome, appetite, exclusions, acceptance"
             " journey, repository set, and required Batches.",
-            "For define or revise, make the outcome observable and the acceptance journey"
+            "For define, make the outcome observable and the acceptance journey"
             " executable. Keep exclusions explicit. Never infer missing scope merely to make the"
             " contract complete.",
             "For activate, require an approved current contract, satisfiable repository"
             " ownership, no blocking policy conflict, and a valid planning route. Preview the"
             " activation consequences.",
-            "For repair, bind the failing acceptance, audit, review, or release evidence and"
-            " propose bounded repair scope. Repair cannot silently widen the original outcome.",
             "For cancel, enumerate active or pending descendants and require their legal"
             " disposition. Preserve every receipt and reason.",
             "Submit only the selected action's RPC with expected revision and idempotency key,"
@@ -540,74 +533,60 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         task=(
             "Report where effort, time, and money actually went. This skill is operator-only and"
             " mutates no canonical state. It is read-only apart from one effect: the title fill"
-            " of step 8, which sends a scrubbed structural digest to the provider and caches the"
-            " answer, and which --local-only disables."
+            " of the run action, which sends a scrubbed structural digest to the provider and"
+            " caches the answer, and which --local-only disables."
         ),
         context=(
-            "Inputs are the measurement collections owned by V07-MEAS: runtime counters,"
-            " actuals, and estimates. Do not re-scrape provider session history; a second reader"
-            " of the same facts drifts from the first, and the measured rows already carry"
-            " harness, model, quality, and exclusion state. The one input from outside those"
-            " collections is the local title cache of step 8, which holds provider answers keyed"
-            " by digest hash and never a transcript line.\n\n"
-            "Scope defaults to the current project. A wider scope, up to all_local - every"
-            " project whose collections exist on this machine - is read only when the operator"
-            " asks for it explicitly. A wider read is still a local read: the read and the render"
-            " send nothing anywhere, and no content excerpt is persisted at any scope beyond the"
-            " bounded scrubbed title. The only egress is the title fill of the run verb, which"
-            " sends a scrubbed structural digest and never prompt text; --local-only disables"
-            " it, every title then falls back to scrubbed_extract or structural, and the report"
-            " states which source each title carries."
+            "Inputs are the current tree's measurement collections: runtime counters, actuals,"
+            " and estimates, as the reflect verbs read them. Do not re-scrape provider session"
+            " history; a second reader of the same facts drifts from the first, and the measured"
+            " rows already carry harness, model, quality, and exclusion state. The one input from"
+            " outside those collections is the local title cache, which holds provider answers"
+            " keyed by digest hash and never a transcript line.\n\n"
+            "The read and the render send nothing anywhere, and no content excerpt is persisted"
+            " beyond the bounded scrubbed title. The only egress is the title fill of the run"
+            " action, which sends a scrubbed structural digest and never prompt text;"
+            " --local-only disables it, every title then falls back to scrubbed_extract or"
+            " structural, and the report states which source each title carries."
         ),
         method=(
-            "Bind the reporting window and the cohort. Prefer a project-first cohort when it"
-            " holds at least the configured minimum comparable sample; otherwise fall back"
-            " through wider personal cohorts and say which was used. Exclude prior runs of this"
-            " skill, and every helper session this skill spawned, from every cohort, not only"
-            " from the overhead line, or the tool inflates its own norms each time it runs.",
+            "Select the action. run reads the tree's Runs, fills their titles, and writes the"
+            " report, to --out when given; show prints the newest report in the local"
+            " collection; export writes the newest report as a static page, to --out when given;"
+            " prune removes local reports and cached titles past their retention class.",
             "Aggregate measured rows only. Never substitute an estimate for an actual, never"
             " render a ratio when either side is unavailable, and never compare across"
-            " effort-unit mapping revisions without labelling the comparison.",
+            " effort-unit mapping revisions without labelling the comparison. Exclude prior runs"
+            " of this skill, and every helper session it spawned, from every baseline.",
             "Classify excluded rows separately and report them in their own section with their"
             " reasons. Excluded work is still observed usage; it is removed from the baseline,"
             " not from the report.",
             "Report unpriced spend as unpriced. A placeholder rate is never presented as a dollar"
             " figure, and zero is never printed where the source recorded unknown.",
-            "Measure and exclude the reflection run's own overhead from the baseline it reports.",
-            "Bound the first pass. Inventory the full approved scope, parse a bounded first"
-            " sample under the declared per-source ceilings, and write a digest-bound"
-            " verification manifest carrying parser versions, scope fingerprint, inventory"
-            " digest, candidate count and bytes, approved source prefixes, sample references and"
-            " verdicts, malformed ratio, schema drift, and coverage. Include an orchestrated"
-            " root, an aborted or incomplete root, and a noise candidate in the sample where each"
-            " exists. If validation passes, process the remaining approved inventory without a"
-            " second operator decision.",
             "Mark every row by quotability. A statistic scoped to the current project is"
-            " quotable into a committed artifact. A cross-project row is not, and is labelled"
-            " non-quotable in the report itself so a later agent citing it can see the boundary"
-            " rather than infer it.",
-            "Fill session titles from the local cache, then from the provider unless"
+            " quotable into a committed artifact; a row that is not is labelled non-quotable in"
+            " the report itself, so a later agent citing it can see the boundary rather than"
+            " infer it.",
+            "For run, fill session titles from the local cache, then from the provider unless"
             " --local-only is set, sending only the scrubbed structural digest. Leave an"
-            " unanswerable digest uncached, name every helper session with the reflection marker"
-            " so the sweep drops it, and fall back per title to scrubbed_extract then structural,"
-            " stating the source each title carries.",
+            " unanswerable digest uncached, and fall back per title to scrubbed_extract then"
+            " structural, stating the source each title carries.",
         ),
         constraints=(
             "Persist statistics and metadata only. Bounded content may be inspected in memory to"
             " classify a candidate finding; no excerpt is persisted beyond the bounded scrubbed"
-            " title, at any scope.",
+            " title.",
             "You are operator-invoked, you mutate no canonical state, and you send nothing beyond"
-            " the scrubbed structural digests of step 8; producing agent-readable output does not"
-            " make this skill agent-invocable.",
+            " the scrubbed structural digests of the run action; producing agent-readable output"
+            " does not make this skill agent-invocable.",
         ),
         output=(
-            "Output one ReflectReport containing window, scope, cohort and its sample size,"
-            " measured totals by Track, Milestone, Batch, Task, and Run, estimate-versus-actual"
-            " variance with its mapping revision, pricing quality, the excluded-row section, and"
-            " every unavailable field named with its reason. Emit it in a form an agent can"
-            " consume without re-deriving it: a machine-readable overview and typed highlighted"
-            " issues beside the rendered prose, each issue carrying its subject, its evidence"
-            " rows, and its quotability mark."
+            "Output one ReflectReport containing the measured totals by Track, Milestone, Batch,"
+            " Task, and Run, estimate-versus-actual variance with its mapping revision, pricing"
+            " quality, the excluded-row section, and every unavailable field named with its"
+            " reason. Emit it in a form an agent can consume without re-deriving it: a"
+            " machine-readable overview and typed highlighted issues beside the rendered prose,"
+            " each issue carrying its subject, its evidence rows, and its quotability mark."
         ),
     ),
     SkillPrompt(
@@ -637,8 +616,7 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " recover, operate only missing or ambiguous legs and preserve the burned version and"
             " frozen artifacts.",
             "Declare RELEASED only after every required target is independently observed with"
-            " matching digests. Return operation references immediately unless `--wait` was"
-            " requested.",
+            " matching digests. Return operation references immediately.",
         ),
         constraints=(
             "Stop on stale source, dirty or non-ancestor tree, version/channel mismatch, missing"
@@ -708,7 +686,12 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " the stated discriminator; do not grow production architecture around the"
             " experiment.",
             "Run the exact verification commands and capture bounded machine-readable"
-            " observations, logs, environment assumptions, and result receipts. Then extract"
+            " observations, logs, environment assumptions, and result receipts. When an"
+            " observation depends on which provider ran it, set each contract environment's"
+            " `provider_tuple` to the sorted, distinct providers the probe ran through, from"
+            " `--provider` or the dispatch provider set; leave it empty when the measurement does"
+            " not depend on the provider, because a non-empty tuple restricts where the contract"
+            " transfers. Then extract"
             " contracts from those observations: for each probed surface, state what it is, what"
             " it accepts and returns, and its non-empty boundary - the conditions under which the"
             " observation stops holding. An observation records that a run printed something; a"
@@ -783,9 +766,6 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             "For create, reject duplicate identity, unresolved repositories, empty charter, or"
             " scope that cannot be enforced. Preview the complete Track contract before"
             " submitting it.",
-            "For set-policy, show the before/after policy and identify every authority, WIP,"
-            " provider, budget, or repository boundary that changes. A widening requires the"
-            " protected action declared by policy.",
             "For retire, prove no active Milestone, Batch, Task, Run, pending protected action,"
             " or unresolved acceptance depends on the Track. Preserve history; retirement never"
             " deletes the Track.",
@@ -793,13 +773,12 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " idempotency key. Return its receipt and refreshed Track projection.",
         ),
         constraints=(
-            "Stop when the reference is stale, repository identity is ambiguous, policy widening"
-            " lacks authority, retirement guards fail, or requested work belongs to a Milestone"
-            " or PlanRevision.",
+            "Stop when the reference is stale, repository identity is ambiguous, retirement"
+            " guards fail, or requested work belongs to a Milestone or PlanRevision.",
         ),
         output=(
-            "Output one TrackSkillReport containing action, before/after revisions, effective"
-            " policy, affected references, receipt, warnings, and blockers."
+            "Output one TrackSkillReport containing action, before/after revisions, affected"
+            " references, receipt, warnings, and blockers."
         ),
         activities=("plan",),
     ),

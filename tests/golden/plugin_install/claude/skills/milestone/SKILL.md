@@ -1,20 +1,21 @@
 ---
 name: milestone
-description: "Define, activate, revise, repair or cancel a Milestone."
-argument-hint: "<define|show|activate|revise|repair|cancel> [<milestone-ref>] [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>] [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...] [--reason <text>] [--from-spec <path|->] [--dry-run]"
+description: "Define, show, activate or cancel a Milestone."
+argument-hint: "<define|show|activate|cancel> [<milestone-ref>] [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>] [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...] [--reason <text>] [--from-spec <path|->] [--dry-run]"
 user-invocable: true
 disable-model-invocation: true
 ---
 
 # /milestone
 
-Define, activate, revise, repair or cancel a Milestone.
+Define, show, activate or cancel a Milestone.
 
 ## 1. Authority
 
-- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
-- Effects: Milestone RPCs.
-- Allowed RPCs: `read_entity`, `domain.milestone.create`, `domain.milestone.activate`, `domain.milestone.revise`, `domain.milestone.repair`, `domain.milestone.cancel`. Any other RPC is denied before it reaches a handler.
+- Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Operates on: Milestone, through `projection.milestone.read`, `domain.milestone.create`, `domain.milestone.activate`, `domain.milestone.cancel`.
+- Effects: The Milestone read plus its create, activate and cancel verbs.
+- Allowed RPCs: `projection.milestone.read`, `domain.milestone.create`, `domain.milestone.activate`, `domain.milestone.cancel`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -27,22 +28,21 @@ Resolve the subject before acting. Name every entity with its identifier and its
 
 ## 3. Task
 
-You operate one Milestone through the selected define, show, activate, revise, repair, or cancel action.
+You operate one Milestone through the selected define, show, activate, or cancel action.
 
 ```text
-/milestone <define|show|activate|revise|repair|cancel> [<milestone-ref>] [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>] [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...] [--reason <text>] [--from-spec <path|->] [--dry-run]
+/milestone <define|show|activate|cancel> [<milestone-ref>] [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>] [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...] [--reason <text>] [--from-spec <path|->] [--dry-run]
 ```
 
-Select exactly one action: `define`, `show`, `activate`, `revise`, `repair`, `cancel`. An option the selected action does not declare is refused before you start.
+Select exactly one action: `define`, `show`, `activate`, `cancel`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
 1. Resolve its Track, exact revision, outcome, appetite, exclusions, acceptance journey, repository set, and required Batches.
-2. For define or revise, make the outcome observable and the acceptance journey executable. Keep exclusions explicit. Never infer missing scope merely to make the contract complete.
+2. For define, make the outcome observable and the acceptance journey executable. Keep exclusions explicit. Never infer missing scope merely to make the contract complete.
 3. For activate, require an approved current contract, satisfiable repository ownership, no blocking policy conflict, and a valid planning route. Preview the activation consequences.
-4. For repair, bind the failing acceptance, audit, review, or release evidence and propose bounded repair scope. Repair cannot silently widen the original outcome.
-5. For cancel, enumerate active or pending descendants and require their legal disposition. Preserve every receipt and reason.
-6. Submit only the selected action's RPC with expected revision and idempotency key, then render the resulting Milestone state.
+4. For cancel, enumerate active or pending descendants and require their legal disposition. Preserve every receipt and reason.
+5. Submit only the selected action's RPC with expected revision and idempotency key, then render the resulting Milestone state.
 
 ## 4b. Applicable rules
 
@@ -72,4 +72,4 @@ The obligations the effective rule graph holds for activities `plan`. They bind 
 
 Output one MilestoneSkillReport with action, contract summary, before/after revisions, descendant effects, receipt, acceptance gaps, and blockers.
 
-The report validates against `MilestoneSkillReport`, and its terminal outcome is exactly one of `shown`, `defined`, `activated`, `revised`, `repair_requested`, `cancelled`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `MilestoneSkillReport`, and its terminal outcome is exactly one of `shown`, `defined`, `activated`, `cancelled`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /milestone` before returning it.

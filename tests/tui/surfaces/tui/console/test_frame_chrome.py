@@ -1,9 +1,9 @@
-"""The console chrome the jury reviewed: header name, gutter, bands, summary, keys, styling.
+"""The console chrome: header name, gutter, bands, summary, keys, styling.
 
-Each test names the jury finding it holds the console to. The chrome is what every route
-shares -- the header's scope name and connection value, the summary line under it, the
-keybar's paging pairs, the tinted bands, the one-cell outer gutter, the cursor ground, the
-id links, the receded pane and what Shift-Tab does -- so each is proved on the native
+The chrome is what every route shares -- the header's scope name and connection value,
+the summary line under it, the keybar's paging pairs, the tinted bands, the one-cell outer
+gutter, the cursor ground, the id links, the receded pane and what Shift-Tab does -- so
+each is proved on the native
 frames an operator's console draws and, where the golden contract's prototype mode shares
 the code path, on that mode too.
 """
@@ -111,14 +111,14 @@ def _native(
     return render_route(view)
 
 
-# ---------- J4-01 · J1-15 · J2-17 · J3-23: the header names the project ----------
+# ---------- the header names the project ----------
 
 
 @pytest.mark.parametrize(
     ("route", "document", "subject"),
     [("scope.home", HOME, None), ("activity", RUNS, None), ("task.detail", TASKS, "TSK-0001")],
 )
-def test_j4_01_the_header_names_the_project_not_the_root_id(
+def test_the_header_names_the_project_not_the_root_id(
     route: str, document: dict[str, Any], subject: str | None
 ) -> None:
     header = _native(route, document, subject=subject)[0]
@@ -126,13 +126,13 @@ def test_j4_01_the_header_names_the_project_not_the_root_id(
     assert ROOT_ID not in header
 
 
-def test_j4_01_a_console_given_no_name_names_the_scope_by_its_id() -> None:
+def test_a_console_given_no_name_names_the_scope_by_its_id() -> None:
     view = View(session=Session(), fixture=Fixture.from_chrome(load_chrome()), w=80, h=24)
     assert scope_label(view, ROOT_ID) == ROOT_ID
     assert _native("scope.home", HOME, scope_name="")[0].startswith(f" Eä ▸ {ROOT_ID}")
 
 
-def test_j4_01_the_project_name_is_the_state_records_slug(tmp_path: Path) -> None:
+def test_the_project_name_is_the_state_records_slug(tmp_path: Path) -> None:
     state = tmp_path / "state.json"
     project = {
         "code": "EAWF",
@@ -152,7 +152,7 @@ def test_j4_01_the_project_name_is_the_state_records_slug(tmp_path: Path) -> Non
     [None, "", "{not json", "[]", "{}", '{"project": {"slug": "eawf"}}', '{"project": null}'],
     ids=["missing", "empty", "malformed", "not-a-mapping", "no-project", "invalid", "null"],
 )
-def test_j4_01_an_unreadable_project_falls_back_to_the_repository_name(
+def test_an_unreadable_project_falls_back_to_the_repository_name(
     tmp_path: Path, content: str | None
 ) -> None:
     state = tmp_path / "state.json"
@@ -161,7 +161,7 @@ def test_j4_01_an_unreadable_project_falls_back_to_the_repository_name(
     assert project_name(state, tmp_path / "my-repo") == "my-repo"
 
 
-def test_j4_01_the_seam_hands_its_name_to_every_render() -> None:
+def test_the_seam_hands_its_name_to_every_render() -> None:
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
     seam = ProjectionSeam(route="scope.home", scope_id=ROOT_ID, state_path=None, scope_name="eawf")
@@ -170,58 +170,58 @@ def test_j4_01_the_seam_hands_its_name_to_every_render() -> None:
     assert ConsoleApp(chrome=load_chrome(), clock=FakeClock()).view().scope_name == ""
 
 
-# ---------- J4-02 · J1-15 · J2-16: the summary line ----------
+# ---------- the summary line ----------
 
 
 @pytest.mark.parametrize(
     ("route", "document"), [("scope.home", HOME), ("activity", RUNS), ("search", HOME)]
 )
-def test_j4_02_a_complete_read_names_no_cursor(route: str, document: dict[str, Any]) -> None:
+def test_a_complete_read_names_no_cursor(route: str, document: dict[str, Any]) -> None:
     assert "cursor" not in _native(route, document)[1]
 
 
-def test_j2_16_only_an_incomplete_read_says_how_far_it_got() -> None:
+def test_only_an_incomplete_read_says_how_far_it_got() -> None:
     whole = build_spine_view(_projection("scope.home", HOME))
     part = dataclasses.replace(whole, complete=False)
     assert counts(whole) == "1 track · 1 milestone · 0 batches"
     assert counts(part) == "1 track · 1 milestone · 0 batches · known · cursor 41,208"
 
 
-def test_j4_02_a_detail_frame_names_its_subject() -> None:
+def test_a_detail_frame_names_its_subject() -> None:
     summary = _native("task.detail", TASKS, subject="TSK-0003")[1]
     assert summary.startswith(" Task TSK-0003 Task number 3 · DROPPED")
     assert "tasks" not in summary
 
 
-def test_j4_02_the_run_frame_names_the_run_and_its_sequence() -> None:
+def test_the_run_frame_names_the_run_and_its_sequence() -> None:
     summary = _native("run.detail", RUNS, subject="RUN-00000001")[1]
     assert summary.rstrip() == " Run RUN-00000001 · RUNNING · seq 41,208"
 
 
-# ---------- J4-07: paging only when the table is windowed ----------
+# ---------- paging only when the table is windowed ----------
 
 
-def test_j4_07_a_table_showing_every_row_offers_no_paging() -> None:
+def test_a_table_showing_every_row_offers_no_paging() -> None:
     bar = _native("scope.home", HOME)[-1]
     assert "PageUp" not in bar and "Home End" not in bar
     assert ". actions" in bar and "? help" in bar
 
 
-def test_j4_07_a_windowed_table_pages_where_the_bar_has_room() -> None:
+def test_a_windowed_table_pages_where_the_bar_has_room() -> None:
     runs = {"run": {f"RUN-{n:08d}": _row("run", f"RUN-{n:08d}", "RUNNING") for n in range(40)}}
     assert "PageUp PageDown page" in _native("activity", runs, w=160)[-1]
 
 
-def test_j4_07_a_narrow_windowed_frame_keeps_the_way_back_over_paging() -> None:
+def test_a_narrow_windowed_frame_keeps_the_way_back_over_paging() -> None:
     bar = _native("task.detail", TASKS, subject="TSK-0001")[-1]
     assert "Esc back" in bar and "i inspect" in bar
     assert "Home End" not in bar
 
 
-# ---------- J4-08: tinted bands ----------
+# ---------- tinted bands ----------
 
 
-def test_j4_08_the_bands_are_the_accent_over_the_surface() -> None:
+def test_the_bands_are_the_accent_over_the_surface() -> None:
     assert EA_DARK.variables["band"] == "#0d1818"
     for theme in (EA_DARK, EA_CB, EA_LIGHT):
         variables = theme.variables
@@ -232,20 +232,20 @@ def test_j4_08_the_bands_are_the_accent_over_the_surface() -> None:
 @pytest.mark.parametrize(
     ("share", "expected"), [(0.0, "#000000"), (1.0, "#ffffff"), (0.5, "#808080")]
 )
-def test_j4_08_a_mix_takes_its_share_of_the_first_colour(share: float, expected: str) -> None:
+def test_a_mix_takes_its_share_of_the_first_colour(share: float, expected: str) -> None:
     assert mix("#ffffff", "#000000", share) == expected
 
 
 @pytest.mark.parametrize("share", [-0.01, 1.01])
-def test_j4_08_a_mix_refuses_a_share_outside_the_unit(share: float) -> None:
+def test_a_mix_refuses_a_share_outside_the_unit(share: float) -> None:
     with pytest.raises(ValueError, match="between 0 and 1"):
         mix("#ffffff", "#000000", share)
 
 
-# ---------- J4-09 · J1-14 · J3-07: the outer gutter ----------
+# ---------- the outer gutter ----------
 
 
-def test_j4_09_the_frame_is_laid_out_inside_a_one_cell_gutter() -> None:
+def test_the_frame_is_laid_out_inside_a_one_cell_gutter() -> None:
     async def body() -> tuple[tuple[int, int], list[int], list[str], int]:
         app = ConsoleApp(load_fixture(GOLDEN_FIXTURE), FakeClock(), gutter=OUTER_GUTTER)
         async with app.run_test(size=(82, 24)) as pilot:
@@ -265,20 +265,20 @@ def test_j4_09_the_frame_is_laid_out_inside_a_one_cell_gutter() -> None:
     assert all(len(row) == 82 and row[0] == " " and row[-1] == " " for row in strips)
 
 
-def test_j4_09_a_console_with_no_gutter_fills_the_terminal() -> None:
+def test_a_console_with_no_gutter_fills_the_terminal() -> None:
     app = ConsoleApp(load_fixture(GOLDEN_FIXTURE), FakeClock())
     assert app.gutter == 0
 
 
-def test_j4_09_a_negative_gutter_is_refused() -> None:
+def test_a_negative_gutter_is_refused() -> None:
     with pytest.raises(ValueError, match="cannot be negative"):
         ConsoleApp(load_fixture(GOLDEN_FIXTURE), FakeClock(), gutter=-1)
 
 
-# ---------- J4-10: the cursor grounds its own pane ----------
+# ---------- the cursor grounds its own pane ----------
 
 
-def test_j4_10_a_rail_caret_does_not_ground_the_body_beside_it() -> None:
+def test_a_rail_caret_does_not_ground_the_body_beside_it() -> None:
     rail_row = paint("▸ flow        │   · advance_after.polish        true", Part.BODY)
     assert {s.ground for s in rail_row} == {None}
     body_row = paint("  dispatch    │ ▸ · advance_after.audit         true", Part.BODY)
@@ -287,32 +287,32 @@ def test_j4_10_a_rail_caret_does_not_ground_the_body_beside_it() -> None:
     assert "dispatch" not in grounded
 
 
-def test_j4_10_a_row_with_no_rail_is_grounded_whole() -> None:
+def test_a_row_with_no_rail_is_grounded_whole() -> None:
     row = " ▸ RUN-00000003 EAWF-0147 Complete…    RUNNING"
     assert {s.ground for s in paint(row, Part.BODY)} == {"cursor"}
     assert {s.ground for s in paint("   RUN-00000004", Part.BODY)} == {None}
 
 
-# ---------- J4-11: typed ids are links ----------
+# ---------- typed ids are links ----------
 
 
 @pytest.mark.parametrize(
     "token", ["RUN-538453eb", "RUN-00000003", "EAWF-0147", "MLS-0100", "TRK-EAWF-CORE", "EVT-2218"]
 )
-def test_j4_11_a_typed_id_in_the_body_is_underlined(token: str) -> None:
+def test_a_typed_id_in_the_body_is_underlined(token: str) -> None:
     strokes = paint(f"   {token}  something", Part.BODY)
     assert [s.text for s in strokes if s.underline] == [token]
 
 
 @pytest.mark.parametrize("text", ["WAIT-PERM", "S-Tab", "RUNNING", "B001", "re-run-3x"])
-def test_j4_11_a_word_that_is_no_id_is_not_underlined(text: str) -> None:
+def test_a_word_that_is_no_id_is_not_underlined(text: str) -> None:
     assert not any(s.underline for s in paint(f"   {text}  x", Part.BODY))
 
 
-# ---------- J4-12: the receded pane and the dim tone ----------
+# ---------- the receded pane and the dim tone ----------
 
 
-def test_j4_12_the_dim_and_recede_tones_are_mixed_from_the_palette() -> None:
+def test_the_dim_and_recede_tones_are_mixed_from_the_palette() -> None:
     dark = EA_DARK.variables
     assert dark["dim"] == "#89919a"
     assert dark["recede"] == mix(dark["foreground"], dark["surface"], 0.74)
@@ -320,7 +320,7 @@ def test_j4_12_the_dim_and_recede_tones_are_mixed_from_the_palette() -> None:
     assert SURFACES["recede"].token == "recede"
 
 
-def test_j4_12_a_receded_row_recedes_but_keeps_what_needs_the_operator() -> None:
+def test_a_receded_row_recedes_but_keeps_what_needs_the_operator() -> None:
     strokes = paint(recede(" NEEDS OPERATOR  !3 waiting RUNNING", 60), Part.BODY)
     by_text = {s.text: s for s in strokes}
     assert by_text["!3"].surface == "warn" and by_text["!3"].bold
@@ -329,7 +329,7 @@ def test_j4_12_a_receded_row_recedes_but_keeps_what_needs_the_operator() -> None
     assert not any(s.ground for s in strokes)
 
 
-def test_j4_12_the_unfocused_home_pane_recedes() -> None:
+def test_the_unfocused_home_pane_recedes() -> None:
     session = Session()
     fixture = load_fixture(GOLDEN_FIXTURE)
     view = View(session=session, fixture=fixture, w=120, h=30)
@@ -343,16 +343,16 @@ def test_j4_12_the_unfocused_home_pane_recedes() -> None:
     assert all(isinstance(row, Receded) for row in frame[3 : rule - 1])
 
 
-# ---------- J4-13: a terminal frame keeps the link ----------
+# ---------- a terminal frame keeps the link ----------
 
 
-def test_j4_13_a_terminal_subject_keeps_live_and_says_final() -> None:
+def test_a_terminal_subject_keeps_live_and_says_final() -> None:
     frame = _native("task.detail", TASKS, subject="TSK-0001")
     assert frame[0].rstrip().endswith("● LIVE")
     assert "DROPPED · final" in frame[1]
 
 
-# ---------- J4-16: Shift-Tab reverses Tab ----------
+# ---------- Shift-Tab reverses Tab ----------
 
 
 class _Host:
@@ -370,7 +370,7 @@ def _press(session: Session, key: str, *, shift: bool) -> None:
     dispatch(ctx, key, shift)
 
 
-def test_j4_16_shift_tab_walks_back_through_what_tab_walks() -> None:
+def test_shift_tab_walks_back_through_what_tab_walks() -> None:
     session = Session()
     session.route = "activity"
     _press(session, "Tab", shift=False)
@@ -382,7 +382,7 @@ def test_j4_16_shift_tab_walks_back_through_what_tab_walks() -> None:
     assert session.bucket not in (None, first)
 
 
-def test_j4_16_shift_tab_where_nothing_cycles_says_so_honestly() -> None:
+def test_shift_tab_where_nothing_cycles_says_so_honestly() -> None:
     session = Session()
     session.route = "health"
     _press(session, "Tab", shift=True)
@@ -395,11 +395,11 @@ def test_j4_16_shift_tab_where_nothing_cycles_says_so_honestly() -> None:
     ("current", "back", "expected"),
     [("a", False, "b"), ("c", False, "a"), ("a", True, "c"), ("z", False, "a"), ("z", True, "c")],
 )
-def test_j4_16_a_cycle_wraps_both_ways(current: str, back: bool, expected: str) -> None:
+def test_a_cycle_wraps_both_ways(current: str, back: bool, expected: str) -> None:
     assert cycle(("a", "b", "c"), current, back=back) == expected
 
 
-def test_j4_16_a_cycle_of_one_stays_and_of_none_is_refused() -> None:
+def test_a_cycle_of_one_stays_and_of_none_is_refused() -> None:
     assert cycle(("a",), "a", back=True) == "a"
     with pytest.raises(ValueError, match="nothing to cycle"):
         cycle((), "a", back=False)

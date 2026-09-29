@@ -455,7 +455,7 @@ def test_con_131_j2_01_live_a_sealed_pending_action_opens_no_card(tmp_path: Path
         ({"drop_reason": "superseded", "status": "DROPPED"}, "successor"),
         ({"status": "AUTO_RESOLVED"}, "defaulted"),
         ({"options": [{"key": f"o{i}", "label": f"o{i}"} for i in range(5)]}, "at most 4"),
-        ({"id": "ACT-0001"}, "pattern"),
+        ({"id": "TSK-0001"}, "pattern"),
         ({"reply": "x" * 2001}, "2000"),
     ],
 )

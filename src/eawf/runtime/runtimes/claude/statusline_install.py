@@ -29,6 +29,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from eawf.runtime.harness.host_keys import require_recorded
+
 logger = logging.getLogger(__name__)
 
 _STATUSLINE_KEY: str = "statusLine"
@@ -99,7 +101,11 @@ def patch_settings(settings: dict[str, Any]) -> dict[str, Any]:
 
     Returns:
         A new mapping with the statusline command applied.
+
+    Raises:
+        UnrecordedHostKeyError: ``statusLine`` has no observed host effect.
     """
+    require_recorded("claude_settings", (_STATUSLINE_KEY,))
     patched = dict(settings)
     patched[_STATUSLINE_KEY] = build_statusline_command()
     return patched

@@ -535,6 +535,10 @@ def test_store_kind_values() -> None:
         "conformance_stage",
         # Machine-local conduct deviations; never committed.
         "conduct_deviation",
+        # Deferred gates owed until they run and pass; stable approval reads them.
+        "verification_debt",
+        # Machine-local trail of every state a submitted operation reaches.
+        "operation",
     }
     actual = {m.value for m in enums.StoreKind}
     assert actual == expected

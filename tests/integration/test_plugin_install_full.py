@@ -156,8 +156,8 @@ def test_plugin_install_codex_writes_native_layout(
     assert (plugin_root / "skills").is_dir()
     assert (config_path.parent / "agents" / "executor.toml").is_file()
     text = config_path.read_text(encoding="utf-8")
-    assert "[plugins.eawf]" in text
-    assert "enabled = true" in text
+    assert "[plugins" not in text
+    assert "[agents]" in text
 
 
 def test_plugin_install_codex_accepts_explicit_plugin_root(tmp_path: Path) -> None:

@@ -790,10 +790,10 @@ def test_ui_061_a_state_that_refuses_writes_withdraws_the_verbs_and_says_why(
 
 
 @pytest.mark.parametrize("value", list(ConnectionValue), ids=[v.value for v in ConnectionValue])
-def test_c_03_every_write_verb_refuses_outside_live_naming_the_state(
+def test_every_write_verb_refuses_outside_live_naming_the_state(
     fixture: Fixture, value: ConnectionValue
 ) -> None:
-    """C-03: of the nine connection values only LIVE admits a write; each other refuses.
+    """Of the nine connection values only LIVE admits a write; each other refuses.
 
     The refusal comes from the one write gate, so the same words answer a keybar verb, a
     menu verb and an overlay verb, and they name the connection state that refused it.

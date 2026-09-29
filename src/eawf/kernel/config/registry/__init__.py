@@ -28,7 +28,11 @@ The two registries are related but distinct:
 
 from __future__ import annotations
 
-from eawf.kernel.config.registry.coercion import coerce_and_validate, is_known_key
+from eawf.kernel.config.registry.coercion import (
+    coerce_and_validate,
+    is_known_key,
+    validate_config_value,
+)
 from eawf.kernel.config.registry.config_keys import (
     CONFIG_REGISTRY,
     ConfigKey,
@@ -60,4 +64,5 @@ __all__ = [
     "leaf_keys_by_domain",
     "registry_lookup",
     "tabs_sorted",
+    "validate_config_value",
 ]

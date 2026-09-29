@@ -33,6 +33,8 @@ from eawf.surfaces.tui.console.navigation import Ctx, close_overlay, copied, ope
 from eawf.surfaces.tui.console.operations import binding_refusal
 from eawf.surfaces.tui.console.overlays.bound import (
     CARD_ROUTES,
+    Bound,
+    CardRecord,
     Rung,
     bound_card,
     bound_overlay,
@@ -190,7 +192,7 @@ def _escape_only(ctx: Ctx, k: str, why: str) -> None:
         ctx.noop(k)
 
 
-def _overlay_key(ctx: Ctx, record: object, k: str) -> None:
+def _overlay_key(ctx: Ctx, record: Bound, k: str) -> None:
     decisions = ctx.decisions or DecisionRecords()
     if isinstance(record, QuestionRecord):
         _question_key(ctx, record, decisions, k)
@@ -228,7 +230,7 @@ def _cursor_key(ctx: Ctx, k: str, rows: int, copy: Callable[[int], str] | None) 
 
 def _question_key(ctx: Ctx, q: QuestionRecord, decisions: DecisionRecords, k: str) -> None:
     s = ctx.s
-    run_state = decisions.run_states.get(q.run)
+    run_state = decisions.run_states.get(q.run) if q.run is not None else None
     live = answerable(q, run_state) and can_mutate(s)
     if live and k.isdigit() and 1 <= int(k) <= len(q.options):
         option = q.options[int(k) - 1]
@@ -350,7 +352,7 @@ def _draft_key(ctx: Ctx, d: DraftRecord, k: str) -> None:
 # ---------- the cards on sub-surfaces ----------
 
 
-def _card_key(ctx: Ctx, card: object, k: str) -> None:
+def _card_key(ctx: Ctx, card: CardRecord, k: str) -> None:
     s = ctx.s
     if k == "y":
         text = _card_copy(card)
@@ -369,14 +371,12 @@ def _card_key(ctx: Ctx, card: object, k: str) -> None:
         ctx.noop(k)
 
 
-def _card_copy(card: object) -> str:
+def _card_copy(card: CardRecord) -> str:
     if isinstance(card, Rung):
         return f"{card.claim.urn}#rung-{card.rung.rung}"
     if isinstance(card, ArtifactRecord):
         return f"{card.key} · sha256 {card.digest}"
-    if isinstance(card, StepRecord):
-        return f"{card.campaign} · step {card.ordinal}"
-    return ""
+    return f"{card.campaign} · step {card.ordinal}"
 
 
 def _step_key(ctx: Ctx, st: StepRecord, k: str) -> None:
@@ -405,9 +405,11 @@ def _step_key(ctx: Ctx, st: StepRecord, k: str) -> None:
 def open_held_row(ctx: Ctx) -> bool:
     """Open the detail the held Attention row's record kind owns, returning whether one opened.
 
-    A pending action opens its action detail, which the consequence card realises; it
-    never opens the question detail, whatever it asks. The row is the one the frame drew
-    from the held projection, never a prototype register.
+    A pending action opens its action detail, which the consequence card realises, unless
+    it is an operator decision whose options are held: that opens the question detail, the
+    card that draws a decision's own options, where approve and decline would not be among
+    them. The row is the one the frame drew from the held projection, never a prototype
+    register.
     """
     held = ctx.attention
     if held is None:
@@ -421,6 +423,10 @@ def open_held_row(ctx: Ctx) -> bool:
     if row.collection is not Epoch2Collection.PENDING_ACTION:
         return False
     s.sel_id = row.key
+    if ctx.decisions is not None and ctx.decisions.question(row.key) is not None:
+        open_overlay(s, "question", subject=row.key)
+        ctx.log("Enter", f"question detail · {row.key}")
+        return True
     open_overlay(s, "consequence", subject=row.key)
     ctx.log("Enter", f"action detail · {row.key}")
     return True

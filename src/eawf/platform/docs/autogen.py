@@ -295,23 +295,31 @@ def cli_page() -> GeneratedPage:
 
 
 def skills_page() -> GeneratedPage:
-    """Generate ``skills.md`` from the closed skill catalog."""
-    from eawf.workflow.skills.catalog import shipped_skill_specs
+    """Generate ``skills.md`` from the closed skill catalog and its lane map."""
+    from eawf.workflow.skills.catalog import SKILL_CATALOG, shipped_skill_specs, skill_lanes
 
     lines: list[str] = [
         "# eawf skill catalog",
         "",
         "Auto-generated from `eawf.workflow.skills.catalog:shipped_skill_specs`. Each row "
-        "is an Eä skill the runtime can install as a slash command.",
+        "is an Eä skill the runtime can install as a slash command. The lane columns come "
+        "from the one invocation-audience map every host menu and agent catalog reads; an "
+        "operator-only action refuses in the agent lane before dispatch.",
         "",
-        "| Skill | User-invocable | Argument hint | Description |",
-        "|---|---|---|---|",
+        "| Skill | Operator lane | Agent lane | Operator-only actions | Argument hint "
+        "| Description |",
+        "|---|---|---|---|---|---|",
     ]
     for spec in sorted(shipped_skill_specs(), key=lambda s: s.skill_name):
-        invocable = "yes" if spec.user_invocable else "no"
+        entry = SKILL_CATALOG.entry(spec.skill_name)
+        assert entry is not None, "every shipped spec is a catalog entry"
+        lanes = skill_lanes(entry)
+        operator = "yes" if "operator" in lanes else "no"
+        agent = "yes" if "agent" in lanes else "no"
+        only = ", ".join(f"`{action}`" for action in entry.operator_only_actions) or "—"
         hint = spec.argument_hint or "—"
         lines.append(
-            f"| `/{spec.skill_name}` | {invocable} | `{_md_escape(hint)}` "
+            f"| `/{spec.skill_name}` | {operator} | {agent} | {only} | `{_md_escape(hint)}` "
             f"| {_md_escape(spec.description)} |"
         )
     body = "\n".join(lines).rstrip("\n") + "\n"

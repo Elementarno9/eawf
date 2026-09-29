@@ -58,7 +58,7 @@ The packaged tree includes a `hooks.json` manifest at the plugin root plus a `ho
 
 | Layer | Surface | Events |
 |---|---|---|
-| CC plugin manifest (`hooks.json`) | Handler-backed events Claude Code can observe reliably | `SessionStart`, `Stop` (`SESSION_END`), `SubagentStart`, `SubagentStop` and `PermissionRequest` today, the subagent pair adopting each harness-spawned subagent as a Run and `PermissionRequest` recording each call the host holds for its operator as a provider permission, without answering for the host; `PreToolUse(Bash)`/`PostToolUse(Bash)` filtered to `git commit`/`git push` and `PreCompact` are observable but have no runner-registered handler, so they are not wired |
+| CC plugin manifest (`hooks.json`) | Handler-backed events Claude Code can observe reliably | `SessionStart`, `Stop` (`SESSION_END`), `SubagentStart`, `SubagentStop` and `PermissionRequest` today, the subagent pair adopting each harness-spawned subagent as a Run and `PermissionRequest` recording each call the host holds for its operator as a provider permission and, for up to `runtime.claude.permission_wait_s` seconds, handing the host a principal's recorded decision (otherwise the host's own prompt decides); `PreToolUse(Bash)`/`PostToolUse(Bash)` filtered to `git commit`/`git push` and `PreCompact` are observable but have no runner-registered handler, so they are not wired |
 | State CLI (`eawf hook run`) | Workflow-internal lifecycle the state writer controls | `wave_open`/`wave_close`, `iter_open`/`iter_close`, `phase_open`/`phase_close`, `pre_audit`/`post_audit` |
 
 Wiring an event with no registered handler would ship an idle no-op script that still fires on every matching Claude Code event (e.g. every `Bash` tool call), so both the repo-install and plugin-package paths subscribe only the handler-backed subset. The workflow-internal events stay fired from inside the state CLI because CC's `UserPromptSubmit` matcher cannot observe slash-command sub-skill dispatch (e.g. `/flow` runs sub-skills internally without re-emitting their slash prompts) and agent calls to the state CLI never trigger a prompt at all. A manifest-level subscription to those events would be lossy in both directions, so the state writer keeps ownership.
@@ -69,7 +69,7 @@ Generated assets update only Eä-owned files or managed regions (`<!-- BEGIN EAW
 
 ## Codex adapter
 
-Renders a native Codex CLI plugin under `<plugin_root>/.codex-plugin/plugin.json` (the canonical Codex manifest file). Skills, agents, and hooks live in subdirectories of the same plugin root; an `[plugins.eawf] enabled = true` table is patched into the scope-correct `config.toml` between `# ---- __eawf_managed begin/end ----` markers so user-authored TOML elsewhere stays untouched. A sidecar `.codex-plugin/.eawf-managed.json` carries the hash registry the `plugin doctor` command checks.
+Renders a native Codex CLI plugin under `<plugin_root>/.codex-plugin/plugin.json` (the canonical Codex manifest file). Skills, agents, and hooks live in subdirectories of the same plugin root; the `[agents]` fan-out keys are patched into the scope-correct `config.toml` between `# ---- __eawf_managed begin/end ----` markers so user-authored TOML elsewhere stays untouched. No `[plugins.eawf]` table is written: a probe showed Codex loads nothing for it, and every host key eawf writes must have an observed effect (`src/eawf/runtime/harness/host_keys.py`). A sidecar `.codex-plugin/.eawf-managed.json` carries the hash registry the `plugin doctor` command checks.
 
 | Scope | Plugin root | Config patched |
 |---|---|---|
@@ -80,7 +80,7 @@ Source: `src/eawf/runtimes/codex/`. Plugin lifecycle commands: `eawf plugin inst
 
 ### Codex marketplace package
 
-Per the Codex Build-plugin reference, dropping a plugin directory under `~/.codex/plugins/<name>/` does **not** auto-load it — Codex requires marketplace registration before discovery. The `install codex` command writes the plugin tree at the scope-correct location and toggles `[plugins.eawf] enabled = true` in `config.toml`, but discovery still needs a marketplace step.
+Per the Codex Build-plugin reference, dropping a plugin directory under `~/.codex/plugins/<name>/` does **not** auto-load it — Codex requires marketplace registration before discovery. The `install codex` command writes the plugin tree at the scope-correct location, but discovery still needs a marketplace step.
 
 `eawf plugin package codex [--target ./build/eawf-codex-marketplace]` emits a self-contained marketplace tree:
 

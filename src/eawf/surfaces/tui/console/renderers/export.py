@@ -2,14 +2,16 @@
 
 Nothing leaves the machine.
 
-When the console holds the export route's read model the card states the plan of that
-view: each part sized off the rows in hand rather than estimated, and the digest the
-report would be taken at. Taking the report writes nothing into the tree, so the card
-promises an artifact rather than a state change.
+When the console holds the export route's read model the card states the plan
+``eawf run report`` writes: the Run report's parts in its order, each included as that
+command includes it, a size it counts off the Run's event lines left unstated rather than
+guessed, and the digest the view was read at. Taking it writes nothing into the tree, so
+the card promises an artifact rather than a state change.
 """
 
 from __future__ import annotations
 
+from eawf.observability.reflect.run_report import ReportPartName
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.frame import CHIP_END, LABEL_MARK, View, boxed, g_pad, scope_label
@@ -42,21 +44,29 @@ def native_card(view: View, model: RunReportPlanView) -> list[str]:
     lines.extend(
         ("▸" if index == session.sel else " ")
         + g_pad(part.name, 19)
-        + g_pad("yes" if part.included else "never", 11)
+        + g_pad(_included(part.name, included=part.included), 11)
         + part.size
         for index, part in enumerate(model.parts)
     )
     lines.extend(["", f"Plain text at digest {model.digest} — nothing leaves the machine."])
+    run = session.subj_id or "RUN-…"
     return boxed(
         view,
         crumb=f"Eä ▸ {scope_label(view, model.scope_id)} ▸ Export",
         ctx=f"{model.route} · cursor {model.source_cursor}",
         pre=[],
-        title="EXPORT · report this view",
+        title="EXPORT · report this Run",
         lines=lines,
-        foot=f"{model.parts[session.sel].why}  The report is taken; no record moves.",
+        foot=f"{model.parts[session.sel].why}.  eawf run report {run} writes it; no record moves.",
         keys=_KEYS,
     )
+
+
+def _included(name: str, *, included: bool) -> str:
+    """Return the INCLUDED cell: secrets are never carried, an unasked part is not."""
+    if included:
+        return "yes"
+    return "never" if name == ReportPartName.SECRETS else "no"
 
 
 def render(view: View) -> list[str]:

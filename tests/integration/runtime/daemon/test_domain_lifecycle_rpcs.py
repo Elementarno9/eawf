@@ -108,6 +108,8 @@ class Case:
         guard: The guard name a refused case must name, when a predicate
             was reached.
         lines: Ledger lines the canary is seeded with beside the rows.
+        appended: The ledger events a committed case files after its
+            transition, in order.
     """
 
     method: str
@@ -118,6 +120,7 @@ class Case:
     code: str = ""
     guard: str | None = None
     lines: tuple[LedgerRecord, ...] = ()
+    appended: tuple[str, ...] = ()
 
 
 COMMITTED_CASES: tuple[Case, ...] = (
@@ -234,6 +237,14 @@ COMMITTED_CASES: tuple[Case, ...] = (
         rows={"task": {"EAWF-0042": seed_row("task", "PLANNED")}},
         urn=TASK_URN,
         event_name="domain.task.claimed",
+    ),
+    Case(
+        method="domain.task.release",
+        rows={"task": {"EAWF-0042": seed_row("task", "CLAIMED")}},
+        urn=TASK_URN,
+        params={"reason_code": "operator-abort"},
+        event_name="domain.task.lease_released",
+        appended=("ledger.task.appended",),
     ),
     Case(
         method="domain.task.start",
@@ -413,6 +424,17 @@ REFUSED_CASES: tuple[Case, ...] = (
         code=DomainErrorCode.ILLEGAL_TRANSITION.value,
     ),
     Case(
+        method="domain.task.release",
+        rows={
+            "task": {"EAWF-0042": seed_row("task", "CLAIMED")},
+            "run": {"RUN-00000010": seed_row("run", "QUEUED")},
+        },
+        urn=TASK_URN,
+        params={"reason_code": "operator-abort"},
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="no_active_run",
+    ),
+    Case(
         method="domain.task.start",
         rows={"task": {"EAWF-0042": seed_row("task", "CLAIMED")}},
         urn=TASK_URN,
@@ -523,9 +545,9 @@ def test_lifecycle_verb_commits_through_the_transaction(case: Case, tmp_path: Pa
     assert case.event_name in DOMAIN_EVENT_NAMES
     assert (answer["revision_before"], answer["revision_after"]) == (1, 2)
     rows = _firehose_rows(canary)
-    assert [row["payload"]["name"] for row in rows] == [case.event_name]
+    assert [row["payload"]["name"] for row in rows] == [case.event_name, *case.appended]
     assert rows[0]["payload"]["canonical_sequence"] == answer["result"]["canonical_sequence"]
-    assert len(_wal_records(canary, tmp_path)) == 1
+    assert len(_wal_records(canary, tmp_path)) == 1 + len(case.appended)
 
 
 @pytest.mark.parametrize("case", REFUSED_CASES, ids=lambda case: case.method)

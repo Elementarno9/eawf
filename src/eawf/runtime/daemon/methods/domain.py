@@ -55,6 +55,13 @@ three facts -- ``merge`` records the authorisation, ``observe_merge``
 needs a landed read-back filed by the reconciliation verb, and
 ``complete`` needs that read-back to match the head the Batch pinned.
 
+``domain.task.release`` hands a claimed Task back to ``PLANNED``. Only
+the principal holding the claim may release it, never while a Run is
+queued or working against the Task, and each release files a
+:class:`~eawf.kernel.state.epoch2.task.TaskReleaseRecord` naming its cause
+and actor, so an operator abort and a routine replan read differently
+afterwards.
+
 Two further verbs carry the bookkeeping the fenced epoch-1 verbs used to:
 ``domain.legacy.advance`` moves a record the cutover imported along its
 closed edge table, and ``domain.record.append`` files an audit, decision or
@@ -106,6 +113,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext
 from eawf.runtime.daemon.epoch2_transaction import (
     LIFECYCLE_ENTITIES,
     RECORD_CLASSES,
+    MutationReceipt,
     TransactionRefusalCode,
     TransactionRefusedError,
     TransitionRequest,
@@ -141,6 +149,7 @@ from eawf.runtime.daemon.methods.domain_guards import (
 )
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
+from eawf.runtime.daemon.task_release import TASK_RELEASE_METHOD, file_task_release
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
 from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
@@ -329,6 +338,12 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         kind=EntityKind.TASK,
         from_statuses=(TaskStatus.PLANNED,),
         to_status=TaskStatus.CLAIMED,
+    ),
+    LifecycleVerb(
+        method=TASK_RELEASE_METHOD,
+        kind=EntityKind.TASK,
+        from_statuses=(TaskStatus.CLAIMED,),
+        to_status=TaskStatus.PLANNED,
     ),
     LifecycleVerb(
         method="domain.task.start",
@@ -680,6 +695,7 @@ def _unmet_guard(
         record=record,
         updates=params.updates,
         reason_code=params.reason_code,
+        actor=params.actor,
         binding_refs=params.binding_refs,
     )
     for guard in row.guards:
@@ -956,11 +972,42 @@ async def _run_verb(
     # the event the original commit already fanned out.
     if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope):
         warnings = (PROJECTION_DEGRADED,)
-    if verb.to_status is MilestoneStatus.ACTIVE:
-        warnings += await asyncio.to_thread(_activation_watchlist, context, request_params.urn)
+    warnings += await _after_commit(ctx, context, verb, request_params, committed.receipt)
     return accepted_envelope(
         committed.receipt, operation=verb.method, warnings=warnings
     ).model_dump(mode="json")
+
+
+async def _after_commit(
+    ctx: MethodContext,
+    context: Epoch2RootContext,
+    verb: LifecycleVerb,
+    params: LifecycleParams,
+    receipt: MutationReceipt,
+) -> tuple[str, ...]:
+    """Do what one committed verb owes after its commit, and return its warnings.
+
+    An activated Milestone reads its advisory WIP signals. A released Task
+    files its release record -- on a replay too, because a daemon that died
+    between the commit and the append left the release without its record.
+
+    Returns:
+        The watchlist lines, or ``projection_degraded`` when a filed release
+        record's row did not reach the projection; empty otherwise.
+    """
+    if verb.to_status is MilestoneStatus.ACTIVE:
+        return await asyncio.to_thread(_activation_watchlist, context, params.urn)
+    if verb.method != TASK_RELEASE_METHOD:
+        return ()
+    filed = await asyncio.to_thread(
+        file_task_release,
+        context,
+        task_ref=params.urn,
+        cause=str(params.reason_code),
+        actor=params.actor,
+        receipt=receipt,
+    )
+    return () if filed is None or publish_projection(ctx.bus, filed) else (PROJECTION_DEGRADED,)
 
 
 def _activation_watchlist(context: Epoch2RootContext, urn: QualifiedUrn) -> tuple[str, ...]:

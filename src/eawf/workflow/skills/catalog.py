@@ -11,6 +11,11 @@ the successor's grammar is not a superset of the retired one.
 
 No surface states how many skills ship; any displayed cardinality is derived
 from :data:`SKILL_CATALOG` at render time.
+
+One invocation-audience map, :func:`skill_lanes`, decides who may invoke a
+skill: the host menus, the generated help, the agent callable catalog and the
+invocation check all filter from it, so a skill cannot be hidden in one lane
+and callable in another.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from eawf.kernel.economics.prompt_budget import BudgetClassId
+from eawf.kernel.runtime.semantic import SemanticToolId
 
 if TYPE_CHECKING:
     from eawf.surfaces.render.skills.render import SkillSpec
@@ -31,6 +37,14 @@ logger = logging.getLogger(__name__)
 
 SkillClass = Literal["lifecycle", "investigation", "knowledge", "engineering"]
 InvocationAudience = Literal["user_only", "agent_only", "both"]
+Lane = Literal["operator", "agent"]
+
+#: Who may invoke a skill of each audience.
+_AUDIENCE_LANES: dict[InvocationAudience, frozenset[Lane]] = {
+    "user_only": frozenset({"operator"}),
+    "agent_only": frozenset({"agent"}),
+    "both": frozenset({"operator", "agent"}),
+}
 
 _SKILL_ID_PATTERN = r"^[a-z][a-z0-9-]{1,31}$"
 _ACTION_PATTERN = r"^[a-z][a-z0-9-]*$"
@@ -43,12 +57,22 @@ class InvocationGrammar(BaseModel):
 
     ``usage`` is the single source of the grammar: the option set and the
     one-line argument hint are derived from it so the two can never drift.
+
+    Attributes:
+        usage: The whole invocation line.
+        actions: The closed action set, empty for a skill with one action.
+        subject_field: The argument key the positional subject is passed
+            under.
+        action_options: The options each named action accepts. An action
+            absent from the map accepts every option of the usage line.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     usage: str = Field(min_length=3)
     actions: tuple[str, ...] = ()
+    subject_field: str = Field(default="subject_ref", pattern=r"^[a-z][a-z0-9_]*$")
+    action_options: dict[str, tuple[str, ...]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _actions_are_declared_in_usage(self) -> InvocationGrammar:
@@ -59,6 +83,13 @@ class InvocationGrammar(BaseModel):
                 raise ValueError(f"action {action!r} does not match {_ACTION_PATTERN}")
             if action not in self.usage:
                 raise ValueError(f"action {action!r} is not in usage {self.usage!r}")
+        stray = set(self.action_options) - set(self.actions)
+        if stray:
+            raise ValueError(f"action_options names undeclared actions {sorted(stray)}")
+        for action, options in self.action_options.items():
+            unknown = set(options) - set(self.options)
+            if unknown:
+                raise ValueError(f"action {action!r} names undeclared options {sorted(unknown)}")
         return self
 
     @property
@@ -72,18 +103,43 @@ class InvocationGrammar(BaseModel):
         _, _, rest = self.usage.partition(" ")
         return rest
 
+    def options_for(self, action: str | None) -> tuple[str, ...]:
+        """Return the options *action* accepts, in usage order.
+
+        Args:
+            action: A declared action, or ``None`` for a skill with one action.
+
+        Returns:
+            The action's declared options, or every usage option when the
+            action names none of its own.
+        """
+        if action is None or action not in self.action_options:
+            return self.options
+        allowed = set(self.action_options[action])
+        return tuple(option for option in self.options if option in allowed)
+
 
 class EffectsBoundary(BaseModel):
-    """What one skill may touch: its RPC allowlist and its local write root.
+    """What one skill may touch: its routes, verbs, tools and local write root.
 
     An RPC outside ``rpcs`` is denied before it reaches a handler, and a skill
     with no ``local_write_scope`` may not write local files at all.
+
+    Attributes:
+        summary: One sentence naming the boundary.
+        rpcs: The daemon routes the skill calls directly.
+        verbs: The CLI verbs the skill runs, by verb-catalog path.
+        tools: The semantic tools a Run of the skill calls.
+        canonical_mutates: Whether any of them changes canonical state.
+        local_write_scope: The one repo-relative root it may write under.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     summary: str = Field(min_length=1)
     rpcs: tuple[str, ...] = ()
+    verbs: tuple[str, ...] = ()
+    tools: tuple[SemanticToolId, ...] = ()
     canonical_mutates: bool
     local_write_scope: str | None = None
 
@@ -94,6 +150,8 @@ class EffectsBoundary(BaseModel):
             raise ValueError(f"local_write_scope {scope!r} must be a repo-relative path")
         if len(set(self.rpcs)) != len(self.rpcs):
             raise ValueError(f"duplicate rpc in {self.rpcs!r}")
+        if len(set(self.verbs)) != len(self.verbs):
+            raise ValueError(f"duplicate verb in {self.verbs!r}")
         return self
 
 
@@ -112,13 +170,43 @@ class SkillReport(BaseModel):
     summary: str = ""
 
 
+class NotCovered(BaseModel):
+    """One item a sweep did not cover, and why."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    item: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+
+
+class CoverageBlock(BaseModel):
+    """What a sweep covered and what it did not, as a machine-checkable answer.
+
+    A report that says it looked everywhere carries nothing to check; one that
+    lists what it did not reach can be re-asked about exactly that remainder.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    covered: tuple[str, ...] = Field(min_length=1)
+    not_covered: tuple[NotCovered, ...]
+
+
 class OutputSchema(BaseModel):
-    """The typed terminal report a skill invocation must produce."""
+    """The typed terminal report a skill invocation must produce.
+
+    Attributes:
+        schema_name: The report model's name.
+        terminal_outcomes: The closed set of ways an invocation ends.
+        coverage: Whether the report must carry a :class:`CoverageBlock`,
+            which every sweep-shaped skill does.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_name: str = Field(pattern=r"^[A-Z][A-Za-z]+Report$")
     terminal_outcomes: tuple[str, ...] = Field(min_length=1)
+    coverage: bool = False
 
     @model_validator(mode="after")
     def _outcomes_are_unique_snake_case(self) -> OutputSchema:
@@ -137,17 +225,28 @@ class OutputSchema(BaseModel):
 
         Returns:
             A :class:`SkillReport` subclass named ``schema_name`` whose
-            ``skill_id`` and ``outcome`` accept only the declared literals.
+            ``skill_id`` and ``outcome`` accept only the declared literals,
+            and which requires a coverage block when :attr:`coverage` is set.
         """
-        return _report_model(self.schema_name, skill_id, self.terminal_outcomes)
+        return _report_model(self.schema_name, skill_id, self.terminal_outcomes, self.coverage)
 
 
 @cache
-def _report_model(schema_name: str, skill_id: str, outcomes: tuple[str, ...]) -> type[SkillReport]:
+def _report_model(
+    schema_name: str, skill_id: str, outcomes: tuple[str, ...], coverage: bool
+) -> type[SkillReport]:
     # Literal[...] over a runtime tuple is the documented way to build a closed
     # enum field on a generated model; mypy cannot follow it, pydantic can.
     outcome_type = Literal[outcomes]  # type: ignore[valid-type]
     skill_type = Literal[skill_id]  # type: ignore[valid-type]
+    if coverage:
+        return create_model(
+            schema_name,
+            __base__=SkillReport,
+            skill_id=(skill_type, ...),
+            outcome=(outcome_type, ...),
+            coverage=(CoverageBlock, ...),
+        )
     return create_model(
         schema_name,
         __base__=SkillReport,
@@ -161,13 +260,16 @@ class SkillCatalogEntry(BaseModel):
 
     ``budget_class`` is the prompt-budget class the skill's bytes are charged
     to. A skill loads on demand, so it can never declare the always-on zone-1
-    class and enlarge what every session carries.
+    class and enlarge what every session carries. ``subject`` names the
+    epoch-2 entity the skill operates on, or, for a skill with no lifecycle
+    entity, the thing it works over.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     skill_id: str = Field(pattern=_SKILL_ID_PATTERN)
     skill_class: SkillClass
+    subject: str = Field(min_length=1, max_length=40)
     audience: InvocationAudience
     operator_only_actions: tuple[str, ...] = ()
     description: str = Field(min_length=1, max_length=160)
@@ -193,6 +295,11 @@ class SkillCatalogEntry(BaseModel):
     def invocation_name(self) -> str:
         """Return the slash-prefixed name an operator types."""
         return f"/{self.skill_id}"
+
+    @property
+    def lanes(self) -> frozenset[Lane]:
+        """Return the lanes that may invoke this skill; see :func:`skill_lanes`."""
+        return skill_lanes(self)
 
     def validate_report(self, payload: object) -> SkillReport:
         """Validate *payload* against this skill's typed output schema.
@@ -314,18 +421,32 @@ class UnknownSkillError(LookupError):
     """Raised when a name is neither a catalog skill nor a retired one."""
 
 
-def _grammar(usage: str, *actions: str) -> InvocationGrammar:
-    return InvocationGrammar(usage=usage, actions=actions)
+def _grammar(
+    usage: str,
+    *actions: str,
+    subject_field: str = "subject_ref",
+    **action_options: tuple[str, ...],
+) -> InvocationGrammar:
+    # An action spelled with a hyphen is passed as its snake_case keyword.
+    return InvocationGrammar(
+        usage=usage,
+        actions=actions,
+        subject_field=subject_field,
+        action_options={name.replace("_", "-"): opts for name, opts in action_options.items()},
+    )
 
 
-def _out(schema_name: str, outcomes: str) -> OutputSchema:
-    return OutputSchema(schema_name=schema_name, terminal_outcomes=tuple(outcomes.split("|")))
+def _out(schema_name: str, outcomes: str, *, coverage: bool = False) -> OutputSchema:
+    return OutputSchema(
+        schema_name=schema_name, terminal_outcomes=tuple(outcomes.split("|")), coverage=coverage
+    )
 
 
 _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="accept",
         skill_class="lifecycle",
+        subject="Milestone",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description=(
@@ -340,14 +461,21 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "reject",
             "request-repair",
             "show",
+            prepare=("--bundle", "--criterion", "--dry-run"),
+            accept=("--bundle", "--reason", "--dry-run"),
+            reject=("--reason", "--dry-run"),
+            request_repair=("--criterion", "--reason", "--repair-scope", "--dry-run"),
+            show=(),
         ),
         effects=EffectsBoundary(
-            summary="Milestone acceptance RPCs.",
+            summary="Milestone acceptance reads plus the approval, acceptance and repair verbs.",
             rpcs=(
-                "read_entity",
-                "query_evidence",
-                "milestone.acceptance.prepare",
-                "milestone.acceptance.decide",
+                "projection.milestone.read",
+                "projection.milestone.acceptance",
+                "runtime.delivery.open_acceptance_approval",
+                "runtime.delivery.seal_acceptance_approval",
+                "domain.milestone.accept",
+                "runtime.delivery.request_acceptance_repair",
             ),
             canonical_mutates=True,
         ),
@@ -358,84 +486,72 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="attend",
         skill_class="lifecycle",
+        subject="PendingAction",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("resolve",),
         description="Work the Attention queue: pending actions, open questions and open pauses.",
         grammar=_grammar(
-            "/attend [<list|prepare|resolve|defer|watch>] [<item-ref>]"
+            "/attend [<list|prepare|resolve>] [<item-ref>]"
             " [--kind <action|question|pause>] [--urgency <watch|normal|high|urgent>]"
-            " [--option <id>] [--answer <text>] [--until <datetime>] [--limit <N>]"
-            " [--scope <urn>] [--dry-run]",
+            " [--option <id>] [--answer <text>] [--limit <N>] [--scope <urn>] [--dry-run]",
             "list",
             "prepare",
             "resolve",
-            "defer",
-            "watch",
+            list=("--kind", "--urgency", "--limit", "--scope"),
+            prepare=("--kind", "--scope"),
+            resolve=("--option", "--answer", "--dry-run"),
         ),
         effects=EffectsBoundary(
             summary=(
-                "Attention read and preparation plus the protected resolution RPC"
-                " when explicitly selected."
+                "Attention reads plus the approval and permission verbs that answer a"
+                " pending action, when resolve is explicitly selected."
             ),
             rpcs=(
-                "read_entity",
-                "query_evidence",
-                "operations.pending_action.resolve",
-                "operations.pending_action.hold",
-                "operations.pending_action.cancel",
-                "research.question.answer",
-                "research.question.drop",
-                "operations.pause.hold",
-                "operations.pause.resume",
-                "operations.pause.cancel",
+                "projection.attention.read",
+                "projection.notifications.read",
+                "runtime.delivery.seal_acceptance_approval",
+                "runtime.permission.decide",
+                "runtime.question.open_decision",
             ),
             canonical_mutates=True,
         ),
-        output=_out(
-            "AttentionSkillReport",
-            "listed|prepared|resolved|deferred|watching|needs_operator|blocked",
-        ),
+        output=_out("AttentionSkillReport", "listed|prepared|resolved|needs_operator|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="backlog",
         skill_class="lifecycle",
+        subject="Task",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
-        operator_only_actions=("drop",),
-        description="Add, prioritize, defer, drop or propose promotion of draft Tasks.",
+        description="Add or list draft Tasks and propose their promotion through a plan.",
         grammar=_grammar(
-            "/backlog <add|list|prioritize|defer|drop|promote> [<task-ref>]"
+            "/backlog <add|list|promote> [<task-ref>]"
             " [--intent <text>] [--priority <critical|high|normal|low>]"
-            " [--due-scope <urn>] [--to-batch <ref>] [--criterion <text>...]"
-            " [--owner <path-selector>...] [--reason <text>] [--limit <N>] [--dry-run]",
+            " [--to-batch <ref>] [--criterion <text>...] [--owner <path-selector>...]"
+            " [--limit <N>] [--dry-run]",
             "add",
             "list",
-            "prioritize",
-            "defer",
-            "drop",
             "promote",
+            add=("--intent", "--priority", "--criterion", "--owner", "--dry-run"),
+            list=("--priority", "--limit"),
+            promote=("--to-batch", "--criterion", "--owner", "--dry-run"),
         ),
         effects=EffectsBoundary(
-            summary="Task-draft and PlanRevision proposal RPCs.",
+            summary="The backlog read, the draft Task create verb and the plan submission verb.",
             rpcs=(
-                "read_entity",
-                "domain.task.create_draft",
-                "domain.task.set_priority",
-                "domain.task.defer",
-                "domain.task.drop",
-                "planning.plan_revision.propose",
+                "projection.backlog.read",
+                "domain.task.create",
+                "planning.plan_revision.submit",
             ),
             canonical_mutates=True,
         ),
-        output=_out(
-            "BacklogSkillReport",
-            "listed|added|updated|deferred|dropped|promotion_proposed|blocked",
-        ),
+        output=_out("BacklogSkillReport", "listed|added|promotion_proposed|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="campaign",
         skill_class="investigation",
+        subject="Campaign",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description="Run a complete Campaign from definition through terminal synthesis.",
@@ -452,95 +568,85 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "steer",
             "cancel",
             "show",
+            resume=("--resume", "--budget", "--feedback"),
+            steer=("--question", "--exclude", "--feedback", "--reason"),
+            cancel=("--reason",),
+            show=(),
         ),
         effects=EffectsBoundary(
-            summary="Campaign, evidence, question, dispatch, review and completion RPCs.",
+            summary="Campaign create, run, steer and cancel verbs, their reads, and Run tools.",
             rpcs=(
-                "read_entity",
-                "query_evidence",
-                "submit_evidence",
-                "raise_question",
-                "submit_report",
-                "research.campaign.create",
-                "research.campaign.request_approval",
-                "research.campaign.activate",
-                "research.campaign.dispatch_frontier",
-                "research.campaign.checkpoint",
-                "research.campaign.begin_synthesis",
-                "research.campaign.submit_artifact",
-                "research.campaign.request_review",
-                "research.campaign.complete",
-                "research.campaign.drop",
-                "research.campaign.fail",
-                "research.campaign.get",
+                "projection.campaign.read",
+                "projection.campaign.step.read",
+                "projection.campaign.artifact.read",
+                "research.create_campaign",
+                "research.run",
+                "research.steer",
+                "research.cancel_campaign",
+            ),
+            tools=(
+                SemanticToolId.SUBMIT_EVIDENCE,
+                SemanticToolId.SUBMIT_REPORT,
+                SemanticToolId.ASK_OPERATOR,
             ),
             canonical_mutates=True,
         ),
         output=_out(
             "CampaignRunReport",
             "completed|dropped|failed|needs_operator|paused|budget_exhausted",
+            coverage=True,
         ),
     ),
     SkillCatalogEntry(
         skill_id="decide",
         skill_class="knowledge",
+        subject="Decision",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
-        operator_only_actions=("ratify", "reject", "supersede", "obsolete"),
-        description="Propose, ratify, reject, supersede or obsolete a Decision.",
+        operator_only_actions=("supersede",),
+        description="Propose, supersede or show a Decision.",
         grammar=_grammar(
-            "/decide <propose|ratify|reject|supersede|obsolete|show> [<decision-ref>]"
-            " [--title <text>] [--rationale <text>] [--alternative <text>...]"
-            " [--consequence <text>...] [--evidence <ref>...] [--supersedes <ref>]"
-            " [--scope <urn>] [--from <ref>...] [--dry-run]",
+            "/decide <propose|supersede|show> [<decision-ref>]"
+            " [--summary <text>] [--rationale <text>] [--alternative <text>...]"
+            " [--supersedes <ref>] [--scope <urn>] [--dry-run]",
             "propose",
-            "ratify",
-            "reject",
             "supersede",
-            "obsolete",
             "show",
+            propose=("--summary", "--rationale", "--alternative", "--scope", "--dry-run"),
+            supersede=("--supersedes", "--dry-run"),
+            show=("--scope",),
         ),
         effects=EffectsBoundary(
-            summary="Decision RPCs.",
-            rpcs=(
-                "read_entity",
-                "query_evidence",
-                "decision.propose",
-                "decision.request_ratification",
-                "decision.reject",
-                "decision.supersede",
-                "decision.obsolete",
-                "decision.get",
-            ),
+            summary="The decision add, supersede, list and graph verbs.",
+            rpcs=("runtime.question.open_decision",),
+            verbs=("decision add", "decision supersede", "decision list", "decision graph"),
             canonical_mutates=True,
         ),
-        output=_out(
-            "DecisionSkillReport",
-            "shown|proposed|ratified|rejected|superseded|obsoleted|blocked",
-        ),
+        output=_out("DecisionSkillReport", "shown|proposed|superseded|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="dispatch",
         skill_class="lifecycle",
+        subject="Batch",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Coordinate one Delivery Batch: bring its ready Tasks to a candidate.",
         grammar=_grammar(
             "/dispatch <batch-ref> [--task <ref>...]"
             " [--until <frontier-empty|candidate-ready|attention>]"
-            " [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]"
+            " [--provider <id>] [--resume <run-ref>] [--run <run-ref>]"
+            " [--run-request <compiled>] [--budget <tokens>] [--dry-run]"
+            " [--idempotency-key <key>] [--output <human|json|markdown>]",
+            subject_field="batch_ref",
         ),
         effects=EffectsBoundary(
-            summary="Coordinator and Run-dispatch RPCs.",
+            summary="Coordinator read models plus the Run dispatch and retry verbs.",
             rpcs=(
-                "read_entity",
-                "domain.task.dispatch",
-                "run.dispatch",
-                "run.control.interrupt",
-                "run.control.cancel",
-                "run.control.retry",
-                "run.control.resume",
-                "operation.status",
+                "projection.batch.detail.read",
+                "projection.task.detail.read",
+                "projection.run.detail.read",
+                "runtime.run.dispatch",
+                "runtime.run.retry",
             ),
             canonical_mutates=True,
         ),
@@ -552,33 +658,74 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="integrate",
         skill_class="lifecycle",
+        subject="Batch",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("apply", "retry"),
         description=("Prepare or execute one daemon-owned integration action on a Delivery Batch."),
         grammar=_grammar(
             "/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref>"
-            " [--candidate <ref>...] [--strategy <declared-strategy>]"
-            " [--expected-head <sha>] [--verify-after] [--reason <text>] [--dry-run]",
+            " [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>]"
+            " [--verify-after] [--reason <text>] [--base <revision-binding>]"
+            " [--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run]"
+            " [--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>]"
+            " [--verdict <verdict>] [--resulting-tree-digest <digest>]"
+            " [--expected-revision <N>] [--idempotency-key <key>]"
+            " [--output <human|json|markdown>]",
             "seal",
             "select",
             "apply",
             "retry",
             "show",
+            seal=(
+                "--run",
+                "--report-schema-ref",
+                "--report-digest",
+                "--verdict",
+                "--resulting-tree-digest",
+                "--expected-revision",
+                "--idempotency-key",
+                "--output",
+            ),
+            select=("--candidate", "--strategy", "--output"),
+            apply=(
+                "--candidate",
+                "--expected-head",
+                "--verify-after",
+                "--base",
+                "--exit",
+                "--diagnostic",
+                "--dry-run",
+                "--expected-revision",
+                "--idempotency-key",
+                "--output",
+            ),
+            retry=(
+                "--candidate",
+                "--expected-head",
+                "--reason",
+                "--base",
+                "--exit",
+                "--diagnostic",
+                "--dry-run",
+                "--expected-revision",
+                "--idempotency-key",
+                "--output",
+            ),
+            show=("--output",),
         ),
         effects=EffectsBoundary(
-            summary="Candidate and IntegrationGeneration RPCs.",
+            summary=(
+                "Batch and conflict reads plus the candidate-report, delivery-assembly and"
+                " delivery-integration verbs."
+            ),
             rpcs=(
-                "read_entity",
-                "query_evidence",
-                "candidate.seal",
-                "integration.submit",
-                "integration.status",
-                "integration.reconcile",
-                "verification.submit",
-                "operation.status",
-                "operation.resume",
-                "operation.cancel",
+                "projection.batch.detail.read",
+                "projection.merge.conflict.read",
+                "runtime.candidate.report.bind",
+                "runtime.delivery.assemble",
+                "runtime.delivery.integrate",
+                "runtime.question.open_decision",
             ),
             canonical_mutates=True,
         ),
@@ -590,73 +737,79 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="memory",
         skill_class="knowledge",
+        subject="memory entry",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
-        operator_only_actions=("promote", "forget"),
-        description="Search, write, promote or forget memory entries.",
+        operator_only_actions=("promote",),
+        description="Search, write, promote or show memory entries.",
         grammar=_grammar(
-            "/memory <search|write|promote|forget|show> [<query-or-memory-ref>...]"
-            " [--scope <urn>] [--kind <fact|preference|procedure|warning|summary>]"
-            " [--content <text>] [--evidence <ref>...] [--tag <text>...]"
-            " [--expires <datetime|never>] [--limit <N>] [--dry-run]",
+            "/memory <search|write|promote|show> [<query-or-memory-ref>...]"
+            " [--scope <urn>] [--title <text>] [--body <text>]"
+            " [--confidence <low|medium|high>] [--limit <N>] [--dry-run]",
             "search",
             "write",
             "promote",
-            "forget",
             "show",
+            search=("--scope", "--limit"),
+            write=("--scope", "--title", "--body", "--confidence", "--dry-run"),
+            promote=("--scope", "--confidence", "--dry-run"),
+            show=("--scope",),
         ),
         effects=EffectsBoundary(
-            summary="Memory RPCs; evidence queries only for promotion.",
-            rpcs=(
-                "memory.search",
-                "memory.write",
-                "memory.promote",
-                "memory.forget",
-                "memory.get",
-                "query_evidence",
-            ),
+            summary="The memory list, view, add and promote verbs.",
+            rpcs=("runtime.question.open_decision",),
+            verbs=("memory list", "memory view", "memory add", "memory promote"),
             canonical_mutates=True,
         ),
-        output=_out("MemorySkillReport", "listed|shown|written|promoted|forgotten|blocked"),
+        output=_out("MemorySkillReport", "listed|shown|written|promoted|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="milestone",
         skill_class="lifecycle",
+        subject="Milestone",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
-        description="Define, activate, revise, repair or cancel a Milestone.",
+        description="Define, show, activate or cancel a Milestone.",
         grammar=_grammar(
-            "/milestone <define|show|activate|revise|repair|cancel> [<milestone-ref>]"
+            "/milestone <define|show|activate|cancel> [<milestone-ref>]"
             " [--track <ref>] [--title <text>] [--outcome <text>] [--appetite <duration>]"
             " [--exclude <text>...] [--journey-step <text>...] [--batch <ref>...]"
             " [--reason <text>] [--from-spec <path|->] [--dry-run]",
             "define",
             "show",
             "activate",
-            "revise",
-            "repair",
             "cancel",
+            define=(
+                "--track",
+                "--title",
+                "--outcome",
+                "--appetite",
+                "--exclude",
+                "--journey-step",
+                "--batch",
+                "--from-spec",
+                "--dry-run",
+            ),
+            show=(),
+            activate=("--from-spec", "--dry-run"),
+            cancel=("--reason", "--from-spec", "--dry-run"),
         ),
         effects=EffectsBoundary(
-            summary="Milestone RPCs.",
+            summary="The Milestone read plus its create, activate and cancel verbs.",
             rpcs=(
-                "read_entity",
+                "projection.milestone.read",
                 "domain.milestone.create",
                 "domain.milestone.activate",
-                "domain.milestone.revise",
-                "domain.milestone.repair",
                 "domain.milestone.cancel",
             ),
             canonical_mutates=True,
         ),
-        output=_out(
-            "MilestoneSkillReport",
-            "shown|defined|activated|revised|repair_requested|cancelled|blocked",
-        ),
+        output=_out("MilestoneSkillReport", "shown|defined|activated|cancelled|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="mockup",
         skill_class="engineering",
+        subject="operator-visible surface",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Build and compare operator-visible design options.",
@@ -668,7 +821,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         ),
         effects=EffectsBoundary(
             summary="Inline rendering or proposal-local assets only.",
-            rpcs=("ask_operator",),
+            tools=(SemanticToolId.ASK_OPERATOR,),
             canonical_mutates=False,
             local_write_scope=".ea/local/mockups",
         ),
@@ -677,46 +830,47 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="plan",
         skill_class="lifecycle",
+        subject="PlanRevision",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         operator_only_actions=("approve", "apply"),
-        description="Propose, validate, revise, approve and apply a PlanRevision.",
+        description="Propose, approve and apply a PlanRevision.",
         grammar=_grammar(
-            "/plan <propose|validate|revise|approve|apply|show|diff>"
-            " [<milestone-or-revision-ref>] [--from <ref>...]"
+            "/plan <propose|approve|apply> [<milestone-or-revision-ref>] [--from <ref>...]"
             " [--strategy <minimal|balanced|parallel>] [--scope <urn>] [--agents <1..8>]"
-            " [--budget <spec>] [--set <declared-key=value>...] [--feedback <ref>...]"
-            " [--dry-run]",
+            " [--budget <spec>] [--feedback <ref>...] [--dry-run]",
             "propose",
-            "validate",
-            "revise",
             "approve",
             "apply",
-            "show",
-            "diff",
+            propose=(
+                "--from",
+                "--strategy",
+                "--scope",
+                "--agents",
+                "--budget",
+                "--feedback",
+                "--dry-run",
+            ),
+            approve=("--dry-run",),
+            apply=("--dry-run",),
         ),
         effects=EffectsBoundary(
-            summary="PlanRevision RPCs.",
+            summary="The roadmap read plus the PlanRevision submit, approve and apply verbs.",
             rpcs=(
-                "read_entity",
-                "query_evidence",
-                "planning.plan_revision.propose",
-                "planning.plan_revision.validate",
-                "planning.plan_revision.request_approval",
+                "projection.roadmap.read",
+                "planning.plan_revision.submit",
+                "planning.plan_revision.approve",
                 "planning.plan_revision.apply",
-                "planning.plan_revision.get",
-                "planning.plan_revision.diff",
+                "runtime.question.open_decision",
             ),
             canonical_mutates=True,
         ),
-        output=_out(
-            "PlanSkillReport",
-            "shown|proposed|valid|rejected|approval_requested|approved|applied|blocked",
-        ),
+        output=_out("PlanSkillReport", "proposed|rejected|approved|applied|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="refactor",
         skill_class="engineering",
+        subject="repository code",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Inspect or apply a bounded structural refactor.",
@@ -736,23 +890,29 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="reflect",
         skill_class="knowledge",
+        subject="measurement record",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description=(
             "Report where effort, time and money actually went, without mutating canonical state."
         ),
         grammar=_grammar(
-            "/reflect [--window <duration|from..to>]"
-            " [--scope <all_local|workspace|project|track|milestone>]"
-            " [--cohort <project-first|personal>] [--format <report|json>]"
-            " [--out <path>] [--local-only]"
+            "/reflect <run|show|export|prune> [--out <path>] [--local-only]",
+            "run",
+            "show",
+            "export",
+            "prune",
+            run=("--out", "--local-only"),
+            show=(),
+            export=("--out",),
+            prune=(),
         ),
         effects=EffectsBoundary(
             summary=(
-                "Read-only apart from the session title fill, which --local-only"
-                " disables; persists statistics and metadata to the resolved output path."
+                "The reflect run, show, export and prune verbs: read-only apart from the"
+                " session title fill, which --local-only disables, and the local report files."
             ),
-            rpcs=("read_entity", "query_measurement", "query_telemetry"),
+            verbs=("reflect run", "reflect show", "reflect export", "reflect prune"),
             canonical_mutates=False,
             local_write_scope=".ea/local/reflect",
         ),
@@ -761,14 +921,14 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="release",
         skill_class="lifecycle",
+        subject="Release",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
         description="Prove, preflight, approve, publish, observe and recover a release.",
         grammar=_grammar(
             "/release <create|show|pin|preflight|approve|publish|observe|retry-target|recover>"
             " [<release-ref>] [--version <version>] [--milestone <ref>...]"
-            " [--channel <dev|rc|stable>] [--source <sha>] [--target <id>...] [--wait]"
-            " [--resume <operation-ref>] [--dry-run]",
+            " [--channel <dev|rc|stable>] [--source <sha>] [--target <id>...] [--dry-run]",
             "create",
             "show",
             "pin",
@@ -778,22 +938,29 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "observe",
             "retry-target",
             "recover",
+            create=("--version", "--milestone", "--channel", "--dry-run"),
+            show=(),
+            pin=("--source", "--dry-run"),
+            preflight=("--source",),
+            approve=("--dry-run",),
+            publish=("--source", "--dry-run"),
+            observe=("--target",),
+            retry_target=("--target", "--dry-run"),
+            recover=("--target", "--dry-run"),
         ),
         effects=EffectsBoundary(
-            summary="Release and external-operation RPCs.",
+            summary="Release reads plus the create, pin, readiness, approval and publish verbs.",
             rpcs=(
-                "read_entity",
-                "query_evidence",
+                "projection.release.read",
+                "release.show",
                 "release.create",
-                "release.pin",
-                "release.proof.prepare",
+                "release.candidate",
+                "release.compute_readiness",
                 "release.approve",
                 "release.publish",
-                "release.observe",
-                "release.recover",
-                "operation.status",
-                "operation.resume",
-                "operation.cancel",
+                "release.observe_target",
+                "release.retry_target",
+                "release.reconcile",
             ),
             canonical_mutates=True,
         ),
@@ -806,6 +973,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="research",
         skill_class="investigation",
+        subject="question",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Answer one question with a swift one-page investigation; no Campaign.",
@@ -815,19 +983,27 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             " [--sources <repo|external|both>] [--web <auto|allow|deny|required>]"
             " [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>]"
             " [--agents <1..3>] [--budget <spec>] [--save [<relative-path>]]"
-            " [--output <markdown|json>]"
+            " [--output <markdown|json>]",
+            subject_field="topic",
         ),
         effects=EffectsBoundary(
-            summary="No Campaign or lifecycle RPC; optional gitignored local brief.",
-            rpcs=("read_entity", "query_evidence", "retrieve_source", "submit_report"),
+            summary="Evidence read and repository reads; optional gitignored local brief.",
+            rpcs=("projection.evidence.read",),
+            tools=(
+                SemanticToolId.EAWF_STATE_QUERY,
+                SemanticToolId.REPO_READ,
+                SemanticToolId.REPO_SEARCH,
+                SemanticToolId.SUBMIT_REPORT,
+            ),
             canonical_mutates=False,
             local_write_scope=".ea/local/research",
         ),
-        output=_out("SwiftResearchReport", "answered|open|blocked"),
+        output=_out("SwiftResearchReport", "answered|open|blocked", coverage=True),
     ),
     SkillCatalogEntry(
         skill_id="spike",
         skill_class="investigation",
+        subject="proof of concept",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Build, test, independently verify and present a local proof of concept.",
@@ -835,25 +1011,31 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "/spike <idea...> [--hypothesis <text>] [--confirm <condition>]"
             " [--reject <condition>] [--from <ref>...] [--constraint <text>...]"
             " [--stack <auto|python|shell|node|other>] [--entrypoint <relative-path>]"
-            " [--verify <command>...] [--fixture <ref>...] [--agents <2..8>]"
-            " [--budget <spec>] [--slug <slug>]"
+            " [--verify <command>...] [--fixture <ref>...] [--provider <id>...]"
+            " [--agents <2..8>] [--budget <spec>] [--slug <slug>]"
             " [--local-root <path-under-.ea/local/spikes>] [--network <deny|allow>]"
             " [--retention <keep|expire-after-review>] [--resume <folder>]"
         ),
         effects=EffectsBoundary(
             summary=(
                 "Writes only under the resolved local spike folder; separate builder and"
-                " verifier Runs; extracted contracts are submitted for promotion."
+                " verifier Runs; the report is filed and its contracts submitted for promotion."
             ),
-            rpcs=("retrieve_source", "run.dispatch", "submit_report", "submit_evidence"),
+            rpcs=("runtime.run.dispatch", "runtime.evidence.spike_report.file"),
+            tools=(
+                SemanticToolId.REPO_READ,
+                SemanticToolId.SUBMIT_REPORT,
+                SemanticToolId.SUBMIT_EVIDENCE,
+            ),
             canonical_mutates=False,
             local_write_scope=".ea/local/spikes",
         ),
-        output=_out("SpikeReport", "ready|inconclusive|failed|cancelled|blocked"),
+        output=_out("SpikeReport", "ready|inconclusive|failed|cancelled|blocked", coverage=True),
     ),
     SkillCatalogEntry(
         skill_id="test",
         skill_class="engineering",
+        subject="test contract",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Design, add, repair or run a bounded test contract.",
@@ -867,63 +1049,75 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             "add",
             "repair",
             "run",
+            run=("--command", "--seed", "--budget"),
         ),
         effects=EffectsBoundary(
             summary="Leased test-workspace edits and test execution; no canonical RPC.",
             canonical_mutates=False,
         ),
-        output=_out("TestSkillReport", "strategy_ready|tests_added|passed|failed|blocked"),
+        output=_out(
+            "TestSkillReport", "strategy_ready|tests_added|passed|failed|blocked", coverage=True
+        ),
     ),
     SkillCatalogEntry(
         skill_id="track",
         skill_class="lifecycle",
+        subject="Track",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="user_only",
-        description="Create a Track, set its policy, or retire it.",
+        description="Create, show or retire a Track.",
         grammar=_grammar(
-            "/track <create|show|set-policy|retire> [<track-ref>] [--title <text>]"
+            "/track <create|show|retire> [<track-ref>] [--title <text>]"
             " [--charter <text>] [--owner <principal>] [--repository <ref>...]"
-            " [--scope <urn>] [--policy <key=value>...] [--reason <text>]"
-            " [--from-spec <path|->] [--dry-run]",
+            " [--scope <urn>] [--reason <text>] [--from-spec <path|->] [--dry-run]",
             "create",
             "show",
-            "set-policy",
             "retire",
+            create=(
+                "--title",
+                "--charter",
+                "--owner",
+                "--repository",
+                "--scope",
+                "--from-spec",
+                "--dry-run",
+            ),
+            show=(),
+            retire=("--reason", "--from-spec", "--dry-run"),
         ),
         effects=EffectsBoundary(
-            summary="Track RPCs.",
-            rpcs=(
-                "read_entity",
-                "domain.track.create",
-                "domain.track.set_policy",
-                "domain.track.retire",
-            ),
+            summary="The Track read plus its create and retire verbs.",
+            rpcs=("projection.track.read", "domain.track.create", "domain.track.retire"),
             canonical_mutates=True,
         ),
-        output=_out("TrackSkillReport", "shown|created|updated|retired|blocked"),
+        output=_out("TrackSkillReport", "shown|created|retired|blocked"),
     ),
     SkillCatalogEntry(
         skill_id="verify",
         skill_class="lifecycle",
+        subject="Batch",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Verify one Delivery Batch at one exact revision, as auditor or as reviewer.",
         grammar=_grammar(
             "/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>]"
             " [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>]"
-            " [--budget <spec>] [--no-cache] [--output <human|json|markdown>]"
+            " [--budget <spec>] [--milestone <ref>] [--journey <step>...]"
+            " [--accepted-binding <binding>] [--requested-by <principal>] [--no-cache]"
+            " [--expected-revision <N>] [--idempotency-key <key>]"
+            " [--output <human|json|markdown>]"
         ),
         effects=EffectsBoundary(
-            summary="Read and check effects plus verification receipts.",
+            summary=(
+                "Batch and evidence reads plus the Batch verification, Task completion and"
+                " acceptance-question verbs, which file verification receipts."
+            ),
             rpcs=(
-                "read_entity",
-                "query_evidence",
-                "verification.submit",
-                "verification.status",
-                "verification.resume",
-                "batch.audit.submit",
-                "batch.review.submit",
-                "operation.status",
+                "projection.batch.detail.read",
+                "projection.evidence.read",
+                "runtime.delivery.verify_batch",
+                "runtime.delivery.assess_completion",
+                "runtime.delivery.open_acceptance_approval",
             ),
             canonical_mutates=True,
         ),
@@ -932,6 +1126,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
     SkillCatalogEntry(
         skill_id="why",
         skill_class="knowledge",
+        subject="any canonical entity",
         budget_class=BudgetClassId.STEERING_ZONE2,
         audience="both",
         description="Explain the provenance of an entity; read-only.",
@@ -943,15 +1138,15 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         effects=EffectsBoundary(
             summary="Read-only provenance queries.",
             rpcs=(
-                "read_entity",
-                "query_evidence",
+                "projection.history.read",
+                "projection.evidence.read",
                 "semantic.result.read",
-                "run.events.read",
-                "operation.status",
+                "runtime.run.events.read",
             ),
+            tools=(SemanticToolId.EAWF_STATE_QUERY,),
             canonical_mutates=False,
         ),
-        output=_out("WhyReport", "explained|partial|not_found|blocked"),
+        output=_out("WhyReport", "explained|partial|not_found|blocked", coverage=True),
     ),
 )
 
@@ -1030,6 +1225,33 @@ def resolve_skill(name: str) -> SkillCatalogEntry:
     raise UnknownSkillError(f"unknown skill {name!r}; expected one of {known}")
 
 
+def skill_lanes(entry: SkillCatalogEntry) -> frozenset[Lane]:
+    """Return who may invoke *entry*: the one invocation-audience map.
+
+    Args:
+        entry: A catalog entry.
+
+    Returns:
+        ``operator`` when an operator may invoke it, ``agent`` when a model
+        may. The host menu, the generated help, the agent callable catalog and
+        the invocation check all read this answer and no other.
+    """
+    return _AUDIENCE_LANES[entry.audience]
+
+
+def skills_for_lane(lane: Lane) -> tuple[SkillCatalogEntry, ...]:
+    """Return the catalog entries *lane* may invoke, in catalog order.
+
+    Args:
+        lane: ``operator`` for generated user help, ``agent`` for the agent
+            callable catalog.
+
+    Returns:
+        The entries whose :func:`skill_lanes` include *lane*.
+    """
+    return tuple(entry for entry in SKILL_CATALOG.entries if lane in skill_lanes(entry))
+
+
 @cache
 def shipped_skill_specs() -> tuple[SkillSpec, ...]:
     """Project the catalog into the render specs every plugin packager ships.
@@ -1037,19 +1259,26 @@ def shipped_skill_specs() -> tuple[SkillSpec, ...]:
     Order follows :data:`SKILL_CATALOG`. The argument hint is derived from the
     catalog grammar and every body is rendered through the six-slot prompt
     chassis, so no shipped page is hand-written or carried over from a
-    pre-catalog body. A ``user_only`` or canonical-mutating skill is never
-    model-invoked, so the model cannot autonomously drive a state transition.
+    pre-catalog body. The host-menu flags come from :func:`skill_lanes`: a
+    skill the agent lane may not invoke forbids model invocation, and its
+    page states it is operator-invoked by design. Generation first joins the
+    catalog to the verb catalog, so a skill naming a route no verb carries
+    ships nothing.
 
     Returns:
         One :class:`~eawf.surfaces.render.skills.render.SkillSpec` per entry.
 
     Raises:
+        eawf.workflow.skills.catalog_join.CatalogJoinError: A skill names a
+            missing or incompatible route.
         eawf.workflow.skills.bodies.chassis.SkillPageError: A rendered page
             breaks the chassis.
     """
     from eawf.surfaces.render.skills.render import SkillSpec
     from eawf.workflow.skills.bodies.chassis import check_skill_page, shipped_skill_page
+    from eawf.workflow.skills.catalog_join import require_joined
 
+    require_joined(SKILL_CATALOG)
     pages = {entry.skill_id: shipped_skill_page(entry) for entry in SKILL_CATALOG.entries}
     for entry in SKILL_CATALOG.entries:
         check_skill_page(pages[entry.skill_id], entry)
@@ -1058,10 +1287,8 @@ def shipped_skill_specs() -> tuple[SkillSpec, ...]:
             skill_name=entry.skill_id,
             description=entry.description,
             argument_hint=entry.grammar.argument_hint,
-            user_invocable=True,
-            disable_model_invocation=(
-                entry.audience == "user_only" or entry.effects.canonical_mutates
-            ),
+            user_invocable="operator" in skill_lanes(entry),
+            disable_model_invocation="agent" not in skill_lanes(entry),
             body=pages[entry.skill_id],
         )
         for entry in SKILL_CATALOG.entries
@@ -1070,9 +1297,12 @@ def shipped_skill_specs() -> tuple[SkillSpec, ...]:
 
 __all__ = [
     "SKILL_CATALOG",
+    "CoverageBlock",
     "EffectsBoundary",
     "InvocationAudience",
     "InvocationGrammar",
+    "Lane",
+    "NotCovered",
     "OutputSchema",
     "RetiredSkill",
     "SkillCatalog",
@@ -1083,4 +1313,6 @@ __all__ = [
     "UnknownSkillError",
     "resolve_skill",
     "shipped_skill_specs",
+    "skill_lanes",
+    "skills_for_lane",
 ]

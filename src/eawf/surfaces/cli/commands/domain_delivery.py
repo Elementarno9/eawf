@@ -4,8 +4,9 @@
 start work. This module exposes the ones that finish it, as one command
 per daemon verb:
 
-- ``task claim``, ``task ready`` and ``task complete`` send
-  ``domain.task.claim``, ``domain.task.ready`` and ``domain.task.complete``;
+- ``task claim``, ``task release``, ``task ready`` and ``task complete``
+  send ``domain.task.claim``, ``domain.task.release``, ``domain.task.ready``
+  and ``domain.task.complete``;
 - ``run create``, ``run start``, ``run finish`` and ``run fail`` send
   ``domain.run.create`` and the three Run moves;
 - ``batch merge``, ``batch observe-merge`` and ``batch complete`` send the
@@ -42,6 +43,7 @@ from eawf.surfaces.cli.commands.domain import (
     TASK_CLAIM,
     TASK_COMPLETE,
     TASK_READY,
+    TASK_RELEASE,
     _run_create_verb,
     _run_verb,
 )
@@ -126,6 +128,28 @@ def task_claim_cmd(
 ) -> None:
     """Claim a PLANNED Task for the actor that will run it."""
     _move(ctx, TASK_CLAIM, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes)
+
+
+@task_app.command("release")
+def task_release_cmd(
+    ctx: typer.Context,
+    urn: _Urn,
+    expected_revision: _TaskRevision,
+    idempotency_key: _Key,
+    actor: _Actor,
+    from_spec: _Spec = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Release a CLAIMED Task's lease, handing it back to PLANNED.
+
+    The payload names the cause in ``reason_code``. Only the principal
+    holding the claim releases it, and never while a Run is open on the
+    Task; the daemon files the release record naming the cause and actor.
+    """
+    _move(
+        ctx, TASK_RELEASE, urn, expected_revision, idempotency_key, actor, from_spec, dry_run, yes
+    )
 
 
 @task_app.command("ready")
@@ -333,4 +357,5 @@ __all__ = [
     "task_claim_cmd",
     "task_complete_cmd",
     "task_ready_cmd",
+    "task_release_cmd",
 ]

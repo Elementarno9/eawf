@@ -4,10 +4,7 @@
 
 ## Workspace-level state and repo sub-states
 
-Default mode for `eawf init` inside a repo: **repo-owned `.ea/state.json`
-plus workspace index link when a workspace exists**. Every initialized
-repo remains portable and commit-ready, while a parent workspace can
-orchestrate multiple repos through an index/rollup.
+Default mode for `eawf init` inside a repo: **repo-owned `.ea/state.json` plus workspace index link when a workspace exists**. Every initialized repo remains portable and commit-ready, while a parent workspace can orchestrate multiple repos through an index/rollup.
 
 Direction:
 
@@ -42,19 +39,13 @@ Workspace state SHOULD link to repo states; repos do not link back.
    }
    ```
 
-   Repo-project relation is 1-to-1. `project_code` is the short symbolic
-   name used in human-facing refs, commits, statusline, and
-   `urn:eawf:v1:repo:<code>` references.
+   Repo-project relation is 1-to-1. `project_code` is the short symbolic name used in human-facing refs, commits, statusline, and `urn:eawf:v1:repo:<code>` references.
 
-2. **Repo standalone mode**: only `repo/.ea/state.json`. Used for OSS
-   repos or repos cloned outside a workspace.
+2. **Repo standalone mode**: only `repo/.ea/state.json`. Used for OSS repos or repos cloned outside a workspace.
 
-3. **Workspace-only mode** (discouraged): all state in
-   `workspace/.ea/state.json`; repo loses portability and cannot work
-   fully after standalone clone.
+3. **Workspace-only mode** (discouraged): all state in `workspace/.ea/state.json`; repo loses portability and cannot work fully after standalone clone.
 
-4. **Repo sub-state mode**: repo state coordinated by workspace state for
-   cross-repo roadmap with repo-local execution details.
+4. **Repo sub-state mode**: repo state coordinated by workspace state for cross-repo roadmap with repo-local execution details.
 
 ### State resolution order
 
@@ -70,12 +61,9 @@ Invariants:
 
 - Every state file has `scope_kind`: `workspace` or `repo`.
 - Every entity has an owning state file.
-- Workspace may reference repo entities by URN
-  (e.g. `urn:eawf:v1:state:QR/P13-I04-W01`).
-- Workspace cannot mutate repo-owned entities unless the command
-  explicitly targets the repo and takes the repo lock.
-- Repo cannot mutate workspace-owned entities unless `-w` /
-  `--workspace` is explicit.
+- Workspace may reference repo entities by URN (e.g. `urn:eawf:v1:state:QR/P13-I04-W01`).
+- Workspace cannot mutate repo-owned entities unless the command explicitly targets the repo and takes the repo lock.
+- Repo cannot mutate workspace-owned entities unless `-w` / `--workspace` is explicit.
 - `eawf validate --strict` validates the active state only.
 - `eawf workspace validate --strict` validates workspace + linked repos.
 
@@ -89,14 +77,11 @@ Project
               └─ Wave
 ```
 
-Orthogonal (cross-cutting) entities: Goal, Outcome, Hypothesis, Decision,
-Audit, Incident, Artifact, AgentSession, BacklogItem.
+Orthogonal (cross-cutting) entities: Goal, Outcome, Hypothesis, Decision, Audit, Incident, Artifact, AgentSession, BacklogItem.
 
 ## Top-level state fields
 
-All Pydantic v2 models use `extra="forbid"`. IDs are immutable strings.
-Timestamps are UTC ISO-8601. URNs use `urn:eawf:v1:*`. Lifecycle IDs
-use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
+All Pydantic v2 models use `extra="forbid"`. IDs are immutable strings. Timestamps are UTC ISO-8601. URNs use `urn:eawf:v1:*`. Lifecycle IDs use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
@@ -135,13 +120,7 @@ use two-digit padding by default (`P01`, `P01-I01`, `P01-I01-W01`).
 | `memory_index` | map[id, MemorySummary] | no | materialized on first memory entry |
 | `indexes` | object | yes | derived lookup caches |
 
-`eawf validate --strict` ignores absent optional keys. Once a key
-materializes (any record written), its schema is enforced. A profile
-that requires a key (e.g., `research` requires `hypotheses` + `audits`)
-materializes the key as `{}` on profile composition, even before the
-first record. Adding a profile later
-(`eawf config profile enable <name>`) materializes any newly-required
-keys as `{}` during the next `eawf sync`.
+`eawf validate --strict` ignores absent optional keys. Once a key materializes (any record written), its schema is enforced. A profile that requires a key (e.g., `research` requires `hypotheses` + `audits`) materializes the key as `{}` on profile composition, even before the first record. Adding a profile later (`eawf config profile enable <name>`) materializes any newly-required keys as `{}` during the next `eawf sync`.
 
 ## Core records
 
@@ -194,11 +173,7 @@ Backlog:       B<NNN>
 
 **Project / Track code regex**: `^[A-Z][A-Z0-9_-]{1,15}$` — uppercase ASCII first character, optional digits / underscore / hyphen, total 2–16 characters. Validates `QR`, `EA`, `COLLAR`, `PLATFORM`, `AO-SERVER`. Rejects `Q` (single char), `qr` (lowercase), `1Q` (digit-leading).
 
-All IDs are strings and immutable. Phase / iter / wave IDs encode
-parentage; commands do not require redundant parent flags:
-`eawf iter open P13-I04` implies `phase=P13`. Parent flags are only
-accepted for auto-allocation: `eawf iter open P13` lets the allocator
-choose the next `P13-Ixx`.
+All IDs are strings and immutable. Phase / iter / wave IDs encode parentage; commands do not require redundant parent flags: `eawf iter open P13-I04` implies `phase=P13`. Parent flags are only accepted for auto-allocation: `eawf iter open P13` lets the allocator choose the next `P13-Ixx`.
 
 ### Phase scoping: project vs Track
 
@@ -216,10 +191,7 @@ The first command materializes `tracks.COLLAR`; the second sets `current.track_i
 
 ## Estimation model
 
-Eä includes an operator-time budget estimator. The estimator answers:
-**how much active operator + agent session time should the user
-budget?** It is not a delivery-date promise and not a replacement for
-evidence.
+Eä includes an operator-time budget estimator. The estimator answers: **how much active operator + agent session time should the user budget?** It is not a delivery-date promise and not a replacement for evidence.
 
 ```text
 1 EU = 30 minutes active operator + agent session time
@@ -227,38 +199,22 @@ evidence.
 
 Clocks tracked separately:
 
-- `elapsed_EU`: wall-clock session time after idle / break policy;
-  primary budget metric.
-- `attention_EU`: optional operator attention estimate; nullable / manual
-  in v0.1.
-- `agent_runtime_EU`: total agent / subagent runtime, including parallel
-  work; useful for cost / load, not user waiting time.
+- `elapsed_EU`: wall-clock session time after idle / break policy; primary budget metric.
+- `attention_EU`: optional operator attention estimate; nullable / manual in v0.1.
+- `agent_runtime_EU`: total agent / subagent runtime, including parallel work; useful for cost / load, not user waiting time.
 
 Storage:
 
 - `state.json` keeps the current estimate / actual summary per scope.
-- `.ea/store/estimate.jsonl` stores all estimate versions and supersession
-  links; `.ea/store/actual.jsonl` stores actual segments and recovery
-  events.
+- `.ea/store/estimate.jsonl` stores all estimate versions and supersession links; `.ea/store/actual.jsonl` stores actual segments and recovery events.
 
-Actuals are append-only segment records. Never overwrite prior measured
-session time. If a session stops, the runtime crashes, or the PC powers
-off, close the current segment as `interrupted` when the next Eä
-process can observe it. Calibration uses `done` scopes only;
-interrupted, blocked, abandoned, failed, and superseded scopes feed
-risk / fallback statistics.
+Actuals are append-only segment records. Never overwrite prior measured session time. If a session stops, the runtime crashes, or the PC powers off, close the current segment as `interrupted` when the next Eä process can observe it. Calibration uses `done` scopes only; interrupted, blocked, abandoned, failed, and superseded scopes feed risk / fallback statistics.
 
 Estimation by scope: wave (direct, highest quality) → iter (rollup of waves) → phase (rollup of iters). Every wave is costed at one effort constant of 0.8 EU (24 minutes, measured p10 8.8, p50 23.9, p90 123.1 minutes), so plan renderers can show both `sum_wave_eu` and `critical_path_eu`. A wave's `effort_bucket` label is a narrative annotation with no scheduling meaning: nothing multiplies by it. Closed wave timestamps derive a provisional `actual_elapsed_eu` until richer actual-segment instrumentation is present. Roadmap-level shows directional envelopes only.
 
 ## Large entity handling
 
-`state.json` stores **index fields and summaries**, not full long-form
-documents. Long-form details (research briefs, plan specs, long
-hypothesis rationale, full audit metric tables, incident timelines) live
-as artifacts under `.ea/artifacts/` and are referenced by artifact ID +
-URN. Markdown artifacts use the standard chassis: `Summary`,
-`References`, `Provenance`, and `Scrub`. Local drafts under `.ea/local/`
-carry an `eawf-template` sentinel and lose it on promotion.
+`state.json` stores **index fields and summaries**, not full long-form documents. Long-form details (research briefs, plan specs, long hypothesis rationale, full audit metric tables, incident timelines) live as artifacts under `.ea/artifacts/` and are referenced by artifact ID + URN. Markdown artifacts use the standard chassis: `Summary`, `References`, `Provenance`, and `Scrub`. Local drafts under `.ea/local/` carry an `eawf-template` sentinel and lose it on promotion.
 
 Suggested thresholds:
 
@@ -284,8 +240,7 @@ urn:eawf:v1:branch:<owner>/<name>
 urn:eawf:v1:secret:<NAME>
 ```
 
-See `docs/reference/urn-namespace.md` for the full URN specification
-(rules, query / fragment components, agent usage guidance).
+See `docs/reference/urn-namespace.md` for the full URN specification (rules, query / fragment components, agent usage guidance).
 
 ## Validation invariants
 
@@ -298,15 +253,11 @@ See `docs/reference/urn-namespace.md` for the full URN specification
 - Eä-managed MCP / plugin records never overwrite non-Eä owner entries.
 - Auto-ID allocation happens while holding the state sibling lockfile.
 - Secret / env refs use `${ENV:NAME}` and never store values.
-- Checkpoint commit required when command declares a checkpoint
-  boundary.
+- Checkpoint commit required when command declares a checkpoint boundary.
 
 ## Cross-references
 
 - Enums (full canonical list) — see `docs/reference/enums.md`.
-- JSONL store record envelope, event payload, config schema sections,
-  lockfile semantics — see `docs/reference/lockfile-semantics.md` and
-  `docs/architecture/envelope.md`.
+- JSONL store record envelope, event payload, config schema sections, lockfile semantics — see `docs/reference/lockfile-semantics.md` and `docs/architecture/envelope.md`.
 - URN format details — see `docs/reference/urn-namespace.md`.
-- Authoritative-mutator policy and the state CLI — see
-  `docs/architecture/cli-surface.md`.
+- Authoritative-mutator policy and the state CLI — see `docs/architecture/cli-surface.md`.

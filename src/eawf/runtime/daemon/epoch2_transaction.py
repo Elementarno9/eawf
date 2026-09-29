@@ -509,7 +509,9 @@ def run_transaction(
                 unmet=locked_unmet(document, record=record, target=target),
                 observations=frozenset(request.observations),
             ),
-            updates=edge_updates(record, target=target, updates=request.updates, now=now),
+            updates=edge_updates(
+                record, target=target, updates=request.updates, actor=request.actor, now=now
+            ),
         )
         if isinstance(outcome, TransitionDenied):
             raise _denied(outcome, request=request, revision=record.revision)

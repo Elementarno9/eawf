@@ -395,8 +395,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     focus = _focus(groups, s.sel_id, s.home_track)
     tree = tree_of(groups, focus)
     keys = [item.row.key if item.row is not None else None for item in tree]
-    found = keys.index(s.sel_id) if s.sel_id is not None and s.sel_id in keys else None
-    index = found if found is not None else min(max(s.sel, 0), max(len(tree) - 1, 0))
+    index = dv.restore_by_id(s, keys)
     if tree and tree[index].group != focus:
         # the cursor stepped onto another group's heading, which expands in its place
         landed = tree[index]

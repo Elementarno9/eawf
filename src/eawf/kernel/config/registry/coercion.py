@@ -9,6 +9,8 @@ Public API:
 
 - :func:`coerce_and_validate` — turn a raw string answer into a typed value
   matching the entry's declared type.
+- :func:`validate_config_value` — hold a value about to be written under a
+  dotted key to that key's registry entry, when it has one.
 - :func:`is_known_key` — ``True`` when a dotted key has a registry entry or
   appears in the supplied merged config.
 
@@ -34,6 +36,8 @@ def _coerce_bool(raw: str | bool) -> bool:
     """
     if isinstance(raw, bool):
         return raw
+    if not isinstance(raw, str):
+        raise UserError(f"cannot coerce {raw!r} to bool", kind="InvalidInput")
     lowered = raw.strip().lower()
     if lowered in ("true", "yes", "y", "1", "on"):
         return True
@@ -50,6 +54,9 @@ def _coerce_number(raw: str | int | float, *, want_int: bool) -> int | float:
             (``kind="InvalidInput"``).
     """
     if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        if want_int and raw != int(raw):
+            # int() would silently truncate a fractional value to a different setting
+            raise UserError(f"cannot coerce {raw!r} to int", kind="InvalidInput")
         return int(raw) if want_int else float(raw)
     text = str(raw).strip()
     try:
@@ -69,12 +76,12 @@ def _coerce_ranged_number(entry: ConfigKey, raw: Any, *, want_int: bool) -> int 
     value = _coerce_number(raw, want_int=want_int)
     if entry.min_value is not None and value < entry.min_value:
         raise UserError(
-            f"value {value} below minimum {entry.min_value} for {entry.key}",
+            f"value {value} below minimum {entry.min_value:g} for {entry.key}",
             kind="InvalidInput",
         )
     if entry.max_value is not None and value > entry.max_value:
         raise UserError(
-            f"value {value} above maximum {entry.max_value} for {entry.key}",
+            f"value {value} above maximum {entry.max_value:g} for {entry.key}",
             kind="InvalidInput",
         )
     return value
@@ -147,12 +154,38 @@ def coerce_and_validate(entry: ConfigKey, raw: Any) -> Any:
     if entry.type == "float":
         return _coerce_ranged_number(entry, raw, want_int=False)
     if entry.type == "str":
+        if not isinstance(raw, (str, int, float)):
+            raise UserError(f"cannot coerce {raw!r} to str", kind="InvalidInput")
         return str(raw)
     if entry.type == "choice":
         return _coerce_choice(entry, raw)
     if entry.type == "multichoice":
         return _coerce_multichoice(entry, raw)
     raise UserError(f"unknown registry type: {entry.type}", kind="InvalidInput")
+
+
+def validate_config_value(key: str, value: Any) -> Any:
+    """Return *value* as it may be written under *key*, held to the key's registry entry.
+
+    The interactive registry is the one place a key's type, range and choices are
+    declared, and the settings stack draws the same range, so every write path holds a
+    value to it rather than keeping a copy of the bounds.
+
+    Args:
+        key: Dotted config key the value is written under.
+        value: The value a caller asked to write.
+
+    Returns:
+        The value coerced to the entry's declared type, or *value* unchanged when the
+        registry does not describe *key*.
+
+    Raises:
+        UserError: When the value does not parse as the declared type, is outside the
+            declared range, or is not one of the declared choices
+            (``kind="InvalidInput"``).
+    """
+    entry = registry_lookup(key)
+    return value if entry is None else coerce_and_validate(entry, value)
 
 
 def _registry_self_check_defaults() -> None:

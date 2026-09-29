@@ -725,7 +725,8 @@ def test_release_receipts_cli_waits_as_long_as_the_proofs_may_run(
     assert seen["client_kwargs"] == {
         "call_timeout_seconds": float(
             proof_budget_seconds(gate_bindings_for(ReleaseGateProfile.DEV2))
-        )
+        ),
+        "spawn": True,
     }
 
 

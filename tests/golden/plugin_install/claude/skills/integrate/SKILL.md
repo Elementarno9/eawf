@@ -1,9 +1,9 @@
 ---
 name: integrate
 description: "Prepare or execute one daemon-owned integration action on a Delivery Batch."
-argument-hint: "<seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--dry-run]"
+argument-hint: "<seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--base <revision-binding>] [--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] [--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] [--verdict <verdict>] [--resulting-tree-digest <digest>] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # /integrate
@@ -13,9 +13,10 @@ Prepare or execute one daemon-owned integration action on a Delivery Batch.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operator-only actions: `apply`, `retry`. An agent that reaches one prepares a PendingAction and stops; it never chooses the recommended option itself.
-- Effects: Candidate and IntegrationGeneration RPCs.
-- Allowed RPCs: `read_entity`, `query_evidence`, `candidate.seal`, `integration.submit`, `integration.status`, `integration.reconcile`, `verification.submit`, `operation.status`, `operation.resume`, `operation.cancel`. Any other RPC is denied before it reaches a handler.
+- Operates on: Batch, through `projection.batch.detail.read`, `projection.merge.conflict.read`, `runtime.candidate.report.bind`, `runtime.delivery.assemble`, `runtime.delivery.integrate`, `runtime.question.open_decision`.
+- Operator-only actions: `apply`, `retry`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself.
+- Effects: Batch and conflict reads plus the candidate-report, delivery-assembly and delivery-integration verbs.
+- Allowed RPCs: `projection.batch.detail.read`, `projection.merge.conflict.read`, `runtime.candidate.report.bind`, `runtime.delivery.assemble`, `runtime.delivery.integrate`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -31,7 +32,7 @@ Resolve the subject before acting. Name every entity with its identifier and its
 You prepare or execute one daemon-owned integration action. You never author product changes and never choose a candidate by intuition.
 
 ```text
-/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--dry-run]
+/integrate <seal|select|apply|retry|show> <batch-or-candidate-ref> [--candidate <ref>...] [--strategy <declared-strategy>] [--expected-head <sha>] [--verify-after] [--reason <text>] [--base <revision-binding>] [--exit <kind>=<ref>...] [--diagnostic <evidence-ref>] [--dry-run] [--run <run-ref>] [--report-schema-ref <ref>] [--report-digest <digest>] [--verdict <verdict>] [--resulting-tree-digest <digest>] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]
 ```
 
 Select exactly one action: `seal`, `select`, `apply`, `retry`, `show`. An option the selected action does not declare is refused before you start.
@@ -63,4 +64,4 @@ The obligations the effective rule graph holds for activities `integrate`. They 
 
 Output one IntegrationSkillReport containing candidates considered, selection reasons, exact bindings, generation, conflicts, verification receipts, and terminal outcome.
 
-The report validates against `IntegrationSkillReport`, and its terminal outcome is exactly one of `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `IntegrationSkillReport`, and its terminal outcome is exactly one of `shown`, `sealed`, `selected`, `integrated`, `conflicted`, `stale`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /integrate` before returning it.

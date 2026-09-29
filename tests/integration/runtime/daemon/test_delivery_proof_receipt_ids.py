@@ -83,7 +83,7 @@ def _seed_proof(path: Path, receipt_id: str) -> None:
     append_ledger_record(ledger_path(path, Epoch2Collection.RECEIPT), proof_line(receipt))
 
 
-def test_r07_a_failed_then_passing_run_files_four_distinct_sequential_ids(
+def test_a_failed_then_passing_run_files_four_distinct_sequential_ids(
     tmp_path: Path,
 ) -> None:
     """Each receipt gets the next number, so a rerun of a leg is its own receipt."""
@@ -99,7 +99,7 @@ def test_r07_a_failed_then_passing_run_files_four_distinct_sequential_ids(
     assert [leg["receipt_id"] for leg in passed["legs"]] == ["RCP-0003", "RCP-0004"]
 
 
-def test_r07_numbering_continues_after_the_highest_filed_id(tmp_path: Path) -> None:
+def test_numbering_continues_after_the_highest_filed_id(tmp_path: Path) -> None:
     """A receipt another Task's run filed is counted, so no id is reused."""
     path = _adopted(tmp_path)
     _seed_proof(path, "RCP-0041")
@@ -109,7 +109,7 @@ def test_r07_numbering_continues_after_the_highest_filed_id(tmp_path: Path) -> N
     assert [leg["receipt_id"] for leg in answer["legs"]] == ["RCP-0042", "RCP-0043"]
 
 
-def test_r07_a_full_receipt_key_space_is_refused(tmp_path: Path) -> None:
+def test_a_full_receipt_key_space_is_refused(tmp_path: Path) -> None:
     """The four-digit space ends at 9999; the next receipt is refused, not wrapped."""
     path = _adopted(tmp_path)
     _seed_proof(path, "RCP-9999")
@@ -120,7 +120,7 @@ def test_r07_a_full_receipt_key_space_is_refused(tmp_path: Path) -> None:
     assert _filed_ids(path) == ["RCP-9999"]
 
 
-def test_r03_proof_retried_under_its_key_replays_without_running_a_gate(
+def test_proof_retried_under_its_key_replays_without_running_a_gate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A retry answers the first run's answer, and no gate runs a second time."""
@@ -138,7 +138,7 @@ def test_r03_proof_retried_under_its_key_replays_without_running_a_gate(
     assert len(_filed_ids(path)) == 2
 
 
-def test_r03_proof_key_naming_other_gates_is_refused(tmp_path: Path) -> None:
+def test_proof_key_naming_other_gates_is_refused(tmp_path: Path) -> None:
     """One key cannot name two different proof runs."""
     _adopted(tmp_path)
     _dispatch(PROVE, tmp_path, urn=TASK_URN, idempotency_key="p", gates=_gates(tmp_path))
@@ -149,7 +149,7 @@ def test_r03_proof_key_naming_other_gates_is_refused(tmp_path: Path) -> None:
         )
 
 
-def test_r03_assessment_takes_no_idempotency_key(tmp_path: Path) -> None:
+def test_assessment_takes_no_idempotency_key(tmp_path: Path) -> None:
     """The read-only completion verb refuses a key it would never read."""
     _adopted(tmp_path)
 

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import orjson
 from pydantic import ValidationError
 
+from eawf.kernel.spec.common import GATE_RUN_EVIDENCE_KINDS
 from eawf.kernel.state.enums import (
     AgentSessionRole,
     StoreKind,
@@ -434,7 +435,7 @@ def build_durable_audit_context(  # noqa: C901
     for criterion in wave.success_criteria:
         if not criterion.required:
             continue
-        deterministic = criterion.evidence_kind == "deterministic"
+        deterministic = criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS
         receipt_urns = tuple(dict.fromkeys(receipts_by_criterion.get(criterion.id, [])))
         if deterministic and not receipt_urns:
             raise LifecycleError(
@@ -445,6 +446,7 @@ def build_durable_audit_context(  # noqa: C901
                 criterion_id=criterion.id,
                 text=criterion.text,
                 deterministic=deterministic,
+                rendered_run=criterion.evidence_kind == "rendered_run",
                 gate_receipt_urns=receipt_urns,
             )
         )

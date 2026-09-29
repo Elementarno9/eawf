@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.delivery.bulk import (
+    BULK_CONTROLS,
     DISPOSITION_STATES,
     INVALIDATION_RULE,
     ITEM_EDGES,
@@ -101,7 +102,7 @@ def test_del_021_an_operation_names_at_least_one_item() -> None:
 
 
 def test_del_021_integration_and_merge_are_never_bulk_verbs() -> None:
-    assert {verb.value for verb in BulkVerb} == {"cancel", "interrupt", "retry"}
+    assert {verb.value for verb in BulkVerb} == {"cancel", "interrupt", "retry", "release"}
     with pytest.raises(ValidationError, match="verb"):
         operation([BulkItemState.ACCEPTED], verb="merge")
 
@@ -175,10 +176,10 @@ def test_del_023_every_persisted_disposition_reads_as_an_item_state() -> None:
 # ---- DEL-024: the confirmation names count, effects, non-effects and the rule --
 
 
-def test_del_024_every_verb_confirms_its_non_effects_and_the_invalidation_rule() -> None:
+def test_del_024_every_run_verb_confirms_its_non_effects_and_the_invalidation_rule() -> None:
     refs = [parse_qualified_urn(run(n)) for n in (2, 1)]
 
-    for verb in BulkVerb:
+    for verb in BULK_CONTROLS:
         shown = confirm_bulk(verb, refs)
         assert shown.target_count == 2
         assert [str(ref) for ref in shown.item_refs] == [run(1), run(2)]

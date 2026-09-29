@@ -21,9 +21,11 @@ reason. The two never render alike.
 
 A bulk selection is marked with Space, a whole register with the action menu's ``*``, and
 cleared with ``,``; the action menu then offers the verbs of the selection's entity, and
-one card previews the whole selection by identifier. Repeating a confirmed card at an
-unchanged revision is not prompted again: it is sent again under the same operation id,
-which the daemon answers with what the first send did. A changed revision always prompts.
+one card previews the whole selection by identifier. A selection confirmed for a verb
+the daemon runs in bulk is sent as one bulk operation rather than target by target (see
+:mod:`eawf.surfaces.tui.console.bulk`). Repeating a confirmed card at an unchanged
+revision is not prompted again: it is sent again under the same operation id, which the
+daemon answers with what the first send did. A changed revision always prompts.
 """
 
 from __future__ import annotations
@@ -31,10 +33,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, Literal
 
+from eawf.kernel.delivery.bulk import BulkVerb
 from eawf.kernel.projection.attention import CONSOLE_PRINCIPAL_CLASS
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, ProjectionRow
 from eawf.kernel.projection.settings import SettingsLeaf
@@ -51,14 +55,18 @@ from eawf.kernel.state.epoch2.consequence import (
 from eawf.kernel.state.epoch2.transitions import (
     AMBIGUOUS_STATES,
     TERMINAL_STATUSES,
+    DenialCode,
     LifecycleEntity,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
 from eawf.surfaces.tui.console.attention import VERB, selected_open_row
+from eawf.surfaces.tui.console.bulk import BULK_METHODS, BulkRequest
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keymap import allowlist
 from eawf.surfaces.tui.console.navigation import Ctx, leave_overlay, open_overlay
+from eawf.surfaces.tui.console.notices import NOTICE_VERBS, notice_of, short_key
 from eawf.surfaces.tui.console.operations import (
     ANSWER_OPTIONS,
     ATTENTION_ROUTE,
@@ -66,9 +74,11 @@ from eawf.surfaces.tui.console.operations import (
     RUN_CONTROLS,
     RUN_KINDS,
     SAME_VERB,
+    SNOOZE_FOR,
     AnswerRequest,
     ControlRequest,
     LifecycleRequest,
+    NoticeRequest,
     OperationResult,
     PermissionDecision,
     SettingRequest,
@@ -110,6 +120,7 @@ NATIVE_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "domain.task.promote": "m",
         "domain.task.demote": "o",
         "domain.task.claim": "l",
+        "domain.task.release": "r",
         "domain.task.start": "s",
         "domain.task.ready": "w",
         "domain.task.complete": "c",
@@ -198,7 +209,7 @@ def gate(
     return Gate(GateKind.REFUSED, refusal) if refusal else Gate(GateKind.OPEN)
 
 
-Kind = Literal["lifecycle", "setting", "answer", "control"]
+Kind = Literal["lifecycle", "setting", "answer", "control", "notice"]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -231,6 +242,20 @@ class Item:
     request: VerbRequest | None
     stale_token: str
     clock_fields: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Refuse a target that is neither sent nor refused, or both.
+
+        Raises:
+            ValueError: the target carries a request and a refusal, or neither.
+        """
+        if (self.request is None) == (self.refusal is None):
+            raise ValueError(f"{self.key} is sent exactly when it is not refused")
+
+    @property
+    def why(self) -> str:
+        """Return why the target is refused on the card; empty for a target that is sent."""
+        return self.refusal.reason if self.refusal is not None else ""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -300,6 +325,11 @@ class Card:
         return len(self.items) > 1
 
     @property
+    def bulk_verb(self) -> BulkVerb | None:
+        """Return the bulk verb a confirmed selection is sent as, or ``None``."""
+        return BULK_METHODS.get(self.origin) if self.kind == "lifecycle" and self.bulk else None
+
+    @property
     def sendable(self) -> tuple[Item, ...]:
         """Return the targets confirmation sends: the ones not refused on the card."""
         return tuple(item for item in self.items if item.request is not None)
@@ -362,12 +392,20 @@ def menu_entity(session: Session, rows: Sequence[ProjectionRow]) -> LifecycleEnt
     return entity
 
 
-def _item(mutation: CanonicalMutation, row: ProjectionRow, operation_id: str) -> Item:
-    """Return one lifecycle target, previewed at the row's own status and revision."""
+def _item(
+    mutation: CanonicalMutation, row: ProjectionRow, operation_id: str, *, in_bulk: bool
+) -> Item:
+    """Return one lifecycle target, previewed at the row's own status and revision.
+
+    A target sent in a bulk operation is not refused for lacking a recorded reason: the
+    bulk verb records its own cause on every item.
+    """
     status = status_of(row)
     revision = int(row.revision)
     stated = consequence(mutation, key=row.key, revision=revision, status=status)
     refusal = stated.refusal
+    if in_bulk and refusal is not None:
+        refusal = None if refusal.code == DenialCode.TRANSITION_REASON_MISSING.value else refusal
     if status is None:
         refusal = Refusal(
             code="status_unknown",
@@ -428,8 +466,12 @@ def lifecycle_card(
     if not targets:
         raise ValueError("a card needs at least one target")
     ids = reuse or {}
-    items = tuple(_item(mutation, row, ids.get(row.key) or mint_lifecycle_id()) for row in targets)
-    revision = items[0].revision or 1
+    in_bulk = len(targets) > 1 and mutation.method in BULK_METHODS
+    items = tuple(
+        _item(mutation, row, ids.get(row.key) or mint_lifecycle_id(), in_bulk=in_bulk)
+        for row in targets
+    )
+    revision = int(targets[0].revision)
     stale = (
         if_stale(revision)
         if len(items) == 1
@@ -602,6 +644,57 @@ def answer_card(row: ProjectionRow, verb_key: str, *, principal: str, now: float
     )
 
 
+def notice_card(
+    notice: BudgetThresholdNotice, verb_key: str, *, principal: str, now: float, wall: datetime
+) -> Card:
+    """Return the card previewing a snooze or resolve of one held budget notice.
+
+    Args:
+        notice: The notice as the operator's inbox holds it.
+        verb_key: ``z`` to snooze it or ``v`` to resolve it.
+        principal: Who the disposition is recorded as.
+        now: The console clock.
+        wall: The wall-clock instant a snooze is measured from.
+    """
+    resolve = NOTICE_VERBS.get(verb_key) == "resolve"
+    disposition: Literal["snooze", "resolve"] = "resolve" if resolve else "snooze"
+    until = None if resolve else wall + SNOOZE_FOR
+    named = f"notice {short_key(notice)}"
+    effects = (
+        (f"{named} closes for its whole audience, resolved in your name",)
+        if until is None
+        else (f"{named} leaves your inbox until {until:%H:%M} UTC", "it stays open for the rest")
+    )
+    item = Item(
+        key=notice.notice_key,
+        title=f"{notice.scope_id} {notice.axis} over budget",
+        revision=notice.revision,
+        status=notice.status,
+        effects=effects,
+        not_effects=("no run is stopped, extended or restarted by it",),
+        refusal=None,
+        unknown="",
+        request=NoticeRequest(
+            target=notice.notice_key,
+            disposition=disposition,
+            revision=notice.revision,
+            snooze_until=until,
+        ),
+        stale_token=str(notice.revision),
+    )
+    return Card(
+        kind="notice",
+        origin=verb_key,
+        action=disposition,
+        noun="budget notice",
+        items=(item,),
+        if_stale=if_stale(notice.revision),
+        authority=_authority("notice disposition", principal),
+        issuer=principal,
+        opened_at=now,
+    )
+
+
 def control_card(
     row: ProjectionRow, target: Mapping[str, str], *, principal: str, now: float
 ) -> Card:
@@ -700,8 +793,7 @@ def verb_check(
     card = lifecycle_card(mutation, selection(session, rows), principal="", now=0.0)
     if card.sendable:
         return Availability(True)
-    first = card.items[0].refusal
-    return Availability(False, first.reason if first is not None else "refused")
+    return Availability(False, card.items[0].why)
 
 
 def native_mutation(
@@ -776,7 +868,7 @@ def _repeat(s: Session, mutation: CanonicalMutation, row: ProjectionRow) -> str 
     if held is None:
         return None
     revision, operation_id = held
-    return str(operation_id) if int(revision) == int(row.revision) else None
+    return operation_id if revision == int(row.revision) else None
 
 
 def open_lifecycle(ctx: Ctx, mutation: CanonicalMutation) -> None:
@@ -832,6 +924,12 @@ def adopt(ctx: Ctx) -> None:
         return
     now = ctx.clock.now()
     target = s.c_target
+    notice = notice_of(ctx.notices, s.ov_subject) if s.route == ATTENTION_ROUTE else None
+    if target is None and notice is not None:
+        s.mutation = notice_card(
+            notice, s.verb, principal=principal_of(ctx), now=now, wall=ctx.clock.wall()
+        )
+        return
     if target is None and s.route == ATTENTION_ROUTE and ctx.attention is not None:
         row = selected_open_row(s, ctx.attention)
         if row is not None:
@@ -848,6 +946,9 @@ def _current_token(ctx: Ctx, card: Card, item: Item) -> str | None:
     if card.kind == "setting":
         settings = ctx.settings
         return setting_token(settings.leaf(item.key)) if settings is not None else None
+    if card.kind == "notice":
+        notice = notice_of(ctx.notices, item.key)
+        return str(notice.revision) if notice is not None else None
     if card.kind == "answer" and ctx.attention is not None:
         row = _row(ctx.attention.rows, item.key)
     else:
@@ -872,6 +973,12 @@ def _reload(ctx: Ctx, card: Card, moved: Sequence[tuple[Item, str | None]]) -> N
         row = _row(ctx.attention.rows, card.items[0].key)
         if row is not None:
             rebuilt = answer_card(row, card.origin, principal=principal_of(ctx), now=now)
+    elif card.kind == "notice":
+        notice = notice_of(ctx.notices, card.items[0].key)
+        if notice is not None:
+            rebuilt = notice_card(
+                notice, card.origin, principal=principal_of(ctx), now=now, wall=ctx.clock.wall()
+            )
     elif card.kind == "control":
         row = _row(ctx.rows, card.items[0].key)
         target = s.c_target
@@ -918,19 +1025,20 @@ def confirm(ctx: Ctx) -> None:
         _reload(ctx, card, moved)
         return
     if not card.sendable:
-        first = card.items[0].refusal
-        ctx.log("Enter", f"{card.action} refused · {first.reason if first else 'refused'}")
+        ctx.log("Enter", f"{card.action} refused · {card.items[0].why}")
         return
     now = ctx.clock.now()
+    if card.bulk_verb is not None:
+        _confirm_bulk(ctx, card, card.bulk_verb, now)
+        return
     results: list[Result] = []
     for item in card.items:
-        if item.request is None:
-            why = item.refusal
+        if item.refusal is not None:
             results.append(
                 Result(
                     key=item.key,
                     disposition=ControlDisposition.IDLE,
-                    detail=f"{why.code} · {why.reason}" if why else "refused on the card",
+                    detail=f"{item.refusal.code} · {item.refusal.reason}",
                 )
             )
             continue
@@ -938,6 +1046,47 @@ def confirm(ctx: Ctx) -> None:
     s.mutation = replace(card, results=tuple(results))
     sent = sum(1 for row in results if row.requested != NO_STAMP)
     ctx.log("Enter", f"{card.action} · {sent} of {len(results)} sent · waiting for the daemon")
+
+
+def _bulk_request(card: Card, verb: BulkVerb, *, reconcile: bool = False) -> BulkRequest:
+    """Return the one bulk operation a card's sendable targets are sent as.
+
+    The operation is named by the first sendable target's id, which the card keeps, so a
+    reconcile addresses the operation the confirmation opened.
+    """
+    moves = [item.request for item in card.sendable]
+    assert all(isinstance(move, LifecycleRequest) for move in moves), "lifecycle moves only"
+    lifecycle = [move for move in moves if isinstance(move, LifecycleRequest)]
+    return BulkRequest(
+        verb=verb,
+        targets=tuple(move.target for move in lifecycle),
+        revisions={move.target: move.revision for move in lifecycle},
+        operation_id=lifecycle[0].operation_id,
+        reconcile=reconcile,
+    )
+
+
+def _confirm_bulk(ctx: Ctx, card: Card, verb: BulkVerb, now: float) -> None:
+    """Send a confirmed selection as one bulk operation, one row per target.
+
+    A target refused on the card is recorded refused and never sent; every sent target's
+    row waits for its own item result.
+    """
+    sent = ctx.dispatch_write(_bulk_request(card, verb))
+    results: list[Result] = []
+    for item in card.items:
+        if item.request is not None and sent:
+            results.append(_requested(card, item, now))
+            continue
+        why = item.refusal
+        detail = f"{why.code} · {why.reason}" if why else NO_LINK_REASON
+        results.append(Result(key=item.key, disposition=ControlDisposition.IDLE, detail=detail))
+    ctx.s.mutation = replace(card, results=tuple(results))
+    count = len(card.sendable) if sent else 0
+    ctx.log(
+        "Enter",
+        f"{card.action} · {count} of {len(results)} sent as one operation · waiting for the daemon",
+    )
 
 
 def _send(ctx: Ctx, card: Card, item: Item, now: float) -> Result:
@@ -967,6 +1116,12 @@ def reconcile(ctx: Ctx) -> None:
     row = card.results[min(card.sel, len(card.results) - 1)]
     if row.disposition not in RECONCILABLE:
         ctx.log("n", f"{row.key} is {row.disposition} · only an unknown row is reconciled")
+        return
+    if card.bulk_verb is not None:
+        if not ctx.dispatch_write(_bulk_request(card, card.bulk_verb, reconcile=True)):
+            ctx.log("n", f"{row.key} · {NO_LINK_REASON}")
+            return
+        ctx.log("n", f"reconcile {row.key} · every unsettled target asked again")
         return
     item = next(item for item in card.items if item.key == row.key)
     if item.request is None or not ctx.dispatch_write(item.request):
@@ -1096,10 +1251,17 @@ def settle(session: Session, result: OperationResult, now: float) -> None:
 
 
 def _answered(card: Card, result: OperationResult) -> int | None:
-    """Return the row ``result`` answers: by operation id, else the target's open row."""
+    """Return the row ``result`` answers: by operation id, else the target's open row.
+
+    A bulk operation answers every target under one id, so the target decides the row.
+    """
     for item in card.items:
         request = item.request
-        if isinstance(request, LifecycleRequest) and request.operation_id == result.operation_id:
+        if (
+            isinstance(request, LifecycleRequest)
+            and request.operation_id == result.operation_id
+            and item.key == result.target
+        ):
             return next(i for i, row in enumerate(card.results) if row.key == item.key)
     return next(
         (
@@ -1131,6 +1293,7 @@ __all__ = [
     "lifecycle_card",
     "lifecycle_verbs",
     "menu_key",
+    "notice_card",
     "select_key",
     "setting_card",
     "setting_token",

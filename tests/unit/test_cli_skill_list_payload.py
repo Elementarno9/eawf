@@ -61,7 +61,8 @@ def test_list_payload_carries_every_canonical_name_in_order() -> None:
 
 def test_list_payload_row_keys_are_exactly_the_documented_set() -> None:
     """Per-row keys are the historical four plus the catalog's class, audience,
-    argument hint, output schema and terminal outcomes. The ``skill render
+    argument hint, output schema, terminal outcomes, invocation lanes, operator-only
+    actions, argument schema and completion metadata. The ``skill render
     --format=json`` surface adds a ``body`` field on top — that addition is
     exercised in ``test_cli_skill_render.py`` so the two surfaces stay aligned.
     """
@@ -76,6 +77,10 @@ def test_list_payload_row_keys_are_exactly_the_documented_set() -> None:
         "argument_hint",
         "output_schema",
         "terminal_outcomes",
+        "lanes",
+        "operator_only_actions",
+        "arguments",
+        "completion",
     }
     for row in payload["skills"]:
         assert set(row.keys()) == expected_keys, f"unexpected keys in row {row}"

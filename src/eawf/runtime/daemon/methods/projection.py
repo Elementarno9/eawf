@@ -61,7 +61,9 @@ from eawf.kernel.delivery.acceptance import AcceptanceBundleLedger, MilestoneAcc
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.compute import (
     CANONICAL_SEQUENCE_FIELD,
+    CEILING_BREACH_KIND,
     ROUTE_COLLECTIONS,
+    ROUTE_NOTICE_COLLECTIONS,
     KeyedPatch,
     RouteProjection,
     build_route_projection,
@@ -78,10 +80,12 @@ from eawf.kernel.projection.settings import (
     EffectiveSettingsView,
     build_settings_view,
 )
+from eawf.kernel.runtime.delegation import ChildCeilingBreach
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt
 from eawf.kernel.state.epoch2.pending_action import PendingAction
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import effective_records, read_ledger_records
@@ -212,7 +216,7 @@ class AcceptanceParams(BaseModel):
     milestone_key: NonEmptyStr
 
 
-def _document_path(authority: RootAuthority) -> Path:
+def document_path(authority: RootAuthority) -> Path:
     """Return the selected generation's document of a fence-cleared tree."""
     target, generation_id = authority.target, authority.generation_id
     assert target is not None, "an epoch-2 answer always carries its target"
@@ -259,7 +263,7 @@ def _terminal_ledger_rows(
         set first, in the order the ledger appended them. Empty when the
         collection has no ledger file yet.
     """
-    path = ledger_path(_document_path(authority), collection)
+    path = ledger_path(document_path(authority), collection)
     records = effective_records(read_ledger_records(path))
     payloads = [
         record.payload for record in records if record.payload.get("key") == record.record_key
@@ -267,13 +271,57 @@ def _terminal_ledger_rows(
     return tuple(payloads[-LEDGER_MERGE_ROW_LIMIT:])
 
 
+#: The Run statuses a delegation subtree can still grow under.
+_LIVE_RUN_STATUSES: Final = frozenset(
+    {RunStatus.QUEUED.value, RunStatus.RUNNING.value, RunStatus.SUSPENDED.value}
+)
+
+
+def _live_breach_rows(
+    authority: RootAuthority, document: dict[str, Any]
+) -> tuple[dict[str, Any], ...]:
+    """Return every child-ceiling breach whose overrun Run is still live, as a notice row.
+
+    A breach is filed against the Run whose ceiling was passed and never revised, so it
+    stands at revision one under the status its ledger line was filed with. Once that Run
+    has ended, its subtree can grow no further and the notice is history.
+
+    Raises:
+        pydantic.ValidationError: A line claims to be a breach and does not validate as
+            one, which means the ledger is corrupt.
+    """
+    live = {
+        key
+        for key, row in document_rows(document, Epoch2Collection.RUN).items()
+        if isinstance(row, dict) and row.get("status") in _LIVE_RUN_STATUSES
+    }
+    rows: list[dict[str, Any]] = []
+    path = ledger_path(document_path(authority), Epoch2Collection.RUN)
+    for record in read_ledger_records(path):
+        if record.payload.get("payload_kind") != CEILING_BREACH_KIND:
+            continue
+        breach = ChildCeilingBreach.model_validate(record.payload)
+        if breach.ancestor_run_ref.entity_key in live:
+            rows.append(
+                {
+                    **breach.model_dump(mode="json"),
+                    "key": record.record_key,
+                    "urn": str(breach.ancestor_run_ref),
+                    "revision": 1,
+                    "status": record.status,
+                }
+            )
+    return tuple(rows)
+
+
 def _ledger_rows_for(
-    *, route: str, authority: RootAuthority
+    *, route: str, authority: RootAuthority, document: dict[str, Any]
 ) -> dict[Epoch2Collection, tuple[dict[str, Any], ...]]:
     """Return the ledger-held rows *route*'s merged collections contribute.
 
     A provider permission is filed on the run ledger rather than a ledger of its
-    own, so a route that renders permissions reads the open ones from there.
+    own, so a route that renders permissions reads the open ones from there, and a
+    route that lists notices from the run ledger reads the live ceiling breaches.
     """
     rows: dict[Epoch2Collection, tuple[dict[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
@@ -282,6 +330,8 @@ def _ledger_rows_for(
     }
     if Epoch2Collection.PERMISSION in ROUTE_COLLECTIONS.get(route, ()):
         rows[Epoch2Collection.PERMISSION] = open_permission_rows(authority)
+    if Epoch2Collection.RUN in ROUTE_NOTICE_COLLECTIONS.get(route, ()):
+        rows[Epoch2Collection.RUN] = _live_breach_rows(authority, document)
     return rows
 
 
@@ -293,7 +343,7 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
             other than an ordinal, or holds a row the route cannot render.
         FileNotFoundError: The selected generation carries no document.
     """
-    document = read_document(_document_path(authority))
+    document = read_document(document_path(authority))
     try:
         return build_route_projection(
             route=route,
@@ -301,7 +351,7 @@ def _project(*, route: str, authority: RootAuthority) -> RouteProjection:
             cursor=_document_cursor(document),
             scope_id=RootIdentity.of(authority.root).root_id,
             generated_at=datetime.now(UTC),
-            ledger_rows=_ledger_rows_for(route=route, authority=authority),
+            ledger_rows=_ledger_rows_for(route=route, authority=authority, document=document),
         )
     except ValueError as error:
         raise DaemonValidationError(
@@ -323,7 +373,7 @@ def _read_settings(*, authority: RootAuthority) -> EffectiveSettingsView:
         FileNotFoundError: The selected generation carries no document.
     """
     root = authority.root
-    cursor = _document_cursor(read_document(_document_path(authority)))
+    cursor = _document_cursor(read_document(document_path(authority)))
     return build_settings_view(
         workspace=root,
         repo=root,
@@ -354,7 +404,7 @@ def _milestone_fields(
     held = document_rows(document, Epoch2Collection.MILESTONE).get(key)
     if isinstance(held, dict):
         return held
-    path = ledger_path(_document_path(authority), Epoch2Collection.MILESTONE)
+    path = ledger_path(document_path(authority), Epoch2Collection.MILESTONE)
     filed = [
         record.payload
         for record in effective_records(read_ledger_records(path))
@@ -372,7 +422,7 @@ def _sealed_bundle(
         DaemonValidationError: The Milestone's filed revisions do not read back as one
             chain, so no revision of it can be vouched for.
     """
-    path = ledger_path(_document_path(authority), Epoch2Collection.MILESTONE)
+    path = ledger_path(document_path(authority), Epoch2Collection.MILESTONE)
     payloads = [
         record.payload
         for record in read_ledger_records(path)
@@ -414,7 +464,7 @@ def _milestone_acceptance(*, authority: RootAuthority, key: str) -> MilestoneAcc
         DaemonValidationError: The Milestone's bundle revisions do not read back.
         FileNotFoundError: The selected generation carries no document.
     """
-    document = read_document(_document_path(authority))
+    document = read_document(document_path(authority))
     fields = _milestone_fields(authority=authority, document=document, key=key)
     urn = fields.get("urn") if fields is not None else None
     if fields is None or not isinstance(urn, str):
@@ -481,7 +531,7 @@ def _reconnect(*, route: str, authority: RootAuthority, cursor: int) -> dict[str
         DaemonValidationError: The document cannot be read through a cursor, or
             the client's cursor is one this tree could never have issued.
     """
-    server_cursor = _document_cursor(read_document(_document_path(authority)))
+    server_cursor = _document_cursor(read_document(document_path(authority)))
     held, patches = _retained(_firehose_path(authority), route=route)
     try:
         negotiation = negotiate_reconnect(

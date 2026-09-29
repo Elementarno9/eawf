@@ -138,12 +138,13 @@ def test_evidence_kind_is_a_literal_type() -> None:
 # CriterionEvidenceKind Literal -----------------------------------------
 
 
-def test_criterion_evidence_kind_has_three_members() -> None:
-    """The verification-flavor vocabulary has exactly three values."""
+def test_criterion_evidence_kind_has_four_members() -> None:
+    """The verification-flavor vocabulary has exactly four values."""
     assert set(get_args(CriterionEvidenceKind)) == {
         "deterministic",
         "jury",
         "attested",
+        "rendered_run",
     }
 
 

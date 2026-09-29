@@ -12,9 +12,11 @@ Run a complete Campaign from definition through terminal synthesis.
 
 ## 1. Authority
 
-- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
-- Effects: Campaign, evidence, question, dispatch, review and completion RPCs.
-- Allowed RPCs: `read_entity`, `query_evidence`, `submit_evidence`, `raise_question`, `submit_report`, `research.campaign.create`, `research.campaign.request_approval`, `research.campaign.activate`, `research.campaign.dispatch_frontier`, `research.campaign.checkpoint`, `research.campaign.begin_synthesis`, `research.campaign.submit_artifact`, `research.campaign.request_review`, `research.campaign.complete`, `research.campaign.drop`, `research.campaign.fail`, `research.campaign.get`. Any other RPC is denied before it reaches a handler.
+- Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Operates on: Campaign, through `projection.campaign.read`, `projection.campaign.step.read`, `projection.campaign.artifact.read`, `research.create_campaign`, `research.run`, `research.steer`, `research.cancel_campaign`.
+- Effects: Campaign create, run, steer and cancel verbs, their reads, and Run tools.
+- Allowed RPCs: `projection.campaign.read`, `projection.campaign.step.read`, `projection.campaign.artifact.read`, `research.create_campaign`, `research.run`, `research.steer`, `research.cancel_campaign`. Any other RPC is denied before it reaches a handler.
+- Run tools: `submit_evidence`, `submit_report`, `ask_operator`.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -65,4 +67,4 @@ The obligations the effective rule graph holds for activities `research` and rol
 
 Output one CampaignRunReport containing Campaign/plan/artifact revisions, round ledger, Runs, claim/evidence coverage, saturation, verifier result, Attention items, receipts, and final disposition.
 
-The report validates against `CampaignRunReport`, and its terminal outcome is exactly one of `completed`, `dropped`, `failed`, `needs_operator`, `paused`, `budget_exhausted`. Prose in the report is explanation, never the result.
+The report validates against `CampaignRunReport`, and its terminal outcome is exactly one of `completed`, `dropped`, `failed`, `needs_operator`, `paused`, `budget_exhausted`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /campaign` before returning it.

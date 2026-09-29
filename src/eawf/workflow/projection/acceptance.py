@@ -57,6 +57,11 @@ from eawf.kernel.projection.route_view import (
 )
 from eawf.kernel.projection.truth import TruthField, TruthState
 from eawf.kernel.state.epoch2.base import NonEmptyStr
+from eawf.observability.reflect.run_report import (
+    DEFAULT_PARTS,
+    SANDBOX_UNAVAILABLE,
+    ReportPartName,
+)
 from eawf.workflow.delivery.acceptance import AcceptanceApproval
 
 logger = logging.getLogger(__name__)
@@ -120,13 +125,29 @@ READINESS_SIGNALS: Final[tuple[str, ...]] = (*STATED_SIGNALS, *GATE_SIGNALS)
 #: rather than a number, because a count of what is never carried would be misread.
 REDACTED_SIZE: Final = "redacted by policy"
 
-#: The parts a report carries, in render order, each with whether it is included and why.
-#: Secrets are the one part no cursor and no permission can include.
-REPORT_PARTS: Final[tuple[tuple[str, bool, str], ...]] = (
-    ("rows", True, "every record the route rendered at this cursor, in render order"),
-    ("counts", True, "the count of each register the route binds, derived from the rows"),
-    ("unstated", True, "the declared columns no producer states, so the gaps are readable"),
-    ("secrets", False, "policy redacts these; no export of any view can carry them"),
+#: The size cell of a part the Run report counts off the Run's event lines and captured
+#: runtime as it is taken. The export route reads the Run's record and not those, so the
+#: card states no number it does not hold.
+TAKEN_SIZE: Final = "? counted when taken"
+
+#: The size cell of a part the report carries only when ``--parts`` names it.
+UNASKED_SIZE: Final = "not asked"
+
+#: Why the Run report carries each of its parts, in the order ``eawf run report`` writes
+#: them. Secrets are the one part no request and no permission can include.
+REPORT_PARTS: Final[Mapping[ReportPartName, str]] = MappingProxyType(
+    {
+        ReportPartName.TIMELINE: "every event the Run recorded, in order; a purged range "
+        "reads as purged",
+        ReportPartName.USAGE_AND_COST: "what the Run's captured runtime states, one counter "
+        "per line",
+        ReportPartName.TRANSCRIPT: "what the runner said, one line per event, scrubbed",
+        ReportPartName.SECRETS: (  # pragma: allowlist secret
+            "policy redacts these; no report of any Run can carry them"
+        ),
+        ReportPartName.SANDBOX_DECISIONS: f"left out unless --parts names it; "
+        f"{SANDBOX_UNAVAILABLE}",
+    }
 )
 
 #: What each acceptance route renders per row, in column order. The first field of every
@@ -475,35 +496,22 @@ def receipt_cards(receipts: Sequence[ProofReceipt]) -> tuple[ReceiptCard, ...]:
     )
 
 
-def _part_size(name: str, model: RouteReadModel) -> str:
-    """Return how much of one part there is, counted off ``model`` rather than estimated.
+def report_parts() -> tuple[ReportPart, ...]:
+    """Return the parts the Run report carries, planned as ``eawf run report`` plans them.
 
-    A part nothing counts is the redacted one: policy keeps it out of every export, so
-    its size is the reason it is absent rather than a number.
+    A part is included when the report carries it by default; secrets never are. A size
+    the report counts off the Run's event lines is not guessed here, because the export
+    route reads the Run's record and not its lines.
     """
-    counted: Mapping[str, tuple[int, str]] = {
-        "rows": (len(model.rows), "row"),
-        "counts": (len(model.counts), "register"),
-        "unstated": (len(model.unproduced()), "column"),
-    }
-    found = counted.get(name)
-    if found is None:
-        return REDACTED_SIZE
-    total, unit = found
-    return f"{total} {unit}" + ("" if total == 1 else "s")
-
-
-def report_parts(model: RouteReadModel) -> tuple[ReportPart, ...]:
-    """Return what a report of ``model`` would carry, sized off the view itself.
-
-    A size is counted rather than estimated: the rows, the registers and the silent
-    columns are all in hand, so the card states how much there is instead of promising
-    a figure the export would have to discover.
-    """
-    return tuple(
-        ReportPart(name=name, included=included, size=_part_size(name, model), why=why)
-        for name, included, why in REPORT_PARTS
-    )
+    parts: list[ReportPart] = []
+    for name, why in REPORT_PARTS.items():
+        included = name in DEFAULT_PARTS
+        if name is ReportPartName.SECRETS:
+            size = REDACTED_SIZE
+        else:
+            size = TAKEN_SIZE if included else UNASKED_SIZE
+        parts.append(ReportPart(name=name.value, included=included, size=size, why=why))
+    return tuple(parts)
 
 
 def export_report(model: RouteReadModel) -> ExportReport:
@@ -616,7 +624,7 @@ def build_acceptance_view(
         )
     if projection.route == RECEIPT_ROUTE:
         return _as(model, ReceiptCardView, cards=receipt_cards(receipts))
-    return _as(model, RunReportPlanView, parts=report_parts(model))
+    return _as(model, RunReportPlanView, parts=report_parts())
 
 
 __all__ = [

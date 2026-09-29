@@ -78,6 +78,7 @@ from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.lifecycle import Elapsed, Family, Layout
 from eawf.surfaces.tui.console.mutation import Card, Item, Result
+from eawf.surfaces.tui.console.operations import AnswerRequest
 from eawf.surfaces.tui.console.overlays.mutation_card import ledger_cell, results_frame
 from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.registry import REGISTRY
@@ -104,7 +105,7 @@ GALLERY_ROUTES: tuple[str, ...] = (*PLANNING_ROUTES, *DIAGNOSTICS_ROUTES)
 #: Search draw their packet layouts, each silent column a cell wearing the unknown token,
 #: and ``test_native_route_frames`` holds those three; the Backlog draws its two groups,
 #: which ``test_native_route_bodies`` holds; the roadmap draws its lane chart and History
-#: its fact ledger, which ``test_spine_frames_jury`` holds.
+#: its fact ledger, which ``test_spine_frames`` holds.
 TABLE_ROUTES: tuple[str, ...] = tuple(
     r
     for r in GALLERY_ROUTES
@@ -475,6 +476,12 @@ DETAIL_ROUTES: dict[Family, str] = {
 }
 
 
+def _renders_as(row: lifecycle.StateTreatment) -> str:
+    """Return the renders-as rule a gallery row states."""
+    rule = f"{row.severity.value} chip · {row.elapsed.value}"
+    return f"{rule} · {row.note}" if row.note else rule
+
+
 def _gallery(family: Family, *, width: int = 120) -> list[str]:
     """Return one family's gallery: a keyed table of every state, then the class legend."""
     rows = [
@@ -483,7 +490,7 @@ def _gallery(family: Family, *, width: int = 120) -> list[str]:
         "═" * width,
         f" {'STATE':<32}{'MEANING':<48}RENDERS AS",
         *(
-            f" {row.state:<32}{row.meaning:<48}{row.renders_as}"
+            f" {row.state:<32}{row.meaning:<48}{_renders_as(row)}"
             for row in lifecycle.TREATMENTS[family]
         ),
         "─" * width,
@@ -718,7 +725,7 @@ def test_con_104_a_detail_frame_opens_with_the_cursor_on_its_subject() -> None:
 
 
 def test_con_105_every_state_renders_through_exactly_one_of_four_fixed_classes() -> None:
-    assert {c.value: m for c, m in lifecycle.SEVERITY_MEANING.items()} == LEGEND
+    assert set(LEGEND) == {c.value for c in lifecycle.SeverityClass}
     for family in Family:
         for row in lifecycle.TREATMENTS[family]:
             assert isinstance(row.severity, lifecycle.SeverityClass)
@@ -988,7 +995,7 @@ def test_con_128_the_results_card_draws_the_ledger_cell_of_the_row_under_the_cur
         not_effects=(),
         refusal=None,
         unknown="",
-        request=None,
+        request=AnswerRequest(target="ACT-0901", option_id="approve"),
         stale_token="6",
     )
     card = Card(

@@ -31,8 +31,6 @@ from eawf.surfaces.tui.console.overlays.chassis import crumb
 from eawf.surfaces.tui.console.width import pad
 
 NAME = "consequence"
-#: The six panes every preview draws, in the only order it draws them.
-PANES: tuple[str, ...] = ("ACTION", "TARGET", "EFFECTS", "NOT", "IF STALE", "AUTHORITY")
 _ID = 16
 _STAMP = 11
 
@@ -299,7 +297,6 @@ __all__ = [
     "LEDGER_STAMPS",
     "NAME",
     "NO_STAMP",
-    "PANES",
     "ledger_cell",
     "preview_frame",
     "render",

@@ -34,31 +34,31 @@ from eawf.workflow.skills.discovery import (
     reconcile_skills,
 )
 
-# Read-only skills the model MAY auto-invoke: none of them mutates canonical
-# state, so autonomous invocation cannot drive a lifecycle transition.
-_READ_ONLY_SKILL_NAMES: frozenset[str] = frozenset(
-    {"mockup", "refactor", "research", "spike", "test", "why"}
-)
-
-# Skills the model is BARRED from auto-invoking: every canonical-mutating
-# skill, plus every operator-only (``user_only``) skill whatever its effects.
-_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
+# Skills the model MAY invoke: the agent lane admits them. A mutating one keeps
+# its protected actions operator-only, and those refuse before dispatch.
+_AGENT_LANE_SKILL_NAMES: frozenset[str] = frozenset(
     {
-        "accept",
         "attend",
         "backlog",
-        "campaign",
         "decide",
         "dispatch",
         "integrate",
         "memory",
-        "milestone",
+        "mockup",
         "plan",
-        "reflect",
-        "release",
-        "track",
+        "refactor",
+        "research",
+        "spike",
+        "test",
         "verify",
+        "why",
     }
+)
+
+# Skills the model is BARRED from invoking: the operator-only (``user_only``)
+# skills, each operator-invoked by design and saying so on its page.
+_MODEL_BARRED_SKILL_NAMES: frozenset[str] = frozenset(
+    {"accept", "campaign", "milestone", "reflect", "release", "track"}
 )
 
 
@@ -69,22 +69,23 @@ def _registry_by_name() -> dict[str, object]:
 # --- model-invocation classification contract -------------------------------
 
 
-@pytest.mark.parametrize("name", sorted(_READ_ONLY_SKILL_NAMES))
-def test_read_only_skill_is_model_invocable(name: str) -> None:
-    """Each read-only skill renders ``disable_model_invocation=False``."""
+@pytest.mark.parametrize("name", sorted(_AGENT_LANE_SKILL_NAMES))
+def test_agent_lane_skill_is_model_invocable(name: str) -> None:
+    """Each skill the agent lane admits renders ``disable_model_invocation=False``."""
     spec = _registry_by_name()[name]
     assert spec.disable_model_invocation is False, (
-        f"{name} is read-only and must be model-invocable"
+        f"{name} is admitted to the agent lane and must be model-invocable"
     )
 
 
 @pytest.mark.parametrize("name", sorted(_MODEL_BARRED_SKILL_NAMES))
-def test_mutating_skill_is_model_barred(name: str) -> None:
-    """Each mutating or operator-only skill stays ``disable_model_invocation=True``."""
+def test_operator_only_skill_is_model_barred(name: str) -> None:
+    """Each operator-only skill stays ``disable_model_invocation=True`` and says why."""
     spec = _registry_by_name()[name]
     assert spec.disable_model_invocation is True, (
-        f"{name} mutates state or is operator-only and must stay model-barred"
+        f"{name} is operator-only and must stay model-barred"
     )
+    assert "by design" in spec.body
 
 
 def test_every_shipped_skill_is_user_invocable() -> None:
@@ -95,13 +96,13 @@ def test_every_shipped_skill_is_user_invocable() -> None:
 def test_classification_partitions_the_registry() -> None:
     """The two classified sets exactly and disjointly cover every shipped skill.
 
-    Guards against a new skill landing without an explicit read-only /
+    Guards against a new skill landing without an explicit agent-lane /
     model-barred classification (which would leave its model-invocability
     un-pinned).
     """
-    assert _READ_ONLY_SKILL_NAMES.isdisjoint(_MODEL_BARRED_SKILL_NAMES)
+    assert _AGENT_LANE_SKILL_NAMES.isdisjoint(_MODEL_BARRED_SKILL_NAMES)
     registry_names = {spec.skill_name for spec in shipped_skill_specs()}
-    assert registry_names == _READ_ONLY_SKILL_NAMES | _MODEL_BARRED_SKILL_NAMES
+    assert registry_names == _AGENT_LANE_SKILL_NAMES | _MODEL_BARRED_SKILL_NAMES
 
 
 # --- reconcile sweep --------------------------------------------------------
@@ -250,7 +251,7 @@ def _rendered_argument_hint(rendered: str) -> str:
     raise AssertionError("rendered SKILL.md carries no argument-hint frontmatter line")
 
 
-@pytest.mark.parametrize("name", sorted(_READ_ONLY_SKILL_NAMES | _MODEL_BARRED_SKILL_NAMES))
+@pytest.mark.parametrize("name", sorted(_AGENT_LANE_SKILL_NAMES | _MODEL_BARRED_SKILL_NAMES))
 def test_rendered_skill_md_argument_hint_carries_runtime_options(name: str) -> None:
     """Every option the catalog grammar declares lands in the rendered hint line."""
     from eawf.workflow.skills.catalog import resolve_skill

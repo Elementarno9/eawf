@@ -55,11 +55,12 @@ from eawf.kernel.config.layered import (
     workspace_config_path,
 )
 from eawf.kernel.config.loader import load_yaml_layer
-from eawf.kernel.config.registry import leaf_key_lookup
+from eawf.kernel.config.registry import leaf_key_lookup, validate_config_value
 from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.runtime.daemon.methods import MethodContext, register
+from eawf.surfaces.cli.errors import UserError
 
 logger = logging.getLogger(__name__)
 
@@ -125,8 +126,9 @@ class SetLayerValueParams(BaseModel):
         key_path: Dotted-key as a list (e.g. ``["vcs", "auto_commit"]``).
             List form keeps the wire encoding unambiguous when any
             segment contains a literal ``.``.
-        value: Typed value to set. Caller is responsible for type
-            coercion before crossing the wire.
+        value: Value to set. The daemon coerces it to the type the config
+            registry declares for the key and refuses one outside the
+            declared range or choices.
         branch: Branch name (required when ``layer == "branch"``).
             Subdirectory form is preserved (``feature/foo`` →
             ``.ea/branches/feature/foo.yaml``).
@@ -525,7 +527,8 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         RuntimeError: When the daemon context is missing fields the
             mutator depends on.
         ValueError: When the layer is unknown, the layer is read-only,
-            or the params payload fails validation.
+            the params payload fails validation, or the value is not the
+            type, range or choice the config registry declares for the key.
     """
     try:
         args = SetLayerValueParams.model_validate(params)
@@ -565,6 +568,10 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
         raise ValueError(
             f"validation_failed: leaf {dotted!r} is not writable from the {args.layer} layer"
         )
+    try:
+        value = validate_config_value(dotted, args.value)
+    except UserError as exc:
+        raise ValueError(f"validation_failed: {exc}") from exc
 
     cache = _idempotency_cache(ctx)
     now_mono = time.monotonic()
@@ -587,14 +594,14 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
     try:
         with portalock.acquire(target, timeout=5.0):
             existing = load_yaml_layer(target)
-            _set_dotted(existing, list(args.key_path), args.value)
+            _set_dotted(existing, list(args.key_path), value)
             _atomic_write_yaml(target, existing)
 
             envelope = _build_envelope(
                 layer=args.layer,
                 layer_path=target,
                 key_path=list(args.key_path),
-                value=args.value,
+                value=value,
             )
             if ctx.bus is not None and hasattr(ctx.bus, "publish"):
                 ctx.bus.publish(envelope)
@@ -609,7 +616,7 @@ async def set_layer_value(ctx: MethodContext, params: dict[str, Any]) -> dict[st
                 layer=args.layer,
                 layer_path=str(target),
                 key_path=list(args.key_path),
-                value=args.value,
+                value=value,
                 envelope=envelope.model_dump(mode="json"),
                 idempotent_replay=False,
             ).model_dump(mode="json")

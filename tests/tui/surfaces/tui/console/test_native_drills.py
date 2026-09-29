@@ -5,7 +5,7 @@ caret as the destination's subject, and a caret that names no row drills nowhere
 home's cursor lands on Milestone leaves only, its Tab focuses the attention list only when
 the list holds something, and a Run frame stays about one Run whatever the arrows do. No
 prototype record is reachable from a live tree, and a keybar offers only keys that act on
-what the frame holds. Each test names the jury finding it closes.
+what the frame holds.
 """
 
 from __future__ import annotations
@@ -123,7 +123,7 @@ def _bar(view: View) -> str:
 # ---------- scope home: leaves only, Enter and Tab ----------
 
 
-def test_j1_02_j4_03_home_cursor_starts_on_a_milestone_leaf_never_the_track() -> None:
+def test_home_cursor_starts_on_a_milestone_leaf_never_the_track() -> None:
     view = _open("scope.home")
     assert view.session.sel_id == "MLS-0100"
     frame = render_route(view)
@@ -131,20 +131,20 @@ def test_j1_02_j4_03_home_cursor_starts_on_a_milestone_leaf_never_the_track() ->
     assert not any(row.startswith(" ▸ TRK-CORE") for row in frame)
 
 
-def test_j1_02_home_arrows_step_between_leaves_and_never_onto_the_track() -> None:
+def test_home_arrows_step_between_leaves_and_never_onto_the_track() -> None:
     view = _open("scope.home")
     for key in ("ArrowUp", "ArrowDown", "ArrowDown"):
         _press(view, key)
         assert view.session.sel_id == "MLS-0100"
 
 
-def test_j1_01_j4_04_home_enter_drills_the_leaf_with_it_as_subject() -> None:
+def test_home_enter_drills_the_leaf_with_it_as_subject() -> None:
     session = _press(_open("scope.home"), "Enter")
     assert (session.route, session.subj_id) == ("milestone", "MLS-0100")
     assert session.back.items()[-1].route == "scope.home"
 
 
-def test_j1_03_home_tab_with_nothing_waiting_says_so_and_keeps_the_focus() -> None:
+def test_home_tab_with_nothing_waiting_says_so_and_keeps_the_focus() -> None:
     view = _open("scope.home", document=QUIET)
     assert "Tab list" not in _bar(view)
     session = _press(view, "Tab", document=QUIET)
@@ -153,7 +153,7 @@ def test_j1_03_home_tab_with_nothing_waiting_says_so_and_keeps_the_focus() -> No
     assert [toast.text for toast in session.toasts] == [NOTHING_WAITING]
 
 
-def test_j1_03_j4_04_home_tab_focuses_the_attention_list_and_enter_opens_its_item() -> None:
+def test_home_tab_focuses_the_attention_list_and_enter_opens_its_item() -> None:
     view = _open("scope.home")
     assert "Tab list" in _bar(view)
     session = _press(view, "Tab")
@@ -171,7 +171,7 @@ def test_j1_03_j4_04_home_tab_focuses_the_attention_list_and_enter_opens_its_ite
 # ---------- a Run frame stays about one Run ----------
 
 
-def test_j1_05_j4_05_run_detail_arrows_never_move_to_another_run() -> None:
+def test_run_detail_arrows_never_move_to_another_run() -> None:
     view = _open("run.detail")
     pinned = view.session.subj_id
     assert pinned is not None
@@ -182,7 +182,7 @@ def test_j1_05_j4_05_run_detail_arrows_never_move_to_another_run() -> None:
     assert "↑↓" not in _bar(view)
 
 
-def test_j1_05_a_run_subject_the_register_does_not_hold_is_not_swapped_for_another() -> None:
+def test_a_run_subject_the_register_does_not_hold_is_not_swapped_for_another() -> None:
     frame = render_route(_open("run.detail", subject="RUN-99999999"))
     text = "\n".join(frame)
     assert "RUN-99999999 is not held" in text
@@ -192,7 +192,7 @@ def test_j1_05_a_run_subject_the_register_does_not_hold_is_not_swapped_for_anoth
 # ---------- every drill carries its subject ----------
 
 
-def test_j1_08_j2_02_j4_05_activity_enter_drills_the_run_under_the_caret() -> None:
+def test_activity_enter_drills_the_run_under_the_caret() -> None:
     view = _open("activity")
     _press(view, "ArrowDown")
     selected = view.session.sel_id
@@ -200,7 +200,7 @@ def test_j1_08_j2_02_j4_05_activity_enter_drills_the_run_under_the_caret() -> No
     assert (session.route, session.subj_id) == ("run.detail", selected)
 
 
-def test_j2_02_activity_enter_on_a_bucket_holding_nothing_is_a_no_op() -> None:
+def test_activity_enter_on_a_bucket_holding_nothing_is_a_no_op() -> None:
     view = _open("activity")
     view.session.bucket = "perm"
     view.session.filters["activity"] = "no such run"
@@ -211,7 +211,7 @@ def test_j2_02_activity_enter_on_a_bucket_holding_nothing_is_a_no_op() -> None:
     assert session.log[0].note == NOTHING_SELECTED
 
 
-def test_j1_08_task_enter_drills_the_row_under_the_caret_by_its_collection() -> None:
+def test_task_enter_drills_the_row_under_the_caret_by_its_collection() -> None:
     view = _open("task.detail")
     _press(view, "ArrowDown")
     selected = view.session.sel_id
@@ -220,14 +220,14 @@ def test_j1_08_task_enter_drills_the_row_under_the_caret_by_its_collection() -> 
     assert (session.route, session.subj_id) == ("task.detail", selected)
 
 
-def test_j1_08_batch_enter_drills_the_child_task_under_the_caret() -> None:
+def test_batch_enter_drills_the_child_task_under_the_caret() -> None:
     view = _open("batch.detail", subject="BAT-0100")
     assert view.session.sel_id == "TSK-0001"
     session = _press(view, "Enter")
     assert (session.route, session.subj_id) == ("task.detail", "TSK-0001")
 
 
-def test_j1_08_a_batch_with_no_child_offers_no_enter_and_says_so_when_pressed() -> None:
+def test_a_batch_with_no_child_offers_no_enter_and_says_so_when_pressed() -> None:
     document = {**bodies.DOCUMENT, "task": {}}
     view = _open("batch.detail", subject="BAT-0100", document=document)
     assert "Enter" not in _bar(view)
@@ -236,7 +236,7 @@ def test_j1_08_a_batch_with_no_child_offers_no_enter_and_says_so_when_pressed() 
     assert session.toasts and "BAT-0100" in session.toasts[-1].text
 
 
-def test_j1_12_track_enter_drills_its_milestone_never_a_prototype_campaign() -> None:
+def test_track_enter_drills_its_milestone_never_a_prototype_campaign() -> None:
     view = _open("track", subject="TRK-CORE")
     assert "Tab" in _bar(view)
     session = _press(view, "Enter")
@@ -248,7 +248,7 @@ def test_j1_12_track_enter_drills_its_milestone_never_a_prototype_campaign() -> 
     assert "Tab" not in _bar(_open("track"))
 
 
-def test_j1_12_timeline_enter_drills_the_row_never_a_prototype_marker() -> None:
+def test_timeline_enter_drills_the_row_never_a_prototype_marker() -> None:
     view = _open("timeline")
     assert "Enter" not in _bar(view), "a lane states no dated marker to open"
     session = _press(view, "Enter")
@@ -258,7 +258,7 @@ def test_j1_12_timeline_enter_drills_the_row_never_a_prototype_marker() -> None:
     assert (session.route, session.subj_id) == ("milestone", "MLS-0100")
 
 
-def test_j2_13_search_enter_drills_the_hit_under_the_caret() -> None:
+def test_search_enter_drills_the_hit_under_the_caret() -> None:
     view = _open("search")
     _press(view, "ArrowDown")
     selected = view.session.sel_id
@@ -268,7 +268,7 @@ def test_j2_13_search_enter_drills_the_hit_under_the_caret() -> None:
     assert session.route != "search"
 
 
-def test_j3_01_history_enter_never_opens_a_prototype_fact() -> None:
+def test_history_enter_never_opens_a_prototype_fact() -> None:
     view = _open("history")
     assert view.session.sel_id is None, "the ledger lists no fact until a feed is served"
     session = _press(view, "Enter")
@@ -276,27 +276,27 @@ def test_j3_01_history_enter_never_opens_a_prototype_fact() -> None:
     assert session.log[0].note == NOTHING_SELECTED
 
 
-def test_j1_08_milestone_enter_on_its_own_row_opens_its_acceptance_evidence() -> None:
+def test_milestone_enter_on_its_own_row_opens_its_acceptance_evidence() -> None:
     view = _open("milestone", subject="MLS-0030", model=ds.milestone_view(None))
     session = _press(view, "Enter")
     assert (session.overlay, session.ov_subject) == ("acceptance", "MLS-0030")
     assert "Tab" not in _bar(_open("milestone", model=ds.milestone_view(None)))
 
 
-def test_j2_08_an_empty_backlog_offers_no_row_key() -> None:
+def test_an_empty_backlog_offers_no_row_key() -> None:
     tasks = {key: {**row, "status": "RUNNING"} for key, row in bodies.DOCUMENT["task"].items()}
     bar = _bar(_open("backlog", document={**bodies.DOCUMENT, "task": tasks}))
     assert "↑↓" not in bar and "Enter" not in bar and "Tab" not in bar
 
 
-def test_j2_10_release_enter_drills_the_membership_milestone() -> None:
+def test_release_enter_drills_the_membership_milestone() -> None:
     view = _open("release", model=ds.release_view("CANDIDATE"))
     assert view.session.sel_id == "MLS-0030"
     session = _press(view, "Enter")
     assert (session.route, session.subj_id) == ("milestone", "MLS-0030")
 
 
-def test_j2_08_backlog_enter_opens_the_draft_card_on_the_row_under_the_caret() -> None:
+def test_backlog_enter_opens_the_draft_card_on_the_row_under_the_caret() -> None:
     tasks = {key: {**row, "status": "DRAFT"} for key, row in bodies.DOCUMENT["task"].items()}
     view = _open("backlog", document={**bodies.DOCUMENT, "task": tasks})
     _press(view, "ArrowDown")
@@ -315,7 +315,7 @@ def test_j2_08_backlog_enter_opens_the_draft_card_on_the_row_under_the_caret() -
 # ---------- attention: nothing open, nothing sealed ----------
 
 
-def test_j2_01_enter_on_an_attention_frame_with_nothing_open_opens_no_card() -> None:
+def test_enter_on_an_attention_frame_with_nothing_open_opens_no_card() -> None:
     view = _open("attention", document=QUIET)
     assert view.session.sel_id is None
     session = _press(view, "Enter", document=QUIET)
@@ -323,7 +323,7 @@ def test_j2_01_enter_on_an_attention_frame_with_nothing_open_opens_no_card() -> 
     assert "Enter" not in _bar(view)
 
 
-def test_j2_01_a_sealed_row_is_never_selected_for_an_answer() -> None:
+def test_a_sealed_row_is_never_selected_for_an_answer() -> None:
     session = Session()
     session.route, session.sel_id = "attention", "ACT-0003"
     assert selected_open_row(session, bodies._projection("attention")) is None
@@ -337,7 +337,7 @@ def test_j2_01_a_sealed_row_is_never_selected_for_an_answer() -> None:
 # ---------- no prototype record on a live tree ----------
 
 
-def test_j2_12_escape_from_a_fixed_parent_route_climbs_without_a_prototype_subject() -> None:
+def test_escape_from_a_fixed_parent_route_climbs_without_a_prototype_subject() -> None:
     for route in ("trust", "evidence"):
         session = Session()
         session.route = route
@@ -345,7 +345,7 @@ def test_j2_12_escape_from_a_fixed_parent_route_climbs_without_a_prototype_subje
         assert up is not None and up[1] is None, route
 
 
-def test_j2_12_a_subjectless_native_crumb_names_no_prototype_record() -> None:
+def test_a_subjectless_native_crumb_names_no_prototype_record() -> None:
     model = build_spine_view(bodies._projection("campaign"))
     for route in ("evidence", "campaign", "release"):
         view = _open("campaign")
@@ -355,7 +355,7 @@ def test_j2_12_a_subjectless_native_crumb_names_no_prototype_record() -> None:
         assert text.endswith(REGISTRY.route_word(route)), text
 
 
-def test_j1_12_j2_12_no_drill_on_the_probe_tree_reaches_a_prototype_record() -> None:
+def test_no_drill_on_the_probe_tree_reaches_a_prototype_record() -> None:
     reached: list[str] = []
     for route in ("track", "timeline", "cost.ceiling", "history", "search"):
         session = _press(_open(route), "Tab", "Enter")
@@ -366,19 +366,19 @@ def test_j1_12_j2_12_no_drill_on_the_probe_tree_reaches_a_prototype_record() -> 
 # ---------- keys shown are the keys that work ----------
 
 
-def test_j4_06_a_one_row_frame_offers_no_arrows_and_an_empty_one_no_enter() -> None:
+def test_a_one_row_frame_offers_no_arrows_and_an_empty_one_no_enter() -> None:
     track = _bar(_open("track", subject="TRK-CORE"))
     assert "↑↓" not in track and "Home End" not in track and "Enter drill" in track
     ceiling = _bar(_open("cost.ceiling"))
     assert "↑↓" not in ceiling and "Enter" not in ceiling
 
 
-def test_j4_06_paging_is_offered_only_when_the_table_is_windowed() -> None:
+def test_paging_is_offered_only_when_the_table_is_windowed() -> None:
     assert "PageUp PageDown" not in _bar(_open("task.detail"))
     assert "↑↓ row" in _bar(_open("task.detail"))
 
 
-def test_j4_06_the_prototype_replay_keeps_its_golden_keybar() -> None:
+def test_the_prototype_replay_keeps_its_golden_keybar() -> None:
     session = Session()
     session.route = "track"
     golden = load_fixture(Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture")
@@ -386,7 +386,7 @@ def test_j4_06_the_prototype_replay_keeps_its_golden_keybar() -> None:
     assert "Tab group" in frame[-1] and "↑↓ row" in frame[-1]
 
 
-def test_j4_06_unattended_requests_address_no_prototype_queue_on_a_live_tree() -> None:
+def test_unattended_requests_address_no_prototype_queue_on_a_live_tree() -> None:
     view = _open("unattended", model=build_operations_view(bodies._projection("unattended")))
     bar = _bar(view)
     assert "request pause" not in bar and "request drain" not in bar
@@ -395,7 +395,7 @@ def test_j4_06_unattended_requests_address_no_prototype_queue_on_a_live_tree() -
         assert (session.overlay, session.c_target) == (None, None)
 
 
-def test_j2_12_the_back_stack_crumb_names_no_prototype_record_on_a_live_tree() -> None:
+def test_the_back_stack_crumb_names_no_prototype_record_on_a_live_tree() -> None:
     session = Session()
     session.route = "evidence"
     session.back.record(remember(session))

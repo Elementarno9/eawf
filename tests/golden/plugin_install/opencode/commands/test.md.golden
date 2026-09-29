@@ -9,6 +9,7 @@ Design, add, repair or run a bounded test contract.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Operates on: test contract, through no lifecycle route; this is an explicit skill contract.
 - Effects: Leased test-workspace edits and test execution; no canonical RPC.
 - Allowed RPCs: none. This skill calls no daemon RPC.
 - Canonical state: never mutated by this skill.
@@ -56,7 +57,7 @@ The obligations the effective rule graph holds for activities `test`. They bind 
 
 Output one TestSkillReport containing strategy, kind, oracle, files, red/green receipts where applicable, covered cases, unverified cases, commands, and outcome.
 
-The report validates against `TestSkillReport`, and its terminal outcome is exactly one of `strategy_ready`, `tests_added`, `passed`, `failed`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `TestSkillReport`, and its terminal outcome is exactly one of `strategy_ready`, `tests_added`, `passed`, `failed`, `blocked`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /test` before returning it.
 
 <!-- argument hint: <design|add|repair|run> <target...> [--kind <unit|property|integration|golden|conformance|e2e>] [--invariant <text>] [--case <text>...] [--command <command>...] [--seed <N>] [--examples <N>] [--mode <inspect|apply>] [--budget <spec>] [--dry-run] -->
 ARGUMENTS: $ARGUMENTS

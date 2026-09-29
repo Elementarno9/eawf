@@ -12,11 +12,11 @@ and the argv it spawns can come from free-form agent-supplied
 directives, so the runner is itself a policy boundary rather than a
 callers-know-best pass-through. Two controls sit in front of the spawn:
 
-* Every argv is routed through
-  :func:`eawf.runtime.sandbox.argv_policy.validate_gate_argv` against
-  :data:`~eawf.kernel.spec.promotion.DEFAULT_GATE_ARGV_ALLOWLIST`. The
-  reject raises before the child starts, so an argv the L0 policy
-  refuses is never executed no matter which caller assembled it.
+* Every argv is resolved through
+  :func:`eawf.runtime.sandbox.argv_policy.resolve_command_family` to the
+  registered command family it runs. The reject raises before the child
+  starts, so an argv the L0 policy refuses is never executed no matter
+  which caller assembled it.
 * The child environment is built by
   :func:`eawf.runtime.sandbox.env_scrub.build_child_env` on the no-auth
   :data:`~eawf.runtime.sandbox.env_scrub.GATE_RUNTIME_LANE`, so the
@@ -73,7 +73,6 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from eawf.kernel.spec.promotion import DEFAULT_GATE_ARGV_ALLOWLIST
 from eawf.platform.artifacts.references import (
     Citation,
     CitationValidationError,
@@ -82,7 +81,7 @@ from eawf.platform.artifacts.references import (
 )
 from eawf.platform.artifacts.validation import REFERENCE_ROW_RE
 from eawf.platform.lint._conditional import changed_files
-from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
+from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, resolve_command_family
 from eawf.runtime.sandbox.env_scrub import (
     GATE_RUNTIME_LANE,
     build_child_env,
@@ -722,7 +721,7 @@ def _check_command_exit_zero(
         ) from exc
     argv = list(args.argv)
     try:
-        validate_gate_argv(argv, allowlist=list(DEFAULT_GATE_ARGV_ALLOWLIST))
+        resolve_command_family(argv)
     except ArgvPolicyError as exc:
         logger.warning(
             f"_check_command_exit_zero reject gate_id={spec.name!r} "

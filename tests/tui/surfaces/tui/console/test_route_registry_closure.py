@@ -86,6 +86,15 @@ DIVIDER_RUN = 3
 DIVIDER = "│"
 
 
+#: Each route group's routes, the sub-surfaces by their parent, and the declared holes,
+#: indexed off the registry's own rows.
+GROUPS: dict[RouteGroup, tuple[str, ...]] = {
+    g: tuple(s.id for s in REGISTRY.routes if s.group is g) for g in RouteGroup
+}
+SUB_SURFACES: dict[str, str] = {s.id: s.sub_surface_of for s in REGISTRY.routes if s.sub_surface_of}
+HOLES: dict[str, str] = {s.id: s.hole for s in REGISTRY.routes if s.hole}
+
+
 @pytest.fixture(scope="module")
 def contract() -> Contract:
     """Return the tracked golden contract."""
@@ -251,10 +260,10 @@ def test_ui_058_every_route_carries_a_route_group_never_a_family() -> None:
     assert "group" in fields
     assert "family" not in fields
     assert all(isinstance(spec.group, RouteGroup) for spec in ROUTES)
-    assert set().union(*map(set, REGISTRY.groups.values())) == set(REGISTRY.ids)
+    assert set().union(*map(set, GROUPS.values())) == set(REGISTRY.ids)
 
 
-@pytest.mark.parametrize(("route", "parent"), sorted(REGISTRY.sub_surfaces.items()))
+@pytest.mark.parametrize(("route", "parent"), sorted(SUB_SURFACES.items()))
 def test_ui_058_a_sub_surface_takes_its_parent_group_and_escapes_to_it(
     route: str, parent: str
 ) -> None:
@@ -264,7 +273,7 @@ def test_ui_058_a_sub_surface_takes_its_parent_group_and_escapes_to_it(
 
 
 def test_ui_058_a_receipt_takes_the_group_of_the_task_its_row_names_first() -> None:
-    assert REGISTRY.sub_surfaces["receipt"] == "task.detail"
+    assert SUB_SURFACES["receipt"] == "task.detail"
     assert REGISTRY.by_id["receipt"].group is RouteGroup.SPINE
 
 
@@ -485,7 +494,7 @@ def test_ui_039_every_row_has_goldens_at_every_size_or_a_declared_hole(
     contract: Contract, route: str
 ) -> None:
     drawn = _golden_routes(contract).get(route, set())
-    hole = REGISTRY.holes.get(route, "")
+    hole = HOLES.get(route, "")
     if hole:
         assert not drawn, f"{route} declares a hole but the contract draws it at {drawn}"
     else:
@@ -499,15 +508,15 @@ def test_ui_039_the_entry_states_are_golden_at_every_size(contract: Contract) ->
 
 
 def test_ui_039_the_open_holes_are_the_undrawn_sub_surfaces() -> None:
-    assert sorted(REGISTRY.holes) == ["campaign.artifact", "campaign.step", "evidence.digest"]
-    assert all(REGISTRY.holes[route].strip() for route in REGISTRY.holes)
-    assert set(REGISTRY.holes) <= set(REGISTRY.sub_surfaces)
+    assert sorted(HOLES) == ["campaign.artifact", "campaign.step", "evidence.digest"]
+    assert all(HOLES[route].strip() for route in HOLES)
+    assert set(HOLES) <= set(SUB_SURFACES)
 
 
 def test_ui_039_a_stale_hole_is_detected(contract: Contract) -> None:
     stale = RouteRegistry(_replace("health", hole="undrawn"))
     drawn = _golden_routes(contract)
-    assert [route for route in stale.holes if drawn.get(route)] == ["health"]
+    assert [s.id for s in stale.routes if s.hole and drawn.get(s.id)] == ["health"]
 
 
 # ---------- UI-033: pane stack and at most one declared rail ----------

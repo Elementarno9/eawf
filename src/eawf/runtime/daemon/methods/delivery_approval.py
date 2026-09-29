@@ -324,7 +324,7 @@ def _refused(code: ApprovalRefusal | AcceptanceRefusal, detail: str) -> DaemonVa
     return DaemonValidationError(f"validation_failed: {code.value}: {detail}")
 
 
-def _action_urn(container: QualifiedUrn, key: str) -> QualifiedUrn:
+def action_urn(container: QualifiedUrn, key: str) -> QualifiedUrn:
     """Return the URN of pending action *key* in the repository *container* names."""
     prefix = str(container).rsplit("/", 2)[0]
     return parse_qualified_urn(f"{prefix}/{EntityKind.PENDING_ACTION.value}/{key}")
@@ -431,7 +431,7 @@ def _evidence(session: RootSession) -> EvidenceView:
         ) from error
 
 
-def _actions(document: dict[str, Any]) -> dict[str, PendingAction]:
+def held_actions(document: dict[str, Any]) -> dict[str, PendingAction]:
     """Return every pending action the document holds that reads back.
 
     A row that does not validate is not a question anybody can answer, so
@@ -487,7 +487,7 @@ def _envelope(
     )
 
 
-def _commit_action(
+def commit_action(
     *,
     context: Epoch2RootContext,
     session: RootSession,
@@ -535,7 +535,7 @@ def _commit_action(
     return CommittedTransaction(receipt=receipt, envelope=plan.envelope)
 
 
-def _answer(
+def action_answer(
     action: PendingAction,
     *,
     urn: QualifiedUrn,
@@ -563,7 +563,7 @@ def _answer(
     )
 
 
-def _presented(action: PendingAction) -> UserQuestion | None:
+def presented_question(action: PendingAction) -> UserQuestion | None:
     """Return the host question for *action* while it waits, ``None`` once sealed.
 
     Raises:
@@ -646,18 +646,18 @@ def open_acceptance_approval(
     with context.session([str(args.urn)]) as session:
         milestone = _milestone_of(session.read_document(), args.urn)
         bundle, new_bundle = _bundle_to_ask_about(session, milestone=milestone, args=args, now=now)
-        held = _actions(session.read_document())
+        held = held_actions(session.read_document())
         standing = standing_question(held.values(), bundle=bundle)
         if standing is not None:
             logger.info(f"open_acceptance_approval standing action={standing.id}")
             return ApprovalCommit(
-                answer=_answer(
+                answer=action_answer(
                     standing,
                     urn=standing.urn,
                     bundle=bundle,
                     receipt=None,
                     reason=f"{standing.id} already asks about revision {bundle.revision}",
-                    host_question=_presented(standing),
+                    host_question=presented_question(standing),
                 )
             )
         envelopes: list[Envelope] = []
@@ -665,7 +665,7 @@ def open_acceptance_approval(
             envelopes.append(_append_bundle(session, bundle))
         taken = document_rows(session.read_document(), Epoch2Collection.PENDING_ACTION)
         key = next_action_key(taken)
-        urn = _action_urn(args.urn, key)
+        urn = action_urn(args.urn, key)
         action = acceptance_question(
             key=key,
             urn=urn,
@@ -677,7 +677,7 @@ def open_acceptance_approval(
         # Presented before the commit so an unpresentable question is never
         # filed, and returned only after it, so no surface shows a question
         # the tree does not hold.
-        host_question = _presented(action)
+        host_question = presented_question(action)
         request = ActionCommitRequest(
             urn=urn,
             idempotency_key=action.idempotency_key,
@@ -685,7 +685,7 @@ def open_acceptance_approval(
             operation="open",
             detail={"bundle_digest": bundle.digest()},
         )
-        committed = _commit_action(
+        committed = commit_action(
             context=context,
             session=session,
             request=request,
@@ -700,7 +700,7 @@ def open_acceptance_approval(
         f"revision={bundle.revision} sequence={committed.receipt.canonical_sequence}"
     )
     return ApprovalCommit(
-        answer=_answer(
+        answer=action_answer(
             action,
             urn=urn,
             bundle=bundle,
@@ -867,7 +867,7 @@ def seal_acceptance_approval(
             )
             envelopes: tuple[Envelope, ...] = ()
             if replayed is None and result.outcome is AnswerOutcome.SUPERSEDED:
-                committed = _commit_action(
+                committed = commit_action(
                     context=context,
                     session=session,
                     request=request,
@@ -881,7 +881,7 @@ def seal_acceptance_approval(
                 )
                 envelopes = (committed.envelope,)
             return ApprovalCommit(
-                answer=_answer(
+                answer=action_answer(
                     result.action,
                     urn=args.urn,
                     bundle=None,
@@ -910,7 +910,7 @@ def seal_acceptance_approval(
             outcome=AnswerOutcome.SEALED,
             option_id=args.option_id,
         )
-        committed = _commit_action(
+        committed = commit_action(
             context=context,
             session=session,
             request=request,
@@ -925,7 +925,7 @@ def seal_acceptance_approval(
         f"sequence={committed.receipt.canonical_sequence}"
     )
     return ApprovalCommit(
-        answer=_answer(
+        answer=action_answer(
             recorded,
             urn=args.urn,
             bundle=None,
@@ -937,7 +937,7 @@ def seal_acceptance_approval(
     )
 
 
-def _published(ctx: MethodContext, envelopes: Iterable[Envelope]) -> None:
+def publish_commits(ctx: MethodContext, envelopes: Iterable[Envelope]) -> None:
     """Publish the committed rows after the locks are released."""
     for envelope in envelopes:
         if not publish_projection(ctx.bus, envelope):
@@ -953,7 +953,7 @@ async def _open_acceptance_approval(
     context = ctx.native_root_context(authority.root)
     await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     commit = await asyncio.to_thread(open_acceptance_approval, context, args, now=datetime.now(UTC))
-    _published(ctx, commit.envelopes)
+    publish_commits(ctx, commit.envelopes)
     return commit.answer.model_dump(mode="json")
 
 
@@ -965,7 +965,7 @@ async def _seal_acceptance_approval(
     args = native_params(ApprovalSealParams, params)
     context = ctx.native_root_context(authority.root)
     commit = await asyncio.to_thread(seal_acceptance_approval, context, args, now=datetime.now(UTC))
-    _published(ctx, commit.envelopes)
+    publish_commits(ctx, commit.envelopes)
     return commit.answer.model_dump(mode="json")
 
 
@@ -981,6 +981,12 @@ __all__ = [
     "ApprovalCommit",
     "ApprovalOpenParams",
     "ApprovalSealParams",
+    "action_answer",
+    "action_urn",
+    "commit_action",
+    "held_actions",
     "open_acceptance_approval",
+    "presented_question",
+    "publish_commits",
     "seal_acceptance_approval",
 ]

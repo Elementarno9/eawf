@@ -89,7 +89,7 @@ def test_phase_04_end_to_end(
     result = runner.invoke(
         app,
         ["--json", "skill", "run", "/research"],
-        input='{"depth": "medium"}',
+        input="{}",
     )
     assert result.exit_code == 0, result.stdout
     env = OutputEnvelope.model_validate_json(result.stdout)

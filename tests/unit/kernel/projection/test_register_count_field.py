@@ -17,7 +17,7 @@ from eawf.kernel.projection.truth import Precision, TruthKind, TruthState
 from eawf.kernel.state.enums import MeasurementQuality
 
 
-def test_r09_an_exact_count_is_known_and_derived() -> None:
+def test_an_exact_count_is_known_and_derived() -> None:
     field = count_field(value=3, revision=7, refs=("activity",), reason=None)
 
     assert (field.value, field.state, field.truth_kind) == (
@@ -32,14 +32,14 @@ def test_r09_an_exact_count_is_known_and_derived() -> None:
     assert field.provenance_refs == ("activity",)
 
 
-def test_r09_a_zero_count_is_a_count_not_an_unknown() -> None:
+def test_a_zero_count_is_a_count_not_an_unknown() -> None:
     field = count_field(value=0, revision=1, refs=("attention",), reason=None)
 
     assert field.value == "0"
     assert field.state is TruthState.KNOWN
 
 
-def test_r09_an_estimate_is_known_but_bounded() -> None:
+def test_an_estimate_is_known_but_bounded() -> None:
     field = count_field(value=2, revision=1, refs=("activity",), reason="stale", estimate=True)
 
     assert field.truth_kind is TruthKind.ESTIMATED
@@ -47,7 +47,7 @@ def test_r09_an_estimate_is_known_but_bounded() -> None:
     assert field.measurement_quality is MeasurementQuality.ESTIMATED
 
 
-def test_r09_an_absent_count_is_unknown_naming_why() -> None:
+def test_an_absent_count_is_unknown_naming_why() -> None:
     field = count_field(value=None, revision=1, refs=("scope",), reason="no producer")
 
     assert field.value is None
@@ -56,11 +56,11 @@ def test_r09_an_absent_count_is_unknown_naming_why() -> None:
     assert field.missing_reason == "no producer"
 
 
-def test_r09_an_unknown_count_without_a_reason_is_refused() -> None:
+def test_an_unknown_count_without_a_reason_is_refused() -> None:
     with pytest.raises(ValueError, match="missing_reason"):
         count_field(value=None, revision=1, refs=("scope",), reason=None)
 
 
-def test_r09_a_revision_below_one_is_refused() -> None:
+def test_a_revision_below_one_is_refused() -> None:
     with pytest.raises(ValueError, match="producer_revision"):
         count_field(value=1, revision=0, refs=("scope",), reason=None)

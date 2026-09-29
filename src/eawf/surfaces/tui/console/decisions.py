@@ -21,7 +21,11 @@ from typing import Annotated, Final, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
-QuestionKey = Annotated[str, StringConstraints(pattern=r"^QST-\d{4,}$")]
+from eawf.kernel.state.epoch2.pending_action import AgentPrincipal, PendingAction
+
+#: An open question's ``QST-####`` key, or the ``ACT-####`` key of an operator decision,
+#: which the question detail draws the same way: a question with offered answers.
+QuestionKey = Annotated[str, StringConstraints(pattern=r"^(QST|ACT)-\d{4,}$")]
 ClaimKey = Annotated[str, StringConstraints(pattern=r"^CLM-\d{4,}$")]
 MilestoneKey = Annotated[str, StringConstraints(pattern=r"^MLS-\d{4,}$")]
 CampaignKey = Annotated[str, StringConstraints(pattern=r"^CAM-\d{4,}$")]
@@ -29,7 +33,7 @@ RunKey = Annotated[str, StringConstraints(pattern=r"^RUN-[0-9a-f]{8}$")]
 EvidenceKey = Annotated[str, StringConstraints(pattern=r"^EVD-\d{4,}$")]
 Text = Annotated[str, StringConstraints(min_length=1)]
 
-#: The fewest and most answers a question may offer as options; zero is a reply question.
+#: The most answers a question may offer as options; zero is a reply question.
 MAX_OPTIONS: Final = 4
 #: The rungs of a claim's ladder, in order, by name.
 RUNG_NAMES: Final[tuple[str, ...]] = ("resolve", "anchor", "screen", "entail")
@@ -91,8 +95,8 @@ class QuestionRecord(_Record):
     """One open question, as the question detail draws it.
 
     Attributes:
-        id: The question's ``QST-####`` key.
-        run: The asking Run.
+        id: The question's ``QST-####`` key, or an operator decision's ``ACT-####`` key.
+        run: The asking Run; ``None`` when a person asked, since a person asks inside none.
         scope: The scope the question was asked under.
         asked_at: When it was asked.
         question: The question in full.
@@ -117,7 +121,7 @@ class QuestionRecord(_Record):
     """
 
     id: QuestionKey
-    run: RunKey
+    run: RunKey | None = None
     scope: Text
     asked_at: AwareDatetime
     question: Text
@@ -153,6 +157,41 @@ class QuestionRecord(_Record):
     def option(self, key: str | None) -> QuestionOption | None:
         """Return the offered option ``key``, or ``None`` when the question offers none."""
         return next((o for o in self.options if o.key == key), None)
+
+    @classmethod
+    def of_decision(cls, action: PendingAction) -> Self:
+        """Return the question detail's record of a waiting operator decision.
+
+        A decision waits the way an open question does, with no halted work: it offers
+        its filed options, marks its one recommendation, and names the default and the
+        window in which an answer still overrides it.
+
+        Args:
+            action: A waiting ``operator_decision`` pending action.
+
+        Returns:
+            The record, open, asked by the Run the requesting agent acts inside or by
+            nobody's Run when a person asked.
+        """
+        requester = action.requested_by
+        return cls(
+            id=action.id,
+            run=requester.run_ref.entity_key if isinstance(requester, AgentPrincipal) else None,
+            scope=action.subject_ref.entity_key,
+            asked_at=action.created_at,
+            question=action.question,
+            options=tuple(
+                QuestionOption(
+                    key=option.option_id,
+                    label=option.label,
+                    recommended=option.option_id == action.recommended_option_id,
+                )
+                for option in action.options
+            ),
+            default_option=action.default_on_timeout,
+            override_until=action.override_until,
+            status=QuestionStatus.OPEN,
+        )
 
 
 # ---------- the pause ----------

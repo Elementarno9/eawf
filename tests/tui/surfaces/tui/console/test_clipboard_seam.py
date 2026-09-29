@@ -20,7 +20,7 @@ from eawf.surfaces.tui.console.navigation import NOT_COPIED, Ctx
 from eawf.surfaces.tui.console.session import Session, SessionSetup
 from eawf.surfaces.tui.console.tokens import Severity
 from tests.tui.surfaces.tui.console.test_guarded_quit import FIXTURE, _Host
-from tests.tui.surfaces.tui.console.test_jury_round3 import PROJECT_URN, _linked
+from tests.tui.surfaces.tui.console.test_live_tree_frames import PROJECT_URN, _linked
 
 
 async def _copied(route: str, key: str) -> tuple[str | None, str]:
@@ -34,19 +34,19 @@ async def _copied(route: str, key: str) -> tuple[str | None, str]:
         return app.clipboard, app.session.toasts[-1].text
 
 
-def test_k_01_y_puts_the_value_on_the_clipboard_and_then_says_so() -> None:
+def test_y_puts_the_value_on_the_clipboard_and_then_says_so() -> None:
     clipboard, toast = asyncio.run(_copied("activity", "y"))
     assert clipboard
     assert toast == clipboard
 
 
-def test_k_01_shift_y_puts_the_urn_on_the_clipboard_and_then_says_so() -> None:
+def test_shift_y_puts_the_urn_on_the_clipboard_and_then_says_so() -> None:
     clipboard, toast = asyncio.run(_copied("activity", "Y"))
     assert clipboard is not None and clipboard.startswith("urn:eawf:")
     assert toast == clipboard
 
 
-def test_k_01_a_console_with_no_clipboard_says_the_text_was_not_copied() -> None:
+def test_a_console_with_no_clipboard_says_the_text_was_not_copied() -> None:
     session = Session()
     session.route = "activity"
     ctx = Ctx(session=session, fixture=FIXTURE, host=_Host(), w=120, h=30)
@@ -57,7 +57,7 @@ def test_k_01_a_console_with_no_clipboard_says_the_text_was_not_copied() -> None
     assert session.log[0].note.startswith("not copied")
 
 
-def test_k_01_a_refusing_clipboard_is_never_reported_as_a_copy() -> None:
+def test_a_refusing_clipboard_is_never_reported_as_a_copy() -> None:
     session = Session()
     session.route = "activity"
     taken: list[str] = []
@@ -72,12 +72,12 @@ def test_k_01_a_refusing_clipboard_is_never_reported_as_a_copy() -> None:
     assert session.toasts[-1].title == "not copied"
 
 
-def test_k_01_a_console_that_is_not_running_writes_no_clipboard() -> None:
+def test_a_console_that_is_not_running_writes_no_clipboard() -> None:
     assert ConsoleApp(FIXTURE, FakeClock()).copy_text("RUN-1") is False
 
 
-def test_k_15_every_copied_urn_is_the_one_the_identity_module_formats() -> None:
-    """K-15: a record's URN and the tree's URN both round-trip the identity formatter."""
+def test_every_copied_urn_is_the_one_the_identity_module_formats() -> None:
+    """A record's URN and the tree's URN both round-trip the identity formatter."""
     app = _linked("scope.home", sel="MLS-0100")
     rows = app.view().rows
     record = dv.urn(app.session, app.fixture, rows=rows)
@@ -92,7 +92,7 @@ def test_k_15_every_copied_urn_is_the_one_the_identity_module_formats() -> None:
     assert (held.kind, held.repository_key) == (EntityKind.MILESTONE, "EAWF")
 
 
-def test_k_15_the_urn_copy_passes_through_the_formatter() -> None:
+def test_the_urn_copy_passes_through_the_formatter() -> None:
     app = _linked("scope.home", sel="MLS-0100")
     dispatch(app._ctx(), "Y", False)
     copied = app.session.toasts[-1].text

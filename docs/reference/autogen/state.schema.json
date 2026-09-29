@@ -1196,7 +1196,8 @@
           "enum": [
             "deterministic",
             "jury",
-            "attested"
+            "attested",
+            "rendered_run"
           ],
           "title": "Evidence Kind",
           "type": "string"
@@ -2014,7 +2015,7 @@
     },
     "GateSpec": {
       "additionalProperties": false,
-      "description": "One gate row that scores a :class:`CriterionSpec` at some cadence.\n\nThe ``kind`` field names the check family\n(``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)\nand ``args`` carries the per-kind arguments. The spec layer does\nnot validate the full ``args`` shape — that is the gate-runner\nsubsystem's responsibility (W08 lands per-kind args validators).\nThe one exception is the ``argv`` vector on argv-bearing kinds\n(``command_exit_zero`` today): an\n``@model_validator`` routes ``args[\"argv\"]`` through the L0\nargv-policy at construction time so a malformed or shell-deny\nargv cannot reach the spec layer regardless of which builder\nconstructed the row. The same policy fires again at spec-promote\npersistence via\n:func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense\nin depth across the parse-time and persistence-time seams.\n\n``timeout_s`` is ``None`` by default so a kind that has a timeout-class\ndefault does not need an explicit override. A present value must be a\npositive strict integer; zero is not a meaningful process budget.",
+      "description": "One gate row that scores a :class:`CriterionSpec` at some cadence.\n\n``kind`` names the check family (``command_exit_zero``, ``regex_match``,\n...) and ``args`` its arguments, whose full shape the gate runner\nvalidates. The exception is the ``argv`` of an argv-bearing kind: the\nrow names the registered command family the argv runs in\n``command_family_ref`` and construction refuses an argv outside it, as\nspec promote does again through\n:func:`eawf.kernel.spec.promotion.validate_argv_gates`.\n\n``timeout_s`` is ``None`` by default so a kind that has a timeout-class\ndefault needs no override; a present value is a positive strict integer.",
       "properties": {
         "args": {
           "additionalProperties": true,
@@ -2031,6 +2032,19 @@
           ],
           "title": "Cadence",
           "type": "string"
+        },
+        "command_family_ref": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command Family Ref"
         },
         "criterion_id": {
           "minLength": 1,

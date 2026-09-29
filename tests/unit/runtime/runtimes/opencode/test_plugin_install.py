@@ -84,8 +84,8 @@ def test_install_writes_plugin_js_sidecar_and_config(
     assert js_path.is_file()
     assert sidecar.is_file()
     assert config.is_file()
-    parsed = json.loads(config.read_text(encoding="utf-8"))
-    assert "mcp" in parsed
+    # No OpenCode key has an observed effect, so the installer adds none.
+    assert json.loads(config.read_text(encoding="utf-8")) == {}
     assert result.plugin_js is not None
     assert result.plugin_js.action == "created"
     assert result.sidecar is not None

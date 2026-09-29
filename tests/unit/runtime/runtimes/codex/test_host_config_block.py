@@ -3,7 +3,9 @@
 ``config.toml`` is shared with the operator and with Codex itself and is
 often untracked, so every write goes through a backup, a read-back that
 every byte outside the managed block survived, and a refusal to declare
-the eawf plugin a second time beside a declaration Codex keeps outside it.
+the ``[agents]`` table a second time beside one outside it. The block
+declares no plugin, so the ``eawf@<marketplace>`` entry Codex keeps for a
+real install stays the only one.
 """
 
 from __future__ import annotations
@@ -23,9 +25,7 @@ from eawf.runtime.runtimes.codex.plugin_install import install_plugin
 _BEGIN = "# ---- __eawf_managed begin ----"
 _END = "# ---- __eawf_managed end ----"
 _BLOCK = (
-    f"{_BEGIN}\n[plugins.eawf]\nenabled = true\n"
-    "[agents]\nmax_concurrent_threads_per_session = 8\nmax_depth = 1\n"
-    f"{_END}\n"
+    f"{_BEGIN}\n[agents]\nmax_concurrent_threads_per_session = 8\nmax_depth = 1\n{_END}\n"
 ).encode()
 
 # A blank line inside a section is where a pattern-based section removal
@@ -100,28 +100,32 @@ def test_surf_168_edit_losing_a_section_of_a_new_file_removes_it(tmp_path: Path)
 
 @pytest.mark.parametrize(
     "outside",
-    [
-        b"[plugins.eawf]\nenabled = false\n",
-        b'[plugins."eawf@eawf"]\nenabled = true\n',
-        b"plugins = { eawf = { enabled = true } }\n",
-    ],
-    ids=["bare", "qualified", "inline"],
+    [b"[agents]\nmax_depth = 3\n", b"agents = { max_depth = 3 }\n"],
+    ids=["table", "inline"],
 )
-def test_surf_168_duplicate_plugin_key_outside_the_block_refuses(
+def test_surf_168_duplicate_agents_key_outside_the_block_refuses(
     tmp_path: Path, outside: bytes
 ) -> None:
     config = _config(tmp_path, outside)
-    with pytest.raises(ManagedBlockError, match="already declares"):
+    with pytest.raises(ManagedBlockError, match=r"\[agents\]"):
         install_plugin(tmp_path, home=tmp_path / "home")
     assert config.read_bytes() == outside
     assert sorted(p.name for p in config.parent.iterdir()) == ["config.toml"]
 
 
-def test_surf_168_other_plugins_outside_the_block_are_not_duplicates(tmp_path: Path) -> None:
-    outside = b'[plugins."other@market"]\nenabled = true\n'
+@pytest.mark.parametrize(
+    "outside",
+    [b'[plugins."eawf@eawf"]\nenabled = true\n', b'[plugins."other@market"]\nenabled = true\n'],
+    ids=["eawf-marketplace", "other"],
+)
+def test_surf_168_block_declares_no_plugin_so_host_entries_are_kept(
+    tmp_path: Path, outside: bytes
+) -> None:
     config = _config(tmp_path, outside)
     install_plugin(tmp_path, home=tmp_path / "home")
-    assert config.read_bytes().startswith(outside)
+    written = config.read_bytes()
+    assert written.startswith(outside)
+    assert b"[plugins" not in written[len(outside) :]
 
 
 def test_surf_168_invalid_toml_outside_the_block_refuses(tmp_path: Path) -> None:

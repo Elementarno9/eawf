@@ -25,15 +25,25 @@ from eawf.runtime.budget.notice_inbox import (
     inbox_for,
 )
 from eawf.runtime.budget.notices import load_notice_ledger, notices_path
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext, register
+from eawf.runtime.daemon.methods import (
+    DaemonValidationError,
+    MethodContext,
+    note_cross_root_serve,
+    register,
+)
 
 
 class _PrincipalParams(BaseModel):
-    """Params naming the recipient a call acts for."""
+    """Params naming the recipient a call acts for, and the tree it is about.
+
+    ``repo_root`` addresses a tree other than the one the daemon was started on, as a
+    console attached to a repository does; omitted, the daemon's own tree is meant.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     principal: PrincipalKey
+    repo_root: str | None = None
 
 
 class _DisposeParams(BaseModel):
@@ -46,10 +56,14 @@ class _DisposeParams(BaseModel):
     disposition: NoticeDisposition
     expected_revision: StrictPositiveInt
     snooze_until: UtcDatetime | None = None
+    repo_root: str | None = None
 
 
-def _ledger_path(ctx: MethodContext) -> Path:
-    """Return the notice ledger beside the daemon's state file."""
+def _ledger_path(ctx: MethodContext, repo_root: str | None) -> Path:
+    """Return the notice ledger beside the addressed tree's state file."""
+    note_cross_root_serve(ctx, repo_root=repo_root, command="budget_notice")
+    if repo_root:
+        return notices_path(Path(repo_root) / ".ea" / "state.json")
     if ctx.state_path is None:
         raise RuntimeError("state_path not configured on daemon context")
     return notices_path(Path(ctx.state_path))
@@ -59,7 +73,7 @@ def _ledger_path(ctx: MethodContext) -> Path:
 async def list_budget_notices(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     """Return the principal's active, acknowledged and history notices."""
     args = _PrincipalParams.model_validate(params)
-    ledger = load_notice_ledger(_ledger_path(ctx))
+    ledger = load_notice_ledger(_ledger_path(ctx, args.repo_root))
     inbox = inbox_for(ledger, principal=args.principal, now=datetime.now(UTC))
     return {
         bucket: [notice.model_dump(mode="json") for notice in getattr(inbox, bucket)]
@@ -72,7 +86,10 @@ async def deliver_budget_notices(ctx: MethodContext, params: dict[str, Any]) -> 
     """Deliver the principal's undelivered revisions, each at most once."""
     args = _PrincipalParams.model_validate(params)
     delivered = await asyncio.to_thread(
-        deliver_pending, _ledger_path(ctx), principal=args.principal, now=datetime.now(UTC)
+        deliver_pending,
+        _ledger_path(ctx, args.repo_root),
+        principal=args.principal,
+        now=datetime.now(UTC),
     )
     return {"delivered": [notice.model_dump(mode="json") for notice in delivered]}
 
@@ -84,7 +101,7 @@ async def dispose_budget_notice(ctx: MethodContext, params: dict[str, Any]) -> d
     try:
         notice = await asyncio.to_thread(
             dispose_notice,
-            _ledger_path(ctx),
+            _ledger_path(ctx, args.repo_root),
             notice_key=args.notice_key,
             principal=args.principal,
             disposition=args.disposition,

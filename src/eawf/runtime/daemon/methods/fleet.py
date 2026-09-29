@@ -866,7 +866,7 @@ async def _live_repair_lane(ctx: MethodContext, lane: FleetLane) -> LaneRepairOu
     runtime = wave.runtime_preference[0] if wave.runtime_preference else "claude-code"
     role = wave.agent_role if wave.agent_role is not None else _Role.EXECUTOR
     effort = wave.effort_bucket if wave.effort_bucket is not None else _Effort.M
-    role_tier = resolve_role_blocks(repo_root)
+    role_tier = resolve_role_blocks(repo_root, unattended=True)
     base_prompt = render_dispatch_envelope(
         state,
         wave_id,

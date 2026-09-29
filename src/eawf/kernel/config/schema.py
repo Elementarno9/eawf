@@ -373,6 +373,16 @@ DEFAULT_STALL_INTERVAL_SECONDS: Final = 600
 #: The runtimes a ``runtime.<name>`` liveness block may be written for.
 STALL_INTERVAL_RUNTIMES: Final[tuple[str, ...]] = ("claude", "codex", "opencode")
 
+#: How long the host's permission hook waits for a decision recorded here before
+#: it answers nothing and leaves the call to the host's own prompt.
+DEFAULT_PERMISSION_WAIT_SECONDS: Final = 20
+
+#: The longest that wait may be set to. Claude Code kills a command hook after 60
+#: seconds unless its entry sets a timeout, and the installed entry sets none, so
+#: the cap leaves the hook's own start-up and the answer room inside that window;
+#: a hook killed mid-wait would hand the host nothing at all.
+MAX_PERMISSION_WAIT_SECONDS: Final = 50
+
 
 class RuntimeLivenessConfig(BaseModel):
     """Strict typed model for one ``runtime.<name>`` liveness block.
@@ -383,16 +393,24 @@ class RuntimeLivenessConfig(BaseModel):
     Attributes:
         stall_interval_s: The silence a Run on this runtime is allowed
             before it is flagged stalled.
+        permission_wait_s: How long the host's permission hook waits for a
+            principal's decision before leaving the call to the host's own
+            prompt; ``0`` records the call and never waits.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     stall_interval_s: StrictInt = Field(default=DEFAULT_STALL_INTERVAL_SECONDS, ge=0, le=86_400)
+    permission_wait_s: StrictInt = Field(
+        default=DEFAULT_PERMISSION_WAIT_SECONDS, ge=0, le=MAX_PERMISSION_WAIT_SECONDS
+    )
 
 
 __all__ = [
     "ALL_ROLES",
+    "DEFAULT_PERMISSION_WAIT_SECONDS",
     "DEFAULT_STALL_INTERVAL_SECONDS",
+    "MAX_PERMISSION_WAIT_SECONDS",
     "STALL_INTERVAL_RUNTIMES",
     "AgentDrivenReleasePolicy",
     "AgentsConfig",

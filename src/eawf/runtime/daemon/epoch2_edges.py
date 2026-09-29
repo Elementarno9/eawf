@@ -1,9 +1,10 @@
 """Facts a lifecycle edge writes or re-judges beyond what its caller supplies.
 
 The transaction walks every native edge the same way; the few edges that
-carry a fact of their own -- a first-claim stamp, a Batch listing to undo,
-a ceiling that reads sibling rows -- are decided here, against the locked
-document the transaction already holds.
+carry a fact of their own -- a claim stamp, a released lease's contract
+revision, a Batch listing to undo, a predicate that reads sibling rows --
+are decided here, against the locked document the transaction already
+holds.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import LifecycleStatus, TransitionGuard
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.daemon.methods.domain_guards import batch_activation_admitted
+from eawf.runtime.daemon.methods.domain_guards import batch_activation_admitted, task_run_open
 from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
 
@@ -27,10 +28,11 @@ def locked_unmet(
     """Return the guards that fail when re-judged against the locked document.
 
     The per-verb preflight answers every computable guard from a read it
-    releases before the commit. The hard WIP ceiling is judged again here,
-    because it reads sibling Batches rather than the record being moved:
-    two activations over different Batches would each pass a preflight
-    taken before the other committed.
+    releases before the commit. The guards that read sibling rows rather
+    than the record being moved are judged again here: two activations
+    over different Batches would each pass a preflight taken before the
+    other committed, and a Run queued against a Task after the preflight
+    of its release would otherwise lose its Task underneath it.
 
     Args:
         document: The locked document.
@@ -46,6 +48,13 @@ def locked_unmet(
         and not batch_activation_admitted(document, record)
     ):
         return frozenset({TransitionGuard.BATCH_WIP_ADMITS})
+    if (
+        isinstance(record, Task)
+        and record.status is TaskStatus.CLAIMED
+        and target is TaskStatus.PLANNED
+        and task_run_open(document, record)
+    ):
+        return frozenset({TransitionGuard.NO_ACTIVE_RUN})
     return frozenset()
 
 
@@ -54,29 +63,36 @@ def edge_updates(
     *,
     target: LifecycleStatus,
     updates: Mapping[str, Any],
+    actor: str,
     now: datetime,
 ) -> dict[str, Any]:
     """Return the field values the edge writes, the request's own included.
 
-    The first claim of a Task carries a fact the caller never supplies: it
-    stamps ``first_claimed_at``, which closes demotion for good.
+    Two Task edges carry facts the caller never supplies. A claim records
+    its actor as the lease holder, and the first claim stamps
+    ``first_claimed_at``, which closes demotion for good. A released lease
+    increments the contract revision, because the Task is planned again
+    under a contract a new claimant has not yet taken.
 
     Args:
         record: The record as the document holds it.
         target: The status the request moves to.
         updates: The field values the request supplies.
+        actor: The principal the request is attributed to.
         now: When the transition happened.
 
     Returns:
         The updates handed to the reducer.
     """
     written = dict(updates)
-    if (
-        isinstance(record, Task)
-        and target is TaskStatus.CLAIMED
-        and record.first_claimed_at is None
-    ):
-        written["first_claimed_at"] = now
+    if not isinstance(record, Task):
+        return written
+    if target is TaskStatus.CLAIMED:
+        written["claimed_by"] = actor
+        if record.first_claimed_at is None:
+            written["first_claimed_at"] = now
+    elif record.status is TaskStatus.CLAIMED and target is TaskStatus.PLANNED:
+        written["contract_revision"] = record.contract_revision + 1
     return written
 
 

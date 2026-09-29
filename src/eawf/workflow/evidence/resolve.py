@@ -56,7 +56,7 @@ criterion flavors surface as a whole-result
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import assert_never
@@ -357,8 +357,12 @@ def resolve(
     if not ref.strip():
         raise ValueError("evidence ref must be non-empty")
 
-    if evidence_kind == "deterministic":
-        result = _resolve_deterministic(ref, project_root=project_root)
+    # A rendered-run criterion's references are receipts and paths like any
+    # deterministic one's; what it may cite is the review gate's concern.
+    if evidence_kind == "deterministic" or evidence_kind == "rendered_run":
+        result = replace(
+            _resolve_deterministic(ref, project_root=project_root), evidence_kind=evidence_kind
+        )
         logger.debug(
             f"resolve ref={ref!r} kind={evidence_kind} status={result.status} check={result.check}"
         )

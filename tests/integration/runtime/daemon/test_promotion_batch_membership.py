@@ -46,7 +46,7 @@ def _draft(batches: dict[str, Any]) -> dict[str, dict[str, Any]]:
         ),
     ],
 )
-def test_r06_promotion_into_a_batch_with_no_live_row_is_refused(
+def test_promotion_into_a_batch_with_no_live_row_is_refused(
     tmp_path: Path, batches: dict[str, Any]
 ) -> None:
     canary = _canary(tmp_path, _draft(batches))
@@ -61,7 +61,7 @@ def test_r06_promotion_into_a_batch_with_no_live_row_is_refused(
     assert document_path(canary).read_bytes() == before
 
 
-def test_r06_promotion_into_a_live_active_batch_still_lists_the_task(tmp_path: Path) -> None:
+def test_promotion_into_a_live_active_batch_still_lists_the_task(tmp_path: Path) -> None:
     """The positive control: a live ACTIVE row takes the Task."""
     canary = _canary(tmp_path, _draft({"BAT-0007": seed_row("batch", "ACTIVE")}))
 

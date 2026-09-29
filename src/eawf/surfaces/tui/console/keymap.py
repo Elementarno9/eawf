@@ -34,7 +34,7 @@ DISMISS = "-"
 
 OVERLAY_KEYS: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
-        "help": ("Escape",),
+        "help": ("PageUp", "PageDown", "Escape"),
         "palette": ("Escape",),
         "consequence": ("Enter", "Escape"),
         "question": ("1", "2", "3", "4", "w", "x", "Escape"),

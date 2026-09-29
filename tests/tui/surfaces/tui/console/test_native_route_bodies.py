@@ -476,7 +476,7 @@ def test_con_108_the_three_empty_frames_answer_three_questions() -> None:
 # ---------- CON-126 in the frame: an action another principal holds ----------
 
 
-def test_j2_06_the_attention_route_groups_open_rows_by_bucket_and_lists_no_sealed_row() -> None:
+def test_the_attention_route_groups_open_rows_by_bucket_and_lists_no_sealed_row() -> None:
     frame = _frame("attention")
     heads = [row.split("  ")[0].strip() for row in frame if re.match(r"^ [A-Z][A-Z ]+  \d", row)]
     assert heads == ["NEEDS OPERATOR"]

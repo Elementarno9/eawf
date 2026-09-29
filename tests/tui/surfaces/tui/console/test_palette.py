@@ -152,7 +152,7 @@ def test_con_097_search_is_never_a_route_row_and_an_overflow_ends_in_a_search_ro
     assert "search" in rows[-1]
 
 
-# ---------- V-16: an untitled record is described, never by a route id ----------
+# ---------- an untitled record is described, never by a route id ----------
 
 
 _ROOT = "eawf://EAWF/EAWF/EAWF"
@@ -195,16 +195,14 @@ def _what(fixture: Fixture, key: str) -> str:
 @pytest.mark.parametrize(
     ("key", "what"), [("BAT-0101", "Batch · ACTIVE"), ("TRK-X", "Track · ACTIVE")]
 )
-def test_v16_an_untitled_record_shows_its_kind_and_state(
-    fixture: Fixture, key: str, what: str
-) -> None:
+def test_an_untitled_record_shows_its_kind_and_state(fixture: Fixture, key: str, what: str) -> None:
     assert _what(fixture, key) == what
 
 
-def test_v16_an_untitled_record_is_no_hit_for_its_parents_id(fixture: Fixture) -> None:
+def test_an_untitled_record_is_no_hit_for_its_parents_id(fixture: Fixture) -> None:
     found = [h.name for h in hits("mls", entities(fixture, _held())) if h.kind is HitKind.ENTITY]
     assert "MLS-0101" in found and "BAT-0101" not in found
 
 
-def test_v16_a_titled_record_keeps_its_title(fixture: Fixture) -> None:
+def test_a_titled_record_keeps_its_title(fixture: Fixture) -> None:
     assert _what(fixture, "MLS-0101") == "Cut 0.7.0rc1"

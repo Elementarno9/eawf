@@ -31,7 +31,7 @@ def test_resolve_routes_on_criterion_evidence_kind_not_evidence_kind() -> None:
     """The dispatcher's routing key is CriterionEvidenceKind, not EvidenceKind.
 
     The two enums are disjoint by value: CriterionEvidenceKind is
-    {deterministic, jury, attested}; EvidenceKind is {audit, artifact,
+    {deterministic, jury, attested, rendered_run}; EvidenceKind is {audit, artifact,
     decision, store_record, external_url}. None of the EvidenceKind
     values is a valid resolve() route, so a regression that swapped the
     routing enum would have to accept an EvidenceKind value here — and
@@ -39,7 +39,7 @@ def test_resolve_routes_on_criterion_evidence_kind_not_evidence_kind() -> None:
     """
     criterion_values = set(CriterionEvidenceKind.__args__)  # type: ignore[attr-defined]
     evidence_values = set(EvidenceKind.__args__)  # type: ignore[attr-defined]
-    assert criterion_values == {"deterministic", "jury", "attested"}
+    assert criterion_values == {"deterministic", "jury", "attested", "rendered_run"}
     assert criterion_values.isdisjoint(evidence_values)
 
     # Every CriterionEvidenceKind value is accepted by resolve().

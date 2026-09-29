@@ -1,6 +1,6 @@
 """The settings, operations and entry frames read the way the design pack draws them.
 
-Each test is named by the console jury finding it closes. The settings route opens on the
+The settings route opens on the
 pack's section, closes its rail before the keybar, chooses a value from a vertical list
 that keeps the stored value marked, filters its keys, and draws the stack as a boxed,
 read-only overlay. The operations frames speak in operator words -- no storage name, no
@@ -76,10 +76,10 @@ def _spans(row: str) -> dict[str, tuple[str | None, bool]]:
     return {s.text: (s.surface, s.bold) for s in paint(row, Part.BODY)}
 
 
-# ---------- J3-03: the history keybar keeps copy and the way back at 80 ----------
+# ---------- the history keybar keeps copy and the way back at 80 ----------
 
 
-def test_j3_03_the_history_bar_keeps_copy_and_back_at_80() -> None:
+def test_the_history_bar_keeps_copy_and_back_at_80() -> None:
     """The paging pairs give way before ``Esc back`` and ``y copy`` do."""
     bar = keybar([entry.pair() for entry in native_keys("history", windowed=True)], 80)
     assert "y copy" in bar
@@ -87,7 +87,7 @@ def test_j3_03_the_history_bar_keeps_copy_and_back_at_80() -> None:
     assert "Home End" not in bar
 
 
-def test_j3_03_paging_is_kept_when_dropping_it_would_not_save_the_global() -> None:
+def test_paging_is_kept_when_dropping_it_would_not_save_the_global() -> None:
     """A bar too wide even without its pages keeps them and loses its globals as before."""
     pairs = [("↑↓", "row"), ("PageUp PageDown", "page"), ("a", "x" * 70), ("Esc", "back")]
     bar = keybar(pairs, 80)
@@ -95,10 +95,10 @@ def test_j3_03_paging_is_kept_when_dropping_it_would_not_save_the_global() -> No
     assert "Esc" not in bar
 
 
-# ---------- J3-04: a linked console opens Settings on planning ----------
+# ---------- a linked console opens Settings on planning ----------
 
 
-def test_j3_04_a_linked_console_opens_settings_on_planning() -> None:
+def test_a_linked_console_opens_settings_on_planning() -> None:
     """The section cursor is placed in the kernel catalog's rail order, not the prototype's."""
     seam = ProjectionSeam(route="settings", scope_id="EAWF", state_path=None)
     app = ConsoleApp(chrome=load_chrome(), seam=seam, clock=FakeClock())
@@ -106,16 +106,14 @@ def test_j3_04_a_linked_console_opens_settings_on_planning() -> None:
     assert catalog_section_order()[app.session.set_sec] == "planning"
 
 
-def test_j3_04_the_catalog_order_is_the_order_a_built_view_draws(tree: Path) -> None:
+def test_the_catalog_order_is_the_order_a_built_view_draws(tree: Path) -> None:
     assert _view(tree).sections() == catalog_section_order()
 
 
-# ---------- J3-05 / J4-15: the rail, category and glyph colours ----------
+# ---------- the rail, category and glyph colours ----------
 
 
-def test_j3_05_the_rail_selection_and_categories_take_the_accent(
-    tree: Path, fixture: Fixture
-) -> None:
+def test_the_rail_selection_and_categories_take_the_accent(tree: Path, fixture: Fixture) -> None:
     rows = _settings(fixture, _view(tree), sr.LITERAL_KEY, w=120, h=30)
     category = next(row for row in rows if row.startswith("QUALITY"))
     selected = next(row for row in rows if row.startswith("▸ prose"))
@@ -127,27 +125,27 @@ def test_j3_05_the_rail_selection_and_categories_take_the_accent(
     ("glyph", "surface"),
     [("=", "ok"), ("≠", "warn"), ("·", "dim"), ("–", "dim")],  # noqa: RUF001
 )
-def test_j3_05_each_key_glyph_is_coloured_by_what_it_says(glyph: str, surface: str) -> None:
+def test_each_key_glyph_is_coloured_by_what_it_says(glyph: str, surface: str) -> None:
     row = f"  prose        │ ▸ {glyph} level                  strict      repo      "
     assert _spans(row)[glyph] == (surface, surface in ("ok", "warn"))
 
 
-def test_j3_05_a_glyph_outside_a_settings_row_is_not_coloured() -> None:
+def test_a_glyph_outside_a_settings_row_is_not_coloured() -> None:
     assert "=" not in _spans("  a = b")
 
 
-def test_j4_15_categories_are_upper_case_on_the_rail(tree: Path, fixture: Fixture) -> None:
+def test_categories_are_upper_case_on_the_rail(tree: Path, fixture: Fixture) -> None:
     rows = _settings(fixture, _view(tree), sr.BOOL_KEY, w=160, h=60)
     rail = [row.split("│")[0].strip() for row in rows]
     assert "EXECUTION" in rail
     assert "execution" not in rail
 
 
-# ---------- J3-06: the rail is closed before the keybar ----------
+# ---------- the rail is closed before the keybar ----------
 
 
 @pytest.mark.parametrize(("w", "h"), sr.SIZES)
-def test_j3_06_the_rail_closes_on_its_own_row(tree: Path, fixture: Fixture, w: int, h: int) -> None:
+def test_the_rail_closes_on_its_own_row(tree: Path, fixture: Fixture, w: int, h: int) -> None:
     view = _view(tree)
     rows = _settings(fixture, view, sr.BOOL_KEY, w=w, h=h)
     rail = rail_width(view, wide=breadth_of(w) >= Breadth.WIDE)
@@ -155,19 +153,17 @@ def test_j3_06_the_rail_closes_on_its_own_row(tree: Path, fixture: Fixture, w: i
     assert len(rows) == h
 
 
-# ---------- J3-08: the vertical chooser keeps the stored value marked ----------
+# ---------- the vertical chooser keeps the stored value marked ----------
 
 
-def test_j3_08_the_chooser_is_a_vertical_list_at_rest(tree: Path, fixture: Fixture) -> None:
+def test_the_chooser_is_a_vertical_list_at_rest(tree: Path, fixture: Fixture) -> None:
     body = "\n".join(_settings(fixture, _view(tree), sr.LITERAL_KEY, w=120, h=30))
     assert "│    ○ loose" in body
     assert "│    ● standard" in body
     assert "│    ○ strict" in body
 
 
-def test_j3_08_pointing_at_a_value_keeps_the_stored_one_dotted(
-    tree: Path, fixture: Fixture
-) -> None:
+def test_pointing_at_a_value_keeps_the_stored_one_dotted(tree: Path, fixture: Fixture) -> None:
     view = _view(tree)
     session = sr._on(sr._session(), view, sr.LITERAL_KEY)
     sr._press(fixture, view, session, ["Enter", "ArrowDown"])
@@ -177,13 +173,11 @@ def test_j3_08_pointing_at_a_value_keeps_the_stored_one_dotted(
     assert "VALUE    ●" not in body
 
 
-# ---------- J3-09: the stack is a boxed, read-only overlay ----------
+# ---------- the stack is a boxed, read-only overlay ----------
 
 
 @pytest.mark.parametrize(("w", "h"), sr.SIZES)
-def test_j3_09_the_stack_is_a_boxed_read_only_card(
-    tree: Path, fixture: Fixture, w: int, h: int
-) -> None:
+def test_the_stack_is_a_boxed_read_only_card(tree: Path, fixture: Fixture, w: int, h: int) -> None:
     view = _view(tree)
     rows = sr._frame(
         fixture, view, sr._on(sr._session("settings.stack"), view, sr.BOOL_KEY), w=w, h=h
@@ -196,7 +190,7 @@ def test_j3_09_the_stack_is_a_boxed_read_only_card(
     assert any(row.startswith("└") and row.endswith("┘") for row in rows)
 
 
-def test_j3_09_a_full_second_tier_folds_the_card_rather_than_losing_a_row(
+def test_a_full_second_tier_folds_the_card_rather_than_losing_a_row(
     tree: Path, fixture: Fixture
 ) -> None:
     view = _view(tree)
@@ -219,10 +213,10 @@ def test_j3_09_a_full_second_tier_folds_the_card_rather_than_losing_a_row(
         assert f"│ {label}" in body, label
 
 
-# ---------- J3-10: the filter narrows the keys, and the wide bar advertises it ----------
+# ---------- the filter narrows the keys, and the wide bar advertises it ----------
 
 
-def test_j3_10_the_filter_narrows_keeps_and_clears(tree: Path, fixture: Fixture) -> None:
+def test_the_filter_narrows_keeps_and_clears(tree: Path, fixture: Fixture) -> None:
     view = _view(tree)
     session = sr._on(sr._session(), view, sr.LITERAL_KEY)
     sr._press(fixture, view, session, ["\\", "l", "e", "v"])
@@ -236,7 +230,7 @@ def test_j3_10_the_filter_narrows_keeps_and_clears(tree: Path, fixture: Fixture)
     assert session.set_filter == ""
 
 
-def test_j3_10_a_filter_that_matches_nothing_says_so(tree: Path, fixture: Fixture) -> None:
+def test_a_filter_that_matches_nothing_says_so(tree: Path, fixture: Fixture) -> None:
     view = _view(tree)
     session = sr._on(sr._session(), view, sr.LITERAL_KEY)
     sr._press(fixture, view, session, ["\\", "z", "z", "z"])
@@ -244,17 +238,17 @@ def test_j3_10_a_filter_that_matches_nothing_says_so(tree: Path, fixture: Fixtur
 
 
 @pytest.mark.parametrize(("w", "advertised"), [(80, False), (119, False), (120, True)])
-def test_j3_10_stack_and_filter_are_advertised_from_120(
+def test_stack_and_filter_are_advertised_from_120(
     tree: Path, fixture: Fixture, w: int, advertised: bool
 ) -> None:
     bar = _settings(fixture, _view(tree), sr.BOOL_KEY, w=w, h=24)[-1]
     assert ("i stack" in bar and "\\ filter" in bar) is advertised
 
 
-# ---------- J3-11: a number steps rather than being retyped ----------
+# ---------- a number steps rather than being retyped ----------
 
 
-def test_j3_11_arrows_step_a_whole_number(tree: Path, fixture: Fixture) -> None:
+def test_arrows_step_a_whole_number(tree: Path, fixture: Fixture) -> None:
     view = _view(tree)
     session = sr._on(sr._session(), view, sr.INT_KEY)
     sr._press(fixture, view, session, ["Enter", "ArrowUp", "ArrowUp", "ArrowDown"])
@@ -273,38 +267,38 @@ def test_j3_11_arrows_step_a_whole_number(tree: Path, fixture: Fixture) -> None:
         ("float", "1", False, "0.95"),
     ],
 )
-def test_j3_11_step_boundaries(tree: Path, value_type: str, text: str, up: bool, out: str) -> None:
+def test_step_boundaries(tree: Path, value_type: str, text: str, up: bool, out: str) -> None:
     leaf = _view(tree).leaf(sr.INT_KEY).model_copy(update={"value_type": value_type})
     assert step(leaf, text, up) == out
 
 
-# ---------- J3-12: rail width, category case and the context row ----------
+# ---------- rail width, category case and the context row ----------
 
 
 @pytest.mark.parametrize(("w", "floor"), [(80, 14), (119, 14), (120, 17), (160, 17)])
-def test_j3_12_the_rail_is_the_packet_width_at_least(tree: Path, w: int, floor: int) -> None:
+def test_the_rail_is_the_packet_width_at_least(tree: Path, w: int, floor: int) -> None:
     view = _view(tree)
     longest = max(len(name) for name in view.sections())
     assert rail_width(view, wide=breadth_of(w) >= Breadth.WIDE) == max(floor, longest + 2)
 
 
-def test_j3_12_the_context_row_reads_in_category_section(tree: Path, fixture: Fixture) -> None:
+def test_the_context_row_reads_in_category_section(tree: Path, fixture: Fixture) -> None:
     rows = _settings(fixture, _view(tree), sr.LITERAL_KEY)
     assert " · in QUALITY ▸ prose" in rows[1]
 
 
-# ---------- J3-13: the lens is bold in the chain ----------
+# ---------- the lens is bold in the chain ----------
 
 
-def test_j3_13_the_lens_layer_is_bold_in_the_chain() -> None:
+def test_the_lens_layer_is_bold_in_the_chain() -> None:
     row = "EXECUTION     │  FLOW     global › workspace › [repo] › branch › local"  # noqa: RUF001
     assert _spans(row)["[repo]"] == (None, True)
 
 
-# ---------- J3-15: the notes head names the key within its section ----------
+# ---------- the notes head names the key within its section ----------
 
 
-def test_j3_15_the_notes_head_is_section_relative_and_the_meaning_wraps(
+def test_the_notes_head_is_section_relative_and_the_meaning_wraps(
     tree: Path, fixture: Fixture
 ) -> None:
     rows = _settings(fixture, _view(tree), sr.LITERAL_KEY, w=80, h=30)
@@ -315,7 +309,7 @@ def test_j3_15_the_notes_head_is_section_relative_and_the_meaning_wraps(
     assert meaning.split()[-1] in body
 
 
-# ---------- J3-16 / J3-17: operator words in the operations frames ----------
+# ---------- operator words in the operations frames ----------
 
 
 @pytest.mark.parametrize(
@@ -329,18 +323,18 @@ def test_j3_15_the_notes_head_is_section_relative_and_the_meaning_wraps(
         (16, "batch", "16 batches"),
     ],
 )
-def test_j3_16_a_register_is_counted_in_operator_words(n: int, name: str, out: str) -> None:
+def test_a_register_is_counted_in_operator_words(n: int, name: str, out: str) -> None:
     assert noun(n, name) == out
 
 
 @pytest.mark.parametrize("route", ["health", "sandbox.log"])
-def test_j3_16_no_storage_name_reaches_the_summary(route: str) -> None:
+def test_no_storage_name_reaches_the_summary(route: str) -> None:
     summary = nrf._frame(route, w=120)[1]
     assert "_" not in summary
 
 
 @pytest.mark.parametrize("route", ["crash.recovery", "history.diff"])
-def test_j3_16_the_body_and_summary_name_no_cursor(route: str) -> None:
+def test_the_body_and_summary_name_no_cursor(route: str) -> None:
     frame = nrf._frame(route, w=120, subject="TRK-CORE")
     assert "cursor" not in frame[1] or route == "crash.recovery"
     assert not any("after cursor" in row for row in frame)
@@ -349,21 +343,21 @@ def test_j3_16_the_body_and_summary_name_no_cursor(route: str) -> None:
 @pytest.mark.parametrize(
     "producer", [SANDBOX_DECISION_PRODUCER, DISPATCH_QUEUE_PRODUCER, PULL_REQUEST_PRODUCER]
 )
-def test_j3_17_a_missing_producer_is_named_without_a_requirement_id(producer: str) -> None:
+def test_a_missing_producer_is_named_without_a_requirement_id(producer: str) -> None:
     assert not REQUIREMENT_ID.search(producer)
 
 
 @pytest.mark.parametrize("route", ["sandbox.log", "unattended", "git.pr"])
-def test_j3_17_no_frame_prints_a_requirement_id(route: str) -> None:
+def test_no_frame_prints_a_requirement_id(route: str) -> None:
     body = "\n".join(nrf._frame(route, w=80, subject="BAT-0101"))
     assert not REQUIREMENT_ID.search(body)
 
 
-# ---------- J3-18: the recovery doors fit at 80 ----------
+# ---------- the recovery doors fit at 80 ----------
 
 
 @pytest.mark.parametrize(("w", "wide"), [(80, False), (120, True), (160, True)])
-def test_j3_18_the_leaves_you_column_is_drawn_only_where_it_fits(w: int, wide: bool) -> None:
+def test_the_leaves_you_column_is_drawn_only_where_it_fits(w: int, wide: bool) -> None:
     frame = nrf._frame("crash.recovery", w=w)
     head = next(row for row in frame if "DOOR" in row and "COSTS" in row)
     assert ("LEAVES YOU" in head) is wide
@@ -374,10 +368,10 @@ def test_j3_18_the_leaves_you_column_is_drawn_only_where_it_fits(w: int, wide: b
     assert not any("…" in row for row in doors)
 
 
-# ---------- J3-19: the offline state says when no snapshot is held ----------
+# ---------- the offline state says when no snapshot is held ----------
 
 
-def test_j3_19_the_offline_state_draws_an_absence_rather_than_an_empty_table() -> None:
+def test_the_offline_state_draws_an_absence_rather_than_an_empty_table() -> None:
     chrome = load_chrome()
     offline = next(state for state in chrome.entry if state.id == "offline")
     session = Session()
@@ -387,7 +381,7 @@ def test_j3_19_the_offline_state_draws_an_absence_rather_than_an_empty_table() -
     assert "∅ no snapshot held" in body
 
 
-# ---------- J3-20: entry commands are shown whole, relative to where the shell stands ----------
+# ---------- entry commands are shown whole, relative to where the shell stands ----------
 
 
 @pytest.mark.parametrize(
@@ -400,7 +394,7 @@ def test_j3_19_the_offline_state_draws_an_absence_rather_than_an_empty_table() -
         ("register", "register"),
     ],
 )
-def test_j3_20_a_path_at_or_under_the_launch_folder_is_shown_relative(
+def test_a_path_at_or_under_the_launch_folder_is_shown_relative(
     tmp_path: Path, word: str, out: str
 ) -> None:
     command = EntryCommand(argv=("repo", "register", word.format(here=tmp_path)), purpose="")
@@ -408,7 +402,7 @@ def test_j3_20_a_path_at_or_under_the_launch_folder_is_shown_relative(
     assert command.line.endswith(word.format(here=tmp_path))
 
 
-def test_j3_20_a_long_command_wraps_instead_of_clipping(
+def test_a_long_command_wraps_instead_of_clipping(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -425,10 +419,10 @@ def test_j3_20_a_long_command_wraps_instead_of_clipping(
     assert state.commands == (command.line,)
 
 
-# ---------- J3-21: a long value wraps under its label ----------
+# ---------- a long value wraps under its label ----------
 
 
-def test_j3_21_a_label_row_wraps_rather_than_clips() -> None:
+def test_a_label_row_wraps_rather_than_clips() -> None:
     text = "∅ unavailable · no repository reader states the branch or its drift " * 2
     rows = wrapped("BRANCH", text.strip(), 80)
     assert len(rows) > 1
@@ -438,20 +432,20 @@ def test_j3_21_a_label_row_wraps_rather_than_clips() -> None:
 
 
 @pytest.mark.parametrize("text", ["", "one"])
-def test_j3_21_a_short_or_empty_value_is_one_row(text: str) -> None:
+def test_a_short_or_empty_value_is_one_row(text: str) -> None:
     assert wrapped("BRANCH", text, 80) == [f" {'BRANCH':<13}{text}"]
 
 
 @pytest.mark.parametrize("route", ["cost.ceiling", "git.pr"])
-def test_j3_21_no_label_row_is_clipped_at_80(route: str) -> None:
+def test_no_label_row_is_clipped_at_80(route: str) -> None:
     frame = nrf._frame(route, w=80, subject="BAT-0101")
     assert not any(row.rstrip().endswith("…") for row in frame[3:-1])
 
 
-# ---------- J3-22: the queue's window count sits in the label gutter ----------
+# ---------- the queue's window count sits in the label gutter ----------
 
 
-def test_j3_22_the_queue_window_row_shares_the_label_gutter() -> None:
+def test_the_queue_window_row_shares_the_label_gutter() -> None:
     frame = nrf._frame("unattended", w=80)
     queue = next(row for row in frame if row.startswith(" QUEUE"))
     window = next(row for row in frame if row.startswith(" WINDOW"))

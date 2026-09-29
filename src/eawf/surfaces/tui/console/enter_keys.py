@@ -94,6 +94,10 @@ def confirm(ctx: Ctx) -> None:
         ctx.log("Enter", "no attention row is held here — nothing was sent")
         return
     action_id = row.key
+    # the register lists a Run only as a ceiling breach, a notice nothing answers
+    if row.collection is Epoch2Collection.RUN:
+        ctx.log("Enter", f"{action_id} is a notice — nothing answers it, nothing was sent")
+        return
     verb = att.VERB[s.verb or "a"]
     refusal = write_refusal(s, ctx.fixture, verb=verb.name, kind=att.ATTENTION_ROUTE)
     # a provider permission is decided by its own verb, never sealed as an answer

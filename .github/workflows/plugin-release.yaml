@@ -188,6 +188,11 @@ jobs:
             echo "claude binary absent — falling back to JSON-schema/parse check"
           fi
 
+          # The catalog, prompt, argument, allowlist, output-schema and file
+          # digests of each rendered tree are checked as one publication unit.
+          uv run python -m eawf.workflow.skills.publication "$claude_tree"
+          uv run python -m eawf.workflow.skills.publication build/eawf-codex-marketplace/plugins/eawf
+
           uv run python - "$claude_tree" "$codex_market" "$codex_manifest" <<'PY'
           import json
           import sys

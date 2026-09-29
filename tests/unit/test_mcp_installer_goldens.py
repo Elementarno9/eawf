@@ -4,7 +4,8 @@ The MCP config writers are byte-deterministic: a fresh install of a fixed
 server (with the epoch timestamp sentinel) produces exactly the checked-in
 golden, and a second install of the same server re-reads ``unchanged`` and
 leaves the file byte-identical. The goldens cover the Claude ``.mcp.json``
-writer, Codex TOML writer, and OpenCode ``opencode.json`` writer.
+writer and the Codex TOML writer; OpenCode entries are refused until a
+probe observes their effect.
 
 Regenerate the goldens (only on an intentional format change) with::
 
@@ -49,7 +50,6 @@ def _golden_server() -> McpServer:
     [
         ("claude", ".mcp.json", "claude_mcp.json"),
         ("codex", ".codex/config.toml", "codex_config.toml"),
-        ("opencode", "opencode.json", "opencode_config.json"),
     ],
 )
 def test_install_matches_golden_and_is_idempotent(

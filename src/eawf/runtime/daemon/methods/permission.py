@@ -22,8 +22,10 @@ explicit ``expired`` resolution rather than in silence.
 through its permission hook. The host names its own session, never a Run, so
 the verb binds the call to the one live Run on that vendor session and records
 it with the host's decision window as the provider's deadline. The hook that
-calls it never waits on an answer: the host keeps asking its own operator, and
-the record makes the held call visible here. :func:`expire_lapsed` is what the
+calls it reads the record back for a short configured wait and hands the host a
+principal's decision made through ``runtime.permission.decide`` in that time;
+otherwise the host's own prompt decides, and a later decision is still recorded
+here. :func:`expire_lapsed` is what the
 daemon's expiry sweep calls, so a lapse is recorded whether or not anyone reads
 the Run again.
 """

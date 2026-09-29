@@ -1,21 +1,22 @@
 ---
 name: plan
-description: "Propose, validate, revise, approve and apply a PlanRevision."
-argument-hint: "<propose|validate|revise|approve|apply|show|diff> [<milestone-or-revision-ref>] [--from <ref>...] [--strategy <minimal|balanced|parallel>] [--scope <urn>] [--agents <1..8>] [--budget <spec>] [--set <declared-key=value>...] [--feedback <ref>...] [--dry-run]"
+description: "Propose, approve and apply a PlanRevision."
+argument-hint: "<propose|approve|apply> [<milestone-or-revision-ref>] [--from <ref>...] [--strategy <minimal|balanced|parallel>] [--scope <urn>] [--agents <1..8>] [--budget <spec>] [--feedback <ref>...] [--dry-run]"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # /plan
 
-Propose, validate, revise, approve and apply a PlanRevision.
+Propose, approve and apply a PlanRevision.
 
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operator-only actions: `approve`, `apply`. An agent that reaches one prepares a PendingAction and stops; it never chooses the recommended option itself.
-- Effects: PlanRevision RPCs.
-- Allowed RPCs: `read_entity`, `query_evidence`, `planning.plan_revision.propose`, `planning.plan_revision.validate`, `planning.plan_revision.request_approval`, `planning.plan_revision.apply`, `planning.plan_revision.get`, `planning.plan_revision.diff`. Any other RPC is denied before it reaches a handler.
+- Operates on: PlanRevision, through `projection.roadmap.read`, `planning.plan_revision.submit`, `planning.plan_revision.approve`, `planning.plan_revision.apply`, `runtime.question.open_decision`.
+- Operator-only actions: `approve`, `apply`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself.
+- Effects: The roadmap read plus the PlanRevision submit, approve and apply verbs.
+- Allowed RPCs: `projection.roadmap.read`, `planning.plan_revision.submit`, `planning.plan_revision.approve`, `planning.plan_revision.apply`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -31,10 +32,10 @@ Resolve the subject before acting. Name every entity with its identifier and its
 You are proposing one PlanRevision for one Milestone. You do not apply it.
 
 ```text
-/plan <propose|validate|revise|approve|apply|show|diff> [<milestone-or-revision-ref>] [--from <ref>...] [--strategy <minimal|balanced|parallel>] [--scope <urn>] [--agents <1..8>] [--budget <spec>] [--set <declared-key=value>...] [--feedback <ref>...] [--dry-run]
+/plan <propose|approve|apply> [<milestone-or-revision-ref>] [--from <ref>...] [--strategy <minimal|balanced|parallel>] [--scope <urn>] [--agents <1..8>] [--budget <spec>] [--feedback <ref>...] [--dry-run]
 ```
 
-Select exactly one action: `propose`, `validate`, `revise`, `approve`, `apply`, `show`, `diff`. An option the selected action does not declare is refused before you start.
+Select exactly one action: `propose`, `approve`, `apply`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
@@ -66,7 +67,7 @@ The obligations the effective rule graph holds for activities `plan` and roles `
 - must: **Map every brief deliverable to a criterion or a deferral.** Map every enumerated brief deliverable to a criterion or to an explicit deferral row with its reason and target; while any span stays unmapped, halt planning with verdict=blocked naming the span.
 - must: **Mark a criterion deterministic wherever a falsifier exists.** Set evidence_kind to deterministic wherever a falsifier exists, and to attested only for a claim that is genuinely judgment-bound.
 - must: **Pin stable contracts verbatim in criterion text.** Pin stable contracts verbatim in the criterion text, such as digit and key maps, enum values, schemas and API shapes; a criterion that names only a chassis is a thinning defect.
-- must: **Emit only typed criteria with a proof locus and a gate.** Give every emitted wave typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
+- must: **Emit only typed criteria with a proof locus and a gate.** Give every emitted Task typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
 - should: **Show a concrete rendering when options differ in structure.** Where options differ structurally, give each a concrete rendering of its outcome, such as a layout, a diagram or a worked example, rather than a description of the difference.
 
 ## 5. Constraints
@@ -81,4 +82,4 @@ The obligations the effective rule graph holds for activities `plan` and roles `
 
 One strict PlanRevision proposal, plus the atom-to-criterion coverage table, every atom you dropped with its reason, and the uncertainty register from step 0 with each unknown either resolved to a cited contract or named as unmeasured.
 
-The report validates against `PlanSkillReport`, and its terminal outcome is exactly one of `shown`, `proposed`, `valid`, `rejected`, `approval_requested`, `approved`, `applied`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `PlanSkillReport`, and its terminal outcome is exactly one of `proposed`, `rejected`, `approved`, `applied`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /plan` before returning it.

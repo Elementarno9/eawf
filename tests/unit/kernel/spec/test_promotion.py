@@ -4,7 +4,7 @@ Pins the persistence-layer argv-policy check the daemon ``spec.promote``
 handler runs before flipping a spec to READY:
 
 1. Argv-bearing gates with a clean argv pass.
-2. Argv-bearing gates with a shell-deny / metachar / non-allowlisted
+2. Argv-bearing gates with a shell-deny / metachar / unregistered
    head raise :class:`SpecPromoteValidationError` naming the gate id
    and the underlying L0 reject reason.
 3. A missing ``args['argv']`` on an argv-bearing kind raises the same
@@ -15,8 +15,7 @@ handler runs before flipping a spec to READY:
 5. The function is a no-op on an empty iterable (so the daemon can
    call it pre-write even when the body parser has not yet landed —
    v0.4.0 seam ahead of W08).
-6. Custom ``allowlist`` argument is honoured (overrides
-   :data:`DEFAULT_GATE_ARGV_ALLOWLIST`).
+6. A gate argv resolves through the registered command families.
 """
 
 from __future__ import annotations
@@ -26,7 +25,6 @@ import pytest
 from eawf.kernel.spec.common import GateSpec
 from eawf.kernel.spec.promotion import (
     ARGV_BEARING_GATE_KINDS,
-    DEFAULT_GATE_ARGV_ALLOWLIST,
     SpecPromoteValidationError,
     validate_argv_gates,
 )
@@ -119,39 +117,29 @@ def test_validate_argv_gates_mixed_kinds_skips_non_argv() -> None:
     assert validate_argv_gates([regex_gate, cmd_gate]) is None
 
 
-def test_default_allowlist_used_when_caller_omits_allowlist() -> None:
-    """``allowlist=None`` falls back to :data:`DEFAULT_GATE_ARGV_ALLOWLIST`."""
+def test_registered_family_gate_passes() -> None:
+    """A gate whose argv runs a registered family passes under its name."""
     gate = _build_gate(args={"argv": ["pre-commit", "run", "--all-files"]})
-    # ``pre-commit`` is in the default; this passes only because the
-    # default is wired through correctly.
-    assert "pre-commit" in DEFAULT_GATE_ARGV_ALLOWLIST
+    assert gate.command_family_ref == "pre-commit"
     assert validate_argv_gates([gate]) is None
 
 
-def test_default_allowlist_admits_project_cli_and_task_runner() -> None:
-    """``eawf`` and ``just`` sit on the default floor, wrapped and bare.
+def test_project_cli_and_task_runner_pass_as_registered_families() -> None:
+    """``eawf`` and ``just`` resolve as registered families, wrapped and bare.
 
-    Pins the floor a wave gate relies on when its criterion is "this
+    Pins the path a wave gate relies on when its criterion is "this
     CLI invocation exits zero" rather than "this test passes".
     """
-    assert "eawf" in DEFAULT_GATE_ARGV_ALLOWLIST
-    assert "just" in DEFAULT_GATE_ARGV_ALLOWLIST
     wrapped = _build_gate(id="G1", args={"argv": ["uv", "run", "eawf", "status"]})
     bare = _build_gate(id="G2", args={"argv": ["just", "test-all"]})
     assert validate_argv_gates([wrapped, bare]) is None
 
 
-def test_custom_allowlist_overrides_default() -> None:
-    """An explicit ``allowlist`` argument overrides the module-level default.
-
-    Uses :meth:`pydantic.BaseModel.model_construct` to build the
-    GateSpec with a head (``customtool``) that the construction-time
-    validator would reject against the default allowlist; the
-    persistence-layer call then passes when the explicit allowlist
-    names it.
-    """
+def test_unregistered_head_is_rejected_at_promote() -> None:
+    """A row built past the constructor still meets the registry at promote."""
     gate = _construct_gate(args={"argv": ["customtool", "subcmd"]})
-    assert validate_argv_gates([gate], allowlist=["customtool"]) is None
+    with pytest.raises(SpecPromoteValidationError, match="customtool"):
+        validate_argv_gates([gate])
 
 
 # Reject paths ----------------------------------------------------------------

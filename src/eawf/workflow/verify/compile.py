@@ -20,8 +20,9 @@ Two public entry points:
   compile time so a malformed argv fails the profile load, not the
   gate run.
 
-v0.4.0 contract: **only ``evidence_kind="deterministic"`` compiles**.
-``"jury"`` and ``"attested"`` gates return ``None`` here so the
+v0.4.0 contract: **only a gate-running evidence kind compiles**
+(``"deterministic"`` and ``"rendered_run"``, whose gate runs the rendered
+artifact). ``"jury"`` and ``"attested"`` gates return ``None`` here so the
 readiness compute knows to fall back to its evidence-row path for the
 non-deterministic flavours (jury votes + operator attestations land
 in v0.4.1+ — see ``.ea/local/research/2026-05-26-v04-roadmap.md`` §7).
@@ -40,10 +41,16 @@ from __future__ import annotations
 import logging
 from typing import Any, cast
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
-from eawf.kernel.spec.promotion import DEFAULT_GATE_ARGV_ALLOWLIST
+from eawf.kernel.spec.common import (
+    GATE_RUN_EVIDENCE_KINDS,
+    CriterionSpec,
+    GateSpec,
+    OracleTier,
+    _tier_for_gate_kind,
+)
 from eawf.platform.profiles.models import FloorCheck
 from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
+from eawf.runtime.sandbox.command_families import REGISTERED_GATE_HEADS
 from eawf.workflow.audit_dsl.models import (
     CheckKind,
     CheckSpec,
@@ -76,8 +83,9 @@ def compile_gate(
 ) -> CheckSpec | None:
     """Compile a typed :class:`GateSpec` into a runnable :class:`CheckSpec`.
 
-    v0.4.0 contract: only ``criterion.evidence_kind == "deterministic"``
-    compiles to a runnable spec. ``"jury"`` and ``"attested"`` return
+    v0.4.0 contract: only a criterion whose ``evidence_kind`` is in
+    :data:`~eawf.kernel.spec.common.GATE_RUN_EVIDENCE_KINDS` compiles to a
+    runnable spec. ``"jury"`` and ``"attested"`` return
     ``None`` so the readiness compute keeps using its evidence-row
     path for the non-deterministic flavours (the v0.4.1 jury / attested
     machinery lands in a later wave per the v0.4 roadmap §7).
@@ -113,16 +121,31 @@ def compile_gate(
     Returns:
         A :class:`CheckSpec` ready for
         :func:`eawf.workflow.audit_dsl.runner.run_checks`, or ``None``
-        when the criterion's ``evidence_kind`` is not
-        ``"deterministic"`` (jury / attested defer to v0.4.1+) or
+        when the criterion's ``evidence_kind`` runs no gate (jury /
+        attested defer to v0.4.1+) or
         ``command_exit_zero`` gates lack a usable ``argv``.
+
+    Raises:
+        ValueError: A ``rendered_run`` criterion's gate is a static source
+            scan, or of a kind no oracle tier names.
     """
-    if criterion.evidence_kind != "deterministic":
+    if criterion.evidence_kind not in GATE_RUN_EVIDENCE_KINDS:
         logger.debug(
             f"compile_gate skip gate_id={gate.id!r} criterion={criterion.id!r} "
             f"evidence_kind={criterion.evidence_kind!r}"
         )
         return None
+    # A static gate only reads source text, which cannot tell what a reader
+    # of the rendered artifact sees.
+    if (
+        criterion.evidence_kind == "rendered_run"
+        and _tier_for_gate_kind(gate.kind) is OracleTier.T1_STATIC
+    ):
+        raise ValueError(
+            f"gate {gate.id!r} for rendered_run criterion {criterion.id!r} is a static "
+            f"source scan ({gate.kind!r}); a rendering claim needs a gate that runs "
+            "the rendered artifact"
+        )
 
     if gate.kind == "command_exit_zero":
         argv = gate.args.get("argv")
@@ -200,8 +223,9 @@ def compile_floor_pack(
     ``criterion`` metadata string are threaded onto ``args`` so the
     W15-hardened runner has every kwarg it expects.
 
-    Compile-time argv validation: the union of *allowlist* and
-    :data:`~eawf.kernel.spec.promotion.DEFAULT_GATE_ARGV_ALLOWLIST`
+    Compile-time argv validation: the union of *allowlist* and the
+    heads of the registered command families
+    (:data:`~eawf.runtime.sandbox.command_families.REGISTERED_GATE_HEADS`)
     is handed to :func:`~eawf.runtime.sandbox.argv_policy.validate_gate_argv`.
     A reject raises :class:`FloorPackCompileError` with the offending
     floor-check name + the underlying policy-reject message so the
@@ -214,9 +238,9 @@ def compile_floor_pack(
             An empty list returns ``[]``.
         allowlist: Profile-fed argv head allowlist
             (:attr:`~eawf.platform.profiles.models.VerifyBlock.argv_allowlist`).
-            Combined with :data:`DEFAULT_GATE_ARGV_ALLOWLIST` so the
-            kernel-spec floor of dev-loop wrappers is always allowed
-            even when a profile forgets to list one.
+            Combined with the registered family heads so a registered
+            family is always admitted, in its declared shape, even when
+            a profile forgets to list its head.
 
     Returns:
         One :class:`CheckSpec` per floor check, in the same order as
@@ -228,7 +252,7 @@ def compile_floor_pack(
             fails the L0 argv-policy. Stops at the first failure (the
             operator wants the first error, not a flood).
     """
-    resolved_allowlist = list({*DEFAULT_GATE_ARGV_ALLOWLIST, *allowlist})
+    resolved_allowlist = sorted({*REGISTERED_GATE_HEADS, *allowlist})
     compiled: list[CheckSpec] = []
     for check in checks:
         try:

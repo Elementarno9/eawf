@@ -70,6 +70,8 @@ DAEMON_GUARDS: Final = frozenset(
         TransitionGuard.CRITERIA_EVIDENCE_BOUND,
         TransitionGuard.HOST_MERGE_OBSERVED,
         TransitionGuard.RECONCILIATION_MATCHED,
+        TransitionGuard.RELEASER_HOLDS_LEASE,
+        TransitionGuard.NO_ACTIVE_RUN,
     }
 )
 
@@ -100,6 +102,7 @@ GUARD_CONDITIONS: Final[Mapping[TransitionGuard, str]] = MappingProxyType(
         TransitionGuard.INTEGRATED_BINDING_PINNED: "the integrated revision is pinned",
         TransitionGuard.LEASE_HELD: "the task's lease is held",
         TransitionGuard.MANIFEST_COMPLETE: "the release manifest is complete",
+        TransitionGuard.NO_ACTIVE_RUN: "no run is queued or working on the task",
         TransitionGuard.NO_EXTERNAL_EFFECT: "no externally visible effect has landed",
         TransitionGuard.NEVER_CLAIMED: "the task has never been claimed",
         TransitionGuard.NO_OPEN_MILESTONES: "no milestone under the track is still open",
@@ -110,6 +113,7 @@ GUARD_CONDITIONS: Final[Mapping[TransitionGuard, str]] = MappingProxyType(
         TransitionGuard.REASON_RECORDED: "a transition reason is recorded",
         TransitionGuard.RECONCILIATION_MATCHED: "the merge read-back matches the pinned head",
         TransitionGuard.RECOVERY_EXHAUSTED: "the recovery budget is spent",
+        TransitionGuard.RELEASER_HOLDS_LEASE: "the releasing principal holds the task's lease",
         TransitionGuard.REQUIRED_BATCHES_COMPLETED: "every required batch is closed",
         TransitionGuard.RUN_BOUND: "the run that will do the work exists",
         TransitionGuard.RUN_REPORT_BOUND: "the run's role report is bound",
@@ -273,6 +277,14 @@ CANONICAL_MUTATIONS: Final[tuple[CanonicalMutation, ...]] = (
         TaskStatus.CLAIMED,
         "claim",
         ("no run is started", "the batch does not move"),
+    ),
+    CanonicalMutation(
+        "domain.task.release",
+        _E.TASK,
+        (TaskStatus.CLAIMED,),
+        TaskStatus.PLANNED,
+        "release",
+        ("no run is cancelled or stopped", "the task keeps its batch and criteria"),
     ),
     CanonicalMutation(
         "domain.task.start",

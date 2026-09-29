@@ -120,14 +120,14 @@ def test_hook_run_session_start_prints_the_context_document_on(
 
 def test_render_hook_sh_codex_session_start_keeps_stdout() -> None:
     start = render_hook_sh(HookEventType.SESSION_START, runtime="codex")
-    assert start.rstrip("\n").endswith("hook run session_start --runtime codex")
+    assert start.rstrip("\n").endswith("hook run session_start --runtime codex --target-epoch 2")
     end = render_hook_sh(HookEventType.SESSION_END, runtime="codex")
-    assert end.rstrip("\n").endswith("--runtime codex >/dev/null")
+    assert end.rstrip("\n").endswith("--runtime codex --target-epoch 2 >/dev/null")
 
 
 def test_render_hook_sh_claude_session_start_is_unchanged() -> None:
     start = render_hook_sh(HookEventType.SESSION_START)
-    assert start.rstrip("\n").endswith("hook run session_start --runtime claude")
+    assert start.rstrip("\n").endswith("hook run session_start --runtime claude --target-epoch 2")
     assert "\nfi\n\nprintf" in start
 
 

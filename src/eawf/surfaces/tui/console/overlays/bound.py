@@ -51,6 +51,9 @@ class Rung:
     rung: RungRecord
 
 
+#: What a card route is bound to: an artifact, a claim's rung, or a campaign step.
+type CardRecord = ArtifactRecord | Rung | StepRecord
+
 type Bound = (
     QuestionRecord
     | PauseRecord
@@ -133,7 +136,7 @@ def draft_of(spine: SpineView, key: str | None) -> DraftRecord | None:
     )
 
 
-def bound_card(session: Session, decisions: DecisionRecords | None) -> Bound | None:
+def bound_card(session: Session, decisions: DecisionRecords | None) -> CardRecord | None:
     """Return the record the session's card route is bound to, or ``None``.
 
     The artifact card's subject is the artifact's key, the rung card's the claim with the

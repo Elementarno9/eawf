@@ -87,7 +87,7 @@
       "channel": "background",
       "token": "cursor-ground",
       "fg": "#1a1d21",
-      "bg": "#e4e6e8"
+      "bg": "#ffffff"
     },
     "ok": {
       "channel": "color",

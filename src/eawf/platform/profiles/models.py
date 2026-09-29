@@ -726,6 +726,21 @@ class RenderBlock(BaseModel):
         return self
 
 
+class ProfileCertification(BaseModel):
+    """The digest an enriched profile is certified as managed under.
+
+    Attributes:
+        digest: ``sha256:<hex>`` of the body's canonical content without
+            this block, as :func:`eawf.platform.profiles.certification.profile_digest`
+            computes it. It certifies the body only while the repository's
+            committed ``profiles.certified`` ledger pins the same digest.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
 class ProfileBody(BaseModel):
     """Closed schema for a single ``data/<id>.yaml`` profile body (v2).
 
@@ -767,6 +782,11 @@ class ProfileBody(BaseModel):
     :class:`~eawf.kernel.state.enums.TrackKind`). ``None`` means the profile
     contributes no track config; an unknown kind token in the ``track.kinds``
     map raises :class:`ValidationError` at the load boundary.
+
+    ``certification`` carries the digest an enriched body (see
+    :attr:`is_enriched`) is certified as managed under. ``None`` -- the
+    default, so every body written before the field existed still loads --
+    leaves an enriched body interactive-only.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -788,6 +808,21 @@ class ProfileBody(BaseModel):
     research: ResearchProfileBlock | None = None
     output: OutputBlock = Field(default_factory=OutputBlock)
     track: TrackProfileBlock | None = None
+    certification: ProfileCertification | None = None
+
+    @property
+    def is_enriched(self) -> bool:
+        """``True`` when the body carries at least one role-tier render block.
+
+        A role-tier block (:attr:`RenderBlock.is_role_tier`) is injected into
+        the system prompt of a dispatched agent, so the profile changes what
+        an agent is instructed to do rather than a file the operator reads.
+        Such a profile is *enriched*. A body with no role-tier block --
+        managed-file blocks, verification, research and track configuration
+        only -- is *plain*: nothing in it reaches a dispatched agent's
+        instructions.
+        """
+        return any(block.is_role_tier for block in self.render_blocks)
 
 
 class ComposedProfile(BaseModel):

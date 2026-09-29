@@ -42,6 +42,7 @@ from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     CONTROL_METHOD,
+    NOTICE_LIST_METHOD,
     QUESTION_OPTIONS,
     SEAL_METHOD,
     UNBOUND_REASON,
@@ -62,6 +63,7 @@ from eawf.surfaces.tui.console.reads import mut_reason
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
+from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
 
 GOLDEN_ROOT = Path(__file__).resolve().parents[4] / "fixtures" / "console" / "golden"
 FIXTURE_DIR = GOLDEN_ROOT / "fixture"
@@ -238,8 +240,8 @@ def test_confirm_on_an_empty_register_sends_nothing() -> None:
 @pytest.mark.parametrize(
     ("key", "reason"),
     [
-        ("z", "no daemon verb snoozes a pending action"),
-        ("v", "no daemon verb resolves a notice"),
+        ("z", "no daemon verb snoozes a pending action · only a budget notice snoozes"),
+        ("v", "no daemon verb resolves a pending action · only a budget notice resolves"),
     ],
 )
 def test_attention_verb_without_mutator_is_refused_with_reason(key: str, reason: str) -> None:
@@ -484,12 +486,16 @@ class _Daemon:
     def answer(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
         if method in self._reads:
             return _projection(self._reads[method])
+        if method == NOTICE_LIST_METHOD:
+            return {"active": []}
         if method.endswith(".reconnect"):
             route = method.split(".")[1]
             negotiation = negotiate_reconnect(
                 route=route, client_cursor=5, server_cursor=5, retained=()
             )
             return {"negotiation": negotiation.model_dump(mode="json"), "patches": []}
+        if method == QUESTION_DECISIONS_METHOD:
+            return {"decisions": []}
         self.writes.append((method, params))
         if self.fail_with is not None:
             error, self.fail_with = self.fail_with, None

@@ -197,10 +197,10 @@ _RECEDE_TEXT_SHARE: Final[dict[bool, float]] = {True: 0.74, False: 0.78}
 #: raw faint misses AA on the tinted bands, so the dim tone is lifted toward text.
 _DIM_FAINT_SHARE: Final[dict[bool, float]] = {True: 0.55, False: 0.74}
 
-#: The share of text in the light cursor ground, the rest surface. The light raised panel
-#: sits 1.03:1 off the surface, too close to see; this mix lifts the row about 1.15:1 and
-#: keeps every text tone on it readable. The dark raised panel already lifts 1.13:1.
-_CURSOR_TEXT_SHARE: Final[float] = 0.07
+#: The share of text in the dark cursor ground, the rest surface. It lifts the row about
+#: 1.10:1, the most a dark ground can lift while the error tone on it keeps 4.5:1; the
+#: raised panel lifts 1.13:1 and drops that tone to 4.43:1.
+_CURSOR_TEXT_SHARE: Final[float] = 0.06
 
 
 def mix(first: str, second: str, share: float) -> str:
@@ -229,14 +229,16 @@ def _derived(semantic: dict[str, str], chrome: dict[str, str], *, dark: bool) ->
     ``band`` is the header and keybar ground, ``recede`` the text of a pane that does
     not own the arrows, ``dim`` the lifted faint tone, and ``cursor-ground`` the ground of
     the row the cursor sits on; each is a mix so it moves with the palette it is mixed
-    from, except the dark cursor ground, which is the raised panel.
+    from, except the light cursor ground, which is the white panel: every light tone
+    already sits near 4.5:1 on the surface, so only a lighter ground lifts the row without
+    dropping one of them below it.
     """
     surface, text = chrome["surface"], chrome["foreground"]
     return {
         "band": mix(semantic["accent"], surface, BAND_ACCENT_SHARE),
         "recede": mix(text, surface, _RECEDE_TEXT_SHARE[dark]),
         "dim": mix(chrome["faint"], text, _DIM_FAINT_SHARE[dark]),
-        "cursor-ground": chrome["panel-2"] if dark else mix(text, surface, _CURSOR_TEXT_SHARE),
+        "cursor-ground": mix(text, surface, _CURSOR_TEXT_SHARE) if dark else chrome["panel"],
     }
 
 

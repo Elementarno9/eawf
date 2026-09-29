@@ -270,7 +270,7 @@ def test_landed_work_walks_to_an_accepted_milestone_through_the_cli(
     assert adopted["generation"] == 2
     proved = eawf(root, "task", "prove", TASK_URN, "--gates", gates_file(tmp_path),
                   "--expected-task-revision", "2",
-                  "--idempotency-key", "prove-1", "--actor", ACTOR)["result"]  # fmt: skip
+                  "--idempotency-key", "prove-1", "--actor", ACTOR, "--wait")["result"]  # fmt: skip
     assert proved["passed"] is True
     out = tmp_path / "assessment.json"
     assessed = eawf(root, "task", "assess", TASK_URN, "--actor", ACTOR, "--out", str(out))["result"]

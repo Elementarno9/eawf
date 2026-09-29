@@ -24,6 +24,8 @@ from eawf.kernel.projection.compute import ProjectionRow, RouteProjection
 from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
+from eawf.runtime.budget.notices import BudgetThresholdNotice
+from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.clock import Clock, notify
 from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -36,9 +38,6 @@ from eawf.surfaces.tui.console.tokens import Severity
 NAV_KEY = "—"
 #: What a copy says when no clipboard took the text, so the rack never claims a copy.
 NOT_COPIED = "no clipboard is reachable from this console"
-#: The depth keys: Enter drills, Escape returns, ``u`` climbs the containment chain, and
-#: ``[`` and ``]`` walk the siblings at the current depth. Breadth is the ``g`` prefix.
-DEPTH_KEYS: tuple[str, ...] = ("Enter", "Escape", "u", "[", "]")
 
 
 class Host(Protocol):
@@ -86,6 +85,8 @@ class Ctx:
             from the row's own status and revision, and nowhere else.
         decisions: The records the frame's decision overlay or card was drawn from; a
             key on it acts on the same record.
+        notices: The budget notices the Attention frame listed; a snooze or resolve is
+            previewed and addressed from the notice as it was drawn.
         principal: Who the console acts as, whose own top attention item ``!`` jumps to;
             ``None`` when it acts as nobody.
         scope: The scope a linked console is attached to, by name else by id, which an
@@ -106,13 +107,14 @@ class Ctx:
     verbose: bool = False
     projection: SpineView | RouteReadModel | None = None
     unheld: bool = False
-    send: Callable[[VerbRequest], bool] | None = None
+    send: Callable[[VerbRequest | BulkRequest], bool] | None = None
     attention: RouteProjection | None = None
     principal_refusal: str = ""
     settings: EffectiveSettingsView | None = None
     outstanding: int = 0
     rows: tuple[ProjectionRow, ...] = ()
     decisions: DecisionRecords | None = None
+    notices: tuple[BudgetThresholdNotice, ...] = ()
     principal: str | None = None
     scope: str = ""
     gutter: int = 0
@@ -160,7 +162,7 @@ class Ctx:
         """Record an unclaimed key."""
         self.session.noop(key, verbose=self.verbose)
 
-    def dispatch_write(self, request: VerbRequest) -> bool:
+    def dispatch_write(self, request: VerbRequest | BulkRequest) -> bool:
         """Hand ``request`` to the daemon link.
 
         Args:

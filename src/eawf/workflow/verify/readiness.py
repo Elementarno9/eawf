@@ -57,7 +57,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import orjson
 
 from eawf.kernel.config.schema import VerifyConfig, VerifyWaiverMode
-from eawf.kernel.spec.common import GRANDFATHERED_KIND, CriterionSpec, GateSpec
+from eawf.kernel.spec.common import (
+    GATE_RUN_EVIDENCE_KINDS,
+    GRANDFATHERED_KIND,
+    CriterionSpec,
+    GateSpec,
+)
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import State, Wave
 from eawf.kernel.store.envelope import Envelope
@@ -573,7 +578,7 @@ def _build_spec_views(
         gate_results: list[GateResult] = []
         per_criterion_waived: list[str] = []
         for gate in gates:
-            if criterion.evidence_kind == "deterministic":
+            if criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS:
                 if gate.id in prevalidated_gate_ids:
                     status = "pass"
                     was_waived = False

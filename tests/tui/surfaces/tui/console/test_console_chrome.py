@@ -206,7 +206,7 @@ def test_unheld_route_draws_the_unknown_frame(
 ) -> None:
     rows = _frame(ConsoleApp(clock=FakeClock()), route)
     assert rows[1].strip() == f"NOT HELD · {route} · no read model is held for this route"
-    assert any(f" ROWS      {UNKNOWN} " in row for row in rows)
+    assert any(row.startswith(f" ROWS         {UNKNOWN} ") for row in rows)
     assert _leaks(rows, prototype_literals) == []
 
 

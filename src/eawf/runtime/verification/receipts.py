@@ -39,6 +39,7 @@ from eawf.kernel.delivery.receipts import (
     ReuseReason,
     RevisionBinding,
 )
+from eawf.kernel.spec.common import GATE_RUN_EVIDENCE_KINDS
 from eawf.kernel.state.enums import GateReceiptResult
 from eawf.kernel.state.epoch2.base import Epoch2Model, Sha256DigestStr
 from eawf.workflow.delivery.criteria import ExecutionContract
@@ -343,7 +344,7 @@ def decide_leg_reuse(
         raise ValueError("now and max_age must be given together")
     if now is not None and now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
-    if leg.contract.evidence_kind != "deterministic":
+    if leg.contract.evidence_kind not in GATE_RUN_EVIDENCE_KINDS:
         return _decision(leg, ReuseReason.NOT_DETERMINISTIC, receipt=None)
     superseded = {receipt.supersedes_id for receipt in receipts if receipt.supersedes_id}
     candidate = _pick_candidate(leg, receipts, superseded)

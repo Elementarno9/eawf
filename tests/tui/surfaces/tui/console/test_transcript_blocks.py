@@ -831,7 +831,7 @@ def test_con_169_the_keybar_walks_blocks_and_folds_them() -> None:
     assert bar[4:6] == ["f", "follow"]
 
 
-def test_j4_06_enter_fold_is_left_off_a_block_that_folds_nothing() -> None:
+def test_enter_fold_is_left_off_a_block_that_folds_nothing() -> None:
     bar = _rows(_frame(_view(_live_run())))[-1].split()
     assert bar[:4] == ["↑↓", "block", "f", "follow"]
 
@@ -853,11 +853,11 @@ def test_con_169_the_epoch_one_feed_renders_a_waiting_question_and_its_estimate_
     assert "estimate" not in frame
 
 
-# ---------- K-09: an empty transcript answers truthfully ----------
+# ---------- an empty transcript answers truthfully ----------
 
 
 @pytest.mark.parametrize(("key", "verb"), [("y", "copy"), ("Enter", "fold")])
-def test_k_09_a_transcript_with_no_block_names_that_nothing_is_there(key: str, verb: str) -> None:
+def test_a_transcript_with_no_block_names_that_nothing_is_there(key: str, verb: str) -> None:
     model = _view()
     assert model.blocks == ()
     session = Session()
@@ -887,7 +887,7 @@ def test_k_09_a_transcript_with_no_block_names_that_nothing_is_there(key: str, v
     assert " y copy" not in f" {bar}"
 
 
-def test_k_01_y_on_a_held_block_puts_the_block_text_on_the_clipboard() -> None:
+def test_y_on_a_held_block_puts_the_block_text_on_the_clipboard() -> None:
     model = _view(_long_summary())
     session = Session()
     session.route = TRANSCRIPT_ROUTE

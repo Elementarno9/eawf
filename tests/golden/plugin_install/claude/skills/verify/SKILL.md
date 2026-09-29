@@ -1,9 +1,9 @@
 ---
 name: verify
 description: "Verify one Delivery Batch at one exact revision, as auditor or as reviewer."
-argument-hint: "<batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--no-cache] [--output <human|json|markdown>]"
+argument-hint: "<batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--milestone <ref>] [--journey <step>...] [--accepted-binding <binding>] [--requested-by <principal>] [--no-cache] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # /verify
@@ -13,8 +13,9 @@ Verify one Delivery Batch at one exact revision, as auditor or as reviewer.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Effects: Read and check effects plus verification receipts.
-- Allowed RPCs: `read_entity`, `query_evidence`, `verification.submit`, `verification.status`, `verification.resume`, `batch.audit.submit`, `batch.review.submit`, `operation.status`. Any other RPC is denied before it reaches a handler.
+- Operates on: Batch, through `projection.batch.detail.read`, `projection.evidence.read`, `runtime.delivery.verify_batch`, `runtime.delivery.assess_completion`, `runtime.delivery.open_acceptance_approval`.
+- Effects: Batch and evidence reads plus the Batch verification, Task completion and acceptance-question verbs, which file verification receipts.
+- Allowed RPCs: `projection.batch.detail.read`, `projection.evidence.read`, `runtime.delivery.verify_batch`, `runtime.delivery.assess_completion`, `runtime.delivery.open_acceptance_approval`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -32,7 +33,7 @@ You verify one Delivery Batch at one exact revision. You do not repair it.
 You may be invoked as an auditor or as a reviewer. They are different jobs: an audit is closed-world — it tries to falsify each required criterion. A review is open-world — it looks for defects nobody wrote a criterion for. Do the one you were assigned.
 
 ```text
-/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--no-cache] [--output <human|json|markdown>]
+/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] [--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] [--milestone <ref>] [--journey <step>...] [--accepted-binding <binding>] [--requested-by <principal>] [--no-cache] [--expected-revision <N>] [--idempotency-key <key>] [--output <human|json|markdown>]
 ```
 
 ## 4. Method
@@ -70,7 +71,7 @@ The obligations the effective rule graph holds for activities `review`, `test` a
 - must: **Report a criterion with no falsifier as unverified.** Report a legacy or attested criterion that has no falsifier as unverified, never as passed.
 - should: **Show a concrete rendering when options differ in structure.** Where options differ structurally, give each a concrete rendering of its outcome, such as a layout, a diagram or a worked example, rather than a description of the difference.
 - should: **Fix a high-miss practice by where it surfaces.** Treat a practice rule with a high lifetime miss rate as a surfacing defect: bind it to a narrower trigger or an earlier decision point, or rewrite or retire it; never restate it more emphatically.
-- should: **Run the wave's own gates before re-reading its prose.** Run the wave's own gates rather than re-reading its prose, and report a gate that cannot fail on broken input as a finding.
+- should: **Run the Task's own gates before re-reading its prose.** Run the audited Task's own gates rather than re-reading its prose, and report a gate that cannot fail on broken input as a finding.
 
 ## 5. Constraints
 
@@ -83,4 +84,4 @@ The obligations the effective rule graph holds for activities `review`, `test` a
 
 A typed audit or review result: per-criterion verdicts with the falsifier attempted, or stable findings with severity and evidence. Aggregate verdicts are derived from rows, never asserted.
 
-The report validates against `VerificationReport`, and its terminal outcome is exactly one of `passed`, `failed`, `unverified`, `stale`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `VerificationReport`, and its terminal outcome is exactly one of `passed`, `failed`, `unverified`, `stale`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /verify` before returning it.

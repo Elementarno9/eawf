@@ -326,6 +326,7 @@ def _dispatch(
     params: dict[str, Any],
     *,
     call_timeout_seconds: float | None = None,
+    spawn: bool = True,
 ) -> dict[str, Any]:
     """Call one ``release.*`` JSON-RPC method and return its result.
 
@@ -335,6 +336,8 @@ def _dispatch(
         call_timeout_seconds: How long to wait for the reply; ``None``
             keeps the client's default, which suits every verb that does
             not run proof commands.
+        spawn: Whether a missing daemon is started; a read verb passes
+            ``False`` so inspecting a release never starts one.
 
     Returns:
         The handler's result object.
@@ -349,9 +352,9 @@ def _dispatch(
 
     try:
         client = (
-            DaemonClient()
+            DaemonClient(spawn=spawn)
             if call_timeout_seconds is None
-            else DaemonClient(call_timeout_seconds=call_timeout_seconds)
+            else DaemonClient(call_timeout_seconds=call_timeout_seconds, spawn=spawn)
         )
         with client:
             return client.call(method, params)
@@ -373,6 +376,7 @@ def _answer(
     call_timeout_seconds: float | None = None,
     failed_guard: Callable[[dict[str, Any]], str | None] | None = None,
     links: Callable[[dict[str, Any]], dict[str, str]] | None = None,
+    spawn: bool = True,
 ) -> dict[str, Any] | None:
     """Send one release verb and print its answer as the machine envelope.
 
@@ -388,6 +392,7 @@ def _answer(
             so an answer the daemon gave but that refused part of the work
             exits with the refusal status.
         links: Derives the commands a caller may follow next from the answer.
+        spawn: Whether a missing daemon is started for the call.
 
     Returns:
         The answer when it stood; ``None`` after a refusal or an error was
@@ -397,7 +402,7 @@ def _answer(
 
     flags: GlobalFlags = ctx.obj
     try:
-        result = _dispatch(method, params, call_timeout_seconds=call_timeout_seconds)
+        result = _dispatch(method, params, call_timeout_seconds=call_timeout_seconds, spawn=spawn)
     except DaemonRpcError as exc:
         if exc.code != cli_errors.RPC_VALIDATION_FAILED:
             cli_errors.emit_error(
@@ -530,6 +535,7 @@ def release_show(
         RELEASE_RPC_METHODS["show"],
         {"version": version},
         subject=version or "open rung",
+        spawn=False,
     )
 
 
@@ -596,7 +602,7 @@ def release_readiness(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    _answer(ctx, RELEASE_RPC_METHODS["readiness"], params, subject=version)
+    _answer(ctx, RELEASE_RPC_METHODS["readiness"], params, subject=version, spawn=False)
 
 
 @release_app.command("create")
@@ -750,6 +756,7 @@ def release_publish(
         params,
         subject=release_key,
         revision=expected_revision,
+        links=lambda result: {"follow": f"eawf follow {result['operation_ref']}"},
     )
 
 

@@ -47,6 +47,7 @@ from importlib.resources import files
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from eawf.runtime.hooks.event import HookEventType
+from eawf.workflow.skills.publication import BUNDLE_TARGET_EPOCH
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ def render_hook_sh(event_type: HookEventType, *, runtime: str = "claude") -> str
         event_type=spec.event_type.value,
         claude_event_name=spec.claude_event_name,
         runtime=runtime,
+        target_epoch=BUNDLE_TARGET_EPOCH,
     )
     if not rendered.endswith("\n"):
         rendered = rendered + "\n"

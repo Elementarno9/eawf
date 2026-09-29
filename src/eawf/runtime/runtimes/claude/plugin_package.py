@@ -78,6 +78,7 @@ from eawf.surfaces.render.skills import (
     render_skill_md,
 )
 from eawf.workflow.skills.catalog import shipped_skill_specs
+from eawf.workflow.skills.publication import write_publication
 
 logger = logging.getLogger(__name__)
 
@@ -560,29 +561,34 @@ def package_plugin(
 
     manifest_path = target_dir / ".claude-plugin" / "plugin.json"
     atomic_write_text(manifest_path, plugin_manifest)
+    written = [manifest_path]
 
     if marketplace is not None:
         market_path = target_dir / ".claude-plugin" / "marketplace.json"
         atomic_write_text(market_path, marketplace)
+        written.append(market_path)
 
     if readme is not None:
         readme_path = target_dir / "README.md"
         atomic_write_text(readme_path, readme)
+        written.append(readme_path)
 
-    for path, body in skill_outputs:
+    for path, body in (*skill_outputs, *agent_outputs):
         atomic_write_text(path, body)
-
-    for path, body in agent_outputs:
-        atomic_write_text(path, body)
+        written.append(path)
 
     if hooks_manifest is not None:
         # hooks.json lives at the plugin tree root (NOT under
         # ``.claude-plugin/``) per the Claude Code plugin manifest schema.
         hooks_json_path = target_dir / "hooks.json"
         atomic_write_text(hooks_json_path, hooks_manifest)
+        written.append(hooks_json_path)
         for path, body in hook_outputs:
             atomic_write_text(path, body)
             os.chmod(path, _HOOK_FILE_MODE)
+            written.append(path)
+
+    write_publication(target_dir, written)
 
     logger.info(
         f"package_plugin target={target_dir} skills={len(skill_names)} "

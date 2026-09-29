@@ -67,6 +67,7 @@ from eawf.surfaces.tui.chassis.theme import (
     resolve_theme_name,
 )
 from eawf.surfaces.tui.console.attach import OFFLINE
+from eawf.surfaces.tui.console.bulk import BulkRequest
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import (
     Clock,
@@ -78,7 +79,6 @@ from eawf.surfaces.tui.console.clock import (
     quit_step,
     sweep_toasts,
 )
-from eawf.surfaces.tui.console.decisions import DecisionRecords
 from eawf.surfaces.tui.console.dispatch import activate_crumb, dispatch
 from eawf.surfaces.tui.console.drawers import DRAWERS
 from eawf.surfaces.tui.console.drill import say_why
@@ -225,7 +225,8 @@ def _drawer_frame(view: View, name: str) -> list[str]:
     return [
         *body,
         pad(thin(w), w),
-        *(pad(line, w) for line in inline),
+        # a full-width row is kept as drawn, so a mark such as Disabled reaches the painter
+        *(line if cell_len(line) == w else pad(line, w) for line in inline),
         keybar(DRAWER_PAIRS[name], w),
     ]
 
@@ -422,9 +423,6 @@ class ConsoleApp(App[None]):
             given none draws no block rather than a block that says nothing.
         proof_receipts: The receipts a receipt card may open, in record order. A console
             given none opens no card and says the receipt is not held.
-        decision_records: The questions, pauses, claims and planning records the decision
-            overlays and cards are bound to. They are process records rather than document
-            rows, so they arrive beside the projection under the same rule as the verdicts.
         chrome: The static tables a console given no fixture draws; the packaged chrome
             when omitted. A fixture carries its own chrome, so passing both is refused.
         gutter: The blank cells kept clear at each side of every row; the frame is laid
@@ -455,7 +453,6 @@ class ConsoleApp(App[None]):
         integration_conflicts: Sequence[IntegrationConflict] = (),
         run_events: Sequence[RunEventRecord] = (),
         proof_receipts: Sequence[ProofReceipt] = (),
-        decision_records: DecisionRecords | None = None,
         gutter: int = 0,
         theme: str = DEFAULT_THEME,
     ) -> None:
@@ -483,7 +480,6 @@ class ConsoleApp(App[None]):
         self.integration_conflicts = tuple(integration_conflicts)
         self.run_events = tuple(run_events)
         self.proof_receipts = tuple(proof_receipts)
-        self.decision_records = decision_records
         self.session = Session()
         # the attention revisions already announced to this principal; ``None`` until the
         # first read, which seeds it so nothing already open is toasted after a restart
@@ -787,7 +783,8 @@ class ConsoleApp(App[None]):
             principal_refusal=self.principal_refusal(),
             replay=self.seam.replay_note if self.seam is not None else None,
             rows=self.seam.held_rows() if self.seam is not None else (),
-            decisions=self.decision_records,
+            notices=self.seam.notices if self.seam is not None else (),
+            decisions=self.seam.decisions if self.seam is not None else None,
             principal=self.principal(),
             # a held clock reads no wall time, so a held frame is its authored instant
             now=self.console_clock.wall() if self.seam is not None and not self.held else None,
@@ -868,6 +865,7 @@ class ConsoleApp(App[None]):
             outstanding=len(self.seam.outstanding) if self.seam else 0,
             rows=view.rows,
             decisions=view.decisions,
+            notices=view.notices,
             principal=view.principal,
             scope=self.seam.scope_name or self.seam.scope_id if self.seam is not None else "",
             gutter=view.gutter,
@@ -938,11 +936,12 @@ class ConsoleApp(App[None]):
         self._follow_route()
         self.render_frame()
 
-    def send(self, request: VerbRequest) -> bool:
+    def send(self, request: VerbRequest | BulkRequest) -> bool:
         """Send a confirmed verb through the seam, off the key path.
 
         Args:
-            request: The confirmed verb to send.
+            request: The confirmed verb to send, or a card's targets sent as one bulk
+                operation.
 
         Returns:
             Whether a daemon link took the verb: ``False`` for a console with no seam, or
@@ -951,12 +950,22 @@ class ConsoleApp(App[None]):
         seam = self.seam
         if seam is None or not self.is_running:
             return False
-        self.run_worker(self._deliver(seam, request), group=WRITE_WORKERS)
+        work = (
+            self._deliver_bulk(seam, request)
+            if isinstance(request, BulkRequest)
+            else self._deliver(seam, request)
+        )
+        self.run_worker(work, group=WRITE_WORKERS)
         return True
 
     async def _deliver(self, seam: ProjectionSeam, request: VerbRequest) -> None:
         """Wait for the daemon's answer to one verb, then say what became of it."""
         self.announce(await seam.request(request))
+
+    async def _deliver_bulk(self, seam: ProjectionSeam, request: BulkRequest) -> None:
+        """Wait for the daemon's answer to one bulk operation, then settle every row."""
+        for result in await seam.bulk(request):
+            self.announce(result)
 
     def announce(self, result: OperationResult) -> None:
         """Say what became of a sent verb, in the rack and the key log, and repaint.

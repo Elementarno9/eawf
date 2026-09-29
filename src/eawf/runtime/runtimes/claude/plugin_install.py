@@ -47,6 +47,7 @@ from eawf.kernel.config.layered import resolve_agent_extra_tools
 from eawf.kernel.economics.governor import InFlightGovernor
 from eawf.runtime.daemon.admission import load_economics
 from eawf.runtime.harness.fan_out import fan_out_values
+from eawf.runtime.harness.host_keys import require_recorded
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.runtime.runtimes.claude.statusline_install import build_statusline_command
@@ -177,6 +178,7 @@ def _mcp_config_target(target_dir: Path) -> Path:
 
 def _render_mcp_config() -> bytes:
     """Return the empty project-scoped Claude MCP config scaffold."""
+    require_recorded("claude_mcp", ("mcpServers",))
     return (json.dumps({"mcpServers": {}}, sort_keys=True, indent=2) + "\n").encode("utf-8")
 
 
@@ -355,6 +357,11 @@ def _patch_settings_json(
     - Every other key is preserved verbatim.
     - Render the resulting object as deterministic JSON (sorted keys,
       2-space indent, trailing newline) so two installs are byte-stable.
+
+    Raises:
+        ValueError: The existing file is not a JSON object.
+        UnrecordedHostKeyError: A key the patch writes has no observed
+            host effect; nothing is written.
     """
     parsed: dict[str, Any] = {}
     if target_path.exists():
@@ -372,15 +379,27 @@ def _patch_settings_json(
                     f" {type(parsed_any).__name__}"
                 )
             parsed = dict(parsed_any)
+    eawf_hooks = _eawf_settings_hooks()
+    fan_out = fan_out_values("claude", governor=governor)
+    sets_statusline = _STATUSLINE_KEY not in parsed
+    require_recorded(
+        "claude_settings",
+        (
+            _MANAGED_KEY,
+            *(f"hooks.{event}" for event in eawf_hooks),
+            *((_STATUSLINE_KEY,) if sets_statusline else ()),
+            *fan_out,
+        ),
+    )
     parsed[_MANAGED_KEY] = managed_body
-    merged_hooks = _merge_settings_hooks(parsed.get("hooks"), _eawf_settings_hooks())
+    merged_hooks = _merge_settings_hooks(parsed.get("hooks"), eawf_hooks)
     if merged_hooks:
         parsed["hooks"] = merged_hooks
-    if _STATUSLINE_KEY not in parsed:
+    if sets_statusline:
         parsed[_STATUSLINE_KEY] = build_statusline_command()
     env = parsed.get("env")
     env = dict(env) if isinstance(env, dict) else {}
-    for path, value in fan_out_values("claude", governor=governor).items():
+    for path, value in fan_out.items():
         env[path.removeprefix("env.")] = str(value)
     parsed["env"] = env
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"

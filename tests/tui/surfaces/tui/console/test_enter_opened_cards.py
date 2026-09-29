@@ -54,6 +54,7 @@ from eawf.kernel.projection.compute import (
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.state.enums import GateReceiptResult
+from eawf.observability.reflect.run_report import DEFAULT_PARTS, ReportPartName
 from eawf.runtime.daemon.methods.projection import (
     EXPORT_REPORT_METHOD,
     ROUTE_READ_METHODS,
@@ -601,13 +602,33 @@ def test_no_key_the_receipt_footer_advertises_moves_the_opened_card() -> None:
 # ---------- the export plans a report and writes nothing ----------
 
 
-def test_the_export_card_plans_the_view_it_would_report() -> None:
-    """Each part is sized off the rows in hand rather than promised as an estimate."""
+def test_the_export_card_plans_the_parts_the_run_report_writes() -> None:
+    """The card lists the parts ``eawf run report`` writes, in its order, as it includes them."""
     model = _view("export")
     assert isinstance(model, RunReportPlanView)
-    assert [part.name for part in model.parts] == ["rows", "counts", "unstated", "secrets"]
-    assert [part.name for part in model.included()] == ["rows", "counts", "unstated"]
-    assert model.parts[0].size == "1 row"
+    assert [part.name for part in model.parts] == [part.value for part in ReportPartName]
+    assert [part.name for part in model.included()] == [part.value for part in DEFAULT_PARTS]
+
+
+def test_the_export_card_states_no_size_it_does_not_hold() -> None:
+    """The route reads the Run's record, not its event lines, so no count is guessed."""
+    sizes = {part.name: part.size for part in _view("export").parts}
+    assert sizes == {
+        "timeline": "? counted when taken",
+        "usage_and_cost": "? counted when taken",
+        "transcript": "? counted when taken",
+        "secrets": "redacted by policy",  # pragma: allowlist secret
+        "sandbox_decisions": "not asked",
+    }
+
+
+def test_the_export_card_draws_secrets_never_and_an_unasked_part_no() -> None:
+    model = _view("export")
+    rows = _frame(model, subject="RUN-538453eb")
+    secrets = next(row for row in rows if " secrets " in row)
+    sandbox = next(row for row in rows if " sandbox_decisions " in row)
+    assert " never " in secrets and " no " in sandbox
+    assert any("eawf run report RUN-538453eb writes it" in row for row in rows)
 
 
 def test_the_export_card_states_the_digest_the_report_would_carry() -> None:

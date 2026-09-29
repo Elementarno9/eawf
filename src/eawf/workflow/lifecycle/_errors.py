@@ -337,7 +337,7 @@ def check_criteria_floor(
             resolve, or (absent a waiver) a legacy row or a gateless
             deterministic criterion lands.
     """
-    from eawf.kernel.spec.common import GRANDFATHERED_KIND
+    from eawf.kernel.spec.common import GATE_RUN_EVIDENCE_KINDS, GRANDFATHERED_KIND
 
     if gates is not None:
         _check_gate_refs_resolve(
@@ -358,7 +358,7 @@ def check_criteria_floor(
     gateless = [
         criterion.id
         for criterion in criteria
-        if criterion.evidence_kind == "deterministic" and not criterion.gate_ids
+        if criterion.evidence_kind in GATE_RUN_EVIDENCE_KINDS and not criterion.gate_ids
     ]
     if gateless:
         raise LifecycleError(

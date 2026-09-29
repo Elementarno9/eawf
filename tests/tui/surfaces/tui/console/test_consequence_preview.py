@@ -20,7 +20,11 @@ import pytest
 
 from eawf.kernel.projection.compute import ProjectionRow, build_route_projection
 from eawf.kernel.runtime.control import ControlDisposition
-from eawf.kernel.state.epoch2.consequence import CANONICAL_MUTATIONS, MUTATIONS_BY_METHOD
+from eawf.kernel.state.epoch2.consequence import (
+    CANONICAL_MUTATIONS,
+    MUTATIONS_BY_METHOD,
+    Refusal,
+)
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -31,6 +35,7 @@ from eawf.surfaces.tui.console.mutation import (
     NATIVE_KEYS,
     Card,
     GateKind,
+    Item,
     answer_card,
     gate,
     lifecycle_card,
@@ -41,13 +46,13 @@ from eawf.surfaces.tui.console.mutation import (
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     SAME_VERB,
+    AnswerRequest,
     LifecycleRequest,
     OperationResult,
     OperationStatus,
     SettingRequest,
     VerbRequest,
 )
-from eawf.surfaces.tui.console.overlays.mutation_card import PANES
 from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.session import SIZES, Session
 
@@ -57,6 +62,9 @@ AT = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 ROOT = "eawf://EAWF/EAWF/EAWF"
 TASK, OTHER, DRAFT = "EAWF-0001", "EAWF-0002", "EAWF-0003"
 QUEUED, RUNNING = "RUN-00000001", "RUN-00000002"
+
+#: The six panes every preview draws, in the only order it draws them.
+PANES: tuple[str, ...] = ("ACTION", "TARGET", "EFFECTS", "NOT", "IF STALE", "AUTHORITY")
 
 
 def _row(
@@ -567,3 +575,39 @@ def test_con_058_the_card_keys_are_the_allowlist_while_a_card_is_held() -> None:
     assert allowlist(session, chrome()) >= CARD_KEYS
     _press(session, "x", rows=rows, link=link)
     assert len(link.sent) == 2
+
+
+# ---------- a target is sent exactly when it is not refused ----------
+
+
+def _item(**fields: Any) -> Item:
+    return Item(
+        key="EAWF-0001",
+        title=None,
+        revision=1,
+        status="DRAFT",
+        effects=(),
+        not_effects=(),
+        unknown="",
+        stale_token="1",
+        **fields,
+    )
+
+
+def test_item_neither_sent_nor_refused_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="sent exactly when it is not refused"):
+        _item(refusal=None, request=None)
+
+
+def test_item_both_sent_and_refused_raises_value_error() -> None:
+    refusal = Refusal(code="x", reason="no", remediation="none")
+    request = AnswerRequest(target="EAWF-0001", option_id="approve")
+    with pytest.raises(ValueError, match="sent exactly when it is not refused"):
+        _item(refusal=refusal, request=request)
+
+
+def test_item_why_names_the_refusal_and_is_empty_when_sent() -> None:
+    refusal = Refusal(code="x", reason="no status", remediation="wait")
+    assert _item(refusal=refusal, request=None).why == "no status"
+    request = AnswerRequest(target="EAWF-0001", option_id="approve")
+    assert _item(refusal=None, request=request).why == ""

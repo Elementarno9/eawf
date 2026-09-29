@@ -16,7 +16,6 @@ route opened with nothing read is honest about what is missing rather than blank
 from __future__ import annotations
 
 import re
-import textwrap
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -68,6 +67,7 @@ from eawf.surfaces.tui.console.renderers import (
     trust,
     unattended,
 )
+from eawf.surfaces.tui.console.renderers.read_model import label, wrapped
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import TRUTH
 from eawf.workflow.projection.acceptance import AcceptanceBundleView
@@ -78,7 +78,6 @@ Copy = Callable[[Session, Fixture], str]
 _DIGEST = re.compile(r"digest\s+(\S+)")
 # The entry state a linked console shows while its first read is outstanding.
 RESOLVING_STATE = "resolving"
-_LABEL_GUTTER = 11
 _CAMPAIGN_RECEIPTS: tuple[str, ...] = (
     "EVT-9101 EVT-9104 EVT-9108",
     "EVT-9120 EVT-9126",
@@ -156,13 +155,6 @@ def seam_for(route: str) -> Seam | None:
     return module.seam if module else None
 
 
-def _labelled(label: str, text: str, w: int) -> list[str]:
-    """Return ``text`` wrapped under ``label`` in the eleven-cell gutter, never clipped."""
-    lines = textwrap.wrap(text, width=w - _LABEL_GUTTER - 1)
-    lead = f" {label:<{_LABEL_GUTTER - 1}}"
-    return [(lead if i == 0 else " " * _LABEL_GUTTER) + line for i, line in enumerate(lines)]
-
-
 def unknown_frame(view: View) -> list[str]:
     """Return the frame of a route whose rows nothing has read: the unknown token, no row."""
     s, w = view.session, view.w
@@ -171,10 +163,12 @@ def unknown_frame(view: View) -> list[str]:
         header(view, f" Eä ▸ {view.fixture.scope} ▸ {s.route}"),
         f" NOT HELD · {s.route} · no read model is held for this route",
         bar(w),
-        f" ROWS      {TRUTH['unknown'].unicode} unknown · nothing has been read, so no row"
-        " is drawn",
-        *_labelled("ANSWERS", spec.question, w),
-        *_labelled("NEEDS", spec.needs, w),
+        label(
+            "ROWS",
+            f"{TRUTH['unknown'].unicode} unknown · nothing has been read, so no row is drawn",
+        ),
+        *wrapped("ANSWERS", spec.question, w),
+        *wrapped("NEEDS", spec.needs, w),
         thin(w),
     ]
     return build(view, rows, keybar([("Esc", "back")], w))

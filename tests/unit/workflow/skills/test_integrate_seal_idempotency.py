@@ -62,6 +62,7 @@ def seal(ledger: KeyedLedger, **overrides: Any) -> dict[str, Any]:
         "subject_ref": CANDIDATE,
         "run": RUN_URN,
         "resulting_tree_digest": TREE,
+        "expected_revision": 2,
         **overrides,
     }
     result = IntegrateSkill(caller=ledger).action(

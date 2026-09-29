@@ -34,6 +34,7 @@ from tests.integration.runtime.daemon.test_semantic_tool_handlers import (
     invoke,
     make_canary,
     method_context,
+    run_revision,
     seal_call,
     seal_fixture,
     skill_caller,
@@ -197,6 +198,7 @@ def test_submit_report_seal_binds_the_one_report_the_run_accepted(
                 "subject_ref": ref,
                 "run": RUN_URN,
                 "resulting_tree_digest": tree_digest,
+                "expected_revision": run_revision(task_canary, runtime_root),
             },
         )
     )

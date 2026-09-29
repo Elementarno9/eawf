@@ -48,11 +48,12 @@ from eawf.surfaces.tui.console.navigation import (
     remember,
     return_focus,
 )
+from eawf.surfaces.tui.console.notices import notice_verb
 from eawf.surfaces.tui.console.operations import (
     QUESTION_OPTIONS,
     AnswerRequest,
 )
-from eawf.surfaces.tui.console.overlays import is_overlay
+from eawf.surfaces.tui.console.overlays import help_card, is_overlay
 from eawf.surfaces.tui.console.overlays.bound_keys import bound_key
 from eawf.surfaces.tui.console.overlays.chassis import holds, unheld_keys
 from eawf.surfaces.tui.console.overlays.palette import palette_hits
@@ -225,7 +226,8 @@ def _console_keys(ctx: Ctx, k: str, shift: bool) -> None:
         # an Escape that closes or goes back is not a quit press: the prompt promised the
         # next press at a quiet scope home would quit, and a back-step is not that press
         disarm(s, k)
-    if s.overlay == "palette" and _palette_key(ctx, k):
+    owner_key = _OVERLAY_OWNS.get(s.overlay or "")
+    if owner_key is not None and owner_key(ctx, k):
         return
     if _console_claims(ctx, k):
         return
@@ -353,6 +355,13 @@ def _palette_key(ctx: Ctx, k: str) -> bool:
     s.subj_id = hit.subject
     ctx.log("Enter", f"palette → {s.route}" + (f" · {hit.subject}" if hit.subject else ""))
     return True
+
+
+# The overlays that claim some keys before the global grammar hears them: the palette its
+# text and rows, help its paging.
+_OVERLAY_OWNS: Mapping[str, Callable[[Ctx, str], bool]] = MappingProxyType(
+    {"palette": _palette_key, "help": help_card.scroll_key}
+)
 
 
 def _filter_key(ctx: Ctx, k: str) -> None:
@@ -935,6 +944,7 @@ def _help(ctx: Ctx, k: str, pane: bool) -> None:
         close_overlay(s)
     else:
         open_overlay(s, "help", subject=s.route)
+        s.help_top = 0
     ctx.log("?", "route help")
 
 
@@ -977,7 +987,7 @@ def _marker(ctx: Ctx, k: str, pane: bool) -> None:
 
 def _attention_verb(ctx: Ctx, k: str, pane: bool) -> None:
     s, fx = ctx.s, ctx.fixture
-    if s.route != att.ATTENTION_ROUTE or att.held_refusal(ctx, k):
+    if s.route != att.ATTENTION_ROUTE or att.held_refusal(ctx, k) or notice_verb(ctx, k):
         return
     rows = att.attn_list(s, fx)
     row = rows[s.sel] if s.sel < len(rows) else None

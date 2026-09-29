@@ -40,17 +40,37 @@ class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class StatisticPopulation(_StrictModel):
+    """The population a quoted statistic was drawn from.
+
+    A rate means nothing until its denominator is known: a glob that read
+    one directory depth once described the root files alone as every
+    local transcript. Naming the selector and filter lets a reader
+    re-derive the population before trusting the rate.
+
+    Attributes:
+        selector: What was read, e.g. a store, a query or a recursive glob.
+        filter: Which of the selected rows were counted.
+    """
+
+    selector: Annotated[str, Field(min_length=1, max_length=240)]
+    filter: Annotated[str, Field(min_length=1, max_length=240)]
+
+
 class AgentReportEvidenceRef(_StrictModel):
     """Pointer to evidence supporting a report claim.
 
     The ``kind`` Literal is imported from :data:`eawf.kernel.spec.common.EvidenceKind`
     so the agent-report vocabulary equals the spec-layer vocabulary —
-    one canonical kind set across spec and report layers.
+    one canonical kind set across spec and report layers. ``population``
+    is optional so a reference persisted before it existed still loads;
+    the durable review gate is what refuses a quoted rate without one.
     """
 
     kind: EvidenceKind
     ref: Annotated[str, Field(min_length=1)]
     note: Annotated[str, Field(max_length=240)] | None = None
+    population: StatisticPopulation | None = None
 
 
 class AgentReportFollowup(_StrictModel):

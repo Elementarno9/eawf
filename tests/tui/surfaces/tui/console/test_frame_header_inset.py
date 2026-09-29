@@ -28,11 +28,11 @@ def _head(*, gutter: int, needs: int = 0, crumb: str = " Eä ▸ eawf ▸ Settin
     return build(view, [head, pad(" context", W), bar(W)], pad(" Esc back", W))[0]
 
 
-# ---------- V-14: the right edge keeps a cell ----------
+# ---------- the right edge keeps a cell ----------
 
 
 @pytest.mark.parametrize("needs", [0, 4])
-def test_v14_the_launched_header_ends_one_cell_in(needs: int) -> None:
+def test_the_launched_header_ends_one_cell_in(needs: int) -> None:
     head = _head(gutter=1, needs=needs)
     assert len(head) == W
     assert head.endswith("● LIVE ")
@@ -40,12 +40,12 @@ def test_v14_the_launched_header_ends_one_cell_in(needs: int) -> None:
     assert ("!4 NEEDS YOU  ● LIVE " in head) == bool(needs)
 
 
-def test_v14_the_bare_frame_keeps_the_packet_flush_slot() -> None:
+def test_the_bare_frame_keeps_the_packet_flush_slot() -> None:
     head = _head(gutter=0)
     assert head.endswith("● LIVE") and len(head) == W
 
 
-def test_v14_a_crumb_that_leaves_no_spare_padding_keeps_its_slot_flush() -> None:
+def test_a_crumb_that_leaves_no_spare_padding_keeps_its_slot_flush() -> None:
     crumb = " " + "x" * (W - len("  ● LIVE") - 1)
     head = _head(gutter=1, crumb=crumb)
     assert head.endswith("  ● LIVE") and len(head) == W

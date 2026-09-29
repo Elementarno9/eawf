@@ -83,7 +83,7 @@ def _complete(canary: CanaryProvision, tmp_path: Path, receipts: tuple[Any, ...]
     )
 
 
-def test_r01_completion_refuses_a_filed_fail_restated_as_pass(tmp_path: Path) -> None:
+def test_completion_refuses_a_filed_fail_restated_as_pass(tmp_path: Path) -> None:
     """The proof run filed FAIL; a PASS copy of that receipt completes nothing."""
     passing = _passing()
     failed = tuple(
@@ -100,7 +100,7 @@ def test_r01_completion_refuses_a_filed_fail_restated_as_pass(tmp_path: Path) ->
     assert document_path(canary).read_bytes() == before
 
 
-def test_r01_completion_refuses_a_filed_pass_presented_with_other_stamps(
+def test_completion_refuses_a_filed_pass_presented_with_other_stamps(
     tmp_path: Path,
 ) -> None:
     """A copy differing from the filed line in any field is not the filed receipt."""
@@ -114,7 +114,7 @@ def test_r01_completion_refuses_a_filed_pass_presented_with_other_stamps(
     assert "G-01" in answer["errors"][0]["message"]
 
 
-def test_r01_completion_on_the_filed_passing_receipts_commits(tmp_path: Path) -> None:
+def test_completion_on_the_filed_passing_receipts_commits(tmp_path: Path) -> None:
     """The positive control: the exact filed PASS lines complete the Task."""
     passing = _passing()
     canary = _canary(tmp_path, tuple(proof_line(item) for item in passing))
@@ -124,7 +124,7 @@ def test_r01_completion_on_the_filed_passing_receipts_commits(tmp_path: Path) ->
     assert answer["status"] == "ok", answer["errors"]
 
 
-def test_r01_a_later_passing_run_of_a_failed_leg_counts(tmp_path: Path) -> None:
+def test_a_later_passing_run_of_a_failed_leg_counts(tmp_path: Path) -> None:
     """A leg filed FAIL then proved again PASS completes on the passing line."""
     passing = _passing()
     failed = passing[0].model_copy(

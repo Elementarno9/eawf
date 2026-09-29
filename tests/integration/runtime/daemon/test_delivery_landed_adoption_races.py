@@ -46,7 +46,7 @@ def _generations(path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def test_r08_adoption_refuses_a_head_selected_while_the_repository_was_read(
+def test_adoption_refuses_a_head_selected_while_the_repository_was_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A generation selected mid-read leaves the adoption refused, not duplicated."""
@@ -71,7 +71,7 @@ def test_r08_adoption_refuses_a_head_selected_while_the_repository_was_read(
     assert ordinals == [2]
 
 
-def test_r08_adoption_on_an_unmoved_head_still_selects_its_generation(tmp_path: Path) -> None:
+def test_adoption_on_an_unmoved_head_still_selects_its_generation(tmp_path: Path) -> None:
     """The positive control: nothing moved, so the recheck lets the append through."""
     canary, base, head = landed_canary(tmp_path)
 
@@ -81,7 +81,7 @@ def test_r08_adoption_on_an_unmoved_head_still_selects_its_generation(tmp_path: 
     assert [item["id"] for item in _generations(document_path(canary))] == ["ING-000002"]
 
 
-def test_r03_adoption_retried_under_its_key_replays_the_first_answer(
+def test_adoption_retried_under_its_key_replays_the_first_answer(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A retry under the same key answers from the filed answer, reading nothing again."""
@@ -98,7 +98,7 @@ def test_r03_adoption_retried_under_its_key_replays_the_first_answer(
     assert len(_generations(document_path(canary))) == 1
 
 
-def test_r03_adoption_key_naming_other_parameters_is_refused(tmp_path: Path) -> None:
+def test_adoption_key_naming_other_parameters_is_refused(tmp_path: Path) -> None:
     """One key cannot name two different adoptions."""
     canary, base, head = landed_canary(tmp_path)
     _adopt(canary, tmp_path, base_commit=base, head_sha=head)

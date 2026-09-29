@@ -1,4 +1,4 @@
-"""The final jury's findings on a console reading a live tree, each test named for one.
+"""A console reading a live tree: its menus, finished records, event keys, scope and marks.
 
 A menu verb no daemon verb carries is listed refused with that reason and never opens a
 consequence card; the chrome's prototype reasons stay off a live tree; a finished
@@ -93,10 +93,10 @@ def _text(app: ConsoleApp) -> str:
     return "\n".join(compose_frame(app.view()))
 
 
-# ---------- C3-01: a verb no daemon verb carries never opens a card ----------
+# ---------- a verb no daemon verb carries never opens a card ----------
 
 
-def test_c3_01_every_offered_heavy_verb_on_a_live_tree_is_one_a_daemon_verb_carries() -> None:
+def test_every_offered_heavy_verb_on_a_live_tree_is_one_a_daemon_verb_carries() -> None:
     """Audit every chrome menu verb: a heavy verb stays offered only with a daemon binding."""
     audited = 0
     for route, _rows in LINKED.proto.actions.items():
@@ -112,7 +112,7 @@ def test_c3_01_every_offered_heavy_verb_on_a_live_tree_is_one_a_daemon_verb_carr
 
 
 @pytest.mark.parametrize(("route", "letter"), [("scope.home", "p"), ("run.detail", "s")])
-def test_c3_01_pin_outcome_and_steer_read_the_unbound_reason(route: str, letter: str) -> None:
+def test_pin_outcome_and_steer_read_the_unbound_reason(route: str, letter: str) -> None:
     verb = LINKED.menus.verb(route, letter)
     assert verb is not None
     assert (verb.available, verb.reason) == (False, UNBOUND_REASON)
@@ -125,7 +125,7 @@ def test_c3_01_pin_outcome_and_steer_read_the_unbound_reason(route: str, letter:
         ("run.detail", "RUN-00000001", None, "s"),
     ],
 )
-def test_c3_01_an_unbound_verb_is_refused_without_a_card(
+def test_an_unbound_verb_is_refused_without_a_card(
     route: str, subject: str | None, sel: str | None, letter: str
 ) -> None:
     app = _linked(route, subject=subject, sel=sel)
@@ -137,16 +137,16 @@ def test_c3_01_an_unbound_verb_is_refused_without_a_card(
     assert app.session.trace is not None and UNBOUND_REASON in app.session.trace
 
 
-def test_c3_01_the_prototype_replay_keeps_its_own_menus() -> None:
+def test_the_prototype_replay_keeps_its_own_menus() -> None:
     proto = load_fixture(FIXTURE_ROOT)
     pin = proto.menus.verb("scope.home", "p")
     assert pin is not None and pin.available and pin.reason == ""
 
 
-# ---------- C3-02: no prototype reason on a live tree ----------
+# ---------- no prototype reason on a live tree ----------
 
 
-def test_c3_02_retire_track_names_what_it_acts_on_not_the_fixtures_batches() -> None:
+def test_retire_track_names_what_it_acts_on_not_the_fixtures_batches() -> None:
     verb = LINKED.menus.verb("scope.home", "r")
     assert verb is not None and not verb.available
     assert "batches in flight" not in verb.reason
@@ -155,7 +155,7 @@ def test_c3_02_retire_track_names_what_it_acts_on_not_the_fixtures_batches() -> 
     assert set(SAME_VERB) == {"retire track", "accept", "authorize merge", "promote"}
 
 
-def test_c3_02_no_live_menu_reason_is_a_chrome_literal() -> None:
+def test_no_live_menu_reason_is_a_chrome_literal() -> None:
     chrome_reasons = {
         row[3] for rows in load_chrome().actions.values() for row in rows if len(row) > 3 and row[3]
     }
@@ -164,10 +164,10 @@ def test_c3_02_no_live_menu_reason_is_a_chrome_literal() -> None:
             assert verb.reason not in chrome_reasons, (route, verb.verb, verb.reason)
 
 
-# ---------- C3-03: the sandbox policy key names the held policy ----------
+# ---------- the sandbox policy key names the held policy ----------
 
 
-def test_c3_03_p_names_the_held_policy_and_opens_no_unrelated_section() -> None:
+def test_p_names_the_held_policy_and_opens_no_unrelated_section() -> None:
     app = _linked("sandbox.log", sel="SBX-0001")
     _text(app)
     _press(app, "p")
@@ -178,10 +178,10 @@ def test_c3_03_p_names_the_held_policy_and_opens_no_unrelated_section() -> None:
     assert "pol-2026" not in toast.text
 
 
-# ---------- C3-04: a finished Milestone keeps only its light verbs ----------
+# ---------- a finished Milestone keeps only its light verbs ----------
 
 
-def test_c3_04_home_offers_no_lifecycle_verb_on_a_completed_leaf() -> None:
+def test_home_offers_no_lifecycle_verb_on_a_completed_leaf() -> None:
     app = _linked("scope.home", sel="MLS-0101")
     _text(app)
     _press(app, ".")
@@ -192,14 +192,14 @@ def test_c3_04_home_offers_no_lifecycle_verb_on_a_completed_leaf() -> None:
     assert app.session.overlay != CARD
 
 
-def test_c3_04_home_still_offers_lifecycle_verbs_on_an_open_leaf() -> None:
+def test_home_still_offers_lifecycle_verbs_on_an_open_leaf() -> None:
     app = _linked("scope.home", sel="MLS-0100")
     _text(app)
     _press(app, ".")
     assert "open review" in _text(app)
 
 
-def test_c3_04_a_completed_milestone_frame_draws_its_final_band_and_light_menu() -> None:
+def test_a_completed_milestone_frame_draws_its_final_band_and_light_menu() -> None:
     app = _linked("milestone", subject="MLS-0101")
     frame = _text(app).split("\n")
     final = next(row for row in frame if "FINAL" in row)
@@ -213,7 +213,7 @@ def test_c3_04_a_completed_milestone_frame_draws_its_final_band_and_light_menu()
     assert "open trust record" in menu
 
 
-# ---------- C3-05: one label width per frame ----------
+# ---------- one label width per frame ----------
 
 
 def _value_at(row: str, label: str) -> int:
@@ -222,7 +222,7 @@ def _value_at(row: str, label: str) -> int:
     return after + len(row[after:]) - len(row[after:].lstrip())
 
 
-def test_c3_05_the_batch_final_band_sits_in_the_batch_frames_gutter() -> None:
+def test_the_batch_final_band_sits_in_the_batch_frames_gutter() -> None:
     app = _linked("batch.detail", subject="BAT-0100")
     frame = _text(app).split("\n")
     final = next(row for row in frame if "FINAL" in row)
@@ -231,22 +231,22 @@ def test_c3_05_the_batch_final_band_sits_in_the_batch_frames_gutter() -> None:
     assert _value_at(final, "FINAL") == _value_at(state, "STATE")
 
 
-def test_c3_05_health_tuples_sits_in_the_checks_gutter() -> None:
+def test_health_tuples_sits_in_the_checks_gutter() -> None:
     frame = nrf._frame("health", w=160)
     checks = next(row for row in frame if row.startswith(" CHECKS"))
     tuples = next(row for row in frame if row.startswith(" TUPLES"))
     assert _value_at(tuples, "TUPLES") == _value_at(checks, "CHECKS")
 
 
-# ---------- C3-06: the Run's event keys answer once, in words that hold ----------
+# ---------- the Run's event keys answer once, in words that hold ----------
 
 
-def test_c3_06_the_event_toast_points_at_enter_on_this_frame() -> None:
+def test_the_event_toast_points_at_enter_on_this_frame() -> None:
     assert NO_EVENTS == "no event is recorded for this Run yet · Enter opens the transcript"
     assert "Activity" not in NO_EVENTS
 
 
-def test_c3_06_a_toast_identical_to_the_newest_replaces_it() -> None:
+def test_a_toast_identical_to_the_newest_replaces_it() -> None:
     session, clock = Session(), FakeClock()
     notify(session, clock, text="same", title="↓", sev=Severity.INFO)
     clock.advance(1.0)
@@ -258,17 +258,17 @@ def test_c3_06_a_toast_identical_to_the_newest_replaces_it() -> None:
     assert [t.text for t in session.toasts] == ["same", "other", "same"]
 
 
-def test_c3_06_arrows_on_a_run_stack_one_toast() -> None:
+def test_arrows_on_a_run_stack_one_toast() -> None:
     app = _linked("run.detail", subject="RUN-00000001")
     _text(app)
     _press(app, "ArrowDown", "ArrowUp", "PageDown", "End")
     assert [t.text for t in app.session.toasts] == [NO_EVENTS]
 
 
-# ---------- C3-07: home's scope drawer and one URN scheme ----------
+# ---------- home's scope drawer and one URN scheme ----------
 
 
-def test_c3_07_i_on_home_opens_the_scope_drawer() -> None:
+def test_i_on_home_opens_the_scope_drawer() -> None:
     app = _linked("scope.home", sel="MLS-0100")
     assert "i inspect" in _text(app).split("\n")[-1]
     _press(app, "i")
@@ -280,7 +280,7 @@ def test_c3_07_i_on_home_opens_the_scope_drawer() -> None:
     assert copy_for(app._ctx()) == PROJECT_URN
 
 
-def test_c3_07_a_subjectless_frame_copies_the_tree_urn_in_the_one_scheme() -> None:
+def test_a_subjectless_frame_copies_the_tree_urn_in_the_one_scheme() -> None:
     app = _linked("scope.home", sel=None)
     app.session.route = "git.pr"
     _press(app, "Y")
@@ -290,13 +290,13 @@ def test_c3_07_a_subjectless_frame_copies_the_tree_urn_in_the_one_scheme() -> No
     assert str(parse_qualified_urn(copied)) == copied
 
 
-def test_c3_07_the_prototype_home_bar_keeps_the_packs_keys() -> None:
+def test_the_prototype_home_bar_keeps_the_packs_keys() -> None:
     view = View(session=Session(), fixture=load_fixture(FIXTURE_ROOT), w=80, h=24)
     assert "i inspect" not in render_route(view)[-1]
     assert KEY["inspect"] in native_keys("scope.home", windowed=False)
 
 
-# ---------- C3-08: an empty table draws no head ----------
+# ---------- an empty table draws no head ----------
 
 
 @pytest.mark.parametrize(
@@ -306,16 +306,16 @@ def test_c3_07_the_prototype_home_bar_keeps_the_packs_keys() -> None:
         ("campaign", ("STEP STATE DEPENDS ON", "RECEIPT WHAT IT SHOWS CLAIM", "ARTIFACT WRITTEN")),
     ],
 )
-def test_c3_08_an_empty_table_draws_no_head(route: str, heads: tuple[str, ...]) -> None:
+def test_an_empty_table_draws_no_head(route: str, heads: tuple[str, ...]) -> None:
     rows = {" ".join(row.split()) for row in nrf._frame(route, w=80)}
     for head in heads:
         assert head not in rows, head
 
 
-# ---------- C3-09: select all says how many it marked ----------
+# ---------- select all says how many it marked ----------
 
 
-def test_c3_09_select_all_raises_the_count_it_marked() -> None:
+def test_select_all_raises_the_count_it_marked() -> None:
     app = _linked("scope.home", sel="MLS-0100")
     _text(app)
     _press(app, ".", "*")
@@ -324,10 +324,10 @@ def test_c3_09_select_all_raises_the_count_it_marked() -> None:
     assert toast.text.endswith(f"{len(app.session.marked)} selected")
 
 
-# ---------- C3-10: a cut native bar keeps the action menu ----------
+# ---------- a cut native bar keeps the action menu ----------
 
 
-def test_c3_10_a_cut_native_activity_bar_keeps_the_menu_ahead_of_paging() -> None:
+def test_a_cut_native_activity_bar_keeps_the_menu_ahead_of_paging() -> None:
     pairs = [e.pair() for e in native_keys("activity", windowed=True)]
     bar = keybar(pairs, 80, keep_actions=True)
     assert ". actions" in bar
@@ -335,7 +335,7 @@ def test_c3_10_a_cut_native_activity_bar_keeps_the_menu_ahead_of_paging() -> Non
     assert ". actions" not in keybar(pairs, 80)
 
 
-# ---------- C3-01 live: every action menu on every route, on this repository's tree ----------
+# ---------- live: every action menu on every route, on this repository's tree ----------
 
 
 def _menu_letters(app: ConsoleApp) -> list[str]:
@@ -352,7 +352,7 @@ def _menu_letters(app: ConsoleApp) -> list[str]:
     return letters
 
 
-def test_c3_01_live_no_menu_verb_without_a_daemon_verb_opens_a_card(tmp_path: Path) -> None:
+def test_live_no_menu_verb_without_a_daemon_verb_opens_a_card(tmp_path: Path) -> None:
     """Every letter of every route's action menu, pressed live, opens only a bound card."""
     from eawf.surfaces.tui.console.registry import REGISTRY
 

@@ -489,8 +489,9 @@ def test_surf_084_a_publication_answers_with_its_operation_reference_on_submissi
 # ---- SURF-086 ---------------------------------------------------------------
 
 #: Read verbs of the declared groups that answer from the tree without a daemon.
-#: ``daemon status`` is absent: it cold-spawns a daemon when none answers,
-#: which writes runtime files under the runtime directory.
+#: ``daemon status`` and ``follow`` are absent: they answer only from a running
+#: daemon and exit with the daemon-unreachable code without one, never starting
+#: it; ``tests/integration/surfaces/cli/test_operation_cli.py`` pins that.
 _READ_VERBS: tuple[tuple[str, ...], ...] = (
     ("config", "get", "project.code"),
     ("config", "validate"),

@@ -10,8 +10,7 @@
       "command": "eawf-mcp",
       "env": {
         "DEMO_KEY": "${ENV:DEMO_KEY}"
-      },
-      "transport": "stdio"
+      }
     }
   }
 }

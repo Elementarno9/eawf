@@ -27,18 +27,16 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
-    needs_count,
     route_keys_bar,
-    scope_label,
     thin,
 )
-from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNKNOWN_WORD,
     counts,
     label,
     native,
+    native_header,
     route_crumb,
     unstated_rows,
 )
@@ -159,13 +157,7 @@ def native_frame(view: View, model: ReleaseReadinessView) -> list[str]:
         subject = f"{NO_RELEASE} · {counts(model)}"
     table = TABLES["MB"]
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=route_crumb(view, model, leaf),
-            scope=scope_label(view, model.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, route_crumb(view, model, leaf), model.scope_id),
         " " + subject,
         bar(w),
         table.head([MEMBERSHIP, "TRACK", "ACCEPTED"]),

@@ -3,8 +3,9 @@
 A detail frame is about its subject, so what it lists are the records filed under that
 subject, found by their parent key -- a Batch lists its own Tasks, a Milestone its own
 Batches -- and never the register the subject sits in, whose other rows are siblings.
-The facts beside the list sit in one label gutter, two cells in, so the value column is
-the same on every detail route and the caret lands in the cells between label and value.
+The facts beside the list sit in the one label gutter every native frame shares, so the
+value column is the same on every detail route; the caret lands in the two cells between
+label and value.
 """
 
 from __future__ import annotations
@@ -22,11 +23,12 @@ from eawf.surfaces.tui.console.frame import (
     recede,
     window_rows,
 )
+from eawf.surfaces.tui.console.renderers.read_model import LABEL_W as GUTTER_W
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
 
-#: The cells a fact label takes after its two-cell gutter.
-LABEL_W = 11
+#: The cells a fact label takes before the caret's two cells: the shared gutter less them.
+LABEL_W = GUTTER_W - 2
 
 
 class Record(Protocol):
@@ -54,7 +56,7 @@ class Record(Protocol):
 
 def lrow(label: str, value: str, cur: bool = False) -> str:
     """Return a labelled fact row, the caret between label and value when ``cur``."""
-    return "  " + pad(label, LABEL_W) + ("▸ " if cur else "  ") + value
+    return " " + pad(label, LABEL_W) + ("▸ " if cur else "  ") + value
 
 
 def status(row: Record) -> str:
@@ -92,10 +94,9 @@ def child_cursor(session: Session, keys: Sequence[str], *, subject: str) -> int:
     Returns:
         The offset of the child under the caret; ``0`` for an empty list.
     """
-    found = keys.index(session.sel_id) if session.sel_id in keys else None
-    index = found if found is not None else min(max(session.sel, 0), max(len(keys) - 1, 0))
-    session.sel = index
-    session.sel_id = keys[index] if keys else subject
+    index = dv.restore_by_id(session, keys)
+    if not keys:
+        session.sel_id = subject
     # the arrows walk the children and Enter opens one, so an empty list offers neither
     session.nav_rows = len(keys)
     dv.publish_nav(session, list(keys))

@@ -66,4 +66,4 @@ else
         "${_eawf_arg4}")
 fi
 
-printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run subagent_stop --runtime claude
+printf '%s' "${_eawf_payload}" | exec "${_eawf_uv}" run eawf hook run subagent_stop --runtime claude --target-epoch 2

@@ -43,6 +43,7 @@ from eawf.workflow.skills.bodies.verify import (
     VerifyMode,
     VerifyOutcome,
 )
+from eawf.workflow.skills.catalog import resolve_skill
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.workflow.skills.lifecycle_rpc import (
     OutputRendering,
@@ -57,6 +58,9 @@ from eawf.workflow.skills.registry import register
 
 logger = logging.getLogger(__name__)
 
+
+#: The catalog row this skill's allowlist and grammar are read from.
+_ENTRY: Final = resolve_skill("/verify")
 
 #: The Batch read model the pass binds its subject at.
 BATCH_READ_METHOD: Final = "projection.batch.detail.read"
@@ -73,27 +77,12 @@ DELIVERY_ASSESS_COMPLETION_METHOD: Final = "runtime.delivery.assess_completion"
 #: The verb that asks the operator to accept a verified Milestone.
 DELIVERY_OPEN_APPROVAL_METHOD: Final = "runtime.delivery.open_acceptance_approval"
 
-#: Every JSON-RPC method this skill may address. A call outside the set
-#: is refused before the transport is touched.
-RPC_SCOPE: Final = RpcScope(
-    skill="/verify",
-    methods=(
-        BATCH_READ_METHOD,
-        EVIDENCE_READ_METHOD,
-        DELIVERY_VERIFY_BATCH_METHOD,
-        DELIVERY_ASSESS_COMPLETION_METHOD,
-        DELIVERY_OPEN_APPROVAL_METHOD,
-    ),
-)
+#: Every JSON-RPC method this skill may address: the catalog row's allowlist.
+#: A call outside the set is refused before the transport is touched.
+RPC_SCOPE: Final = RpcScope(skill="/verify", methods=_ENTRY.effects.rpcs)
 
 #: The complete accepted invocation, brackets optional and ``...`` repeatable.
-INVOCATION_GRAMMAR: Final = (
-    "/verify <batch-or-revision-ref> [--mode <gates|audit|review|security|all>] "
-    "[--gate <id>...] [--severity-floor <P0|P1|P2|P3>] [--agents <1..8>] [--budget <spec>] "
-    "[--milestone <ref>] [--journey <step>...] [--accepted-binding <binding>] "
-    "[--requested-by <principal>] [--no-cache] [--idempotency-key <key>] "
-    "[--output <human|json|markdown>]"
-)
+INVOCATION_GRAMMAR: Final = _ENTRY.grammar.usage
 
 #: What this skill may cause, stated as the boundary it never crosses.
 EFFECTS: Final = (
@@ -134,6 +123,7 @@ _APPROVAL_FIELDS: Final[tuple[tuple[str, str], ...]] = (
     ("steps", "journey"),
     ("accepted_binding", "accepted_binding"),
     ("requested_by", "requested_by"),
+    ("expected_revision", "expected_revision"),
 )
 
 #: The refusal-code fragment that means the head moved under the pass.
@@ -171,6 +161,8 @@ class VerifyArgs(BaseModel):
         accepted_binding: The exact tree the acceptance would be taken on.
         requested_by: The principal the question is recorded as asked by.
         no_cache: Re-derive every leg rather than reusing a receipt.
+        expected_revision: The revision the caller read the Milestone at,
+            which the acceptance question is anchored to.
         idempotency_key: This request's name; minted when omitted.
         repo_root: The tree to address, when not the daemon's own.
         output: The rendering the caller wants.
@@ -189,6 +181,7 @@ class VerifyArgs(BaseModel):
     accepted_binding: dict[str, Any] | None = None
     requested_by: dict[str, Any] | None = None
     no_cache: bool = False
+    expected_revision: int | None = None
     idempotency_key: str | None = None
     repo_root: str | None = None
     output: OutputRendering = "human"
@@ -341,6 +334,7 @@ class VerifySkill(Skill):
                 "requested_by": args.requested_by,
                 "steps": list(args.journey),
                 "accepted_binding": args.accepted_binding,
+                "expected_revision": args.expected_revision,
             },
         )
         return opened, ()

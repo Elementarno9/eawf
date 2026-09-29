@@ -720,6 +720,31 @@ def resolve_stall_interval_seconds(repo_root: Path, runtime: str | None) -> int:
     return RuntimeLivenessConfig.model_validate(raw).stall_interval_s
 
 
+def resolve_permission_wait_seconds(repo_root: Path) -> int:
+    """Return the wait ``runtime.claude.permission_wait_s`` resolves to.
+
+    Claude is the one host whose permission hook can carry a decision back,
+    so the leaf is read from its block only.
+
+    Args:
+        repo_root: Repo root the layered config is composed against.
+
+    Returns:
+        The configured wait in seconds, or the default when the Claude block
+        or its leaf is absent.
+
+    Raises:
+        pydantic.ValidationError: The Claude block is present but malformed,
+            or sets a wait past the host's hook window.
+    """
+    from eawf.kernel.config.schema import RuntimeLivenessConfig
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    section = merged.get("runtime")
+    raw = section.get("claude") if isinstance(section, dict) else None
+    return RuntimeLivenessConfig.model_validate(raw or {}).permission_wait_s
+
+
 def resolve_agent_extra_tools(repo_root: Path | None = None) -> dict[str, tuple[str, ...]]:
     """Return the merged ``agents.extra_tools`` grant map (role to extra tools).
 

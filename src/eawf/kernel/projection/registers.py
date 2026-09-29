@@ -38,6 +38,7 @@ from typing import Final
 from eawf.kernel.projection.compute import (
     PROJECTION_PRODUCER,
     ROUTE_COLLECTIONS,
+    ROUTE_NOTICE_COLLECTIONS,
     ROUTE_READ_MODELS,
     ProjectionRow,
     RouteProjection,
@@ -309,7 +310,9 @@ def build_register_view(projection: RouteProjection) -> RegisterView:
         )
     bound = ROUTE_COLLECTIONS[route]
     written = tuple(c for c in bound if c not in UNWRITTEN_COLLECTIONS)
-    rows = tuple(row for row in projection.rows if row.collection in written)
+    # a notice is listed from a collection the route does not bind, and counts in none
+    listed = (*written, *ROUTE_NOTICE_COLLECTIONS.get(route, ()))
+    rows = tuple(row for row in projection.rows if row.collection in listed)
     counts = MappingProxyType(
         {
             collection.value: sum(1 for row in rows if row.collection is collection)

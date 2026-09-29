@@ -86,6 +86,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         # cross-references this map when a profile body changes between
         # loads — drift surfaces as a prompt.
         "trusted": {},
+        # Managed-certification ledger; key = profile id, value = the
+        # digest an enriched profile is certified under. Committed at the
+        # repo layer so certifying a profile is a reviewed change.
+        "certified": {},
     },
     "runtime": {
         "default": "claude-code",

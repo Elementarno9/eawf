@@ -68,9 +68,13 @@ from eawf.kernel.projection.truth import (
     TruthKind,
     TruthState,
 )
+from eawf.kernel.runtime.certification import CertificationFailureCode, CertifiedRuntimeFacts
 from eawf.kernel.spec.release import Sha256DigestStr
 from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.base import Epoch2Model, NonEmptyStr
+from eawf.observability.telemetry.models import RuntimeName
+from eawf.platform.rules.host_facts import load_host_facts
+from eawf.runtime.mcp.env_ref import ENV_REF_RE
 
 logger = logging.getLogger(__name__)
 
@@ -452,6 +456,68 @@ def _effective_field(*, key: str, value: Any, winner: Layer | None) -> TruthFiel
     )
 
 
+def _deny_chain(
+    entry: LeafKey, value: Any, merged: Mapping[str, Any], sources: Mapping[str, str]
+) -> tuple[str, ...]:
+    """Return the refusal in force on a key's value, naming the leaf and layer behind it.
+
+    A refusal is stated only while it holds: the key carries the refused value and the
+    leaf that would lift it is not ``true``, which is exactly when the engine refuses.
+    """
+    deny = entry.deny
+    if deny is None or value is _ABSENT or render_value(value) != deny.value:
+        return ()
+    # the lifting leaf always has a value in force: the built-in defaults state it
+    lifted = merged[deny.unless]
+    if lifted is True:
+        return ()
+    return (f"{deny.unless} = {render_value(lifted)} · {_winner(deny.unless, sources)}",)
+
+
+def _constraint_chain(entry: LeafKey) -> tuple[str, ...]:
+    """Return the range the compiled config registry holds a key's value to, if any."""
+    if entry.value_range is None:
+        return ()
+    low, high = entry.value_range
+    if low is not None and high is not None:
+        span = f"{low:g} to {high:g}"
+    else:
+        span = f"at least {low:g}" if low is not None else f"at most {high:g}"
+    return (f"config registry range {span} · {Layer.BUILT_IN}",)
+
+
+def _certification_state(runtime: RuntimeName) -> str:
+    """Return whether ``runtime`` can be certified, read off its certified runtime facts.
+
+    The conformance runner refuses to certify a runtime none of whose facts is certified,
+    so that refusal is the state a key needing the runtime is in.
+    """
+    facts = CertifiedRuntimeFacts.from_host_facts(load_host_facts().runtime(runtime))
+    if facts is None:
+        return CertificationFailureCode.RUNTIME_FACTS_UNCERTIFIED.value
+    return "runtime facts certified"
+
+
+def _strings(value: Any) -> Iterable[str]:
+    """Yield every string a config value holds, however deeply nested."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for item in value.values():
+            yield from _strings(item)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _strings(item)
+
+
+def _secret_ref(entry: LeafKey, value: Any) -> str | None:
+    """Return the credential references a key's value names; never a credential itself."""
+    if not entry.secret_refs or value is _ABSENT:
+        return None
+    refs = sorted({text for text in _strings(value) if ENV_REF_RE.match(text)})
+    return ", ".join(refs) or None
+
+
 def _leaf(
     *,
     key: str,
@@ -469,6 +535,7 @@ def _leaf(
         else ()
     )
     writable = () if entry is None or entry.reserved else entry.writable_layers
+    runtime = entry.runtime if entry is not None else None
     return SettingsLeaf(
         key=key,
         section=entry.domain if entry is not None else None,
@@ -480,6 +547,11 @@ def _leaf(
         value_type=entry.type if entry is not None else None,
         meaning=entry.description if entry is not None else "",
         allowed=(entry.choices or ()) if entry is not None else (),
+        deny_chain=_deny_chain(entry, value, merged, sources) if entry is not None else (),
+        constraint_chain=_constraint_chain(entry) if entry is not None else (),
+        capability_requirement=f"{runtime} runtime" if runtime is not None else None,
+        certification_state=_certification_state(runtime) if runtime is not None else None,
+        secret_ref=_secret_ref(entry, value) if entry is not None else None,
     )
 
 

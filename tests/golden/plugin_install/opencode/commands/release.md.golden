@@ -8,9 +8,10 @@ Prove, preflight, approve, publish, observe and recover a release.
 
 ## 1. Authority
 
-- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
-- Effects: Release and external-operation RPCs.
-- Allowed RPCs: `read_entity`, `query_evidence`, `release.create`, `release.pin`, `release.proof.prepare`, `release.approve`, `release.publish`, `release.observe`, `release.recover`, `operation.status`, `operation.resume`, `operation.cancel`. Any other RPC is denied before it reaches a handler.
+- Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Operates on: Release, through `projection.release.read`, `release.show`, `release.create`, `release.candidate`, `release.compute_readiness`, `release.approve`, `release.publish`, `release.observe_target`, `release.retry_target`, `release.reconcile`.
+- Effects: Release reads plus the create, pin, readiness, approval and publish verbs.
+- Allowed RPCs: `projection.release.read`, `release.show`, `release.create`, `release.candidate`, `release.compute_readiness`, `release.approve`, `release.publish`, `release.observe_target`, `release.retry_target`, `release.reconcile`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -26,7 +27,7 @@ Resolve the subject before acting. Name every entity with its identifier and its
 You operate one Release from draft through observed publication using the selected action. Submission success never means publication success.
 
 ```text
-/release <create|show|pin|preflight|approve|publish|observe|retry-target|recover> [<release-ref>] [--version <version>] [--milestone <ref>...] [--channel <dev|rc|stable>] [--source <sha>] [--target <id>...] [--wait] [--resume <operation-ref>] [--dry-run]
+/release <create|show|pin|preflight|approve|publish|observe|retry-target|recover> [<release-ref>] [--version <version>] [--milestone <ref>...] [--channel <dev|rc|stable>] [--source <sha>] [--target <id>...] [--dry-run]
 ```
 
 Select exactly one action: `create`, `show`, `pin`, `preflight`, `approve`, `publish`, `observe`, `retry-target`, `recover`. An option the selected action does not declare is refused before you start.
@@ -39,7 +40,7 @@ Select exactly one action: `create`, `show`, `pin`, `preflight`, `approve`, `pub
 4. For approve, present the frozen manifest and consequences through a protected action. The agent never chooses approval.
 5. For publish, submit one durable external operation per target. Treat accepted, effected, and independently observed as distinct facts.
 6. For observe, query each target through its observation adapter. For retry-target or recover, operate only missing or ambiguous legs and preserve the burned version and frozen artifacts.
-7. Declare RELEASED only after every required target is independently observed with matching digests. Return operation references immediately unless `--wait` was requested.
+7. Declare RELEASED only after every required target is independently observed with matching digests. Return operation references immediately.
 
 ## 4b. Applicable rules
 
@@ -62,7 +63,7 @@ The obligations the effective rule graph holds for activities `release`. They bi
 
 Output one ReleaseSkillReport with frozen manifest digest, readiness matrix, approvals, per-target attempts/effects/observations, recovery state, and terminal release truth.
 
-The report validates against `ReleaseSkillReport`, and its terminal outcome is exactly one of `shown`, `drafted`, `pinned`, `ready`, `not_ready`, `approved`, `submitted`, `observed`, `recovering`, `released`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `ReleaseSkillReport`, and its terminal outcome is exactly one of `shown`, `drafted`, `pinned`, `ready`, `not_ready`, `approved`, `submitted`, `observed`, `recovering`, `released`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /release` before returning it.
 
-<!-- argument hint: <create|show|pin|preflight|approve|publish|observe|retry-target|recover> [<release-ref>] [--version <version>] [--milestone <ref>...] [--channel <dev|rc|stable>] [--source <sha>] [--target <id>...] [--wait] [--resume <operation-ref>] [--dry-run] -->
+<!-- argument hint: <create|show|pin|preflight|approve|publish|observe|retry-target|recover> [<release-ref>] [--version <version>] [--milestone <ref>...] [--channel <dev|rc|stable>] [--source <sha>] [--target <id>...] [--dry-run] -->
 ARGUMENTS: $ARGUMENTS

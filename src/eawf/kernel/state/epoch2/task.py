@@ -18,17 +18,28 @@ Demotion runs the promotion edge backwards, and only until the first
 claim. ``first_claimed_at`` is the fact that closes it: stamped on the
 first claim and never cleared, it survives a released lease, so a Task
 that was once claimed can never read as a backlog row again.
+
+A claim is a lease, and ``claimed_by`` names who holds it. Releasing it
+moves the Task back to ``PLANNED`` and clears the holder, and each
+release files a :class:`TaskReleaseRecord` in the Task ledger, so an
+operator abort and a routine replan stay distinguishable afterwards.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Final, Self
+from typing import Final, Literal, Self
 
 from pydantic import Field, model_validator
 
 from eawf.kernel.spec.common import CriterionSpec
-from eawf.kernel.state.epoch2.base import Epoch2Model, NonEmptyStr, StrictPositiveInt
+from eawf.kernel.state.epoch2.base import (
+    Epoch2Model,
+    NonEmptyStr,
+    PrincipalKey,
+    SlugStr,
+    StrictPositiveInt,
+)
 from eawf.kernel.state.epoch2.run import WriteSetPath
 from eawf.kernel.state.epoch2.urns import BatchUrn, DueScopeUrn, RunUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import Epoch2Record, ExactRevisionBinding
@@ -133,6 +144,7 @@ class Task(Epoch2Record):
     first_claimed_at: UtcDatetime | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    claimed_by: PrincipalKey | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def _placement_matches_draft_head(self) -> Self:
@@ -192,10 +204,56 @@ class Task(Epoch2Record):
         return self
 
 
+#: The discriminator a release line carries in the Task ledger, which
+#: every reader of Task rows skips.
+TASK_RELEASE_PAYLOAD_KIND: Final = "task_release"
+
+
+class TaskReleaseRecord(Epoch2Model):
+    """Why a claimed Task went back to ``PLANNED``, and who sent it.
+
+    Attributes:
+        payload_kind: The discriminator separating a release line from a
+            Task row in the Task ledger.
+        task_ref: The released Task.
+        cause: The stable reason code the release was asked with.
+        actor: The principal that released the lease.
+        prior_revision: The Task revision the release moved from.
+        new_revision: The Task revision it landed on.
+        target_batch_ref: The Batch the Task is planned in again.
+        recorded_at: When the release happened.
+    """
+
+    payload_kind: Literal["task_release"] = TASK_RELEASE_PAYLOAD_KIND
+    task_ref: TaskUrn
+    cause: SlugStr
+    actor: PrincipalKey
+    prior_revision: StrictPositiveInt
+    new_revision: StrictPositiveInt
+    target_batch_ref: BatchUrn
+    recorded_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def _moves_forward(self) -> Self:
+        """Refuse a release that does not advance the Task's revision.
+
+        Raises:
+            ValueError: The new revision is not past the prior one.
+        """
+        if self.new_revision <= self.prior_revision:
+            raise ValueError(
+                f"new_revision {self.new_revision} does not follow prior_revision "
+                f"{self.prior_revision}"
+            )
+        return self
+
+
 __all__ = [
+    "TASK_RELEASE_PAYLOAD_KIND",
     "TERMINAL_TASK_STATUSES",
     "Task",
     "TaskCreateSpec",
     "TaskPriority",
+    "TaskReleaseRecord",
     "TaskStatus",
 ]

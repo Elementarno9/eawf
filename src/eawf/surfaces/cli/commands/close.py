@@ -27,15 +27,19 @@ def call_close_rpc(
     method: str,
     params: dict[str, Any],
     flags: GlobalFlags,
+    spawn: bool = True,
 ) -> dict[str, Any]:
-    """Call one close RPC with a repository anchor and typed CLI errors."""
+    """Call one close RPC with a repository anchor and typed CLI errors.
+
+    ``spawn=False`` is for a read that must not be what starts a daemon.
+    """
     from eawf.runtime.daemon import PROTOCOL_VERSION
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     repo_root = str((flags.workspace or Path.cwd()).resolve())
     payload = {**params, "repo_root": repo_root}
     try:
-        with DaemonClient() as client:
+        with DaemonClient(spawn=spawn) as client:
             ping = client.call("daemon.ping", {})
             daemon_protocol = ping.get("protocol_version")
             if daemon_protocol is not None and daemon_protocol != PROTOCOL_VERSION:
@@ -236,13 +240,14 @@ def close_status_cmd(
     ctx: typer.Context,
     ref: Annotated[str, typer.Argument(help="Close-attempt ID or wave ID.")],
 ) -> None:
-    """Show durable close status without waiting."""
+    """Show durable close status without waiting, never starting a daemon."""
     flags: GlobalFlags = ctx.obj
     try:
         result = call_close_rpc(
             method="close.status",
             params={"ref": ref},
             flags=flags,
+            spawn=False,
         )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)

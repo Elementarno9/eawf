@@ -9,8 +9,10 @@ Answer one question with a swift one-page investigation; no Campaign.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Effects: No Campaign or lifecycle RPC; optional gitignored local brief.
-- Allowed RPCs: `read_entity`, `query_evidence`, `retrieve_source`, `submit_report`. Any other RPC is denied before it reaches a handler.
+- Operates on: question, through `projection.evidence.read`.
+- Effects: Evidence read and repository reads; optional gitignored local brief.
+- Allowed RPCs: `projection.evidence.read`. Any other RPC is denied before it reaches a handler.
+- Run tools: `eawf_state_query`, `repo_read`, `repo_search`, `submit_report`.
 - Canonical state: never mutated by this skill.
 - Local write root: `.ea/local/research`; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -56,7 +58,7 @@ The obligations the effective rule graph holds for activities `research` and rol
 
 Output one SwiftResearchReport containing question, scope, findings, alternatives, verdict, confidence, open gaps, references, coverage, and stop reason.
 
-The report validates against `SwiftResearchReport`, and its terminal outcome is exactly one of `answered`, `open`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `SwiftResearchReport`, and its terminal outcome is exactly one of `answered`, `open`, `blocked`. It carries a `coverage` block listing what the pass covered and, with a reason each, what it did not. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /research` before returning it.
 
 <!-- argument hint: <topic...> [--question <text>] [--scope <urn>] [--from <ref>...] [--include <selector>...] [--exclude <selector>...] [--sources <repo|external|both>] [--web <auto|allow|deny|required>] [--domains <domain>...] [--recency-days <N>] [--max-sources <1..20>] [--agents <1..3>] [--budget <spec>] [--save [<relative-path>]] [--output <markdown|json>] -->
 ARGUMENTS: $ARGUMENTS

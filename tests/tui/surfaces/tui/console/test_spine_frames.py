@@ -1,6 +1,6 @@
-"""The spine frames the console jury judged: each draws its own subject and its own children.
+"""The spine frames: each draws its own subject and its own children.
 
-Every test is named for the jury finding it holds. The probe tree has two Tracks, so the
+The probe tree has two Tracks, so the
 home tree can show one expanded and one collapsed; two Batches under one Milestone, so a
 Batch frame that listed its siblings would show the other; and Tasks and Runs filed under
 them by parent key, so a detail frame's list can be told apart from its register.
@@ -190,17 +190,17 @@ def _caret(frame: list[str]) -> str:
     return next(row for row in frame[3:-1] if "▸ " in row)
 
 
-# ---------- J1-04 and J4-14: the home tree's columns and its grouping ----------
+# ---------- the home tree's columns and its grouping ----------
 
 
-def test_j4_14_home_keeps_the_packet_columns_at_80() -> None:
+def test_home_keeps_the_packet_columns_at_80() -> None:
     frame = _frame("scope.home", w=80)
     head = next(row for row in frame if row.lstrip().startswith("MILESTONES"))
     assert (head.index("RUNS"), head.index("ATTENTION"), head.index("PROGRESS")) == (33, 40, 52)
 
 
 @pytest.mark.parametrize("w", [120, 160])
-def test_j1_04_home_caps_the_name_column_near_48_and_keeps_the_counts_beside_it(w: int) -> None:
+def test_home_caps_the_name_column_near_48_and_keeps_the_counts_beside_it(w: int) -> None:
     frame = _frame("scope.home", w=w)
     head = next(row for row in frame if row.lstrip().startswith("MILESTONES"))
     assert head.index("RUNS") == 51, "the name column stops at 48 cells, whatever the width"
@@ -210,14 +210,14 @@ def test_j1_04_home_caps_the_name_column_near_48_and_keeps_the_counts_beside_it(
     assert "done" not in leaf, "a Milestone row carries no progress cell"
 
 
-def test_j1_04_only_the_track_the_cursor_is_in_expands() -> None:
+def test_only_the_track_the_cursor_is_in_expands() -> None:
     frame = _frame("scope.home")
     text = "\n".join(frame)
     assert "MLS-0100" in text and "MLS-0200" not in text
     assert "TRK-DOCS Documentation" in text
 
 
-def test_j1_04_the_cursor_stepping_onto_a_collapsed_track_expands_it() -> None:
+def test_the_cursor_stepping_onto_a_collapsed_track_expands_it() -> None:
     session = _session("scope.home", None)
     frame = _press(session, "scope.home", "ArrowDown")
     assert "MLS-0200" in "\n".join(frame)
@@ -226,34 +226,34 @@ def test_j1_04_the_cursor_stepping_onto_a_collapsed_track_expands_it() -> None:
     assert session.sel_id == "MLS-0200"
 
 
-def test_j4_14_home_draws_no_window_row_while_every_row_is_on_screen() -> None:
+def test_home_draws_no_window_row_while_every_row_is_on_screen() -> None:
     assert not any(row.startswith(" WINDOW") for row in _frame("scope.home", w=80))
 
 
-# ---------- J1-09: Batch and Task frames list their own children ----------
+# ---------- Batch and Task frames list their own children ----------
 
 
-def test_j1_09_the_batch_frame_lists_its_own_tasks_and_no_sibling() -> None:
+def test_the_batch_frame_lists_its_own_tasks_and_no_sibling() -> None:
     frame = _frame("batch.detail", "BAT-0100")
     text = "\n".join(frame)
     assert frame[0].startswith(" Eä ▸ EAWF ▸ MLS-0100 ▸ BAT-0100")
     assert frame[1].startswith(" Batch BAT-0100 · ACTIVE")
     assert "BAT-0101" not in text, "a sibling Batch is not the frame's subject"
     assert "TSK-0003" not in text, "a Task of another Batch is not listed"
-    assert _starts(frame, "TASKS").startswith("  TASKS      ▸ TSK-0001 · RUNNING  Bound the replay")
+    assert _starts(frame, "TASKS").startswith(" TASKS      ▸ TSK-0001 · RUNNING  Bound the replay")
     assert "TSK-0002 · COMPLETED" in text
     assert "Seal the ledger" not in text, "only the row under the caret carries its title"
     assert "2 tasks · 1 completed" in _starts(frame, "COUNT")
     assert not any(row.startswith((" REGIONS", "   ROW ")) for row in frame)
 
 
-def test_j1_09_the_batch_frame_drills_the_task_under_its_caret() -> None:
+def test_the_batch_frame_drills_the_task_under_its_caret() -> None:
     session = _session("batch.detail", "BAT-0100")
     _press(session, "batch.detail", "ArrowDown", "Enter")
     assert (session.route, session.subj_id) == ("task.detail", "TSK-0002")
 
 
-def test_j1_09_a_batch_with_no_task_says_so_and_keeps_the_selection_on_itself() -> None:
+def test_a_batch_with_no_task_says_so_and_keeps_the_selection_on_itself() -> None:
     session = _session("batch.detail", "BAT-0101")
     document = {**DOCUMENT, "task": {}}
     frame = _frame("batch.detail", session=session, document=document)
@@ -261,7 +261,7 @@ def test_j1_09_a_batch_with_no_task_says_so_and_keeps_the_selection_on_itself() 
     assert session.sel_id == "BAT-0101"
 
 
-def test_j1_09_the_task_frame_lists_its_own_runs() -> None:
+def test_the_task_frame_lists_its_own_runs() -> None:
     frame = _frame("task.detail", "TSK-0001")
     text = "\n".join(frame)
     assert frame[0].startswith(" Eä ▸ EAWF ▸ BAT-0100 ▸ TSK-0001")
@@ -273,7 +273,7 @@ def test_j1_09_the_task_frame_lists_its_own_runs() -> None:
 
 
 @pytest.mark.parametrize("route", ["batch.detail", "task.detail", "track"])
-def test_j1_09_a_detail_route_binds_the_collection_it_lists(route: str) -> None:
+def test_a_detail_route_binds_the_collection_it_lists(route: str) -> None:
     child = {
         "batch.detail": Epoch2Collection.TASK,
         "task.detail": Epoch2Collection.RUN,
@@ -282,7 +282,7 @@ def test_j1_09_a_detail_route_binds_the_collection_it_lists(route: str) -> None:
     assert child in ROUTE_COLLECTIONS[route]
 
 
-def test_j1_09_a_long_task_list_windows_and_says_what_it_hides() -> None:
+def test_a_long_task_list_windows_and_says_what_it_hides() -> None:
     tasks = {
         f"TSK-{n:04d}": _row(
             "task", f"TSK-{n:04d}", "PLANNED", batch_ref=_under("batch", "BAT-0100")
@@ -294,22 +294,22 @@ def test_j1_09_a_long_task_list_windows_and_says_what_it_hides() -> None:
     assert any(re.search(r"\b1–\d+ of 40\b", row) for row in frame)  # noqa: RUF001
 
 
-# ---------- J1-10: the Milestone frame is about its subject ----------
+# ---------- the Milestone frame is about its subject ----------
 
 
-def test_j1_10_the_milestone_frame_lists_its_batches_under_its_track() -> None:
+def test_the_milestone_frame_lists_its_batches_under_its_track() -> None:
     frame = _frame("milestone", "MLS-0100")
     text = "\n".join(frame)
     assert frame[0].startswith(" Eä ▸ EAWF ▸ TRK-CORE ▸ MLS-0100")
     assert frame[1].startswith(" Milestone MLS-0100 Cut the candidate")
     assert "ACTIVE" in frame[1] and "cursor" not in frame[1]
     assert _starts(frame, "TRACK").rstrip().endswith("TRK-CORE")
-    assert _starts(frame, "BATCHES").startswith("  BATCHES    ▸ BAT-0100 · ACTIVE")
+    assert _starts(frame, "BATCHES").startswith(" BATCHES    ▸ BAT-0100 · ACTIVE")
     assert "MLS-0200" not in text, "another Milestone is not listed"
     assert "2 batches · 0 completed" in _starts(frame, "BUILT")
 
 
-def test_j1_10_tab_moves_the_visible_section_focus() -> None:
+def test_tab_moves_the_visible_section_focus() -> None:
     session = _session("milestone", "MLS-0100")
     before = _frame("milestone", session=session)
     assert "[glance]" in "\n".join(before)
@@ -318,10 +318,10 @@ def test_j1_10_tab_moves_the_visible_section_focus() -> None:
     assert any(row.lstrip().startswith("TRY") for row in after)
 
 
-# ---------- J1-16: the Track frame's three groups ----------
+# ---------- the Track frame's three groups ----------
 
 
-def test_j1_16_the_track_frame_lists_its_own_milestones_in_the_focused_group() -> None:
+def test_the_track_frame_lists_its_own_milestones_in_the_focused_group() -> None:
     session = _session("track", "TRK-CORE")
     frame = _frame("track", session=session)
     text = "\n".join(frame)
@@ -333,7 +333,7 @@ def test_j1_16_the_track_frame_lists_its_own_milestones_in_the_focused_group() -
     assert session.record_nav == ["MLS-0100"]
 
 
-def test_j1_16_tab_moves_the_focus_and_enter_drills_the_focused_group() -> None:
+def test_tab_moves_the_focus_and_enter_drills_the_focused_group() -> None:
     session = _session("track", "TRK-CORE")
     after = _press(session, "track", "Tab")
     assert session.track_group == "CAMPAIGNS"
@@ -345,10 +345,10 @@ def test_j1_16_tab_moves_the_focus_and_enter_drills_the_focused_group() -> None:
     assert (session.route, session.subj_id) == ("milestone", "MLS-0100")
 
 
-# ---------- J1-11: the roadmap lane chart ----------
+# ---------- the roadmap lane chart ----------
 
 
-def test_j1_11_the_timeline_draws_one_lane_per_track_over_the_weeks_around_now() -> None:
+def test_the_timeline_draws_one_lane_per_track_over_the_weeks_around_now() -> None:
     frame = _frame("timeline", w=160)
     weeks = next(row for row in frame if "│" in row and "W38" in row)
     assert weeks.rstrip() == week_header(AT, 12).rstrip()
@@ -359,7 +359,7 @@ def test_j1_11_the_timeline_draws_one_lane_per_track_over_the_weeks_around_now()
     assert not any("ROW " in row for row in frame), "the chart is not the record table"
 
 
-def test_j1_11_every_undated_milestone_lands_in_the_undated_region() -> None:
+def test_every_undated_milestone_lands_in_the_undated_region() -> None:
     frame = _frame("timeline", w=160)
     assert _starts(frame, "UNDATED").rstrip().endswith("2 milestones with no date proposed")
     for key in ("MLS-0100", "MLS-0200"):
@@ -369,22 +369,22 @@ def test_j1_11_every_undated_milestone_lands_in_the_undated_region() -> None:
     assert "0 of 2 milestones dated" in frame[1]
 
 
-def test_j1_11_enter_on_a_lane_with_no_dated_marker_opens_nothing() -> None:
+def test_enter_on_a_lane_with_no_dated_marker_opens_nothing() -> None:
     session = _session("timeline", None)
     _press(session, "timeline", "Enter")
     assert session.route == "timeline" and session.overlay is None
 
 
-def test_j1_11_an_undated_milestone_opens_on_enter() -> None:
+def test_an_undated_milestone_opens_on_enter() -> None:
     session = _session("timeline", None)
     _press(session, "timeline", "Tab", "Enter")
     assert (session.route, session.subj_id) == ("milestone", "MLS-0100")
 
 
-# ---------- J1-06: the Run frame opens on its timeline ----------
+# ---------- the Run frame opens on its timeline ----------
 
 
-def test_j1_06_the_run_frame_draws_the_timeline_pane_first_with_an_honest_empty_state() -> None:
+def test_the_run_frame_draws_the_timeline_pane_first_with_an_honest_empty_state() -> None:
     frame = _frame("run.detail", "RUN-00000001")
     assert frame[3] == timeline_head(120)
     assert frame[3].endswith(f"{TIMELINE_LEGEND} ")
@@ -400,20 +400,20 @@ def test_j1_06_the_run_frame_draws_the_timeline_pane_first_with_an_honest_empty_
     assert not any(re.match(r"^\s+TIMELINE\s+EVENT\s+DETAIL", row) for row in frame)
 
 
-def test_j1_06_enter_opens_the_runs_transcript() -> None:
+def test_enter_opens_the_runs_transcript() -> None:
     session = _session("run.detail", "RUN-00000001")
     _press(session, "run.detail", "Enter")
     assert (session.route, session.subj_id) == ("transcript", "RUN-00000001")
 
 
-# ---------- J1-07: the transcript agrees with its Run and speaks operator prose ----------
+# ---------- the transcript agrees with its Run and speaks operator prose ----------
 
 
-def test_j1_07_the_outcome_producer_is_operator_prose_not_a_requirement_code() -> None:
+def test_the_outcome_producer_is_operator_prose_not_a_requirement_code() -> None:
     assert not re.search(r"\b[A-Z]{2,5}-\d{2,4}\b", RUN_OUTCOME_PRODUCER)
 
 
-def test_j1_07_the_transcript_states_the_runs_own_status_and_climbs_through_it() -> None:
+def test_the_transcript_states_the_runs_own_status_and_climbs_through_it() -> None:
     from eawf.kernel.projection.transcript import build_transcript_view
 
     model = build_transcript_view(_projection("transcript"))
@@ -424,11 +424,11 @@ def test_j1_07_the_transcript_states_the_runs_own_status_and_climbs_through_it()
     assert "nothing running" not in frame[1]
 
 
-# ---------- J1-13 and J3-02: History is the fact ledger ----------
+# ---------- History is the fact ledger ----------
 
 
 @pytest.mark.parametrize("w", [80, 120, 160])
-def test_j1_13_history_draws_the_ledger_columns_and_no_record_list(w: int) -> None:
+def test_history_draws_the_ledger_columns_and_no_record_list(w: int) -> None:
     frame = _frame("history", w=w)
     head = next(row for row in frame if row.lstrip().startswith("FACT"))
     assert re.match(r"^\s+FACT\s+REVISION\s+SOURCE\s+WHEN$", head.rstrip())
@@ -438,20 +438,20 @@ def test_j1_13_history_draws_the_ledger_columns_and_no_record_list(w: int) -> No
         assert not any(key in row for row in frame[3:]), key
 
 
-def test_j3_02_history_docks_the_source_pane_at_the_foot() -> None:
+def test_history_docks_the_source_pane_at_the_foot() -> None:
     frame = _frame("history", w=80)
     assert frame[-2].startswith(" SOURCE")
     assert frame[-3].startswith("─")
     assert frame[-1].split() == ["Esc", "back"]
 
 
-def test_j3_02_enter_on_the_held_ledger_opens_no_prototype_card() -> None:
+def test_enter_on_the_held_ledger_opens_no_prototype_card() -> None:
     session = _session("history", None)
     _press(session, "history", "Enter")
     assert session.overlay is None
 
 
-# ---------- V-07, V-10, V-15: the cursor row, the Run's groups and the caret's slot ----------
+# ---------- the cursor row, the Run's groups and the caret's slot ----------
 
 
 def _grounded(frame: list[str]) -> list[int]:
@@ -462,7 +462,7 @@ def _grounded(frame: list[str]) -> list[int]:
     ]
 
 
-def test_v07_the_milestone_frame_grounds_its_cursor_batch_and_not_its_section_strip() -> None:
+def test_the_milestone_frame_grounds_its_cursor_batch_and_not_its_section_strip() -> None:
     session = _session("milestone", "MLS-0100")
     frame = _frame("milestone", session=session)
     assert [frame[i].lstrip()[:7] for i in _grounded(frame)] == ["BATCHES"]
@@ -472,13 +472,13 @@ def test_v07_the_milestone_frame_grounds_its_cursor_batch_and_not_its_section_st
     assert [after[i].strip()[:10] for i in _grounded(after)] == ["▸ BAT-0101"]
 
 
-def test_v07_the_batch_frame_grounds_its_cursor_task() -> None:
+def test_the_batch_frame_grounds_its_cursor_task() -> None:
     frame = _frame("batch.detail", "BAT-0100")
     grounded = _grounded(frame)
     assert len(grounded) == 1 and "TSK-0001" in frame[grounded[0]]
 
 
-def test_v10_the_run_frame_rules_off_usage_and_controls_as_their_own_groups() -> None:
+def test_the_run_frame_rules_off_usage_and_controls_as_their_own_groups() -> None:
     frame = _frame("run.detail", "RUN-00000001")
     usage = next(i for i, row in enumerate(frame) if row.startswith(" USAGE"))
     controls = next(i for i, row in enumerate(frame) if row.startswith(" CONTROLS"))
@@ -488,14 +488,14 @@ def test_v10_the_run_frame_rules_off_usage_and_controls_as_their_own_groups() ->
 
 
 @pytest.mark.parametrize("w", [80, 120, 160])
-def test_v10_the_run_frame_keeps_every_fact_at_each_size(w: int) -> None:
+def test_the_run_frame_keeps_every_fact_at_each_size(w: int) -> None:
     for run in ("RUN-00000001", "RUN-00000002"):
         text = "\n".join(_frame("run.detail", run, w=w))
         for label in (" USAGE", " CONTROLS", " LINEAGE"):
             assert label in text, (run, w, label)
 
 
-def test_v15_a_timeline_lane_keeps_a_space_between_its_caret_and_its_key() -> None:
+def test_a_timeline_lane_keeps_a_space_between_its_caret_and_its_key() -> None:
     frame = _frame("timeline", w=160)
     lane = next(row for row in frame if "TRK-CORE" in row and "─" in row)
     assert lane.startswith("▸ TRK-CORE ")

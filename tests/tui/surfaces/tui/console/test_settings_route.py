@@ -89,6 +89,8 @@ LITERAL_KEY = "prose.level"
 INT_KEY = "runtime.fallback.max_backoff_seconds"
 #: A list writable at all five file layers.
 LIST_KEY = "profiles.enabled"
+#: An int the config registry holds to [100, 10000], writable at repo.
+RANGED_KEY = "ui.refresh_ms"
 #: A key no layer may write.
 LOCKED_KEY = "schema_version"
 #: A mapping, which the console leaves to its file.
@@ -343,7 +345,7 @@ def test_ui057_the_route_draws_at_every_size_with_the_packet_keybar(
     assert f"{len(view.rail)} categories" in rows[1]
 
 
-def test_j4_06_unset_is_not_offered_on_a_key_the_lens_layer_does_not_set(
+def test_unset_is_not_offered_on_a_key_the_lens_layer_does_not_set(
     tree: Path, fixture: Fixture
 ) -> None:
     """A key with no value at the lens layer has nothing for ``x`` to remove."""
@@ -779,10 +781,44 @@ def test_edit_a_refused_write_changes_no_file_and_keeps_the_view(tree: Path) -> 
     assert seam.settings is before
 
 
-# ---------- V-17: an open editor recedes the rail and the key list ----------
+@pytest.mark.parametrize(
+    ("value", "reason"),
+    [(20000, "above maximum 10000"), (99, "below minimum 100"), ("fast", "cannot coerce")],
+)
+def test_ui_053_the_console_shows_the_daemon_refusing_a_value_the_stack_rules_out(
+    tree: Path, value: object, reason: str
+) -> None:
+    """A write outside the range the stack draws is refused by the daemon and said so."""
+    daemon = _daemon_ctx(tree)
+
+    async def _call(method: str, params: dict[str, Any]) -> dict[str, Any]:
+        if method == SETTING_SET_METHOD:
+            try:
+                return await set_layer_value(daemon, params)
+            except ValueError as error:
+                raise DaemonRpcError(-32602, str(error)) from error
+        return _view(tree).model_dump(mode="json")
+
+    seam = ProjectionSeam(route="settings", scope_id=SCOPE, state_path=None, repo_root=tree)
+    seam.binding.call = _call  # type: ignore[method-assign]
+    before = asyncio.run(seam.load_settings())
+    assert before.leaf(RANGED_KEY).constraint_chain == (
+        "config registry range 100 to 10000 · built-in",
+    )
+
+    result = asyncio.run(seam.request(SettingRequest(target=RANGED_KEY, layer="repo", value=value)))
+
+    assert result.status is OperationStatus.REFUSED
+    assert "validation_failed:" in result.detail
+    assert reason in result.detail
+    assert not (tree / ".ea" / "config.yaml").exists()
+    assert seam.settings is before
 
 
-def test_v17_an_open_editor_recedes_the_rail_and_keys_and_keeps_the_readout_lit(
+# ---------- an open editor recedes the rail and the key list ----------
+
+
+def test_an_open_editor_recedes_the_rail_and_keys_and_keeps_the_readout_lit(
     tree: Path, fixture: Fixture
 ) -> None:
     view = _view(tree)

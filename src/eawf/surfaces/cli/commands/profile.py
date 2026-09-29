@@ -148,9 +148,14 @@ def profile_validate_cmd(
         typer.Option("--all", help="Validate every discoverable profile."),
     ] = False,
 ) -> None:
-    """Validate a profile (or every profile) against the layered loader."""
+    """Validate a profile (or every profile) against the layered loader.
+
+    The payload's ``digests`` names the digest each enriched profile is
+    certified as managed under once it is pinned in ``profiles.certified``.
+    """
     from eawf.platform.profiles import discovery as profiles_discovery
     from eawf.platform.profiles import trust as profiles_trust
+    from eawf.platform.profiles.certification import profile_digest
 
     flags: GlobalFlags = ctx.obj
     if (name is None) == (not validate_all):
@@ -170,6 +175,7 @@ def profile_validate_cmd(
         assert name is not None
         ids = [name]
     failures: list[dict[str, str]] = []
+    digests: dict[str, str] = {}
     for pid in ids:
         try:
             loc = profiles_discovery.discover_profile(pid, workspace=workspace)
@@ -177,10 +183,12 @@ def profile_validate_cmd(
             failures.append({"profile": pid, "code": "unknown", "message": str(exc)})
             continue
         try:
-            profiles_discovery.load_profile_with_discovery(pid, workspace=workspace)
+            body = profiles_discovery.load_profile_with_discovery(pid, workspace=workspace)
         except cli_errors.ValidationError as exc:
             failures.append({"profile": pid, "code": "schema_rejected", "message": str(exc)})
             continue
+        if body.is_enriched:
+            digests[pid] = profile_digest(body)
         try:
             profiles_trust.verify_trust(
                 pid,
@@ -195,6 +203,7 @@ def profile_validate_cmd(
     payload = {
         "validated": list(ids),
         "failures": failures,
+        "digests": digests,
         "ok": not failures,
     }
     text = (

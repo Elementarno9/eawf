@@ -187,7 +187,7 @@ def test_con040_there_is_no_q_binding(key: str) -> None:
     assert session.trace == f"{key} → unclaimed"
 
 
-# ---------- K-04 and K-07: only presses at a quiet scope home quit ----------
+# ---------- only presses at a quiet scope home quit ----------
 
 
 def _armed_elsewhere(route: str) -> tuple[Session, _Host]:
@@ -208,8 +208,8 @@ def _prompts(session: Session) -> int:
     return sum(1 for toast in session.toasts if toast.text == QUIT_PROMPT)
 
 
-def test_k_04_an_escape_that_steps_back_disarms_and_withdraws_the_prompt() -> None:
-    """K-04: Ctrl+C on Activity, Esc back to home, Esc -- the last Esc arms, it never quits."""
+def test_an_escape_that_steps_back_disarms_and_withdraws_the_prompt() -> None:
+    """Ctrl+C on Activity, Esc back to home, Esc -- the last Esc arms, it never quits."""
     session, host = _armed_elsewhere("activity")
     host.clock.advance(0.35)
     _press(session, host, "Escape")
@@ -243,8 +243,8 @@ def test_ruling_1_an_escape_that_closes_something_disarms(setup: str, left: str)
     assert (session.last_esc, _prompts(session), host.quits) == (0.0, 0, 0)
 
 
-def test_k_07_a_press_is_judged_on_its_arrival_not_on_its_handling() -> None:
-    """K-07: two presses 30ms apart are a burst even when the second is handled 300ms later."""
+def test_a_press_is_judged_on_its_arrival_not_on_its_handling() -> None:
+    """Two presses 30ms apart are a burst even when the second is handled 300ms later."""
     session = _home()
     host = _Host()
     arrived = host.clock.now()
@@ -256,8 +256,8 @@ def test_k_07_a_press_is_judged_on_its_arrival_not_on_its_handling() -> None:
     assert quit_step(session, host.clock, at=arrived + 0.5).step is QuitStep.QUIT
 
 
-def test_k_07_two_escapes_the_parser_held_together_are_one_burst() -> None:
-    """K-07: Escapes stamped within the toolkit's escape delay of each other never quit."""
+def test_two_escapes_the_parser_held_together_are_one_burst() -> None:
+    """Escapes stamped within the toolkit's escape delay of each other never quit."""
 
     async def body() -> list[bool]:
         app = ConsoleApp(FIXTURE, FakeClock())

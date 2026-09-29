@@ -17,6 +17,8 @@ Public surface:
   return the joined line.
 - :func:`sourced_segment` / :func:`unavailable_segment` — a segment whose
   value a named producer states, and the marker naming why it cannot be shown.
+- :func:`rate_window_segment` — one bar per host rate-limit window, with its
+  used fraction and reset time.
 - :func:`budget_segment` / :func:`budget_unavailable_segment` — the active
   scope's spend against its one ceiling, and the marker naming why it
   cannot be shown.
@@ -34,10 +36,10 @@ don't want to decorate.
 from __future__ import annotations
 
 import logging
-import os
 import re
-import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from importlib.resources import files
 from typing import Any, Final, Literal
 
@@ -55,34 +57,6 @@ from eawf.surfaces.render.bars import DEFAULT_WIDTH, render_block_bar
 from eawf.surfaces.render.units import format_tokens
 
 logger = logging.getLogger(__name__)
-
-
-GlyphMode = Literal["ascii", "unicode"]
-"""Effective glyph set after resolving the configured policy.
-
-The configured ``statusline.glyph_mode`` policy is one of ``auto`` /
-``ascii`` / ``unicode``; :func:`resolve_glyph_mode` collapses ``auto`` to a
-concrete :data:`GlyphMode` against the terminal capability probe, so the
-render path only ever sees a resolved value.
-"""
-
-ColorMode = Literal["on", "off"]
-"""Effective colour state after resolving the configured policy.
-
-The configured ``statusline.color_mode`` policy is one of ``auto`` /
-``always`` / ``never``; :func:`resolve_color_mode` collapses ``auto`` against
-the terminal capability probe to a concrete :data:`ColorMode`.
-"""
-
-_GLYPH_MODE_AUTO: str = "auto"
-_GLYPH_MODE_ASCII: GlyphMode = "ascii"
-_GLYPH_MODE_UNICODE: GlyphMode = "unicode"
-
-_COLOR_MODE_AUTO: str = "auto"
-_COLOR_MODE_ALWAYS: str = "always"
-_COLOR_MODE_NEVER: str = "never"
-_COLOR_ON: ColorMode = "on"
-_COLOR_OFF: ColorMode = "off"
 
 
 SegmentStatus = Literal["ok", "warn", "missing", "degraded", "failed"]
@@ -441,46 +415,28 @@ def render_segments(segments: list[StatuslineSegment], theme: StatuslineTheme) -
     return theme.separator.join(decorated)
 
 
-def render_rows(
-    rows_of_segments: list[list[StatuslineSegment]],
-    theme: StatuslineTheme,
-    *,
-    rows: int,
-) -> str:
-    """Render exactly *rows* statusline lines, newline-joined.
-
-    Each entry in *rows_of_segments* is one row's segment list, rendered
-    through :func:`render_segments` under *theme*. The output always carries
-    exactly *rows* lines: extra supplied rows beyond *rows* are dropped, and
-    a shortfall is padded with empty lines so the row count is stable for a
-    fixed-height statusline reader.
-
-    Args:
-        rows_of_segments: One segment list per row, in top-to-bottom order.
-        theme: Theme applied to every row.
-        rows: Number of lines to emit (> 0). Matches ``statusline.rows``.
-
-    Returns:
-        The rendered statusline of exactly *rows* newline-joined lines. No
-        trailing newline -- the caller decides how to write it.
-
-    Raises:
-        ValueError: When *rows* is not positive.
-    """
-    if rows <= 0:
-        raise ValueError(f"rows must be positive: {rows!r}")
-    lines: list[str] = []
-    for index in range(rows):
-        segments = rows_of_segments[index] if index < len(rows_of_segments) else []
-        lines.append(render_segments(segments, theme))
-    return "\n".join(lines)
-
-
-_CONTEXT_USAGE_MODULE: str = "context_usage"
-"""Stable module id for the context-usage bar segment."""
-
 _RATE_WINDOW_MODULE: str = "rate_window"
-"""Stable module id for the rate-window bar segment."""
+"""Stable module id for the rate-limit window segment."""
+
+_RATE_WINDOW_LABEL: str = "rate"
+
+_RATE_WINDOW_JOIN: str = " · "
+
+
+@dataclass(frozen=True, slots=True)
+class RateWindow:
+    """One host rate-limit window: how full it is and when it resets.
+
+    Attributes:
+        label: The window's name as the host keys it, such as ``five_hour``.
+        ratio: The used fraction in ``[0, 1]``.
+        resets_at: When the window resets, or ``None`` when the host names
+            no reset time.
+    """
+
+    label: str
+    ratio: float
+    resets_at: datetime | None = None
 
 
 def render_usage_bar(ratio: float, *, width: int = DEFAULT_WIDTH) -> str:
@@ -504,48 +460,36 @@ def render_usage_bar(ratio: float, *, width: int = DEFAULT_WIDTH) -> str:
     return render_block_bar(ratio, width=width)
 
 
-def context_usage_segment(
-    ratio: float, source: SegmentSource, *, width: int = DEFAULT_WIDTH
-) -> StatuslineSegment:
-    """Build the context-usage statusline segment as a block-eighths bar.
-
-    Args:
-        ratio: Context-window fill ratio in ``[0, 1]`` (used tokens / budget).
-        source: Who states the ratio.
-        width: Bar cell count (> 0).
-
-    Returns:
-        A :class:`StatuslineSegment` whose text is the block-eighths bar.
-
-    Raises:
-        ValueError: When *ratio* is outside ``[0, 1]`` or *width* is not
-            positive (propagated from :func:`render_usage_bar`).
-    """
-    bar = render_usage_bar(ratio, width=width)
-    return StatuslineSegment(
-        module=_CONTEXT_USAGE_MODULE, text=bar, truth=_known_truth(bar, source)
-    )
+def _rate_window_text(window: RateWindow, width: int) -> str:
+    """Return one window as ``<label> <bar> <pct>%`` plus its reset time when known."""
+    text = f"{window.label} {render_usage_bar(window.ratio, width=width)} {window.ratio:.0%}"
+    if window.resets_at is not None:
+        text += f" ↻{window.resets_at.astimezone(UTC):%H:%MZ}"
+    return text
 
 
 def rate_window_segment(
-    ratio: float, source: SegmentSource, *, width: int = DEFAULT_WIDTH
+    windows: Sequence[RateWindow], source: SegmentSource, *, width: int = DEFAULT_WIDTH
 ) -> StatuslineSegment:
-    """Build the rate-window statusline segment as a block-eighths bar.
+    """Build the rate-limit segment: one bar per window the host reported.
 
     Args:
-        ratio: Rate-limit window fill ratio in ``[0, 1]`` (spent / window).
-        source: Who states the ratio.
-        width: Bar cell count (> 0).
+        windows: The windows the host's rate-limit block carries, in the
+            order it lists them; at least one.
+        source: Who states the windows.
+        width: Bar cell count per window (> 0).
 
     Returns:
-        A :class:`StatuslineSegment` whose text is the block-eighths bar.
+        A ``rate:<window> <bar> <pct>% ↻<reset>`` segment, windows joined.
 
     Raises:
-        ValueError: When *ratio* is outside ``[0, 1]`` or *width* is not
-            positive (propagated from :func:`render_usage_bar`).
+        ValueError: *windows* is empty, a ratio is outside ``[0, 1]``, or
+            *width* is not positive.
     """
-    bar = render_usage_bar(ratio, width=width)
-    return StatuslineSegment(module=_RATE_WINDOW_MODULE, text=bar, truth=_known_truth(bar, source))
+    if not windows:
+        raise ValueError("a rate-window segment needs at least one window")
+    value = _RATE_WINDOW_JOIN.join(_rate_window_text(window, width) for window in windows)
+    return sourced_segment(_RATE_WINDOW_MODULE, _RATE_WINDOW_LABEL, value, source)
 
 
 _BUDGET_MODULE: str = "budget"
@@ -606,108 +550,22 @@ def budget_unavailable_segment(reason: str, source: SegmentSource) -> Statusline
     return unavailable_segment(_BUDGET_MODULE, _BUDGET_MODULE, reason, source)
 
 
-def terminal_supports_color() -> bool:
-    """Return ``True`` when the active terminal can render ANSI colour.
-
-    The probe is the colour-capability source of truth for the statusline
-    auto modes. A terminal is treated as colour-capable unless any of the
-    standard no-colour signals fires:
-
-    - the ``NO_COLOR`` env var is set to any value (the cross-tool
-      no-colour convention);
-    - ``TERM`` is ``dumb`` or empty (a non-capable terminal);
-    - stdout is not attached to a TTY (a pipe / file / CI capture).
-
-    Returns:
-        ``True`` when none of the no-colour signals fires, else ``False``.
-    """
-    if os.environ.get("NO_COLOR") is not None:
-        return False
-    term = os.environ.get("TERM", "")
-    if term in ("", "dumb"):
-        return False
-    return sys.stdout.isatty()
-
-
-def resolve_glyph_mode(configured: str, *, color_capable: bool) -> GlyphMode:
-    """Resolve a configured glyph policy to a concrete :data:`GlyphMode`.
-
-    The ``statusline.glyph_mode`` policy is one of ``auto`` / ``ascii`` /
-    ``unicode``. ``auto`` downgrades to :data:`_GLYPH_MODE_ASCII` on a
-    no-colour terminal (``color_capable`` is falsy) and selects
-    :data:`_GLYPH_MODE_UNICODE` otherwise; the explicit ``ascii`` / ``unicode``
-    policies pass through unchanged.
-
-    Args:
-        configured: The configured policy string.
-        color_capable: Terminal colour capability, typically from
-            :func:`terminal_supports_color`.
-
-    Returns:
-        The resolved :data:`GlyphMode`.
-
-    Raises:
-        ValueError: When *configured* is not one of the known policies.
-    """
-    if configured == _GLYPH_MODE_ASCII:
-        return _GLYPH_MODE_ASCII
-    if configured == _GLYPH_MODE_UNICODE:
-        return _GLYPH_MODE_UNICODE
-    if configured == _GLYPH_MODE_AUTO:
-        return _GLYPH_MODE_UNICODE if color_capable else _GLYPH_MODE_ASCII
-    raise ValueError(f"unknown statusline glyph mode: {configured!r}")
-
-
-def resolve_color_mode(configured: str, *, color_capable: bool) -> ColorMode:
-    """Resolve a configured colour policy to a concrete :data:`ColorMode`.
-
-    The ``statusline.color_mode`` policy is one of ``auto`` / ``always`` /
-    ``never``. ``always`` forces :data:`_COLOR_ON`, ``never`` forces
-    :data:`_COLOR_OFF`, and ``auto`` defers to the terminal capability probe
-    (``color_capable``), turning colour off on a no-colour terminal.
-
-    Args:
-        configured: The configured policy string.
-        color_capable: Terminal colour capability, typically from
-            :func:`terminal_supports_color`.
-
-    Returns:
-        The resolved :data:`ColorMode`.
-
-    Raises:
-        ValueError: When *configured* is not one of the known policies.
-    """
-    if configured == _COLOR_MODE_ALWAYS:
-        return _COLOR_ON
-    if configured == _COLOR_MODE_NEVER:
-        return _COLOR_OFF
-    if configured == _COLOR_MODE_AUTO:
-        return _COLOR_ON if color_capable else _COLOR_OFF
-    raise ValueError(f"unknown statusline color mode: {configured!r}")
-
-
 __all__ = [
     "BARE_UNKNOWN_TOKENS",
     "SEGMENT_CONTRACT_REVISION",
     "UNAVAILABLE_MARK",
-    "ColorMode",
-    "GlyphMode",
+    "RateWindow",
     "SegmentSource",
     "SegmentStatus",
     "StatuslineSegment",
     "StatuslineTheme",
     "budget_segment",
     "budget_unavailable_segment",
-    "context_usage_segment",
     "load_themes",
     "rate_window_segment",
-    "render_rows",
     "render_segments",
     "render_usage_bar",
-    "resolve_color_mode",
-    "resolve_glyph_mode",
     "resolve_theme",
     "sourced_segment",
-    "terminal_supports_color",
     "unavailable_segment",
 ]

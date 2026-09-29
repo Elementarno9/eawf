@@ -138,6 +138,10 @@ def test_render_cmd_json_keys_are_exactly_the_documented_set(cli_runner: CliRunn
         "argument_hint",
         "output_schema",
         "terminal_outcomes",
+        "lanes",
+        "operator_only_actions",
+        "arguments",
+        "completion",
         "body",
     }
 

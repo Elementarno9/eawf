@@ -19,8 +19,9 @@ from pydantic import ValidationError
 from eawf.kernel.projection.compute import build_route_projection
 from eawf.kernel.state.epoch2.plan_revision import PlanBody, PlannedTask, plan_content_digest
 from eawf.kernel.state.epoch2.run import BatchScope, RunPurpose
+from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.surfaces.render.skills.registry import SKILL_REGISTRY
-from eawf.workflow.planning.apply import _planned_tasks
+from eawf.workflow.planning.apply import _planned_task
 from eawf.workflow.planning.lenses import PlanFindingCode, PlanLens, run_plan_lenses
 from eawf.workflow.planning.orchestration import (
     ORCHESTRATION_CONTRACT,
@@ -32,6 +33,7 @@ from eawf.workflow.skills import dispatch as dispatch_skill
 from eawf.workflow.skills.bodies.dispatch import DispatchBody
 from eawf.workflow.skills.catalog import shipped_skill_specs
 from eawf.workflow.skills.engine import SkillContext
+from tests.integration.runtime.daemon._epoch2_transaction_fixtures import rekeyed, seed_row
 from tests.unit.workflow.planning.lenses.test_ownership_lens import SLOT, _task, body_payload
 
 pytestmark = pytest.mark.unit
@@ -211,14 +213,37 @@ def test_surf_096_exclusive_is_declarable_on_a_planned_task() -> None:
     assert task.exclusive is True
 
 
-def test_surf_093_apply_carries_the_graph_onto_the_task_record() -> None:
+def _planned_tasks(payload: dict[str, Any], document: dict[str, Any] | None = None) -> list[Task]:
+    """Return the Task records one apply of *payload* writes over *document*."""
+    body = PlanBody.model_validate(payload)
+    return [_planned_task(document or {}, body=body, task=entry, at=AT) for entry in body.tasks]
+
+
+def _graph_payload() -> dict[str, Any]:
     payload = body_payload()
     payload["tasks"][1]["depends_on"] = [payload["tasks"][0]["urn"]]
+    payload["tasks"][1]["write_claims"] = ["src/eawf/product/other.py"]
     payload["tasks"][1]["exclusive"] = True
-    tasks = _planned_tasks(PlanBody.model_validate(payload), at=AT)
+    return payload
+
+
+def test_surf_093_apply_carries_the_graph_onto_the_task_record() -> None:
+    payload = _graph_payload()
+    tasks = _planned_tasks(payload)
     assert tasks[0].write_claims == ("src/eawf/product/base.py",)
     assert tasks[1].exclusive is True
     assert [str(ref) for ref in tasks[1].depends_on] == [payload["tasks"][0]["urn"]]
+
+
+def test_surf_093_apply_carries_the_graph_onto_a_promoted_backlog_draft() -> None:
+    payload = _graph_payload()
+    draft = rekeyed(seed_row("task", "DRAFT"), key="EAWF-0002")
+    tasks = _planned_tasks(payload, {"task": {"EAWF-0002": draft}})
+    promoted = tasks[1]
+    assert (promoted.status, str(promoted.uid)) == (TaskStatus.PLANNED, draft["uid"])
+    assert promoted.exclusive is True
+    assert promoted.write_claims == ("src/eawf/product/other.py",)
+    assert [str(ref) for ref in promoted.depends_on] == [payload["tasks"][0]["urn"]]
 
 
 def test_surf_096_unset_exclusive_keeps_the_approved_plan_digest() -> None:
@@ -234,7 +259,7 @@ def _task_document() -> dict[str, Any]:
     payload["tasks"][1]["depends_on"] = [payload["tasks"][0]["urn"]]
     payload["tasks"][1]["write_claims"] = ["src/eawf/product/base.py"]
     payload["tasks"][0]["exclusive"] = True
-    tasks = _planned_tasks(PlanBody.model_validate(payload), at=AT)
+    tasks = _planned_tasks(payload)
     return {"task": {task.key: task.model_dump(mode="json") for task in tasks}}
 
 

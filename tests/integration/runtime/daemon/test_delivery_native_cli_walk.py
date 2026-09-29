@@ -85,7 +85,8 @@ def test_native_work_walks_from_a_lease_to_a_completed_task_through_the_cli(
         "diagnostic_ref": diagnostic,
     })  # fmt: skip
     integrated = eawf(root, "batch", "integrate", world.BATCH, "--actor", ACTOR,
-                      "--expected-batch-revision", "1", "--from-spec", refs)["result"]  # fmt: skip
+                      "--expected-batch-revision", "1", "--from-spec", refs,
+                      "--wait")["result"]  # fmt: skip
     assert integrated["delivered"] is True
     ready = spec(tmp_path, "ready.json",
                  {"observations": ["run_report_bound"], "binding_refs": [diagnostic]})  # fmt: skip
@@ -93,7 +94,7 @@ def test_native_work_walks_from_a_lease_to_a_completed_task_through_the_cli(
          "--idempotency-key", "ready-1", "--actor", ACTOR, "--from-spec", ready)  # fmt: skip
     proved = eawf(root, "task", "prove", world.TASK, "--gates", gates_file(tmp_path),
                   "--expected-task-revision", "2",
-                  "--idempotency-key", "prove-1", "--actor", ACTOR)["result"]  # fmt: skip
+                  "--idempotency-key", "prove-1", "--actor", ACTOR, "--wait")["result"]  # fmt: skip
     assert proved["passed"] is True
     out = tmp_path / "assessment.json"
     assessed = eawf(root, "task", "assess", world.TASK, "--actor", ACTOR, "--out", str(out))[

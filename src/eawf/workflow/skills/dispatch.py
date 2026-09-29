@@ -51,6 +51,7 @@ from eawf.workflow.skills.bodies.dispatch import (
     DispatchOutcome,
 )
 from eawf.workflow.skills.bodies.user_question import UserQuestion, UserQuestionOption
+from eawf.workflow.skills.catalog import resolve_skill
 from eawf.workflow.skills.engine import ProbeOutcome, Skill, SkillContext, SkillResult
 from eawf.workflow.skills.lifecycle_rpc import (
     OutputRendering,
@@ -65,6 +66,9 @@ from eawf.workflow.skills.registry import register
 
 logger = logging.getLogger(__name__)
 
+
+#: The catalog row this skill's allowlist and grammar are read from.
+_ENTRY: Final = resolve_skill("/dispatch")
 
 #: The Batch read model the pass binds its subject at.
 BATCH_READ_METHOD: Final = "projection.batch.detail.read"
@@ -81,26 +85,12 @@ RUN_DISPATCH_METHOD: Final = "runtime.run.dispatch"
 #: The verb that resumes or relinks one Run.
 RUN_RETRY_METHOD: Final = "runtime.run.retry"
 
-#: Every JSON-RPC method this skill may address. A call outside the set
-#: is refused before the transport is touched.
-RPC_SCOPE: Final = RpcScope(
-    skill="/dispatch",
-    methods=(
-        BATCH_READ_METHOD,
-        TASK_READ_METHOD,
-        RUN_READ_METHOD,
-        RUN_DISPATCH_METHOD,
-        RUN_RETRY_METHOD,
-    ),
-)
+#: Every JSON-RPC method this skill may address: the catalog row's allowlist.
+#: A call outside the set is refused before the transport is touched.
+RPC_SCOPE: Final = RpcScope(skill="/dispatch", methods=_ENTRY.effects.rpcs)
 
 #: The complete accepted invocation, brackets optional and ``...`` repeatable.
-INVOCATION_GRAMMAR: Final = (
-    "/dispatch <batch-ref> [--task <ref>...] "
-    "[--until <frontier-empty|candidate-ready|attention>] "
-    "[--provider <id>] [--resume <run-ref>] [--run <run-ref>] [--run-request <compiled>] "
-    "[--budget <tokens>] [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]"
-)
+INVOCATION_GRAMMAR: Final = _ENTRY.grammar.usage
 
 #: What this skill may cause, stated as the boundary it never crosses.
 EFFECTS: Final = (

@@ -26,6 +26,7 @@ import pytest
 
 from eawf.kernel.state.enums import McpRisk, McpStatus
 from eawf.kernel.state.models import McpServer
+from eawf.runtime.harness.host_keys import UnrecordedHostKeyError
 from eawf.runtime.mcp import installer
 from eawf.runtime.mcp.installer import (
     IntegrityViolation,
@@ -77,7 +78,8 @@ def test_install_runtime_entry_creates_settings_when_absent(tmp_path: Path) -> N
     assert entry["__eawf_owner"] == "eawf"
     assert entry["env"] == {"DEMO_KEY": "${ENV:DEMO_KEY}"}
     assert entry["command"] == "demo-mcp"
-    assert entry["transport"] == "stdio"
+    # Claude reads the transport from ``type``, so a ``transport`` key is inert.
+    assert "transport" not in entry
 
 
 def test_install_runtime_entry_preserves_user_entry_byte_equal(tmp_path: Path) -> None:
@@ -308,30 +310,17 @@ def test_list_runtime_entries_missing_settings_returns_empty(tmp_path: Path) -> 
     assert rows == []
 
 
-def test_install_opencode_entry_creates_json_when_absent(tmp_path: Path) -> None:
+def test_install_opencode_entry_refuses_unprobed_keys(tmp_path: Path) -> None:
     server = _make_server(args=["--flag"], env_refs=["${ENV:DEMO_KEY}"])
-    result = install_runtime_entry(
-        server=server,
-        runtime="opencode",
-        target_dir=tmp_path,
-        force=False,
-    )
-    assert result.action == "created"
-    assert result.target_path == tmp_path / "opencode.json"
-    parsed = _read_json(result.target_path)
-    entry = parsed["mcp"]["demo"]  # type: ignore[index]
-    assert entry["command"] == "demo-mcp"
-    assert entry["args"] == ["--flag"]
-    assert entry["env"] == {"DEMO_KEY": "${ENV:DEMO_KEY}"}
-    assert entry["__eawf_owner"] == "eawf"
+    with pytest.raises(UnrecordedHostKeyError, match=r"mcp\.\*\.command \(unprobed"):
+        install_runtime_entry(server=server, runtime="opencode", target_dir=tmp_path, force=False)
+    assert not (tmp_path / "opencode.json").exists()
 
 
 def test_remove_opencode_entry_drops_empty_mcp_key(tmp_path: Path) -> None:
-    install_runtime_entry(
-        server=_make_server(),
-        runtime="opencode",
-        target_dir=tmp_path,
-        force=False,
+    (tmp_path / "opencode.json").write_text(
+        json.dumps({"mcp": {"demo": {"command": "demo-mcp", "__eawf_owner": "eawf"}}}),
+        encoding="utf-8",
     )
     remove_runtime_entry(
         server_id="demo",
@@ -505,7 +494,7 @@ def test_list_runtime_entries_codex_owner_annotation(tmp_path: Path) -> None:
     assert by_id["ours"].owner == "eawf"
 
 
-@pytest.mark.parametrize("runtime", ["claude", "codex", "opencode"])
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
 def test_install_raises_verify_failure_on_corrupt_writeback(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: str
 ) -> None:
@@ -517,11 +506,6 @@ def test_install_raises_verify_failure_on_corrupt_writeback(
         path.parent.mkdir(parents=True, exist_ok=True)
         if runtime == "codex":
             path.write_text('[mcp_servers."demo"]\ncommand = "wrong-mcp"\n', encoding="utf-8")
-        elif runtime == "opencode":
-            path.write_text(
-                json.dumps({"mcp": {"demo": {"command": "wrong-mcp"}}}),
-                encoding="utf-8",
-            )
         else:
             path.write_text(
                 json.dumps({"mcpServers": {"demo": {"command": "wrong-mcp"}}}),

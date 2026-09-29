@@ -12,9 +12,10 @@ Decide a Milestone acceptance bundle: prepare, accept, reject or request repair.
 
 ## 1. Authority
 
-- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
-- Effects: Milestone acceptance RPCs.
-- Allowed RPCs: `read_entity`, `query_evidence`, `milestone.acceptance.prepare`, `milestone.acceptance.decide`. Any other RPC is denied before it reaches a handler.
+- Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Operates on: Milestone, through `projection.milestone.read`, `projection.milestone.acceptance`, `runtime.delivery.open_acceptance_approval`, `runtime.delivery.seal_acceptance_approval`, `domain.milestone.accept`, `runtime.delivery.request_acceptance_repair`.
+- Effects: Milestone acceptance reads plus the approval, acceptance and repair verbs.
+- Allowed RPCs: `projection.milestone.read`, `projection.milestone.acceptance`, `runtime.delivery.open_acceptance_approval`, `runtime.delivery.seal_acceptance_approval`, `domain.milestone.accept`, `runtime.delivery.request_acceptance_repair`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -75,4 +76,4 @@ The obligations the effective rule graph holds for activities `review`. They bin
 
 Output one AcceptanceSkillReport with bundle digest, per-requirement verdicts, evidence links, decision receipt or PendingAction, repair scope, and blockers.
 
-The report validates against `AcceptanceSkillReport`, and its terminal outcome is exactly one of `shown`, `prepared`, `accepted`, `rejected`, `repair_requested`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `AcceptanceSkillReport`, and its terminal outcome is exactly one of `shown`, `prepared`, `accepted`, `rejected`, `repair_requested`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /accept` before returning it.

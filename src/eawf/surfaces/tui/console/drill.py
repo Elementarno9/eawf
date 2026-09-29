@@ -9,8 +9,8 @@ hides every row -- drills nowhere and says so.
 Scope home walks a tree whose Track rows are containers rather than destinations, so its
 cursor lands on Milestone leaves only; Tab moves the focus to the attention list when the
 list holds something, and says there is nothing to focus when it does not. A Run frame is
-about one Run for as long as it is open: its arrows walk the Run's own events, never the
-next Run in the register.
+about one Run for as long as it is open: its arrows never step to the next Run in the
+register, and while no event of the Run is recorded they say so rather than moving.
 
 The containment chain is the one the read model states: each row names the record it is
 filed under, so ``u`` and an Escape with no history climb a Run to its Task, a Task to its

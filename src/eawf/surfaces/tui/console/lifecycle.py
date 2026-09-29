@@ -75,17 +75,6 @@ class SeverityClass(StrEnum):
     WAITING = "info"
 
 
-#: What each class means, as a legend states it.
-SEVERITY_MEANING: Final[Mapping[SeverityClass, str]] = MappingProxyType(
-    {
-        SeverityClass.SETTLED: "a settled good outcome",
-        SeverityClass.NEEDS_PERSON: "needs a person",
-        SeverityClass.BAD_OR_UNKNOWN: "a bad outcome or an unknown one",
-        SeverityClass.WAITING: "waiting, nothing wrong",
-    }
-)
-
-
 class Elapsed(StrEnum):
     """How a state's clock reads; the value is the words a gallery row renders it as."""
 
@@ -137,12 +126,6 @@ class StateTreatment:
     elapsed: Elapsed
     note: str = ""
     layout: Layout = Layout.CHIP
-
-    @property
-    def renders_as(self) -> str:
-        """Return the renders-as rule a gallery row states."""
-        rule = f"{self.severity.value} chip · {self.elapsed.value}"
-        return f"{rule} · {self.note}" if self.note else rule
 
 
 _S = SeverityClass
@@ -378,7 +361,6 @@ def recovery_landing(family: Family) -> tuple[str, ...]:
 __all__ = [
     "ELAPSED_WORDS",
     "FAMILY_ENTITY",
-    "SEVERITY_MEANING",
     "TREATMENTS",
     "WORD_CLASSES",
     "Elapsed",

@@ -512,7 +512,7 @@ def test_menu_rows_match_the_test_only_chassis_drawer() -> None:
 
 #: The keys a surface without authority may bind: a cursor, a copy, a door and Escape.
 _READ_ONLY_KEYS: frozenset[str] = frozenset(
-    {"ArrowUp", "ArrowDown", "k", "j", "y", "Y", "Escape", "Enter"}
+    {"ArrowUp", "ArrowDown", "k", "j", "PageUp", "PageDown", "y", "Y", "Escape", "Enter"}
 )
 #: The keybar tokens such a surface may show.
 _READ_ONLY_TOKENS: frozenset[str] = frozenset({"↑↓", "y", "Y", "Esc", "type", "Enter"})

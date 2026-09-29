@@ -13,8 +13,10 @@ Build and compare operator-visible design options.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
+- Operates on: operator-visible surface, through no lifecycle route; this is an explicit skill contract.
 - Effects: Inline rendering or proposal-local assets only.
-- Allowed RPCs: `ask_operator`. Any other RPC is denied before it reaches a handler.
+- Allowed RPCs: none. This skill calls no daemon RPC.
+- Run tools: `ask_operator`.
 - Canonical state: never mutated by this skill.
 - Local write root: `.ea/local/mockups`; nothing is written outside it.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -70,4 +72,4 @@ The obligations the effective rule graph holds for activities `design`. They bin
 
 Output one MockupReport with artifact references, comparison matrix, state/journey coverage, recommendation, Attention reference where needed, and terminal outcome.
 
-The report validates against `MockupReport`, and its terminal outcome is exactly one of `presented`, `selected`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `MockupReport`, and its terminal outcome is exactly one of `presented`, `selected`, `needs_operator`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /mockup` before returning it.

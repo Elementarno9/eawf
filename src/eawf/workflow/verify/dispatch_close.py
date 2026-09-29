@@ -34,6 +34,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
+from eawf.kernel.spec.common import GATE_RUN_EVIDENCE_KINDS
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
@@ -496,7 +497,7 @@ async def run_close_gates(
     gate_specs = _load_gate_specs(wave.id, state)
     evidence: list[EvidenceRecord] = []
     for criterion in wave.success_criteria:
-        if not criterion.required or criterion.evidence_kind != "deterministic":
+        if not criterion.required or criterion.evidence_kind not in GATE_RUN_EVIDENCE_KINDS:
             continue
         gates = [g for g in gate_specs if g.criterion_id == criterion.id]
         if not gates:

@@ -357,6 +357,7 @@ _REFERENCES: Final[dict[str, Any]] = {
     "base": {"head_sha": "a" * 40},
     "exit": {"repair_task": "task-9", "rebase_task": "task-9"},
     "diagnostic": "evidence-1",
+    "expected_revision": 3,
 }
 
 #: What the delivery-assembly verb answers with, which apply must send verbatim.
@@ -374,6 +375,7 @@ _ACCEPTANCE: Final[dict[str, Any]] = {
     "journey": [{"step_id": "AS-01", "passed": True}],
     "accepted_binding": {"head_sha": "a" * 40},
     "requested_by": {"principal_kind": "human", "principal_id": "OP-0001"},
+    "expected_revision": 4,
 }
 
 
@@ -454,7 +456,7 @@ def test_integrate_apply_sends_exactly_the_assembled_request() -> None:
     assert assembled["actor"] == "SKILL-INTEGRATE"
     assert assembled["exit_refs"] == _REFERENCES["exit"]
     assert assembled["diagnostic_ref"] == "evidence-1"
-    assert caller.calls[1][1] == _ASSEMBLED
+    assert caller.calls[1][1] == {**_ASSEMBLED, "expected_revision": 3}
     assert body.outcome == "integrated"
     assert body.generation_ids == ["ING-000002"]
     assert [row.included for row in body.candidates] == [True]
@@ -487,7 +489,12 @@ def test_integrate_apply_reports_a_conflict_as_conflicted() -> None:
 
 @pytest.mark.parametrize(
     ("missing", "field"),
-    [("base", "base"), ("exit", "exit_refs"), ("diagnostic", "diagnostic_ref")],
+    [
+        ("base", "base"),
+        ("exit", "exit_refs"),
+        ("diagnostic", "diagnostic_ref"),
+        ("expected_revision", "expected_revision"),
+    ],
 )
 def test_integrate_apply_names_only_the_reference_it_was_not_given(
     missing: str, field: str
@@ -560,6 +567,7 @@ def test_verify_opens_the_acceptance_question_once_the_batch_clears() -> None:
     assert opened["urn"] == "milestone-1"
     assert opened["actor"] == "SKILL-VERIFY"
     assert opened["steps"] == _ACCEPTANCE["journey"]
+    assert opened["expected_revision"] == _ACCEPTANCE["expected_revision"]
     assert body.approval_ref == "action-1"
     assert body.acceptance_bundle == {"revision": 1}
     assert body.outcome == "passed"
@@ -585,6 +593,7 @@ def test_verify_asks_nothing_while_the_batch_is_not_cleared() -> None:
         ("journey", "steps"),
         ("accepted_binding", "accepted_binding"),
         ("requested_by", "requested_by"),
+        ("expected_revision", "expected_revision"),
     ],
 )
 def test_verify_names_the_acceptance_field_it_was_not_given(missing: str, field: str) -> None:

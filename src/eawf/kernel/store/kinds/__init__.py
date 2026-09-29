@@ -26,6 +26,7 @@ from eawf.kernel.store.kinds.incident import IncidentPayload
 from eawf.kernel.store.kinds.jury_ballot import JuryBallotPayload
 from eawf.kernel.store.kinds.legacy_audit_disposition import LegacyAuditDisposition
 from eawf.kernel.store.kinds.memory import MemoryPayload
+from eawf.kernel.store.kinds.operation import OperationRecord
 from eawf.kernel.store.kinds.operator_input import OperatorInputPayload
 from eawf.kernel.store.kinds.registry_updated import RegistryUpdatedPayload
 from eawf.kernel.store.kinds.research import ResearchPayload
@@ -92,4 +93,6 @@ PAYLOAD_MODELS: dict[StoreKind, type[BaseModel]] = {
     # One row per debt revision, filed under the debt key: an open debt
     # and its discharge are two rows, and the newest one is the debt.
     StoreKind.VERIFICATION_DEBT: VerificationDebt,
+    # One row per state a submitted operation reaches, machine-local.
+    StoreKind.OPERATION: OperationRecord,
 }

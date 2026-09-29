@@ -71,7 +71,10 @@ def _options(*path: str) -> dict[str, click.Parameter]:
 
 @pytest.mark.parametrize(
     ("group", "verbs"),
-    [("campaign", {"new", "run", "cancel"}), ("question", {"add", "resolve", "list"})],
+    [
+        ("campaign", {"new", "run", "cancel"}),
+        ("question", {"add", "resolve", "list", "open-decision"}),
+    ],
 )
 def test_surf_080_campaign_and_question_are_root_entity_groups(group: str, verbs: set[str]) -> None:
     assert group in verb_contract.ENTITY_GROUPS
@@ -371,18 +374,23 @@ def _prove_args(tmp_path: Path) -> list[str]:
 def test_surf_083_an_integration_verb_renders_the_same_facts_in_both_modes(
     daemon: FakeDaemon, tmp_path: Path, passed: bool
 ) -> None:
-    daemon.result = {
+    proof = {
         "task_ref": _TASK,
         "legs": [{"gate_id": "G-01", "result": "pass" if passed else "fail"}],
         "passed": passed,
         "reason": "every leg passes" if passed else "a leg failed",
     }
-    machine = runner.invoke(app, ["--json", *_prove_args(tmp_path)])
-    human = runner.invoke(app, _prove_args(tmp_path))
+    daemon.result = {
+        "operation_ref": "operation://00000000-0000-0000-0000-000000000001",
+        "operation": {"state": "succeeded", "result": proof},
+        "replayed": False,
+    }
+    machine = runner.invoke(app, ["--json", *_prove_args(tmp_path), "--wait"])
+    human = runner.invoke(app, [*_prove_args(tmp_path), "--wait"])
     assert machine.exit_code == human.exit_code
     assert machine.exit_code == (exit_codes.OK if passed else exit_codes.STATE_CONFLICT)
     payload = orjson.loads(machine.stdout)
-    assert payload["result"] == daemon.result
+    assert payload["result"] == proof
     assert payload["status"] == (DomainStatus.OK if passed else DomainStatus.ERROR).value
     for fact in _leaf_values(payload):
         assert fact in human.stdout, fact

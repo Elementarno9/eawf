@@ -11,12 +11,12 @@ such verb:
 - ``task submit`` and ``task seal`` send ``runtime.candidate.submit`` and
   ``runtime.candidate.report.bind``;
 - ``batch integrate`` asks ``runtime.delivery.assemble`` for the Batch's
-  integrate request and sends it to ``runtime.delivery.integrate``;
+  integrate request and submits it to ``runtime.delivery.integrate``;
 - ``batch adopt-landed`` sends ``runtime.delivery.adopt_landed`` for work
   that already landed on the target branch outside the native loop;
-- ``task prove`` and ``task assess`` send ``runtime.delivery.prove_task``
-  and ``runtime.delivery.task_assessment``; ``task assess --out`` writes
-  the document ``task complete --assessment`` takes;
+- ``task prove`` submits ``runtime.delivery.prove_task`` and ``task
+  assess`` sends ``runtime.delivery.task_assessment``; ``task assess
+  --out`` writes the document ``task complete --assessment`` takes;
 - ``batch reconcile`` sends ``runtime.delivery.reconcile_merge`` with a
   presented observation, or ``runtime.delivery.read_back_merge`` to have
   the daemon read the branch back itself;
@@ -24,6 +24,12 @@ such verb:
   acceptance-approval verbs; ``--bundle-out`` writes the bundle
   ``milestone accept --acceptance-bundle`` takes;
 - ``record evidence`` sends ``runtime.delivery.record_evidence``.
+
+``task prove`` and ``batch integrate`` run gates and git work, so they are
+submitted through ``operation.submit`` rather than awaited: exit zero means
+the work was accepted, and the envelope links the ``eawf follow`` command
+that streams it. ``--wait`` blocks on the same submission until the work is
+terminal and then prints exactly what the direct call would have.
 
 The commands are dispatch and rendering only. Every mutating command
 names the revision the caller read its subject at (``--expected-revision``)
@@ -54,6 +60,7 @@ from eawf.surfaces.cli.commands.domain import (
 )
 from eawf.surfaces.cli.commands.domain_legacy import record_app
 from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
+from eawf.surfaces.cli.commands.operation import OPERATION_SUBMIT, operation_answer
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.verb_contract import (
     answer_envelope,
@@ -154,6 +161,10 @@ _MilestoneRevision = Annotated[
     int, typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP)
 ]
 _Actor = Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)]
+_Wait = Annotated[
+    bool,
+    typer.Option("--wait", help="Block until the submitted work is terminal and print its answer."),
+]
 
 
 def _send(
@@ -164,7 +175,8 @@ def _send(
     urn: str,
     verb_text: str,
     key: str | None,
-    gated: bool = False,
+    read: bool = False,
+    wait: bool | None = None,
 ) -> dict[str, Any] | None:
     """Send one native RPC and return its answer, or print why there is none.
 
@@ -174,18 +186,46 @@ def _send(
         params: The wire parameters, less ``repo_root``.
         urn: The subject the request addresses, named by a refusal.
         verb_text: The command spelling an operator typed.
-        key: The retry key to bound-check, or ``None`` for a read.
-        gated: Whether the verb runs gates or git work inside the request.
+        key: The retry key to bound-check, or ``None`` for a request that
+            carries none.
+        read: Whether the verb only reads, so it never starts a daemon.
+        wait: ``None`` to call *method* directly; otherwise submit it as an
+            operation under *key*, blocking until it is terminal when true,
+            with the wire held as long as a gated mutation may run.
 
     Returns:
-        The answer, or ``None`` after a refusal envelope or an error was
-        printed (both exit, so ``None`` is reached only under test doubles).
+        The answer, or ``None`` after a submission, a refusal envelope or an
+        error was printed (a refusal and an error exit, so ``None`` after
+        them is reached only under test doubles).
     """
     flags: GlobalFlags = ctx.obj
     try:
         if key is not None:
             _check_idempotency_key(key)
-        return _native_answer(method, params, flags=flags, verb_text=verb_text, gated=gated)
+        if wait is None:
+            return _native_answer(method, params, flags=flags, verb_text=verb_text, read=read)
+        submitted = _native_answer(
+            OPERATION_SUBMIT,
+            {"method": method, "params": params, "idempotency_key": key, "wait": wait},
+            flags=flags,
+            verb_text=verb_text,
+            gated=wait,
+        )
+        if wait:
+            return operation_answer(submitted["operation"])
+        emit_envelope(
+            answer_envelope(
+                submitted,
+                operation=method,
+                urn=urn,
+                revision_before=params.get("expected_revision"),
+                revision_after=None,
+                links={"follow": f"eawf follow {submitted['operation_ref']}"},
+            ),
+            urn=urn,
+            flags=flags,
+        )
+        return None
     except DaemonRpcError as exc:
         if exc.code != cli_errors.RPC_VALIDATION_FAILED:
             cli_errors.emit_error(cli_errors.cli_error_for_rpc(exc.code, exc.message), flags=flags)
@@ -335,8 +375,13 @@ def task_prove_cmd(
     idempotency_key: _Key,
     actor: _Actor,
     gates: Annotated[Path | None, typer.Option("--gates", help=_GATES_HELP)] = None,
+    wait: _Wait = False,
 ) -> None:
-    """Run a Task's gates at the generation each leg binds and file the receipts."""
+    """Run a Task's gates at the generation each leg binds and file the receipts.
+
+    The proof is submitted as an operation and its reference printed at once;
+    ``--wait`` blocks until it is terminal and prints the proof instead.
+    """
     params: dict[str, Any] = {
         "urn": urn,
         "expected_revision": expected_revision,
@@ -355,7 +400,7 @@ def task_prove_cmd(
         urn=urn,
         verb_text="task prove",
         key=idempotency_key,
-        gated=True,
+        wait=wait,
     )
     if answer is not None:
         _answer(
@@ -383,6 +428,7 @@ def task_assess_cmd(
         urn=urn,
         verb_text="task assess",
         key=None,
+        read=True,
     )
     if answer is None:
         return
@@ -408,12 +454,15 @@ def batch_integrate_cmd(
     expected_revision: _BatchRevision,
     actor: _Actor,
     from_spec: Annotated[Path, typer.Option("--from-spec", help=_REFS_HELP)],
+    wait: _Wait = False,
 ) -> None:
     """Integrate a Batch's sealed candidates into its next generation.
 
     The daemon assembles the integrate request from the Batch's plan and
-    the references the file names, then runs it under the anchor; assembling
-    the same plan again names the same idempotency key, so a retry replays.
+    the references the file names, then runs it under the anchor as a
+    submitted operation; assembling the same plan again names the same
+    idempotency key, so a retry replays. ``--wait`` blocks until the
+    integration is terminal and prints it.
     """
     refs = _document(ctx, from_spec)
     if refs is None:
@@ -434,8 +483,8 @@ def batch_integrate_cmd(
         {**request, "expected_revision": expected_revision},
         urn=urn,
         verb_text="batch integrate",
-        key=None,
-        gated=True,
+        key=request["idempotency_key"],
+        wait=wait,
     )
     if answer is not None:
         _answer(

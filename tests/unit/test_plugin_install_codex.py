@@ -428,14 +428,15 @@ def test_manifest_version_tracks_package_version(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])
-def test_install_codex_writes_enabled_entry_in_config_toml(
+def test_install_codex_writes_the_managed_block_in_config_toml(
     tmp_path: Path, fake_home: Path, scope: str
 ) -> None:
     install_plugin(tmp_path, **_install_kwargs(scope, fake_home))
     config_path = _config_path(tmp_path, scope, fake_home)
     text = config_path.read_text(encoding="utf-8")
-    assert "[plugins.eawf]" in text
-    assert "enabled = true" in text
+    # Codex loads nothing for a bare ``[plugins.eawf]`` table, so none is written.
+    assert "[plugins" not in text
+    assert "[agents]" in text
     assert "# ---- __eawf_managed begin ----" in text
     assert "# ---- __eawf_managed end ----" in text
     # Legacy __eawf_managed TOML table must NOT appear inside config.toml.
@@ -449,7 +450,7 @@ def test_config_toml_preserves_user_sections(tmp_path: Path) -> None:
     install_plugin(tmp_path)
     text = cfg_path.read_text(encoding="utf-8")
     assert 'user_setting = "keep_me"' in text
-    assert "[plugins.eawf]" in text
+    assert "[agents]" in text
 
 
 @pytest.mark.parametrize("scope", ["project", "user"])

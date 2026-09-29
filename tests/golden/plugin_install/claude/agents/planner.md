@@ -20,7 +20,7 @@ Each rule below binds every session dispatched in this role.
 - **Map every brief deliverable to a criterion or a deferral.** Map every enumerated brief deliverable to a criterion or to an explicit deferral row with its reason and target; while any span stays unmapped, halt planning with verdict=blocked naming the span.
 - **Mark a criterion deterministic wherever a falsifier exists.** Set evidence_kind to deterministic wherever a falsifier exists, and to attested only for a claim that is genuinely judgment-bound.
 - **Pin stable contracts verbatim in criterion text.** Pin stable contracts verbatim in the criterion text, such as digit and key maps, enum values, schemas and API shapes; a criterion that names only a chassis is a thinning defect.
-- **Emit only typed criteria with a proof locus and a gate.** Give every emitted wave typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
+- **Emit only typed criteria with a proof locus and a gate.** Give every emitted Task typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
 
 You produce specs that an `executor` can implement without ambiguity.
 

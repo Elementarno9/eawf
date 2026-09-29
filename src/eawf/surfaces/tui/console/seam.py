@@ -81,16 +81,31 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, EffectiveSettingsView
+from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.runtime.daemon.epoch2_transaction import TransactionRefusalCode
 from eawf.runtime.daemon.methods.state_subscribe import PROJECTION_SUBSCRIBE_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.chassis.state_binding import StateBinding, StateBindingCallbacks
+from eawf.surfaces.tui.console.bulk import (
+    BULK_CONTROL_METHOD,
+    BULK_PREVIEW_METHOD,
+    BULK_RECONCILE_METHOD,
+    BulkRequest,
+    bulk_params,
+    bulk_results,
+    refused_bulk,
+    unanswered_bulk,
+)
+from eawf.surfaces.tui.console.decisions import DecisionRecords, QuestionRecord
 from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
+    NOTICE_LIST_METHOD,
     AnswerRequest,
     ConsoleOperation,
     LifecycleRequest,
+    NoticeRequest,
     OperationLedger,
     OperationResult,
     OperationStatus,
@@ -99,6 +114,7 @@ from eawf.surfaces.tui.console.operations import (
     VerbRequest,
     address,
     address_lifecycle,
+    address_notice,
     address_setting,
     exhausted,
     not_sent,
@@ -106,6 +122,7 @@ from eawf.surfaces.tui.console.operations import (
     settled,
     unanswered,
 )
+from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
 from eawf.workflow.projection.acceptance import (
     MILESTONE_ACCEPTANCE_METHOD,
     MILESTONE_ROUTE,
@@ -260,6 +277,8 @@ class ProjectionSeam:
         self._reading: set[str] = set()
         self._settings: EffectiveSettingsView | None = None
         self._acceptance: dict[str, MilestoneAcceptanceRecord] = {}
+        self._notices: tuple[BudgetThresholdNotice, ...] | None = None
+        self._decisions: tuple[PendingAction, ...] | None = None
         self._subject: str | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
@@ -362,6 +381,12 @@ class ProjectionSeam:
         subject = self._subject
         if self._route == MILESTONE_ROUTE and subject and subject not in self._acceptance:
             owed.append(MILESTONE_ACCEPTANCE_METHOD)
+        # a budget notice is addressed to a principal, so a console acting as nobody has none
+        if self._route == ATTENTION_ROUTE and self._operator is not None and self._notices is None:
+            owed.append(NOTICE_LIST_METHOD)
+        # a decision is answered from its Attention row, so its options are read there
+        if self._route == ATTENTION_ROUTE and self._decisions is None:
+            owed.append(QUESTION_DECISIONS_METHOD)
         return tuple(route for route in owed if route not in self._reading)
 
     def retarget(self, route: str) -> None:
@@ -413,6 +438,10 @@ class ProjectionSeam:
                     await self.load_settings()
                 elif route == MILESTONE_ACCEPTANCE_METHOD:
                     await self.load_acceptance()
+                elif route == NOTICE_LIST_METHOD:
+                    await self.load_notices()
+                elif route == QUESTION_DECISIONS_METHOD:
+                    await self.load_decisions()
                 else:
                     await self.load(route)
             except Exception as exc:
@@ -555,6 +584,68 @@ class ProjectionSeam:
         logger.debug(f"load_acceptance milestone={key} bundle={record.bundle is not None}")
         return record
 
+    @property
+    def notices(self) -> tuple[BudgetThresholdNotice, ...]:
+        """Return the open budget notices in this principal's inbox; empty before their read."""
+        return self._notices or ()
+
+    async def load_notices(self) -> tuple[BudgetThresholdNotice, ...]:
+        """Read the budget notices active in the operator's inbox, and hold them.
+
+        The notice ledger is not a document collection, so no patch carries it; it is
+        re-read after every disposition instead. A snoozed or acknowledged notice is not
+        in the active inbox, so it is not held.
+
+        Returns:
+            The active notices, in ledger-key order.
+
+        Raises:
+            ValueError: The seam acts as nobody, so no inbox is addressed to it.
+        """
+        if self._operator is None:
+            raise ValueError("a notice inbox is one principal's; the console acts as nobody")
+        answer = await self._binding.call(
+            NOTICE_LIST_METHOD, {**self._params(), "principal": self._operator.principal}
+        )
+        self._notices = tuple(
+            BudgetThresholdNotice.model_validate(item) for item in answer.get("active", ())
+        )
+        logger.debug(f"load_notices active={len(self._notices)}")
+        return self._notices
+
+    @property
+    def decisions(self) -> DecisionRecords | None:
+        """Return the records the question detail is bound to; ``None`` before their read.
+
+        Each waiting operator decision is held as the question it asks, so the card an
+        operator opens from its Attention row draws the filed options, the one
+        recommendation and any default with its window, and never a prototype question.
+        """
+        if self._decisions is None:
+            return None
+        operator = self._operator
+        return DecisionRecords(
+            principal=operator.principal if operator is not None else None,
+            questions=tuple(QuestionRecord.of_decision(item) for item in self._decisions),
+        )
+
+    async def load_decisions(self) -> tuple[PendingAction, ...]:
+        """Read every waiting operator decision in full, and hold them.
+
+        The Attention register carries a row's facts rather than its offered answers, so
+        the options a decision's card draws are read beside it; a pushed patch to any
+        pending action drops the held read, and the next sync reads it again.
+
+        Returns:
+            The waiting decisions, in key order.
+        """
+        answer = await self._binding.call(QUESTION_DECISIONS_METHOD, self._params())
+        self._decisions = tuple(
+            PendingAction.model_validate(item) for item in answer.get("decisions", ())
+        )
+        logger.debug(f"load_decisions waiting={len(self._decisions)}")
+        return self._decisions
+
     async def reconnect(self) -> ReconnectOutcome:
         """Run the reconnect protocol from the cursor the console persisted.
 
@@ -629,8 +720,14 @@ class ProjectionSeam:
             or outstanding when the answer never arrived. A request that cannot be
             addressed is refused without being sent.
         """
-        if isinstance(request, SettingRequest):
-            return await self._write_setting(request)
+        if isinstance(request, SettingRequest | NoticeRequest):
+            # neither is addressed from a projection row: a setting is a layer write and a
+            # notice lives in the notice ledger
+            return await (
+                self._write_setting(request)
+                if isinstance(request, SettingRequest)
+                else self._dispose(request)
+            )
         if self._operator is None:
             return not_sent(request.target, f"{NO_PRINCIPAL_REASON} (and --receipt-ref to answer)")
         row = self._row(request.target)
@@ -661,6 +758,26 @@ class ProjectionSeam:
             await self._reload_holding(request.target)
         return result
 
+    async def _dispose(self, request: NoticeRequest) -> OperationResult:
+        """Send one notice disposition, then re-read the inbox it changed.
+
+        A notice the console does not hold was never shown, so it is refused unsent. The
+        inbox is re-read whatever the answer: an applied disposition moved the notice out
+        of it, and a refused one may have been refused because it escalated.
+        """
+        if self._operator is None:
+            return not_sent(request.target, NO_PRINCIPAL_REASON)
+        if not any(notice.notice_key == request.target for notice in self.notices):
+            return not_sent(request.target, f"{request.target} is in no inbox the console holds")
+        operation = address_notice(request, operator=self._operator)
+        self._operations.open(operation)
+        result = await self._send(operation)
+        try:
+            await self.load_notices()
+        except (DaemonRpcError, OSError, ValueError) as exc:
+            logger.warning(f"_dispose reread_failed id={operation.operation_id} cause={exc!r}")
+        return result
+
     async def _move(self, request: LifecycleRequest, *, urn: str) -> OperationResult:
         """Send one confirmed lifecycle move under the id its card minted.
 
@@ -681,6 +798,51 @@ class ProjectionSeam:
         if held is None:
             self._operations.open(operation)
         return await self._send(operation)
+
+    async def bulk(self, request: BulkRequest) -> tuple[OperationResult, ...]:
+        """Send one confirmed card's targets as one daemon bulk operation.
+
+        The preview is asked first, and the operation opens under the confirmation
+        digest it answers, anchored at the revisions the card showed; a reconcile asks
+        again under the same id for every target not yet settled. The results are the
+        daemon's, one per target; nothing the console holds changes here.
+
+        Args:
+            request: The confirmed targets.
+
+        Returns:
+            One result per target: the item's own outcome, ``rejected`` for every target
+            of an operation refused whole, or ``unknown`` for every target when no answer
+            arrived. A console acting as nobody, or holding no row for a target, sends
+            nothing.
+        """
+        if self._operator is None:
+            return tuple(not_sent(key, NO_PRINCIPAL_REASON) for key in request.targets)
+        urns = {key: row.urn for key in request.targets if (row := self._row(key)) is not None}
+        if len(urns) != len(request.targets):
+            return tuple(
+                not_sent(key, f"{key} is in no projection the console holds")
+                for key in request.targets
+            )
+        routed = self._params()
+        items = {"verb": request.verb.value, "item_refs": list(urns.values())}
+        try:
+            shown = await self._binding.call(BULK_PREVIEW_METHOD, {**items, **routed})
+            params = bulk_params(
+                request,
+                urns,
+                actor=self._operator.principal,
+                digest=shown["confirmation_digest"],
+            )
+            method = BULK_RECONCILE_METHOD if request.reconcile else BULK_CONTROL_METHOD
+            answer = await self._binding.call(method, {**params, **routed})
+        except DaemonRpcError as error:
+            return refused_bulk(request, error.message)
+        except Exception as exc:
+            logger.warning(f"bulk unanswered id={request.operation_id} cause={exc!r}")
+            return unanswered_bulk(request, "no answer arrived · reconcile asks again")
+        logger.info(f"bulk id={request.operation_id} items={len(urns)} method={method}")
+        return bulk_results(request, urns, answer)
 
     def held_rows(self) -> tuple[ProjectionRow, ...]:
         """Return every row the held projections carry, one per key, the visible route's first.
@@ -865,6 +1027,9 @@ class ProjectionSeam:
         if any(entry.collection in _ACCEPTANCE_COLLECTIONS for entry in patch.entries):
             # a moved Milestone or sealed question may change what it was accepted at
             self._acceptance.clear()
+        if any(entry.collection is Epoch2Collection.PENDING_ACTION for entry in patch.entries):
+            # a filed or answered decision changes which ones wait
+            self._decisions = None
         patched = self._fan_out(patch)
         if not patched:
             return

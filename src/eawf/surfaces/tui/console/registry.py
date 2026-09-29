@@ -612,12 +612,6 @@ class RouteRegistry:
         self.escapes: Mapping[str, Escape] = MappingProxyType(
             {s.id: s.escape for s in self.routes if s.escape is not None}
         )
-        self.groups: Mapping[RouteGroup, tuple[str, ...]] = MappingProxyType(
-            {g: tuple(s.id for s in self.routes if s.group is g) for g in RouteGroup}
-        )
-        self.sub_surfaces: Mapping[str, str] = MappingProxyType(
-            {s.id: s.sub_surface_of for s in self.routes if s.sub_surface_of}
-        )
         self.tab_owners: Mapping[str, str] = MappingProxyType(
             {s.id: s.tab_owner for s in self.routes if s.tab_owner}
         )
@@ -635,9 +629,6 @@ class RouteRegistry:
         )
         self.rails: Mapping[str, Rail] = MappingProxyType(
             {s.id: s.rail for s in self.routes if s.rail is not None}
-        )
-        self.holes: Mapping[str, str] = MappingProxyType(
-            {s.id: s.hole for s in self.routes if s.hole}
         )
 
     def route_word(self, route: str) -> str:

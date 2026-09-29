@@ -44,7 +44,7 @@ from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthField
 from eawf.kernel.projection.verification import HealthReadModel, RuntimeTupleRow
 from eawf.surfaces.tui.console.cells import value_cell
-from eawf.surfaces.tui.console.derive import plural
+from eawf.surfaces.tui.console.derive import plural, restore_by_id
 from eawf.surfaces.tui.console.format import group, span
 from eawf.surfaces.tui.console.frame import (
     Fixed,
@@ -219,23 +219,35 @@ def cell(field: TruthField[str]) -> str:
     return value_cell(field).full
 
 
-def restore(session: Session, model: RouteReadModel) -> int:
-    """Return the row the cursor sits on, restored by stable id, and publish that id.
+def native_header(view: View, crumb: str, scope_id: str) -> str:
+    """Return the header row of a frame drawn from a read model.
 
     Args:
-        session: The session whose ``sel_id`` names the row the cursor was on and whose
-            ``sel`` is the offset the frame draws the caret at.
-        model: The read model the frame draws.
+        view: The render being built.
+        crumb: The breadcrumb text after the brand.
+        scope_id: The scope the read model was stated for, named as the header names it.
+    """
+    return header_row(
+        view.session,
+        crumb=crumb,
+        scope=scope_label(view, scope_id),
+        needs=needs_count(view),
+        w=view.w,
+    )
+
+
+def restore(session: Session, model: RouteReadModel | RegisterView | SpineView) -> int:
+    """Return the row the cursor sits on in ``model``, restored by stable id, and publish it.
+
+    Args:
+        session: The session whose ``sel_id`` names the row the cursor was on.
+        model: The read model the frame draws, of any family.
 
     Returns:
         The row offset the caret goes on; ``0`` for an empty read model, which draws no
         caret at all.
     """
-    found = model.index_of(session.sel_id)
-    index = found if found is not None else min(max(session.sel, 0), max(len(model.rows) - 1, 0))
-    session.sel = index
-    session.sel_id = model.rows[index].key if model.rows else None
-    return index
+    return restore_by_id(session, [row.key for row in model.rows])
 
 
 def label(name: str, text: str = "") -> str:
@@ -306,13 +318,7 @@ def native_head(
     known = "" if rd.complete or re.search(rf"\b{KNOWN}\b", summary) else f" · {KNOWN}"
     line = f" {summary}{known}" + ("" if rd.complete else f" · {rd.label}")
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=crumb_text,
-            scope=scope_label(view, model.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, crumb_text, model.scope_id),
         Fixed(pad(line, w)),
         bar(w),
     ]
@@ -430,13 +436,7 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     cursor = restore(session, model)
     regions = REGISTRY.focus_regions.get(session.route, ())
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=crumb(view, model),
-            scope=scope_label(view, model.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, crumb(view, model), model.scope_id),
         " " + counts(model),
         bar(w),
     ]

@@ -48,23 +48,9 @@ from eawf.kernel.release.signals import (
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.spec.release import ReleaseGateProfile
 from eawf.kernel.spec.release_config import ReleaseGateName
-from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_gate_argv
+from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, resolve_command_family
 
 logger = logging.getLogger(__name__)
-
-#: Argv heads a release proof command may dispatch through the gate
-#: runner. The set is the project's own tooling surface -- the ``uv`` /
-#: ``uvx`` wrappers, the ``run`` sub-verb the depth-1 recursion consumes,
-#: and the three inner commands the authored proofs invoke. A new head
-#: is a policy decision, not a config knob, so it is spelled here rather
-#: than read from the checkpoint file.
-PROOF_ARGV_ALLOWLIST: Final[tuple[str, ...]] = (
-    "uv",
-    "uvx",
-    "run",
-    "pytest",
-    "eawf",
-)
 
 
 class GateEvidenceKind(StrEnum):
@@ -552,7 +538,7 @@ def _reject_bad_proof_argv(binding: GateBinding) -> None:
     if binding.proof is None:
         return
     try:
-        validate_gate_argv(list(binding.proof.argv), allowlist=list(PROOF_ARGV_ALLOWLIST))
+        resolve_command_family(list(binding.proof.argv))
     except ArgvPolicyError as exc:
         raise GateBindingError(
             GateBindingRejection.ARGV_REJECTED,
@@ -688,7 +674,6 @@ __all__ = [
     "PRODUCT_CANARY_POST_MERGE_GATES",
     "PRODUCT_CANARY_PRE_MERGE_GATES",
     "PROFILE_GATES",
-    "PROOF_ARGV_ALLOWLIST",
     "WAIVER_BLOCK_REF",
     "GateBinding",
     "GateBindingError",

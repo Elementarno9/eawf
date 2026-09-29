@@ -154,6 +154,7 @@ COMMAND_PANELS: dict[str, str] = {
     "cc": "runtime",
     "config": "runtime",
     "daemon": "runtime",
+    "follow": "runtime",
     "hook": "runtime",
     "mcp": "runtime",
     "plugin": "runtime",
@@ -171,6 +172,7 @@ COMMAND_PANELS: dict[str, str] = {
     "render-output": "ui",
     "status": "ui",
     "ui": "ui",
+    "verbs": "ui",
     "version": "ui",
     # vcs: VCS-adjacent operations (co-author, repo + workspace state,
     # clone, init are the entry points into a tracked workspace).

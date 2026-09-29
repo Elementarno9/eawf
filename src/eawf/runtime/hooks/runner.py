@@ -629,6 +629,71 @@ def adopt_host_subagent(
 #: The verb a held host call is recorded through.
 _HOST_PERMISSION_METHOD: Final = "runtime.host.permission.request"
 
+#: The verb the recorded call's decision is read back through.
+_PERMISSION_READ_METHOD: Final = "runtime.permission.read"
+
+#: How often a waiting hook reads the record again. Each read takes the Run's
+#: lock, so the wait sleeps between reads rather than asking back to back.
+_DECISION_POLL_S: Final = 0.5
+
+#: The host behaviour each principal decision is answered with. An expiry is
+#: absent: the provider decided it, so there is nothing to hand back.
+HOST_PERMISSION_BEHAVIOR: Final[dict[str, str]] = {"approved": "allow", "denied": "deny"}
+
+#: The hook whose output a host permission decision is read from.
+HOST_PERMISSION_HOOK: Final = "runtime.host_permission"
+
+
+def _await_decision(
+    client: Any, permission: dict[str, Any], *, repo_root: str, wait_s: float
+) -> str | None:
+    """Return the principal decision recorded on *permission* within *wait_s*.
+
+    Args:
+        client: The open daemon client the call was recorded through.
+        permission: The record as the daemon answered it.
+        repo_root: The repository the harness runs in.
+        wait_s: How long to keep reading before giving up.
+
+    Returns:
+        ``approved`` or ``denied`` when a principal decided in time; ``None``
+        when nobody did, or the record ended any other way.
+    """
+    deadline = time.monotonic() + wait_s
+    while (resolution := permission.get("resolution")) is None:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            return None
+        time.sleep(min(_DECISION_POLL_S, left))
+        answer = client.call(
+            _PERMISSION_READ_METHOD, {"urn": permission["run_ref"], "repo_root": repo_root}
+        )
+        permission = next(
+            item["permission"]
+            for item in answer["permissions"]
+            if item["permission"]["key"] == permission["key"]
+        )
+    decision = resolution["decision"]
+    return decision if decision in HOST_PERMISSION_BEHAVIOR else None
+
+
+def host_permission_decision(results: Iterable[HookResult]) -> str | None:
+    """Return the decision the permission hook carried back, if it carried one.
+
+    Args:
+        results: The results one PERMISSION_REQUEST dispatch returned.
+
+    Returns:
+        ``approved`` or ``denied`` when :func:`record_host_permission` read a
+        principal's decision in time; ``None`` otherwise, which leaves the
+        call to the host's own prompt.
+    """
+    for result in results:
+        words = result.output.split()
+        if result.name == HOST_PERMISSION_HOOK and words[:1] == [HOST_PERMISSION_HOOK]:
+            return next((word for word in words[1:2] if word in HOST_PERMISSION_BEHAVIOR), None)
+    return None
+
 
 def record_host_permission(
     event: HookEvent,
@@ -636,13 +701,16 @@ def record_host_permission(
     daemon_client_factory: DaemonClientFactory | None = None,
     repo_root: Path | None = None,
 ) -> HookResult:
-    """Record a call the host is holding for its operator as a provider permission.
+    """Record a call the host is holding as a provider permission, and await its decision.
 
     The host fires this while it asks its own operator whether a tool call may
-    run. The hook never answers for the host and never waits on an answer: it
-    records the held call with the daemon, bound to the Run on the host's
-    session, and returns at once, so the host goes on asking. Inside a
-    subagent the host names the subagent, whose own Run the call belongs to.
+    run. The hook records the held call with the daemon, bound to the Run on
+    the host's session, then reads the record back for up to
+    ``runtime.claude.permission_wait_s`` seconds. A principal's decision
+    recorded in that window is carried back so the host applies it; past the
+    window, or on any daemon error, the hook carries nothing and the host's
+    own prompt decides. It never denies by timing out. Inside a subagent the
+    host names the subagent, whose own Run the call belongs to.
 
     Args:
         event: The PERMISSION_REQUEST event.
@@ -652,10 +720,14 @@ def record_host_permission(
             directory when ``None``.
 
     Returns:
-        A non-blocking :class:`HookResult` naming the recorded permission, or
-        the reason none was recorded.
+        A non-blocking :class:`HookResult` naming the recorded permission and,
+        when one arrived in time, the decision -- the form
+        :func:`host_permission_decision` reads -- or the reason none was
+        recorded.
     """
-    name = "runtime.host_permission"
+    from eawf.kernel.config.layered import resolve_permission_wait_seconds
+
+    name = HOST_PERMISSION_HOOK
     harness = _HOST_HARNESSES.get(event.runtime)
     if harness is None:
         return HookResult(name=name, output=f"{name} skipped: {event.runtime} holds no call")
@@ -672,21 +744,23 @@ def record_host_permission(
     if session is None or not isinstance(tool_name, str) or not tool_name:
         return HookResult(name=name, output=f"{name} skipped: missing session_id or tool_name")
     tool_input = payload.get("tool_input")
+    root = repo_root if repo_root is not None else Path.cwd()
     params: dict[str, Any] = {
         "harness": harness,
         "host_session_id": session,
         "tool_name": tool_name,
         "tool_input": tool_input if isinstance(tool_input, dict) else {},
-        "repo_root": str(repo_root if repo_root is not None else Path.cwd()),
+        "repo_root": str(root),
     }
     factory = daemon_client_factory or _default_daemon_client_factory
     try:
+        wait_s = resolve_permission_wait_seconds(root)
         with factory() as client:
-            answer = client.call(_HOST_PERMISSION_METHOD, params)
+            permission = client.call(_HOST_PERMISSION_METHOD, params)["permission"]
+            decision = _await_decision(client, permission, repo_root=str(root), wait_s=wait_s)
     except Exception as exc:
         return HookResult(name=name, output=repr(exc))
-    key = answer.get("permission", {}).get("key")
-    return HookResult(name=name, output=f"{name} ok permission={key}")
+    return HookResult(name=name, output=f"{name} {decision or 'ok'} permission={permission['key']}")
 
 
 def register_runtime_capture_hooks(
@@ -893,6 +967,8 @@ def append_event_idempotent(path: Path, event: HookEvent, *, timeout: float = 5.
 
 
 __all__ = [
+    "HOST_PERMISSION_BEHAVIOR",
+    "HOST_PERMISSION_HOOK",
     "DaemonClientFactory",
     "HookCallable",
     "HookResult",
@@ -901,6 +977,7 @@ __all__ = [
     "append_event_idempotent",
     "capture_codex_lifecycle",
     "capture_runtime_on_session_end",
+    "host_permission_decision",
     "record_host_permission",
     "register_runtime_capture_hooks",
     "registered_handler_event_types",

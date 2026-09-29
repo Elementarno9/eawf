@@ -7,7 +7,7 @@ the write under, so sending the same operation twice is one write: that is what 
 reconnect reconcile an operation whose answer was lost by simply asking again under the
 same id, instead of guessing whether it landed.
 
-Five daemon mutators are bound. An answer to a pending action goes to the approval seal,
+Six daemon mutators are bound. An answer to a pending action goes to the approval seal,
 which reports a later conflicting answer as superseded rather than refusing it; an answer
 to a provider permission goes to the permission's own decide verb, as the operator, and
 never to the seal, because the two records resolve apart; a Run
@@ -15,7 +15,9 @@ control goes to the control-request verb, which records that a principal asked a
 the Run not at all; a settings edit goes to the layered-config verbs, which write one
 layer file under the daemon's lock; and a lifecycle move goes to the per-entity verb that
 names it, addressed at the revision its consequence card was built at and filed under the
-operation id the card minted, so confirming the same card twice is one write. Every other
+operation id the card minted, so confirming the same card twice is one write; and a budget
+notice's snooze or resolve goes to the notice ledger's disposition verb, at the revision the
+operator was shown. Every other
 writing verb stays listed and refused with its reason, because a verb that looked like it
 worked while the daemon never heard of it is the one thing a console must not draw.
 """
@@ -26,9 +28,10 @@ import logging
 import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from eawf.kernel.projection.attention import CONSOLE_PRINCIPAL_CLASS
 from eawf.kernel.runtime.control import ControlDisposition
@@ -54,6 +57,15 @@ PERMISSION_DECIDE_METHOD: Final = "runtime.permission.decide"
 #: key against the leaf catalog before it writes.
 SETTING_SET_METHOD: Final = "config.set_layer_value"
 SETTING_UNSET_METHOD: Final = "config.unset_layer_value"
+
+#: The daemon verbs that list one principal's budget notices and record what they did to
+#: one. A notice is not a pending action: it blocks nothing and is answered by nobody.
+NOTICE_LIST_METHOD: Final = "budget_notice.list"
+NOTICE_DISPOSE_METHOD: Final = "budget_notice.dispose"
+
+#: How long a console snooze keeps a notice out of the principal's inbox. The ledger takes
+#: a deadline rather than a duration, and the console offers one snooze length.
+SNOOZE_FOR: Final = timedelta(hours=1)
 
 #: The layers a settings edit may target: the five file layers the lens cycles.
 SETTING_LAYERS: Final = frozenset({"global", "workspace", "repo", "branch", "local"})
@@ -90,8 +102,8 @@ RUN_CONTROLS: Final[Mapping[str, ControlKind]] = MappingProxyType(
 UNBOUND_REASON: Final = "no daemon verb carries this yet"
 _UNBOUND_REASONS: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "snooze": "no daemon verb snoozes a pending action",
-        "resolve": "no daemon verb resolves a notice",
+        "snooze": "no daemon verb snoozes a pending action · only a budget notice snoozes",
+        "resolve": "no daemon verb resolves a pending action · only a budget notice resolves",
     }
 )
 
@@ -283,8 +295,44 @@ class LifecycleRequest:
             raise ValueError("a lifecycle move needs the operation id its card minted")
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NoticeRequest:
+    """An operator's snooze or resolve of one budget notice, at the revision they were shown.
+
+    Attributes:
+        target: The notice's key.
+        disposition: ``snooze`` keeps it out of this principal's inbox until
+            ``snooze_until``; ``resolve`` closes it for its whole audience.
+        revision: The revision the operator was shown; the ledger refuses a disposition
+            of a revision the notice has escalated past.
+        snooze_until: When a snooze lapses; ``None`` for a resolve.
+    """
+
+    target: str
+    disposition: Literal["snooze", "resolve"]
+    revision: int
+    snooze_until: datetime | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a disposition the ledger would refuse.
+
+        Raises:
+            ValueError: ``revision`` is not positive, or a deadline is given exactly when
+                the disposition is not a snooze.
+        """
+        if self.revision < 1:
+            raise ValueError(f"revision must be positive, got {self.revision}")
+        if (self.disposition == "snooze") != (self.snooze_until is not None):
+            raise ValueError("a snooze names when it lapses, and only a snooze does")
+
+
 VerbRequest = (
-    AnswerRequest | PermissionDecision | ControlRequest | SettingRequest | LifecycleRequest
+    AnswerRequest
+    | PermissionDecision
+    | ControlRequest
+    | SettingRequest
+    | LifecycleRequest
+    | NoticeRequest
 )
 
 
@@ -401,6 +449,32 @@ def address_lifecycle(
     return ConsoleOperation(
         operation_id=request.operation_id,
         method=request.method,
+        params=MappingProxyType(params),
+        target=request.target,
+    )
+
+
+def address_notice(request: NoticeRequest, *, operator: Operator) -> ConsoleOperation:
+    """Return the notice-ledger call ``request`` is sent as.
+
+    Args:
+        request: The confirmed snooze or resolve.
+        operator: Who the console acts as; the ledger records the disposition as theirs.
+
+    Returns:
+        The addressed operation under a freshly minted id.
+    """
+    params: dict[str, Any] = {
+        "notice_key": request.target,
+        "principal": operator.principal,
+        "disposition": request.disposition,
+        "expected_revision": request.revision,
+    }
+    if request.snooze_until is not None:
+        params["snooze_until"] = request.snooze_until.isoformat()
+    return ConsoleOperation(
+        operation_id=_minted("NTC"),
+        method=NOTICE_DISPOSE_METHOD,
         params=MappingProxyType(params),
         target=request.target,
     )
@@ -535,6 +609,17 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
         )
     if operation.method in MUTATIONS_BY_METHOD:
         return _lifecycle_settled(operation, answer)
+    if operation.method == NOTICE_DISPOSE_METHOD:
+        notice = answer.get("notice")
+        stated = notice.get("status") if isinstance(notice, Mapping) else None
+        return OperationResult(
+            operation_id=operation.operation_id,
+            target=operation.target,
+            status=OperationStatus.APPLIED,
+            detail=f"{operation.target} {operation.params['disposition']}d · the notice is "
+            f"{str(stated).lower() if stated else 'recorded'} · no work was stopped",
+            disposition=ControlDisposition.CONFIRMED,
+        )
     reason = answer.get("reason")
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
         disposition = ControlDisposition.SUPERSEDED
@@ -794,6 +879,8 @@ class OperationLedger:
 __all__ = [
     "ANSWER_OPTIONS",
     "CONTROL_METHOD",
+    "NOTICE_DISPOSE_METHOD",
+    "NOTICE_LIST_METHOD",
     "NO_PRINCIPAL_REASON",
     "OUTCOME_SENTENCES",
     "PERMISSION_DECIDE_METHOD",
@@ -806,11 +893,13 @@ __all__ = [
     "SETTING_LAYERS",
     "SETTING_SET_METHOD",
     "SETTING_UNSET_METHOD",
+    "SNOOZE_FOR",
     "UNBOUND_REASON",
     "AnswerRequest",
     "ConsoleOperation",
     "ControlRequest",
     "LifecycleRequest",
+    "NoticeRequest",
     "OperationLedger",
     "OperationResult",
     "OperationStatus",
@@ -820,6 +909,7 @@ __all__ = [
     "VerbRequest",
     "address",
     "address_lifecycle",
+    "address_notice",
     "address_setting",
     "binding_refusal",
     "exhausted",

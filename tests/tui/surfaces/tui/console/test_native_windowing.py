@@ -460,7 +460,7 @@ def _leaf_on(view: View, frame: list[str]) -> str:
     return carets[0].split()[1]
 
 
-def test_j1_02_home_walks_1490_leaves_with_the_caret_on_screen() -> None:
+def test_home_walks_1490_leaves_with_the_caret_on_screen() -> None:
     """Fifty presses down a 1,490-leaf tree keep the caret on a leaf, never the Track."""
     view = home_view(Session())
     frame = render_route(view)
@@ -471,7 +471,7 @@ def test_j1_02_home_walks_1490_leaves_with_the_caret_on_screen() -> None:
     assert view.session.sel_id == f"MLS-{PRESSES:04d}"
 
 
-def test_j1_02_home_end_and_home_land_on_the_last_and_first_leaf() -> None:
+def test_home_end_and_home_land_on_the_last_and_first_leaf() -> None:
     """End reaches the last Milestone; Home comes back to the first, past the Track row."""
     view = home_view(Session())
     render_route(view)
@@ -480,7 +480,7 @@ def test_j1_02_home_end_and_home_land_on_the_last_and_first_leaf() -> None:
     assert "PageUp PageDown page" in render_route(view)[-1]
 
 
-def test_j1_02_home_paging_rests_on_a_leaf_and_never_on_the_track() -> None:
+def test_home_paging_rests_on_a_leaf_and_never_on_the_track() -> None:
     """PageDown moves a screen onto a Milestone; PageUp past the top stops on the first."""
     view = home_view(Session())
     render_route(view)
@@ -490,14 +490,14 @@ def test_j1_02_home_paging_rests_on_a_leaf_and_never_on_the_track() -> None:
     assert _leaf_on(view, frame) == "MLS-0000"
 
 
-def test_j4_06_a_native_frame_leaves_off_what_it_does_not_serve() -> None:
+def test_a_native_frame_leaves_off_what_it_does_not_serve() -> None:
     """Recovery can take no door yet; a Track's Tab walks groups only on a Track's own frame."""
     assert "Enter" in unserved("crash.recovery", None)
     assert "Tab" in unserved("track", None)
     assert "Tab" not in unserved("track", "TRK-0001")
 
 
-# ---------- K-11: paging is advertised where it acts, and acts where advertised ----------
+# ---------- paging is advertised where it acts, and acts where advertised ----------
 
 
 def _drafts(n: int) -> dict[str, Any]:
@@ -513,7 +513,7 @@ def _drafts(n: int) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(("drafts", "paged"), [(3, False), (60, True)])
-def test_k_11_a_backlog_cut_to_its_window_advertises_paging(drafts: int, paged: bool) -> None:
+def test_a_backlog_cut_to_its_window_advertises_paging(drafts: int, paged: bool) -> None:
     session = Session()
     session.route = "backlog"
     spine = build_spine_view(_projection("backlog", {"task": _drafts(drafts)}))
@@ -523,7 +523,7 @@ def test_k_11_a_backlog_cut_to_its_window_advertises_paging(drafts: int, paged: 
     assert ("PageDown" in (session.bar_keys or ())) is paged
 
 
-def test_k_11_home_end_lands_on_the_last_leaf_and_home_on_the_first() -> None:
+def test_home_end_lands_on_the_last_leaf_and_home_on_the_first() -> None:
     view = drills._open("scope.home", document=nrf.DOCUMENT)
     leaves = leaves_of(groups_of(view.projection))
     assert len(leaves) > 1

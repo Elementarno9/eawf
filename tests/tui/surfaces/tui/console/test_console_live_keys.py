@@ -80,7 +80,7 @@ async def _setups(app: ConsoleApp, pilot: Any, seam: Any) -> list[SessionSetup]:
     return setups
 
 
-def test_j4_06_live_every_advertised_key_acts_on_every_route(tmp_path: Path) -> None:
+def test_live_every_advertised_key_acts_on_every_route(tmp_path: Path) -> None:
     """Each pair on each route's keybar moves the frame when one of its keys is pressed."""
     require_epoch2_repository()
     before = authority_digests(REPO_ROOT)
@@ -133,7 +133,7 @@ def _claimed(trace: str | None) -> bool:
     return trace is not None and not trace.endswith("→ unclaimed")
 
 
-def test_c2_09_live_every_claimed_key_acts_or_says_why(tmp_path: Path) -> None:
+def test_live_every_claimed_key_acts_or_says_why(tmp_path: Path) -> None:
     """A key some handler claims either changes the frame or raises a toast naming why.
 
     A claimed key whose only answer is a key-log line the frame never draws reads, to the
@@ -170,7 +170,7 @@ def test_c2_09_live_every_claimed_key_acts_or_says_why(tmp_path: Path) -> None:
     assert pressed > 500
 
 
-def test_j1_01_j1_05_j1_08_live_drills_carry_the_row_under_the_caret(tmp_path: Path) -> None:
+def test_live_drills_carry_the_row_under_the_caret(tmp_path: Path) -> None:
     """Home, Activity and Search open the row the caret is on; a Run stays that Run."""
     require_epoch2_repository()
 
@@ -213,7 +213,7 @@ _WALKS: tuple[
     tuple[str, SessionSetup, tuple[tuple[str, tuple[str, str | None] | None], ...]], ...
 ] = (
     (
-        "C2-02 u climbs a Run to its Track through the chain the rows state",
+        "u climbs a Run to its Track through the chain the rows state",
         # starts on a finished Run, not the Nth Activity row: new Runs reorder Activity,
         # and the drill onto the caret row is pinned by the test above
         SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
@@ -226,7 +226,7 @@ _WALKS: tuple[
         ),
     ),
     (
-        "C2-02 [ ] walk the Milestones of one Track; Esc with no history climbs to it",
+        "[ ] walk the Milestones of one Track; Esc with no history climbs to it",
         SessionSetup(route="milestone", size=SIZE, subjId="MLS-0100"),
         (
             ("]", ("milestone", "MLS-0101")),
@@ -236,29 +236,29 @@ _WALKS: tuple[
         ),
     ),
     (
-        "C2-02 a light verb opens on its Run and u climbs back to that Run",
+        "a light verb opens on its Run and u climbs back to that Run",
         SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
         ((".", None), ("b", ("git.pr", "RUN-00000005")), ("u", ("run.detail", "RUN-00000005"))),
     ),
     (
-        "C1-04 Esc from Trust climbs to the Milestone it is about",
+        "Esc from Trust climbs to the Milestone it is about",
         SessionSetup(route="trust", size=SIZE, subjId="MLS-0101"),
         (("Escape", ("milestone", "MLS-0101")),),
     ),
     (
-        "C1-04 J2-19 Esc from a subjectless Trust, Evidence or Campaign lands on home",
+        "Esc from a subjectless Trust, Evidence or Campaign lands on home",
         SessionSetup(route="trust", size=SIZE),
         (("Escape", ("scope.home", None)),),
     ),
     (
-        "C2-03 the palette opens a held Milestone by its id",
+        "the palette opens a held Milestone by its id",
         SessionSetup(route="scope.home", size=SIZE),
         (("/", None), ("m", None), ("l", None), ("s", None), ("Enter", ("milestone", "MLS-0100"))),
     ),
 )
 
 
-def test_c2_02_c1_04_c2_03_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
+def test_live_climbs_and_jumps_land_on_real_records(tmp_path: Path) -> None:
     """On this tree every climb, sibling step and palette jump lands on a record it holds."""
     require_epoch2_repository()
 

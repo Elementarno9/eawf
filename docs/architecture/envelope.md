@@ -2,10 +2,7 @@
 
 *Uniform JSON envelope returned by every workflow skill; markdown is rendered from JSON via `eawf render-output`.*
 
-Every workflow skill returns a uniform envelope. Canonical form is JSON;
-markdown is rendered from JSON via `eawf render-output --format
-markdown`. Statusline, hooks, and runtime adapters parse JSON only —
-they never grep markdown.
+Every workflow skill returns a uniform envelope. Canonical form is JSON; markdown is rendered from JSON via `eawf render-output --format markdown`. Statusline, hooks, and runtime adapters parse JSON only — they never grep markdown.
 
 ## Envelope schema (shared)
 
@@ -36,55 +33,27 @@ ea_skill_output:
 Render rules:
 
 - `--json` emits the envelope verbatim.
-- `--plain` / TUI renders header as one status line, body as markdown,
-  footer as a "next actions" list.
-- `status=needs_user` MUST include `body.user_question` with a 2–4-option
-  `AskUserQuestion` payload.
-- `status=blocked` or `status=failed` MUST include
-  `footer.repair_commands`.
+- `--plain` / TUI renders header as one status line, body as markdown, footer as a "next actions" list.
+- `status=needs_user` MUST include `body.user_question` with a 2–4-option `AskUserQuestion` payload.
+- `status=blocked` or `status=failed` MUST include `footer.repair_commands`.
 - All durable references use Eä URNs.
 
 ## Per-skill body schemas
 
-Each workflow skill defines a typed `body` payload validated by the
-JSON Schema below. Body schemas:
+Each workflow skill defines a typed `body` payload validated by the JSON Schema below. Body schemas:
 
-- **`/research`**: `{ brief_id, questions: [{q, answer, confidence,
-  sources}], options: [{name, tradeoffs, complexity, reversibility,
-  risks}], recommendation: {choice, confidence, fallback}, peer_review:
-  {reviewer_id, findings: [], no_flaws_checks: []}, persisted_brief?:
-  urn }`.
-- **`/prep`**: `{ iter_id, objective, non_goals, dag: [{task_id, deps,
-  file_scope, commands, evidence, risk}], waves: [{wave_id, tasks,
-  worktree_policy, estimate_eu}], acceptance: {checks, baselines},
-  approval_required: bool }`.
-- **`/audit`**: `{ scope_id, kind: evaluation|ship-gate, checks_run:
-  [{check_id, command, status, output_blob}], outcomes_measured:
-  [{outcome_id, value, threshold, verdict}], hypothesis_verdicts:
-  [{hypothesis_id, verdict, evidence_commit}], findings: [{severity,
-  location, summary, kind: blocker|fix-now|follow-up|false-positive}],
-  audit_artifact_urn }`.
-- **`/ship`**: `{ commit_groups: [{message, files, evidence_refs}],
-  push: {ref, status}, pr: {action, url, template, gates: {ci, reviews,
-  state_valid}}, estimate_vs_actual: {…}, rollback_notes }`.
-- **`/review`**: `{ pr_url, base, head, findings: [{severity, location,
-  comment, suggested_fix}], recommendation: approve|comment|
-  request_changes|fix_locally, posted: bool }`.
-- **`/polish`**: `{ groups: [{topic, scope, risk, items: [{kind:
-  stale_doc|duplicate_rule|broken_link|orphan_artifact|stale_memory|
-  naming_drift, location, action, applied: bool}]}], memory_pass:
-  {promotions, prunes, compactions}, report_only: bool }`.
+- **`/research`**: `{ brief_id, questions: [{q, answer, confidence, sources}], options: [{name, tradeoffs, complexity, reversibility, risks}], recommendation: {choice, confidence, fallback}, peer_review: {reviewer_id, findings: [], no_flaws_checks: []}, persisted_brief?: urn }`.
+- **`/prep`**: `{ iter_id, objective, non_goals, dag: [{task_id, deps, file_scope, commands, evidence, risk}], waves: [{wave_id, tasks, worktree_policy, estimate_eu}], acceptance: {checks, baselines}, approval_required: bool }`.
+- **`/audit`**: `{ scope_id, kind: evaluation|ship-gate, checks_run: [{check_id, command, status, output_blob}], outcomes_measured: [{outcome_id, value, threshold, verdict}], hypothesis_verdicts: [{hypothesis_id, verdict, evidence_commit}], findings: [{severity, location, summary, kind: blocker|fix-now|follow-up|false-positive}], audit_artifact_urn }`.
+- **`/ship`**: `{ commit_groups: [{message, files, evidence_refs}], push: {ref, status}, pr: {action, url, template, gates: {ci, reviews, state_valid}}, estimate_vs_actual: {…}, rollback_notes }`.
+- **`/review`**: `{ pr_url, base, head, findings: [{severity, location, comment, suggested_fix}], recommendation: approve|comment| request_changes|fix_locally, posted: bool }`.
+- **`/polish`**: `{ groups: [{topic, scope, risk, items: [{kind: stale_doc|duplicate_rule|broken_link|orphan_artifact|stale_memory| naming_drift, location, action, applied: bool}]}], memory_pass: {promotions, prunes, compactions}, report_only: bool }`.
 
-Skills outside the canonical six (`/init`, `/roadmap`, `/differentiate`,
-`/flow`) reuse the envelope with skill-specific bodies. `/flow` body
-wraps a list of nested per-skill envelopes for each phase of the run.
+Skills outside the canonical six (`/init`, `/roadmap`, `/differentiate`, `/flow`) reuse the envelope with skill-specific bodies. `/flow` body wraps a list of nested per-skill envelopes for each phase of the run.
 
 ## JSON Schema artifact
 
-The canonical schema lives at `src/eawf/schemas/skill-output.schema.json`
-in the framework repo. `eawf validate --strict` accepts a skill output
-JSON and verifies envelope conformance. `eawf render-output` round-trips
-between JSON and markdown:
+The canonical schema lives at `src/eawf/schemas/skill-output.schema.json` in the framework repo. `eawf validate --strict` accepts a skill output JSON and verifies envelope conformance. `eawf render-output` round-trips between JSON and markdown:
 
 ```bash
 # JSON → markdown
@@ -96,8 +65,7 @@ cat brief.md | eawf render-output --format json
 
 ## JSONL store record envelope
 
-Every JSONL store record (research, audit, incident, estimate, actual,
-memory, decision, event, flow) shares this envelope:
+Every JSONL store record (research, audit, incident, estimate, actual, memory, decision, event, flow) shares this envelope:
 
 | Field | Type | Required | Notes |
 |---|---|---:|---|
@@ -114,18 +82,11 @@ memory, decision, event, flow) shares this envelope:
 
 ## Event payload fields
 
-`.ea/store/event.jsonl` is audit-log only. Event payload requires:
-`event_type`, `actor`, `command`, `args_hash`, `scope_id`,
-`before_state_version`, `after_state_version`, `status`, `message`,
-`artifact_ids`, `timestamp`.
+`.ea/store/event.jsonl` is audit-log only. Event payload requires: `event_type`, `actor`, `command`, `args_hash`, `scope_id`, `before_state_version`, `after_state_version`, `status`, `message`, `artifact_ids`, `timestamp`.
 
 ## Config schema required sections
 
-The composed `.ea/config.yaml` schema covers these sections: `cli`,
-`project`, `workspace`, `profiles`, `runtime`, `ui`, `storage`,
-`research`, `planning`, `estimation`, `audit`, `ship`, `review`,
-`polish`, `memory`, `vcs`, `worktrees`, `acceptance`, `security`,
-`hooks`, `mcp`, `statusline`, `docs`, `commands`, `state_schema`.
+The composed `.ea/config.yaml` schema covers these sections: `cli`, `project`, `workspace`, `profiles`, `runtime`, `ui`, `storage`, `research`, `planning`, `estimation`, `audit`, `ship`, `review`, `polish`, `memory`, `vcs`, `worktrees`, `acceptance`, `security`, `hooks`, `mcp`, `statusline`, `docs`, `commands`, `state_schema`.
 
 ## Cross-references
 

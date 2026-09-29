@@ -38,13 +38,10 @@ from eawf.surfaces.tui.console.frame import (
     View,
     bar,
     build,
-    needs_count,
     route_keys_bar,
-    scope_label,
     thin,
     window_rows,
 )
-from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
@@ -52,8 +49,9 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     cell,
     counts,
     crumb,
+    native_header,
+    restore,
 )
-from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.width import pad
 
 #: The row the frame shows where a register nothing writes would have been counted.
@@ -131,25 +129,6 @@ _BLOCKS: Mapping[str, Callable[[View, RegisterView], list[str]]] = MappingProxyT
 )
 
 
-def restore(session: Session, register: RegisterView) -> int:
-    """Return the row the cursor sits on, restored by stable id, and publish that id.
-
-    Args:
-        session: The session whose ``sel_id`` names the row the cursor was on and whose
-            ``sel`` is the offset the frame draws the caret at.
-        register: The read model the frame draws.
-
-    Returns:
-        The row offset the caret goes on; ``0`` for an empty read model, which draws no
-        caret at all.
-    """
-    found = register.index_of(session.sel_id)
-    index = found if found is not None else min(max(session.sel, 0), max(len(register.rows) - 1, 0))
-    session.sel = index
-    session.sel_id = register.rows[index].key if register.rows else None
-    return index
-
-
 def native_frame(view: View, register: RegisterView) -> list[str]:
     """Return one register route's frame, drawn from the read model the daemon served.
 
@@ -167,13 +146,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     session, w = view.session, view.w
     cursor = restore(session, register)
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=crumb(view, register),
-            scope=scope_label(view, register.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, crumb(view, register), register.scope_id),
         " " + counts(register),
         bar(w),
     ]

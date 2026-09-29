@@ -634,6 +634,30 @@ def test_prx_036_the_daemon_verb_maps_a_refusal_to_a_validation_error(tmp_path: 
         _rpc(dispose_budget_notice, _ctx(state_path), {**params, "expected_revision": 0})
 
 
+def test_the_daemon_verbs_address_the_tree_a_repo_root_names(tmp_path: Path) -> None:
+    """A console attached to a repository names it; the daemon reads that tree's ledger."""
+    state_path, key, _now = _opened(tmp_path)
+    elsewhere = _ctx(tmp_path / "other" / ".ea" / "state.json")
+    root = {"repo_root": str(state_path.parent.parent)}
+    listed = _rpc(list_budget_notices, elsewhere, {"principal": LOCAL_OPERATOR, **root})
+    assert [n["notice_key"] for n in listed["active"]] == [key]
+    params = {
+        "notice_key": key,
+        "principal": LOCAL_OPERATOR,
+        "disposition": "resolve",
+        "expected_revision": 1,
+        **root,
+    }
+    assert _rpc(dispose_budget_notice, elsewhere, params)["notice"]["status"] == "RESOLVED"
+    assert _inbox_after_restart(state_path)["active"] == []
+
+
+def test_the_daemon_verbs_without_a_repo_root_read_the_bound_tree(tmp_path: Path) -> None:
+    state_path, key, _now = _opened(tmp_path)
+    listed = _rpc(list_budget_notices, _ctx(state_path), {"principal": LOCAL_OPERATOR})
+    assert [n["notice_key"] for n in listed["active"]] == [key]
+
+
 # ---- PRX-037: one principal's notice touches no other principal -------------
 
 

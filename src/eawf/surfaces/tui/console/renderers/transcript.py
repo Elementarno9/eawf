@@ -38,18 +38,16 @@ from eawf.surfaces.tui.console.frame import (
     build,
     g_frame,
     g_pad,
-    needs_count,
-    scope_label,
     snap_caret,
     strip_chips,
     thin,
 )
-from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import keybar, route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, copied
 from eawf.surfaces.tui.console.renderers.read_model import (
     crumb,
     native,
+    native_header,
     route_crumb,
     unstated_rows,
 )
@@ -517,13 +515,7 @@ def native_frame(view: View, model: TranscriptReadModel) -> list[str]:
     session, w, h = view.session, view.w, view.h
     sel = cursor(session, len(model.blocks))
     opening: list[str] = [
-        header_row(
-            session,
-            crumb=_crumb(view, model),
-            scope=scope_label(view, model.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, _crumb(view, model), model.scope_id),
         Fixed(pad(" " + native_context(view, model), w)),
         bar(w),
         *_state_rows(model, w),

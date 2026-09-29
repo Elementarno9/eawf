@@ -28,6 +28,7 @@ from eawf.kernel.identity import EntityKind, IdentityError, parse_qualified_urn
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.policy import TrackPolicy
+from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.track import Track, TrackStatus
 from eawf.kernel.state.epoch2.transitions import TransitionGuard
@@ -83,6 +84,7 @@ class GuardInputs:
         record: The subject, validated through its own model.
         updates: The field values the request supplies.
         reason_code: The stable reason the request carries, if any.
+        actor: The principal the request is attributed to.
         binding_refs: The proofs the request says the move was taken on.
         ledger_statuses: What each ledger says about the records it has
             taken out of the document, filled on first read. One request
@@ -96,6 +98,7 @@ class GuardInputs:
     record: LifecycleRecord
     updates: Mapping[str, Any]
     reason_code: str | None
+    actor: str
     binding_refs: tuple[str, ...] = ()
     ledger_statuses: dict[Epoch2Collection, Mapping[str, str]] = field(default_factory=dict)
 
@@ -407,6 +410,49 @@ def _never_claimed(inputs: GuardInputs) -> bool:
     return isinstance(inputs.record, Task) and inputs.record.first_claimed_at is None
 
 
+def _releaser_holds_lease(inputs: GuardInputs) -> bool:
+    """Return whether the releasing principal is the one holding the Task's lease.
+
+    A claim taken before the holder was recorded names nobody, so there is
+    no holder for the release to be taken from and any principal may
+    release it.
+    """
+    if not isinstance(inputs.record, Task):
+        return False
+    holder = inputs.record.claimed_by
+    return holder is None or holder == inputs.actor
+
+
+#: The Run statuses a Task's work may still be in. A terminal Run has
+#: left the document for its ledger, so only these are ever found there.
+_OPEN_RUN_STATUSES: Final = frozenset(
+    {RunStatus.QUEUED.value, RunStatus.RUNNING.value, RunStatus.SUSPENDED.value}
+)
+
+
+def task_run_open(document: dict[str, Any], task: Task) -> bool:
+    """Return whether a Run scoped to *task* is queued, running or suspended.
+
+    Args:
+        document: The document the release would land in.
+        task: The Task being released.
+
+    Returns:
+        ``True`` when any open Run in the document works for the Task.
+    """
+    wanted = str(task.urn)
+    return any(
+        _row_field(_row_field(row, "scope"), "task_ref") == wanted
+        and _row_field(row, "status") in _OPEN_RUN_STATUSES
+        for row in document_rows(document, Epoch2Collection.RUN).values()
+    )
+
+
+def _no_active_run(inputs: GuardInputs) -> bool:
+    """Return whether no open Run works for the Task the release would free."""
+    return isinstance(inputs.record, Task) and not task_run_open(inputs.document, inputs.record)
+
+
 def _criteria_evidence_bound(inputs: GuardInputs) -> bool:
     """Return whether the request binds evidence for the Task's criteria.
 
@@ -483,6 +529,8 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
     TransitionGuard.CRITERIA_EVIDENCE_BOUND: _criteria_evidence_bound,
     TransitionGuard.HOST_MERGE_OBSERVED: _host_merge_observed,
     TransitionGuard.RECONCILIATION_MATCHED: _reconciliation_matched,
+    TransitionGuard.RELEASER_HOLDS_LEASE: _releaser_holds_lease,
+    TransitionGuard.NO_ACTIVE_RUN: _no_active_run,
 }
 
 
@@ -493,4 +541,5 @@ __all__ = [
     "GuardInputs",
     "batch_activation_admitted",
     "milestone_watchlist",
+    "task_run_open",
 ]

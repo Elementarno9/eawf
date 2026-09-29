@@ -24,7 +24,7 @@ from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
-from eawf.surfaces.tui.console.format import clock_time, group, span
+from eawf.surfaces.tui.console.format import clock_time, group, instant, span
 from eawf.surfaces.tui.console.frame import (
     Table,
     Titled,
@@ -46,6 +46,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     label,
     more,
     native_head,
+    restore,
     route_crumb,
 )
 from eawf.surfaces.tui.console.renderers.spine import (
@@ -53,7 +54,6 @@ from eawf.surfaces.tui.console.renderers.spine import (
     finished_rows,
     finished_subject,
     held,
-    restore,
 )
 from eawf.surfaces.tui.console.width import cell_len, pad
 
@@ -132,11 +132,7 @@ def _subject(view: View, spine: SpineView) -> SpineRow | None:
 
 def _instant(run: SpineRow, name: str) -> datetime | None:
     """Return one instant a Run states, or ``None`` when it states none readable."""
-    stamp = run.facts.get(name)
-    try:
-        return datetime.fromisoformat(stamp) if stamp else None
-    except ValueError:
-        return None
+    return instant(run.facts.get(name))
 
 
 def elapsed(view: View, spine: SpineView, run: SpineRow) -> str:

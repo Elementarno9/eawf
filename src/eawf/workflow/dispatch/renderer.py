@@ -122,7 +122,7 @@ class ResolvedRoleBlocks:
     token_cap: int
 
 
-def resolve_role_blocks(repo_root: Path | None) -> ResolvedRoleBlocks:
+def resolve_role_blocks(repo_root: Path | None, *, unattended: bool = False) -> ResolvedRoleBlocks:
     """Resolve the role-tier dispatch blocks + token cap for *repo_root*.
 
     The one production seam every dispatch render site calls before
@@ -134,14 +134,22 @@ def resolve_role_blocks(repo_root: Path | None) -> ResolvedRoleBlocks:
     warning — a profile problem must not take the dispatch surface down;
     the profile lints own that failure.
 
+    An unattended request composes without every enriched profile that is
+    not certified as managed against the ``profiles.certified`` ledger
+    (:mod:`eawf.platform.profiles.certification`), so such a profile never
+    instructs an agent no operator is watching; each refusal is logged.
+
     Args:
         repo_root: Repository root anchoring layered config + profile
             discovery. ``None`` returns the empty resolution.
+        unattended: ``True`` when no operator attends the Run the blocks
+            are rendered for.
     """
     if repo_root is None:
         return ResolvedRoleBlocks(role_blocks={}, token_cap=DEFAULT_ROLE_TIER_TOKEN_CAP)
     from eawf.kernel.config.layered import merge_config
-    from eawf.platform.profiles.loader import load_composed_profile
+    from eawf.platform.profiles.certification import uncertified_enriched
+    from eawf.platform.profiles.loader import load_composed_profile, load_profile
 
     try:
         merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
@@ -154,11 +162,20 @@ def resolve_role_blocks(repo_root: Path | None) -> ResolvedRoleBlocks:
         if isinstance(cap_raw, (int, float)) and int(cap_raw) > 0
         else DEFAULT_ROLE_TIER_TOKEN_CAP
     )
-    enabled = (merged.get("profiles") or {}).get("enabled") or []
+    profiles = merged.get("profiles") or {}
+    enabled = profiles.get("enabled") or []
     profile_ids = [pid for pid in enabled if isinstance(pid, str)]
-    if not profile_ids:
-        return ResolvedRoleBlocks(role_blocks={}, token_cap=token_cap)
     try:
+        if unattended:
+            refused = uncertified_enriched(
+                {pid: load_profile(pid, workspace=repo_root) for pid in profile_ids},
+                profiles.get("certified") or {},
+            )
+            for pid in refused:
+                logger.warning(f"resolve_role_blocks status=refused profile={pid} uncertified")
+            profile_ids = [pid for pid in profile_ids if pid not in refused]
+        if not profile_ids:
+            return ResolvedRoleBlocks(role_blocks={}, token_cap=token_cap)
         composed = load_composed_profile(profile_ids, workspace=repo_root)
     except (OSError, ValueError, KeyError) as exc:
         logger.warning(f"resolve_role_blocks status=skip-compose err={exc!s}")

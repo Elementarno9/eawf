@@ -28,11 +28,11 @@ Two special cases extend the floor:
   be in :data:`GIT_ALLOWED_SUBVERBS` (read-only verbs only); any
   member of :data:`GIT_DENIED_SUBVERBS` or an unknown sub-verb is
   rejected even if ``git`` itself is allowlisted.
-- ``eawf`` and ``just`` scope — the project CLI and its task runner are
-  admitted the way ``git`` is: ``eawf`` only in the read-only forms of
-  :data:`EAWF_READ_ONLY_SUBVERBS` (a preview verb only with its preview
-  flag, never with a flag in :data:`EAWF_MUTATING_FLAGS`), and ``just``
-  only for a recipe in :data:`JUST_READ_ONLY_RECIPES`.
+- Command-family shape — a head that runs a registered
+  :class:`~eawf.runtime.sandbox.command_families.CommandFamily` is held to
+  that family's declared argv shape wherever the head is admitted, so the
+  project's own ``eawf`` CLI and ``just`` runner only ever run their
+  read-only forms.
 - Wrapper recursion — when ``argv[0]`` is in
   :data:`WRAPPER_HEADS` (``uv``, ``uvx``, ``npm``, ``pnpm``, ``yarn``,
   ``npx``, ``cargo``, ``python``, ``python3``, ``poetry``, ``pdm``,
@@ -54,6 +54,14 @@ invocation.
 from __future__ import annotations
 
 import logging
+
+from eawf.runtime.sandbox.command_families import (
+    COMMAND_FAMILIES,
+    FAMILIES_BY_HEAD,
+    GIT_ALLOWED_SUBVERBS,
+    REGISTERED_GATE_HEADS,
+    CommandFamily,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -131,27 +139,6 @@ WRAPPER_DIRECT_HEADS: frozenset[str] = frozenset({"uvx", "npx", "tox", "nox"})
 #: Python module execution is a wrapper form only for ``python -m <module>``.
 PYTHON_MODULE_WRAPPERS: frozenset[str] = frozenset({"python", "python3"})
 
-#: Git sub-verbs that read-only inspect the repository state. The ship
-#: gauntlet, the audit-DSL runner, and the worktree helpers all need to
-#: read git state; none of them needs to mutate it through the gate
-#: runner. (Mutating verbs land via the dedicated ``git`` helper module,
-#: which has its own typed interface.)
-GIT_ALLOWED_SUBVERBS: frozenset[str] = frozenset(
-    {
-        "diff",
-        "log",
-        "status",
-        "rev-parse",
-        "show",
-        "ls-files",
-        "cat-file",
-        "for-each-ref",
-        "describe",
-        "blame",
-        "grep",
-    }
-)
-
 #: Git sub-verbs that mutate state or escalate execution. These are
 #: rejected explicitly so a typo against the allowlist doesn't silently
 #: pass; the explicit deny set is also the canonical citation for code
@@ -166,36 +153,6 @@ GIT_DENIED_SUBVERBS: frozenset[str] = frozenset(
         "hooks",
     }
 )
-
-
-#: ``eawf`` sub-verbs a gate may run. Admitting the project's own CLI is
-#: interim: it exists so a criterion whose truth is this command line has
-#: an admissible falsifier without a test that shells it, and it retires
-#: once the gate contract names registered command families instead of
-#: bare argv heads. Like ``git`` it is scoped to forms that observe and
-#: report, never to a verb that writes state.
-EAWF_READ_ONLY_SUBVERBS: frozenset[str] = frozenset(
-    {"--version", "version", "status", "validate", "doctor", "why", "bench", "release"}
-)
-
-#: ``eawf`` verb groups that also carry mutating sub-verbs, mapped to the
-#: sub-verbs of each a gate may run.
-EAWF_SCOPED_SUBVERBS: dict[str, frozenset[str]] = {
-    "bench": frozenset({"turn-cost"}),
-    "release": frozenset({"show", "tag"}),
-}
-
-#: ``eawf`` commands that act unless the argv asks for their preview, mapped
-#: to the flag that makes them a preview.
-EAWF_PREVIEW_FLAGS: dict[tuple[str, str], str] = {("release", "tag"): "--dry-run"}
-
-#: Flags that turn an otherwise read-only ``eawf`` form into a mutation.
-EAWF_MUTATING_FLAGS: frozenset[str] = frozenset({"--fix", "--yes", "--push"})
-
-#: ``just`` recipes a gate may run: the test recipes the repository's
-#: justfile declares, each of which runs the suite and writes nothing back.
-#: Retires with the ``eawf`` widening above, for the same reason.
-JUST_READ_ONLY_RECIPES: frozenset[str] = frozenset({"test", "test-all", "test-tui"})
 
 
 class ArgvPolicyError(ValueError):
@@ -260,44 +217,15 @@ def _check_git_subverb(argv: list[str]) -> None:
         raise ArgvPolicyError(f"git sub-verb {subverb!r} is not in the read-only allow set")
 
 
-def _check_eawf_form(argv: list[str]) -> None:
-    """Apply the read-only scope when ``argv[0] == "eawf"``."""
-    subverb = argv[1] if len(argv) > 1 else None
-    if subverb not in EAWF_READ_ONLY_SUBVERBS:
-        logger.warning(f"validate_gate_argv reject subverb={subverb!r} reason=eawf-not-read-only")
-        raise ArgvPolicyError(
-            f"eawf sub-verb {subverb!r} is not in the read-only allow set (argv {argv!r})"
-        )
-    scoped = EAWF_SCOPED_SUBVERBS.get(subverb)
-    command = subverb if scoped is None else (argv[2] if len(argv) > 2 else None)
-    if scoped is not None and command not in scoped:
-        logger.warning(
-            f"validate_gate_argv reject command={subverb!r}/{command!r} reason=eawf-not-read-only"
-        )
-        raise ArgvPolicyError(
-            f"eawf {subverb} {command!r} is not in the read-only allow set (argv {argv!r})"
-        )
-    mutating = sorted(EAWF_MUTATING_FLAGS.intersection(argv))
-    if mutating:
-        logger.warning(f"validate_gate_argv reject flags={mutating!r} reason=eawf-mutating-flag")
-        raise ArgvPolicyError(f"eawf argv carries mutating flag(s) {mutating} (argv {argv!r})")
-    preview = EAWF_PREVIEW_FLAGS.get((subverb, command or ""))
-    if preview is not None and preview not in argv:
-        logger.warning(f"validate_gate_argv reject command={subverb!r} reason=eawf-not-preview")
-        raise ArgvPolicyError(
-            f"eawf {subverb} {command} acts unless run as {preview} (argv {argv!r})"
-        )
-
-
-def _check_just_recipe(argv: list[str]) -> None:
-    """Apply the declared-recipe scope when ``argv[0] == "just"``."""
-    recipe = argv[1] if len(argv) > 1 else None
-    if recipe not in JUST_READ_ONLY_RECIPES:
-        logger.warning(f"validate_gate_argv reject recipe={recipe!r} reason=just-undeclared")
-        raise ArgvPolicyError(
-            f"just recipe {recipe!r} is not in the read-only allow set "
-            f"{sorted(JUST_READ_ONLY_RECIPES)} (argv {argv!r})"
-        )
+def _check_family_shape(argv: list[str]) -> None:
+    """Hold a registered family's head to the argv shape the family declares."""
+    family = FAMILIES_BY_HEAD.get(argv[0])
+    if family is None:
+        return
+    violation = family.shape_violation(argv)
+    if violation is not None:
+        logger.warning(f"validate_gate_argv reject family={family.family_id!r} reason=family-shape")
+        raise ArgvPolicyError(f"{violation} (argv {argv!r})")
 
 
 def _check_list_of_str(argv: object) -> list[str]:
@@ -330,10 +258,7 @@ def _validate_one_level(argv: list[str], *, allowlist: frozenset[str]) -> None:
     _check_metachars(argv)
     if head == "git":
         _check_git_subverb(argv)
-    elif head == "eawf":
-        _check_eawf_form(argv)
-    elif head == "just":
-        _check_just_recipe(argv)
+    _check_family_shape(argv)
 
 
 def _effective_wrapper_argv(argv: list[str]) -> list[str] | None:
@@ -425,17 +350,74 @@ def validate_gate_argv(argv: list[str], *, allowlist: list[str]) -> list[str]:
     return checked
 
 
+def resolve_command_family(argv: list[str]) -> CommandFamily:
+    """Resolve a gate *argv* to the registered command family it runs.
+
+    The argv passes the whole L0 policy with the registry's heads as its
+    allowlist, then its wrappers are unwrapped to the effective command,
+    whose head names the family.
+
+    Args:
+        argv: The gate's argv vector, wrappers included.
+
+    Returns:
+        The :class:`CommandFamily` the effective command runs.
+
+    Raises:
+        ArgvPolicyError: When *argv* fails the L0 policy, including a head
+            no registered family runs, a form outside the family's shape,
+            or a bare wrapper that runs no command at all.
+    """
+    current = validate_gate_argv(argv, allowlist=sorted(REGISTERED_GATE_HEADS))
+    while current[0] in WRAPPER_HEADS:
+        effective = _effective_wrapper_argv(current)
+        if effective is None:
+            logger.warning(f"resolve_command_family reject argv={argv!r} reason=no-family")
+            raise ArgvPolicyError(f"argv runs no registered command family (argv {argv!r})")
+        current = effective
+    return FAMILIES_BY_HEAD[current[0]]
+
+
+def validate_family_argv(argv: list[str], *, family_ref: str | None) -> list[str]:
+    """Validate that *argv* runs the command family *family_ref* names.
+
+    Args:
+        argv: The gate's argv vector.
+        family_ref: The family id the gate declares.
+
+    Returns:
+        The same *argv* on pass.
+
+    Raises:
+        ArgvPolicyError: When *argv* resolves to no registered family (see
+            :func:`resolve_command_family`), when *family_ref* is not a
+            registered family, or when it names a family other than the
+            one *argv* runs.
+    """
+    family = resolve_command_family(argv)
+    if family_ref not in COMMAND_FAMILIES:
+        logger.warning(f"validate_family_argv reject ref={family_ref!r} reason=unregistered")
+        raise ArgvPolicyError(
+            f"command family {family_ref!r} is not registered; argv {argv!r} "
+            f"runs family {family.family_id!r}"
+        )
+    if family_ref != family.family_id:
+        logger.warning(f"validate_family_argv reject ref={family_ref!r} reason=family-mismatch")
+        raise ArgvPolicyError(
+            f"gate names command family {family_ref!r} but argv {argv!r} "
+            f"runs family {family.family_id!r}"
+        )
+    return argv
+
+
 __all__ = [
-    "EAWF_MUTATING_FLAGS",
-    "EAWF_PREVIEW_FLAGS",
-    "EAWF_READ_ONLY_SUBVERBS",
-    "EAWF_SCOPED_SUBVERBS",
     "GIT_ALLOWED_SUBVERBS",
     "GIT_DENIED_SUBVERBS",
-    "JUST_READ_ONLY_RECIPES",
     "SHELL_DENY_HEADS",
     "SHELL_METACHARS",
     "WRAPPER_HEADS",
     "ArgvPolicyError",
+    "resolve_command_family",
+    "validate_family_argv",
     "validate_gate_argv",
 ]

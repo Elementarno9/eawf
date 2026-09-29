@@ -33,7 +33,7 @@ import orjson
 
 from eawf.kernel.state.mutations import Mutation
 from eawf.runtime.daemon.runtime_dir import runtime_dir as default_runtime_dir
-from eawf.runtime.daemon.spawn import auto_spawn_daemon
+from eawf.runtime.daemon.spawn import auto_spawn_daemon, daemon_pid_if_ready
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,14 @@ class DaemonRpcError(RuntimeError):
         super().__init__(f"daemon rpc error code={code} message={message!r}")
 
 
+class DaemonNotRunningError(ConnectionError):
+    """Raised on enter when no daemon answers and the client may not start one.
+
+    A :class:`ConnectionError`, so every caller that already maps an
+    ``OSError`` to "daemon unavailable" reports it the same way.
+    """
+
+
 class DaemonClient:
     """Synchronous JSON-RPC client over the daemon's UDS / named pipe.
 
@@ -73,6 +81,9 @@ class DaemonClient:
 
     The context-manager spawns the daemon on enter (silent unless
     ``EAWF_VERBOSE=1``) and tears down the connection cleanly on exit.
+    A read verb passes ``spawn=False``: inspecting the surface must not be
+    what starts a daemon, so enter then only attaches to a running one and
+    raises :class:`DaemonNotRunningError` when none answers.
     The connection is a single socket; multiple ``client.call``
     invocations multiplex over it sequentially (one in-flight request
     at a time per the JSON-RPC 2.0 ordering contract).
@@ -83,11 +94,13 @@ class DaemonClient:
         *,
         runtime_dir: Path | None = None,
         call_timeout_seconds: float = DEFAULT_CALL_TIMEOUT_SECONDS,
+        spawn: bool = True,
     ) -> None:
         if runtime_dir is None:
             runtime_dir = default_runtime_dir()
         self._runtime_dir = runtime_dir
         self._call_timeout_seconds = float(call_timeout_seconds)
+        self._spawn = spawn
         self._sock: socket.socket | None = None
         self._reader: Any = None  # makefile("rb") for newline-framed reads
         self._pid: int = 0
@@ -109,7 +122,15 @@ class DaemonClient:
         return self._pid
 
     def __enter__(self) -> DaemonClient:
-        self._pid = auto_spawn_daemon(self._runtime_dir)
+        if self._spawn:
+            self._pid = auto_spawn_daemon(self._runtime_dir)
+        else:
+            pid = daemon_pid_if_ready(self._runtime_dir)
+            if pid is None:
+                raise DaemonNotRunningError(
+                    f"no eawfd daemon is running under {self._runtime_dir.name!r}"
+                )
+            self._pid = pid
         if sys.platform == "win32":
             # Windows named-pipe transport: connectionless request/response.
             # Each ``call`` opens its own pipe handle through
@@ -530,5 +551,6 @@ class DaemonClient:
 __all__ = [
     "DEFAULT_CALL_TIMEOUT_SECONDS",
     "DaemonClient",
+    "DaemonNotRunningError",
     "DaemonRpcError",
 ]

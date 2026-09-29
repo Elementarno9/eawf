@@ -78,6 +78,7 @@ def _entry(**overrides: object) -> dict[str, object]:
     base: dict[str, object] = {
         "skill_id": "demo",
         "skill_class": "lifecycle",
+        "subject": "Demo",
         "budget_class": "steering_zone2",
         "audience": "both",
         "description": "Demo skill.",
@@ -87,6 +88,16 @@ def _entry(**overrides: object) -> dict[str, object]:
     }
     base.update(overrides)
     return base
+
+
+_COVERAGE: dict[str, object] = {"covered": ["src"], "not_covered": []}
+
+
+def _report(skill_id: str, outcome: str) -> dict[str, object]:
+    payload: dict[str, object] = {"skill_id": skill_id, "outcome": outcome}
+    if _ENTRIES[skill_id].output.coverage:
+        payload["coverage"] = _COVERAGE
+    return payload
 
 
 def test_skill_catalog_holds_exactly_the_twenty_named_skills() -> None:
@@ -101,7 +112,7 @@ def test_validate_report_accepts_every_declared_outcome(skill_id: str) -> None:
     model = entry.output.model_for(skill_id)
     assert model.__name__ == entry.output.schema_name
     for outcome in entry.output.terminal_outcomes:
-        report = entry.validate_report({"skill_id": skill_id, "outcome": outcome})
+        report = entry.validate_report(_report(skill_id, outcome))
         assert report.outcome == outcome
         assert isinstance(report, model)
 
@@ -111,11 +122,11 @@ def test_validate_report_rejects_undeclared_outcome_and_foreign_skill(skill_id: 
     entry = _ENTRIES[skill_id]
     outcome = entry.output.terminal_outcomes[0]
     with pytest.raises(ValidationError):
-        entry.validate_report({"skill_id": skill_id, "outcome": "not_an_outcome"})
+        entry.validate_report(_report(skill_id, "not_an_outcome"))
     with pytest.raises(ValidationError):
-        entry.validate_report({"skill_id": "elsewhere", "outcome": outcome})
+        entry.validate_report({**_report(skill_id, outcome), "skill_id": "elsewhere"})
     with pytest.raises(ValidationError):
-        entry.validate_report({"skill_id": skill_id, "outcome": outcome, "extra": 1})
+        entry.validate_report({**_report(skill_id, outcome), "extra": 1})
     with pytest.raises(ValidationError):
         entry.validate_report({"skill_id": skill_id})
 
@@ -128,7 +139,7 @@ def test_catalog_entry_declares_grammar_effects_and_output(skill_id: str) -> Non
     assert entry.effects.summary
     assert entry.output.terminal_outcomes
     if entry.effects.canonical_mutates:
-        assert entry.effects.rpcs, "a mutating skill must declare its RPC allowlist"
+        assert entry.effects.rpcs or entry.effects.verbs, "a mutating skill names its routes"
 
 
 @pytest.mark.parametrize(("retired", "successor"), sorted(_RETIRED_SUCCESSORS.items()))
@@ -272,8 +283,8 @@ def test_shipped_skill_specs_project_the_catalog() -> None:
         entry = _ENTRIES[spec.skill_name]
         assert spec.argument_hint == entry.grammar.argument_hint
         assert spec.description == entry.description
-        barred = entry.audience == "user_only" or entry.effects.canonical_mutates
-        assert spec.disable_model_invocation is barred
+        assert spec.disable_model_invocation is (entry.audience == "user_only")
+        assert spec.user_invocable is (entry.audience != "agent_only")
         assert spec.body.strip()
 
 

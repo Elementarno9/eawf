@@ -159,12 +159,12 @@ def test_save_value_to_layer_daemonless_env_uses_in_process(
     config_cmd._save_value_to_layer(
         target_path=config_yaml,
         key="vcs.auto_commit",
-        value=False,
+        value="never",
     )
 
     assert config_yaml.exists()
     body = yaml.safe_load(config_yaml.read_text())
-    assert body == {"vcs": {"auto_commit": False}}
+    assert body == {"vcs": {"auto_commit": "never"}}
 
 
 # ---- Scenario 3: proxy on + daemon DOWN ------------------------------------
@@ -228,13 +228,13 @@ def test_save_value_to_layer_method_not_found_falls_back(
     config_cmd._save_value_to_layer(
         target_path=config_yaml,
         key="vcs.auto_commit",
-        value=True,
+        value="auto",
     )
 
     # In-process arm ran — local file written.
     assert config_yaml.exists()
     body = yaml.safe_load(config_yaml.read_text())
-    assert body == {"vcs": {"auto_commit": True}}
+    assert body == {"vcs": {"auto_commit": "auto"}}
 
 
 # ---- Layer-label reverse-resolver -------------------------------------------

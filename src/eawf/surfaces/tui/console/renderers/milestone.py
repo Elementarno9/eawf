@@ -30,12 +30,9 @@ from eawf.surfaces.tui.console.frame import (
     bar,
     build,
     header,
-    needs_count,
     route_keys_bar,
-    scope_label,
     thin,
 )
-from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import native_keys
 from eawf.surfaces.tui.console.registry import SECTIONS
@@ -54,6 +51,7 @@ from eawf.surfaces.tui.console.renderers.read_model import (
     crumb,
     native,
     native_head,
+    native_header,
     record_rows,
     restore,
     route_crumb,
@@ -312,13 +310,7 @@ def native_frame(view: View, model: AcceptanceBundleView) -> list[str]:
         return milestone_frame(view, model, model.rows[found])
     cursor = restore(session, model)
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=crumb(view, model),
-            scope=scope_label(view, model.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, crumb(view, model), model.scope_id),
         " " + counts(model),
         bar(w),
         _lrow("BUNDLE", _bundle_text(model)),

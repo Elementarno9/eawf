@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
+from eawf.kernel.spec.common import CriterionEvidenceKind, CriterionSpec, GateSpec
 from eawf.kernel.state.enums import AuditRequirement, CloseAttemptStatus, StoreKind
 from eawf.kernel.state.models import CloseAttempt, State
 from eawf.kernel.state.mutations import Mutation, MutationKind
@@ -325,17 +325,17 @@ def test_durable_high_risk_close_runs_deterministic_gates_before_fresh_audit(
     assert recorder.durable_context == context
 
 
-def test_build_durable_audit_context_reads_bound_persisted_receipt(
-    tmp_path: Path,
-) -> None:
-    """Exact audit context comes from canonical attempt plus receipt store."""
+def _persisted_receipt_context(
+    tmp_path: Path, evidence_kind: CriterionEvidenceKind
+) -> tuple[DurableAuditContext, CloseAttempt]:
+    """Persist one close attempt and its bound receipt, then build the context."""
     state = State.model_validate(_state_payload())
     criterion = CriterionSpec(
         id="CR-01",
         text="the exact deterministic receipt grounds this required criterion",
         kind="contract",
         acceptance_style="binary",
-        evidence_kind="deterministic",
+        evidence_kind=evidence_kind,
         gate_ids=["G-01"],
         quality_dimension="functional_suitability",
         measurable_signal="a passing persisted receipt names this exact integrated tree",
@@ -417,6 +417,14 @@ def test_build_durable_audit_context_reads_bound_persisted_receipt(
         close_attempt_id=attempt.id,
         wave=state.waves[_WAVE],
     )
+    return context, attempt
+
+
+def test_build_durable_audit_context_reads_bound_persisted_receipt(
+    tmp_path: Path,
+) -> None:
+    """Exact audit context comes from canonical attempt plus receipt store."""
+    context, attempt = _persisted_receipt_context(tmp_path, "deterministic")
 
     assert context.close_attempt_id == attempt.id
     assert context.integration_id == attempt.integration_id
@@ -431,6 +439,17 @@ def test_build_durable_audit_context_reads_bound_persisted_receipt(
     assert context.criteria[0].gate_receipt_urns == (
         f"urn:eawf:v1:store:{_WAVE}/gate_receipt/GR-proof",
     )
+    assert context.criteria[0].rendered_run is False
+
+
+def test_lint_037_durable_audit_context_marks_a_rendered_run_criterion(tmp_path: Path) -> None:
+    """A rendering claim reaches the review gate bound to its rendered-run receipt."""
+    context, _ = _persisted_receipt_context(tmp_path, "rendered_run")
+
+    (criterion,) = context.criteria
+    assert criterion.rendered_run is True
+    assert criterion.deterministic is True
+    assert criterion.gate_receipt_urns == (f"urn:eawf:v1:store:{_WAVE}/gate_receipt/GR-proof",)
 
 
 def test_close_gate_blocking_jury_replaces_auditor(

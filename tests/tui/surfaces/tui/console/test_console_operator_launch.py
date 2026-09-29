@@ -35,6 +35,7 @@ from eawf.surfaces.cli.app import app as cli
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.operations import (
     CONTROL_METHOD,
+    NOTICE_LIST_METHOD,
     SEAL_METHOD,
     AnswerRequest,
     ControlRequest,
@@ -43,6 +44,7 @@ from eawf.surfaces.tui.console.operations import (
 )
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
+from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
 
 AT = datetime(2026, 9, 26, 12, 0, tzinfo=UTC)
 CONTAINER = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF"
@@ -120,6 +122,10 @@ class _Daemon:
     def call(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         if method in _READS:
             return _projection(_READS[method])
+        if method == NOTICE_LIST_METHOD:
+            return {"active": []}
+        if method == QUESTION_DECISIONS_METHOD:
+            return {"decisions": []}
         WRITES.append((method, dict(params or {})))
         if method == SEAL_METHOD:
             return {"outcome": "sealed", "reason": f"{ACTION} was answered"}

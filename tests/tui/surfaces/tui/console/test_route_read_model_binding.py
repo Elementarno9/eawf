@@ -28,6 +28,7 @@ from eawf.surfaces.tui.console.registry import (
     RouteRegistry,
     RouteSpec,
 )
+from tests.tui.surfaces.tui.console.test_route_registry_closure import SUB_SURFACES
 
 HOLE = RouteSpec(
     id="spike.hole",
@@ -108,14 +109,14 @@ def test_route_registry_read_models_entry_layer_has_no_projection() -> None:
 
 def test_route_registry_read_models_sub_surface_uses_parent_sub_model() -> None:
     checked = 0
-    for route, parent in REGISTRY.sub_surfaces.items():
+    for route, parent in SUB_SURFACES.items():
         # a receipt is its own immutable record, opened from a Task or a bundle alike
         if route == "receipt":
             continue
         parent_model = REGISTRY.read_models[parent]
         assert READ_MODEL_BY_KIND[REGISTRY.read_models[route]].parent is parent_model
         checked += 1
-    assert checked == len(REGISTRY.sub_surfaces) - 1
+    assert checked == len(SUB_SURFACES) - 1
 
 
 def test_route_registry_read_model_holes_lists_unbound_row() -> None:

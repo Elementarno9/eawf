@@ -815,6 +815,29 @@ def _emit_session_context(results: list[HookResult]) -> None:
     typer.echo(orjson.dumps(document).decode("utf-8"))
 
 
+def _emit_permission_decision(results: list[HookResult]) -> None:
+    """Print a principal's decision as the host's permission-hook answer.
+
+    Claude reads ``hookSpecificOutput.decision.behavior`` (``allow`` or
+    ``deny``) from a ``PermissionRequest`` hook's stdout. Nothing is printed
+    when no decision arrived in time, which leaves the call to the host's own
+    prompt rather than denying it.
+
+    Args:
+        results: The permission-request hook results.
+    """
+    from eawf.runtime.hooks.runner import HOST_PERMISSION_BEHAVIOR, host_permission_decision
+
+    decision = host_permission_decision(results)
+    if decision is None:
+        return
+    verdict: dict[str, str] = {"behavior": HOST_PERMISSION_BEHAVIOR[decision]}
+    if decision == "denied":
+        verdict["message"] = "A principal denied this call in Eä."
+    document = {"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": verdict}}
+    typer.echo(orjson.dumps(document).decode("utf-8"))
+
+
 @hook_app.command(name="run")
 def run(
     ctx: typer.Context,
@@ -847,13 +870,30 @@ def run(
             help="Originating Eä CLI command string for the event record.",
         ),
     ] = "",
+    target_epoch: Annotated[
+        int | None,
+        typer.Option(
+            "--target-epoch",
+            help="Schema epoch the invoking bundle targets; another repository epoch refuses.",
+        ),
+    ] = None,
 ) -> None:
     """Dispatch a hook event read from stdin and emit the result envelope."""
     from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
+    from eawf.workflow.skills.publication import BundleEpochMismatchError, require_bundle_epoch
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
+    if target_epoch is not None:
+        # A bundle built for another epoch reads records it does not
+        # understand; it stands down with guidance rather than writing, and
+        # exits zero so the host session it runs inside is not broken.
+        try:
+            require_bundle_epoch(target_epoch, (flags.workspace or Path.cwd()).resolve())
+        except BundleEpochMismatchError as exc:
+            typer.echo(f"eawf: {exc}", err=True)
+            return
 
     if runtime.lower() not in {"claude", "codex", "opencode", "generic"}:
         cli_errors.emit_error(
@@ -906,6 +946,9 @@ def run(
         and event.runtime in _SESSION_CONTEXT_RUNTIMES
     ):
         _emit_session_context(results)
+        return
+    if event.event_type == HookEventType.PERMISSION_REQUEST and event.runtime == "claude":
+        _emit_permission_decision(results)
         return
 
     finished_at = datetime.now(UTC)

@@ -17,9 +17,11 @@ agents,hooks}/`` dump. Output under *plugin_root*:
 
 The scope-correct ``config.toml`` (``<target>/.codex/config.toml`` for
 project scope, ``<home>/.codex/config.toml`` for user scope) is patched
-between the ``# ---- __eawf_managed begin/end ----`` markers with a
-single ``[plugins.eawf] enabled = true`` table. User-authored TOML
-outside the markers is preserved verbatim.
+between the ``# ---- __eawf_managed begin/end ----`` markers with the
+``[agents]`` fan-out keys. User-authored TOML outside the markers is
+preserved verbatim. The block carries no ``[plugins.eawf]`` table: Codex
+keys an installed plugin as ``eawf@<marketplace>`` and loads nothing for
+a bare ``eawf`` entry.
 
 The Codex manifest schema (``name``, ``version``, ``description``,
 ``skills``, ``hooks``) is taken from the Codex Build-plugin reference.
@@ -61,6 +63,7 @@ from eawf.platform.install.managed_block import (
 )
 from eawf.runtime.daemon.admission import load_economics
 from eawf.runtime.harness.fan_out import fan_out_values
+from eawf.runtime.harness.host_keys import require_recorded
 from eawf.runtime.runtimes.codex.hook_map import (
     CODEX_HOOK_EVENT_TYPES,
     codex_hook_event_name,
@@ -510,7 +513,7 @@ def _render_manifest() -> bytes:
         "interface": {
             "displayName": "Eä Workflow",
             "shortDescription": (
-                "Agent-driven development workflow — research, plan, ship in waves."
+                "Agent-driven development workflow — research, plan, ship in Batches."
             ),
             "longDescription": (
                 "Eä Workflow (eawf) is an agent-driven software development framework. "
@@ -589,16 +592,18 @@ _END_MARKER: str = f"# ---- {_MANAGED_TABLE} end ----"
 
 
 def _render_enabled_block(fan_out: Mapping[str, str | int]) -> bytes:
-    """Render the marker-wrapped block: the plugin enable and the fan-out keys.
+    """Render the marker-wrapped block holding the fan-out keys.
 
     Args:
         fan_out: The ``[agents]`` fan-out values, keyed by dotted host path.
+
+    Raises:
+        UnrecordedHostKeyError: A fan-out key has no observed host effect.
     """
+    require_recorded("codex_config", fan_out)
     agents = [f"{path.rpartition('.')[2]} = {json.dumps(value)}" for path, value in fan_out.items()]
     return render_managed_block(
-        begin=_BEGIN_MARKER,
-        end=_END_MARKER,
-        body_lines=(f"[plugins.{_PLUGIN_NAME}]", "enabled = true", "[agents]", *agents),
+        begin=_BEGIN_MARKER, end=_END_MARKER, body_lines=("[agents]", *agents)
     )
 
 
@@ -623,7 +628,7 @@ def _patch_config_toml(target_path: Path, *, governor: InFlightGovernor) -> byte
             is not one Codex accepts.
     """
     existing = target_path.read_bytes() if target_path.exists() else b""
-    outside = _refuse_duplicate_plugin_key(target_path, existing)
+    outside = _refuse_duplicate_agents_key(target_path, existing)
     effort = outside.get("model_reasoning_effort")
     try:
         fan_out = fan_out_values(
@@ -636,22 +641,19 @@ def _patch_config_toml(target_path: Path, *, governor: InFlightGovernor) -> byte
     )
 
 
-def _refuse_duplicate_plugin_key(target_path: Path, existing: bytes) -> dict[str, object]:
-    """Refuse a block that would declare the plugin beside a declaration outside it.
+def _refuse_duplicate_agents_key(target_path: Path, existing: bytes) -> dict[str, object]:
+    """Refuse a block that would declare the ``[agents]`` table twice.
 
-    Codex keys a marketplace install as ``eawf@<marketplace>``; a bare
-    ``eawf`` table in the block next to it declares the same plugin twice,
-    and a second bare table is a TOML error Codex refuses to load. The
-    block also opens the ``[agents]`` table, so a header or a key of that
-    table outside the block would be declared twice the same way.
+    The block opens the ``[agents]`` table, so a header or a key of that
+    table outside the block would be declared twice, a TOML error Codex
+    refuses to load.
 
     Returns:
         The content outside the block, parsed.
 
     Raises:
         ManagedBlockError: When the content outside the block is not valid
-            TOML, already declares the plugin under any marketplace, or
-            already opens the ``[agents]`` table.
+            TOML or already opens the ``[agents]`` table.
     """
     outside = unmanaged_bytes(existing, begin=_BEGIN_MARKER, end=_END_MARKER)
     try:
@@ -660,14 +662,6 @@ def _refuse_duplicate_plugin_key(target_path: Path, existing: bytes) -> dict[str
         raise ManagedBlockError(
             f"{target_path} is not valid TOML outside the eawf block: {exc}"
         ) from exc
-    plugins = declared.get("plugins")
-    keys = plugins if isinstance(plugins, dict) else {}
-    duplicates = sorted(key for key in keys if key.partition("@")[0] == _PLUGIN_NAME)
-    if duplicates:
-        raise ManagedBlockError(
-            f"{target_path} already declares {', '.join(f'plugins.{key}' for key in duplicates)} "
-            f"outside the eawf block; remove it or the block would declare the plugin twice"
-        )
     agents = declared.get("agents")
     scalars = sorted(
         key

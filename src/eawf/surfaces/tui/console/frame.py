@@ -28,6 +28,7 @@ from eawf.kernel.projection.route_view import RouteReadModel
 from eawf.kernel.projection.settings import EffectiveSettingsView
 from eawf.kernel.projection.spine import SpineView
 from eawf.kernel.projection.truth import TruthState
+from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.surfaces.tui.console.attention import open_count
 from eawf.surfaces.tui.console.chrome import EntryState
 from eawf.surfaces.tui.console.decisions import DecisionRecords
@@ -114,6 +115,8 @@ class View:
             each lifecycle verb against.
         decisions: The records the decision overlays and cards are bound to, which
             arrive beside the projection; ``None`` when none are held.
+        notices: The budget notices active in the operator's inbox, which the Attention
+            route lists after its actions; empty before their read or with no link.
         principal: Who the console acts as, whose own attention items the header counts;
             ``None`` when it acts as nobody, which has no ``mine`` to count.
         now: The wall-clock instant the frame is drawn at, which an age or a running
@@ -140,6 +143,7 @@ class View:
     replay: ReplayNote | None = None
     rows: tuple[ProjectionRow, ...] = ()
     decisions: DecisionRecords | None = None
+    notices: tuple[BudgetThresholdNotice, ...] = ()
     principal: str | None = None
     now: datetime | None = None
     scope_name: str = ""

@@ -1,6 +1,6 @@
 """What a linked console states is the record it read, in the operator's words.
 
-Each test is named for the confirmation-jury finding it closes. A Milestone's sealed
+A Milestone's sealed
 bundle and approval are read for that Milestone alone, through the seam, and drawn from
 the live tree; ``y`` copies what the frame drew rather than a prototype literal; a line
 under the header names the route's own subject instead of an unrelated register count;
@@ -122,10 +122,10 @@ class _Calls:
         return record.model_dump(mode="json")
 
 
-# ---------- C1-02 = C2-13: the Milestone's bundle and approval, per subject ----------
+# ---------- the Milestone's bundle and approval, per subject ----------
 
 
-def test_c1_02_the_seam_owes_an_acceptance_read_for_the_milestone_on_screen() -> None:
+def test_the_seam_owes_an_acceptance_read_for_the_milestone_on_screen() -> None:
     """The read is owed for the subject alone, answered per key, and not owed twice."""
     seam = ProjectionSeam(route="milestone", scope_id=SCOPE, state_path=None, clock=lambda: AT)
     seam._projection = ds.projection("milestone", DOCUMENT)
@@ -144,7 +144,7 @@ def test_c1_02_the_seam_owes_an_acceptance_read_for_the_milestone_on_screen() ->
     assert seam.acceptance_for(None) is None
 
 
-def test_c1_02_a_moved_milestone_drops_the_read_so_it_is_asked_again() -> None:
+def test_a_moved_milestone_drops_the_read_so_it_is_asked_again() -> None:
     """A patch on a Milestone or a sealed question may move what it was accepted at."""
     seam = ProjectionSeam(route="milestone", scope_id=SCOPE, state_path=None, clock=lambda: AT)
     seam._projection = ds.projection("milestone", DOCUMENT)
@@ -171,7 +171,7 @@ def test_c1_02_a_moved_milestone_drops_the_read_so_it_is_asked_again() -> None:
     assert MILESTONE_ACCEPTANCE_METHOD in seam.owed()
 
 
-def test_c1_02_the_view_draws_the_subjects_acceptance_and_never_anothers() -> None:
+def test_the_view_draws_the_subjects_acceptance_and_never_anothers() -> None:
     """The production call site: route_view takes the record held for the subject."""
     app = _linked("milestone", DOCUMENT, subject="MLS-0030")
     assert app.seam is not None
@@ -185,7 +185,7 @@ def test_c1_02_the_view_draws_the_subjects_acceptance_and_never_anothers() -> No
     assert app.route_view().bundle_digest is None  # type: ignore[union-attr]
 
 
-def test_c1_02_criteria_say_no_bundle_is_held_rather_than_that_it_lists_no_step() -> None:
+def test_criteria_say_no_bundle_is_held_rather_than_that_it_lists_no_step() -> None:
     """With nothing sealed there is no held bundle for the criteria to be silent about."""
     rows = _frame(_linked("milestone", DOCUMENT, subject="MLS-0030"))
     text = "\n".join(rows)
@@ -194,7 +194,7 @@ def test_c1_02_criteria_say_no_bundle_is_held_rather_than_that_it_lists_no_step(
     assert NO_STEP not in text
 
 
-def test_c1_02_an_acceptance_read_that_names_no_milestone_is_refused() -> None:
+def test_an_acceptance_read_that_names_no_milestone_is_refused() -> None:
     """The error path: the verb validates its parameters before it touches a tree."""
     with pytest.raises(DaemonValidationError, match=r"milestone\.acceptance"):
         asyncio.run(read_milestone_acceptance(None, {}))  # type: ignore[arg-type]
@@ -205,7 +205,7 @@ def test_c1_02_an_acceptance_read_that_names_no_milestone_is_refused() -> None:
         asyncio.run(seam.load_acceptance())
 
 
-def test_c1_02_the_live_tree_draws_the_accepted_milestones_bundle_and_approval(
+def test_the_live_tree_draws_the_accepted_milestones_bundle_and_approval(
     tmp_path: Path,
 ) -> None:
     """MLS-0100 was accepted on a sealed approval; the live frame says so, from the tree."""
@@ -237,10 +237,10 @@ def test_c1_02_the_live_tree_draws_the_accepted_milestones_bundle_and_approval(
     assert authority_digests(REPO_ROOT) == before, "the live serve wrote to the tree"
 
 
-# ---------- C2-01: y copies what the frame drew ----------
+# ---------- y copies what the frame drew ----------
 
 
-def test_c2_01_y_copies_the_row_under_the_caret_then_the_subject() -> None:
+def test_y_copies_the_row_under_the_caret_then_the_subject() -> None:
     """A linked console never copies a prototype literal: the caret's row, else the subject."""
     session = Session()
     session.route = "run.detail"
@@ -251,7 +251,7 @@ def test_c2_01_y_copies_the_row_under_the_caret_then_the_subject() -> None:
     assert copy_target(session, chrome()) == RUN
 
 
-def test_c2_01_with_nothing_selected_y_copies_the_address_in_the_attached_scope() -> None:
+def test_with_nothing_selected_y_copies_the_address_in_the_attached_scope() -> None:
     """The empty boundary: no row and no subject say no URN is held, never ``?``.
 
     The copy is never a route address in a second scheme: a tree's URN is the one its
@@ -264,14 +264,14 @@ def test_c2_01_with_nothing_selected_y_copies_the_address_in_the_attached_scope(
     assert "urn:eawf:" not in copied
 
 
-def test_c2_01_the_urn_copy_is_the_urn_the_held_record_carries() -> None:
+def test_the_urn_copy_is_the_urn_the_held_record_carries() -> None:
     """Shift-Y on a linked console copies the record's own address, not one spelled here."""
     app = _linked("run.detail", RUN_DOCUMENT, subject=RUN)
     dispatch(app._ctx(), "Y", False)
     assert app.session.toasts[-1].text == f"urn:eawf:{SCOPE}:run:{RUN}"
 
 
-def test_c2_01_the_milestone_copies_the_digest_it_drew_and_offers_none_without_one() -> None:
+def test_the_milestone_copies_the_digest_it_drew_and_offers_none_without_one() -> None:
     """The digest is read off the frame's bundle; with none, y is not offered as a digest."""
     app = _linked("milestone", DOCUMENT, subject="MLS-0030")
     assert app.seam is not None
@@ -285,7 +285,7 @@ def test_c2_01_the_milestone_copies_the_digest_it_drew_and_offers_none_without_o
     assert copy_for(app._ctx()) == f"digest {_bundle().digest()}"
 
 
-def test_c2_01_y_inside_the_inspect_drawer_copies_the_run_on_screen() -> None:
+def test_y_inside_the_inspect_drawer_copies_the_run_on_screen() -> None:
     """The drawers copy through the same path, so no prototype Run id reaches the clipboard."""
     app = _linked("run.detail", RUN_DOCUMENT, subject=RUN)
     dispatch(app._ctx(), "i", False)
@@ -293,7 +293,7 @@ def test_c2_01_y_inside_the_inspect_drawer_copies_the_run_on_screen() -> None:
     assert app.session.toasts[-1].text == RUN
 
 
-# ---------- C1-13: the line under the header names the route's own subject ----------
+# ---------- the line under the header names the route's own subject ----------
 
 
 @pytest.mark.parametrize(
@@ -306,7 +306,7 @@ def test_c2_01_y_inside_the_inspect_drawer_copies_the_run_on_screen() -> None:
         ("git.pr", "BAT-0007", "BAT-0007 · read only"),
     ],
 )
-def test_c1_13_the_summary_line_names_its_own_subject_not_a_register_count(
+def test_the_summary_line_names_its_own_subject_not_a_register_count(
     route: str, subject: str | None, says: str
 ) -> None:
     """The count of the register a route reads is not what the route is about."""
@@ -323,10 +323,10 @@ def test_c1_13_the_summary_line_names_its_own_subject_not_a_register_count(
         assert "1 run" not in line
 
 
-# ---------- C1-09: the readiness remedy is stated whole ----------
+# ---------- the readiness remedy is stated whole ----------
 
 
-def test_c1_09_the_focused_signals_remedy_is_not_clipped_at_the_narrowest_width() -> None:
+def test_the_focused_signals_remedy_is_not_clipped_at_the_narrowest_width() -> None:
     """At 82 cells the table cuts its cell, so the REMEDY row carries the reason whole."""
     model = ds.release_view("candidate")
     session = ds.opened("release", "readiness", "REL-0001")
@@ -337,7 +337,7 @@ def test_c1_09_the_focused_signals_remedy_is_not_clipped_at_the_narrowest_width(
     assert RC_GATE_REASON in remedy
 
 
-def test_c1_09_an_invalidated_approval_returns_the_release_to_draft_as_the_lifecycle_does() -> None:
+def test_an_invalidated_approval_returns_the_release_to_draft_as_the_lifecycle_does() -> None:
     """The copy follows the transition table: APPROVED invalidates to DRAFT, never CANDIDATE."""
     from eawf.kernel.spec.release import ReleaseStatus
     from eawf.workflow.release.lifecycle import RELEASE_TRANSITIONS
@@ -351,10 +351,10 @@ def test_c1_09_an_invalidated_approval_returns_the_release_to_draft_as_the_lifec
     assert "returns to DRAFT" in ds.text(rows)
 
 
-# ---------- C1-14: the article and the Esc verb of the absent cards ----------
+# ---------- the article and the Esc verb of the absent cards ----------
 
 
-def test_c1_14_the_artifact_card_takes_an_and_goes_back_as_the_step_card_does() -> None:
+def test_the_artifact_card_takes_an_and_goes_back_as_the_step_card_does() -> None:
     """A noun starting with a vowel takes ``an``; both campaign cards say ``Esc back``."""
     for route in ("campaign.artifact", "campaign.step"):
         rows = _frame(_linked(route, {"campaign": {}, "artifact": {}}))
@@ -366,11 +366,11 @@ def test_c1_14_the_artifact_card_takes_an_and_goes_back_as_the_step_card_does() 
     assert "a step is drawn" in "\n".join(_frame(_linked("campaign.step", {})))
 
 
-# ---------- C1-16: the transcript reason wraps at the frame width ----------
+# ---------- the transcript reason wraps at the frame width ----------
 
 
 @pytest.mark.parametrize("size", range(len(SIZES)))
-def test_c1_16_the_transcript_reason_is_whole_and_says_its_state_word_once(size: int) -> None:
+def test_the_transcript_reason_is_whole_and_says_its_state_word_once(size: int) -> None:
     """The reason is wrapped rather than cut, and the word the STATE row printed is not repeated."""
     app = _linked("transcript", RUN_DOCUMENT, subject=RUN)
     app.session.size = size
@@ -388,10 +388,10 @@ def test_c1_16_the_transcript_reason_is_whole_and_says_its_state_word_once(size:
     assert " ".join(reason) == thinking.missing_reason
 
 
-# ---------- C2-10: a light verb names the place it opened and its subject ----------
+# ---------- a light verb names the place it opened and its subject ----------
 
 
-def test_c2_10_the_light_toast_is_the_place_in_words_and_the_subject() -> None:
+def test_the_light_toast_is_the_place_in_words_and_the_subject() -> None:
     """Boundary: with no subject the toast is the place alone, never a route id."""
     menus = chrome().menus
     branch, cost = menus.verb("run.detail", "b"), menus.verb("run.detail", "m")
@@ -406,7 +406,7 @@ def test_c2_10_the_light_toast_is_the_place_in_words_and_the_subject() -> None:
     ("key", "route", "toast"),
     [("b", "git.pr", f"branch and PR · {RUN}"), ("m", "cost.ceiling", f"cost ceiling · {RUN}")],
 )
-def test_c2_10_a_light_verb_from_a_run_carries_the_run_and_names_the_place(
+def test_a_light_verb_from_a_run_carries_the_run_and_names_the_place(
     key: str, route: str, toast: str
 ) -> None:
     """The production call site: the action menu's light verb, pressed on a Run."""
@@ -419,7 +419,7 @@ def test_c2_10_a_light_verb_from_a_run_carries_the_run_and_names_the_place(
     assert route not in app.session.toasts[-1].text.split(" · ")
 
 
-def test_c2_10_the_git_surface_opened_on_a_run_is_about_the_runs_batch() -> None:
+def test_the_git_surface_opened_on_a_run_is_about_the_runs_batch() -> None:
     """A Run subject is read through the Batch its record is filed under."""
     document = {
         "batch": {
@@ -436,10 +436,10 @@ def test_c2_10_the_git_surface_opened_on_a_run_is_about_the_runs_batch() -> None
     assert "no Batch · read only" in line, "an unstated Batch is not borrowed from the rows"
 
 
-# ---------- C1-10: the offline entry frame ----------
+# ---------- the offline entry frame ----------
 
 
-def test_c1_10_with_no_snapshot_the_offline_frame_says_none_is_held() -> None:
+def test_with_no_snapshot_the_offline_frame_says_none_is_held() -> None:
     """The empty boundary: no rows are drawn and the absence is said."""
     state = offline_state(load_chrome(), None)
     assert state.id == OFFLINE
@@ -447,7 +447,7 @@ def test_c1_10_with_no_snapshot_the_offline_frame_says_none_is_held() -> None:
     assert state.tail == (NO_SNAPSHOT,)
 
 
-def test_c1_10_the_offline_frame_lists_this_trees_tracks_from_its_last_commit() -> None:
+def test_the_offline_frame_lists_this_trees_tracks_from_its_last_commit() -> None:
     """One row per Track of the committed document, as of when it was committed."""
     require_epoch2_repository()
     authority = resolve_authority(REPO_ROOT / ".ea")
@@ -464,7 +464,7 @@ def test_c1_10_the_offline_frame_lists_this_trees_tracks_from_its_last_commit() 
     assert NO_SNAPSHOT not in "\n".join(frame)
 
 
-def test_c1_10_an_unreadable_generation_reads_as_no_snapshot() -> None:
+def test_an_unreadable_generation_reads_as_no_snapshot() -> None:
     """A tree naming no generation, or one whose document is gone, gives no snapshot."""
     require_epoch2_repository()
     authority = resolve_authority(REPO_ROOT / ".ea")
@@ -474,7 +474,7 @@ def test_c1_10_an_unreadable_generation_reads_as_no_snapshot() -> None:
     assert offline_snapshot(missing, scope_id=SCOPE, now=AT) is None  # type: ignore[arg-type]
 
 
-def test_c1_10_a_console_whose_daemon_answers_nothing_lands_on_the_offline_frame() -> None:
+def test_a_console_whose_daemon_answers_nothing_lands_on_the_offline_frame() -> None:
     """The production call site: a first sync that reads nothing opens the offline state."""
 
     async def refused(method: str, params: dict[str, Any]) -> dict[str, Any]:

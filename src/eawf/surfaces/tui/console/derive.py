@@ -458,21 +458,34 @@ def sel_in(session: Session, n: int) -> int:
     return session.sel
 
 
+def restore_by_id(session: Session, keys: Sequence[str | None]) -> int:
+    """Return the offset the cursor sits on in ``keys``, restored by stable id, and publish it.
+
+    The row the session's id names keeps the cursor when the list re-sorts; an id no
+    longer listed falls back to the old offset, clamped to the list.
+
+    Args:
+        session: The session whose ``sel_id`` names the row the cursor was on and whose
+            ``sel`` is the offset the frame draws the caret at.
+        keys: The listed rows' ids, in the order the frame draws them.
+
+    Returns:
+        The offset the caret goes on; ``0`` for an empty list, which publishes no id.
+    """
+    held = session.sel_id
+    # a list may hold a heading with no id, which an absent selection must not land on
+    found = keys.index(held) if held is not None and held in keys else None
+    index = found if found is not None else max(0, min(session.sel, len(keys) - 1))
+    session.sel = index
+    session.sel_id = keys[index] if keys else None
+    return index
+
+
 def sel_by_id(session: Session, ids: Sequence[str]) -> int:
-    """Clamp the cursor on a re-sorting list by entity id, never by row offset."""
+    """Clamp the cursor on a re-sorting list by entity id, and publish how many rows it walks."""
     session.count = len(ids)
     session.nav_rows = len(ids)
-    if not ids:
-        session.sel = 0
-        session.sel_id = None
-        return 0
-    if session.sel_id in ids:
-        index = ids.index(session.sel_id)
-    else:
-        index = max(0, min(session.sel, len(ids) - 1))
-        session.sel_id = ids[index]
-    session.sel = index
-    return index
+    return restore_by_id(session, ids)
 
 
 def filter_of(session: Session) -> str:

@@ -360,11 +360,11 @@ def test_native_console_restores_the_terminal_handler_when_the_run_raises(
 
 
 # --------------------------------------------------------------------------
-# K-14: an interactive launch prints no log line on the terminal it takes.
+# An interactive launch prints no log line on the terminal it takes.
 # --------------------------------------------------------------------------
 
 
-def test_k_14_an_interactive_launch_keeps_info_logs_off_the_terminal(
+def test_an_interactive_launch_keeps_info_logs_off_the_terminal(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _activate_epoch2(tmp_path / ".ea")

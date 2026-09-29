@@ -50,7 +50,7 @@ def integration_research_skill() -> Iterator[type[Skill]]:
             )
 
         def action(self, ctx: SkillContext) -> SkillResult:
-            depth = str(ctx.args.get("depth", "deep"))
+            depth = str(ctx.args.get("question", "deep"))
             return SkillResult(
                 status="ok",
                 body={
@@ -104,7 +104,7 @@ def test_skill_run_research_emits_well_formed_envelope_json(
     result = runner.invoke(
         app,
         ["--json", "skill", "run", "/research"],
-        input='{"depth": "quick"}',
+        input='{"question": "quick"}',
     )
     assert result.exit_code == 0, result.stdout
 
@@ -122,7 +122,7 @@ def test_skill_run_research_emits_well_formed_envelope_json(
     assert isinstance(env.body, dict)
     assert env.body["brief_id"] == "BR-INT-01"
     assert env.body["recommendation"]["choice"] == "ship"
-    # The depth=quick stdin args propagated into the action.
+    # The question stdin arg propagated into the action.
     assert env.body["questions"][0]["answer"] == "yes (quick)"
 
     # Footer carries the next-action and evidence pointers.

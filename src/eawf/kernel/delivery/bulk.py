@@ -1,10 +1,12 @@
-"""One operator decision over many Runs, with one result per Run.
+"""One operator decision over many Runs or Tasks, with one result per item.
 
 A mass abort naming twenty-seven Runs is one decision, and issuing it as
 twenty-seven unrelated requests loses that fact and leaves nowhere to say
 that twenty-four stopped, two went quiet and one was refused. A
 :class:`BulkOperation` keeps both: one record over an explicit item set,
-and a ledger per item that is never collapsed into a single flag.
+and a ledger per item that is never collapsed into a single flag. The Run
+controls name Runs; releasing leases names Tasks, and every item of one
+operation is of the kind its verb takes.
 
 Each item walks its own small lifecycle, :data:`ITEM_EDGES`. An item is
 ``requested`` when it is admitted, ``accepted`` or ``rejected`` once its
@@ -30,7 +32,7 @@ from typing import Annotated, Final, Literal, Self
 from pydantic import ConfigDict, Field, StringConstraints, model_validator
 
 from eawf.kernel.delivery.receipts import canonical_digest
-from eawf.kernel.identity import QualifiedUrn
+from eawf.kernel.identity import EntityKind, QualifiedUrn
 from eawf.kernel.runtime.control import ControlDisposition, ControlRequestId
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.kernel.state.epoch2.base import (
@@ -41,7 +43,7 @@ from eawf.kernel.state.epoch2.base import (
     StrictNonNegativeInt,
     StrictPositiveInt,
 )
-from eawf.kernel.state.epoch2.urns import RunUrn
+from eawf.kernel.state.epoch2.urns import BulkItemUrn
 
 
 class _FrozenModel(Epoch2Model):
@@ -58,20 +60,34 @@ RefusalCode = Annotated[str, StringConstraints(strict=True, pattern=r"^[a-z][a-z
 
 
 class BulkVerb(StrEnum):
-    """The closed set of verbs an operation may apply to many Runs at once.
+    """The closed set of verbs an operation may apply to many items at once.
 
-    Only recoverable control is bulk-eligible: each verb here is a Run
-    control whose effect the Run's driver observes. Integration, merge,
-    acceptance and publication never are, because a partial outcome of
-    any of them is not something an operator can simply reissue.
+    Only recoverable control is bulk-eligible: a Run control whose effect
+    the Run's driver observes, or the release of a Task's lease, which
+    plans the Task again. Integration, merge, acceptance and publication
+    never are, because a partial outcome of any of them is not something
+    an operator can simply reissue. ``release`` is the Task lease release,
+    not a publication.
     """
 
     CANCEL = "cancel"
     INTERRUPT = "interrupt"
     RETRY = "retry"
+    RELEASE = "release"
 
 
-#: The Run control each bulk verb asks for, item by item.
+#: The kind of record each verb names, so a Run control never addresses a
+#: Task and a release never addresses a Run.
+BULK_ITEM_KINDS: Final[Mapping[BulkVerb, EntityKind]] = MappingProxyType(
+    {
+        BulkVerb.CANCEL: EntityKind.RUN,
+        BulkVerb.INTERRUPT: EntityKind.RUN,
+        BulkVerb.RETRY: EntityKind.RUN,
+        BulkVerb.RELEASE: EntityKind.TASK,
+    }
+)
+
+#: The Run control each Run bulk verb asks for, item by item.
 BULK_CONTROLS: Final[Mapping[BulkVerb, ControlKind]] = MappingProxyType(
     {
         BulkVerb.CANCEL: ControlKind.CANCEL,
@@ -80,7 +96,7 @@ BULK_CONTROLS: Final[Mapping[BulkVerb, ControlKind]] = MappingProxyType(
     }
 )
 
-#: What each verb does to one Run, and what it leaves alone. The
+#: What each verb does to one item, and what it leaves alone. The
 #: non-effects are stated because the surprising consequence of a mass
 #: control is usually the one it does not have.
 _CONSEQUENCES: Final[Mapping[BulkVerb, tuple[tuple[str, ...], tuple[str, ...]]]] = MappingProxyType(
@@ -107,6 +123,17 @@ _CONSEQUENCES: Final[Mapping[BulkVerb, tuple[tuple[str, ...], tuple[str, ...]]]]
             (
                 "does not rewrite any Run's recorded outcome",
                 "does not release the Runs' Tasks, which keep their status and lease",
+            ),
+        ),
+        BulkVerb.RELEASE: (
+            (
+                "moves each CLAIMED Task back to PLANNED and releases its lease",
+                "files a release record naming the cause and the actor on each Task",
+            ),
+            (
+                "does not cancel, stop or retry any Run; a Task a Run is open on is rejected",
+                "does not change any Task's Batch or criteria, or move any Batch",
+                "releases only a lease the actor holds; another principal's claim is rejected",
             ),
         ),
     }
@@ -203,11 +230,27 @@ def advance(prior: BulkItemState, observed: BulkItemState) -> BulkItemState:
     return observed
 
 
+def require_item_kinds(verb: BulkVerb, item_refs: Iterable[QualifiedUrn]) -> None:
+    """Refuse an item of a kind *verb* does not take.
+
+    Args:
+        verb: The bulk verb.
+        item_refs: The items it would name.
+
+    Raises:
+        ValueError: An item is not of the kind the verb names.
+    """
+    kind = BULK_ITEM_KINDS[verb]
+    foreign = sorted(str(ref) for ref in item_refs if ref.kind is not kind)
+    if foreign:
+        raise ValueError(f"{verb.value} takes {kind.value} items, not: {', '.join(foreign)}")
+
+
 def canonical_items(item_refs: Iterable[QualifiedUrn]) -> tuple[QualifiedUrn, ...]:
     """Return *item_refs* in the one order an operation lists them in.
 
     The order is canonical rather than the order of selection, so two
-    selections of the same Runs name the same operation.
+    selections of the same items name the same operation.
 
     Args:
         item_refs: The selected items.
@@ -216,7 +259,7 @@ def canonical_items(item_refs: Iterable[QualifiedUrn]) -> tuple[QualifiedUrn, ..
         The items, sorted by URN.
 
     Raises:
-        ValueError: An item is named twice, which would give one Run two
+        ValueError: An item is named twice, which would give it two
             results.
     """
     refs = tuple(item_refs)
@@ -241,7 +284,7 @@ class BulkConfirmation(_FrozenModel):
 
     verb: BulkVerb
     target_count: StrictPositiveInt
-    item_refs: tuple[RunUrn, ...] = Field(min_length=1)
+    item_refs: tuple[BulkItemUrn, ...] = Field(min_length=1)
     effects: tuple[NonEmptyStr, ...] = Field(min_length=1)
     non_effects: tuple[NonEmptyStr, ...] = Field(min_length=1)
     invalidation_rule: NonEmptyStr
@@ -251,8 +294,10 @@ class BulkConfirmation(_FrozenModel):
         """Refuse a count that disagrees with the items it counts.
 
         Raises:
-            ValueError: The stated count is not the number of items.
+            ValueError: The stated count is not the number of items, or an
+                item is not of the kind the verb names.
         """
+        require_item_kinds(self.verb, self.item_refs)
         if self.target_count != len(self.item_refs):
             raise ValueError(
                 f"target_count {self.target_count} does not count {len(self.item_refs)} items"
@@ -270,13 +315,14 @@ def confirm_bulk(verb: BulkVerb, item_refs: Iterable[QualifiedUrn]) -> BulkConfi
 
     Args:
         verb: The bulk verb.
-        item_refs: The Runs it names, in any order.
+        item_refs: The items it names, in any order.
 
     Returns:
         The confirmation, naming the items in canonical order.
 
     Raises:
-        ValueError: An item is named twice, or no item is named.
+        ValueError: An item is named twice, no item is named, or an item
+            is not of the kind the verb names.
     """
     refs = canonical_items(item_refs)
     effects, non_effects = _CONSEQUENCES[verb]
@@ -297,8 +343,9 @@ class BulkItemResult(_FrozenModel):
         state: Where the item stands.
         code: Why a rejected item was refused; ``None`` otherwise.
         detail: One sentence an operator reads.
-        control_request_ref: The control the item was asked under, or
-            ``None`` when it was rejected before anything was asked.
+        control_request_ref: The Run control the item was asked under, or
+            ``None`` when it was rejected before anything was asked or is
+            a Task, which is released by a lifecycle move, not a control.
     """
 
     state: BulkItemState
@@ -335,7 +382,7 @@ def aggregate_of(results: Iterable[BulkItemResult]) -> dict[BulkItemState, int]:
 
 
 class BulkOperation(_FrozenModel):
-    """One operator decision over an explicit set of Runs.
+    """One operator decision over an explicit set of Runs or Tasks.
 
     A partial outcome -- some confirmed, some unknown, some rejected -- is
     a normal result, so the record carries counts by state and no single
@@ -356,7 +403,7 @@ class BulkOperation(_FrozenModel):
 
     operation_kind: Literal["bulk_control"] = "bulk_control"
     verb: BulkVerb
-    item_refs: tuple[RunUrn, ...] = Field(min_length=1)
+    item_refs: tuple[BulkItemUrn, ...] = Field(min_length=1)
     expected_revisions: dict[str, StrictPositiveInt]
     item_results: dict[str, BulkItemResult]
     aggregate: dict[BulkItemState, StrictNonNegativeInt]
@@ -369,11 +416,12 @@ class BulkOperation(_FrozenModel):
         """Refuse an operation whose ledgers do not match its item set.
 
         Raises:
-            ValueError: The items are not unique or not canonical; an
-                anchor or a result is missing for an item or present for
-                something that is not one; or the aggregate disagrees with
-                the results it counts.
+            ValueError: The items are not unique, not canonical or not of
+                the verb's kind; an anchor or a result is missing for an
+                item or present for something that is not one; or the
+                aggregate disagrees with the results it counts.
         """
+        require_item_kinds(self.verb, self.item_refs)
         if canonical_items(self.item_refs) != self.item_refs:
             raise ValueError("item_refs must be listed in canonical order")
         items = {str(ref) for ref in self.item_refs}
@@ -390,6 +438,7 @@ class BulkOperation(_FrozenModel):
 
 __all__ = [
     "BULK_CONTROLS",
+    "BULK_ITEM_KINDS",
     "DISPOSITION_STATES",
     "INVALIDATION_RULE",
     "ITEM_EDGES",
@@ -405,4 +454,5 @@ __all__ = [
     "aggregate_of",
     "canonical_items",
     "confirm_bulk",
+    "require_item_kinds",
 ]

@@ -111,7 +111,7 @@ def test_con_100_with_no_record_under_the_cursor_nothing_is_inspected() -> None:
     assert focused(view) is None
 
 
-# ---------- K-02: the rack is the console's, so no drawer hides it ----------
+# ---------- the rack is the console's, so no drawer hides it ----------
 
 
 def _below(frame: list[str]) -> list[str]:
@@ -120,7 +120,7 @@ def _below(frame: list[str]) -> list[str]:
 
 
 @pytest.mark.parametrize("surface", ["inspect", "raw", "actions", "prefix"])
-def test_k_02_a_toast_stands_over_an_open_drawer_and_hides_no_row(surface: str) -> None:
+def test_a_toast_stands_over_an_open_drawer_and_hides_no_row(surface: str) -> None:
     view = _view(None if surface == "prefix" else surface)
     if surface == "prefix":
         view.session.prefix = "g"
@@ -132,11 +132,11 @@ def test_k_02_a_toast_stands_over_an_open_drawer_and_hides_no_row(surface: str) 
     assert _below(frame) == _below(quiet)
 
 
-# ---------- K-13: the selection line counts its results in words ----------
+# ---------- the selection line counts its results in words ----------
 
 
 @pytest.mark.parametrize(("marked", "said"), [(1, "1 result"), (2, "2 results")])
-def test_k_13_the_selection_line_pluralises_its_results(marked: int, said: str) -> None:
+def test_the_selection_line_pluralises_its_results(marked: int, said: str) -> None:
     view = bodies._view("activity")
     render_route(view)
     view.session.marked = ["RUN-00000001", "RUN-00000002"][:marked]

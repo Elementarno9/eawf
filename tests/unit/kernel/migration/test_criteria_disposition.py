@@ -149,7 +149,9 @@ def test_convert_criterion_drops_no_criterion_field() -> None:
 
 
 def test_convert_criterion_drops_no_gate_field() -> None:
-    assert set(GATE_FIELD_ROUTES) == set(GateSpec.model_fields)
+    stored = {name for name, field in GateSpec.model_fields.items() if not field.exclude}
+    assert set(GATE_FIELD_ROUTES) == stored
+    assert "command_family_ref" not in stored
 
 
 def test_convert_criterion_every_routed_field_reaches_the_imported_record() -> None:

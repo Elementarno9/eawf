@@ -137,6 +137,7 @@ class TransitionGuard(StrEnum):
     LEASE_HELD = "lease_held"
     MANIFEST_COMPLETE = "manifest_complete"
     NEVER_CLAIMED = "never_claimed"
+    NO_ACTIVE_RUN = "no_active_run"
     NO_EXTERNAL_EFFECT = "no_external_effect"
     NO_OPEN_MILESTONES = "no_open_milestones"
     OBSERVED_PRERELEASE = "observed_prerelease"
@@ -146,6 +147,7 @@ class TransitionGuard(StrEnum):
     REASON_RECORDED = "reason_recorded"
     RECONCILIATION_MATCHED = "reconciliation_matched"
     RECOVERY_EXHAUSTED = "recovery_exhausted"
+    RELEASER_HOLDS_LEASE = "releaser_holds_lease"
     REQUIRED_BATCHES_COMPLETED = "required_batches_completed"
     RUN_BOUND = "run_bound"
     RUN_REPORT_BOUND = "run_report_bound"
@@ -193,8 +195,10 @@ class DenialCode(StrEnum):
     TASK_ALREADY_CLAIMED = "task_already_claimed"
     TASK_EVIDENCE_UNBOUND = "task_evidence_unbound"
     TASK_INTEGRATION_UNPROVEN = "task_integration_unproven"
+    TASK_LEASE_HELD_BY_OTHER = "task_lease_held_by_other"
     TASK_LEASE_UNHELD = "task_lease_unheld"
     TASK_PROMOTION_INCOMPLETE = "task_promotion_incomplete"
+    TASK_RUN_ACTIVE = "task_run_active"
     TASK_RUN_UNBOUND = "task_run_unbound"
     TRACK_HAS_OPEN_MILESTONES = "track_has_open_milestones"
     TRANSITION_REASON_MISSING = "transition_reason_missing"
@@ -288,6 +292,7 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.LEASE_HELD: DenialCode.TASK_LEASE_UNHELD,
     TransitionGuard.MANIFEST_COMPLETE: DenialCode.RELEASE_MANIFEST_INCOMPLETE,
     TransitionGuard.NEVER_CLAIMED: DenialCode.TASK_ALREADY_CLAIMED,
+    TransitionGuard.NO_ACTIVE_RUN: DenialCode.TASK_RUN_ACTIVE,
     TransitionGuard.NO_EXTERNAL_EFFECT: DenialCode.RELEASE_EFFECT_ALREADY_STARTED,
     TransitionGuard.NO_OPEN_MILESTONES: DenialCode.TRACK_HAS_OPEN_MILESTONES,
     TransitionGuard.OBSERVED_PRERELEASE: DenialCode.PUBLICATION_NOT_OBSERVED,
@@ -297,6 +302,7 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.REASON_RECORDED: DenialCode.TRANSITION_REASON_MISSING,
     TransitionGuard.RECONCILIATION_MATCHED: DenialCode.BATCH_RECONCILIATION_PENDING,
     TransitionGuard.RECOVERY_EXHAUSTED: DenialCode.RECOVERY_BUDGET_AVAILABLE,
+    TransitionGuard.RELEASER_HOLDS_LEASE: DenialCode.TASK_LEASE_HELD_BY_OTHER,
     TransitionGuard.REQUIRED_BATCHES_COMPLETED: DenialCode.MILESTONE_BATCHES_OPEN,
     TransitionGuard.RUN_BOUND: DenialCode.TASK_RUN_UNBOUND,
     TransitionGuard.RUN_REPORT_BOUND: DenialCode.RUN_REPORT_UNBOUND,
@@ -394,9 +400,16 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     DenialCode.TASK_INTEGRATION_UNPROVEN: (
         "Record the exact revision binding the Task integrated at."
     ),
+    DenialCode.TASK_LEASE_HELD_BY_OTHER: (
+        "Only the principal that claimed the Task releases its lease; ask it to, or cancel "
+        "the Task."
+    ),
     DenialCode.TASK_LEASE_UNHELD: "Take the Task's lease before claiming it.",
     DenialCode.TASK_PROMOTION_INCOMPLETE: (
         "A promoted Task needs a Batch, at least one criterion and a due scope."
+    ),
+    DenialCode.TASK_RUN_ACTIVE: (
+        "Cancel the Run working the Task and let it settle, then release the Task."
     ),
     DenialCode.TASK_RUN_UNBOUND: "Open the Run that will do the work, then start the Task.",
     DenialCode.TRACK_HAS_OPEN_MILESTONES: (
@@ -659,12 +672,19 @@ _TASK_ROWS: Final[tuple[TransitionRow, ...]] = (
         guards=(TransitionGuard.RUN_BOUND,),
         required_updates=("active_run_ref",),
     ),
+    # Releasing the lease is its holder's to do, and never pulls a Task out
+    # from under a Run already queued against it.
     TransitionRow(
         entity=LifecycleEntity.TASK,
         frm=TaskStatus.CLAIMED,
         to=TaskStatus.PLANNED,
         verb=TransitionVerb.LEASE_RELEASED,
-        guards=(TransitionGuard.REASON_RECORDED,),
+        guards=(
+            TransitionGuard.REASON_RECORDED,
+            TransitionGuard.RELEASER_HOLDS_LEASE,
+            TransitionGuard.NO_ACTIVE_RUN,
+        ),
+        cleared_fields=("claimed_by",),
     ),
     TransitionRow(
         entity=LifecycleEntity.TASK,

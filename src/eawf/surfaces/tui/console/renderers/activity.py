@@ -14,7 +14,6 @@ declared rail, so it folds into a strip exactly where the registry says it does.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime
 from types import MappingProxyType
 
 from eawf.kernel.projection.activity import STATUS_BUCKETS, ActivityGrouping, group_runs
@@ -24,7 +23,7 @@ from eawf.kernel.state.epoch2.run import RunStatus
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.fixture import FleetRow
-from eawf.surfaces.tui.console.format import clock_minute, group
+from eawf.surfaces.tui.console.format import clock_minute, group, instant
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Table,
@@ -264,11 +263,8 @@ def run_reason(row: ProjectionRow) -> str:
 
 def as_of(row: ProjectionRow) -> str:
     """Return the minute a Run's record last moved, or the unknown token when unstated."""
-    stamp = row.facts.get("updated_at")
-    try:
-        return clock_minute(datetime.fromisoformat(stamp)) if stamp else UNKNOWN_WORD
-    except ValueError:
-        return UNKNOWN_WORD
+    at = instant(row.facts.get("updated_at"))
+    return clock_minute(at) if at is not None else UNKNOWN_WORD
 
 
 def task_cell(row: ProjectionRow) -> str:
@@ -341,9 +337,7 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
     """
     s, w = view.session, view.w
     shown = _shown(view, register)
-    found = next((i for i, row in enumerate(shown) if row.key == s.sel_id), None)
-    cursor = found if found is not None else min(max(s.sel, 0), max(len(shown) - 1, 0))
-    s.sel, s.sel_id = cursor, (shown[cursor].key if shown else None)
+    cursor = dv.restore_by_id(s, [row.key for row in shown])
     wide = REGISTRY.rail_at(s.route, view.columns) is not None
     col = w - RAIL_W - 1 if wide else w
     grouping = group_runs(register)

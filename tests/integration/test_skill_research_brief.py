@@ -53,7 +53,7 @@ def test_skill_research_full_run_persists_events_and_envelope(
     result = runner.invoke(
         app,
         ["--json", "skill", "run", "/research"],
-        input='{"depth": "medium"}',
+        input="{}",
     )
     assert result.exit_code == 0, result.stdout
 

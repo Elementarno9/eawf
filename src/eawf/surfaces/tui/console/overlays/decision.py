@@ -231,9 +231,19 @@ def _question_outcome(q: QuestionRecord, principal: str | None) -> list[str]:
     return []
 
 
+def _override_window(q: QuestionRecord) -> str:
+    """Return what the ``OVERRIDE`` row says about a defaulting question's window."""
+    if q.status is QuestionStatus.AUTO_RESOLVED:
+        return f"open until {short_time(q.override_until)}"
+    if q.override_until is not None:
+        # a waiting decision files its window up front: the default stands when it closes
+        return f"the default stands at {short_time(q.override_until)} unless you answer"
+    return f"{TRUTH['unavailable'].unicode} no override window is open"
+
+
 def render_question(view: View, q: QuestionRecord, decisions: DecisionRecords) -> list[str]:
     """Return the question detail over ``q``."""
-    run_state = decisions.run_states.get(q.run)
+    run_state = decisions.run_states.get(q.run) if q.run is not None else None
     situation = question_situation(q, principal=decisions.principal, run_state=run_state)
     body = [lab("QUESTION", q.question)]
     if q.rationale:
@@ -246,12 +256,7 @@ def render_question(view: View, q: QuestionRecord, decisions: DecisionRecords) -
     if not q.options:
         body.append(lab("OPTIONS", "none · it is answered in your own words"))
     if q.default_option is not None:
-        window = (
-            f"open until {short_time(q.override_until)}"
-            if q.status is QuestionStatus.AUTO_RESOLVED
-            else f"{TRUTH['unavailable'].unicode} no override window is open"
-        )
-        body.append(lab("OVERRIDE", window))
+        body.append(lab("OVERRIDE", _override_window(q)))
     if q.status is QuestionStatus.BLOCKED:
         body.append(lab("HALTED", f"the work under {q.scope} waits on this answer"))
     if q.escalated_by:
@@ -265,7 +270,7 @@ def render_question(view: View, q: QuestionRecord, decisions: DecisionRecords) -
         view,
         name="question",
         subject=q.id,
-        context=f"asked by {q.run} under {q.scope} · {short_time(q.asked_at)}",
+        context=f"asked by {q.run or 'a person'} under {q.scope} · {short_time(q.asked_at)}",
         body=body,
         keys=question_keys(q, view.session, run_state),
         situation=situation,
@@ -516,7 +521,7 @@ def _red_signal(model: ReleaseReadinessView) -> str | None:
     )
 
 
-def status_of(model: ReleaseReadinessView) -> ReleaseStatus | None:
+def release_status(model: ReleaseReadinessView) -> ReleaseStatus | None:
     """Return the state the release's own row states, or ``None`` when it states none."""
     release = next((r for r in model.rows if r.collection is Epoch2Collection.RELEASE), None)
     field = release.fields.get("status") if release is not None else None
@@ -529,7 +534,7 @@ def readiness_situation(model: ReleaseReadinessView) -> tuple[str, Situation]:
     if release is None:
         # no release is cut, which is a state of the tree rather than a gap in the read
         return "no release", Situation(NO_RELEASE, "a release is cut from accepted Milestones")
-    status = status_of(model)
+    status = release_status(model)
     if status is None:
         return release.key, Situation(
             f"{UNKNOWN} unknown · the release states no status", "the release states its status"
@@ -564,7 +569,7 @@ def render_readiness(view: View, model: ReleaseReadinessView) -> list[str]:
         # a narrow cell cuts the remedy, so the focused signal's is also stated whole
         focus = signals[s.sel]
         body.append(lab("REMEDY", f"{focus.name} · {_remedy(focus)}"))
-    approval = model.approval if status_of(model) in APPROVED_ONWARD else None
+    approval = model.approval if release_status(model) in APPROVED_ONWARD else None
     body += [
         thin(w),
         lab(

@@ -326,6 +326,8 @@ def _save_value_to_layer(
     Raises:
         StateConflict: Daemon required but unreachable
             (``daemon_required`` envelope; ``kind="IntegrityViolation"``).
+        UserError: The in-process arm refuses a value outside the type, range
+            or choices the config registry declares for *key*.
         ValidationError: Underlying YAML is malformed.
         OSError: Filesystem failure during read or write.
         yaml.YAMLError: Dump failure when serialising the merged payload.
@@ -362,10 +364,12 @@ def _save_value_to_layer(
 
     # In-process fallback arm (V1 carve-out / EAWF_DAEMONLESS=1 / unmapped path).
     from eawf.kernel.config.loader import load_yaml_layer
+    from eawf.kernel.config.registry import validate_config_value
 
+    typed = validate_config_value(key, value)
     with portalock.acquire(target_path):
         existing = load_yaml_layer(target_path)
-        _set_dotted_in_yaml(existing, key, value)
+        _set_dotted_in_yaml(existing, key, typed)
         _atomic_write_yaml(target_path, existing)
 
 

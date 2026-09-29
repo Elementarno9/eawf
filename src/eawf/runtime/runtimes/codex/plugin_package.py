@@ -4,9 +4,8 @@ Per the Codex Build-plugin reference, dropping a plugin directly under
 ``~/.codex/plugins/<name>/`` does **not** auto-load it — Codex requires
 a marketplace registration step. ``eawf plugin install codex`` writes
 the plugin tree (skills, hooks, ``.codex-plugin/plugin.json``) at the
-scope-correct location and flips ``[plugins.eawf] enabled = true`` in
-``config.toml``, but the operator still has to register a marketplace
-for Codex to discover it.
+scope-correct location, but the operator still has to register a
+marketplace for Codex to discover it.
 
 This module emits a self-contained marketplace tree the operator can
 register with one command::
@@ -68,6 +67,7 @@ from eawf.runtime.runtimes.codex.plugin_install import (
 from eawf.surfaces.render._atomic import atomic_write_text
 from eawf.surfaces.render.hooks import render_hook_sh
 from eawf.workflow.skills.catalog import shipped_skill_specs
+from eawf.workflow.skills.publication import write_publication
 
 logger = logging.getLogger(__name__)
 
@@ -352,6 +352,8 @@ def package_plugin(
         legacy_marketplace = target / _MARKETPLACE_FILE
         if legacy_marketplace.is_file():
             legacy_marketplace.unlink()
+        rendered = (*skill_deltas, *hook_deltas, hook_config_delta, manifest_delta)
+        write_publication(plugin_root, [delta.path for delta in rendered])
     marketplace_delta = FileDelta(path=marketplace_path, action=marketplace_action)
 
     logger.info(

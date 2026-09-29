@@ -245,9 +245,9 @@ def test_persisted_theme_ignores_unrecognised_persisted_value(
     _tmp_global_config: Path,
 ) -> None:
     """A garbage persisted value degrades to the dark baseline, not a crash."""
-    from eawf.surfaces.cli.commands.config import _save_value_to_layer
-
-    _save_value_to_layer(target_path=_tmp_global_config, key="ui.theme", value="not-a-theme")
+    # every config writer refuses an undeclared choice, so only a hand edit plants one
+    _tmp_global_config.parent.mkdir(parents=True, exist_ok=True)
+    _tmp_global_config.write_text("ui:\n  theme: not-a-theme\n", encoding="utf-8")
     assert _persisted_theme() == "dark"
 
 

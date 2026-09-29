@@ -11,9 +11,13 @@ Surface contract:
   or a metadata+body JSON object (``--format=json``). Bytes are
   byte-equal to the SKILL.md :mod:`eawf.runtime.runtimes.claude.plugin_install`
   writes on disk for the same skill.
-- ``eawf skill run <name>`` (Phase 4 W07) invokes
+- ``eawf skill run <name>`` invokes
   :func:`~eawf.workflow.skills.engine.run_skill` headlessly. Optional JSON args
-  may be piped on stdin and are folded into :attr:`SkillContext.args`.
+  may be piped on stdin and are folded into :attr:`SkillContext.args`; they are
+  checked against the skill's argument schema and invocation lanes first, so an
+  unknown, action-incompatible or operator-only argument refuses before a Run.
+- ``eawf skill check-report <name>`` validates a terminal report against the
+  skill's typed output schema, coverage block included.
   The default output is the markdown envelope produced by
   :func:`~eawf.surfaces.render.envelope.to_markdown`; the global ``--json``
   flag flips emission to the JSON envelope shape that
@@ -60,6 +64,7 @@ from eawf.surfaces.cli.scope import resolve_state_path
 if TYPE_CHECKING:
     from eawf.surfaces.render.envelope import EnvelopeStatus, OutputEnvelope, SkillName
     from eawf.surfaces.render.skills import SkillSpec
+    from eawf.workflow.skills.catalog import Lane
     from eawf.workflow.skills.discovery import SkillFlags, SkillReconcileReport
     from eawf.workflow.skills.engine import Skill, SkillContext
 
@@ -282,9 +287,11 @@ def _skill_payload(name: SkillName) -> dict[str, Any]:
     from the one catalog record.
     """
     from eawf.workflow.skills import registry
-    from eawf.workflow.skills.catalog import resolve_skill
+    from eawf.workflow.skills.arguments import argument_schema
+    from eawf.workflow.skills.catalog import resolve_skill, skill_lanes
 
     entry = resolve_skill(name)
+    arguments = argument_schema(entry)
     return {
         "name": name,
         "status": "installed" if registry.lookup(name) is not None else "missing",
@@ -295,6 +302,10 @@ def _skill_payload(name: SkillName) -> dict[str, Any]:
         "argument_hint": entry.grammar.argument_hint,
         "output_schema": entry.output.schema_name,
         "terminal_outcomes": list(entry.output.terminal_outcomes),
+        "lanes": sorted(skill_lanes(entry)),
+        "operator_only_actions": list(entry.operator_only_actions),
+        "arguments": arguments.json_schema(),
+        "completion": arguments.completion(),
     }
 
 
@@ -325,7 +336,12 @@ def _resolve_skill_spec(name: SkillName) -> SkillSpec:
 _SCOPE_CHOICES: frozenset[str] = frozenset({"builtin", "user", "workspace", "all"})
 
 
-def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str, Any]:
+_LANE_CHOICES: frozenset[str] = frozenset({"operator", "agent"})
+
+
+def _discovered_list_payload(
+    *, workspace: Path | None, scope: str, lane: str | None
+) -> dict[str, Any]:
     """Build the ``skill list`` payload spanning builtin + user + workspace.
 
     Each row carries the historical fields (``name``, ``status``,
@@ -335,13 +351,17 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
     ``path``, and ``version``. Catalog skills also carry the catalog's class,
     audience, argument hint, output schema and terminal outcomes.
     """
+    from eawf.workflow.skills.catalog import skills_for_lane
     from eawf.workflow.skills.discovery import discover_skills
 
     rows = discover_skills(workspace=workspace)
     if scope != "all":
         rows = [r for r in rows if r.source == scope]
-    items: list[dict[str, Any]] = []
     builtin_names = set(_all_skill_names())
+    if lane is not None:
+        visible = {entry.invocation_name for entry in skills_for_lane(cast("Lane", lane))}
+        rows = [r for r in rows if r.name not in builtin_names or r.name in visible]
+    items: list[dict[str, Any]] = []
     for entry in rows:
         name = entry.name
         item: dict[str, Any] = {"name": name, "status": "user", "body_schema": None}
@@ -357,7 +377,7 @@ def _discovered_list_payload(*, workspace: Path | None, scope: str) -> dict[str,
             }
         )
         items.append(item)
-    return {"skills": items, "scope": scope}
+    return {"skills": items, "scope": scope, "lane": lane}
 
 
 @skill_app.command(name="list")
@@ -370,6 +390,16 @@ def list_cmd(
             help="Filter rows by source layer (builtin|user|workspace|all).",
         ),
     ] = "all",
+    lane: Annotated[
+        str | None,
+        typer.Option(
+            "--lane",
+            help=(
+                "Keep only catalog skills this lane may invoke: operator for user help,"
+                " agent for the agent callable catalog."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """List every skill resolvable across builtin / user / workspace layers."""
     from eawf.workflow.skills import (
@@ -386,13 +416,22 @@ def list_cmd(
             flags=flags,
         )
         return
+    if lane is not None and lane not in _LANE_CHOICES:
+        cli_errors.emit_error(
+            cli_errors.UserError(
+                f"unknown lane {lane!r}; expected one of {sorted(_LANE_CHOICES)}",
+                kind="InvalidInput",
+            ),
+            flags=flags,
+        )
+        return
     workspace = flags.workspace
     if flags.json_output:
-        payload = _discovered_list_payload(workspace=workspace, scope=scope)
+        payload = _discovered_list_payload(workspace=workspace, scope=scope, lane=lane)
         raw = orjson.dumps(payload, option=orjson.OPT_INDENT_2 | orjson.OPT_SORT_KEYS)
         typer.echo(raw.decode("utf-8"))
         return
-    payload = _discovered_list_payload(workspace=workspace, scope=scope)
+    payload = _discovered_list_payload(workspace=workspace, scope=scope, lane=lane)
     lines = [f"# eawf skills (scope={scope})"]
     for item in payload["skills"]:
         runtimes = ",".join(item["runtimes"]) if item["runtimes"] else "*"
@@ -589,6 +628,13 @@ def run_cmd(
             help="Eä session URN passed to the SkillContext.",
         ),
     ] = "urn:eawf:v1:store:cli/sessions/SES-skill-run",
+    lane: Annotated[
+        str,
+        typer.Option(
+            "--lane",
+            help="Who invokes the skill: operator, or agent for a model-driven call.",
+        ),
+    ] = "operator",
 ) -> None:
     """Run a registered skill headlessly and emit its envelope.
 
@@ -639,6 +685,7 @@ def run_cmd(
 
     try:
         skill_name = _resolve_skill_name(candidate)
+        _check_invocation(skill_name, args, lane=lane)
     except cli_errors.CliError as err:
         cli_errors.emit_error(err, flags=flags)
         return
@@ -663,6 +710,65 @@ def run_cmd(
     code = _exit_for_status(envelope.header.status)
     if code != exit_codes.OK:
         raise typer.Exit(code)
+
+
+def _check_invocation(name: SkillName, args: dict[str, Any], *, lane: str) -> None:
+    """Refuse an invocation the skill's argument schema or lanes do not admit.
+
+    Raises:
+        UserError: *lane* is not a lane, or the schema refuses the arguments
+            (``kind="InvalidInput"``), naming the refusal code.
+    """
+    from eawf.workflow.skills.arguments import InvocationRefusedError, check_invocation
+    from eawf.workflow.skills.catalog import resolve_skill
+
+    if lane not in _LANE_CHOICES:
+        raise cli_errors.UserError(
+            f"unknown lane {lane!r}; expected one of {sorted(_LANE_CHOICES)}", kind="InvalidInput"
+        )
+    try:
+        check_invocation(resolve_skill(name), args, lane=cast("Lane", lane))
+    except InvocationRefusedError as exc:
+        raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
+
+
+@skill_app.command(name="check-report")
+def report_check_cmd(
+    ctx: typer.Context,
+    name: Annotated[str, typer.Argument(help="Skill whose report to check; e.g. '/research'.")],
+    report: Annotated[
+        Path,
+        typer.Argument(help="Path to the report JSON, or '-' to read it from stdin."),
+    ] = Path("-"),
+) -> None:
+    """Validate a terminal report against the skill's typed output schema."""
+    from pydantic import ValidationError
+
+    from eawf.surfaces.cli.verb_contract import read_spec_document
+    from eawf.workflow.skills.catalog import resolve_skill
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        entry = resolve_skill(_resolve_skill_name(_normalise_skill_input(name)))
+        document = read_spec_document(report)
+        validated = entry.validate_report(document)
+    except cli_errors.CliError as err:
+        cli_errors.emit_error(err, flags=flags)
+        return
+    except ValidationError as exc:
+        fields = sorted({".".join(str(part) for part in row["loc"]) for row in exc.errors()})
+        cli_errors.emit_error(
+            cli_errors.ValidationError(
+                f"{entry.output.schema_name} does not validate; check {', '.join(fields)}"
+            ),
+            flags=flags,
+        )
+        return
+    emit_json_or_text(
+        {"skill": entry.invocation_name, "valid": True, "outcome": validated.outcome},
+        f"{entry.output.schema_name} valid: outcome={validated.outcome}",
+        flags=flags,
+    )
 
 
 def _default_skills_root(workspace: Path | None) -> Path:

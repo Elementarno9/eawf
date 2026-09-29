@@ -1,20 +1,21 @@
 ---
 name: track
-description: "Create a Track, set its policy, or retire it."
-argument-hint: "<create|show|set-policy|retire> [<track-ref>] [--title <text>] [--charter <text>] [--owner <principal>] [--repository <ref>...] [--scope <urn>] [--policy <key=value>...] [--reason <text>] [--from-spec <path|->] [--dry-run]"
+description: "Create, show or retire a Track."
+argument-hint: "<create|show|retire> [<track-ref>] [--title <text>] [--charter <text>] [--owner <principal>] [--repository <ref>...] [--scope <urn>] [--reason <text>] [--from-spec <path|->] [--dry-run]"
 user-invocable: true
 disable-model-invocation: true
 ---
 
 # /track
 
-Create a Track, set its policy, or retire it.
+Create, show or retire a Track.
 
 ## 1. Authority
 
-- Only an authenticated operator initiates this skill. An agent may prepare evidence or recommend the invocation, but never calls it.
-- Effects: Track RPCs.
-- Allowed RPCs: `read_entity`, `domain.track.create`, `domain.track.set_policy`, `domain.track.retire`. Any other RPC is denied before it reaches a handler.
+- Only an authenticated operator initiates this skill, by design: it is kept out of the model's reach. An agent may prepare evidence or recommend the invocation, but never calls it.
+- Operates on: Track, through `projection.track.read`, `domain.track.create`, `domain.track.retire`.
+- Effects: The Track read plus its create and retire verbs.
+- Allowed RPCs: `projection.track.read`, `domain.track.create`, `domain.track.retire`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -30,19 +31,18 @@ Resolve the subject before acting. Name every entity with its identifier and its
 You operate one Track through the single action selected by the invocation.
 
 ```text
-/track <create|show|set-policy|retire> [<track-ref>] [--title <text>] [--charter <text>] [--owner <principal>] [--repository <ref>...] [--scope <urn>] [--policy <key=value>...] [--reason <text>] [--from-spec <path|->] [--dry-run]
+/track <create|show|retire> [<track-ref>] [--title <text>] [--charter <text>] [--owner <principal>] [--repository <ref>...] [--scope <urn>] [--reason <text>] [--from-spec <path|->] [--dry-run]
 ```
 
-Select exactly one action: `create`, `show`, `set-policy`, `retire`. An option the selected action does not declare is refused before you start.
+Select exactly one action: `create`, `show`, `retire`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
 1. Resolve the Track, Project, repositories, policy revision, and exact state revision. For create, resolve the proposed code, title, charter, owner, repositories, and scope before proposing a row.
 2. For show, render current policy, Milestones, unresolved Attention, and repository coverage without mutation.
 3. For create, reject duplicate identity, unresolved repositories, empty charter, or scope that cannot be enforced. Preview the complete Track contract before submitting it.
-4. For set-policy, show the before/after policy and identify every authority, WIP, provider, budget, or repository boundary that changes. A widening requires the protected action declared by policy.
-5. For retire, prove no active Milestone, Batch, Task, Run, pending protected action, or unresolved acceptance depends on the Track. Preserve history; retirement never deletes the Track.
-6. Submit only the RPC declared by the selected action, with expected revision and idempotency key. Return its receipt and refreshed Track projection.
+4. For retire, prove no active Milestone, Batch, Task, Run, pending protected action, or unresolved acceptance depends on the Track. Preserve history; retirement never deletes the Track.
+5. Submit only the RPC declared by the selected action, with expected revision and idempotency key. Return its receipt and refreshed Track projection.
 
 ## 4b. Applicable rules
 
@@ -65,11 +65,11 @@ The obligations the effective rule graph holds for activities `plan`. They bind 
 
 ## 5. Constraints
 
-- Stop when the reference is stale, repository identity is ambiguous, policy widening lacks authority, retirement guards fail, or requested work belongs to a Milestone or PlanRevision.
+- Stop when the reference is stale, repository identity is ambiguous, retirement guards fail, or requested work belongs to a Milestone or PlanRevision.
 - Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `blocked` with the reason rather than guessing.
 
 ## 6. Output
 
-Output one TrackSkillReport containing action, before/after revisions, effective policy, affected references, receipt, warnings, and blockers.
+Output one TrackSkillReport containing action, before/after revisions, affected references, receipt, warnings, and blockers.
 
-The report validates against `TrackSkillReport`, and its terminal outcome is exactly one of `shown`, `created`, `updated`, `retired`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `TrackSkillReport`, and its terminal outcome is exactly one of `shown`, `created`, `retired`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /track` before returning it.

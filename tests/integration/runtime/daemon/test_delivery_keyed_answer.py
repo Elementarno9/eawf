@@ -49,30 +49,30 @@ def _file(context: Epoch2RootContext, *, method: str = "m.prove", key: str = "k"
     file_keyed_answer(context, method=method, key=key, params=PARAMS, answer=ANSWER, at=AT)
 
 
-def test_r03_a_key_that_answered_nothing_replays_nothing(context: Epoch2RootContext) -> None:
+def test_a_key_that_answered_nothing_replays_nothing(context: Epoch2RootContext) -> None:
     assert keyed_answer(context, method="m.prove", key="k", params=PARAMS) is None
 
 
-def test_r03_a_filed_answer_replays_for_the_same_parameters(context: Epoch2RootContext) -> None:
+def test_a_filed_answer_replays_for_the_same_parameters(context: Epoch2RootContext) -> None:
     _file(context)
 
     assert keyed_answer(context, method="m.prove", key="k", params=dict(PARAMS)) == ANSWER
 
 
-def test_r03_the_same_key_with_other_parameters_is_refused(context: Epoch2RootContext) -> None:
+def test_the_same_key_with_other_parameters_is_refused(context: Epoch2RootContext) -> None:
     _file(context)
 
     with pytest.raises(DaemonValidationError, match="idempotency_conflict"):
         keyed_answer(context, method="m.prove", key="k", params={**PARAMS, "gates": ["G-01"]})
 
 
-def test_r03_one_key_sent_to_two_verbs_names_two_requests(context: Epoch2RootContext) -> None:
+def test_one_key_sent_to_two_verbs_names_two_requests(context: Epoch2RootContext) -> None:
     _file(context, method="m.prove")
 
     assert keyed_answer(context, method="m.adopt", key="k", params=PARAMS) is None
 
 
-def test_r03_an_unreadable_answer_refuses_rather_than_running_twice(
+def test_an_unreadable_answer_refuses_rather_than_running_twice(
     context: Epoch2RootContext,
 ) -> None:
     _file(context)

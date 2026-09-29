@@ -14,8 +14,9 @@ authority before task, task before method, method before output.
 6. Output - the typed report and its closed terminal outcomes.
 
 A page is checked before it ships: a missing or reordered slot, stale
-grammar, a retired skill named as an invocation, or an option the skill's
-grammar does not declare refuses packaging instead of shipping.
+grammar, a retired skill named as an invocation, an option the skill's
+grammar does not declare, a placeholder where prose belongs, or an epoch-1
+noun refuses packaging instead of shipping.
 """
 
 from __future__ import annotations
@@ -26,10 +27,15 @@ from collections.abc import Iterable
 from typing import Final
 
 from eawf.platform.rules.records import RuleRecord
+from eawf.workflow.skills.arguments import UNIVERSAL_OPTIONS
 from eawf.workflow.skills.bodies.prompts import SkillPrompt, skill_prompt
-from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillCatalogEntry
+from eawf.workflow.skills.catalog import SKILL_CATALOG, SkillCatalogEntry, skill_lanes
+from eawf.workflow.skills.census import epoch1_nouns
 
 logger = logging.getLogger(__name__)
+
+#: The verb an agent files an operator-only choice through, as an operator decision.
+DECISION_RPC: Final = "runtime.question.open_decision"
 
 #: The slot headings of every page, in the order they must appear.
 CHASSIS_SLOTS: Final[tuple[str, ...]] = (
@@ -48,10 +54,12 @@ _RULES_SLOT: Final[str] = "4b. Applicable rules"
 #: bodies, which describe engine internals rather than the invocation grammar.
 STALE_PAGE_TOKENS: Final[tuple[str, ...]] = ("integration_request_unnamed",)
 
-#: Options every skill accepts whatever its own grammar declares.
-UNIVERSAL_OPTIONS: Final[frozenset[str]] = frozenset(
-    {"--output", "--expected-revision", "--idempotency-key", "--args-json", "--dry-run"}
+#: Text that marks a body nobody finished writing. A deferred or placeholder
+#: body must never ship, because the model reads it as the instruction.
+PLACEHOLDER_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"\b(?:TODO|TBD|FIXME|XXX)\b|(?i:lorem ipsum|to be written|body deferred)"
 )
+
 
 #: Outcomes that mean "stopped for a reason", which the stop condition names.
 _STOP_OUTCOMES: Final[tuple[str, ...]] = ("blocked", "needs_operator", "paused")
@@ -151,6 +159,11 @@ def chassis_findings(page: str, entry: SkillCatalogEntry) -> tuple[str, ...]:
     findings.extend(
         f"stale grammar {token!r} is on the page" for token in STALE_PAGE_TOKENS if token in page
     )
+    findings.extend(
+        f"placeholder {match.group(0)!r} is on the page"
+        for match in PLACEHOLDER_PATTERN.finditer(page)
+    )
+    findings.extend(f"epoch-1 noun {noun!r} is on the page" for noun in epoch1_nouns(page))
     prose = _without_rules_slot(page)
     for row in SKILL_CATALOG.retired:
         if re.search(rf"(?<![\w./-])/{re.escape(row.skill_id)}(?![\w-])", prose):
@@ -209,12 +222,13 @@ def shipped_skill_page(entry: SkillCatalogEntry) -> str:
 
 def _authority(entry: SkillCatalogEntry) -> str:
     effects = entry.effects
-    if entry.audience == "user_only":
+    if "agent" not in skill_lanes(entry):
         audience = (
-            "Only an authenticated operator initiates this skill. An agent may prepare evidence"
-            " or recommend the invocation, but never calls it."
+            "Only an authenticated operator initiates this skill, by design: it is kept out of"
+            " the model's reach. An agent may prepare evidence or recommend the invocation, but"
+            " never calls it."
         )
-    elif entry.audience == "agent_only":
+    elif "operator" not in skill_lanes(entry):
         audience = "Only an agent initiates this skill, inside an enclosing scope."
     else:
         audience = (
@@ -222,12 +236,13 @@ def _authority(entry: SkillCatalogEntry) -> str:
             " widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled"
             " capsule already grants every read, write, RPC, budget and external effect below."
         )
-    lines = [f"- {audience}"]
+    lines = [f"- {audience}", f"- Operates on: {_operates_on(entry)}."]
     if entry.operator_only_actions:
         actions = ", ".join(f"`{action}`" for action in entry.operator_only_actions)
         lines.append(
-            f"- Operator-only actions: {actions}. An agent that reaches one prepares a"
-            " PendingAction and stops; it never chooses the recommended option itself."
+            f"- Operator-only actions: {actions}. An agent that reaches one files it with"
+            f" `eawf question open-decision` (`{DECISION_RPC}`), shows the bound question the"
+            " answer carries, and stops; it never chooses the recommended option itself."
         )
     lines.append(f"- Effects: {effects.summary}")
     if effects.rpcs:
@@ -237,6 +252,9 @@ def _authority(entry: SkillCatalogEntry) -> str:
         )
     else:
         lines.append("- Allowed RPCs: none. This skill calls no daemon RPC.")
+    if effects.tools:
+        tools = ", ".join(f"`{tool.value}`" for tool in effects.tools)
+        lines.append(f"- Run tools: {tools}.")
     if effects.canonical_mutates:
         lines.append(
             "- Canonical state changes only through those RPCs, and every mutating call carries"
@@ -255,6 +273,14 @@ def _authority(entry: SkillCatalogEntry) -> str:
         " on this page adds or widens a tool, path, RPC, credential or external effect."
     )
     return "\n".join(lines)
+
+
+def _operates_on(entry: SkillCatalogEntry) -> str:
+    routes = [f"`{rpc}`" for rpc in entry.effects.rpcs]
+    routes += [f"`eawf {verb}`" for verb in entry.effects.verbs]
+    if not routes:
+        return f"{entry.subject}, through no lifecycle route; this is an explicit skill contract"
+    return f"{entry.subject}, through {', '.join(routes)}"
 
 
 def _context(prompt: SkillPrompt) -> str:
@@ -321,10 +347,18 @@ def _constraints(entry: SkillCatalogEntry, prompt: SkillPrompt) -> str:
 
 def _output(entry: SkillCatalogEntry, prompt: SkillPrompt) -> str:
     outcomes = ", ".join(f"`{outcome}`" for outcome in entry.output.terminal_outcomes)
+    coverage = (
+        " It carries a `coverage` block listing what the pass covered and, with a reason each,"
+        " what it did not."
+        if entry.output.coverage
+        else ""
+    )
     return (
         f"{prompt.output}\n\n"
         f"The report validates against `{entry.output.schema_name}`, and its terminal outcome is"
-        f" exactly one of {outcomes}. Prose in the report is explanation, never the result."
+        f" exactly one of {outcomes}.{coverage} Prose in the report is explanation, never the"
+        f" result. Check it with `eawf skill check-report {entry.invocation_name}` before"
+        " returning it."
     )
 
 
@@ -338,6 +372,7 @@ def _without_rules_slot(page: str) -> str:
 
 __all__ = [
     "CHASSIS_SLOTS",
+    "PLACEHOLDER_PATTERN",
     "STALE_PAGE_TOKENS",
     "UNIVERSAL_OPTIONS",
     "SkillPageError",

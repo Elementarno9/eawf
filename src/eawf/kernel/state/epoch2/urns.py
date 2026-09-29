@@ -209,6 +209,15 @@ DueScopeUrn = Annotated[
     _JSON_SCHEMA,
 ]
 
+#: What a bulk operation may name: a Run for a Run control, a Task for a
+#: lease release. Which of the two a given verb takes is the verb's rule.
+BulkItemUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.RUN, EntityKind.TASK)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
 #: Any addressable record. Used where the kind is carried beside the URN
 #: (an :class:`~eawf.kernel.state.epoch2.values.EntityRef` discriminator)
 #: or preserved from a source system rather than chosen.
@@ -223,6 +232,7 @@ AnyEntityUrn = Annotated[
 __all__ = [
     "AnyEntityUrn",
     "BatchUrn",
+    "BulkItemUrn",
     "CampaignFindingUrn",
     "CampaignUrn",
     "ClaimUrn",

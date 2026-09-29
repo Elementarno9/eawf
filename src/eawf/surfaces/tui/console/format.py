@@ -88,6 +88,23 @@ def span(total: int) -> str:
     return f"{hours}h" if minutes == 0 else f"{hours}h {minutes:02d}m"
 
 
+def instant(stamp: str | None) -> datetime | None:
+    """Return the instant a projected fact states, or ``None`` when it states none readable.
+
+    A row's facts are the document's own strings, so an instant is read once here, and a
+    renderer draws the unknown token for ``None`` rather than guessing a time.
+
+    Args:
+        stamp: The fact as the projection states it, an ISO-8601 instant or nothing.
+    """
+    if not stamp:
+        return None
+    try:
+        return datetime.fromisoformat(stamp)
+    except ValueError:
+        return None
+
+
 def _utc(at: datetime) -> datetime:
     """Return ``at`` in UTC.
 

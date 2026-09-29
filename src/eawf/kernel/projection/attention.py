@@ -287,6 +287,8 @@ class AttentionItem:
         notification_class: What the item is announced as.
         deciding_classes: The principal classes that may decide the item, for a record
             that names classes rather than a principal; ``None`` when it names none.
+        read_only: Whether the item is a notice: listed for its audience, but nothing
+            answers it, so it is never counted, jumped to, toasted or offered a verb.
     """
 
     key: str
@@ -297,6 +299,7 @@ class AttentionItem:
     assignee_ref: str | None
     notification_class: NotificationClass
     deciding_classes: frozenset[str] | None = None
+    read_only: bool = False
 
     def addressed_to(self, principal: str) -> bool:
         """Return whether ``principal`` is in this item's audience."""
@@ -344,12 +347,12 @@ class AttentionView:
     items: tuple[AttentionItem, ...]
 
     def open_for(self, principal: str) -> tuple[AttentionItem, ...]:
-        """Return the open items ``principal`` is in the audience of."""
-        return tuple(i for i in self.items if i.addressed_to(principal))
+        """Return the open items ``principal`` is in the audience of, notices left out."""
+        return tuple(i for i in self.blocking() if i.addressed_to(principal))
 
     def blocking(self) -> tuple[AttentionItem, ...]:
-        """Return every open item, whoever it is addressed to."""
-        return self.items
+        """Return every open item, whoever it is addressed to, notices left out."""
+        return tuple(i for i in self.items if not i.read_only)
 
     def bucket_counts(self) -> tuple[BucketCount, ...]:
         """Return every bucket in order, the ``needs operator`` needs after their parent.
@@ -425,6 +428,26 @@ def _permission_item(row: ProjectionRow) -> AttentionItem | None:
     )
 
 
+def _breach_item(row: ProjectionRow) -> AttentionItem:
+    """Return the notice a child-ceiling breach row is.
+
+    The register lists a Run row only as a breach. A Run carries no owner of its own,
+    and the only admission past a ceiling is the adoption of a subagent the host already
+    spawned, whose tree belongs to the operator running that host, so the notice is
+    addressed to every principal.
+    """
+    return AttentionItem(
+        key=row.key,
+        source_ref=row.urn,
+        revision=row.revision,
+        bucket=AttentionBucket.OVER_BUDGET,
+        need=None,
+        assignee_ref=None,
+        notification_class=NotificationClass.BUDGET_PASSED,
+        read_only=True,
+    )
+
+
 def build_attention_view(register: RegisterView) -> AttentionView:
     """Return the Attention register reduced to its open items.
 
@@ -449,6 +472,8 @@ def build_attention_view(register: RegisterView) -> AttentionView:
             item = _permission_item(row)
         elif row.collection is Epoch2Collection.PENDING_ACTION:
             item = _item(row)
+        elif row.collection is Epoch2Collection.RUN:
+            item = _breach_item(row)
         else:
             continue
         if item is not None:

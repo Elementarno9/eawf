@@ -1,7 +1,9 @@
 """Research store read commands + the campaign and question entity groups.
 
 ``research`` keeps the store reads; ``campaign`` and ``question`` are entity
-groups of their own, mounted at the CLI root by the command registry.
+groups of their own, mounted at the CLI root by the command registry. The
+``question`` group also files operator decisions, the pending actions an
+agent raises when it reaches a choice it may not take.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import typer
 from eawf.kernel.state.enums import OpenQuestionDropReason, StoreKind
 from eawf.surfaces.cli import errors
 from eawf.surfaces.cli.commands.draft import install_promote_command
+from eawf.surfaces.cli.commands.question_decision import question_open_decision
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
@@ -45,9 +48,12 @@ campaign_app = typer.Typer(
 
 question_app = typer.Typer(
     name="question",
-    help="Add and list research-campaign open questions.",
+    help="Add and list open questions, and file operator decisions.",
     no_args_is_help=True,
 )
+
+# an epoch-2 verb of this group, kept in a module of its own so it is not an epoch-1 one
+question_app.command("open-decision")(question_open_decision)
 
 install_promote_command(research_app, "research")
 

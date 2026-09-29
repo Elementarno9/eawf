@@ -17,21 +17,17 @@ known to have failed -- exactly what these two states deny.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
 
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthState
-from eawf.surfaces.tui.console.format import clock_time, group
+from eawf.surfaces.tui.console.format import clock_time, group, instant
 from eawf.surfaces.tui.console.frame import (
     View,
     bar,
     build,
-    needs_count,
     route_keys_bar,
-    scope_label,
     thin,
 )
-from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import KeyEntry
 from eawf.surfaces.tui.console.lifecycle import (
     ELAPSED_WORDS,
@@ -41,12 +37,14 @@ from eawf.surfaces.tui.console.lifecycle import (
     treatment,
 )
 from eawf.surfaces.tui.console.reads import attached, reads
-from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD, label, more, route_crumb
+from eawf.surfaces.tui.console.renderers.read_model import (
+    UNKNOWN_WORD,
+    label,
+    more,
+    native_header,
+    route_crumb,
+)
 from eawf.surfaces.tui.console.width import cell_len, clip_words
-
-#: The label gutter of the subject section, the leading space excluded: the same gutter the
-#: spine frame's REGIONS and UNSTATED rows use, so the section reads as one column of labels.
-GUTTER = 10
 
 #: The sentence both unknown frames close on.
 UNKNOWN_CLOSE: tuple[str, str] = (
@@ -106,10 +104,8 @@ def state_of(row: SpineRow) -> StateTreatment | None:
 
 def at(text: str | None) -> str:
     """Return a stored instant as the clock time a fact is stamped with, or the unknown token."""
-    try:
-        return clock_time(datetime.fromisoformat(text)) if text else UNKNOWN_WORD
-    except ValueError:
-        return UNKNOWN_WORD
+    stamped = instant(text)
+    return clock_time(stamped) if stamped is not None else UNKNOWN_WORD
 
 
 def subject_rows(row: SpineRow, state: StateTreatment, w: int) -> list[str]:
@@ -139,11 +135,11 @@ def subject_rows(row: SpineRow, state: StateTreatment, w: int) -> list[str]:
     ]
     unstated = f"{UNKNOWN_WORD} · the record states nothing more"
     return [
-        f" {'SUBJECT':<{GUTTER}}{row.key}{f' {row.title}' if row.title else ''}",
-        f" {'STATE':<{GUTTER}}{state.state} · {state.meaning}",
-        f" {'CLOCK':<{GUTTER}}{ELAPSED_WORDS[state.elapsed]}{moved}",
-        f" {'FILED IN':<{GUTTER}}{row.parent_key or 'nothing above it'}",
-        f" {'FACTS':<{GUTTER}}{' · '.join(stated) or unstated}",
+        label("SUBJECT", f"{row.key}{f' {row.title}' if row.title else ''}"),
+        label("STATE", f"{state.state} · {state.meaning}"),
+        label("CLOCK", f"{ELAPSED_WORDS[state.elapsed]}{moved}"),
+        label("FILED IN", row.parent_key or "nothing above it"),
+        label("FACTS", " · ".join(stated) or unstated),
         thin(w),
     ]
 
@@ -232,13 +228,7 @@ def unknown_frame(
     session.sel = spine.index_of(row.key) or 0
     steps = [*([row.parent_key] if row.parent_key else []), row.key]
     rows: list[str] = [
-        header_row(
-            session,
-            crumb=route_crumb(view, spine, *steps),
-            scope=scope_label(view, spine.scope_id),
-            needs=needs_count(view),
-            w=w,
-        ),
+        native_header(view, route_crumb(view, spine, *steps), spine.scope_id),
         f" {subject_line(row, what, w)}",
         bar(w),
     ]

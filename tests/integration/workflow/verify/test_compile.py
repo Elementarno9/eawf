@@ -394,13 +394,12 @@ def test_compile_floor_pack_rejects_with_argv_policy_detail() -> None:
     assert "argv" in msg.lower() or "policy" in msg.lower()
 
 
-def test_compile_floor_pack_unions_default_allowlist() -> None:
-    """The kernel-spec default allowlist is unioned with the profile-fed one.
+def test_compile_floor_pack_unions_registered_family_heads() -> None:
+    """The registered command-family heads are unioned with the profile-fed ones.
 
-    The default allowlist (:data:`DEFAULT_GATE_ARGV_ALLOWLIST`) carries
-    ``uv``, ``run``, ``pytest``, ``mypy``, ``pre-commit`` etc; even
-    when the profile passes an empty per-floor-check allowlist, the
-    kernel-spec floor of dev-loop wrappers still validates.
+    The registry carries ``uv``, ``pytest``, ``mypy``, ``pre-commit``
+    etc; even when the profile passes an empty per-floor-check
+    allowlist, a registered family still validates.
     """
     pack = compile_floor_pack(
         [_floor_check("pc", cmd=["uv", "run", "pre-commit", "run", "--all-files"])],

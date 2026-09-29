@@ -59,6 +59,7 @@ from eawf.runtime.runtimes.claude.statusline_modules import (
     mcp_health,
     memory,
     model_session_cwd,
+    rate_window,
     scope,
     token_saving,
 )
@@ -82,6 +83,7 @@ _MODULE_ORDER: list[Any] = [
     git,
     model_session_cwd,
     context_tokens,
+    rate_window,
     cost,
     mcp_health,
     hooks_plugins,

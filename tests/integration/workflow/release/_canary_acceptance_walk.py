@@ -715,6 +715,7 @@ def _integrate_and_verify(walker: Walker, planned: Planned) -> dict[str, Any]:
         base=base_binding(walker, batch),
         exit={"repair_task": planned.exit_task, "rebase_task": planned.exit_task},
         diagnostic=diagnostic,
+        expected_revision=walker.revision(batch),
     )
     assert integrated["outcome"] == "integrated", integrated
     walker.walk.generation_ids = tuple(integrated["generation_ids"])
@@ -778,6 +779,7 @@ def _accept(walker: Walker, planned: Planned, binding: dict[str, Any]) -> None:
         ],
         accepted_binding=binding,
         requested_by=OPERATOR_PRINCIPAL,
+        expected_revision=walker.revision(milestone),
     )
     assert asked["approval_ref"], asked
     walker.record(

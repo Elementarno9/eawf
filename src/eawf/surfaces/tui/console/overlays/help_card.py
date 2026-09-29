@@ -2,11 +2,24 @@
 
 It teaches only keys that act where the operator stands: the route's own table, and each
 global key that acts on this route, so a depth key is taught only where there is a depth.
+The table is never cut to fit: a card taller than the frame keeps its title rows and
+scrolls the rest under a ``WINDOW`` row, so every key and the quit rule stay reachable.
 """
 
 from __future__ import annotations
 
-from eawf.surfaces.tui.console.frame import View, bar, build, entry_state, header, thin
+import textwrap
+from typing import TYPE_CHECKING
+
+from eawf.surfaces.tui.console.frame import (
+    RowWindow,
+    View,
+    bar,
+    build,
+    entry_state,
+    header,
+    thin,
+)
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyEntry, keybar
 from eawf.surfaces.tui.console.keymap import (
     ENTRY_ALLOW,
@@ -19,8 +32,15 @@ from eawf.surfaces.tui.console.keymap import (
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.width import cell_len, pad
 
+if TYPE_CHECKING:
+    from eawf.surfaces.tui.console.navigation import Ctx
+
 # The token column's narrowest width; the card's longest token widens the whole column.
 TOKEN_W = 11
+# The title, subtitle and rule the card keeps above its scrolling table.
+_TITLE_ROWS = 3
+_SCROLL_KEYS = ("PageUp", "PageDown")
+QUIT_RULE = "Esc Esc quits only at scope home, nothing open or pending, 80ms to 1.5s apart."
 
 
 def _route_table(view: View) -> tuple[KeyEntry, ...]:
@@ -86,11 +106,42 @@ def render(view: View) -> list[str]:
     rows.extend("   " + key_cell(key.token) + key.text for key in everywhere)
     if pre:
         rows.append("   before a session exists, only the keys above are bound")
-    rows.extend(
-        [
-            thin(w),
-            # one line, so the 80x24 card keeps every global key and this rule together
-            " Esc Esc quits only at scope home, nothing open or pending, 80ms to 1.5s apart.",
-        ]
+    rows.append(thin(w))
+    # wrapped rather than clipped: the rule is the one line a narrow frame cannot lose
+    rows.extend(f" {line}" for line in textwrap.wrap(QUIT_RULE, w - 1))
+    title, table_rows = rows[:_TITLE_ROWS], rows[_TITLE_ROWS:]
+    room = view.h - 1 - _TITLE_ROWS
+    if len(table_rows) <= room:
+        s.help_max = 0
+        return build(view, rows, keybar([("Esc", "close")], w))
+    # the last row of the room states the window, so one row fewer of the table shows
+    shown = room - 1
+    s.help_max, s.help_page = len(table_rows) - shown, shown
+    s.help_top = max(0, min(s.help_top, s.help_max))
+    win = RowWindow(start=s.help_top, stop=s.help_top + shown, total=len(table_rows))
+    return build(
+        view,
+        [*title, *table_rows[win.start : win.stop], win.line()],
+        keybar([("PageUp PageDown", "scroll"), ("Esc", "close")], w),
     )
-    return build(view, rows, keybar([("Esc", "close")], w))
+
+
+def scroll_key(ctx: Ctx, key: str) -> bool:
+    """Page the help card, claiming the paging keys whether or not it scrolls.
+
+    Help has no cursor, so it pages rather than taking the arrows; on a card that fits
+    the paging keys are a no-op, as the keybar does not offer them.
+
+    Returns:
+        Whether the key was a paging key, which the card then claimed.
+    """
+    if key not in _SCROLL_KEYS:
+        return False
+    s = ctx.s
+    if not s.help_max:
+        ctx.noop(key)
+        return True
+    step = s.help_page if key == "PageDown" else -s.help_page
+    s.help_top = max(0, min(s.help_top + step, s.help_max))
+    ctx.log(key, f"help rows from {s.help_top + 1}")
+    return True

@@ -30,6 +30,7 @@ from eawf.kernel.store.kinds.agent_report import (
     AgentReportFollowup,
     AuditorReportBody,
     CriterionVerdict,
+    StatisticPopulation,
 )
 from eawf.workflow.dispatch.verdict import (
     DurableAuditContext,
@@ -294,6 +295,11 @@ def test_durable_auditor_json_schema_string_bounds_match_the_report_models() -> 
     assert len(row["criterion"]["const"]) <= _string_bound(
         CriterionVerdict.model_json_schema(), "criterion", "maxLength"
     )
+    population = props["evidence_refs"]["items"]["properties"]["population"]["properties"]
+    for name in ("selector", "filter"):
+        assert population[name]["maxLength"] == _string_bound(
+            StatisticPopulation.model_json_schema(), name, "maxLength"
+        )
 
 
 # --------------------------------------------------------------------------- #

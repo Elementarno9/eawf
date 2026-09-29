@@ -34,9 +34,13 @@ from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_PROJECT_GOALS,
     _WRITABLE_REPO_ONLY,
     _WRITABLE_RUNTIME_PREFERENCE,
+    LeafDeny,
     LeafKey,
 )
-from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
+from eawf.kernel.config.schema import (
+    DEFAULT_PERMISSION_WAIT_SECONDS,
+    DEFAULT_STALL_INTERVAL_SECONDS,
+)
 from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH, RESEARCH_DEPTH_VALUES
 
 # Catalog data table — declaration-ordered by domain section for review.
@@ -208,6 +212,14 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=("repo", "branch"),
         description="Profile id → sha256 of last-trusted body.",
     ),
+    LeafKey(
+        key="profiles.certified",
+        domain="profiles",
+        type="mapping",
+        default={},
+        writable_layers=("repo", "branch"),
+        description="Profile id → digest an enriched profile is certified as managed under.",
+    ),
     # --- runtime -----------------------------------------------------------
     LeafKey(
         key="runtime.default",
@@ -274,6 +286,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=(),
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the Claude runtime.",
+        runtime="claude",
     ),
     LeafKey(
         key="runtime.models.codex",
@@ -282,6 +295,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=(),
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the Codex runtime.",
+        runtime="codex",
     ),
     LeafKey(
         key="runtime.models.opencode",
@@ -290,6 +304,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=(),
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the opencode runtime.",
+        runtime="opencode",
     ),
     LeafKey(
         key="runtime.claude.stall_interval_s",
@@ -298,6 +313,15 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=DEFAULT_STALL_INTERVAL_SECONDS,
         writable_layers=_WRITABLE_GWR,
         description="Seconds a Claude Run may produce nothing before it is flagged stalled.",
+        runtime="claude",
+    ),
+    LeafKey(
+        key="runtime.claude.permission_wait_s",
+        domain="runtime",
+        type="int",
+        default=DEFAULT_PERMISSION_WAIT_SECONDS,
+        writable_layers=_WRITABLE_GWR,
+        description="Seconds Claude's permission hook waits for a principal's decision.",
     ),
     LeafKey(
         key="runtime.codex.stall_interval_s",
@@ -306,6 +330,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=DEFAULT_STALL_INTERVAL_SECONDS,
         writable_layers=_WRITABLE_GWR,
         description="Seconds a Codex Run may produce nothing before it is flagged stalled.",
+        runtime="codex",
     ),
     LeafKey(
         key="runtime.opencode.stall_interval_s",
@@ -314,6 +339,7 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=DEFAULT_STALL_INTERVAL_SECONDS,
         writable_layers=_WRITABLE_GWR,
         description="Seconds an opencode Run may produce nothing before it is flagged stalled.",
+        runtime="opencode",
     ),
     # Per-adapter sub-keys (claude / codex / opencode).
     LeafKey(
@@ -1127,6 +1153,8 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="str",
         default="merge",
         writable_layers=_WRITABLE_GWR,
+        # ship refuses a squash merge unless vcs.squash_allowed is set
+        deny=LeafDeny(value="squash", unless="vcs.squash_allowed"),
     ),
     LeafKey(
         key="vcs.squash_allowed",
@@ -1488,7 +1516,12 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         writable_layers=_WRITABLE_GWR,
     ),
     LeafKey(
-        key="mcp.servers", domain="mcp", type="mapping", default={}, writable_layers=_WRITABLE_GWR
+        key="mcp.servers",
+        domain="mcp",
+        type="mapping",
+        default={},
+        writable_layers=_WRITABLE_GWR,
+        secret_refs=True,
     ),
     # --- statusline --------------------------------------------------------
     LeafKey(
@@ -1606,6 +1639,7 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "audit.default_level": "eawf.workflow.skills.audit._resolve_level",
     "daemon.proxy_enabled": "eawf.surfaces.cli._mutation._proxy_enabled",
     "dispatch.role_tier_token_cap": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
+    "profiles.certified": "eawf.workflow.dispatch.renderer.resolve_role_blocks",
     "estimation.eu_basis": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "estimation.eu_minutes": "eawf.runtime.daemon.methods.state._wave_close_rollup_config",
     "flow.budget.enforce": "eawf.runtime.daemon.methods.agent._resolve_budget_config",
@@ -1623,6 +1657,9 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.claude.permission_wait_s": (
+        "eawf.kernel.config.layered.resolve_permission_wait_seconds"
+    ),
     "runtime.claude.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
     "runtime.codex.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
     "runtime.opencode.stall_interval_s": (
@@ -1706,8 +1743,21 @@ def _bind_behavior_metadata(entry: LeafKey) -> LeafKey:
     return entry
 
 
+_RANGE_BY_KEY: dict[str, tuple[float | None, float | None]] = {
+    entry.key: (entry.min_value, entry.max_value)
+    for entry in CONFIG_REGISTRY
+    if entry.min_value is not None or entry.max_value is not None
+}
+
+
+def _bind_value_range(entry: LeafKey) -> LeafKey:
+    """Attach the range the interactive config registry holds *entry*'s value to."""
+    bounds = _RANGE_BY_KEY.get(entry.key)
+    return entry if bounds is None else entry.model_copy(update={"value_range": bounds})
+
+
 _LEAF_KEYS: tuple[LeafKey, ...] = tuple(
-    _bind_behavior_metadata(entry) for entry in _DECLARED_LEAF_KEYS
+    _bind_value_range(_bind_behavior_metadata(entry)) for entry in _DECLARED_LEAF_KEYS
 )
 
 _DECLARED_KEYS = {entry.key for entry in _LEAF_KEYS}

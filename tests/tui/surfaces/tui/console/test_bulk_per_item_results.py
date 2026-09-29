@@ -246,21 +246,21 @@ def test_con_148_leaving_a_card_with_an_unknown_row_says_it_stays_unknown() -> N
     assert "1 unknown rows stay unknown until reconcile answers" in journey.session.log[0].note
 
 
-# ---------- K-06: every route that marks a row draws the mark ----------
+# ---------- every route that marks a row draws the mark ----------
 
 
 def _marked_rows(frame: list[str], *keys: str) -> list[str]:
     return [row for row in frame if any(f"{MARKED}{key} " in row for key in keys)]
 
 
-def test_k_06_space_on_scope_home_draws_the_mark_on_each_marked_leaf() -> None:
+def test_space_on_scope_home_draws_the_mark_on_each_marked_leaf() -> None:
     journey = _Journey("scope.home", MS_FIRST)
     journey.mark_two()
     assert journey.session.marked == [MS_FIRST, MS_SECOND]
     assert len(_marked_rows(journey.frame, MS_FIRST, MS_SECOND)) == 2
 
 
-def test_k_06_space_on_a_track_marks_the_milestone_under_the_cursor() -> None:
+def test_space_on_a_track_marks_the_milestone_under_the_cursor() -> None:
     journey = _Journey("track")
     journey.session.subj_id = "TRK-CORE"
     journey.frame = compose_frame(journey.view)
@@ -271,7 +271,7 @@ def test_k_06_space_on_a_track_marks_the_milestone_under_the_cursor() -> None:
     assert len(_marked_rows(journey.frame, row)) == 1
 
 
-def test_k_06_space_with_no_row_under_the_cursor_says_why_rather_than_nothing() -> None:
+def test_space_with_no_row_under_the_cursor_says_why_rather_than_nothing() -> None:
     journey = _Journey()
     journey.session.sel_id = None
     journey.press(" ")
@@ -279,7 +279,7 @@ def test_k_06_space_with_no_row_under_the_cursor_says_why_rather_than_nothing() 
     assert journey.session.log[0].note == NOTHING_TO_MARK
 
 
-def test_k_06_the_mark_goes_only_beside_a_marked_key_that_opens_its_row() -> None:
+def test_the_mark_goes_only_beside_a_marked_key_that_opens_its_row() -> None:
     session = Session()
     session.marked = [FIRST]
     rows = [
@@ -297,7 +297,7 @@ def test_k_06_the_mark_goes_only_beside_a_marked_key_that_opens_its_row() -> Non
     ]
 
 
-def test_k_06_no_mark_leaves_every_row_as_it_was() -> None:
+def test_no_mark_leaves_every_row_as_it_was() -> None:
     rows = [" head", f"   {FIRST} running"]
     paint_marks(Session(), rows)
     assert rows == [" head", f"   {FIRST} running"]

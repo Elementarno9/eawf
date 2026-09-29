@@ -250,6 +250,9 @@ def test_surf_091_verify_renders_the_bound_question_it_asked(
         "journey": [STEP],
         "accepted_binding": ACCEPTED_BINDING,
         "requested_by": dict(OPERATOR),
+        "expected_revision": read_document(document_path(canary))[Epoch2Collection.MILESTONE.value][
+            "MLS-0030"
+        ]["revision"],
     }
     result = verify_skill.VerifySkill(caller=caller).action(
         SkillContext(scope="scope", session="session", args=args)

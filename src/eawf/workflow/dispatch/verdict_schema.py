@@ -50,6 +50,7 @@ type CriterionSchemaRow = tuple[str, tuple[str, ...]]
 _MAX_SUMMARY_CHARS: int = 4000
 _MAX_CRITERION_CHARS: int = 500
 _MAX_NOTE_CHARS: int = 240
+_MAX_POPULATION_CHARS: int = 240
 _MAX_FOLLOWUP_TITLE_CHARS: int = 160
 _MAX_FOLLOWUP_DETAIL_CHARS: int = 500
 
@@ -79,11 +80,16 @@ def _closed_object(*, properties: dict[str, Any], required: Sequence[str]) -> di
 
 def _evidence_ref_schema() -> dict[str, Any]:
     """Return the closed schema of one evidence reference."""
+    population_field = {"type": "string", "minLength": 1, "maxLength": _MAX_POPULATION_CHARS}
     return _closed_object(
         properties={
             "kind": {"type": "string", "enum": list(_EVIDENCE_KINDS)},
             "ref": {"type": "string", "minLength": 1},
             "note": {"type": "string", "maxLength": _MAX_NOTE_CHARS},
+            "population": _closed_object(
+                properties={"selector": population_field, "filter": population_field},
+                required=["selector", "filter"],
+            ),
         },
         required=["kind", "ref"],
     )

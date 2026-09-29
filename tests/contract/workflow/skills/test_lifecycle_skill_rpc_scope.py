@@ -53,6 +53,7 @@ _INTEGRATE_ROW: Final[tuple[str, ...]] = (
     "runtime.candidate.report.bind",
     "runtime.delivery.assemble",
     "runtime.delivery.integrate",
+    "runtime.question.open_decision",
 )
 
 #: The verification row: read and check effects plus the receipt-filing verbs.

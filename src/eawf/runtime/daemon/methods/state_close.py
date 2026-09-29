@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from eawf.kernel.config.schema import EuBasis
 from eawf.kernel.spec.common import (
+    GATE_RUN_EVIDENCE_KINDS,
     CriterionSpec,
     validate_criterion_gate_refs,
 )
@@ -307,7 +308,7 @@ def compute_wave_close_readiness(
             for criterion in state.waves[wave_id].success_criteria
             if criterion.required
             and not criterion.gate_ids
-            and criterion.evidence_kind != "deterministic"
+            and criterion.evidence_kind not in GATE_RUN_EVIDENCE_KINDS
         )
     return compute_readiness(
         wave_id,
@@ -777,7 +778,7 @@ async def score_required_criteria(
         if (
             high_risk_single_auditor
             and close_attempt_id
-            and (not gates or criterion.evidence_kind != "deterministic")
+            and (not gates or criterion.evidence_kind not in GATE_RUN_EVIDENCE_KINDS)
         ):
             continue
         if not gates:

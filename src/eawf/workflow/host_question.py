@@ -23,8 +23,9 @@ expanded in the same view. Sentences are short.
 When it may be shown. Only a question that is filed and waiting: the
 record is durable before any surface sees it, so losing the surface loses
 nothing, and presenting the same waiting record again shows the same
-question. A timeout default is refused, because no override window is
-filed with the record and the surface could not show one.
+question. A timeout default is shown with its override window and the
+policy that permitted it; a default filed without a window is refused,
+because the surface could not show when the default can still be changed.
 """
 
 from __future__ import annotations
@@ -94,7 +95,7 @@ def _require_answerable(action: PendingAction) -> None:
             f"{action.id} is {action.status.value}; only a filed "
             f"{PendingActionStatus.WAITING.value} question is shown",
         )
-    if action.default_on_timeout is not None:
+    if action.default_on_timeout is not None and action.override_until is None:
         raise QuestionPresentationError(
             PresentationRefusal.TIMEOUT_UNSHOWN,
             f"{action.id} would default to {action.default_on_timeout!r} but files no override "
@@ -194,12 +195,13 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
         The multiple-choice question: the persisted options in their order
         and under their labels, each with its consequence, its rendering
         and its option id, the recommendation stated on the recommended
-        option, and the term expansions shown with the question. Bound to
+        option, and the term expansions and any timeout default with its
+        override window shown with the question. Bound to
         the action's URN and the revision it was read at.
 
     Raises:
         QuestionPresentationError: The action is not a filed waiting
-            question, carries a timeout default it cannot show, or is not
+            question, carries a timeout default with no override window, or is not
             presentable as it stands -- an option without a consequence or
             rendering, options that do not differ, no single one-sentence
             recommendation, a sentence too long, or an unexpanded term.
@@ -213,6 +215,13 @@ def present_pending_action(action: PendingAction) -> UserQuestion:
     if action.terms:
         glossary = "; ".join(f"{item.term} is {item.expansion}" for item in action.terms)
         question = f"{question}\n\nTerms: {glossary}."
+    if action.default_on_timeout is not None and action.override_until is not None:
+        default = next(o for o in action.options if o.option_id == action.default_on_timeout)
+        until = f"{action.override_until:%Y-%m-%d %H:%M} universal time"
+        question = (
+            f"{question}\n\nIf nobody answers by {until}, {default.label!r} stands, as "
+            f"{action.default_policy} allows. Until then an answer overrides it."
+        )
     options = [
         UserQuestionOption(
             label=option.label,

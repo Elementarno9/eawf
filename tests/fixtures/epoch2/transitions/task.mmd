@@ -19,7 +19,7 @@ stateDiagram-v2
     PLANNED --> CLAIMED: claimed [lease_held]
     PLANNED --> CANCELLED: cancelled [reason_recorded]
     CLAIMED --> RUNNING: started [run_bound]
-    CLAIMED --> PLANNED: lease_released [reason_recorded]
+    CLAIMED --> PLANNED: lease_released [reason_recorded+releaser_holds_lease+no_active_run]
     CLAIMED --> CANCELLED: cancelled [reason_recorded]
     RUNNING --> READY_TO_INTEGRATE: ready [run_report_bound+criteria_evidence_bound]
     RUNNING --> FAILED: failed [run_report_bound+reason_recorded]

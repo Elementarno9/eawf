@@ -212,6 +212,18 @@ ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingPr
     }
 )
 
+#: The payload kind of a child Run admitted past a ``child_runs`` ceiling, as the run
+#: ledger files it. It is a notice: it records an overrun nobody can answer.
+CEILING_BREACH_KIND: Final = "child_ceiling_breach"
+
+#: The collections a route lists notices from without binding the collection itself.
+#: Attention lists a ceiling breach beside the calls waiting on a principal, but the
+#: breach is a line on the run ledger, and listing the Runs it sits among would turn
+#: the register of what needs a principal into a list of work.
+ROUTE_NOTICE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingProxyType(
+    {"attention": (Epoch2Collection.RUN,)}
+)
+
 
 def _compile_route_read_models(
     bindings: Mapping[str, tuple[Epoch2Collection, ...]],
@@ -441,6 +453,12 @@ def build_route_projection(
                 document=document, collection=collection, ledger_rows=ledger_rows
             ).items()
         )
+    ) + tuple(
+        _with_facts(_projection_row(key=key, row=row, collection=collection), row, links)
+        for collection in ROUTE_NOTICE_COLLECTIONS.get(route, ())
+        for key, row in sorted(
+            _notice_rows(document=document, collection=collection, ledger_rows=ledger_rows).items()
+        )
     )
     return RouteProjection(
         schema_version=PROJECTION_SCHEMA_VERSION,
@@ -600,6 +618,40 @@ def _collection_rows(
     for row in ledger_rows.get(collection, ()):
         key = row.get("key")
         if isinstance(key, str) and key not in merged:
+            merged[key] = row
+    return merged
+
+
+def _is_notice(row: Any) -> bool:
+    """Return whether a stored row is a ceiling breach rather than a record of its collection.
+
+    The ledger line states its payload kind; a row spelled back for a replay states the
+    kind among the facts it was projected with.
+    """
+    if not isinstance(row, dict):
+        return False
+    carried = row.get(FACTS_FIELD)
+    kind = carried.get("kind") if isinstance(carried, dict) else row.get("payload_kind")
+    return kind == CEILING_BREACH_KIND
+
+
+def _notice_rows(
+    *,
+    document: dict[str, Any],
+    collection: Epoch2Collection,
+    ledger_rows: Mapping[Epoch2Collection, Sequence[Mapping[str, Any]]],
+) -> dict[str, Any]:
+    """Return the notices a route lists from ``collection``, never its records.
+
+    A fresh read finds them among the caller's ledger rows; a replay finds the ones it
+    already held among the rows it spells back as its document.
+    """
+    merged = {
+        key: row for key, row in document_rows(document, collection).items() if _is_notice(row)
+    }
+    for row in ledger_rows.get(collection, ()):
+        key = row.get("key")
+        if isinstance(key, str) and _is_notice(row):
             merged[key] = row
     return merged
 
@@ -861,6 +913,29 @@ def _run_facts(key: str, fields: Mapping[str, Any], links: _Links) -> dict[str, 
     return {name: value for name, value in facts.items() if value}
 
 
+def _breach_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a ceiling breach states: whose ceiling, which child, and by how much.
+
+    The subject is the Run whose ceiling was passed, which is where the delegation that
+    overran it was made.
+    """
+    child = _key_of(fields.get("child_run_ref"))
+    ceiling, descendants = fields.get("ceiling"), fields.get("descendants")
+    stated = isinstance(ceiling, int) and isinstance(descendants, int) and child is not None
+    facts = {
+        "kind": CEILING_BREACH_KIND,
+        "subject": _key_of(fields.get("ancestor_run_ref")),
+        "child": child,
+        "question": (
+            f"{child} made the subtree {descendants} Runs past child_runs={ceiling}"
+            if stated
+            else None
+        ),
+        "recorded_at": _text(fields.get("recorded_at")),
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
 def _permission_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     """Return what a provider permission states: its Run, its deadline and who may decide it.
 
@@ -971,7 +1046,9 @@ def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow
         if isinstance(name, str) and _text(value)
     }
     fields, _status = _stored_fields(row.collection, row.key, stored)
-    if row.collection is Epoch2Collection.RUN:
+    if _is_notice(stored):
+        facts.update(_breach_facts(fields))
+    elif row.collection is Epoch2Collection.RUN:
         facts.update(_run_facts(row.key, fields, links))
     elif row.collection is Epoch2Collection.PENDING_ACTION:
         facts.update(_action_facts(fields, links))
@@ -1055,6 +1132,7 @@ def _digest(*, route: str, cursor: int, rows: tuple[ProjectionRow, ...]) -> str:
 
 __all__ = [
     "CANONICAL_SEQUENCE_FIELD",
+    "CEILING_BREACH_KIND",
     "DIAGNOSTICS_CORPUS",
     "FACTS_FIELD",
     "MISSING_STATUS_REASON",
@@ -1062,6 +1140,7 @@ __all__ = [
     "PROJECTION_PRODUCER",
     "PROJECTION_SCHEMA_VERSION",
     "ROUTE_COLLECTIONS",
+    "ROUTE_NOTICE_COLLECTIONS",
     "ROUTE_READ_MODELS",
     "ControlMark",
     "KeyedPatch",

@@ -1,84 +1,95 @@
-"""DEL-035: the gate argv allowlist admits ``eawf`` and ``just``, scoped like ``git``.
+"""DEL-035: ``eawf`` and ``just`` are registered command families, not argv heads.
 
-A criterion whose truth is this project's own command line needs an
-admissible falsifier, so the default gate allowlist carries ``eawf`` and
-``just``. The widening is scoped to read-only forms the way ``git`` is
-scoped to read-only sub-verbs: a mutating verb, a mutating flag or an
-undeclared recipe is refused. A wrapper still recurses to the inner
-command, and a shell metacharacter is refused on its own ground whatever
-the head. A refusal names the head and quotes the argv it came from.
+The interim gate argv allowlist that admitted the project's own CLI and task
+runner as bare heads is superseded by the ``command_family_ref`` registry: a
+gate names the family its argv runs, the family declares its argv shape and
+that the shape is read-only, and the allowlist entry is gone. A wrapper
+still recurses to the inner command, so an inadmissible inner argv is
+refused as before, and a shell metacharacter is refused on its own ground
+whatever the head. A refusal at compilation names the head and quotes the
+argv it came from.
 """
 
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 
-from eawf.kernel.release.gate_binding import PROOF_ARGV_ALLOWLIST
+from eawf.kernel.spec import promotion
 from eawf.kernel.spec.common import GateSpec
-from eawf.kernel.spec.promotion import DEFAULT_GATE_ARGV_ALLOWLIST
 from eawf.platform.profiles.models import FloorCheck
 from eawf.runtime.sandbox.argv_policy import (
-    EAWF_READ_ONLY_SUBVERBS,
-    JUST_READ_ONLY_RECIPES,
     ArgvPolicyError,
+    resolve_command_family,
+    validate_family_argv,
     validate_gate_argv,
+)
+from eawf.runtime.sandbox.command_families import (
+    COMMAND_FAMILIES,
+    FAMILIES_BY_HEAD,
+    REGISTERED_GATE_HEADS,
+    CommandFamily,
 )
 from eawf.workflow.verify.compile import FloorPackCompileError, compile_floor_pack
 
-ALLOWLIST = list(DEFAULT_GATE_ARGV_ALLOWLIST)
+
+def _gate(
+    argv: list[str], *, family: str | None = None, kind: str = "command_exit_zero"
+) -> GateSpec:
+    payload: dict[str, object] = {
+        "id": "G-01",
+        "criterion_id": "CR-01",
+        "kind": kind,
+        "args": {"argv": argv, "scope": "all", "timeout_class": "quick"},
+        "policy": "block",
+        "cadence": "every-wave",
+    }
+    if family is not None:
+        payload["command_family_ref"] = family
+    return GateSpec.model_validate(payload)
 
 
-def _gate(argv: list[str]) -> GateSpec:
-    return GateSpec(
-        id="G-01",
-        criterion_id="CR-01",
-        kind="command_exit_zero",
-        args={"argv": argv, "scope": "all", "timeout_class": "quick"},
-        policy="block",
-        cadence="every-wave",
-    )
+def test_del_035_the_interim_head_allowlist_is_removed() -> None:
+    assert not hasattr(promotion, "DEFAULT_GATE_ARGV_ALLOWLIST")
 
 
-def test_del_035_default_allowlist_carries_both_new_heads() -> None:
-    assert {"eawf", "just"} <= set(DEFAULT_GATE_ARGV_ALLOWLIST)
+@pytest.mark.parametrize("head", ["eawf", "just"])
+def test_del_035_a_project_head_is_a_registered_family(head: str) -> None:
+    family = COMMAND_FAMILIES[head]
+    assert family.head == head
+    assert family.read_only is True
+    assert family.verbs
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["eawf", "status"],
-        ["uv", "run", "eawf", "validate"],
-        ["uv", "run", "eawf", "doctor", "--json"],
-        ["uvx", "eawf", "--version"],
-        ["uv", "run", "eawf", "bench", "turn-cost", "--fixture", "live"],
-        ["uv", "run", "eawf", "release", "tag", "0.7.0.dev1", "--dry-run"],
-    ],
-)
-def test_del_035_admits_a_read_only_eawf_form(argv: list[str]) -> None:
-    assert validate_gate_argv(argv, allowlist=ALLOWLIST) is argv
-    assert _gate(argv).args["argv"] == argv
-
-
-@pytest.mark.parametrize("recipe", sorted(JUST_READ_ONLY_RECIPES))
-def test_del_035_admits_each_declared_just_recipe(recipe: str) -> None:
-    argv = ["just", recipe]
-    assert validate_gate_argv(argv, allowlist=ALLOWLIST) is argv
-
-
-def test_del_035_admits_a_just_recipe_with_its_arguments() -> None:
-    argv = ["just", "test", "changed", "origin/main"]
-    assert validate_gate_argv(argv, allowlist=ALLOWLIST) is argv
+@pytest.mark.parametrize("argv", [["eawf", "status"], ["just", "test"]])
+def test_del_035_a_bare_project_head_is_no_longer_admitted_by_head_alone(
+    argv: list[str],
+) -> None:
+    with pytest.raises(ArgvPolicyError, match="not in the caller-supplied allowlist"):
+        validate_gate_argv(argv, allowlist=["uv", "pytest", "git"])
 
 
 @pytest.mark.parametrize(
-    "argv",
+    ("argv", "family"),
     [
-        ["uv", "run", "eawf", "bench", "turn-cost", "--fixture", "live"],
-        ["uvx", "eawf", "--version"],
+        (["eawf", "status"], "eawf"),
+        (["uv", "run", "eawf", "validate"], "eawf"),
+        (["uv", "run", "eawf", "doctor", "--json"], "eawf"),
+        (["uvx", "eawf", "--version"], "eawf"),
+        (["uv", "run", "eawf", "bench", "turn-cost", "--fixture", "live"], "eawf"),
+        (["uv", "run", "eawf", "release", "tag", "0.7.0.dev1", "--dry-run"], "eawf"),
+        (["just", "test"], "just"),
+        (["just", "test-all"], "just"),
+        (["just", "test-tui"], "just"),
+        (["just", "test", "changed", "origin/main"], "just"),
+        (["uv", "run", "pytest", "tests/unit", "-q"], "pytest"),
+        (["git", "diff", "--quiet"], "git"),
     ],
 )
-def test_del_035_release_proof_commands_stay_admissible(argv: list[str]) -> None:
-    assert validate_gate_argv(argv, allowlist=list(PROOF_ARGV_ALLOWLIST)) is argv
+def test_del_035_a_gate_names_the_family_its_argv_runs(argv: list[str], family: str) -> None:
+    assert resolve_command_family(argv).family_id == family
+    assert _gate(argv).command_family_ref == family
+    assert _gate(argv, family=family).args["argv"] == argv
 
 
 @pytest.mark.parametrize(
@@ -91,30 +102,31 @@ def test_del_035_release_proof_commands_stay_admissible(argv: list[str]) -> None
         (["eawf", "release", "tag", "0.7.0"], "--dry-run"),
         (["eawf", "release", "tag", "0.7.0", "--dry-run", "--push"], "mutating flag"),
         (["eawf", "release", "publish", "REL-0.7.0"], "read-only"),
+        (["eawf", "release"], "read-only"),
         (["eawf", "bench", "record"], "read-only"),
         (["eawf"], "sub-verb"),
+        (["just", "deploy"], "just"),
+        (["just", "--list"], "just"),
+        (["just"], "just"),
     ],
 )
-def test_del_035_refuses_a_mutating_eawf_form(argv: list[str], reason: str) -> None:
+def test_del_035_a_form_outside_the_family_shape_is_refused(argv: list[str], reason: str) -> None:
     with pytest.raises(ArgvPolicyError, match=reason) as caught:
-        validate_gate_argv(argv, allowlist=ALLOWLIST)
-    assert repr(argv[argv.index("eawf") :]) in str(caught.value)
+        resolve_command_family(argv)
+    head = next(index for index, token in enumerate(argv) if token in {"eawf", "just"})
+    assert repr(argv[head:]) in str(caught.value)
 
 
-@pytest.mark.parametrize("argv", [["just", "deploy"], ["just", "--list"], ["just"]])
-def test_del_035_refuses_an_undeclared_just_recipe(argv: list[str]) -> None:
-    with pytest.raises(ArgvPolicyError, match="just"):
-        validate_gate_argv(argv, allowlist=ALLOWLIST)
-
-
-def test_del_035_read_only_sets_are_disjoint_from_mutating_verbs() -> None:
-    assert not {"task", "state", "schema", "config", "daemon"} & EAWF_READ_ONLY_SUBVERBS
+def test_del_035_the_eawf_family_writes_no_state() -> None:
+    eawf = COMMAND_FAMILIES["eawf"]
+    assert eawf.verbs is not None
+    assert not {"task", "state", "schema", "config", "daemon"} & eawf.verbs
 
 
 def test_del_035_an_inadmissible_head_is_named_with_its_argv_quoted() -> None:
     argv = ["curl", "https://example.invalid"]
     with pytest.raises(ArgvPolicyError) as caught:
-        validate_gate_argv(argv, allowlist=ALLOWLIST)
+        resolve_command_family(argv)
     message = str(caught.value)
     assert "'curl'" in message
     assert repr(argv) in message
@@ -131,7 +143,18 @@ def test_del_035_an_inadmissible_head_is_named_at_compilation() -> None:
     with pytest.raises(FloorPackCompileError) as caught:
         compile_floor_pack([check], allowlist=[])
     assert "'fetch'" in str(caught.value)
+    assert "'curl'" in str(caught.value)
     assert repr(check.cmd) in str(caught.value)
+
+
+def test_del_035_compilation_admits_a_registered_family_in_its_shape_only() -> None:
+    def check(cmd: list[str]) -> FloorCheck:
+        return FloorCheck(name="cli", cmd=cmd, scope="all", cadence="every-wave", policy="block")
+
+    compiled = compile_floor_pack([check(["uv", "run", "eawf", "status"])], allowlist=[])
+    assert compiled[0].args["argv"] == ["uv", "run", "eawf", "status"]
+    with pytest.raises(FloorPackCompileError, match="read-only"):
+        compile_floor_pack([check(["uv", "run", "eawf", "state", "rpc"])], allowlist=[])
 
 
 @pytest.mark.parametrize(
@@ -146,7 +169,7 @@ def test_del_035_an_inadmissible_inner_argv_behind_a_wrapper_is_refused(
     argv: list[str],
 ) -> None:
     with pytest.raises(ArgvPolicyError):
-        validate_gate_argv(argv, allowlist=ALLOWLIST)
+        resolve_command_family(argv)
     with pytest.raises(ValueError, match="L0 policy"):
         _gate(argv)
 
@@ -161,4 +184,94 @@ def test_del_035_an_inadmissible_inner_argv_behind_a_wrapper_is_refused(
 )
 def test_del_035_a_metacharacter_is_refused_whatever_the_head(argv: list[str]) -> None:
     with pytest.raises(ArgvPolicyError, match="shell metacharacter"):
-        validate_gate_argv(argv, allowlist=ALLOWLIST)
+        resolve_command_family(argv)
+
+
+@pytest.mark.parametrize("argv", [["uv"], ["uvx"]])
+def test_del_035_a_bare_wrapper_runs_no_family(argv: list[str]) -> None:
+    with pytest.raises(ArgvPolicyError, match="no registered command family"):
+        resolve_command_family(argv)
+
+
+def test_del_035_a_gate_naming_another_family_is_refused() -> None:
+    with pytest.raises(ValidationError, match="names command family 'pytest'"):
+        _gate(["uv", "run", "eawf", "status"], family="pytest")
+
+
+def test_del_035_a_gate_naming_an_unregistered_family_is_refused() -> None:
+    with pytest.raises(ValidationError, match="'shell' is not registered"):
+        _gate(["uv", "run", "eawf", "status"], family="shell")
+
+
+def test_del_035_a_gate_naming_a_malformed_family_id_is_refused() -> None:
+    with pytest.raises(ValidationError, match="command_family_ref"):
+        _gate(["eawf", "status"], family="Not A Family")
+
+
+def test_del_035_a_gate_without_argv_names_no_family() -> None:
+    with pytest.raises(ValidationError, match="names no command family"):
+        _gate(["eawf", "status"], family="eawf", kind="regex_match")
+    assert _gate(["eawf", "status"], kind="regex_match").command_family_ref is None
+
+
+def test_del_035_validate_family_argv_refuses_a_missing_ref() -> None:
+    with pytest.raises(ArgvPolicyError, match="None is not registered"):
+        validate_family_argv(["eawf", "status"], family_ref=None)
+    argv = ["eawf", "status"]
+    assert validate_family_argv(argv, family_ref="eawf") is argv
+
+
+@pytest.mark.parametrize("argv", ["eawf status", [], ["eawf", 1]])
+def test_del_035_a_mis_typed_argv_resolves_to_no_family(argv: object) -> None:
+    with pytest.raises(ArgvPolicyError, match="argv"):
+        resolve_command_family(argv)  # type: ignore[arg-type]
+
+
+def test_del_035_the_registry_is_one_family_per_id_and_head() -> None:
+    assert len(FAMILIES_BY_HEAD) == len(COMMAND_FAMILIES)
+    assert all(family.family_id == key for key, family in COMMAND_FAMILIES.items())
+    assert {"uv", "uvx", *FAMILIES_BY_HEAD} == REGISTERED_GATE_HEADS
+
+
+def test_del_035_a_family_that_writes_is_not_registrable() -> None:
+    with pytest.raises(ValidationError, match="read_only"):
+        CommandFamily.model_validate({"family_id": "deploy", "head": "deploy", "read_only": False})
+    with pytest.raises(ValidationError, match="extra"):
+        CommandFamily.model_validate(
+            {"family_id": "deploy", "head": "deploy", "read_only": True, "shell": True}
+        )
+
+
+def test_del_035_a_family_without_verbs_admits_any_arguments() -> None:
+    assert COMMAND_FAMILIES["pytest"].shape_violation(["pytest"]) is None
+    assert COMMAND_FAMILIES["pytest"].shape_violation(["pytest", "-k", "x"]) is None
+
+
+def test_del_035_a_preview_verb_is_admitted_only_with_its_flag() -> None:
+    ruff = COMMAND_FAMILIES["ruff"]
+    assert ruff.shape_violation(["ruff", "format", "--check", "src"]) is None
+    assert ruff.shape_violation(["ruff", "format", "src"]) == (
+        "ruff format acts unless run as --check"
+    )
+    assert ruff.shape_violation(["ruff", "check", "--fix"]) is not None
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [["pre-commit"], ["pre-commit", "run", "--all-files"], ["ruff"], ["ruff", "--version"]],
+)
+def test_del_035_a_tool_family_admits_its_reporting_forms(argv: list[str]) -> None:
+    assert resolve_command_family(argv).head == argv[0]
+
+
+@pytest.mark.parametrize(
+    ("argv", "reason"),
+    [
+        (["pre-commit", "install"], "writes state"),
+        (["uv", "run", "pre-commit", "autoupdate"], "writes state"),
+        (["ruff", "check", "--unsafe-fixes"], "mutating flag"),
+    ],
+)
+def test_del_035_a_tool_family_refuses_its_writing_forms(argv: list[str], reason: str) -> None:
+    with pytest.raises(ArgvPolicyError, match=reason):
+        resolve_command_family(argv)

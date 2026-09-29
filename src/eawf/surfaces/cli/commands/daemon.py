@@ -56,7 +56,12 @@ import typer
 
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.runtime_dir import log_path, runtime_dir, socket_path
-from eawf.runtime.daemon.spawn import DaemonSpawnTimeoutError, auto_spawn_daemon
+from eawf.runtime.daemon.spawn import (
+    DaemonSpawnTimeoutError,
+    auto_spawn_daemon,
+    daemon_pid_if_ready,
+)
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
@@ -75,17 +80,18 @@ daemon_app = typer.Typer(
 _DEFAULT_BACKUP_KEEP: int = 3
 
 
-async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
+async def _rpc_call(method: str, params: dict[str, Any], *, spawn: bool) -> dict[str, Any]:
     """Issue a single JSON-RPC call against the local daemon socket (POSIX).
 
     Cold-spawns the daemon when no live socket is present, per the V1
-    on-demand spawn contract. Silent unless ``EAWF_VERBOSE=1`` is set.
-    Windows routes through :func:`_rpc_call_pipe` instead -- there is no
-    UDS on Windows.
+    on-demand spawn contract, unless the verb is a read. Silent unless
+    ``EAWF_VERBOSE=1`` is set. Windows routes through
+    :func:`_rpc_call_pipe` instead -- there is no UDS on Windows.
 
     Args:
         method: JSON-RPC method name.
         params: Method params object.
+        spawn: Whether a missing daemon is started for the call.
 
     Returns:
         The parsed response envelope (success or error).
@@ -95,11 +101,17 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
             after a spawn attempt.
         DaemonSpawnTimeoutError: When the auto-spawn never produces a
             live socket within the timeout window.
+        DaemonNotRunningError: When *spawn* is off and no daemon answers.
     """
+    from eawf.surfaces.cli._daemon_client import DaemonNotRunningError
+
     # Readiness, not path existence, decides whether a daemon is live. A
     # process killed before its finally-block can leave a stale UDS node;
     # ``auto_spawn_daemon`` probes RPC readiness and safely replaces it.
-    auto_spawn_daemon(runtime_dir())
+    if spawn:
+        auto_spawn_daemon(runtime_dir())
+    elif daemon_pid_if_ready(runtime_dir()) is None:
+        raise DaemonNotRunningError(f"no eawfd daemon is running for {method}")
     sock_path = socket_path()
     reader, writer = await asyncio.open_unix_connection(path=str(sock_path))
     try:
@@ -125,7 +137,7 @@ async def _rpc_call(method: str, params: dict[str, Any]) -> dict[str, Any]:
             await writer.wait_closed()
 
 
-def _rpc_call_pipe(method: str, params: dict[str, Any]) -> dict[str, Any]:
+def _rpc_call_pipe(method: str, params: dict[str, Any], *, spawn: bool) -> dict[str, Any]:
     """Issue a single JSON-RPC call over the Windows named pipe.
 
     The synchronous counterpart of :func:`_rpc_call`: there is no UDS on
@@ -140,6 +152,7 @@ def _rpc_call_pipe(method: str, params: dict[str, Any]) -> dict[str, Any]:
     Args:
         method: JSON-RPC method name.
         params: Method params object.
+        spawn: Whether a missing daemon is started for the call.
 
     Returns:
         The parsed response envelope (``{"result": ...}`` or
@@ -148,14 +161,14 @@ def _rpc_call_pipe(method: str, params: dict[str, Any]) -> dict[str, Any]:
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
     try:
-        with DaemonClient(runtime_dir=runtime_dir()) as client:
+        with DaemonClient(runtime_dir=runtime_dir(), spawn=spawn) as client:
             result = client.call(method, params)
         return {"result": result}
     except DaemonRpcError as exc:
         return {"error": {"code": exc.code, "message": exc.message, "data": exc.data}}
 
 
-def _run_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
+def _run_rpc(method: str, params: dict[str, Any], *, spawn: bool = True) -> dict[str, Any]:
     """Synchronous wrapper around the per-platform RPC transport.
 
     Routes through the Windows named pipe (:func:`_rpc_call_pipe`) on
@@ -165,13 +178,15 @@ def _run_rpc(method: str, params: dict[str, Any]) -> dict[str, Any]:
     Args:
         method: JSON-RPC method name.
         params: Method params object.
+        spawn: Whether a missing daemon is started for the call; a read
+            passes ``False`` so inspecting the daemon never starts one.
 
     Returns:
         The parsed response envelope.
     """
     if sys.platform == "win32":
-        return _rpc_call_pipe(method, params)
-    return asyncio.run(_rpc_call(method, params))
+        return _rpc_call_pipe(method, params, spawn=spawn)
+    return asyncio.run(_rpc_call(method, params, spawn=spawn))
 
 
 @daemon_app.command("run")
@@ -329,10 +344,20 @@ def ping_cmd(ctx: typer.Context) -> None:
 
 @daemon_app.command("status")
 def status_cmd(ctx: typer.Context) -> None:
-    """Print operational counters from the running daemon."""
+    """Print operational counters from the running daemon, never starting one.
+
+    A status probe that started the daemon it reports on would always find
+    one running, so with none running this reports that and exits with the
+    daemon-unreachable code instead.
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonNotRunningError
+
     flags: GlobalFlags = ctx.obj
     try:
-        response = _run_rpc("daemon.status", {})
+        response = _run_rpc("daemon.status", {}, spawn=False)
+    except DaemonNotRunningError as exc:
+        emit_json_or_text({"running": False}, "daemon not running", flags=flags)
+        raise typer.Exit(code=exit_codes.DAEMON_UNREACHABLE) from exc
     except (ConnectionRefusedError, FileNotFoundError, DaemonSpawnTimeoutError) as exc:
         typer.echo(f"daemon not reachable: {exc}", err=True)
         raise typer.Exit(code=1) from exc

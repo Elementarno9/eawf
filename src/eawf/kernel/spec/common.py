@@ -16,7 +16,14 @@ from typing import Annotated, Any, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
+from eawf.kernel.spec.criterion_evidence import (
+    GATE_RUN_EVIDENCE_KINDS as GATE_RUN_EVIDENCE_KINDS,
+)
+from eawf.kernel.spec.criterion_evidence import (
+    CriterionEvidenceKind as CriterionEvidenceKind,
+)
 from eawf.kernel.state.models import IdStr
+from eawf.runtime.sandbox.command_families import CommandFamilyId
 
 
 class _StrictModel(BaseModel):
@@ -197,26 +204,6 @@ class EvidenceRef(_StrictModel):
     kind: EvidenceKind
     ref: str
     summary: str = Field(min_length=1, max_length=400)
-
-
-# Criterion verification flavor — how a CriterionSpec is checked.
-#
-# Distinct from :data:`EvidenceKind` (which classifies *what* a
-# reference points at). This Literal classifies *how* a criterion's
-# evidence is gathered when the readiness compute and the
-# compile-gate score it:
-#
-#   "deterministic" -> an automated check (test exit code, regex match,
-#                      schema validation) that produces a bit answer.
-#   "jury"          -> a vote of multiple agent reviewers; the
-#                      minority-veto policy lives in the gate machinery.
-#   "attested"      -> a human operator signs off; the attestation is
-#                      stored as a typed Decision row.
-CriterionEvidenceKind = Literal[
-    "deterministic",
-    "jury",
-    "attested",
-]
 
 
 # How a CriterionSpec is scored — binary (pass / fail) or graded
@@ -814,13 +801,13 @@ def _criterion_runs_a_probe(criterion: CriterionSpec) -> bool:
         criterion: The criterion to inspect.
 
     Returns:
-        ``True`` when the row is deterministic, unwaived, binds at least
+        ``True`` when the row runs its gates, is unwaived, binds at least
         one gate id, and its response clause names a known gate kind above
         the static tier.
     """
     response = criterion.response
     if (
-        criterion.evidence_kind != "deterministic"
+        criterion.evidence_kind not in GATE_RUN_EVIDENCE_KINDS
         or criterion.waiver_reason is not None
         or not criterion.gate_ids
         or response is None
@@ -1186,24 +1173,16 @@ class CoverageReport(_StrictModel):
 class GateSpec(_StrictModel):
     """One gate row that scores a :class:`CriterionSpec` at some cadence.
 
-    The ``kind`` field names the check family
-    (``command_exit_zero``, ``regex_match``, ``schema_validate``, etc.)
-    and ``args`` carries the per-kind arguments. The spec layer does
-    not validate the full ``args`` shape — that is the gate-runner
-    subsystem's responsibility (W08 lands per-kind args validators).
-    The one exception is the ``argv`` vector on argv-bearing kinds
-    (``command_exit_zero`` today): an
-    ``@model_validator`` routes ``args["argv"]`` through the L0
-    argv-policy at construction time so a malformed or shell-deny
-    argv cannot reach the spec layer regardless of which builder
-    constructed the row. The same policy fires again at spec-promote
-    persistence via
-    :func:`eawf.kernel.spec.promotion.validate_argv_gates` — defense
-    in depth across the parse-time and persistence-time seams.
+    ``kind`` names the check family (``command_exit_zero``, ``regex_match``,
+    ...) and ``args`` its arguments, whose full shape the gate runner
+    validates. The exception is the ``argv`` of an argv-bearing kind: the
+    row names the registered command family the argv runs in
+    ``command_family_ref`` and construction refuses an argv outside it, as
+    spec promote does again through
+    :func:`eawf.kernel.spec.promotion.validate_argv_gates`.
 
     ``timeout_s`` is ``None`` by default so a kind that has a timeout-class
-    default does not need an explicit override. A present value must be a
-    positive strict integer; zero is not a meaningful process budget.
+    default needs no override; a present value is a positive strict integer.
     """
 
     id: IdStr
@@ -1214,44 +1193,51 @@ class GateSpec(_StrictModel):
     cadence: GateCadence
     required: bool = True
     timeout_s: StrictInt | None = Field(default=None, gt=0)
+    # Never serialized: it is a function of the argv, and storing it moves digests.
+    command_family_ref: CommandFamilyId | None = Field(default=None, exclude=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _name_the_command_family(cls, data: Any) -> Any:
+        """Derive the family an argv row runs, so every loaded row names one.
+
+        An unresolvable argv stays unnamed for the after-validator to refuse.
+        """
+        from eawf.kernel.spec.promotion import ARGV_BEARING_GATE_KINDS
+        from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, resolve_command_family
+
+        if not isinstance(data, dict) or data.get("kind") not in ARGV_BEARING_GATE_KINDS:
+            return data
+        args = data.get("args")
+        if data.get("command_family_ref") is not None or not isinstance(args, dict):
+            return data
+        try:
+            family = resolve_command_family(args.get("argv", []))
+        except ArgvPolicyError:
+            return data
+        return {**data, "command_family_ref": family.family_id}
 
     @model_validator(mode="after")
     def _argv_passes_l0_policy(self) -> GateSpec:
-        """Validate ``args['argv']`` through the L0 argv-policy on argv-bearing kinds.
-
-        Defense-in-depth companion to
-        :func:`eawf.kernel.spec.promotion.validate_argv_gates`: catches
-        a bad argv at construction time so it never reaches the
-        promote-time check. Skips silently when ``kind`` is not in
-        :data:`eawf.kernel.spec.promotion.ARGV_BEARING_GATE_KINDS` so
-        non-argv gates (``regex_match``, ``schema_validate``, ...) are
-        unaffected.
+        """Hold an argv-bearing row's argv to the command family it names.
 
         Raises:
-            ValueError: When ``kind`` requires an ``argv`` vector and
-                ``args['argv']`` is missing, mis-shaped, or rejected by
-                the L0 policy. Pydantic wraps this into
-                :class:`pydantic.ValidationError` at the ``model_validate``
-                boundary.
+            ValueError: On a missing, policy-rejected or other-family argv,
+                or on a family named by a row that runs no argv.
         """
-        # Local import keeps the module-level layer thin and avoids a
-        # circular import (``promotion`` itself imports :class:`GateSpec`).
-        from eawf.kernel.spec.promotion import (
-            ARGV_BEARING_GATE_KINDS,
-            DEFAULT_GATE_ARGV_ALLOWLIST,
-        )
-        from eawf.runtime.sandbox.argv_policy import (
-            ArgvPolicyError,
-            validate_gate_argv,
-        )
+        # Local import avoids a circular import: ``promotion`` imports GateSpec.
+        from eawf.kernel.spec.promotion import ARGV_BEARING_GATE_KINDS
+        from eawf.runtime.sandbox.argv_policy import ArgvPolicyError, validate_family_argv
 
         if self.kind not in ARGV_BEARING_GATE_KINDS:
+            if self.command_family_ref is not None:
+                raise ValueError(f"gate {self.id!r} runs no argv, so names no command family")
             return self
         argv = self.args.get("argv")
         if argv is None:
             raise ValueError(f"gate {self.id!r} kind={self.kind!r} missing required args['argv']")
         try:
-            validate_gate_argv(argv, allowlist=list(DEFAULT_GATE_ARGV_ALLOWLIST))
+            validate_family_argv(argv, family_ref=self.command_family_ref)
         except ArgvPolicyError as exc:
             raise ValueError(f"gate {self.id!r} argv rejected by L0 policy: {exc}") from exc
         return self
@@ -1277,7 +1263,7 @@ def validate_criterion_gate_refs(
        :attr:`GateSpec.id` in *gates*.
     2. Every :attr:`GateSpec.criterion_id` resolves back to a
        :attr:`CriterionSpec.id` in *criteria*.
-    3. A ``deterministic``-kind criterion's gate compiles
+    3. A gate-running (``deterministic`` or ``rendered_run``) criterion's gate compiles
        (:func:`eawf.workflow.verify.compile.compile_gate` returns a
        non-``None`` runnable spec) -- an orphan deterministic gate that
        cannot compile would silently never falsify the criterion.
@@ -1365,8 +1351,8 @@ def validate_criterion_gate_refs(
             raise ValueError(
                 f"gate {gate.id!r} references unknown criterion id: {gate.criterion_id!r}"
             )
-        is_deterministic = owner.evidence_kind == "deterministic"
-        if is_deterministic and compile_gate(gate, criterion=owner) is None:
+        runs_gates = owner.evidence_kind in GATE_RUN_EVIDENCE_KINDS
+        if runs_gates and compile_gate(gate, criterion=owner) is None:
             raise ValueError(
                 f"deterministic gate {gate.id!r} for criterion {owner.id!r} does not compile"
             )

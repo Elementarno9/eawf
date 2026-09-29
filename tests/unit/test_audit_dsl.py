@@ -341,14 +341,15 @@ def test_command_exit_zero_nonzero(tmp_path: Path) -> None:
 
 
 def test_command_exit_zero_missing_binary(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """An allowlisted head that resolves to nothing reports "not executable".
+    """A registered head that resolves to nothing reports "not executable".
 
-    The head has to be allowlisted to reach the spawn at all, so the
-    allowlist is widened for this case only -- the point under test is the
-    ``FileNotFoundError`` branch, not the policy that precedes it.
+    The head has to resolve to a registered family to reach the spawn at
+    all, so the registry check is stubbed for this case only -- the point
+    under test is the ``FileNotFoundError`` branch, not the policy that
+    precedes it.
     """
     ghost = "definitely-not-a-real-binary-eawf-w04"
-    monkeypatch.setattr(registry, "DEFAULT_GATE_ARGV_ALLOWLIST", (ghost,))
+    monkeypatch.setattr(registry, "resolve_command_family", lambda argv: None)
     result = _run_one("command_exit_zero", "ghost", {"argv": [ghost]}, tmp_path)
     assert result.passed is False
     assert "not executable" in (result.details or "")

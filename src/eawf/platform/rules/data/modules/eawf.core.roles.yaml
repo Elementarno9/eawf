@@ -143,13 +143,13 @@ rules:
       method: review
   - rule_id: eawf.core.roles.auditor-run-gates
     obligation_id: roles.auditor.run-gates
-    revision: 1
-    title: Run the wave's own gates before re-reading its prose
+    revision: 2
+    title: Run the Task's own gates before re-reading its prose
     zone: steering
     force: should
     effectiveness: behavioral
     instruction: >-
-      Run the wave's own gates rather than re-reading its prose, and report a gate that cannot fail on broken input as a finding.
+      Run the audited Task's own gates rather than re-reading its prose, and report a gate that cannot fail on broken input as a finding.
     rationale: >-
       A gate run is evidence while a re-read summary is a restatement, and a gate that cannot fail is itself a defect.
     scope:
@@ -158,15 +158,15 @@ rules:
       method: review
   - rule_id: eawf.core.roles.planner-typed-criteria
     obligation_id: roles.planner.typed-criteria
-    revision: 1
+    revision: 2
     title: Emit only typed criteria with a proof locus and a gate
     zone: steering
     force: must
     effectiveness: behavioral
     instruction: >-
-      Give every emitted wave typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
+      Give every emitted Task typed criteria (kind other than legacy), each with a response clause naming the observed verb, the object and a file:line proof locus, and at least one gate, usually a targeted pytest command, with policy=block and required=true.
     rationale: >-
-      An untyped or gateless criterion cannot be checked at close, so the wave closes on the executor's word alone.
+      An untyped or gateless criterion cannot be checked at close, so the Task closes on the executor's word alone.
     scope:
       roles: [planner]
     verification:

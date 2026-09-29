@@ -3,8 +3,10 @@
 RUN-051: a provider permission is produced when a call is held pending a principal
 decision. The Claude plugin subscribes to the host's ``PermissionRequest`` event, the
 router maps it, the runner registers a real handler for it, and the handler records the
-held call through ``runtime.host.permission.request`` -- then returns without a decision,
-whatever the daemon answered, so the host goes on asking its own operator.
+held call through ``runtime.host.permission.request``. A daemon refusal never blocks the
+host. The wait for a principal's decision is configured to zero here, so each case records
+the call and returns; the answer the hook hands back is proven in
+``tests/integration/surfaces/cli/test_hook_permission_answer.py``.
 """
 
 from __future__ import annotations
@@ -14,6 +16,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
+import yaml
 
 from eawf.runtime.hooks.event import HookEvent, HookEventType
 from eawf.runtime.hooks.runner import (
@@ -56,7 +59,18 @@ class _Client:
         self._sink.append((method, params))
         if self._error is not None:
             raise self._error
-        return {"permission": {"key": "PERM-0001"}}
+        return {"permission": {"key": "PERM-0001", "run_ref": "run", "resolution": None}}
+
+
+@pytest.fixture(autouse=True)
+def _no_wait(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Configure the repository the hook runs in to record the call without waiting."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    config = tmp_path / ".ea" / "config.yaml"
+    config.parent.mkdir()
+    config.write_text(
+        yaml.safe_dump({"runtime": {"claude": {"permission_wait_s": 0}}}), encoding="utf-8"
+    )
 
 
 def recording(error: Exception | None = None) -> tuple[list[tuple[str, dict[str, Any]]], Any]:

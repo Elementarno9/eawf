@@ -23,13 +23,19 @@ from eawf.kernel.runtime.provider import ControlKind
 from tests.unit.kernel.delivery.test_bulk import operation
 
 
-def test_auth_022_bulk_verbs_are_exactly_the_recoverable_run_controls() -> None:
-    assert set(BulkVerb) == {BulkVerb.CANCEL, BulkVerb.INTERRUPT, BulkVerb.RETRY}
+def test_auth_022_bulk_verbs_are_the_recoverable_run_controls_and_the_task_release() -> None:
+    assert set(BulkVerb) == {
+        BulkVerb.CANCEL,
+        BulkVerb.INTERRUPT,
+        BulkVerb.RETRY,
+        BulkVerb.RELEASE,
+    }
+    assert set(BULK_CONTROLS) == set(BulkVerb) - {BulkVerb.RELEASE}
     assert set(BULK_CONTROLS.values()) <= set(ControlKind)
 
 
 @pytest.mark.parametrize(
-    "verb", ["integrate", "merge", "accept", "approve", "publish", "release", "complete"]
+    "verb", ["integrate", "merge", "accept", "approve", "publish", "complete", "hold"]
 )
 def test_auth_022_integration_merge_acceptance_and_publication_are_never_bulk_verbs(
     verb: str,

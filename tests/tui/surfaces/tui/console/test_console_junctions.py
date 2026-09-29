@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 
 from eawf.surfaces.tui.console.paint import Part, paint
-from tests.tui.surfaces.tui.console.test_spine_frames_jury import _frame
+from tests.tui.surfaces.tui.console.test_spine_frames import _frame
 
 
 @pytest.mark.parametrize("glyph", list("├┤┬┴┼╤╧╪┌┐└┘"))

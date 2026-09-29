@@ -7,11 +7,10 @@ auto-discovery dirs:
 
 - ``scope="project"`` → ``<target>/.opencode/plugins/eawf.js`` with
   sidecar ``<target>/.opencode/plugins/.eawf-managed.json`` and
-  ``<target>/opencode.json`` patched only in its ``mcp`` block.
+  ``<target>/opencode.json`` kept as the operator wrote it.
 - ``scope="user"`` → ``$OPENCODE_CONFIG_DIR/plugins/eawf.js`` (or
   ``<home>/.config/opencode/plugins/eawf.js`` when the env var is
-  unset) with the corresponding sidecar and config patched at the
-  same scope.
+  unset) with the corresponding sidecar and config at the same scope.
 
 The ``plugins:[...]`` array inside ``opencode.json`` is reserved for
 npm package plugins; we no longer add ``"plugin.js"`` to it. Auto-load
@@ -507,14 +506,18 @@ def _sidecar_fingerprint(payload: bytes) -> str:
 
 
 def _patch_config_json(target_path: Path) -> bytes:
-    """Return rewritten ``opencode.json`` bytes with only the ``mcp`` block ensured.
+    """Return ``opencode.json`` bytes carrying no key eawf adds.
 
-    User-authored top-level keys are preserved verbatim. When the file
-    does not exist, it is seeded with ``{"mcp": {}}`` only — no
-    ``plugins`` array entry, no managed namespace. (Per OpenCode docs,
-    auto-loaded plugins live under ``.opencode/plugins/`` /
+    User-authored top-level keys are preserved verbatim and a missing
+    file becomes an empty object. No key is added: none has had its
+    effect observed on an OpenCode binary, and an unobserved host key is
+    not written (:mod:`eawf.runtime.harness.host_keys`). Auto-loaded
+    plugins live under ``.opencode/plugins/`` /
     ``$OPENCODE_CONFIG_DIR/plugins/``; the ``plugins:[...]`` array is
-    reserved for npm packages.)
+    reserved for npm packages.
+
+    Raises:
+        ValueError: The existing file is not a JSON object.
     """
     parsed: dict[str, Any] = {}
     if target_path.exists():
@@ -532,7 +535,6 @@ def _patch_config_json(target_path: Path) -> bytes:
                     f"got {type(parsed_any).__name__}"
                 )
             parsed = dict(parsed_any)
-    parsed.setdefault("mcp", {})
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return rendered.encode("utf-8")
 
@@ -681,8 +683,8 @@ def install_plugin(
             ``$OPENCODE_CONFIG_DIR/plugins/`` or
             ``<home>/.config/opencode/plugins/``.
         force: When ``True``, hand-edits to ``eawf.js`` are overwritten
-            silently. The ``opencode.json`` ``mcp`` block is always
-            ensured; user-owned keys elsewhere are preserved.
+            silently. ``opencode.json`` keeps every user-owned key and
+            gains none.
         dry_run: When ``True``, returns the :class:`InstallResult`
             describing what would be written but writes nothing.
         timestamp: ISO 8601 UTC timestamp baked into the sidecar.

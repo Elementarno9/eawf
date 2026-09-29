@@ -1,21 +1,22 @@
 ---
 name: decide
-description: "Propose, ratify, reject, supersede or obsolete a Decision."
-argument-hint: "<propose|ratify|reject|supersede|obsolete|show> [<decision-ref>] [--title <text>] [--rationale <text>] [--alternative <text>...] [--consequence <text>...] [--evidence <ref>...] [--supersedes <ref>] [--scope <urn>] [--from <ref>...] [--dry-run]"
+description: "Propose, supersede or show a Decision."
+argument-hint: "<propose|supersede|show> [<decision-ref>] [--summary <text>] [--rationale <text>] [--alternative <text>...] [--supersedes <ref>] [--scope <urn>] [--dry-run]"
 user-invocable: true
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # /decide
 
-Propose, ratify, reject, supersede or obsolete a Decision.
+Propose, supersede or show a Decision.
 
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operator-only actions: `ratify`, `reject`, `supersede`, `obsolete`. An agent that reaches one prepares a PendingAction and stops; it never chooses the recommended option itself.
-- Effects: Decision RPCs.
-- Allowed RPCs: `read_entity`, `query_evidence`, `decision.propose`, `decision.request_ratification`, `decision.reject`, `decision.supersede`, `decision.obsolete`, `decision.get`. Any other RPC is denied before it reaches a handler.
+- Operates on: Decision, through `runtime.question.open_decision`, `eawf decision add`, `eawf decision supersede`, `eawf decision list`, `eawf decision graph`.
+- Operator-only actions: `supersede`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself.
+- Effects: The decision add, supersede, list and graph verbs.
+- Allowed RPCs: `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.
 - Executable grants come from the compiled capsule of the enclosing scope alone; nothing on this page adds or widens a tool, path, RPC, credential or external effect.
@@ -31,18 +32,18 @@ Resolve the subject before acting. Name every entity with its identifier and its
 Drive one named Decision action without choosing for the operator.
 
 ```text
-/decide <propose|ratify|reject|supersede|obsolete|show> [<decision-ref>] [--title <text>] [--rationale <text>] [--alternative <text>...] [--consequence <text>...] [--evidence <ref>...] [--supersedes <ref>] [--scope <urn>] [--from <ref>...] [--dry-run]
+/decide <propose|supersede|show> [<decision-ref>] [--summary <text>] [--rationale <text>] [--alternative <text>...] [--supersedes <ref>] [--scope <urn>] [--dry-run]
 ```
 
-Select exactly one action: `propose`, `ratify`, `reject`, `supersede`, `obsolete`, `show`. An option the selected action does not declare is refused before you start.
+Select exactly one action: `propose`, `supersede`, `show`. An option the selected action does not declare is refused before you start.
 
 ## 4. Method
 
 1. Resolve exact scope, Decision revision, evidence, audits, Hypotheses, questions, and effective policy.
 2. For propose, frame one choice with stable option keys, at least two real alternatives, consequences, conflicts, and evidence. Do not recommend an option without supporting evidence.
-3. For ratify, revalidate evidence and applicability, render persisted options unchanged, and create a protected operator action. The agent never supplies the chosen key.
-4. For supersede, create and ratify the replacement first; the daemon then links the old ACTIVE Decision atomically. For obsolete, prove applicability ended and preserve the reason.
-5. Submit only the selected Decision RPC with expected revision and idempotency key.
+3. For supersede, record the replacement first, then link the old Decision to it. Superseding is the operator's act; an agent prepares it and stops.
+4. For show, list the scope's Decisions and their supersession graph without mutation.
+5. Run only the selected decision verb and return what it recorded.
 
 ## 4b. Applicable rules
 
@@ -73,4 +74,4 @@ The obligations the effective rule graph holds for activities `design`. They bin
 
 Output one DecisionSkillReport with before/after references, option table, evidence chain, consequences, receipt or Attention reference, and blockers.
 
-The report validates against `DecisionSkillReport`, and its terminal outcome is exactly one of `shown`, `proposed`, `ratified`, `rejected`, `superseded`, `obsoleted`, `blocked`. Prose in the report is explanation, never the result.
+The report validates against `DecisionSkillReport`, and its terminal outcome is exactly one of `shown`, `proposed`, `superseded`, `blocked`. Prose in the report is explanation, never the result. Check it with `eawf skill check-report /decide` before returning it.

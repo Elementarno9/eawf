@@ -7,6 +7,7 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | Command | Summary |
 |---|---|
 | `clone-repo` | Clone *url* and run ``eawf init --no-input`` against the result. |
+| `follow` | Stream an operation's states until it succeeds, fails or is lost. |
 | `impact` | Render decision → wave → file-glob impact graph. |
 | `init` | Initialise a new Eä Workflow workspace. |
 | `metrics` | Show rolling workflow metrics — EU variance, audit pass rate, wave elapsed, and planned vs reactive split. |
@@ -15,6 +16,7 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | `sync` | Re-render managed assets and report drift. |
 | `ui` | Open the Eä Textual TUI (or deterministic status fallback off-TTY). |
 | `validate` | Validate a state or envelope document. |
+| `verbs` | List every verb with its entity, parameters, typed errors and effect class. |
 | `version` | Show the eawf version (text or JSON envelope). |
 | `why` | Explain why an EAWF entity has its current trust tier. |
 
@@ -156,7 +158,7 @@ Submit, inspect, follow, resume, or cancel durable wave closure.
 | `follow` | Follow a close attempt until it reaches a terminal state. |
 | `rereceipt` | Re-run a closed wave's gates at its landed commit and bind receipts. |
 | `resume` | Resume an interrupted or infrastructure-failed close attempt. |
-| `status` | Show durable close status without waiting. |
+| `status` | Show durable close status without waiting, never starting a daemon. |
 | `submit` | Submit an idempotent exact-revision close attempt. |
 
 ### `eawf coauthor`
@@ -204,7 +206,7 @@ Manage the eawfd background daemon.
 | `service-enable` | Install + start the eawfd service via the native OS supervisor. |
 | `service-status` | Report the supervisor-level service state plus daemon-health advisories. |
 | `start` | Ensure the current daemon release is running. |
-| `status` | Print operational counters from the running daemon. |
+| `status` | Print operational counters from the running daemon, never starting one. |
 | `stop` | Request graceful daemon shutdown. |
 
 ### `eawf decision`
@@ -508,12 +510,13 @@ Project-level lifecycle (init).
 
 ### `eawf question`
 
-Add and list research-campaign open questions.
+Add and list open questions, and file operator decisions.
 
 | Verb | Summary |
 |---|---|
 | `add` | Add a research-campaign open question for the active scope. |
 | `list` | List the research-campaign open questions for the active scope. |
+| `open-decision` | File a reversible operator decision the host shows as a typed question. |
 | `resolve` | Resolve a blocking / open research-campaign question for the active scope. |
 
 ### `eawf record`
@@ -654,6 +657,7 @@ List, render, and run Eä workflow skills.
 
 | Verb | Summary |
 |---|---|
+| `check-report` | Validate a terminal report against the skill's typed output schema. |
 | `list` | List every skill resolvable across builtin / user / workspace layers. |
 | `reconcile` | Reconcile the built-in skill registry against the disk skill tree. |
 | `render` | Render a registered skill's metadata or SKILL.md body to stdout. |
@@ -718,6 +722,7 @@ Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, compl
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
 | `prove` | Run a Task's gates at the generation each leg binds and file the receipts. |
 | `ready` | Declare a RUNNING Task ready to integrate on its bound report and evidence. |
+| `release` | Release a CLAIMED Task's lease, handing it back to PLANNED. |
 | `seal` | Bind a Run's accepted report to its candidate and attempt the seal. |
 | `start` | Start a CLAIMED Task under the Run the payload binds it to. |
 | `submit` | File one Run's claim that its leased workspace is ready to integrate. |

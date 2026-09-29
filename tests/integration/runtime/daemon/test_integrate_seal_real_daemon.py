@@ -179,6 +179,7 @@ def test_a_filed_report_seals_through_integrate_and_verify_opens_the_approval(
             subject_ref=candidate,
             run=planned.run,
             resulting_tree_digest=tree_digest,
+            expected_revision=walker.revision(planned.run),
         )
         assert sealed["outcome"] == "sealed", sealed
         assert sealed["refusal_code"] != "candidate_report_unbound"
@@ -192,6 +193,7 @@ def test_a_filed_report_seals_through_integrate_and_verify_opens_the_approval(
             subject_ref=candidate,
             run=planned.run,
             resulting_tree_digest=tree_digest,
+            expected_revision=walker.revision(planned.run),
         )
         assert resealed["outcome"] == "sealed", resealed
         assert run_ledger_kinds(walker, planned.run) == kinds
@@ -222,6 +224,7 @@ def test_a_filed_report_seals_through_integrate_and_verify_opens_the_approval(
             ],
             accepted_binding=binding,
             requested_by=OPERATOR_PRINCIPAL,
+            expected_revision=walker.revision(planned.milestone),
         )
 
     assert asked["outcome"] == "passed", asked

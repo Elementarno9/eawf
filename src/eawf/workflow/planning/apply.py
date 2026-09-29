@@ -487,7 +487,8 @@ def _planned_task(
 
     An entry naming a backlog draft promotes that draft through the
     registry's own promotion edge, so the Task keeps its identifier, its
-    history and any due scope the draft already carried. Every other entry
+    history and any due scope the draft already carried, and takes the
+    plan's placement and graph edges like a created one. Every other entry
     creates the Task at revision one.
 
     Args:
@@ -507,6 +508,9 @@ def _planned_task(
         "priority": task.priority.value,
         "intent": task.intent,
         "criteria": [item.model_dump(mode="json") for item in task.criteria],
+        "depends_on": [str(ref) for ref in task.depends_on],
+        "write_claims": list(task.write_claims),
+        "exclusive": task.exclusive,
     }
     draft = _promotable_draft(document, key=task.urn.entity_key)
     if draft is None:
@@ -523,9 +527,6 @@ def _planned_task(
                 "due_scope": str(body.milestone_urn),
                 "contract_revision": 1,
                 "status": TaskStatus.PLANNED.value,
-                "depends_on": [str(ref) for ref in task.depends_on],
-                "write_claims": list(task.write_claims),
-                "exclusive": task.exclusive,
             }
         )
     due_scope = draft.due_scope if draft.due_scope is not None else body.milestone_urn

@@ -499,6 +499,14 @@ def receipt_lines(canary: CanaryProvision, runtime_root: Path) -> int:
         return len(read_ledger_records(session.ledger_path(Epoch2Collection.RECEIPT)))
 
 
+def run_revision(canary: CanaryProvision, runtime_root: Path) -> int:
+    """Return the revision the canary's Run stands at, which a seal anchors on."""
+    context = root_context(canary, runtime_root)
+    with context.session([RUN_URN]) as session:
+        row = document_rows(session.read_document(), Epoch2Collection.RUN)[RUN_KEY]
+    return int(row["revision"])
+
+
 def plan_revision_rows(canary: CanaryProvision, runtime_root: Path) -> dict[str, Any]:
     """Return the plan-revision rows the canary's document holds."""
     context = root_context(canary, runtime_root)
@@ -1072,7 +1080,7 @@ def test_a_report_naming_a_contract_its_run_was_not_sealed_under_is_refused(
 def test_integrate_seal_stops_when_the_run_and_tree_are_not_presented(
     task_canary: CanaryProvision, ctx: MethodContext
 ) -> None:
-    """Naming only the candidate still names neither field the verb always needs."""
+    """Naming only the candidate presents none of the fields the verb always needs."""
     caller = skill_caller(ctx, task_canary)
 
     result = integrate_skill.IntegrateSkill(caller=caller).action(
@@ -1086,7 +1094,13 @@ def test_integrate_seal_stops_when_the_run_and_tree_are_not_presented(
     assert isinstance(result.body, dict)
     assert result.body["outcome"] == "blocked"
     assert result.body["refusal_code"] == "candidate_report_unbound"
-    assert set(result.body["unresolved_request_fields"]) == {"urn", "resulting_tree_digest"}
+    assert set(result.body["unresolved_request_fields"]) == {
+        "urn",
+        "resulting_tree_digest",
+        "expected_revision",
+    }
+    for missing in result.body["unresolved_request_fields"]:
+        assert missing in result.body["reason"]
 
 
 def test_integrate_seal_binds_the_report_and_returns_a_sealed_candidate(
@@ -1108,6 +1122,7 @@ def test_integrate_seal_binds_the_report_and_returns_a_sealed_candidate(
                 "report_digest": digest("7"),
                 "verdict": "pass",
                 "resulting_tree_digest": tree_digest,
+                "expected_revision": run_revision(task_canary, runtime_root),
             },
         )
     )
@@ -1153,6 +1168,7 @@ def test_integrate_seal_reads_the_report_off_the_run_when_omitted(
                 "subject_ref": ref,
                 "run": RUN_URN,
                 "resulting_tree_digest": tree_digest,
+                "expected_revision": run_revision(task_canary, runtime_root),
             },
         )
     )
@@ -1178,6 +1194,7 @@ def test_integrate_seal_still_stops_when_the_run_holds_no_accepted_report(
                 "subject_ref": ref,
                 "run": RUN_URN,
                 "resulting_tree_digest": tree_digest,
+                "expected_revision": run_revision(task_canary, runtime_root),
             },
         )
     )

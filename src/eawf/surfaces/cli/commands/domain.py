@@ -102,6 +102,7 @@ BATCH_COMPLETE: Final = "domain.batch.complete"
 TASK_PROMOTE: Final = "domain.task.promote"
 TASK_DEMOTE: Final = "domain.task.demote"
 TASK_CLAIM: Final = "domain.task.claim"
+TASK_RELEASE: Final = "domain.task.release"
 TASK_START: Final = "domain.task.start"
 TASK_READY: Final = "domain.task.ready"
 TASK_COMPLETE: Final = "domain.task.complete"
@@ -127,6 +128,7 @@ DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     TASK_PROMOTE,
     TASK_DEMOTE,
     TASK_CLAIM,
+    TASK_RELEASE,
     TASK_START,
     TASK_READY,
     TASK_COMPLETE,
@@ -805,6 +807,7 @@ def _native_answer(
     flags: GlobalFlags,
     verb_text: str,
     gated: bool = False,
+    read: bool = False,
 ) -> dict[str, Any]:
     """Send one non-envelope native RPC and return its raw answer.
 
@@ -822,12 +825,14 @@ def _native_answer(
             the ``--daemonless`` rejection message.
         gated: Whether the verb runs gates inside the request, so the wire
             waits as long as the daemon lets a gated mutation run.
+        read: Whether the verb only reads, so it neither escalates as a
+            mutation nor starts a daemon that is not running.
 
     Returns:
         The daemon's answer, as a JSON-mode mapping.
 
     Raises:
-        UserError: ``--daemonless`` was asked for.
+        UserError: ``--daemonless`` was asked for a mutation.
         DaemonRpcError: The daemon answered an error, left for the caller
             to render.
         DaemonUnreachable: The daemon could not be reached.
@@ -845,8 +850,9 @@ def _native_answer(
 
         timeout = cli_mutation_timeout_for(configured_juror_wall_clock(Path(repo_root)))
     try:
-        _dispatch.escalate_mutation(verb_text, flags=flags)
-        with DaemonClient(call_timeout_seconds=timeout) as client:
+        if not read:
+            _dispatch.escalate_mutation(verb_text, flags=flags)
+        with DaemonClient(call_timeout_seconds=timeout, spawn=not read) as client:
             return client.call(method, wire_params)
     except DaemonRpcError:
         raise

@@ -161,6 +161,7 @@ def test_meas_028_every_segment_is_a_truth_field_with_producer_freshness_and_qua
         "git",
         "model_session_cwd",
         "context_tokens",
+        "rate_window",
         "cost",
         "mcp_health",
         "hooks_plugins",

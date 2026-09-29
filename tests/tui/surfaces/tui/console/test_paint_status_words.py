@@ -19,7 +19,7 @@ def _painted(row: str, text: str) -> bool:
     return any(s.text.strip() == text and s.surface for s in paint(row, Part.BODY))
 
 
-# ---------- V-02: passed is a verdict only as a cell ----------
+# ---------- passed is a verdict only as a cell ----------
 
 
 @pytest.mark.parametrize(
@@ -30,7 +30,7 @@ def _painted(row: str, text: str) -> bool:
         " CHECKS       0 checks · 0 failed · 0 warn · 0 unknown · 0 passed",
     ],
 )
-def test_v02_passed_in_prose_is_not_coloured(row: str) -> None:
+def test_passed_in_prose_is_not_coloured(row: str) -> None:
     assert not _painted(row, "passed")
 
 
@@ -41,11 +41,11 @@ def test_v02_passed_in_prose_is_not_coloured(row: str) -> None:
         "   artifact build                    passed",
     ],
 )
-def test_v02_passed_as_a_verdict_cell_is_ok(row: str) -> None:
+def test_passed_as_a_verdict_cell_is_ok(row: str) -> None:
     assert _surface(row, "passed") == "ok"
 
 
-# ---------- V-13: a bucket keeps its colour whatever its count ----------
+# ---------- a bucket keeps its colour whatever its count ----------
 
 
 @pytest.mark.parametrize(
@@ -59,11 +59,11 @@ def test_v02_passed_as_a_verdict_cell_is_ok(row: str) -> None:
         ("│ needs operator            3", "needs operator", "warn"),
     ],
 )
-def test_v13_a_bucket_keeps_its_severity_with_an_unknown_or_estimated_count(
+def test_a_bucket_keeps_its_severity_with_an_unknown_or_estimated_count(
     row: str, bucket: str, surface: str
 ) -> None:
     assert _surface(row, bucket) == surface
 
 
-def test_v13_a_bucket_word_in_prose_without_a_count_stays_plain() -> None:
+def test_a_bucket_word_in_prose_without_a_count_stays_plain() -> None:
     assert not _painted("   the lease failed · retry pending", "failed")
