@@ -372,6 +372,7 @@ def test_profile_enable_renders_rule_projections(repo_root: Path) -> None:
         "AGENTS.override.md",
         "CLAUDE.md",
         *(carrier_target(role) for role in builtin_carrier_roles()),
+        ".gitignore",
     ]
     assert (
         (repo_root / "AGENTS.md")

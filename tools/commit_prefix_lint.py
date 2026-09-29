@@ -57,8 +57,8 @@ Enforces:
 
 2. State-bookkeeping path whitelist applies to any commit with
    ``type == "state"`` — the canonical, and only, semantic signal.
-   It fires on the wave form and on the bare ``[P##]`` /
-   ``[P##-I##]`` form alike.
+   It fires on the wave form, on the bare ``[P##]`` / ``[P##-I##]``
+   form and on a plain ``state:`` subject alike.
 
    State-scoped commits MUST touch only state-bookkeeping paths
    (``.ea/state.json``, ``.ea/store/event.jsonl``,
@@ -130,11 +130,24 @@ Enforces:
    satisfies the open-phase trailer rule. The Task must be CLAIMED or
    RUNNING in the canonical main worktree's selected generation, and it is
    capped at one commit like a wave, amend included. An unmarked root
-   refuses the trailer, since no native Task exists there.
+   refuses the trailer, since no native Task exists there. A Task named
+   in no live row is rejected, so a commit cannot attribute itself to
+   work nobody planned.
+
+   The trailer's position is grammar: it is the last trailer, followed
+   only by co-author trailers, and a message names one Task. The
+   **task-prefix form** ``[EAWF-0137] <type>: <summary>`` names the Task
+   in the subject instead; it is proved and capped the same way, must
+   agree with a trailer that also names one, and warns under
+   ``subject_style: trailer``.
 
 8. A rewrite keeps every wave and Task trailer. ``--check-rewrite OLD NEW`` and the
    ``--pre-push`` hook refuse replacing a tip with history that no longer
    names a wave the old side named; see ``wave_trailer_guard.py``.
+
+9. History stays lintable. ``--check-history <range>`` lints the subject
+   and trailer grammar of every commit in a revision range without
+   reading state; see ``commit_grammar_history.py``.
 
 Checks 1-7 run as a ``commit-msg``-stage pre-commit hook. The first
 argument is the commit-message file path (pre-commit passes it). The
@@ -215,6 +228,23 @@ _WAVE_TRAILER_RE = re.compile(
 # package, so tests/unit/test_commit_prefix_lint_epoch2.py pins the copy.
 _TASK_TRAILER_NAME = "Task"
 _TASK_TRAILER_RE = re.compile(rf"^{_TASK_TRAILER_NAME}:\s+(?P<key>\S+)\s*$", re.MULTILINE)
+# The prefix form names the Task in the subject instead of a trailer. Both
+# grammars are read while the project moves to the trailer form; the prefix
+# form warns whenever the trailer form is the configured one.
+_SUBJECT_TASK_PREFIX_RE = re.compile(
+    r"^\[(?P<key>" + NATIVE_TASK_KEY_RE.pattern.strip("^$") + r")\]\s+"
+    rf"(?P<type>{_TYPES}):\s+\S.*$"
+)
+_TASK_PREFIX_DEPRECATION = (
+    "deprecated task-prefix subject: {subject!r}\n"
+    "vcs.conventions.subject_style is 'trailer': write '<type>: <summary>' with a "
+    f"'{_TASK_TRAILER_NAME}: <KEY>' trailer as the last trailer instead. The prefix "
+    "form still passes, but it is deprecated."
+)
+# Git appends the staged diff below this line under ``commit --verbose``;
+# nothing after it is message.
+_SCISSORS_LINE = "# ------------------------ >8 ------------------------"
+_COAUTHOR_TRAILER_LINE_RE = re.compile(r"^Co-Authored-By:", re.IGNORECASE)
 # A native Task proves a commit only while its work is live, in the
 # generation's own spelling: a native row has no epoch-1 status to map to.
 _LIVE_TASK_STATUSES = frozenset({"CLAIMED", "RUNNING"})
@@ -432,6 +462,56 @@ def _strip_yaml_scalar(value: str) -> str:
 
 def _has_wave_trailer(text: str) -> bool:
     return _WAVE_TRAILER_RE.search(text) is not None
+
+
+def _message_lines(text: str) -> list[str]:
+    """Return the message's non-blank lines, without comments or the verbose diff."""
+    lines: list[str] = []
+    for raw in text.splitlines():
+        if raw.rstrip() == _SCISSORS_LINE:
+            break
+        stripped = raw.strip()
+        if stripped and not stripped.startswith("#"):
+            lines.append(stripped)
+    return lines
+
+
+def task_trailer_position_error(text: str) -> str | None:
+    """Return why the ``Task`` trailer is misplaced, or ``None`` when it is not.
+
+    The trailer is the last one before the agent co-author trailers, so a
+    reader takes it from a fixed position rather than searching the body.
+
+    Args:
+        text: The full commit message.
+
+    Returns:
+        A diagnostic when the message names more than one Task trailer, or
+        when anything but co-author trailers follows it; ``None`` when the
+        message carries no Task trailer or carries one in place.
+    """
+    lines = _message_lines(text)
+    positions = [index for index, line in enumerate(lines) if _TASK_TRAILER_RE.match(line)]
+    if not positions:
+        return None
+    if len(positions) > 1:
+        named = ", ".join(lines[index] for index in positions)
+        return f"{_TASK_TRAILER_NAME} trailer repeated ({named}); a commit names exactly one Task"
+    end = len(lines)
+    while end > 0 and _COAUTHOR_TRAILER_LINE_RE.match(lines[end - 1]):
+        end -= 1
+    if positions[0] != end - 1:
+        return (
+            f"{_TASK_TRAILER_NAME} trailer out of place: {lines[positions[0]]!r} is followed by "
+            f"{lines[positions[0] + 1]!r}; it must be the last trailer, with only "
+            "co-author trailers after it"
+        )
+    if any(_COAUTHOR_TRAILER_LINE_RE.match(line) for line in lines[: positions[0]]):
+        return (
+            f"{_TASK_TRAILER_NAME} trailer out of place: {lines[positions[0]]!r} follows a "
+            "co-author trailer; it comes before them"
+        )
+    return None
 
 
 def _load_managed_state(path: Path) -> tuple[dict[str, Any] | None, str | None]:
@@ -1181,7 +1261,7 @@ def _match_subject(
     """
     wave_match = _SUBJECT_WAVE_RE.match(subject)
     bare_match = _SUBJECT_BARE_RE.match(subject)
-    bracketed = wave_match or bare_match
+    bracketed = wave_match or bare_match or _SUBJECT_TASK_PREFIX_RE.match(subject)
     if bracketed is not None:
         return bracketed, bare_match is not None, ""
     bare_conventional = _SUBJECT_BARE_CONVENTIONAL_RE.match(subject)
@@ -1226,7 +1306,9 @@ def _match_subject(
         False,
         (
             f"commit subject rejected: {subject!r}\n"
-            "expected '[P##-W##] <type>: <summary>', "
+            "expected '<type>: <summary>' with a 'Task: <KEY>' trailer, "
+            "'[<KEY>] <type>: <summary>' (task-prefix form), "
+            "'[P##-W##] <type>: <summary>', "
             "'[P##] state: <summary>' (canonical bookkeeping form), "
             "'[P##] docs: <summary>' (phase/iter-scoped artifact docs), "
             "or '<type>: <summary>' (bare conventional-commits, only when "
@@ -1344,6 +1426,8 @@ def _bracket_form_deprecation(
         return ""
     if is_bare_bracketed or not subject.startswith("["):
         return ""
+    if _SUBJECT_TASK_PREFIX_RE.match(subject):
+        return _TASK_PREFIX_DEPRECATION.format(subject=subject)
     return _BRACKET_FORM_DEPRECATION.format(subject=subject)
 
 
@@ -1405,8 +1489,33 @@ def _check_wave_scope(
     )
 
 
+def _named_task_keys(subject: str, text: str) -> tuple[list[str], str | None]:
+    """Return the Task keys a commit names, and why they disagree if they do.
+
+    Args:
+        subject: The commit subject, which may carry the task-prefix form.
+        text: The full commit message, which may carry a ``Task`` trailer.
+
+    Returns:
+        The distinct keys in carrier order (prefix first), beside a
+        diagnostic when the prefix and the trailer name different Tasks.
+    """
+    prefix = _SUBJECT_TASK_PREFIX_RE.match(subject)
+    keys = [prefix.group("key")] if prefix is not None else []
+    for trailer in _TASK_TRAILER_RE.finditer(text):
+        if trailer.group("key") not in keys:
+            keys.append(trailer.group("key"))
+    if prefix is not None and len(keys) > 1:
+        return keys, (
+            f"subject/trailer task mismatch: subject={keys[0]!r} trailer={keys[1]!r}; "
+            "a commit names exactly one Task"
+        )
+    return keys, None
+
+
 def _check_task_scope(
     *,
+    subject: str,
     text: str,
     commit_type: str,
     staged: list[str],
@@ -1415,20 +1524,23 @@ def _check_task_scope(
     canonical_state_path: Path | None,
     env: Mapping[str, str],
 ) -> tuple[int, str] | None:
-    """Validate every native Task a ``Task`` trailer names.
+    """Validate the native Task the subject prefix or ``Task`` trailer names.
 
     The proof reads the canonical main worktree's selected generation, as
     the wave proof reads its canonical state, so a worktree cannot prove a
     Task against its own stale copy.
 
     Returns:
-        A ``(1, diagnostic)`` rejection for an unmarked root, a malformed
-        key, a Task the canonical generation lacks or holds in any status
-        but CLAIMED or RUNNING, or a second commit for the Task; ``None``
-        when every trailer holds or there is none.
+        A ``(1, diagnostic)`` rejection for two carriers naming different
+        Tasks, an unmarked root, a malformed key, a Task the canonical
+        generation lacks or holds in any status but CLAIMED or RUNNING, or
+        a second commit for the Task; ``None`` when every named Task holds
+        or none is named.
     """
-    for trailer in _TASK_TRAILER_RE.finditer(text):
-        key = trailer.group("key")
+    keys, mismatch = _named_task_keys(subject, text)
+    if mismatch is not None:
+        return 1, mismatch
+    for key in keys:
         label = f"{_TASK_TRAILER_NAME} trailer rejected: {key!r}"
         if state_path is None or epoch2_generation(state_path.parent) is None:
             return 1, f"{label} names a native Task, and this root is not marked epoch 2"
@@ -1452,7 +1564,7 @@ def _check_task_scope(
             )
         capped = _check_commit_cap(
             unit=f"task {key}",
-            terms=[f"{_TASK_TRAILER_NAME}: {key}"],
+            terms=[f"{_TASK_TRAILER_NAME}: {key}", f"[{key}]"],
             commit_type=commit_type,
             staged=staged,
             repo_root=repo_root,
@@ -1501,6 +1613,9 @@ def lint(
     )
     if match is None:
         return 1, err
+    position = task_trailer_position_error(text)
+    if position is not None:
+        return 1, position
     deprecation = _bracket_form_deprecation(
         subject,
         subject_style=configured_style,
@@ -1526,6 +1641,7 @@ def lint(
         canonical_state_path=canonical_state_path,
         env=resolved_env,
     ) or _check_task_scope(
+        subject=subject,
         text=text,
         commit_type=commit_type,
         staged=staged,
@@ -1536,23 +1652,37 @@ def lint(
     )
     if scope is not None:
         return scope
-    # Bare conventional-commits (no bracket prefix) has no path whitelist;
-    # bracketed forms (wave + bare state/docs) route through the
-    # scoped-path check, which internally gates on commit_type / is_bare
-    # to apply the right whitelist.
-    if subject.startswith("["):
-        scoped = _check_scoped_paths(
-            commit_type=match.group("type"),
-            staged=staged,
-            is_bare=is_bare_bracketed,
-            epoch2=state_path is not None and epoch2_generation(state_path.parent) is not None,
-        )
-        if scoped is not None:
-            return scoped
+    # Bookkeeping is recognised by its conventional type wherever the subject
+    # spells it, so a bare ``state:`` meets the same path whitelist as a
+    # bracketed one; the bare-docs whitelist still keys on the bracket, which
+    # is the only place that form exists.
+    scoped = _check_scoped_paths(
+        commit_type=commit_type,
+        staged=staged,
+        is_bare=is_bare_bracketed,
+        epoch2=state_path is not None and epoch2_generation(state_path.parent) is not None,
+    )
+    if scoped is not None:
+        return scoped
     return _accept_or_reject(text, resolved_env, warning=deprecation)
 
 
+def _check_history_main(argv: list[str]) -> int:
+    """Run ``--check-history <rev-range>`` and return its exit code."""
+    from commit_grammar_history import check_history
+
+    if len(argv) == 3:
+        exit_code, diag = check_history(argv[2])
+    else:
+        exit_code, diag = 1, "usage: commit_prefix_lint.py --check-history <rev-range>"
+    if diag:
+        print(diag, file=sys.stderr)
+    return exit_code
+
+
 def main(argv: list[str]) -> int:
+    if argv[1:2] == ["--check-history"]:
+        return _check_history_main(argv)
     if argv[1:2] in (["--check-rewrite"], ["--pre-push"]):
         from wave_trailer_guard import check_pre_push, check_rewrite
 

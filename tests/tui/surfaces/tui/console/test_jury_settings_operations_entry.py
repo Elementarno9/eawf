@@ -191,7 +191,7 @@ def test_j3_09_the_stack_is_a_boxed_read_only_card(
     body = "\n".join(rows)
     assert rows[1].startswith(" LAYER ▸ repo")
     assert "┌─ STACK · nine layers" in body
-    assert f"│ KEY       {sr.BOOL_KEY}" in body
+    assert f"│ KEY        {sr.BOOL_KEY}" in body
     assert "Read only · a value is changed through the lens, never from here." in body
     assert any(row.startswith("└") and row.endswith("┘") for row in rows)
 
@@ -214,7 +214,7 @@ def test_j3_09_a_full_second_tier_folds_the_card_rather_than_losing_a_row(
     rows = sr._frame(fixture, held, sr._on(sr._session("settings.stack"), held, sr.BOOL_KEY))
     body = "\n".join(rows)
     assert len(rows) == 24
-    assert f"KEY       {sr.BOOL_KEY} · bool" in body
+    assert f"KEY        {sr.BOOL_KEY} · bool" in body
     for label in ("DENIED BY", "CONSTRAINED BY", "NEEDS", "SECRET", "LENS SETS"):
         assert f"│ {label}" in body, label
 

@@ -185,6 +185,7 @@ def emit_budget_notice(
     consumed: int,
     ceiling: PromptBudgetCeiling | None,
     observed_at: datetime,
+    contract_digest: str | None = None,
 ) -> NoticeUpsert | None:
     """Upsert *scope_id*'s budget notice once *consumed* reached *ceiling*.
 
@@ -201,6 +202,8 @@ def emit_budget_notice(
         consumed: Cumulative consumption after the latest increment.
         ceiling: The scope's one ceiling, or ``None`` when none is set.
         observed_at: When the consumption was read.
+        contract_digest: The compiled contract a Run's ceiling came from,
+            part of the notice's identity; ``None`` for a wave.
 
     Returns:
         The upsert result, or ``None`` when the ceiling was not reached or
@@ -221,6 +224,7 @@ def emit_budget_notice(
         observed_value=consumed,
         budget_value=ceiling.tokens,
         observed_at=observed_at,
+        contract_digest=contract_digest,
     )
     try:
         return upsert_notice(notices_file, crossing)
@@ -278,17 +282,23 @@ def consume_against_ceiling(
     )
 
 
-def emit_termination_notice(notices_file: Path, receipt: BudgetNotice) -> NoticeUpsert | None:
+def emit_termination_notice(
+    notices_file: Path, receipt: BudgetNotice, *, contract_digest: str | None
+) -> NoticeUpsert | None:
     """Upsert the one notice a Run's budget termination reports.
 
     The run-ledger *receipt* anchors the budget control and answers its
     retries; the notice readers list is the ledger row this writes. A
     termination only happens at a ``hard`` ceiling, so the row's basis is
     always ``hard_limit``, and a retried termination folds into the same row.
+    The row is keyed by the Run, its compiled contract and the axis, inside
+    the root's own notice ledger.
 
     Args:
         notices_file: The notice ledger file.
         receipt: The termination receipt the run ledger holds.
+        contract_digest: The contract the Run was bound to, or ``None``
+            for a Run metered without a dispatch binding.
 
     Returns:
         The upsert result, or ``None`` when the ledger could not be written.
@@ -299,6 +309,7 @@ def emit_termination_notice(notices_file: Path, receipt: BudgetNotice) -> Notice
         consumed=receipt.observed_tokens,
         ceiling=PromptBudgetCeiling(tokens=receipt.cap_tokens, enforce="hard"),
         observed_at=receipt.noticed_at,
+        contract_digest=contract_digest,
     )
 
 

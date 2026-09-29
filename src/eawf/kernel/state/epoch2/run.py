@@ -30,6 +30,12 @@ from typing import Annotated, ClassVar, Final, Literal, Self
 from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from eawf.kernel.state.epoch2.base import Epoch2Model, RunKey
+from eawf.kernel.state.epoch2.measurement import (
+    CapturedRuntime,
+    CounterSnapshot,
+    UncapturedRuntime,
+    VendorSessionRef,
+)
 from eawf.kernel.state.epoch2.urns import (
     BatchUrn,
     CampaignUrn,
@@ -320,7 +326,14 @@ class RunCreateSpec(Epoch2Model):
 
 
 class Run(Epoch2Record):
-    """One execution episode of one agent against one scope."""
+    """One execution episode of one agent against one scope.
+
+    ``vendor_session`` is the runtime's own session the episode's usage
+    is counted under, distinct from the Run key and from any agent
+    session id; capture reads counters only through it.
+    ``counter_baseline`` is the reading taken when the Run started and
+    ``captured_runtime`` what the stop reading made of it.
+    """
 
     key: RunKey
     urn: RunUrn
@@ -330,6 +343,9 @@ class Run(Epoch2Record):
     ended_at: UtcDatetime | None = None
     suspension_reason: SuspensionReason | None = None
     failure: TransitionReason | None = None
+    vendor_session: VendorSessionRef | None = None
+    counter_baseline: CounterSnapshot | UncapturedRuntime | None = None
+    captured_runtime: CapturedRuntime | None = None
 
     @property
     def activity_bucket(self) -> ActivityBucket | None:
@@ -397,6 +413,20 @@ class Run(Epoch2Record):
             and self.ended_at < self.started_at
         ):
             raise ValueError("ended_at precedes started_at")
+        return self
+
+    @model_validator(mode="after")
+    def _capture_matches_status(self) -> Self:
+        """Keep each counter reading on the side of the clock it describes.
+
+        Raises:
+            ValueError: A queued Run carries a baseline, or a Run that has
+                not stopped carries a captured runtime.
+        """
+        if self.status is RunStatus.QUEUED and self.counter_baseline is not None:
+            raise ValueError("a QUEUED Run has not started and carries no counter_baseline")
+        if self.status not in _TERMINAL and self.captured_runtime is not None:
+            raise ValueError(f"captured_runtime belongs to a stopped Run, not {self.status.value}")
         return self
 
 

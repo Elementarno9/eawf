@@ -108,7 +108,9 @@ def pr_render(
             repo = Path.cwd()
             merged, _sources = merge_config(workspace=flags.workspace, repo=repo)
             enabled = [str(p) for p in (merged.get("profiles", {}).get("enabled") or [])]
-            composed = compose([load_profile(pid) for pid in enabled])
+            composed = compose(
+                [load_profile(pid, repo=repo, workspace=flags.workspace) for pid in enabled]
+            )
         try:
             phase_id = resolve_pr_phase_id(state, scope_id)
             inputs = collect_pr_report_inputs(state_path, state, scope_id, kind=pr_kind)

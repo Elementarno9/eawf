@@ -55,6 +55,7 @@ from typing import Annotated, Any, Final, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, StringConstraints, ValidationError
 
+from eawf.kernel.config.layered import resolve_stall_interval_seconds
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.control import (
     TERMINAL_RUN_STATUSES,
@@ -80,6 +81,7 @@ from eawf.kernel.runtime.semantic import SemanticToolId
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import Run, RunStatus
+from eawf.kernel.state.epoch2.transitions import AmbiguityLabel, LifecycleEntity, ambiguity_label
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.ledger import (
@@ -114,6 +116,7 @@ from eawf.runtime.daemon.native_dispatch import (
 )
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator, require_native_call
 from eawf.runtime.daemon.native_retry import RetryParams, retry_run
+from eawf.runtime.daemon.run_capture_updates import terminal_capture_updates
 from eawf.runtime.daemon.run_events import (
     AppendDisposition,
     RunEventAppend,
@@ -311,6 +314,9 @@ class RunStallAnswer(BaseModel):
             never terminates the Run, so this is an offer and not a
             record of something the daemon did.
         resume_control: The control that resume request asks for.
+        ambiguity: ``lost`` for a stalled Run still recorded as running:
+            its outcome is unknown, which is neither a success nor a
+            failure, and only a principal's control ends it.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -322,6 +328,7 @@ class RunStallAnswer(BaseModel):
     interval_seconds: StrictNonNegativeInt
     resume_method: str
     resume_control: ControlKind
+    ambiguity: AmbiguityLabel | None = None
 
 
 class RunEventsAnswer(BaseModel):
@@ -765,14 +772,16 @@ def _terminal_updates(run: Run, *, now: datetime) -> dict[str, Any]:
 
     A Run cancelled out of the queue never started, so the edge requires
     the start stamp as well: the duration of a stopped Run is a recorded
-    fact rather than a difference against now.
+    fact rather than a difference against now. A stop is also the Run's
+    terminal counter reading, so the captured runtime lands in the same
+    commit.
     """
     updates: dict[str, Any] = {"ended_at": now.isoformat()}
     if run.status is RunStatus.QUEUED:
         updates["started_at"] = now.isoformat()
     if run.status is RunStatus.SUSPENDED:
         updates["suspension_reason"] = None
-    return updates
+    return {**updates, **terminal_capture_updates(run, ended_at=now)}
 
 
 def _append_event_line(session: RootSession, event: RunEventRecord, *, now: datetime) -> None:
@@ -943,8 +952,16 @@ def _read_events(
             status=run.status, facts=_control_facts(records, args.urn)
         ).status
         events = run_events_of(records, args.urn)
+        hellos = hello_facts_of(records, args.urn)
+    interval = args.stall_interval_seconds
+    if interval is None:
+        # The context is the fenced ``.ea`` tree; the layered config is read
+        # against the repository that holds it.
+        repository = context.identity.tree_root.parent
+        interval = resolve_stall_interval_seconds(repository, _runtime_of(hellos))
     state = reduce_run_events(events)
-    stall = assess_stall(state=state, now=now, interval_seconds=args.stall_interval_seconds)
+    stall = assess_stall(state=state, now=now, interval_seconds=interval)
+    stalled = stall.verdict is RunLiveness.STALLED
     derived = sorted(
         (event for event in events if event.quarantine is None),
         key=lambda item: item.run_sequence,
@@ -967,8 +984,15 @@ def _read_events(
             interval_seconds=stall.interval_seconds,
             resume_method=RUN_CONTROL_REQUEST_METHOD,
             resume_control=stall.resume_control,
+            ambiguity=ambiguity_label(LifecycleEntity.RUN, status) if stalled else None,
         ),
     )
+
+
+def _runtime_of(hellos: tuple[WorkerHelloFact, ...]) -> str | None:
+    """Return the runtime the Run's latest accepted hello announced, if any."""
+    accepted = [fact for fact in hellos if fact.disposition is HandshakeDisposition.ACCEPTED]
+    return accepted[-1].hello.provider_id if accepted else None
 
 
 def _contract(context: Epoch2RootContext, args: _RunParams) -> RunContract:

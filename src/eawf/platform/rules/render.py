@@ -60,6 +60,7 @@ from eawf.kernel.fsync import fsync_parent_dir
 from eawf.kernel.spec.release import Sha256DigestStr
 from eawf.kernel.state.models import Project
 from eawf.observability.telemetry.models import RuntimeName
+from eawf.platform.install.gitignore_writer import plan_gitignore_block
 from eawf.platform.rules.carriers import carrier_stamp_matches_body, render_role_carriers
 from eawf.platform.rules.compile import (
     CompiledRule,
@@ -88,7 +89,12 @@ from eawf.platform.rules.modules import (
     render_module_index,
     select_rule_modules,
 )
-from eawf.platform.rules.records import RuleModel, RuleRecord, RuleSourceIdentity
+from eawf.platform.rules.records import (
+    REGISTERED_LOCATOR_PREFIX,
+    RuleModel,
+    RuleRecord,
+    RuleSourceIdentity,
+)
 from eawf.platform.rules.views import (
     ModuleViewRead,
     read_module_view,
@@ -106,6 +112,9 @@ POLICY_TARGET: Final[str] = "AGENTS.override.md"
 
 #: The projection manifest sidecar, relative to the repository root.
 PROJECTION_MANIFEST_PATH: Final[str] = ".ea/indexes/rule-projections.json"
+
+#: The committed ignore file whose managed block the render maintains.
+_GITIGNORE: Final[str] = ".gitignore"
 
 #: The profile renderer's manifest; its rows for a projection target are
 #: obsolete once the rule graph renders that target.
@@ -153,6 +162,24 @@ class RuleProjectionOwnedError(RuleProjectionError):
     """A projection target holds prose no renderer wrote."""
 
     code: ClassVar[str] = "rule_projection_operator_owned"
+
+
+class RuleProjectionShadowError(RuleProjectionError):
+    """A shadow generation failed validation before selection."""
+
+    code: ClassVar[str] = "rule_projection_shadow"
+
+
+class RuleProjectionUnenumeratedError(RuleProjectionError):
+    """The render emits a generated path the managed ignore block misses."""
+
+    code: ClassVar[str] = "rule_projection_unenumerated"
+
+
+class RuleProjectionRemovalError(RuleProjectionError):
+    """A host still loads a generated file the render no longer writes."""
+
+    code: ClassVar[str] = "rule_projection_removal"
 
 
 class RuleProjectionSelectionError(RuleProjectionError):
@@ -340,11 +367,14 @@ class ProjectionWrite(RuleModel):
             projections, then the import shim, the module views and the
             role carriers.
         removed: Obsolete targets that were deleted.
+        gitignore_patterns_added: Shipped ignore patterns the managed
+            ``.gitignore`` block lacked before this render.
     """
 
     manifest: ProjectionManifest
     changed: tuple[str, ...]
     removed: tuple[str, ...]
+    gitignore_patterns_added: tuple[str, ...] = ()
 
 
 def rule_source_present(repo_root: Path) -> bool:
@@ -457,6 +487,9 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         HostFactError: When the shipped host-fact record is untrustworthy.
         RuleViewStartupImportError: When a runtime's shim would import a
             module view.
+        RuleProjectionShadowError: When a legacy disposition names an
+            obligation the graph lacks, or a non-builtin rule names a
+            procedure path the repository does not have.
     """
     # The shim renderer lives with the runtime adapters; importing it lazily
     # keeps that module free to import this package's view refusal.
@@ -496,6 +529,7 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
             for carrier in render_role_carriers(policy_graph)
         ),
     )
+    _validate_shadow(repo_root, policy_graph)
     sources = sorted(
         {*card_graph.sources, *policy_graph.sources},
         key=lambda source: (source.kind, source.locator, source.digest),
@@ -553,6 +587,38 @@ def _policy_graph(repo_root: Path, *, home: Path | None) -> tuple[RuleModuleSele
     return selection, graph
 
 
+def _validate_shadow(repo_root: Path, graph: RuleGraph) -> None:
+    """Refuse a shadow generation whose coverage or paths do not hold.
+
+    Builtin procedure paths are the package's; only the paths a repository
+    or workspace rule names are this repository's to provide.
+
+    Args:
+        repo_root: The repository root.
+        graph: The policy graph the generation renders.
+
+    Raises:
+        RuleProjectionShadowError: Naming every uncovered obligation and
+            missing path.
+    """
+    from eawf.platform.rules.migration import unresolved_legacy_obligations
+
+    failures = [
+        f"legacy {line} is owned by no rule"
+        for line in unresolved_legacy_obligations(load_rule_source(repo_root).legacy, graph)
+    ]
+    failures += [
+        f"{rule.record.rule_id} names procedure {rule.record.procedure_ref}, which does not exist"
+        for rule in graph.rules
+        if rule.record.source.kind != "builtin"
+        and rule.record.procedure_ref is not None
+        and not rule.record.procedure_ref.startswith(REGISTERED_LOCATOR_PREFIX)
+        and not (repo_root / rule.record.procedure_ref).exists()
+    ]
+    if failures:
+        raise RuleProjectionShadowError("; ".join(failures))
+
+
 def classify_projection(path: Path) -> ProjectionState:
     """Classify an existing projection target before a render replaces it.
 
@@ -588,20 +654,28 @@ def classify_projection(path: Path) -> ProjectionState:
 def projection_drift(repo_root: Path, plan: ProjectionPlan) -> tuple[str, ...]:
     """Name every projection target whose bytes differ from the plan.
 
-    A hand-edited or missing projection counts as drift.
+    A hand-edited or missing projection counts as drift, and so does a
+    managed ``.gitignore`` block the render would rewrite.
 
     Args:
         repo_root: The repository root.
         plan: The plan to compare against.
 
     Returns:
-        Drifted targets, in render order.
+        Drifted targets, in render order, then ``.gitignore``.
+
+    Raises:
+        ManagedBlockError: When the ``.gitignore`` markers are not exactly
+            one ordered pair.
     """
     drifted: list[str] = []
     for target, text in plan.outputs:
         path = repo_root / target
         if not path.is_file() or path.read_bytes() != text.encode("utf-8"):
             drifted.append(target)
+    ignore = plan_gitignore_block(repo_root)
+    if _read_or_none(ignore.path) != ignore.payload:
+        drifted.append(_GITIGNORE)
     return tuple(drifted)
 
 
@@ -648,11 +722,22 @@ def refresh_rule_projections(repo_root: Path) -> tuple[str, ...]:
 
 
 def write_rule_projections(repo_root: Path, plan: ProjectionPlan) -> ProjectionWrite:
-    """Write a plan's projections and manifest, or nothing.
+    """Select a plan's generation: write its outputs and manifest, or nothing.
 
-    Every target is validated before any byte is written. The prior bytes of
-    every touched path are held in memory, and any failure part-way restores
-    them, so an interrupted render leaves the previous generation intact.
+    The generation is verified and every target checked before any byte is
+    written, and the generation is stored whole before its targets change.
+    The manifest is written last, so a render cut short leaves it naming
+    the previous generation, which the store still holds. The prior bytes
+    of every touched path are held in memory, and any failure part-way
+    restores them.
+
+    The same transaction regenerates the managed ``.gitignore`` block, and
+    refuses before any write a generated path that block does not ignore:
+    the block is the one committed declaration of what is generated, so an
+    output missing from it would be committed by every clone. A generated
+    file some host still loads but the plan no longer writes is removed with
+    the obsolete targets, and the host chain is probed again afterwards, so
+    removal is confirmed where the model reads rather than in the manifest.
 
     Args:
         repo_root: The repository root.
@@ -662,29 +747,57 @@ def write_rule_projections(repo_root: Path, plan: ProjectionPlan) -> ProjectionW
         What was written and removed.
 
     Raises:
+        RuleProjectionShadowError: When the generation fails verification.
         RuleProjectionHandEditError: When a target was edited by hand.
         RuleProjectionOwnedError: When a target holds operator prose.
+        RuleProjectionUnenumeratedError: When the managed ignore block does
+            not ignore a generated path.
+        RuleProjectionRemovalError: When a host still loads a generated file
+            after the render, after restoring every target.
+        ManagedBlockError: When the ``.gitignore`` markers are not exactly
+            one ordered pair.
         OSError: When a write fails, after restoring every target.
     """
+    # The generation store and the render checks read this module's models.
+    from eawf.platform.rules.generations import (
+        generation_path,
+        store_generation,
+        verify_generation,
+    )
+    from eawf.platform.rules.render_checks import checked_ignore_block, stale_host_loaded
+
+    verify_generation(plan)
     outputs = plan.outputs
     for target, _text in outputs:
         _require_replaceable(repo_root / target)
+    ignore = checked_ignore_block(repo_root, plan.manifest)
     manifest_path = repo_root / PROJECTION_MANIFEST_PATH
     writes: dict[Path, bytes] = {
         repo_root / target: text.encode("utf-8") for target, text in outputs
     }
-    writes[manifest_path] = _manifest_bytes(plan.manifest)
+    writes[ignore.path] = ignore.payload
     legacy_path, legacy_bytes = _legacy_manifest_update(repo_root, plan.manifest.targets)
     if legacy_bytes is not None:
         writes[legacy_path] = legacy_bytes
+    manifest_bytes = _manifest_bytes(plan.manifest)
     obsolete = _obsolete_targets(repo_root, plan.manifest)
-    prior = {path: _read_or_none(path) for path in (*writes, *obsolete)}
+    stored = generation_path(repo_root, plan.manifest.generation)
+    prior = {path: _read_or_none(path) for path in (*writes, *obsolete, manifest_path, stored)}
     try:
+        store_generation(repo_root, plan)
         for path, payload in writes.items():
             if prior[path] != payload:
                 _atomic_write_bytes(path, payload)
         for path in obsolete:
             path.unlink(missing_ok=True)
+        still_loaded = stale_host_loaded(repo_root, plan.manifest)
+        if still_loaded:
+            raise RuleProjectionRemovalError(
+                f"a host still loads {[p.relative_to(repo_root).as_posix() for p in still_loaded]} "
+                f"after the render removed it; delete it by hand and re-run eawf sync"
+            )
+        if prior[manifest_path] != manifest_bytes:
+            _atomic_write_bytes(manifest_path, manifest_bytes)
     except BaseException:
         _restore(prior)
         raise
@@ -693,12 +806,19 @@ def write_rule_projections(repo_root: Path, plan: ProjectionPlan) -> ProjectionW
         for target, _text in outputs
         if prior[repo_root / target] != writes[repo_root / target]
     )
+    if prior[ignore.path] != ignore.payload:
+        changed = (*changed, _GITIGNORE)
     removed = tuple(path.relative_to(repo_root).as_posix() for path in obsolete)
     logger.info(
         f"rule projections written generation={plan.manifest.generation} "
         f"changed={list(changed)} removed={list(removed)}"
     )
-    return ProjectionWrite(manifest=plan.manifest, changed=changed, removed=removed)
+    return ProjectionWrite(
+        manifest=plan.manifest,
+        changed=changed,
+        removed=removed,
+        gitignore_patterns_added=ignore.added,
+    )
 
 
 def _render_projection(
@@ -997,6 +1117,10 @@ def _only_managed_regions(text: str) -> bool:
 def _obsolete_targets(repo_root: Path, manifest: ProjectionManifest) -> tuple[Path, ...]:
     """Name the targets the previous render wrote that this one does not.
 
+    The previous manifest is only the render's own record, so the stamped
+    files a host still loads outside this render's targets are named too:
+    a generated file the manifest lost track of stays in the host's chain.
+
     Args:
         repo_root: The repository root.
         manifest: The manifest about to be written.
@@ -1008,16 +1132,20 @@ def _obsolete_targets(repo_root: Path, manifest: ProjectionManifest) -> tuple[Pa
     Raises:
         RuleProjectionHandEditError: When an obsolete target was edited.
     """
+    from eawf.platform.rules.render_checks import stale_host_loaded
+
     prior = _read_prior_manifest(repo_root)
-    if prior is None:
-        return ()
     obsolete: list[Path] = []
-    for target in prior.targets:
+    for target in prior.targets if prior is not None else ():
         path = repo_root / target
         if target in manifest.targets or not path.is_file():
             continue
         _require_replaceable(path)
         obsolete.append(path)
+    for path in stale_host_loaded(repo_root, manifest):
+        if path not in obsolete:
+            _require_replaceable(path)
+            obsolete.append(path)
     return tuple(obsolete)
 
 
@@ -1228,6 +1356,7 @@ __all__ = [
     "RuleProjectionHandEditError",
     "RuleProjectionOwnedError",
     "RuleProjectionSelectionError",
+    "RuleProjectionShadowError",
     "RuleSpan",
     "builtin_rule_provider",
     "classify_projection",

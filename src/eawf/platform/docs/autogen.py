@@ -414,25 +414,17 @@ def error_codes_page() -> GeneratedPage:
 
 
 def exit_codes_page() -> GeneratedPage:
-    """Generate ``exit-codes.md`` from the five-bucket exit-code surface."""
+    """Generate ``exit-codes.md`` from the canonical exit-code surface."""
     lines: list[str] = [
         "# eawf exit codes",
         "",
         "Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical "
-        "five-bucket surface every CLI handler exits with.",
+        "surface every CLI handler exits with.",
         "",
         "| Code | Name |",
         "|---|---|",
     ]
-    surface = [
-        exit_codes_mod.OK,
-        exit_codes_mod.USER_ERROR,
-        exit_codes_mod.VALIDATION_ERROR,
-        exit_codes_mod.STATE_CONFLICT,
-        exit_codes_mod.DAEMON_UNREACHABLE,
-        exit_codes_mod.INTERNAL_ERROR,
-    ]
-    for code in surface:
+    for code in exit_codes_mod.SURFACE:
         lines.append(f"| {code} | `{exit_codes_mod.name_for(code)}` |")
     body = "\n".join(lines).rstrip("\n") + "\n"
     return GeneratedPage(relpath=f"{AUTOGEN_RELDIR}/exit-codes.md", body=body)

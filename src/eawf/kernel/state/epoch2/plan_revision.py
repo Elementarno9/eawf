@@ -51,6 +51,7 @@ from eawf.kernel.state.epoch2.task import TaskPriority
 from eawf.kernel.state.epoch2.urns import (
     AnyEntityUrn,
     BatchUrn,
+    CampaignFindingUrn,
     MilestoneUrn,
     RepositoryUrn,
     TaskUrn,
@@ -386,25 +387,11 @@ class CampaignCitation(Epoch2Model):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    finding_ref: AnyEntityUrn
+    # Typed to the one finding kind a plan may cite: a citation naming a
+    # Batch or a Task would be a delivery edge wearing a provenance label,
+    # and every count that walks the plan would then pick it up.
+    finding_ref: CampaignFindingUrn
     note: NonEmptyStr
-
-    @model_validator(mode="after")
-    def _citation_addresses_a_finding(self) -> Self:
-        """Require the reference to address a promoted Campaign finding.
-
-        Raises:
-            ValueError: The reference addresses any other kind. A citation
-                naming a Batch or a Task would be a delivery edge wearing
-                a provenance label, and every count that walks the plan
-                would then pick it up.
-        """
-        if self.finding_ref.kind is not EntityKind.CAMPAIGN_FINDING:
-            raise ValueError(
-                f"a citation addresses a {EntityKind.CAMPAIGN_FINDING.value}, "
-                f"not a {self.finding_ref.kind.value}"
-            )
-        return self
 
 
 class PlanBody(Epoch2Model):

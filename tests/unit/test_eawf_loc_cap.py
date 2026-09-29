@@ -150,35 +150,36 @@ def test_module_length_violation_render() -> None:
 # --- EAWF002: log-key naming flag + pass ---------------------------------
 
 
-def test_eawf002_flags_wave_id_key() -> None:
+def test_eawf002_flags_task_id_key() -> None:
     source = textwrap.dedent(
         """
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"create_worktree wave_id={wave_id} branch={name}")
+        logger.info(f"claim_task task_id={task_key} branch={name}")
         """
     )
     violations = check_eawf002(source)
     assert len(violations) == 1
     assert violations[0].code == "EAWF002"
-    assert violations[0].key == "wave"
+    assert violations[0].key == "task"
     assert violations[0].lineno == 4
 
 
-def test_eawf002_passes_bare_wave_key() -> None:
-    source = 'logger.info(f"create_worktree wave={wave_id} branch={name}")\n'
+def test_eawf002_passes_bare_task_key() -> None:
+    source = 'logger.info(f"claim_task task={task_key} branch={name}")\n'
     assert check_eawf002(source) == []
 
 
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
-        ("create_worktree wave_id={}", ["wave"]),
-        ("phase_activate phase_id={} base={}", ["phase"]),
-        ("dispatch iter_id={} wave_id={}", ["iter", "wave"]),
-        ("create_worktree wave={} request_id={}", []),  # request_id not banned
-        ("subwave_id={}", []),  # word-boundary: subwave is not a banned key
-        ("phase_activate phase={}", []),
+        ("claim_task task_id={}", ["task"]),
+        ("activate_milestone milestone_id={} base={}", ["milestone"]),
+        ("dispatch batch_id={} run_id={}", ["batch", "run"]),
+        ("claim_task task={} request_id={}", []),  # request_id not banned
+        ("subtask_id={}", []),  # word-boundary: subtask is not a banned key
+        ("activate_milestone milestone={}", []),
+        ("close_wave wave_id={}", []),  # retired key, no alias
     ],
 )
 def test_eawf002_banned_keys_detection(message: str, expected: list[str]) -> None:
@@ -186,14 +187,14 @@ def test_eawf002_banned_keys_detection(message: str, expected: list[str]) -> Non
 
 
 def test_eawf002_multiple_keys_each_reported() -> None:
-    source = 'logger.error(f"dispatch wave_id={w} iter_id={i}")\n'
+    source = 'logger.error(f"dispatch task_id={t} run_id={r}")\n'
     violations = check_eawf002(source)
-    assert sorted(v.key for v in violations) == ["iter", "wave"]
+    assert sorted(v.key for v in violations) == ["run", "task"]
 
 
 def test_eawf002_dynamic_and_non_logger_skipped() -> None:
     assert check_eawf002("logger.info(msg)\n") == []
-    assert check_eawf002('print("wave_id={}")\n') == []
+    assert check_eawf002('print("task_id={}")\n') == []
 
 
 def test_eawf002_raises_on_syntax_error() -> None:

@@ -17,8 +17,8 @@ id). Callers that need a non-default merge order should call
 
 Public API:
 
-    load_profile(profile_id, workspace=None) -> ProfileBody
-    list_profiles(workspace=None)           -> tuple[str, ...]
+    load_profile(profile_id, repo=None, workspace=None) -> ProfileBody
+    list_profiles(repo=None, workspace=None)           -> tuple[str, ...]
     load_composed_profile(profile_ids, *, workspace=None,
                           conflict_resolution="fail") -> ComposedProfile
 """
@@ -39,28 +39,37 @@ from eawf.platform.profiles.models import ComposedProfile, ProfileBody
 logger = logging.getLogger(__name__)
 
 
-def list_profiles(*, workspace: Path | str | None = None) -> tuple[str, ...]:
-    """Enumerate profile ids visible across builtin + user + workspace layers.
+def list_profiles(
+    *,
+    repo: Path | str | None = None,
+    workspace: Path | str | None = None,
+) -> tuple[str, ...]:
+    """Enumerate profile ids visible across builtin, user, workspace and repo layers.
 
     Args:
+        repo: Optional repository root. When given, its ``.ea/profiles/``
+            overlay is included in the union.
         workspace: Optional workspace root. When given, its
             ``.ea/profiles/`` overlay is included in the union.
 
     Returns:
         Tuple of profile ids in deterministic sorted order.
     """
-    return list_profiles_all(workspace=workspace)
+    return list_profiles_all(repo=repo, workspace=workspace)
 
 
 def load_profile(
     profile_id: str,
     *,
+    repo: Path | str | None = None,
     workspace: Path | str | None = None,
 ) -> ProfileBody:
     """Discover and validate ``<profile_id>.yaml`` from the layered roots.
 
     Args:
         profile_id: Profile name (YAML stem).
+        repo: Optional repository root. When given, its ``.ea/profiles/``
+            overlay wins over every other layer.
         workspace: Optional workspace root. When given, its
             ``.ea/profiles/`` overlay wins over the user overlay
             (``~/.eawf/profiles/``), which wins over the built-in
@@ -74,7 +83,7 @@ def load_profile(
             (``kind="InvalidInput"``).
         ValidationError: The YAML body fails schema validation.
     """
-    return load_profile_with_discovery(profile_id, workspace=workspace)
+    return load_profile_with_discovery(profile_id, repo=repo, workspace=workspace)
 
 
 def load_composed_profile(

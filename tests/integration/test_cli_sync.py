@@ -21,6 +21,7 @@ from typer.testing import CliRunner
 
 from eawf.platform.profiles.discovery import _clear_cache_for_tests
 from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -125,7 +126,7 @@ def test_sync_check_honours_target_workspace_profile_overlay(tmp_path: Path) -> 
 
     res = runner.invoke(app, ["--json", "sync", "--target", str(tmp_path), "--check"])
 
-    assert res.exit_code == 4, res.output
+    assert res.exit_code == exit_codes.VALIDATION_ERROR, res.output
     assert '"local-workspace-overlay"' in res.output
     assert (tmp_path / "AGENTS.md").read_bytes() == before
 
@@ -187,19 +188,14 @@ def test_sync_dry_run_does_not_write(tmp_path: Path) -> None:
 
 
 def test_sync_check_exits_4_when_drift(tmp_path: Path) -> None:
-    """``--check`` exits 4 when sync would emit any region; AGENTS.md unchanged."""
+    """``--check`` exits 2 when sync would emit any region; AGENTS.md unchanged."""
     _init_core(tmp_path)
     _rewrite_config_profiles(tmp_path, ["core", "python"])
 
     agents_before = (tmp_path / "AGENTS.md").read_bytes()
 
     res = runner.invoke(app, ["sync", "--target", str(tmp_path), "--check"])
-    # NOTE: source ``sync.py`` still raises ``typer.Exit(code=4)`` via a raw
-    # literal pre-dating the C05 § 5.3 0..5 cutover. Under the new
-    # scheme code 4 is DAEMON_UNREACHABLE rather than the intended
-    # VALIDATION_ERROR (2); a follow-up wave migrates ``sync.py`` to use
-    # the symbolic ``exit_codes.VALIDATION_ERROR`` constant.
-    assert res.exit_code == 4, res.output
+    assert res.exit_code == exit_codes.VALIDATION_ERROR, res.output
 
     agents_after = (tmp_path / "AGENTS.md").read_bytes()
     assert agents_before == agents_after, "AGENTS.md must not be written under --check"
@@ -278,7 +274,7 @@ def test_sync_check_exits_4_on_hand_edited_card(tmp_path: Path) -> None:
     edited = card.read_bytes()
 
     check = runner.invoke(app, ["sync", "--target", str(tmp_path), "--check"])
-    assert check.exit_code == 4, check.output
+    assert check.exit_code == exit_codes.VALIDATION_ERROR, check.output
     write = runner.invoke(app, ["sync", "--target", str(tmp_path)])
     assert write.exit_code != 0, write.output
     assert "edited by hand" in write.output

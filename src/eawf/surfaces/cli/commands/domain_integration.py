@@ -48,12 +48,12 @@ from eawf.surfaces.cli.commands.domain import (
     DOMAIN_REFUSAL_EXIT,
     _call_native_rpc,
     _check_idempotency_key,
-    _load_create_document,
 )
 from eawf.surfaces.cli.commands.domain_legacy import record_app
 from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.verb_contract import read_spec_document
 
 #: The dotted JSON-RPC name each command forwards to, spelled here so the
 #: Typer tree builds without the daemon method registry on the path.
@@ -170,7 +170,7 @@ def _send(
 def _document(ctx: typer.Context, path: Path) -> dict[str, Any] | None:
     """Return the JSON object at *path*, or report why it cannot be read."""
     try:
-        return _load_create_document(path)
+        return read_spec_document(path)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=ctx.obj)
         return None
@@ -513,7 +513,10 @@ def milestone_seal_approval_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_APPROVAL_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-approval-revision", help=_APPROVAL_REVISION_HELP)
+        int,
+        typer.Option(
+            "--expected-revision", "--expected-approval-revision", help=_APPROVAL_REVISION_HELP
+        ),
     ],
     idempotency_key: _Key,
     actor: _Actor,
@@ -533,8 +536,7 @@ def milestone_seal_approval_cmd(
     if expected_revision <= 0:
         cli_errors.emit_error(
             cli_errors.UserError(
-                f"--expected-approval-revision must be a positive revision, "
-                f"got {expected_revision}",
+                f"--expected-revision must be a positive revision, got {expected_revision}",
                 kind="InvalidInput",
             ),
             flags=ctx.obj,

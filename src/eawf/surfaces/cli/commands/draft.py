@@ -12,6 +12,7 @@ import typer
 
 from eawf.kernel.state.enums import ArtifactKind, StoreKind
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.scope import resolve_state_path
@@ -232,7 +233,7 @@ def draft_validate(
     }
     if not report.ok:
         emit_json_or_text(payload, "\n".join(report.errors), flags=flags)
-        raise typer.Exit(code=4)
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
     emit_json_or_text(payload, "draft validate: ok", flags=flags)
 
 

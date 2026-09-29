@@ -577,7 +577,10 @@ def test_bare_conventional_all_supported_types(tmp_path: Path, mod) -> None:
         "state",
     ):
         msg = _write_msg(tmp_path, f"{ctype}: something\n\nbody\n")
-        code, diag = mod.lint(msg, ["any/path.py"], state_path=state)
+        # Bookkeeping is recognised by its type, so a bare state commit
+        # stages bookkeeping paths like a bracketed one.
+        staged = [".ea/state.json"] if ctype == "state" else ["any/path.py"]
+        code, diag = mod.lint(msg, staged, state_path=state)
         assert code == 0, f"{ctype} rejected: {diag}"
 
 

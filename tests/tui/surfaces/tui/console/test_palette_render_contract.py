@@ -225,8 +225,7 @@ def test_auth_058_a_mark_is_one_run_in_its_own_surface(mark: Mark) -> None:
         text = f"{TRUTH[mark.value].unicode} {mark.value}"
     strokes = paint(f" COST  {text} · rate card", Part.BODY)
     marked = [s for s in strokes if s.mark is not None]
-    heavy = MARK_SURFACE[mark] in ("warn", "err")
-    assert marked == [Stroke(text, surface=MARK_SURFACE[mark], bold=heavy, mark=mark)]
+    assert marked == [Stroke(text, surface=MARK_SURFACE[mark], mark=mark)]
 
 
 # ---------------------------------------------------------------- AUTH-058 · live frame
@@ -312,9 +311,9 @@ def test_auth_058_a_live_frame_paints_each_surface_its_theme_token(logical: str)
     assert _colour_of(lines, "Enter")[2]
     assert _colour_of(lines[:1], "▸")[0] == tokens["dim"]
     caret_fg, caret_bg, _ = _colour_of(lines[1:-1], "▸")
-    assert (caret_fg, caret_bg) == (tokens["accent"], tokens["panel-2"])
+    assert (caret_fg, caret_bg) == (tokens["accent"], tokens["cursor-ground"])
     body_bg = {_hex(seg.style.bgcolor) for line in lines[1:-1] for seg in line if seg.style}
-    assert tokens["panel-2"] in body_bg and tokens["surface"] in body_bg
+    assert tokens["cursor-ground"] in body_bg and tokens["surface"] in body_bg
     rule = next(seg for line in lines for seg in line if seg.text.startswith("═"))
     assert rule.style is not None and _hex(rule.style.color) == tokens["muted"]
 

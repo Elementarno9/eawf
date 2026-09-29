@@ -249,7 +249,8 @@ def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[st
     """Return the week row and one lane per Track, each saying no Milestone on it is dated."""
     s, w = view.session, view.w
     tracks = _of(spine, Epoch2Collection.TRACK)
-    label_w = min(20, max(_LANE, *(cell_len(t.key) + 2 for t in tracks))) if tracks else _LANE
+    # the caret's slot, the key, and one cell before the lane
+    label_w = min(20, max(_LANE, *(cell_len(t.key) + 3 for t in tracks))) if tracks else _LANE
     on_lanes = (s.tl_reg or LANES) == LANES
     dv.sel_in(s, len(tracks))
     s.mark, s.timeline_marks, s.timeline_marker = 0, 0, None
@@ -266,7 +267,7 @@ def _native_lanes(view: View, spine: SpineView, now: datetime | None) -> list[st
     milestones = _of(spine, Epoch2Collection.MILESTONE)
     for i, track in enumerate(tracks):
         on = on_lanes and i == s.sel
-        rows.append(Fixed(pad(("▸" if on else " ") + pad(track.key, label_w - 1) + line, w)))
+        rows.append(Fixed(pad(("▸ " if on else "  ") + pad(track.key, label_w - 2) + line, w)))
         undated = sum(1 for m in milestones if m.parent_key == track.key)
         note = f"no Milestone on this lane states a date · {undated} undated below"
         rows.append(Fixed(pad(" " * label_w + note, w)))

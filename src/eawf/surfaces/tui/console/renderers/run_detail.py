@@ -25,7 +25,16 @@ from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
 from eawf.surfaces.tui.console.format import clock_time, group, span
-from eawf.surfaces.tui.console.frame import Table, View, bar, build, header, route_keys_bar, thin
+from eawf.surfaces.tui.console.frame import (
+    Table,
+    Titled,
+    View,
+    bar,
+    build,
+    header,
+    route_keys_bar,
+    thin,
+)
 from eawf.surfaces.tui.console.keybar import KEY, ROUTE_KEYS
 from eawf.surfaces.tui.console.lifecycle import ELAPSED_WORDS
 from eawf.surfaces.tui.console.navigation import Ctx, go
@@ -46,17 +55,26 @@ from eawf.surfaces.tui.console.renderers.spine import (
     held,
     restore,
 )
-from eawf.surfaces.tui.console.width import cell_len
+from eawf.surfaces.tui.console.width import cell_len, pad
 
 OWN = pt.OWN_RUN
 # Cells the timeline's first two columns and their gutter take.
 TL_PREFIX = 38
 
-#: The timeline pane's head: its title and the priority legend its glyph rows are read by.
-TIMELINE_HEAD = f" {'TIMELINE':<18}P0  P1  P2"
+#: The priority legend the timeline's glyph lane is read by.
+TIMELINE_LEGEND = "P0  P1  P2"
 
 #: What the timeline pane says while no producer records the Run's events for this frame.
 NO_EVENTS = "no events recorded yet · Enter opens the transcript"
+
+
+def timeline_head(w: int) -> Titled:
+    """Return the timeline pane's head: its title, and the legend over the glyph lane.
+
+    The lane runs down the frame's right side, so its legend is set against the right edge,
+    one cell in, as the title is one cell in from the left.
+    """
+    return Titled(pad(" TIMELINE", w - cell_len(TIMELINE_LEGEND) - 1) + TIMELINE_LEGEND + " ")
 
 
 def tl_label(wide: bool) -> str:
@@ -205,7 +223,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     if finished is not None:
         rows += [*finished_rows(s.route, finished, label), thin(w)]
     pane = NO_EVENTS if run is not None else "no events · no Run is held to record them"
-    rows += [TIMELINE_HEAD, f"   {pane}", thin(w)]
+    rows += [timeline_head(w), f"   {pane}", thin(w)]
     if run is None:
         missing = f"∅ {s.subj_id} is not held in this scope" if s.subj_id else ""
         rows.append(label("RUN", missing or "∅ this scope holds no Run"))
@@ -243,8 +261,10 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
             ),
             label("ENDED", clock_time(ended) if ended else "still running"),
             label("ASKED", asked(view, run)),
+            thin(w),
             label("USAGE", f"{elapsed(view, spine, run)} · cost {UNKNOWN_WORD}"),
             more("no metering producer states tokens or cost yet"),
+            thin(w),
             label("CONTROLS", "no control sent from this console"),
             label("LINEAGE", f"{attempt} · forks are not read yet"),
         ]

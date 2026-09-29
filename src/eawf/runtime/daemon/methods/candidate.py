@@ -40,7 +40,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated, Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from eawf.kernel.runtime.candidate import (
     CandidateBundle,
@@ -74,7 +74,7 @@ from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.native_dispatch import active_lease_of, run_ledger, stored_run
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.git_workspace import CandidatePinError, pin_submission_commit
 
 logger = logging.getLogger(__name__)
@@ -198,25 +198,6 @@ class CandidateSealAnswer(BaseModel):
 def _refused(code: CandidateRefusal, detail: str) -> DaemonValidationError:
     """Return the wire form of one candidate refusal."""
     return DaemonValidationError(f"validation_failed: {code.value}: {detail}")
-
-
-def _params[ParamsT: BaseModel](model: type[ParamsT], params: dict[str, Any]) -> ParamsT:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return model.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
 
 
 def _lease_for(context: Epoch2RootContext, *, urn: RunUrn, now: datetime) -> WorkLease:
@@ -529,7 +510,7 @@ async def _submit_candidate(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Record one worker's claim, immutably and with no report bound to it."""
-    args = _params(CandidateSubmitParams, params)
+    args = native_params(CandidateSubmitParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(submit_candidate, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
@@ -540,7 +521,7 @@ async def _bind_candidate_report(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Bind the accepted report and seal the candidate if every check holds."""
-    args = _params(CandidateReportParams, params)
+    args = native_params(CandidateReportParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(accept_report, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")

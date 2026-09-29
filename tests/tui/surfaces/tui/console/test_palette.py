@@ -10,11 +10,15 @@ not a kind, and no key but ``/`` opens a search.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
+from eawf.kernel.projection.compute import ProjectionRow, build_route_projection
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS
 from eawf.surfaces.tui.console.keymap import GLOBAL_KEYS
+from eawf.surfaces.tui.console.overlays.palette import entities
 from eawf.surfaces.tui.console.palette import HitKind, PaletteEntity, hits, palette_rows
 from eawf.surfaces.tui.console.registry import REGISTRY, route_for_id
 from eawf.surfaces.tui.console.session import Session
@@ -146,3 +150,61 @@ def test_con_097_search_is_never_a_route_row_and_an_overflow_ends_in_a_search_ro
     assert "search" not in {hit.route for hit in found if hit.kind is HitKind.ROUTE}
     rows = palette_rows(Session(), found, w=W, h=H)
     assert "search" in rows[-1]
+
+
+# ---------- V-16: an untitled record is described, never by a route id ----------
+
+
+_ROOT = "eawf://EAWF/EAWF/EAWF"
+
+
+def _held() -> tuple[ProjectionRow, ...]:
+    """Return a served Track, a titled Milestone and an untitled Batch filed under it."""
+    document = {
+        "track": {"TRK-X": {"urn": f"{_ROOT}/track/TRK-X", "revision": 1, "status": "ACTIVE"}},
+        "milestone": {
+            "MLS-0101": {
+                "urn": f"{_ROOT}/milestone/MLS-0101",
+                "revision": 1,
+                "status": "ACTIVE",
+                "title": "Cut 0.7.0rc1",
+            }
+        },
+        "batch": {
+            "BAT-0101": {
+                "urn": f"{_ROOT}/batch/BAT-0101",
+                "revision": 1,
+                "status": "ACTIVE",
+                "milestone_ref": f"{_ROOT}/milestone/MLS-0101",
+            }
+        },
+    }
+    return build_route_projection(
+        route="scope.home",
+        document=document,
+        cursor=1,
+        scope_id="EAWF",
+        generated_at=datetime(2026, 9, 17, tzinfo=UTC),
+    ).rows
+
+
+def _what(fixture: Fixture, key: str) -> str:
+    return next(e.what for e in entities(fixture, _held()) if e.id == key)
+
+
+@pytest.mark.parametrize(
+    ("key", "what"), [("BAT-0101", "Batch · ACTIVE"), ("TRK-X", "Track · ACTIVE")]
+)
+def test_v16_an_untitled_record_shows_its_kind_and_state(
+    fixture: Fixture, key: str, what: str
+) -> None:
+    assert _what(fixture, key) == what
+
+
+def test_v16_an_untitled_record_is_no_hit_for_its_parents_id(fixture: Fixture) -> None:
+    found = [h.name for h in hits("mls", entities(fixture, _held())) if h.kind is HitKind.ENTITY]
+    assert "MLS-0101" in found and "BAT-0101" not in found
+
+
+def test_v16_a_titled_record_keeps_its_title(fixture: Fixture) -> None:
+    assert _what(fixture, "MLS-0101") == "Cut 0.7.0rc1"

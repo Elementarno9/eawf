@@ -18,6 +18,8 @@ src/eawf/_data/
 # `just test ci` leaves the tree dirty and the tag cleanliness probe reds.
 .coverage.*
 coverage.xml
+# The parallel leg's per-test durations, read by the duration budget gate.
+pytest-junit.xml
 htmlcov/
 # mutmut rewrites source + writes its CI/CD stats into this sandbox dir
 # at the repo root when a mutation campaign runs locally.
@@ -144,3 +146,27 @@ secrets/
 .ea/state.json.lock
 .ea/*.lock
 .ea/**/*.lock
+
+# BEGIN EAWF:gitignore
+CLAUDE.md
+.claude/
+.codex/
+.opencode/
+.mcp.json
+opencode.json
+AGENTS.override.md
+.ea/rules/views/
+.claude/skills/eawf-rules-*/
+.eawf-mcp/
+.ea/locks/
+.ea/**/*.lock
+.ea/local/
+.ea/worktrees/
+.ea/indexes/
+.ea/specs/
+.ea/instrument-probe.json
+.ea/telemetry.db
+*.db
+.ea/state.json.bak.*
+.ea/store/event.jsonl
+# END EAWF:gitignore

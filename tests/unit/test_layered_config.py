@@ -424,6 +424,11 @@ _EXPECTED_CATALOG_ONLY_CONSUMERS: dict[str, str] = {
     "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.claude.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
+    "runtime.codex.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
+    "runtime.opencode.stall_interval_s": (
+        "eawf.kernel.config.layered.resolve_stall_interval_seconds"
+    ),
     "vcs.checkpoint_requires_commit": "eawf.runtime.vcs.checkpoint.resolve_checkpoint_cadence",
     "verify.juror_wall_clock_seconds": (
         "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"

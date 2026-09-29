@@ -25,7 +25,7 @@ Exit codes (the canonical 0..5 surface; see
   ``state.json`` found, an unresolved iter, an invalid ``--iter`` id, no
   active iter with ``--iter`` omitted, ``--json`` and ``--format
   markdown`` passed together (``show``), or a missing / malformed
-  ``--from-spec`` document or a non-positive ``--expected-plan-revision``
+  ``--from-spec`` document or a non-positive ``--expected-revision``
   (``submit`` / ``approve`` / ``apply``).
 - ``2`` (``VALIDATION_ERROR``) when the resolved ``state.json`` fails
   Pydantic schema validation or is not valid JSON (``show`` only).
@@ -51,12 +51,12 @@ import typer
 
 from eawf.kernel.state.ids import is_iter_id
 from eawf.kernel.state.resolve import resolve_with_reason
-from eawf.surfaces.cli import errors
+from eawf.surfaces.cli import errors, exit_codes
 from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-from eawf.surfaces.cli.commands.domain import DOMAIN_REFUSAL_EXIT
 from eawf.surfaces.cli.commands.draft import install_promote_command
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.verb_contract import envelope_exit_code, envelope_text, read_spec_document
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope, DomainErrorCode
@@ -311,33 +311,6 @@ def show_cmd(
 # and answered exactly as any other native verb is.
 
 
-def _read_json_document(path: Path) -> dict[str, Any]:
-    """Return the JSON object *path* names.
-
-    Args:
-        path: The ``--from-spec`` file.
-
-    Returns:
-        The parsed document, forwarded to the daemon as read.
-
-    Raises:
-        UserError: The file is missing, is not JSON, or is not a JSON
-            object. Parsing fails at the boundary so an unusable payload
-            never reaches the wire.
-    """
-    try:
-        raw = orjson.loads(path.read_bytes())
-    except OSError as exc:
-        raise errors.UserError(f"cannot read --from-spec {path}: {exc}", kind="NotFound") from exc
-    except orjson.JSONDecodeError as exc:
-        raise errors.UserError(
-            f"--from-spec {path} is not valid JSON: {exc}", kind="InvalidInput"
-        ) from exc
-    if not isinstance(raw, dict):
-        raise errors.UserError(f"--from-spec {path} must be a JSON object", kind="InvalidInput")
-    return raw
-
-
 def _declared_code(message: str) -> DomainErrorCode | None:
     """Return the domain code a daemon validation message leads with.
 
@@ -456,36 +429,6 @@ def _send_plan_rpc(
         ) from exc
 
 
-def _plan_envelope_text(envelope: DomainEnvelope) -> str:
-    """Return the human-readable rendering of one plan-revision envelope.
-
-    Args:
-        envelope: The daemon's answer.
-
-    Returns:
-        The text body: one headline plus a line per warning, and for a
-        refusal the message, the guard that failed and the remediation.
-    """
-    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
-
-    if envelope.status is DomainStatus.OK:
-        subject = envelope.result.get("entity_ref", "?") if envelope.result else "?"
-        lines = [
-            f"{envelope.operation} ok {subject} "
-            f"revision {envelope.revision_before} -> {envelope.revision_after}"
-        ]
-    else:
-        lines = []
-        for row in envelope.errors:
-            lines.append(f"{envelope.operation} error {row.code.value} {row.entity_ref}")
-            lines.append(f"  {row.message}")
-            if row.guard is not None:
-                lines.append(f"  guard: {row.guard}")
-            lines.append(f"  remediation: {row.remediation}")
-    lines.extend(f"  warning: {warning}" for warning in envelope.warnings)
-    return "\n".join(lines)
-
-
 def _emit_plan_envelope(envelope: DomainEnvelope, *, flags: GlobalFlags) -> None:
     """Print one plan-revision envelope and exit non-zero when it refused.
 
@@ -494,20 +437,20 @@ def _emit_plan_envelope(envelope: DomainEnvelope, *, flags: GlobalFlags) -> None
         flags: Resolved global flags.
 
     Raises:
-        typer.Exit: With :data:`~eawf.surfaces.cli.commands.domain.DOMAIN_REFUSAL_EXIT`
-            when the request was refused. The envelope prints first either
+        typer.Exit: With the envelope's typed exit status when the request
+            was refused. The envelope prints first either
             way, so a caller reading stdout gets the code whichever branch
             it took.
     """
-    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
-
+    subject = envelope.result.get("entity_ref", "?") if envelope.result else "?"
     emit_json_or_text(
         envelope.model_dump(mode="json"),
-        _plan_envelope_text(envelope),
+        envelope_text(envelope, urn=subject),
         flags=flags,
     )
-    if envelope.status is not DomainStatus.OK:
-        raise typer.Exit(DOMAIN_REFUSAL_EXIT)
+    code = envelope_exit_code(envelope)
+    if code != exit_codes.OK:
+        raise typer.Exit(code)
 
 
 def _run_plan_rpc(method: str, params: dict[str, Any], *, flags: GlobalFlags, subject: str) -> None:
@@ -546,7 +489,7 @@ def plan_submit_cmd(
 
     flags: GlobalFlags = ctx.obj
     try:
-        raw = _read_json_document(from_spec)
+        raw = read_spec_document(from_spec)
         proposal = PlanRevisionProposal.model_validate(raw)
     except errors.CliError as exc:
         errors.emit_error(exc, flags=flags)
@@ -574,7 +517,8 @@ def plan_approve_cmd(
     ctx: typer.Context,
     key: Annotated[str, typer.Argument(help=_PLAN_KEY_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-plan-revision", help=_PLAN_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-plan-revision", help=_PLAN_REVISION_HELP),
     ],
     action_ref: Annotated[str, typer.Option("--action-ref", help=_ACTION_REF_HELP)],
     approved_by: Annotated[str, typer.Option("--approved-by", help=_APPROVED_BY_HELP)],
@@ -591,7 +535,7 @@ def plan_approve_cmd(
     if expected_revision <= 0:
         errors.emit_error(
             errors.UserError(
-                f"--expected-plan-revision must be a positive revision, got {expected_revision}",
+                f"--expected-revision must be a positive revision, got {expected_revision}",
                 kind="InvalidInput",
             ),
             flags=flags,
@@ -613,7 +557,8 @@ def plan_apply_cmd(
     ctx: typer.Context,
     key: Annotated[str, typer.Argument(help=_PLAN_KEY_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-plan-revision", help=_PLAN_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-plan-revision", help=_PLAN_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_IDEMPOTENCY_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -623,7 +568,7 @@ def plan_apply_cmd(
     if expected_revision <= 0:
         errors.emit_error(
             errors.UserError(
-                f"--expected-plan-revision must be a positive revision, got {expected_revision}",
+                f"--expected-revision must be a positive revision, got {expected_revision}",
                 kind="InvalidInput",
             ),
             flags=flags,

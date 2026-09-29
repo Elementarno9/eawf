@@ -22,6 +22,8 @@ __all__ = [
     "managed_block_lines",
     "render_managed_block",
     "splice_managed_block",
+    "unmanaged_bytes",
+    "unmanaged_survives",
 ]
 
 
@@ -127,6 +129,62 @@ def splice_managed_block(existing: bytes, *, begin: str, end: str, block: bytes)
         return existing + _append_separator(existing) + block
     start, stop = span
     return existing[:start] + block + existing[stop:]
+
+
+def unmanaged_bytes(existing: bytes, *, begin: str, end: str) -> bytes:
+    """Return *existing* with its managed block cut out.
+
+    Args:
+        existing: The current file bytes.
+        begin: The begin marker line.
+        end: The end marker line.
+
+    Returns:
+        Every byte outside the block; *existing* itself when it has none.
+
+    Raises:
+        ManagedBlockError: When the markers in *existing* are not exactly one
+            ordered pair.
+    """
+    span = _block_span(existing, begin=begin, end=end)
+    if span is None:
+        return existing
+    start, stop = span
+    return existing[:start] + existing[stop:]
+
+
+def unmanaged_survives(prior: bytes, written: bytes, *, begin: str, end: str) -> bool:
+    """Return whether every byte outside the managed block survived a write.
+
+    Checked against the bytes read back after the write, so a splice that
+    reached past a marker, or a writer that raced this one, is caught
+    rather than trusted.
+
+    Args:
+        prior: The file bytes before the write; empty for a new file.
+        written: The file bytes read back after the write.
+        begin: The begin marker line.
+        end: The end marker line.
+
+    Returns:
+        ``True`` when *written* holds exactly one block and the bytes around
+        it equal those around the block of *prior*; a first write may only
+        have appended a separator of line breaks and the block.
+
+    Raises:
+        ManagedBlockError: When the markers in either input are not exactly
+            one ordered pair.
+    """
+    span = _block_span(written, begin=begin, end=end)
+    if span is None:
+        return False
+    start, stop = span
+    prior_span = _block_span(prior, begin=begin, end=end)
+    if prior_span is None:
+        separator = written[len(prior) : start]
+        return written.startswith(prior) and not separator.strip(b"\r\n") and stop == len(written)
+    prior_start, prior_stop = prior_span
+    return written[:start] == prior[:prior_start] and written[stop:] == prior[prior_stop:]
 
 
 def managed_block_lines(existing: bytes, *, begin: str, end: str) -> tuple[str, ...] | None:

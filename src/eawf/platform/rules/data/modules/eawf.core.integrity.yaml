@@ -8,13 +8,13 @@ when_to_use: stating a result, deleting content, staging a commit, dispatching a
 rules:
   - rule_id: eawf.core.integrity.deletion
     obligation_id: integrity.deletion
-    revision: 1
+    revision: 2
     title: Delete content only when it is recoverable and justified
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Delete code, config or docs only when the content is committed on this branch's history, a verdict recorded in state.json motivates it, and the commit or PR body lists each removed path with its reason. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
+      Delete code, config or docs only when it is committed on this branch, a verdict in state.json motivates it, and the commit or PR body lists each removed path and why; when in doubt, propose the list and wait for confirmation. Never delete schemas, golden fixtures, LICENSE, CHANGELOG.md or uncommitted files.
     rationale: >-
       Committed content stays recoverable, a recorded verdict makes the reason auditable, and a listed removal gives the reviewer a chance to object before merge.
     verification:
@@ -34,13 +34,13 @@ rules:
       method: review
   - rule_id: eawf.core.integrity.secrets-hygiene
     obligation_id: integrity.secrets-hygiene
-    revision: 1
+    revision: 2
     title: Keep secrets, machine paths and personal data out of commits
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Never stage credentials, keys, tokens, .env contents, machine-specific paths, hostnames, IP addresses, internal URLs, employer or customer names, emails other than the canonical author block, or other personal data; keep document references repo-relative.
+      Never stage credentials, keys, tokens, .env contents, machine paths, hostnames, IP addresses, internal URLs, employer or customer names, non-canonical emails or other personal data; keep references repo-relative. Scrub before `git add`; fix a leak forward, rewriting history only as a last resort.
     rationale: >-
       A leak in a published commit can only be removed by rewriting history, whose blast radius is far larger than scrubbing before staging.
     verification:

@@ -136,14 +136,14 @@ def test_install_opencode_user_scope_writes_into_xdg(
 
 
 def test_install_opencode_user_scope_env_var_fallback(
-    tmp_path: Path, fake_home: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Absent kwarg + ``$OPENCODE_CONFIG_DIR`` set → XDG override
-    routes through the env var."""
+    """No kwarg, no injected home + ``$OPENCODE_CONFIG_DIR`` set → XDG
+    override routes through the env var."""
     env_dir = tmp_path / "env-xdg"
     env_dir.mkdir()
     monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(env_dir))
-    install_plugin(tmp_path, scope="user", home=fake_home)
+    install_plugin(tmp_path, scope="user")
     assert (env_dir / "plugins" / "eawf.js").is_file()
 
 

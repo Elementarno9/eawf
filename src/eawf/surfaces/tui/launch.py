@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING
 from eawf.kernel.state.epoch2.authority import RootAuthority, resolve_authority
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.platform.registry import default_registry_path
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.tui.console.attach import (
     AttachRequest,
     offline_snapshot,
@@ -47,7 +48,7 @@ if TYPE_CHECKING:
 #: SURF-085: the exit code a terminal entry-layer state returns off a TTY. Nothing
 #: interactive can be shown there, and the deterministic status frame would misstate a
 #: tree the resolver could not attach to, so this stands in for both.
-TERMINAL_ENTRY_EXIT_CODE = 4
+TERMINAL_ENTRY_EXIT_CODE = exit_codes.ATTACH_FAILURE
 
 #: The ``exit`` value of an entry-layer state that ends the process ("quit - exit 4").
 _TERMINAL_EXIT = "terminal"

@@ -39,6 +39,16 @@ _LEAD = "   "
 _REASON_AT = cell_len(_LEAD) + TITLE_COLUMN + KEY_COLUMN + VERB_COLUMN
 
 
+class Disabled(str):
+    """A menu row naming a verb that cannot act, which the painter draws faint.
+
+    It stays listed with its reason, so what is not offered is still disclosed; the faint
+    tone says it cannot be taken, as the words beside it say why.
+    """
+
+    __slots__ = ()
+
+
 class VerbWeight(StrEnum):
     """How much a verb does: a light verb acts at once, a heavy one previews first."""
 
@@ -252,7 +262,9 @@ def menu_rows(
 ) -> list[str]:
     """Return the drawer rows: the column heads, then one row per verb, each ``w`` cells.
 
-    A refused verb's reason fills the last column and is word-clipped to the room left.
+    A refused verb's reason fills the last column and is word-clipped to the room left,
+    and its row is marked :class:`Disabled`, so it is drawn faint beside the verbs that
+    can act.
 
     Args:
         verbs: The route's verbs in menu order.
@@ -267,7 +279,8 @@ def menu_rows(
     lines = [_table_row("ACTIONS", "KEY", "VERB", "REASON", w)]
     for v in verbs:
         check = guard(v)
-        lines.append(_table_row("", v.key, v.verb, "" if check.ok else check.why, w))
+        line = _table_row("", v.key, v.verb, "" if check.ok else check.why, w)
+        lines.append(line if check.ok else Disabled(line))
     if not verbs:
         lines.append(pad(EMPTY_ROW, w))
     return lines

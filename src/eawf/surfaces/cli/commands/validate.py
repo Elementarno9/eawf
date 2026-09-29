@@ -21,7 +21,7 @@ Output modes:
 Exit codes:
 
 - ``0`` when the report is ok.
-- ``4`` when there are schema errors, invariant violations, or contract
+- ``2`` (``VALIDATION_ERROR``) when there are schema errors, invariant violations, or contract
   errors (regardless of ``--strict``). ``--strict`` only adds optional-key
   violations to state-mode validation; envelope-mode contracts are
   always strict.
@@ -36,6 +36,8 @@ from typing import Annotated, Any
 
 import orjson
 import typer
+
+from eawf.surfaces.cli import exit_codes
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +90,7 @@ def validate(
     raw = orjson.loads(Path(target_path).read_bytes())
     if not isinstance(raw, dict):
         typer.echo("schema: top-level value must be a JSON object")
-        raise typer.Exit(code=4)
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
     mode = _detect_mode(raw)
 
     if mode == "envelope":
@@ -109,7 +111,7 @@ def validate(
                 for err in env_report.contract_errors:
                     typer.echo(f"contract: {err}")
         if not env_report.ok:
-            raise typer.Exit(code=4)
+            raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
         return
 
     report = validate_path(target_path, strict_optional=strict)
@@ -131,4 +133,4 @@ def validate(
             for v in report.violations:
                 typer.echo(f"{v.code} at {v.path}: {v.message}")
     if not report.ok:
-        raise typer.Exit(code=4)
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)

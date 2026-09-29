@@ -19,7 +19,7 @@ read.
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Any, Final, Literal, Self
 from uuid import UUID
 
 from pydantic import ConfigDict, model_validator
@@ -180,6 +180,18 @@ class OwnerPrincipal(Epoch2Model):
     principal_id: PrincipalKey
 
 
+#: The refusal a hold on a provider permission earns. It spells the
+#: gateway's protected-action code, because the only remedy is a principal
+#: acting before the provider's deadline, never a pause.
+HOLD_REFUSAL_CODE: Final = "PROTECTED_ACTION_REQUIRED"
+
+#: Why no hold is offered on a provider permission, as the refusal says it.
+HOLD_REFUSAL_REASON: Final = (
+    "a provider permission cannot be held: its deadline is owned by the provider and expires "
+    "whether or not it is answered, so only approve or deny before the deadline acts on it"
+)
+
+
 class Hold(Epoch2Model):
     """A pause placed on one scope, with the reason that justifies it.
 
@@ -202,6 +214,20 @@ class Hold(Epoch2Model):
         """Refuse a budget event, which is a notice and never a hold."""
         refuse_budget_signal(data, target="a hold")
         return data
+
+    @model_validator(mode="after")
+    def _refuse_a_provider_deadline(self) -> Self:
+        """Refuse a hold on a provider permission, whoever places it.
+
+        The refusal lives on the record every hold mutator validates, so no
+        surface, session or local path can hold what the provider times.
+
+        Raises:
+            ValueError: The scope is a provider permission.
+        """
+        if self.scope.kind is EntityKind.PERMISSION:
+            raise ValueError(f"{HOLD_REFUSAL_CODE}: {HOLD_REFUSAL_REASON}")
+        return self
 
     @model_validator(mode="after")
     def _release_follows_creation(self) -> Self:
@@ -249,6 +275,8 @@ class Epoch2Record(Epoch2Model):
 
 
 __all__ = [
+    "HOLD_REFUSAL_CODE",
+    "HOLD_REFUSAL_REASON",
     "EntityOrigin",
     "EntityRef",
     "Epoch2Record",

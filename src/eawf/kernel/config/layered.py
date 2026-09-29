@@ -646,6 +646,38 @@ def resolve_runtime_tier_models(repo_root: Path) -> dict[str, tuple[str, str, st
     return override or None
 
 
+def resolve_stall_interval_seconds(repo_root: Path, runtime: str | None) -> int:
+    """Return the stall interval ``runtime.<runtime>.stall_interval_s`` resolves to.
+
+    Args:
+        repo_root: Repo root the layered config is composed against.
+        runtime: The runtime the Run announced itself as, or ``None`` for a
+            Run that has not announced one.
+
+    Returns:
+        The configured interval in seconds, or the default for a runtime
+        with no liveness block or none of its own leaf.
+
+    Raises:
+        pydantic.ValidationError: The runtime's block is present but
+            malformed.
+    """
+    from eawf.kernel.config.schema import (
+        DEFAULT_STALL_INTERVAL_SECONDS,
+        STALL_INTERVAL_RUNTIMES,
+        RuntimeLivenessConfig,
+    )
+
+    if runtime not in STALL_INTERVAL_RUNTIMES:
+        return DEFAULT_STALL_INTERVAL_SECONDS
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    section = merged.get("runtime")
+    raw = section.get(runtime) if isinstance(section, dict) else None
+    if raw is None:
+        return DEFAULT_STALL_INTERVAL_SECONDS
+    return RuntimeLivenessConfig.model_validate(raw).stall_interval_s
+
+
 def resolve_agent_extra_tools(repo_root: Path | None = None) -> dict[str, tuple[str, ...]]:
     """Return the merged ``agents.extra_tools`` grant map (role to extra tools).
 

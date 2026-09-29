@@ -21,6 +21,7 @@ from typing import Annotated, Any
 import typer
 
 from eawf.kernel.state.epoch2.consequence import MUTATIONS_BY_METHOD, consequence
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
@@ -32,7 +33,7 @@ DryRun = Annotated[
 Yes = Annotated[bool, typer.Option("--yes", help="Send after printing the consequence.")]
 
 #: The exit status of a move the operator declined at the prompt; nothing was sent.
-DECLINED_EXIT = 1
+DECLINED_EXIT = exit_codes.USER_ERROR
 
 
 def consequence_block(method: str, urn: str, revision: int) -> dict[str, Any]:

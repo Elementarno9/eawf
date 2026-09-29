@@ -208,8 +208,12 @@ def _criteria_rows(model: AcceptanceBundleView) -> list[str]:
 
 
 def _tabs(sec: str) -> str:
-    """Return the section strip, the focused section marked, so Tab's focus is visible."""
-    return " ".join(("▸" if x == sec else " ") + x for x in SECTIONS)
+    """Return the section strip, the focused section bracketed, so Tab's focus is visible.
+
+    The strip marks a section, not the row the arrows walk, so it draws no caret: a caret
+    would read, and be grounded, as the cursor.
+    """
+    return " ".join(f"[{x}]" if x == sec else f" {x} " for x in SECTIONS)
 
 
 def _section_rows(sec: str, model: AcceptanceBundleView) -> list[str]:

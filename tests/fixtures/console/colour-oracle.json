@@ -89,7 +89,8 @@
     "primary": "The packet folds focus into accent, so the focus-ring colour is product-authored to stay distinct from accent.",
     "band": "Mixed per theme from its accent (6%) over its surface, as the packet's .canvas header and keybar bands are.",
     "recede": "Mixed per theme from its text over its surface, as the packet's .canvas .sh is (74% dark, 78% light).",
-    "dim": "Mixed per theme from its faint and its text, as the packet's .canvas .dm is (55% faint dark, 74% light)."
+    "dim": "Mixed per theme from its faint and its text, as the packet's .canvas .dm is (55% faint dark, 74% light).",
+    "cursor-ground": "The packet has no row fill, only its caret; product-authored as the raised panel on a dark theme and 7% text over the surface on the light one, whose raised panel sits 1.03:1 off its surface."
   },
   "divergences": [
     {

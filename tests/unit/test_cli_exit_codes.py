@@ -24,6 +24,7 @@ def test_canonical_codes() -> None:
     assert exit_codes.STATE_CONFLICT == 3
     assert exit_codes.DAEMON_UNREACHABLE == 4
     assert exit_codes.INTERNAL_ERROR == 5
+    assert exit_codes.NEEDS_OPERATOR == 6
 
 
 def test_legacy_aliases_are_dropped() -> None:
@@ -45,7 +46,7 @@ def test_legacy_aliases_are_dropped() -> None:
 
 
 def test_name_for_round_trips() -> None:
-    """``name_for`` round-trips for the canonical 0..5 names only."""
+    """``name_for`` round-trips for the canonical names only."""
     for name in (
         "OK",
         "USER_ERROR",
@@ -53,6 +54,7 @@ def test_name_for_round_trips() -> None:
         "STATE_CONFLICT",
         "DAEMON_UNREACHABLE",
         "INTERNAL_ERROR",
+        "NEEDS_OPERATOR",
     ):
         code = getattr(exit_codes, name)
         assert exit_codes.name_for(code) == name

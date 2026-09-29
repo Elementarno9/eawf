@@ -1028,7 +1028,13 @@ class Wave(_DescribedEntity):
 
 
 class Hypothesis(_StrictModel):
-    """Research hypothesis with confirm/reject thresholds."""
+    """Research hypothesis with confirm/reject thresholds.
+
+    ``defined_at`` is when the hypothesis was stated: an audit completed
+    before then cannot have evaluated it, so a verdict citing one is
+    refused as stale. It is ``None`` on a hypothesis stated before the
+    field existed, whose audits are then not dated against it.
+    """
 
     id: HypothesisIdStr
     scope_id: str
@@ -1041,6 +1047,7 @@ class Hypothesis(_StrictModel):
     verdict: HypothesisVerdict | None = None
     audit_id: str | None = None
     source_artifact_id: str | None = None
+    defined_at: UtcDatetime | None = None
 
 
 class Claim(_StrictModel):
@@ -1069,6 +1076,11 @@ class Claim(_StrictModel):
         title: Imperative noun-phrase stating the claim, bounded at 72
             characters with no trailing period (entity-title convention).
         description: Optional long-form statement bounded at 500 characters.
+        falsifier: Optional prose, at most 300 characters, naming the
+            observation that would take the claim away. Prose rather than a
+            measurement, so an absent value renders no row at all.
+        implication: Optional prose, at most 300 characters, naming what the
+            claim buys if it stands; absent renders no row, as above.
         status: Closed :class:`ClaimStatus` lifecycle position.
         evidence_refs: Repo-relative / URN / external-URL strings that
             ratify the claim. Default empty so a freshly logged claim whose
@@ -1088,6 +1100,8 @@ class Claim(_StrictModel):
     scope_id: str
     title: Annotated[str, Field(min_length=1, max_length=72)]
     description: Annotated[str, Field(max_length=500)] | None = None
+    falsifier: Annotated[str, Field(min_length=1, max_length=300)] | None = None
+    implication: Annotated[str, Field(min_length=1, max_length=300)] | None = None
     status: ClaimStatus
     evidence_refs: list[Annotated[str, Field(min_length=1)]] = Field(default_factory=list)
     source_artifact_id: str | None = None

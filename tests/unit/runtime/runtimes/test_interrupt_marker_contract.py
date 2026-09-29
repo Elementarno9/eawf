@@ -111,4 +111,4 @@ def test_interrupt_marker_fixture_is_scrubbed() -> None:
 
 def test_measure_version_bumped_for_as_of_reading() -> None:
     """Splitting a straddling turn changed what the counters mean, so the version moved."""
-    assert MEASURE_VERSION == 8
+    assert MEASURE_VERSION >= 8

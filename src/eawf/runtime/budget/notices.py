@@ -30,6 +30,7 @@ from typing import Final, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from eawf.kernel.runtime.provider import Digest
 from eawf.kernel.state.epoch2.base import NonEmptyStr, StrictNonNegativeInt, StrictPositiveInt
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.writer import atomic_write_json_locked
@@ -68,21 +69,30 @@ _NOTICE_KEY_PATTERN: Final[str] = r"^sha256:[0-9a-f]{64}$"
 _LOCK_TIMEOUT_SECONDS: Final[float] = 5.0
 
 
-def notice_key_for(*, scope_id: str, axis: BudgetAxis, basis: NoticeBasis) -> str:
+def notice_key_for(
+    *, scope_id: str, axis: BudgetAxis, basis: NoticeBasis, contract_digest: str | None = None
+) -> str:
     """Return the logical identity of the notice for one budget condition.
 
-    A changed basis is a changed budget contract, so it is a new identity;
-    the band is deliberately absent so escalation stays on one row.
+    A changed basis is a changed budget contract, so it is a new identity,
+    and so is a Run recompiled under another contract: its ceiling is a
+    different ceiling. The band is deliberately absent so escalation stays
+    on one row.
 
     Args:
-        scope_id: The scope the budget belongs to (a wave id today).
+        scope_id: The scope the budget belongs to: a wave id, or a Run key.
         axis: The metered resource dimension.
         basis: What the budget was set on.
+        contract_digest: The compiled contract a Run's ceiling came from,
+            or ``None`` for a scope that has none.
 
     Returns:
         ``sha256:<hex>`` over the unit-separated identity fields.
     """
-    digest = hashlib.sha256(f"{scope_id}\x1f{axis}\x1f{basis}".encode()).hexdigest()
+    identity = f"{scope_id}\x1f{axis}\x1f{basis}"
+    if contract_digest is not None:
+        identity = f"{identity}\x1f{contract_digest}"
+    digest = hashlib.sha256(identity.encode()).hexdigest()
     return f"sha256:{digest}"
 
 
@@ -110,6 +120,8 @@ class BudgetCrossing(BaseModel):
         observed_value: The consumption observed.
         budget_value: The budget it was measured against.
         observed_at: When the producer read the consumption.
+        contract_digest: The compiled contract a Run's ceiling came from,
+            or ``None`` for a scope that has none.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -121,11 +133,17 @@ class BudgetCrossing(BaseModel):
     observed_value: StrictNonNegativeInt
     budget_value: StrictNonNegativeInt
     observed_at: UtcDatetime
+    contract_digest: Digest | None = None
 
     @property
     def notice_key(self) -> str:
         """The identity of the notice this crossing upserts."""
-        return notice_key_for(scope_id=self.scope_id, axis=self.axis, basis=self.basis)
+        return notice_key_for(
+            scope_id=self.scope_id,
+            axis=self.axis,
+            basis=self.basis,
+            contract_digest=self.contract_digest,
+        )
 
 
 class BudgetThresholdNotice(BaseModel):
@@ -147,6 +165,7 @@ class BudgetThresholdNotice(BaseModel):
         opened_at: When the first crossing was recorded.
         last_observed_at: When the latest escalation was recorded.
         resolved_at: When the notice reached a terminal status.
+        contract_digest: The compiled contract a Run's ceiling came from.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -155,6 +174,7 @@ class BudgetThresholdNotice(BaseModel):
     scope_id: NonEmptyStr
     axis: BudgetAxis
     basis: NoticeBasis
+    contract_digest: Digest | None = None
     blocking: Literal[False] = False
     highest_band: NoticeBand
     severity: NoticeSeverity
@@ -176,7 +196,12 @@ class BudgetThresholdNotice(BaseModel):
                 last observation precedes the opening, or ``resolved_at``
                 disagrees with whether the status is terminal.
         """
-        expected_key = notice_key_for(scope_id=self.scope_id, axis=self.axis, basis=self.basis)
+        expected_key = notice_key_for(
+            scope_id=self.scope_id,
+            axis=self.axis,
+            basis=self.basis,
+            contract_digest=self.contract_digest,
+        )
         if self.notice_key != expected_key:
             raise ValueError(f"notice_key {self.notice_key!r} does not address this condition")
         if self.severity != severity_for(self.basis, self.highest_band):
@@ -260,6 +285,7 @@ def apply_crossing(
             scope_id=crossing.scope_id,
             axis=crossing.axis,
             basis=crossing.basis,
+            contract_digest=crossing.contract_digest,
             highest_band=crossing.band,
             severity=severity_for(crossing.basis, crossing.band),
             observed_value=crossing.observed_value,

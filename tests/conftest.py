@@ -24,6 +24,7 @@ from eawf.kernel.spec.common import (
 )
 from eawf.kernel.spec.intent import IntentBrief
 from eawf.kernel.state.models import CriteriaFloorWaiver
+from eawf.platform.lint.flake_quarantine import LaneReport, load_quarantine, partition
 from eawf.platform.lint.kind_taxonomy import kind_for_test_path, marker_conflict
 from eawf.runtime.daemon.churn import SUITE_SESSION_ENV, RuntimeDirSnapshot, snapshot_runtime_dir
 
@@ -89,6 +90,76 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     if conflicts:
         joined = "\n".join(conflicts[path] for path in sorted(conflicts))
         raise pytest.UsageError(f"test-kind marker conflict:\n{joined}")
+
+
+# --- flake quarantine ---------------------------------------------
+#
+# A test in ``tests/quarantine.json`` is deselected from every run except
+# the quarantine lane (``--quarantine-lane``), which runs only those tests,
+# reports how many failed and exits clean whatever they did, so a known
+# flake never reds a blocking lane and never stops being run.
+
+_QUARANTINE_REGISTRY = Path(__file__).parent / "quarantine.json"
+_QUARANTINE_LANE_OPTION = "--quarantine-lane"
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Register the option that selects the quarantine lane."""
+    parser.addoption(
+        _QUARANTINE_LANE_OPTION,
+        action="store_true",
+        default=False,
+        help="run only the quarantined tests and report their failures without failing",
+    )
+
+
+class _QuarantineSelection:
+    """Keep the quarantined items in the lane and every other item elsewhere."""
+
+    def __init__(self, *, lane: bool) -> None:
+        self.lane = lane
+
+    def pytest_collection_modifyitems(
+        self, config: pytest.Config, items: list[pytest.Item]
+    ) -> None:
+        """Deselect whichever side of the quarantine this run is not."""
+        blocking, quarantined = partition(
+            [item.nodeid for item in items], load_quarantine(_QUARANTINE_REGISTRY)
+        )
+        kept = frozenset(quarantined if self.lane else blocking)
+        dropped = [item for item in items if item.nodeid not in kept]
+        if dropped:
+            config.hook.pytest_deselected(items=dropped)
+            items[:] = [item for item in items if item.nodeid in kept]
+
+
+class _QuarantineLane:
+    """Record each quarantined test's outcome, report them, and never fail."""
+
+    def __init__(self) -> None:
+        self.failed: dict[str, bool] = {}
+
+    def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
+        """Record whether any phase of a quarantined test failed."""
+        self.failed[report.nodeid] = self.failed.get(report.nodeid, False) or report.failed
+
+    def pytest_terminal_summary(self, terminalreporter: pytest.TerminalReporter) -> None:
+        """Print the lane report."""
+        for line in LaneReport(outcomes=dict(self.failed)).render():
+            terminalreporter.write_line(line)
+
+    @pytest.hookimpl(trylast=True)
+    def pytest_sessionfinish(self, session: pytest.Session) -> None:
+        """Clear the exit status: the lane reports and never blocks."""
+        session.exitstatus = pytest.ExitCode.OK
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Install the quarantine selection, and the lane's reporter when the lane runs."""
+    lane = bool(config.getoption(_QUARANTINE_LANE_OPTION))
+    config.pluginmanager.register(_QuarantineSelection(lane=lane), "quarantine-selection")
+    if lane:
+        config.pluginmanager.register(_QuarantineLane(), "quarantine-lane")
 
 
 # --- suite daemon runtime-dir isolation ----------------------

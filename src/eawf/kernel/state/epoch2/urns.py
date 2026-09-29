@@ -141,9 +141,30 @@ EvidenceUrn = Annotated[
     _JSON_SCHEMA,
 ]
 
+#: A promoted Campaign finding. Deliberately not a generic finding URN: a
+#: plan-lens finding and a review finding have other writers and other
+#: lifetimes, and a field that admitted all three could not say which one
+#: may be repaired, owned or cited.
+CampaignFindingUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.CAMPAIGN_FINDING)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
 PendingActionUrn = Annotated[
     QualifiedUrn,
     PlainValidator(_urn_validator(EntityKind.PENDING_ACTION)),
+    _SERIALIZER,
+    _JSON_SCHEMA,
+]
+
+#: A provider permission. A family of its own rather than a kind of
+#: pending action, because its deadline belongs to the provider and a
+#: field typed for one must refuse the other.
+PermissionUrn = Annotated[
+    QualifiedUrn,
+    PlainValidator(_urn_validator(EntityKind.PERMISSION)),
     _SERIALIZER,
     _JSON_SCHEMA,
 ]
@@ -202,12 +223,14 @@ AnyEntityUrn = Annotated[
 __all__ = [
     "AnyEntityUrn",
     "BatchUrn",
+    "CampaignFindingUrn",
     "CampaignUrn",
     "ClaimUrn",
     "DueScopeUrn",
     "EvidenceUrn",
     "MilestoneUrn",
     "PendingActionUrn",
+    "PermissionUrn",
     "QuestionUrn",
     "ReleaseUrn",
     "RepositoryUrn",

@@ -278,7 +278,7 @@ class GitHubReleaseHost:
         self._await_run(run_id)
         for name in RECEIPT_FILENAMES:
             self._run(["gh", "run", "download", run_id, "-n", name, "-D", str(dest / name)])
-        logger.info(f"run_build_receipts run_id={run_id} channel={channel!r}")
+        logger.info(f"run_build_receipts workflow_run={run_id} channel={channel!r}")
 
     def wait_publication(self, *, tag: str, dest: Path) -> None:
         """Wait for every publish run of *tag* and download its publication receipts."""
@@ -300,7 +300,7 @@ class GitHubReleaseHost:
                     str(dest / Path(workflow).stem),
                 ]
             )
-            logger.info(f"wait_publication tag={tag!r} workflow={workflow!r} run_id={run_id}")
+            logger.info(f"wait_publication tag={tag!r} workflow={workflow!r} workflow_run={run_id}")
 
     def prove_gates(self, version: str) -> dict[str, Any]:
         """Run ``release receipts`` on the serving daemon with the isolated proof PATH."""

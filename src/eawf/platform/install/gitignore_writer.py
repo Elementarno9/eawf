@@ -8,8 +8,9 @@ runtime-plugin output, and local databases stay untracked by default.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.io import fallback_wal_dir
@@ -183,42 +184,100 @@ def write_gitignore(
     return GitignoreWriteResult(path=path, patterns=patterns)
 
 
-def add_missing_gitignore_patterns(target_dir: Path) -> tuple[str, ...]:
-    """Add each shipped pattern the managed block lacks, keeping every line it has.
+@dataclass(frozen=True)
+class GitignoreBlockPlan:
+    """The ``.gitignore`` a render transaction writes, and what its block holds.
 
-    A repository initialised before a pattern shipped keeps its old block
-    until something rewrites it; ``eawf sync`` calls this so a generated
-    projection it is about to write is never left committable. Lines already
-    in the block, including the state-layout ignores ``eawf init`` derived,
-    stay in place.
+    Attributes:
+        path: The repository's ``.gitignore``.
+        payload: The whole file with the managed block regenerated.
+        patterns: The lines of the regenerated block.
+        added: Shipped patterns the block on disk lacked.
+    """
+
+    path: Path
+    payload: bytes
+    patterns: tuple[str, ...]
+    added: tuple[str, ...]
+
+
+def plan_gitignore_block(target_dir: Path) -> GitignoreBlockPlan:
+    """Regenerate the managed block from the shipped patterns, without writing.
+
+    The block is machine-maintained, so a hand edit inside it is overwritten.
+    The one exception is a root-anchored line: only ``eawf init`` derives
+    those, from a state layout nothing later in the pipeline knows, so a
+    render keeps them rather than un-ignoring that layout's lock and backup
+    files. Every byte outside the block is kept.
 
     Args:
         target_dir: Repository root.
 
     Returns:
-        The patterns added, in shipped order; empty when none was missing,
-        in which case nothing is written.
+        The planned file; its payload equals the file on disk when nothing
+        changes.
 
     Raises:
         ManagedBlockError: When the existing file's markers are not exactly
-            one ordered pair; the file is left untouched.
+            one ordered pair.
     """
     path = (target_dir.resolve() / ".gitignore").resolve()
     existing = path.read_bytes() if path.exists() else b""
     current = managed_block_lines(existing, begin=_BEGIN, end=_END) or ()
-    missing = tuple(
-        pattern for pattern in dict.fromkeys(GITIGNORE_PATTERNS) if pattern not in current
+    shipped = tuple(dict.fromkeys(GITIGNORE_PATTERNS))
+    derived = tuple(line for line in current if line.startswith("/") and line not in shipped)
+    patterns = tuple(dict.fromkeys((*shipped, *derived)))
+    block = render_managed_block(begin=_BEGIN, end=_END, body_lines=patterns)
+    return GitignoreBlockPlan(
+        path=path,
+        payload=splice_managed_block(existing, begin=_BEGIN, end=_END, block=block),
+        patterns=patterns,
+        added=tuple(pattern for pattern in shipped if pattern not in current),
     )
-    if not missing:
-        return ()
-    block = render_managed_block(begin=_BEGIN, end=_END, body_lines=(*current, *missing))
-    path.write_bytes(splice_managed_block(existing, begin=_BEGIN, end=_END, block=block))
-    return missing
+
+
+def unenumerated_paths(patterns: Iterable[str], paths: Iterable[str]) -> tuple[str, ...]:
+    """Return every path no pattern of a managed block ignores.
+
+    Patterns follow gitignore matching: a pattern without an inner slash
+    matches a name at any depth, one with a slash is anchored at the root,
+    a trailing slash matches directories only, and ``*`` stays inside one
+    path component while ``**`` crosses them. A path is ignored when the
+    pattern matches it or any directory above it. Comments, blank lines and
+    negations ignore nothing.
+
+    Args:
+        patterns: The block's lines.
+        paths: Repository-relative POSIX paths of generated files.
+
+    Returns:
+        The unignored paths, in input order.
+    """
+    rules = [line for line in patterns if line.strip() and not line.startswith(("#", "!"))]
+    return tuple(path for path in paths if not any(_ignores(rule, path) for rule in rules))
+
+
+def _ignores(pattern: str, path: str) -> bool:
+    """Return whether one gitignore *pattern* ignores the file at *path*."""
+    directory_only = pattern.endswith("/")
+    body = pattern.rstrip("/")
+    anchored = "/" in body
+    body = body.lstrip("/")
+    parts = PurePosixPath(path).parts
+    for depth in range(1, len(parts) + 1):
+        if directory_only and depth == len(parts):
+            continue
+        candidate = PurePosixPath(*parts[:depth]) if anchored else PurePosixPath(parts[depth - 1])
+        if candidate.full_match(body):
+            return True
+    return False
 
 
 __all__ = [
     "GITIGNORE_PATTERNS",
+    "GitignoreBlockPlan",
     "GitignoreWriteResult",
-    "add_missing_gitignore_patterns",
+    "plan_gitignore_block",
+    "unenumerated_paths",
     "write_gitignore",
 ]

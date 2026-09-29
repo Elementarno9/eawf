@@ -31,12 +31,12 @@ from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 from eawf.surfaces.cli.commands.domain import (
     DOMAIN_REFUSAL_EXIT,
-    _load_create_document,
     _rpc_refusal,
 )
 from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.verb_contract import read_spec_document
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
@@ -267,7 +267,7 @@ def record_append_cmd(
     """Append one audit, decision or artifact to the generation's ledger."""
     flags: GlobalFlags = ctx.obj
     try:
-        record = _load_create_document(from_spec)
+        record = read_spec_document(from_spec)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit

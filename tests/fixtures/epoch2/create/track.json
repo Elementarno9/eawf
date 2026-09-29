@@ -1,0 +1,35 @@
+{
+  "key": "TRK-CANARY",
+  "title": "Exercise the native verbs",
+  "charter": "Admit and move records through the operator surface.",
+  "scope": {
+    "scope_kind": "repository",
+    "repository_ref": "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/repository/REP-CANARY"
+  },
+  "owner": {
+    "principal_kind": "operator",
+    "principal_id": "OPERATOR"
+  },
+  "policy": {
+    "revision": 1,
+    "wip": {
+      "active_milestones": 1,
+      "active_batches_per_repo": 1
+    },
+    "ownership_principal": {
+      "principal_kind": "operator",
+      "principal_id": "OPERATOR"
+    },
+    "permitted_milestone_kinds": [
+      "product"
+    ],
+    "campaign_templates": [],
+    "outcome_metrics": [],
+    "promotion_rules": [],
+    "integration_priority": 50,
+    "presentation": {
+      "default_view": "roadmap",
+      "color_token": "accent_blue"
+    }
+  }
+}

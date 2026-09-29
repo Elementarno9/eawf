@@ -41,6 +41,7 @@ import json
 import logging
 import os
 import subprocess
+import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,7 +50,13 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import eawf
-from eawf.platform.install.managed_block import render_managed_block, splice_managed_block
+from eawf.platform.install.managed_block import (
+    ManagedBlockError,
+    render_managed_block,
+    splice_managed_block,
+    unmanaged_bytes,
+    unmanaged_survives,
+)
 from eawf.runtime.runtimes.codex.hook_map import (
     CODEX_HOOK_EVENT_TYPES,
     codex_hook_event_name,
@@ -95,6 +102,9 @@ _SIDECAR_FILE: str = ".eawf-managed.json"
 _HOOK_CONFIG_FILE: str = "hooks.json"
 _HOOK_TIMEOUT_SECONDS: int = 10
 _SESSION_END_HOOK_TIMEOUT_SECONDS: int = 3
+#: Suffix of the copy of ``config.toml`` taken before each write. The file is
+#: commonly untracked, so this copy is the only way back from a bad edit.
+_CONFIG_BACKUP_SUFFIX: str = ".eawf-backup"
 
 
 @dataclass(frozen=True)
@@ -260,12 +270,37 @@ def _write_sidecar(plugin_root: Path, ts: str, *, force: bool, dry_run: bool) ->
 
 
 def _write_config(config_path: Path, config_bytes: bytes, *, dry_run: bool) -> FileDelta:
-    """Write the already-patched Codex ``config.toml`` (no integrity guard)."""
+    """Write the already-patched Codex ``config.toml`` behind a backup.
+
+    The prior file is copied beside it first, and the bytes read back after
+    the write must keep everything outside the managed block unchanged;
+    otherwise the prior file is put back and the write refused.
+
+    Raises:
+        ManagedBlockError: When a byte outside the managed block changed; the
+            prior file is restored, or a file the write created is removed.
+    """
     action = _classify(config_path, config_bytes)
-    if not dry_run:
-        _ensure_dir(config_path.parent)
-        atomic_write_text(config_path, config_bytes.decode("utf-8"))
-    return FileDelta(path=config_path, action=action)
+    if dry_run or action == "unchanged":
+        return FileDelta(path=config_path, action=action)
+    _ensure_dir(config_path.parent)
+    prior = config_path.read_bytes() if config_path.exists() else None
+    backup = config_path.with_name(f"{config_path.name}{_CONFIG_BACKUP_SUFFIX}")
+    if prior is not None:
+        atomic_write_text(backup, prior.decode("utf-8"))
+    atomic_write_text(config_path, config_bytes.decode("utf-8"))
+    if unmanaged_survives(
+        prior or b"", config_path.read_bytes(), begin=_BEGIN_MARKER, end=_END_MARKER
+    ):
+        return FileDelta(path=config_path, action=action)
+    if prior is None:
+        config_path.unlink()
+    else:
+        atomic_write_text(config_path, backup.read_bytes().decode("utf-8"))
+    raise ManagedBlockError(
+        f"{config_path}: the edit changed content outside the eawf block; the prior "
+        f"file was restored from {backup.name}"
+    )
 
 
 def _marketplace_plugin_root(home: Path | None = None) -> Path | None:
@@ -567,9 +602,38 @@ def _patch_config_toml(target_path: Path) -> bytes:
             one ordered pair.
     """
     existing = target_path.read_bytes() if target_path.exists() else b""
+    _refuse_duplicate_plugin_key(target_path, existing)
     return splice_managed_block(
         existing, begin=_BEGIN_MARKER, end=_END_MARKER, block=_render_enabled_block()
     )
+
+
+def _refuse_duplicate_plugin_key(target_path: Path, existing: bytes) -> None:
+    """Refuse a block that would declare the plugin beside a declaration outside it.
+
+    Codex keys a marketplace install as ``eawf@<marketplace>``; a bare
+    ``eawf`` table in the block next to it declares the same plugin twice,
+    and a second bare table is a TOML error Codex refuses to load.
+
+    Raises:
+        ManagedBlockError: When the content outside the block is not valid
+            TOML, or already declares the plugin under any marketplace.
+    """
+    outside = unmanaged_bytes(existing, begin=_BEGIN_MARKER, end=_END_MARKER)
+    try:
+        declared = tomllib.loads(outside.decode("utf-8"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
+        raise ManagedBlockError(
+            f"{target_path} is not valid TOML outside the eawf block: {exc}"
+        ) from exc
+    plugins = declared.get("plugins")
+    keys = plugins if isinstance(plugins, dict) else {}
+    duplicates = sorted(key for key in keys if key.partition("@")[0] == _PLUGIN_NAME)
+    if duplicates:
+        raise ManagedBlockError(
+            f"{target_path} already declares {', '.join(f'plugins.{key}' for key in duplicates)} "
+            f"outside the eawf block; remove it or the block would declare the plugin twice"
+        )
 
 
 def _ensure_dir(path: Path) -> None:

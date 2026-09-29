@@ -17,6 +17,7 @@ import typer
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands.evidence import (
     _emit,
     _flags,
@@ -513,7 +514,7 @@ def artifact_validate(
     payload = {"ok": report.ok, "errors": report.errors}
     if not report.ok:
         _emit(payload, "\n".join(report.errors), flags)
-        raise typer.Exit(code=4)
+        raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
     _emit(payload, "artifact validate: ok", flags)
 
 

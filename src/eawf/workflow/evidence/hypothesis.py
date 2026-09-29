@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from eawf.kernel.state.enums import HypothesisStatus, HypothesisVerdict
 from eawf.kernel.state.models import Hypothesis, State
 from eawf.kernel.store.envelope import Envelope
-from eawf.surfaces.cli.errors import UserError
+from eawf.surfaces.cli.errors import UserError, ValidationError
 from eawf.workflow.evidence import _io
 from eawf.workflow.evidence.guards import require_complete_audit
 
@@ -47,6 +47,7 @@ def define_hypothesis(
         verdict=None,
         audit_id=None,
         source_artifact_id=source_artifact_id,
+        defined_at=now,
     )
     hypotheses[hypothesis_id] = hyp
     state.hypotheses = hypotheses
@@ -78,13 +79,36 @@ def set_verdict(
     """Record a hypothesis verdict in place.
 
     Status follows the verdict: ``confirmed`` / ``rejected`` /
-    ``inconclusive``. Audit-evidence guard fires before mutation.
+    ``inconclusive``. Audit-evidence guard fires before mutation. A
+    verdict is immutable: a hypothesis already verdicted is refused, and
+    changed evidence is tested by defining a new hypothesis, so the prior
+    row keeps what its audit found.
+
+    Raises:
+        UserError: ``kind="NotFound"`` for an unknown hypothesis;
+            ``kind="InvalidInput"`` when it already carries a verdict.
+        ValidationError: When *audit_id* is absent, unknown, incomplete, or
+            completed before the hypothesis was stated (a stale audit).
     """
     hypotheses: dict[str, Hypothesis] = dict(state.hypotheses or {})
     if hypothesis_id not in hypotheses:
         raise UserError(f"hypothesis {hypothesis_id!r} not found", kind="NotFound")
+    prior = hypotheses[hypothesis_id]
+    if prior.verdict is not None:
+        raise UserError(
+            f"hypothesis {hypothesis_id!r} already carries the verdict "
+            f"{prior.verdict.value!r}; a verdict is immutable, so re-test by defining "
+            "a new hypothesis",
+            kind="InvalidInput",
+        )
 
     require_complete_audit(state, audit_id)
+    audit = (state.audits or {})[audit_id]
+    if prior.defined_at is not None and audit.created_at < prior.defined_at:
+        raise ValidationError(
+            f"audit-evidence: audit {audit_id!r} predates hypothesis {hypothesis_id!r} "
+            "and cannot have evaluated it (INV.AUDIT.STALE)"
+        )
 
     status_for_verdict = {
         HypothesisVerdict.CONFIRMED: HypothesisStatus.CONFIRMED,
@@ -93,7 +117,6 @@ def set_verdict(
     }[verdict]
 
     now = datetime.now(UTC)
-    prior = hypotheses[hypothesis_id]
     updated = prior.model_copy(
         update={
             "verdict": verdict,

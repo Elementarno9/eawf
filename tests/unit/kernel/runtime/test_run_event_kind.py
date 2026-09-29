@@ -144,12 +144,15 @@ def test_run_event_kind_carries_reasoning_started_and_command_started() -> None:
 
 def test_the_supported_kinds_are_the_ones_whose_payload_model_exists() -> None:
     assert sorted(kind.value for kind in SUPPORTED_EVENT_KINDS) == [
+        "budget_exhausted",
+        "budget_warning",
         "command_output",
         "command_result",
         "command_started",
         "event_gap",
         "reasoning_started",
         "reasoning_summarized",
+        "usage_observed",
     ]
     assert RunEventKind.HEARTBEAT not in SUPPORTED_EVENT_KINDS
 
@@ -191,6 +194,8 @@ def test_the_pinned_phases_are_the_contract() -> None:
         "question_raised": "raised",
         "approval_requested": "requested",
         "approval_resolved": "resolved",
+        "budget_warning": "warning",
+        "budget_exhausted": "exhausted",
         "control_requested": "requested",
         "control_acknowledged": "acknowledged",
         "control_effected": "effected",

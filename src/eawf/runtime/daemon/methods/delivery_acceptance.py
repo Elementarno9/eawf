@@ -79,7 +79,7 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusal,
     AcceptanceRefusedError,
@@ -235,25 +235,6 @@ def _refused(code: ReconciliationRefusal | AcceptanceRefusal, detail: str) -> Da
     return DaemonValidationError(f"validation_failed: {code.value}: {detail}")
 
 
-def _validated[T: BaseModel](model: type[T], params: dict[str, Any]) -> T:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return model.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
-
-
 def _batch_of(session: RootSession, urn: BatchUrn) -> DeliveryBatch:
     """Return the Batch as the tree holds it, from either storage tier.
 
@@ -356,7 +337,7 @@ async def _reconcile_merge(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Reconcile one Batch's in-flight merge against what the branch holds."""
-    args = _validated(MergeReconcileParams, params)
+    args = native_params(MergeReconcileParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(reconcile_batch_merge, context, args)
     return answer.model_dump(mode="json")
@@ -450,7 +431,7 @@ async def _record_evidence(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """File one evidence row an acceptance may cite."""
-    args = _validated(RecordEvidenceParams, params)
+    args = native_params(RecordEvidenceParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(record_evidence, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
@@ -616,7 +597,7 @@ async def _request_acceptance_repair(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Open the successor acceptance bundle revision and file it."""
-    args = _validated(AcceptanceRepairParams, params)
+    args = native_params(AcceptanceRepairParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(open_acceptance_repair, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")

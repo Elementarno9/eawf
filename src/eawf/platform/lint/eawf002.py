@@ -1,9 +1,9 @@
 """EAWF002 — log-key naming lint for library logger call sites.
 
-Enforces the AGENTS naming-conventions rule that wave / iter / phase
-identifiers appear in **log lines** under their bare key form
-(``wave=<id>``, ``iter=<id>``, ``phase=<id>``) — never the
-``_id``-suffixed form (``wave_id=<id>``). The trailing ``_id`` suffix is
+Enforces the AGENTS naming-conventions rule that the lifecycle
+identifiers -- milestone, batch, task and run -- appear in **log lines**
+under their bare key form (``task=<key>``, ``run=<key>``) — never the
+``_id``-suffixed form (``task_id=<key>``). The trailing ``_id`` suffix is
 reserved for typed-model field names and for structured envelopes
 (``EventPayload``, ``state.json``) where the schema benefits from the
 explicit suffix; a free-form ``logger.<level>(...)`` message is neither,
@@ -14,7 +14,9 @@ message to a skeleton (a bare ``str`` constant, or an f-string with its
 interpolations collapsed to ``{}``), and flags every occurrence of a
 banned ``<key>_id=`` token for the keys in :data:`_BANNED_KEYS`. A single
 message may carry more than one offending key; each is reported
-separately so the operator sees the full repair list.
+separately so the operator sees the full repair list. The key set names
+the lifecycle as it stands after the cutover and translates nothing: no
+alias maps a retired identifier onto a current one.
 
 This rule is the log-key sibling of EAWF001 (message shape): EAWF001
 validates the overall ``<funcname> key=value`` grammar, EAWF002 narrows
@@ -43,11 +45,11 @@ _LOGGER_NAMES: frozenset[str] = frozenset({"logger", "log"})
 # Cross-cutting identifiers whose bare key form is canonical in log
 # lines. The ``_id``-suffixed spelling of any of these inside a log
 # message is the drift EAWF002 flags.
-_BANNED_KEYS: tuple[str, ...] = ("wave", "iter", "phase")
+_BANNED_KEYS: tuple[str, ...] = ("milestone", "batch", "task", "run")
 
 # Matches a banned ``<key>_id=`` token sitting on a word boundary, so a
 # legitimate compound like ``request_id=`` (not in the banned set) is
-# never matched and a substring like ``subwave_id=`` does not false-fire.
+# never matched and a substring like ``subtask_id=`` does not false-fire.
 _BANNED_KEY_PATTERN = re.compile(
     r"\b(" + "|".join(re.escape(key) for key in _BANNED_KEYS) + r")_id="
 )
@@ -63,7 +65,7 @@ class LogKeyViolation:
         col_offset: 0-based column of the call node.
         message: the static message skeleton that carried the bad key.
         key: the canonical bare key the operator should use instead
-            (e.g. ``wave`` for a flagged ``wave_id=``).
+            (e.g. ``task`` for a flagged ``task_id=``).
     """
 
     lineno: int
@@ -138,7 +140,7 @@ def banned_keys(message: str) -> list[str]:
     Returns:
         The canonical bare keys (subset of :data:`_BANNED_KEYS`) found in
         ``_id=`` form, in source order, with duplicates preserved so a
-        message that repeats ``wave_id=`` twice yields two entries.
+        message that repeats ``task_id=`` twice yields two entries.
     """
     return [match.group(1) for match in _BANNED_KEY_PATTERN.finditer(message)]
 

@@ -149,9 +149,7 @@ def dispatch(
 ) -> tuple[CanaryProvision, dict[str, Any]]:
     """Dispatch the seeded Run with *launcher* and a sealed *token_budget*."""
     canary = make_canary(tmp_path / "repo")
-    capsule = capsule_request()
-    if token_budget is not None:
-        capsule["token_budget"] = token_budget
+    capsule = capsule_request(token_budget=token_budget)
     supplied = dispatch_params(canary, capsule=capsule)
     args = DispatchParams.model_validate(
         {key: value for key, value in supplied.items() if key != "repo_root"}
@@ -226,16 +224,16 @@ def test_dispatch_run_under_cap_meters_every_reading_and_continues(tmp_path: Pat
     assert kinds(records, "control") == []
 
 
-def test_dispatch_run_without_cap_attaches_no_meter(tmp_path: Path) -> None:
-    """An uncapped Run carries no sink, however much its stream reports."""
+def test_dispatch_run_without_cap_is_never_started(tmp_path: Path) -> None:
+    """An uncapped Run has no reservation to hold, so no process starts to meter."""
     launcher = StreamingLauncher(readings(CAP * 10))
 
-    canary, answer = dispatch(tmp_path, launcher, token_budget=None)
+    with pytest.raises(DaemonValidationError) as caught:
+        dispatch(tmp_path, launcher, token_budget=None)
 
+    assert DispatchRefusal.ADMISSION_QUEUED.value in str(caught.value)
     assert not launcher.sink_present
-    assert launcher.cap_tokens is None
-    assert answer["stage"] == DispatchStage.ANNOUNCED.value
-    assert kinds(ledger_records(canary, tmp_path / "runtime"), "budget_notice") == []
+    assert launcher.answers == []
 
 
 # ---- crossing the cap -------------------------------------------------------

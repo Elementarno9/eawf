@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from eawf.kernel.state.enums import AgentSessionRole, EffortBucket
 
@@ -407,8 +407,35 @@ class RuntimeModelsConfig(BaseModel):
         return out
 
 
+#: How long a Run may produce nothing before it is flagged stalled. Six
+#: hundred seconds is the measured boundary of the unrecovered stalls
+#: that motivated the check, not a chosen round number.
+DEFAULT_STALL_INTERVAL_SECONDS: Final = 600
+
+#: The runtimes a ``runtime.<name>`` liveness block may be written for.
+STALL_INTERVAL_RUNTIMES: Final[tuple[str, ...]] = ("claude", "codex", "opencode")
+
+
+class RuntimeLivenessConfig(BaseModel):
+    """Strict typed model for one ``runtime.<name>`` liveness block.
+
+    The interval is per runtime because a pause that is routine on one
+    runtime is pathological on another.
+
+    Attributes:
+        stall_interval_s: The silence a Run on this runtime is allowed
+            before it is flagged stalled.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    stall_interval_s: StrictInt = Field(default=DEFAULT_STALL_INTERVAL_SECONDS, ge=0, le=86_400)
+
+
 __all__ = [
     "ALL_ROLES",
+    "DEFAULT_STALL_INTERVAL_SECONDS",
+    "STALL_INTERVAL_RUNTIMES",
     "AgentDrivenReleasePolicy",
     "AgentsConfig",
     "AutoChoose",
@@ -423,6 +450,7 @@ __all__ = [
     "ProseConfig",
     "ProseLevel",
     "ReleaseCadence",
+    "RuntimeLivenessConfig",
     "RuntimeModelsConfig",
     "SolutionBias",
     "TaskReference",

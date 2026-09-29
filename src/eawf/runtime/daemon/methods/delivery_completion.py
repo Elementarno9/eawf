@@ -23,14 +23,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.delivery.adoption import ADOPTION_KEY_PREFIX, LandedAdoption
 from eawf.kernel.delivery.integration import IntegrationGeneration
 from eawf.kernel.delivery.receipts import ProofReceipt, RevisionBinding, canonical_digest
 from eawf.kernel.runtime.candidate import CandidateBundle
 from eawf.kernel.spec.common import GateSpec
-from eawf.kernel.state.enums import AgentReportVerdict
+from eawf.kernel.state.enums import AgentReportVerdict, GateReceiptResult
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey
 from eawf.kernel.state.epoch2.task import Task
@@ -40,13 +40,9 @@ from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.delivery import (
-    IdempotencyKey,
-    read_generation_ledger,
-    stored_tasks,
-)
+from eawf.runtime.daemon.methods.delivery import read_generation_ledger, stored_tasks
 from eawf.runtime.daemon.native_dispatch import run_ledger
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.verification.receipts import ProofRuntimeFacts
 from eawf.workflow.delivery.completion import (
     CompletionRefusal,
@@ -60,6 +56,7 @@ from eawf.workflow.delivery.criteria import (
     ExecutionContractSet,
     compile_execution_contracts,
 )
+from eawf.workflow.verify.red_to_green import GateRun, unpaired_required_gates
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +75,11 @@ PROOF_PAYLOAD_KIND: Final = "proof_receipt"
 
 #: The receipt-ledger key prefix a filed proof is kept under.
 PROOF_KEY_PREFIX: Final = "PRF-"
+
+
+def _receipt_digest(receipt: ProofReceipt) -> str:
+    """Return the digest two copies of one receipt are compared by."""
+    return canonical_digest(receipt.model_dump(mode="json"))
 
 
 def _refused(code: CompletionRefusal, detail: str) -> DaemonValidationError:
@@ -152,10 +154,10 @@ class TaskCompletionInputs(BaseModel):
         gates: The gates the Task's criteria reference. Named by the
             caller because a Task record carries its criteria and not the
             gates they are proved by.
-        receipts: The proof receipts held for the Task. Presented rather
-            than read because no native record holds one yet; a receipt
-            counts only where its freshness key is the one the decision
-            derives from the ledger.
+        receipts: The proof receipts held for the Task. A receipt counts
+            only where its freshness key is the one the decision derives
+            from the ledger, and a completion further requires it to be a
+            passing line a proof run filed.
         proof_facts: The runner, environment, selector and policy those
             proofs ran under.
     """
@@ -172,15 +174,17 @@ class TaskCompletionInputs(BaseModel):
 class TaskCompletionParams(TaskCompletionInputs):
     """Params of :data:`DELIVERY_ASSESS_COMPLETION_METHOD`.
 
+    The verb answers and writes nothing, so it takes no idempotency key:
+    a repeated assessment is answered afresh from the Batch head as it
+    stands, never replayed from a head that has since moved.
+
     Attributes:
         urn: The Task being judged.
         actor: Who asked.
-        idempotency_key: The client's name for this request.
     """
 
     urn: TaskUrn
     actor: PrincipalKey
-    idempotency_key: IdempotencyKey
 
 
 class TaskCompletionAnswer(BaseModel):
@@ -212,25 +216,6 @@ class TaskCompletionAnswer(BaseModel):
     unavailable_gate_ids: tuple[str, ...] = ()
     completable: bool
     reason: str
-
-
-def _completion_params(params: dict[str, Any]) -> TaskCompletionParams:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return TaskCompletionParams.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
 
 
 def task_of(session: RootSession, urn: TaskUrn) -> Task:
@@ -302,7 +287,11 @@ class _CompletionJudgment:
         decision: Which legs carry and which must run again.
         head: The generation the Batch head stands on.
         contracts: The Task's criteria compiled against the named gates.
-        filed: The freshness keys of every proof the daemon filed for it.
+        filed: The digest of every passing receipt the daemon filed for it,
+            so a presented copy counts only where it is the filed line
+            itself rather than a restatement of it.
+        unpaired: One line per required-tier gate whose filed proofs hold
+            no failing run before the passing one.
     """
 
     task: Task
@@ -310,6 +299,7 @@ class _CompletionJudgment:
     head: IntegrationGeneration
     contracts: ExecutionContractSet
     filed: frozenset[str]
+    unpaired: tuple[str, ...] = ()
 
 
 def _judge_completion(
@@ -334,7 +324,7 @@ def _judge_completion(
         bundle: CandidateBundle | LandedAdoption | None = sealed_bundle_of(
             read_ledger_records(run_ledger(session)), task_ref=task.urn
         ) or adoption_of(session, batch_ref=task.batch_ref, task_ref=str(task.urn))
-        filed = {item.receipt.freshness_key for item in filed_proofs(session, task.urn)}
+        proofs = filed_proofs(session, task.urn)
         ledger = read_generation_ledger(session.ledger_path(Epoch2Collection.BATCH), task.batch_ref)
     contracts = compiled_contracts(task, args.gates)
     try:
@@ -353,25 +343,45 @@ def _judge_completion(
     # decide_task_completion refuses a ledger with no head, so one exists here.
     head = ledger.head
     assert head is not None, "a decided completion always stands on a selected generation"
+    unpaired = unpaired_required_gates(
+        args.gates,
+        tuple(GateRun(gate_id=item.gate.id, result=item.receipt.result) for item in proofs),
+    )
     return _CompletionJudgment(
-        task=task, decision=decision, head=head, contracts=contracts, filed=frozenset(filed)
+        task=task,
+        decision=decision,
+        head=head,
+        contracts=contracts,
+        filed=frozenset(
+            _receipt_digest(item.receipt)
+            for item in proofs
+            if item.receipt.result is GateReceiptResult.PASS
+        ),
+        unpaired=tuple(finding.render() for finding in unpaired),
     )
 
 
 def _completion_answer(judgment: _CompletionJudgment) -> TaskCompletionAnswer:
     """Return the answer one completion judgment stands for."""
     task, decision = judgment.task, judgment.decision
-    reason = (
-        f"task {task.urn.entity_key} is proved on generation {decision.head_generation}"
-        if decision.completable
-        else (
+    completable = decision.completable and not judgment.unpaired
+    if completable:
+        reason = f"task {task.urn.entity_key} is proved on generation {decision.head_generation}"
+    elif decision.completable:
+        # A defect fix completes only on a failing proof of its repro taken
+        # before the passing one, so the fix is shown to be what turned it.
+        reason = (
+            f"task {task.urn.entity_key} has no failing-then-passing proof pair for its "
+            f"required-tier gate(s): {'; '.join(judgment.unpaired)}"
+        )
+    else:
+        reason = (
             f"task {task.urn.entity_key} needs {len(decision.rerun_gate_ids)} gate(s) proved on "
             f"generation {decision.head_generation} before it completes"
         )
-    )
     logger.info(
         f"assess_task_completion task={task.urn.entity_key} head={decision.head_generation} "
-        f"completable={decision.completable}"
+        f"completable={completable}"
     )
     return TaskCompletionAnswer(
         task_ref=decision.task_ref,
@@ -382,7 +392,7 @@ def _completion_answer(judgment: _CompletionJudgment) -> TaskCompletionAnswer:
         rerun_gate_ids=decision.rerun_gate_ids,
         reused_gate_ids=decision.reused_gate_ids,
         unavailable_gate_ids=decision.unavailable_gate_ids,
-        completable=decision.completable,
+        completable=completable,
         reason=reason,
     )
 
@@ -416,7 +426,9 @@ def completion_binding(
     """Judge one Task and derive the exact binding its completion records.
 
     Only a receipt the daemon filed from its own proof run counts toward
-    the binding, so a caller cannot complete a Task on a receipt it wrote.
+    the binding, and only as it was filed: a presented copy must equal a
+    filed passing line field for field, so a caller cannot complete a Task
+    on a receipt it wrote or on a filed failure it restated as a pass.
     The binding is derived rather than presented: the head and tree are
     the Batch head generation's own, the contract digest covers the
     compiled contracts the proofs were judged against, and the evidence
@@ -431,7 +443,8 @@ def completion_binding(
 
     Returns:
         The assessment answer beside the binding, or beside ``None`` when
-        a required leg is still unproven at its binding.
+        a required leg is still unproven at its binding or a required-tier
+        gate has no failing proof before its passing one.
 
     Raises:
         DaemonValidationError: The assessment refused, or the named commit
@@ -448,10 +461,15 @@ def completion_binding(
         )
     if not answer.completable:
         return answer, None
+    # A reused decision always names the receipt it reused, so its id is set.
+    presented: dict[tuple[str | None, str], ProofReceipt] = {
+        (item.id, item.freshness_key): item for item in args.receipts
+    }
     unfiled = sorted(
         item.gate_id
         for item in judgment.decision.plan.reused
-        if item.expected_freshness_key not in judgment.filed
+        if _receipt_digest(presented[(item.receipt_id, item.expected_freshness_key)])
+        not in judgment.filed
     )
     if unfiled:
         raise DaemonValidationError(
@@ -484,7 +502,7 @@ async def _assess_task_completion(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Judge whether one Task may move to COMPLETED on its Batch head."""
-    args = _completion_params(params)
+    args = native_params(TaskCompletionParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(assess_task_completion, context, args)
     return answer.model_dump(mode="json")

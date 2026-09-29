@@ -42,14 +42,20 @@ def _user_plugin_root(
     home: Path | None = None,
     opencode_config_dir: str | None = None,
 ) -> Path:
-    """Return ``$OPENCODE_CONFIG_DIR/plugins/`` or its XDG default."""
+    """Return ``$OPENCODE_CONFIG_DIR/plugins/`` or its XDG default.
+
+    An injected *home* is the whole root: the environment override is read
+    only when no home was injected, so a probe aimed at a fixture never
+    reaches the configuration directory of the machine running it.
+    """
     if opencode_config_dir is not None:
         return Path(opencode_config_dir) / "plugins"
+    if home is not None:
+        return home / _DEFAULT_XDG_SUBDIR / "plugins"
     env_value = os.environ.get(_OPENCODE_CONFIG_DIR_ENV)
     if env_value:
         return Path(env_value) / "plugins"
-    base = home if home is not None else Path.home()
-    return base / _DEFAULT_XDG_SUBDIR / "plugins"
+    return Path.home() / _DEFAULT_XDG_SUBDIR / "plugins"
 
 
 def detect_user_install(

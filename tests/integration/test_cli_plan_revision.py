@@ -456,8 +456,9 @@ def test_every_census_verb_forwards_its_own_rpc(
     deleted, or renamed onto a different constant, either fails to invoke
     (``No such command``) or forwards the wrong method here.
     """
-    for document_name in ("track.json", "milestone.json", "batch.json", "task.json"):
-        (tmp_path / document_name).write_bytes(orjson.dumps({"key": "PLACEHOLDER"}))
+    fixtures = Path(__file__).resolve().parents[1] / "fixtures" / "epoch2" / "create"
+    for kind in ("track", "milestone", "batch", "task"):
+        (tmp_path / f"{kind}.json").write_bytes((fixtures / f"{kind}.json").read_bytes())
 
     seen_methods: list[str] = []
     for args, method, result in _census_rows(_proposal_spec):

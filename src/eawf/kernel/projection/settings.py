@@ -295,28 +295,6 @@ class EffectiveSettingsView(_SettingsModel):
         return tuple(leaf for leaf in self.leaves if leaf.section is None)
 
 
-def category_assignment_defects(sections: Iterable[str]) -> tuple[str, ...]:
-    """Return every way the category table fails to file ``sections`` exactly once.
-
-    Args:
-        sections: The catalog's sections.
-
-    Returns:
-        One message per section the table does not file, files twice, or files although
-        the catalog has no such section; empty when the assignment is total.
-    """
-    filed = [section for _name, members in SETTINGS_CATEGORIES for section in members]
-    wanted = set(sections)
-    defects = [f"section {s!r} is filed under no category" for s in sorted(wanted - set(filed))]
-    defects += [
-        f"section {s!r} is filed twice" for s in sorted({s for s in filed if filed.count(s) > 1})
-    ]
-    defects += [
-        f"category table files {s!r}, which the catalog lacks" for s in sorted(set(filed) - wanted)
-    ]
-    return tuple(defects)
-
-
 def render_value(value: Any) -> str:
     """Return one config value as the console prints it.
 
@@ -639,7 +617,6 @@ __all__ = [
     "SettingsLeaf",
     "build_settings_view",
     "catalog_section_order",
-    "category_assignment_defects",
     "layer_overlays",
     "render_value",
 ]

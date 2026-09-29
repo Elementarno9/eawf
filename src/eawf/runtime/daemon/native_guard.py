@@ -28,6 +28,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, ClassVar, Final
 
+from pydantic import BaseModel, ValidationError
+
 from eawf.kernel.state.epoch2.authority import (
     NATIVE_AUTHORITY_REQUIRED,
     NativeAuthorityRequiredError,
@@ -63,6 +65,32 @@ class NativeAuthorityRefusedError(DaemonValidationError):
     """
 
     code: ClassVar[str] = NATIVE_AUTHORITY_REQUIRED
+
+
+def native_params[T: BaseModel](model: type[T], params: dict[str, Any]) -> T:
+    """Validate one native request's params, dropping the key the fence already used.
+
+    Args:
+        model: The closed params model of the verb.
+        params: The raw request params, :data:`REPO_ROOT_PARAM` included.
+
+    Returns:
+        The validated params.
+
+    Raises:
+        DaemonValidationError: The request does not parse. The detail is
+            reduced to field paths so the refusal never repeats a
+            submitted value into a log.
+    """
+    try:
+        return model.model_validate(
+            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
+        )
+    except ValidationError as error:
+        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
+        raise DaemonValidationError(
+            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
+        ) from error
 
 
 def native_root(ctx: MethodContext, params: dict[str, Any]) -> Path | None:
@@ -148,6 +176,7 @@ __all__ = [
     "NativeAuthorityRefusedError",
     "NativeHandler",
     "native_mutator",
+    "native_params",
     "native_root",
     "require_native_call",
 ]

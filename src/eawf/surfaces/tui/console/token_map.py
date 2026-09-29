@@ -74,8 +74,9 @@ class SurfaceToken:
 # header hints take muted rather than the packet's faint: faint misses 4.5:1 on the band.
 # The bands, the dim tone and the receded pane take the tones each theme mixes from its
 # own palette, the way the packet's stylesheet mixes them.
-# The cursor row sits on the raised panel rather than the packet's accent-dim selection
-# fill, which no theme binds, so the selection stays one neutral lift on every theme.
+# The cursor row sits on a neutral lift rather than the packet's accent-dim selection fill,
+# which no theme binds: the raised panel on a dark theme, a text mix on the light one, whose
+# raised panel is too close to its surface to see.
 TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("canvas", Channel.BACKGROUND, "surface", ".screen"),
     SurfaceToken("text", Channel.COLOR, "foreground", ".canvas"),
@@ -90,7 +91,7 @@ TOKEN_MAP: tuple[SurfaceToken, ...] = (
     SurfaceToken("frame", Channel.BORDER, "border", ".blk"),
     SurfaceToken("focus", Channel.BORDER, "primary", None),
     SurfaceToken("caret", Channel.COLOR, "accent", ".canvas .br"),
-    SurfaceToken("cursor", Channel.BACKGROUND, "panel-2", None),
+    SurfaceToken("cursor", Channel.BACKGROUND, "cursor-ground", None),
     SurfaceToken("ok", Channel.COLOR, "ok", ".ok"),
     SurfaceToken("info", Channel.COLOR, "status-claimed", ".info"),
     SurfaceToken("warn", Channel.COLOR, "warn", ".canvas .wn"),

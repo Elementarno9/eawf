@@ -474,6 +474,7 @@ def dispatch_request(run_urn: str, task_urn: str) -> dict[str, Any]:
             "report_schema_ref": "schema://executor-report/v1",
             "tool_grants": ["budget_status", "submit_candidate"],
             "stop_conditions": ["budget_exhausted"],
+            "token_budget": 200_000,
         },
         "base": "main",
         "lease_ttl_seconds": 600,

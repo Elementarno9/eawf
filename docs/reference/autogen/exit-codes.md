@@ -1,6 +1,6 @@
 # eawf exit codes
 
-Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical five-bucket surface every CLI handler exits with.
+Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical surface every CLI handler exits with.
 
 | Code | Name |
 |---|---|
@@ -10,3 +10,4 @@ Auto-generated from `eawf.surfaces.cli.exit_codes`. The canonical five-bucket su
 | 3 | `STATE_CONFLICT` |
 | 4 | `DAEMON_UNREACHABLE` |
 | 5 | `INTERNAL_ERROR` |
+| 6 | `NEEDS_OPERATOR` |

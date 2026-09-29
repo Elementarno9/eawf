@@ -106,3 +106,144 @@ rules:
       Hypotheses, audits and decisions are state-resident records, so the evidence chain behind a decision stays reconstructible from state.json alone.
     verification:
       method: review
+
+legacy:
+  - item: block:project-orientation
+    disposition: project_brief
+  - item: block:non-negotiable-rules
+    disposition: rejected
+  - item: block:architecture-cli-dispatch
+    disposition: steering_rule
+    obligation_id: architecture.cli-dispatch
+  - item: block:ea-directory-commit-policy
+    disposition: steering_rule
+    obligation_id: state.ea-directory-commit-policy
+  - item: block:symbol-conventions
+    disposition: steering_rule
+    obligation_id: writing.symbol-conventions
+  - item: block:naming-conventions
+    disposition: steering_rule
+    obligation_id: naming.canonical-names
+  - item: block:entity-title-naming
+    disposition: steering_rule
+    obligation_id: writing.entity-title
+  - item: block:deletion-rule
+    disposition: steering_rule
+    obligation_id: integrity.deletion
+  - item: block:state-vs-specs
+    disposition: steering_rule
+    obligation_id: state.state-vs-specs
+  - item: block:verify-before-claim
+    disposition: steering_rule
+    obligation_id: integrity.verify-before-claim
+  - item: block:worktree-discipline
+    disposition: steering_rule
+    obligation_id: vcs.worktree-discipline
+  - item: block:branch-currency
+    disposition: steering_rule
+    obligation_id: vcs.branch-currency
+  - item: block:commit-prefix
+    disposition: steering_rule
+    obligation_id: vcs.commit-scope-carrier
+  - item: block:branch-naming
+    disposition: steering_rule
+    obligation_id: vcs.branch-naming
+  - item: block:secrets-hygiene
+    disposition: steering_rule
+    obligation_id: integrity.secrets-hygiene
+  - item: block:artifact-chassis
+    disposition: steering_rule
+    obligation_id: writing.artifact-chassis
+  - item: block:planned-scope-revisability
+    disposition: steering_rule
+    obligation_id: state.scope-revisability
+  - item: block:roadmap-procedure
+    disposition: steering_rule
+    obligation_id: lifecycle.roadmap-procedure
+  - item: block:spike-workflow
+    disposition: steering_rule
+    obligation_id: lifecycle.spike
+  - item: block:engineering-principles
+    disposition: steering_rule
+    obligation_id: engineering.simplicity
+  - item: block:engineering-practice
+    disposition: steering_rule
+    obligation_id: engineering.least-surprise
+  - item: block:prep-plan-mode
+    disposition: steering_rule
+    obligation_id: lifecycle.prep-plan-mode
+  - item: block:iter-phase-close-timing
+    disposition: steering_rule
+    obligation_id: lifecycle.close-timing
+  - item: block:markdown-no-manual-wrap
+    disposition: steering_rule
+    obligation_id: writing.markdown-no-manual-wrap
+  - item: block:release-process
+    disposition: steering_rule
+    obligation_id: lifecycle.release-process
+  - item: block:ship-process
+    disposition: steering_rule
+    obligation_id: lifecycle.ship-process
+  - item: block:agent-report-contract
+    disposition: steering_rule
+    obligation_id: integrity.agent-report
+  - item: block:workflow-lifecycle
+    disposition: steering_rule
+    obligation_id: lifecycle.flow
+  - item: block:pr-template
+    disposition: steering_rule
+    obligation_id: vcs.pr-body
+  - item: block:clarity-contract
+    disposition: steering_rule
+    obligation_id: writing.newcomer-clarity
+  - item: block:agent-tool-discipline
+    disposition: steering_rule
+    obligation_id: integrity.agent-tool-discipline
+  - item: block:memory-hygiene
+    disposition: steering_rule
+    obligation_id: state.memory-hygiene
+  - item: block:comment-economy
+    disposition: steering_rule
+    obligation_id: writing.comment-economy
+  - item: block:orchestrator-decision-surface
+    disposition: steering_rule
+    obligation_id: integrity.decision-surface
+  - item: block:gate-fire-proof-sunset
+    disposition: steering_rule
+    obligation_id: integrity.gate-fire-proof
+  - item: block:commit-granularity
+    disposition: steering_rule
+    obligation_id: vcs.commit-granularity
+  - item: block:anti-patterns
+    disposition: rejected
+  - item: block:python-style
+    disposition: rejected
+  - item: block:test-discipline
+    disposition: rejected
+  - item: block:research-workflow
+    disposition: steering_rule
+    obligation_id: research.evidence-chain
+  - item: block:agent-driven-phase-equals-release
+    disposition: steering_rule
+    obligation_id: release.phase-cadence
+  - item: block:agent-driven-large-phase-pr
+    disposition: steering_rule
+    obligation_id: delivery.phase-pr-size
+  - item: block:agent-driven-cadence-adr-pointer
+    disposition: steering_rule
+    obligation_id: delivery.cadence-provenance
+  - item: block:lean-wave-verification
+    disposition: steering_rule
+    obligation_id: lifecycle.wave-verification-scope
+  - item: block:code-craft-dry
+    disposition: steering_rule
+    obligation_id: craft.code.duplication
+  - item: block:code-craft-fail-fast
+    disposition: steering_rule
+    obligation_id: craft.code.fail-fast
+  - item: block:code-craft-single-responsibility
+    disposition: steering_rule
+    obligation_id: craft.code.single-responsibility
+  - item: block:code-craft-explicit-over-implicit
+    disposition: steering_rule
+    obligation_id: craft.code.explicit-over-implicit

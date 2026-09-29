@@ -38,7 +38,9 @@ from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import (
     Fixed,
     Grid,
+    LeadReceded,
     Lensed,
+    Receded,
     View,
     bar,
     build,
@@ -415,17 +417,20 @@ def _with_rail(
     rows: int,
     *,
     width: int,
+    editing: bool,
 ) -> list[str]:
     """Return the body beside the rail, the rail windowed onto the selected section.
 
     The rail is closed by its own rule before the keybar, so the vertical line never
-    reads as running into the keys.
+    reads as running into the keys. While an editor is open the rail and the key list do
+    not own the arrows, so they recede and only the readout below the rule stays lit.
     """
     rail = _rail_entries(settings)
     col = w - width - 2
     selected = next((i for i, (_c, s) in enumerate(rail) if s == section), 0)
     top = max(0, min(selected - rows // 2, max(0, len(rail) - rows)))
     out: list[str] = []
+    readout = next((i for i, cell in enumerate(body) if cell.startswith("─")), len(body))
     for i in range(rows):
         entry = rail[top + i] if top + i < len(rail) else None
         if entry is None:
@@ -437,11 +442,12 @@ def _with_rail(
         cell = body[i] if i < len(body) else ""
         join = "├─" if cell.startswith("─") else "│ "
         line = pad(pad(label, width) + join + pad(cell, col), w)
-        out.append(
-            Lensed(line, lens=cell.lens, layers=cell.layers)
-            if isinstance(cell, Lensed)
-            else Fixed(line)
-        )
+        if editing:
+            out.append(Receded(line) if i < readout else LeadReceded(line))
+        elif isinstance(cell, Lensed):
+            out.append(Lensed(line, lens=cell.lens, layers=cell.layers))
+        else:
+            out.append(Fixed(line))
     out.append(Fixed("─" * width + "┴" + "─" * (w - width - 1)))
     return out
 
@@ -488,7 +494,9 @@ def settings_frame(view: View, settings: EffectiveSettingsView) -> list[str]:
         header_row(session, crumb=_crumb(scope), scope=scope, needs=needs_count(view), w=w),
         _clip(ctx, w),
         bar(w),
-        *_with_rail(settings, section, body, w, view.h - 5, width=rail),
+        *_with_rail(
+            settings, section, body, w, view.h - 5, width=rail, editing=session.edit is not None
+        ),
     ]
     keys = _keys(view)
     if session.edit is None and (leaf is None or leaf.stated_at(lens(session)) is None):
@@ -515,14 +523,14 @@ def _tier_two(leaf: SettingsLeaf) -> list[str]:
     """Return the stack's second tier: only the parts of the field tuple that are stated."""
     rows: list[str] = []
     if leaf.deny_chain:
-        rows.append(f"DENIED BY {' › '.join(leaf.deny_chain)}")  # noqa: RUF001
+        rows.append(f"DENIED BY  {' › '.join(leaf.deny_chain)}")  # noqa: RUF001
     if leaf.constraint_chain:
-        rows.append(f"CONSTRAINED BY {' › '.join(leaf.constraint_chain)}")  # noqa: RUF001
+        rows.append(f"CONSTRAINED BY  {' › '.join(leaf.constraint_chain)}")  # noqa: RUF001
     if leaf.capability_requirement is not None:
         state = leaf.certification_state or f"{TRUTH['unknown'].unicode} certification unknown"
-        rows.append(f"NEEDS     {leaf.capability_requirement} · {state}")
+        rows.append(f"NEEDS      {leaf.capability_requirement} · {state}")
     if leaf.secret_ref is not None:
-        rows.append(f"SECRET    {leaf.secret_ref} · the value never renders")
+        rows.append(f"SECRET     {leaf.secret_ref} · the value never renders")
     return rows
 
 
@@ -533,7 +541,7 @@ def _stack_lines(
     at = lens(session)
     shape = leaf.value_type or "outside the catalog"
     allowed = f" · one of {' | '.join(leaf.allowed)}" if leaf.allowed else ""
-    key_lines = [f"KEY       {leaf.key}", f"TYPE      {shape}{allowed}"]
+    key_lines = [f"KEY        {leaf.key}", f"TYPE       {shape}{allowed}"]
     ladder = [_STACK.head(["LAYER", "VALUE", "KIND", "WHERE"])]
     for index, name in enumerate(LAYER_ORDER):
         layer = Layer(name)
@@ -548,9 +556,9 @@ def _stack_lines(
         ladder.append(_STACK.row(cells, index == session.sel, inner))
     source = leaf.source_layer.value if leaf.source_layer is not None else "no layer"
     reading = [
-        f"WINNING   {source} {value_text(leaf) if leaf.source_layer else ''}".rstrip(),
-        f"LENS      {at} · l on the Settings route cycles the five file layers",
-        f"LENS SETS {_on_lens(leaf, at)}",
+        f"WINNING    {source} {value_text(leaf) if leaf.source_layer else ''}".rstrip(),
+        f"LENS       {at} · l on the Settings route cycles the five file layers",
+        f"LENS SETS  {_on_lens(leaf, at)}",
         *_tier_two(leaf),
     ]
     return key_lines, ladder, reading

@@ -27,22 +27,21 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
-from eawf.kernel.projection.compute import PROJECTION_PRODUCER, ProjectionRow
-from eawf.kernel.projection.registers import RegisterView
+from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.projection.registers import RegisterView, count_field, revision_of
 from eawf.kernel.projection.truth import (
-    Freshness,
-    Precision,
     TruthField,
-    TruthKind,
     TruthState,
 )
-from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.run import RunStatus, SuspensionReason
 
 logger = logging.getLogger(__name__)
 
 #: The console route the grouping is drawn on.
 ACTIVITY_ROUTE: Final = "activity"
+
+#: What every Activity count rests on: the route's own register.
+_REFS: Final = (ACTIVITY_ROUTE,)
 
 
 class ActivityExceptionBucket(StrEnum):
@@ -154,42 +153,6 @@ class ActivityGrouping:
         return tuple(c for c in self.counts if not c.sub)
 
 
-def _field(
-    *,
-    value: int | None,
-    revision: int,
-    reason: str | None,
-    estimate: bool = False,
-) -> TruthField[str]:
-    """Return one count: exact, an estimate naming why, or unknown naming why."""
-    if value is None:
-        return TruthField[str](
-            value=None,
-            state=TruthState.UNKNOWN,
-            truth_kind=TruthKind.DERIVED,
-            producer=PROJECTION_PRODUCER,
-            producer_revision=revision,
-            precision=Precision.UNAVAILABLE,
-            measurement_quality=MeasurementQuality.UNAVAILABLE,
-            freshness=Freshness.LIVE,
-            provenance_refs=(ACTIVITY_ROUTE,),
-            missing_reason=reason,
-        )
-    return TruthField[str](
-        value=str(value),
-        state=TruthState.KNOWN,
-        truth_kind=TruthKind.ESTIMATED if estimate else TruthKind.DERIVED,
-        producer=PROJECTION_PRODUCER,
-        producer_revision=revision,
-        precision=Precision.BOUNDED if estimate else Precision.EXACT,
-        measurement_quality=(
-            MeasurementQuality.ESTIMATED if estimate else MeasurementQuality.EXACT
-        ),
-        freshness=Freshness.LIVE,
-        provenance_refs=(ACTIVITY_ROUTE,),
-    )
-
-
 def _placed(row: ProjectionRow) -> tuple[ActivityExceptionBucket, SuspensionReason | None] | None:
     """Return the bucket and suspension reason of one row, or ``None`` when it states none."""
     if row.status.state is not TruthState.KNOWN or row.status.value is None:
@@ -225,7 +188,7 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
             f"route {register.route!r} states no Run grouping; the grouping is the "
             f"{ACTIVITY_ROUTE!r} route's register"
         )
-    revision = int(register.source_cursor) + 1
+    revision = revision_of(register)
     placed = [_placed(row) for row in register.rows]
     landed = [p for p in placed if p is not None]
     counts: list[ActivityCount] = []
@@ -237,7 +200,7 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
                     bucket=bucket,
                     sub=False,
                     reason=None,
-                    count=_field(value=None, revision=revision, reason=unstated),
+                    count=count_field(value=None, revision=revision, refs=_REFS, reason=unstated),
                 )
             )
             continue
@@ -247,9 +210,10 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
                 bucket=bucket,
                 sub=False,
                 reason=None,
-                count=_field(
+                count=count_field(
                     value=sum(1 for b, _ in landed if b is bucket),
                     revision=revision,
+                    refs=_REFS,
                     reason=RUNNING_ESTIMATE_REASON if estimate else None,
                     estimate=estimate,
                 ),
@@ -263,7 +227,7 @@ def group_runs(register: RegisterView) -> ActivityGrouping:
                         bucket=bucket,
                         sub=True,
                         reason=reason,
-                        count=_field(value=n, revision=revision, reason=None),
+                        count=count_field(value=n, revision=revision, refs=_REFS, reason=None),
                     )
                 )
     logger.debug(f"group_runs cursor={register.source_cursor} total={len(register.rows)}")

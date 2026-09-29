@@ -400,6 +400,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "jury",
     "migration",
     "needs_user",
+    "permission",
     "planning",
     "projection",
     "registry",

@@ -114,7 +114,7 @@ def test_exit_codes_expose_zero_through_five() -> None:
 
 def test_exit_codes_name_for_out_of_range_raises_key_error() -> None:
     with pytest.raises(KeyError):
-        exit_codes.name_for(6)
+        exit_codes.name_for(max(exit_codes.SURFACE) + 1)
 
 
 # --- assertion 4: ErrorEnvelope strict shape -------------------------

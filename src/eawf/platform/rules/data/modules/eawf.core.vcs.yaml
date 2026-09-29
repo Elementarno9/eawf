@@ -8,13 +8,13 @@ when_to_use: creating a branch or worktree, committing, cherry-picking, opening 
 rules:
   - rule_id: eawf.core.vcs.worktree-discipline
     obligation_id: vcs.worktree-discipline
-    revision: 1
+    revision: 2
     title: Branch worktrees from the feature branch and cherry-pick back
     zone: constitution
     force: must
     effectiveness: behavioral
     instruction: >-
-      Branch every worktree from the current feature branch HEAD, never from main, and bring its commits back by cherry-pick in order, never by merge; tear the worktree down only after the cherry-pick lands.
+      Branch every worktree from the current feature branch HEAD, never from main, and bring its commits back by cherry-pick in order, never by merge; tear the worktree down only after the cherry-pick lands. Claim parallel sibling waves with `--out-of-order`.
     rationale: >-
       A worktree cut from main misses the phase's earlier waves, and a merge buries per-wave commits under a merge node that bisect and wave pins cannot follow.
     verification:

@@ -29,17 +29,19 @@ shortcut this module deliberately does not take:
   able to drift from the one clients branch on.
 - **A create is dispatch too, and nothing more.** ``eawf milestone
   create`` sends ``domain.milestone.create`` with the whole create
-  document from ``--from-spec``; the daemon still decides the cursor, the
-  free key and the live parent under its own locks. The CLI validates
-  only that the file is readable JSON, never the document's own fields --
-  the strict per-kind model that decides those is the daemon's.
+  document from ``--from-spec`` (a path, or ``-`` for stdin); the daemon
+  still decides the cursor, the free key and the live parent under its own
+  locks. The document is parsed through the same strict per-kind model the
+  daemon's transaction uses, and refused with the same envelope, so an
+  unparseable document costs no round trip and earns one answer.
 
 Every verb takes the same four addressing flags -- the subject URN, the
-revision the caller read it at, the retry key and the actor -- and reads
-the rest of the request from a ``--from-spec`` JSON file, so the payload
-of a move is a reviewable artifact rather than a shell line. A refused
-envelope still prints in full and then exits :data:`DOMAIN_REFUSAL_EXIT`,
-so a script can branch on the exit status without losing the code.
+revision the caller read it at (``--expected-revision``), the retry key and
+the actor -- and reads the rest of the request from a ``--from-spec`` JSON
+document, so the payload of a move is a reviewable artifact rather than a
+shell line. A refused envelope still prints in full and then exits with the
+typed status :func:`~eawf.surfaces.cli.verb_contract.envelope_exit_code`
+gives it, so a script can branch on the exit status without losing the code.
 
 The verbs that answer outside the :class:`DomainEnvelope` shape -- the
 candidate, integration, proof, approval and evidence verbs -- live in
@@ -54,7 +56,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
-import orjson
 import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
@@ -76,6 +77,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
 )
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.verb_contract import envelope_exit_code, envelope_text, read_spec_document
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope, DomainErrorCode
@@ -163,10 +165,11 @@ CANDIDATE_SUBMIT: Final = "runtime.candidate.submit"
 #: costs no round trip.
 IDEMPOTENCY_KEY_MAX: Final = 128
 
-#: The exit status of a refused mutation. One code for every refusal: the
-#: code a caller routes on is the one inside the envelope, and a second
-#: mapping from that vocabulary onto exit statuses would be a second
-#: contract to keep stable.
+#: The exit status of a refused mutation. One code for every refusal but the
+#: one only an operator can clear (see
+#: :func:`~eawf.surfaces.cli.verb_contract.envelope_exit_code`): the code a
+#: caller routes on is the one inside the envelope, and a finer mapping from
+#: that vocabulary onto exit statuses would be a second contract to keep stable.
 DOMAIN_REFUSAL_EXIT: Final = exit_codes.STATE_CONFLICT
 
 #: What an operator does about a request the epoch-2 fence turned away.
@@ -282,28 +285,19 @@ def _load_spec(path: Path | None) -> DomainVerbSpec:
     """Return the payload the caller named, or an empty one.
 
     Args:
-        path: The ``--from-spec`` file, or ``None``.
+        path: The ``--from-spec`` file, ``-`` for stdin, or ``None``.
 
     Returns:
         The parsed payload.
 
     Raises:
-        UserError: The file is missing, is not JSON, or names a field the
-            request has no room for. Parsing fails at the boundary so an
+        UserError: The file is missing, is not a JSON object, or names a
+            field the request has no room for. Parsing fails at the boundary so an
             unusable payload never reaches the wire.
     """
     if path is None:
         return DomainVerbSpec()
-    try:
-        raw = orjson.loads(path.read_bytes())
-    except OSError as exc:
-        raise cli_errors.UserError(f"cannot read --from-spec {path}: {exc}", kind="NotFound") from (
-            exc
-        )
-    except orjson.JSONDecodeError as exc:
-        raise cli_errors.UserError(
-            f"--from-spec {path} is not valid JSON: {exc}", kind="InvalidInput"
-        ) from exc
+    raw = read_spec_document(path)
     try:
         return DomainVerbSpec.model_validate(raw)
     except PydanticValidationError as exc:
@@ -382,37 +376,6 @@ def _build_request(
     )
 
 
-def _load_create_document(path: Path) -> dict[str, Any]:
-    """Return the create document ``--from-spec`` names.
-
-    Args:
-        path: The JSON file carrying the entity's whole create document.
-
-    Returns:
-        The parsed document, forwarded to the daemon as read. Its fields
-        are never validated here: the strict per-kind model that decides
-        whether they describe a legal record is the daemon's.
-
-    Raises:
-        UserError: The file is missing, is not JSON, or is not a JSON
-            object. Nothing here could ever be a create document, so the
-            request stops before it reaches the wire.
-    """
-    try:
-        raw = orjson.loads(path.read_bytes())
-    except OSError as exc:
-        raise cli_errors.UserError(f"cannot read --from-spec {path}: {exc}", kind="NotFound") from (
-            exc
-        )
-    except orjson.JSONDecodeError as exc:
-        raise cli_errors.UserError(
-            f"--from-spec {path} is not valid JSON: {exc}", kind="InvalidInput"
-        ) from exc
-    if not isinstance(raw, dict):
-        raise cli_errors.UserError(f"--from-spec {path} must be a JSON object", kind="InvalidInput")
-    return raw
-
-
 def _build_create_request(
     *,
     method: str,
@@ -443,7 +406,7 @@ def _build_create_request(
     """
     if expected_revision < 0:
         raise cli_errors.UserError(
-            f"--expected-tree-revision must not be negative, got {expected_revision}",
+            f"--expected-revision must not be negative, got {expected_revision}",
             kind="InvalidInput",
         )
     _check_idempotency_key(idempotency_key)
@@ -453,9 +416,65 @@ def _build_create_request(
         expected_revision=expected_revision,
         idempotency_key=idempotency_key,
         actor=actor,
-        document=_load_create_document(from_spec),
+        document=read_spec_document(from_spec),
         correlation_id=correlation_id,
     )
+
+
+def _create_document_refusal(request: DomainCreateRequest) -> DomainEnvelope | None:
+    """Return the refusal a create document earns from its kind's strict model.
+
+    The document is parsed through the same per-kind model the daemon's
+    create transaction parses it through, and a failure is answered with
+    the envelope that transaction would answer: the same code, the same
+    message naming the offending fields, and no revision because nothing
+    was read. A document that cannot become a record therefore never
+    reaches the wire, and the caller sees one answer whichever side caught it.
+
+    Args:
+        request: The resolved create request.
+
+    Returns:
+        The ``schema_validation_failed`` envelope, or ``None`` when the
+        document parses.
+    """
+    from eawf.kernel.state.epoch2.repository import RepositoryCreateSpec
+    from eawf.kernel.state.epoch2.transitions import LifecycleEntity
+    from eawf.runtime.daemon.epoch2_create import CREATE_SPECS
+    from eawf.runtime.daemon.methods.domain_envelope import (
+        ENVELOPE_SCHEMA_VERSION,
+        DomainEnvelope,
+        DomainError,
+        DomainErrorCode,
+        DomainStatus,
+    )
+
+    kind = request.method.split(".")[1]
+    model = (
+        RepositoryCreateSpec
+        if request.method == REPOSITORY_CREATE
+        else CREATE_SPECS[LifecycleEntity(kind)]
+    )
+    try:
+        model.model_validate(request.document)
+    except PydanticValidationError as error:
+        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
+        return DomainEnvelope(
+            schema_version=ENVELOPE_SCHEMA_VERSION,
+            status=DomainStatus.ERROR,
+            operation=request.method,
+            errors=(
+                DomainError(
+                    code=DomainErrorCode.SCHEMA_VALIDATION_FAILED,
+                    message=(
+                        f"the {kind} create document does not validate; check {', '.join(fields)}"
+                    ),
+                    entity_ref=request.urn,
+                    remediation="Correct the named fields of the create document and retry.",
+                ),
+            ),
+        )
+    return None
 
 
 def _rpc_params(request: DomainVerbRequest, *, repo_root: str) -> dict[str, Any]:
@@ -676,37 +695,6 @@ def _call_domain_create(request: DomainCreateRequest, *, flags: GlobalFlags) -> 
         ) from exc
 
 
-def _envelope_text(envelope: DomainEnvelope, *, urn: str) -> str:
-    """Return the human-readable rendering of one envelope.
-
-    Args:
-        envelope: The daemon's answer.
-        urn: The subject the request addressed, which names it for a
-            refusal taken before any read could report one.
-
-    Returns:
-        The text body: one headline plus a line per warning, and for a
-        refusal the message, the guard that failed and the remediation.
-    """
-    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
-
-    if envelope.status is DomainStatus.OK:
-        lines = [
-            f"{envelope.operation} ok {urn} "
-            f"revision {envelope.revision_before} -> {envelope.revision_after}"
-        ]
-    else:
-        lines = []
-        for row in envelope.errors:
-            lines.append(f"{envelope.operation} error {row.code.value} {row.entity_ref}")
-            lines.append(f"  {row.message}")
-            if row.guard is not None:
-                lines.append(f"  guard: {row.guard}")
-            lines.append(f"  remediation: {row.remediation}")
-    lines.extend(f"  warning: {warning}" for warning in envelope.warnings)
-    return "\n".join(lines)
-
-
 def _emit(envelope: DomainEnvelope, *, urn: str, flags: GlobalFlags) -> None:
     """Print one envelope and exit non-zero when it refused.
 
@@ -716,19 +704,18 @@ def _emit(envelope: DomainEnvelope, *, urn: str, flags: GlobalFlags) -> None:
         flags: Resolved global flags.
 
     Raises:
-        typer.Exit: With :data:`DOMAIN_REFUSAL_EXIT` when the mutation was
-            refused. The envelope prints first either way, so a caller
+        typer.Exit: With the envelope's typed exit status when the mutation
+            was refused. The envelope prints first either way, so a caller
             reading stdout gets the code whichever branch it took.
     """
-    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
-
     emit_json_or_text(
         envelope.model_dump(mode="json"),
-        _envelope_text(envelope, urn=urn),
+        envelope_text(envelope, urn=urn),
         flags=flags,
     )
-    if envelope.status is not DomainStatus.OK:
-        raise typer.Exit(DOMAIN_REFUSAL_EXIT)
+    code = envelope_exit_code(envelope)
+    if code != exit_codes.OK:
+        raise typer.Exit(code)
 
 
 def _run_verb(
@@ -798,7 +785,8 @@ def _run_create_verb(
     """Dispatch one native create verb and render its answer.
 
     The single body every create command in this module delegates to:
-    build the typed request, send it, print the envelope. Mirrors
+    build the typed request, parse its document through the kind's strict
+    model, send it, print the envelope. Mirrors
     :func:`_run_verb`'s shape; what differs is only that a create has no
     existing revision to address and reads its whole document rather than
     a move's update fields.
@@ -824,7 +812,7 @@ def _run_create_verb(
             from_spec=from_spec,
             correlation_id=correlation_id,
         )
-        envelope = _call_domain_create(request, flags=flags)
+        envelope = _create_document_refusal(request) or _call_domain_create(request, flags=flags)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
@@ -900,7 +888,7 @@ def track_retire_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-track-revision", help=_REVISION_HELP)
+        int, typer.Option("--expected-revision", "--expected-track-revision", help=_REVISION_HELP)
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -927,7 +915,8 @@ def track_create_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -954,7 +943,8 @@ def repository_create_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -984,7 +974,8 @@ def milestone_activate_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-milestone-revision", help=_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1011,7 +1002,8 @@ def milestone_open_review_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-milestone-revision", help=_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1038,7 +1030,8 @@ def milestone_accept_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-milestone-revision", help=_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1063,7 +1056,7 @@ def milestone_accept_cmd(
     extra: dict[str, Any] = {}
     if acceptance_bundle is not None:
         try:
-            extra["acceptance_bundle"] = _load_create_document(acceptance_bundle)
+            extra["acceptance_bundle"] = read_spec_document(acceptance_bundle)
         except cli_errors.CliError as exc:
             cli_errors.emit_error(exc, flags=flags)
             return
@@ -1087,7 +1080,8 @@ def milestone_cancel_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-milestone-revision", help=_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1114,7 +1108,8 @@ def milestone_create_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1144,7 +1139,7 @@ def batch_activate_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-batch-revision", help=_REVISION_HELP)
+        int, typer.Option("--expected-revision", "--expected-batch-revision", help=_REVISION_HELP)
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1171,7 +1166,7 @@ def batch_ready_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-batch-revision", help=_REVISION_HELP)
+        int, typer.Option("--expected-revision", "--expected-batch-revision", help=_REVISION_HELP)
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1198,7 +1193,8 @@ def batch_create_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1228,7 +1224,7 @@ def task_promote_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-task-revision", help=_REVISION_HELP)
+        int, typer.Option("--expected-revision", "--expected-task-revision", help=_REVISION_HELP)
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1255,7 +1251,7 @@ def task_start_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-task-revision", help=_REVISION_HELP)
+        int, typer.Option("--expected-revision", "--expected-task-revision", help=_REVISION_HELP)
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
@@ -1282,7 +1278,8 @@ def task_create_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
     ],
     idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
     actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],

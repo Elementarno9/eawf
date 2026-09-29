@@ -86,6 +86,34 @@ RuleEffectiveness = Literal["informational", "behavioral", "guarded"]
 VerificationMethod = Literal["review", "registered_check", "structural"]
 RuleSourceKind = Literal["builtin", "workspace", "repository"]
 
+#: Where one piece of legacy profile-renderer content goes in the rule graph
+#: world. ``duplicate_of`` and ``steering_rule`` name the obligation that now
+#: owns the content; every other disposition names none.
+LegacyDispositionKind = Literal[
+    "project_brief",
+    "steering_rule",
+    "run_policy",
+    "verification_policy",
+    "tool_policy",
+    "domain_policy",
+    "procedure_reference",
+    "retrievable_reference",
+    "duplicate_of",
+    "operator_owned",
+    "rejected",
+]
+
+#: The dispositions that hand the content to an obligation of the rule graph.
+OBLIGATION_DISPOSITIONS: frozenset[LegacyDispositionKind] = frozenset(
+    {"duplicate_of", "steering_rule"}
+)
+
+#: A legacy inventory key: ``block:<render block id>`` or ``root:<file>``.
+LegacyItemKey = Annotated[
+    str,
+    StringConstraints(strict=True, max_length=160, pattern=r"^(?:block|root|field):[^\s]+$"),
+]
+
 
 def _refuse_trailing_period(title: str) -> str:
     """Enforce the entity-title rule that a title never ends in a period.
@@ -257,6 +285,39 @@ class RuleRecord(AuthoredRule):
     source: RuleSourceIdentity
 
 
+class LegacyDisposition(RuleModel):
+    """The operator's typed decision about one legacy inventory item.
+
+    Attributes:
+        item: The inventory key the decision is about.
+        disposition: Where the content goes.
+        obligation_id: The obligation that owns the content now; required
+            for ``duplicate_of`` and ``steering_rule`` and refused otherwise,
+            so ownership is always an identifier and never a text match.
+    """
+
+    item: LegacyItemKey
+    disposition: LegacyDispositionKind
+    obligation_id: ObligationId | None = None
+
+    @model_validator(mode="after")
+    def _obligation_matches_disposition(self) -> LegacyDisposition:
+        """Require an obligation exactly when the disposition hands one over.
+
+        Returns:
+            The validated disposition.
+
+        Raises:
+            ValueError: When the obligation is missing or superfluous.
+        """
+        needs = self.disposition in OBLIGATION_DISPOSITIONS
+        if needs and self.obligation_id is None:
+            raise ValueError(f"a {self.disposition} disposition requires an obligation_id")
+        if not needs and self.obligation_id is not None:
+            raise ValueError(f"a {self.disposition} disposition names no obligation_id")
+        return self
+
+
 class WorkspaceRuleRef(RuleModel):
     """The repository's explicit reference to a workspace rule source.
 
@@ -285,12 +346,15 @@ class RuleSourceDocument(RuleModel):
         modules: Registered references of the builtin rule modules the
             repository selects. Selection only; module prose is never copied.
         rules: Repository-authored rules.
+        legacy: The operator's dispositions of the legacy profile-renderer
+            content the migration inventories.
     """
 
     schema_version: Literal[1]
     workspace: WorkspaceRuleRef | None = None
     modules: tuple[QualifiedId, ...] = ()
     rules: tuple[AuthoredRule, ...] = ()
+    legacy: tuple[LegacyDisposition, ...] = ()
 
 
 class WorkspaceRuleDocument(RuleModel):
@@ -317,19 +381,25 @@ class LoadedRuleSource(RuleModel):
         modules: Selected builtin module references, in authored order.
         rules: Repository rules stamped with ``source``, in authored order.
             Order carries no precedence.
+        legacy: The operator's legacy dispositions, in authored order.
     """
 
     source: RuleSourceIdentity
     workspace: WorkspaceRuleRef | None = None
     modules: tuple[QualifiedId, ...]
     rules: tuple[RuleRecord, ...]
+    legacy: tuple[LegacyDisposition, ...] = ()
 
 
 __all__ = [
+    "OBLIGATION_DISPOSITIONS",
     "REGISTERED_LOCATOR_PREFIX",
     "REPOSITORY_NAMESPACE",
     "WORKSPACE_NAMESPACE",
     "AuthoredRule",
+    "LegacyDisposition",
+    "LegacyDispositionKind",
+    "LegacyItemKey",
     "LoadedRuleSource",
     "RuleRecord",
     "RuleScope",

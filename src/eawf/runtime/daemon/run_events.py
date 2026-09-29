@@ -43,6 +43,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
+from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.compiled import canonical_digest
 from eawf.kernel.runtime.events import (
@@ -64,11 +65,6 @@ from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.store.ledger import LedgerRecord
 
 logger = logging.getLogger(__name__)
-
-#: How long a Run may produce nothing before it is flagged stalled. Six
-#: hundred seconds is the measured boundary of the unrecovered stalls
-#: that motivated the check, not a chosen round number.
-DEFAULT_STALL_INTERVAL_SECONDS: Final = 600
 
 #: The control a stalled Run is resumed through. A stall never moves the
 #: Run itself, so the resume path is a control a principal asks for.
@@ -136,13 +132,12 @@ class RunEventsRead(RunScopedParams):
 
     Attributes:
         stall_interval_seconds: The silence a Run is allowed before it
-            is flagged. It is overridable because a pause that is
-            routine on one runtime is pathological on another.
+            is flagged. ``None`` resolves ``runtime.<name>.stall_interval_s``
+            for the runtime the Run's accepted hello named, because a pause
+            that is routine on one runtime is pathological on another.
     """
 
-    stall_interval_seconds: Annotated[StrictInt, Field(ge=0, le=86_400)] = (
-        DEFAULT_STALL_INTERVAL_SECONDS
-    )
+    stall_interval_seconds: Annotated[StrictInt, Field(ge=0, le=86_400)] | None = None
 
 
 @dataclass(frozen=True, slots=True)

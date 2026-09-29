@@ -132,15 +132,19 @@ def test_set_verdict_missing_audit_raises_validation(tmp_path: Path) -> None:
 def test_set_verdict_status_follows_verdict(tmp_path: Path) -> None:
     state_path = _state_path(tmp_path)
     state = _io.load_state(state_path)
-    hypothesis.define_hypothesis(
-        state,
-        hypothesis_id="H03-12",
-        scope_id="QR",
-        text="t",
-        metric="m",
-        confirm="c",
-        reject="r",
-    )
+    # One hypothesis per verdict: a verdict is immutable, so re-verdicting
+    # one row is refused rather than overwritten.
+    ids = ("H03-12", "H03-13", "H03-14")
+    for hypothesis_id in ids:
+        hypothesis.define_hypothesis(
+            state,
+            hypothesis_id=hypothesis_id,
+            scope_id="QR",
+            text="t",
+            metric="m",
+            confirm="c",
+            reject="r",
+        )
     _seed_artifact(state)
     audit.add_audit(
         state,
@@ -151,18 +155,22 @@ def test_set_verdict_status_follows_verdict(tmp_path: Path) -> None:
         verdict=AuditVerdict.PASS,
     )
 
-    for verdict, expected_status in (
-        (HypothesisVerdict.CONFIRMED, HypothesisStatus.CONFIRMED),
-        (HypothesisVerdict.REJECTED, HypothesisStatus.REJECTED),
-        (HypothesisVerdict.INCONCLUSIVE, HypothesisStatus.INCONCLUSIVE),
+    for hypothesis_id, (verdict, expected_status) in zip(
+        ids,
+        (
+            (HypothesisVerdict.CONFIRMED, HypothesisStatus.CONFIRMED),
+            (HypothesisVerdict.REJECTED, HypothesisStatus.REJECTED),
+            (HypothesisVerdict.INCONCLUSIVE, HypothesisStatus.INCONCLUSIVE),
+        ),
+        strict=True,
     ):
         hypothesis.set_verdict(
             state,
-            hypothesis_id="H03-12",
+            hypothesis_id=hypothesis_id,
             verdict=verdict,
             audit_id="AUD-001",
         )
-        h = state.hypotheses["H03-12"]
+        h = state.hypotheses[hypothesis_id]
         assert h.verdict == verdict
         assert h.status == expected_status
 

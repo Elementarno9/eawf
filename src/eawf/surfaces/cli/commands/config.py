@@ -683,14 +683,14 @@ def config_validate(
         enabled: list[str] = [str(p) for p in enabled_raw]
 
         try:
-            bodies = [load_profile(pid) for pid in enabled]
+            bodies = [load_profile(pid, repo=repo, workspace=workspace) for pid in enabled]
         except UserError as exc:
             emit_error(exc, flags=flags)
             return  # pragma: no cover
 
         composed_view = compose(bodies)
         payload["enabled_profiles"] = enabled
-        payload["available_profiles"] = list(list_profiles())
+        payload["available_profiles"] = list(list_profiles(repo=repo, workspace=workspace))
         payload["composed"] = composed_view.model_dump(mode="json")
         text = f"config: ok (composed {len(enabled)} profile(s): {composed_view.name})"
 
@@ -773,6 +773,7 @@ def profile_enable(
             layer=scope,
             layer_file_path=target_path,
             state_path=state_arg,
+            repo=repo,
             workspace=workspace,
         )
     except (UserError, ValidationError) as exc:

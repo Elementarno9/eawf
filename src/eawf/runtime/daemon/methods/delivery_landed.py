@@ -63,6 +63,8 @@ from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery import (
     GENERATION_STATUS,
     IdempotencyKey,
+    file_keyed_answer,
+    keyed_answer,
     read_generation_ledger,
 )
 from eawf.runtime.daemon.methods.delivery_acceptance import (
@@ -70,7 +72,7 @@ from eawf.runtime.daemon.methods.delivery_acceptance import (
     MergeReconcileParams,
     reconcile_batch_merge,
 )
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.recovery import generation_record_key, integration_generation_id
 from eawf.workflow.integration.reconcile import HostMergeObservation
 
@@ -187,24 +189,6 @@ class ReadBackParams(BaseModel):
     urn: BatchUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
-
-
-def _validated[T: BaseModel](model: type[T], params: dict[str, Any]) -> T:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse; the detail
-            names field paths and never a submitted value.
-    """
-    try:
-        return model.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
 
 
 def _refused(code: str, detail: str) -> DaemonValidationError:
@@ -399,13 +383,23 @@ def adopt_landed(
 
     Returns:
         The adoption and the generation it selected, or the standing ones
-        when the same change was already adopted.
+        when the same change was already adopted. A retry under the same
+        idempotency key answers what the first call answered.
 
     Raises:
-        DaemonValidationError: The Batch is not active, a Task cannot be
-            adopted, evidence does not resolve, or the repository does not
-            show the change landed on the Batch's target branch.
+        DaemonValidationError: The key already answered other parameters,
+            the Batch is not active, a Task cannot be adopted, evidence
+            does not resolve, the repository does not show the change
+            landed on the Batch's target branch, or another generation was
+            selected while the repository was being read.
     """
+    params = args.model_dump(mode="json")
+    replayed = keyed_answer(
+        context, method=DELIVERY_ADOPT_LANDED_METHOD, key=args.idempotency_key, params=params
+    )
+    if replayed is not None:
+        logger.info(f"adopt_landed batch={args.urn.entity_key} replayed_key=True")
+        return AdoptLandedAnswer.model_validate({**replayed, "replayed": True})
     with context.session([str(args.urn)]) as session:
         batch = _batch_row(session, args.urn)
         if batch.status is not BatchStatus.ACTIVE:
@@ -494,6 +488,21 @@ def adopt_landed(
         created_at=now,
     )
     with context.session([str(args.urn)]) as session:
+        # The repository was read with no lock held, so the head the new
+        # generation extends is checked again under the lock it is
+        # appended under; a head that moved would give two generations one
+        # ordinal, or this one the wrong parent.
+        now_head = read_generation_ledger(
+            session.ledger_path(Epoch2Collection.BATCH), args.urn
+        ).head
+        if now_head is not None and now_head.integrated_revision.head_sha == args.head_sha:
+            return _answer(adoption, now_head, target_head=target_head, replayed=True)
+        if (None if now_head is None else now_head.id) != (None if head is None else head.id):
+            raise _refused(
+                "adoption_head_moved",
+                f"batch {batch.key} selected {now_head.id if now_head else 'no generation'} "
+                f"while {args.head_sha} was being read back, so adopt it again on that head",
+            )
         commit_ledger_append(
             session,
             LedgerRecord(
@@ -518,7 +527,16 @@ def adopt_landed(
         f"adopt_landed batch={batch.key} head={args.head_sha} generation={ordinal} "
         f"tasks={len(tasks)} paths={len(paths)}"
     )
-    return _answer(adoption, generation, target_head=target_head, replayed=False)
+    answer = _answer(adoption, generation, target_head=target_head, replayed=False)
+    file_keyed_answer(
+        context,
+        method=DELIVERY_ADOPT_LANDED_METHOD,
+        key=args.idempotency_key,
+        params=params,
+        answer=answer.model_dump(mode="json"),
+        at=now,
+    )
+    return answer
 
 
 def _answer(
@@ -606,7 +624,7 @@ async def _adopt_landed(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Adopt one already-landed change as a Batch's next generation."""
-    args = _validated(AdoptLandedParams, params)
+    args = native_params(AdoptLandedParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(adopt_landed, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
@@ -617,7 +635,7 @@ async def _read_back_merge(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Read a merging Batch's target branch back and reconcile it."""
-    args = _validated(ReadBackParams, params)
+    args = native_params(ReadBackParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(read_back_merge, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")

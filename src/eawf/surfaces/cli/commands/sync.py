@@ -4,7 +4,7 @@ Surface contract::
 
     eawf sync                        # re-render in place; exit 0
     eawf sync --dry-run              # show what would change; never write; exit 0
-    eawf sync --check                # check-only; exit 4 on any planned change
+    eawf sync --check                # check-only; exit 2 on any planned change
 
 The command rebuilds the managed-region content of ``AGENTS.md`` (composed
 from the profiles enabled in ``.ea/config.yaml``) and the ``CLAUDE.md`` shim,
@@ -66,6 +66,7 @@ import typer
 
 from eawf.kernel.state.enums import StoreKind
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
@@ -180,7 +181,7 @@ def _detect_memory_view_changes(target_root: Path, shadow_root: Path) -> list[st
     return changed
 
 
-def _resolve_enabled_profiles(target: Path) -> list[str]:
+def _resolve_enabled_profiles(target: Path, *, workspace: Path | None) -> list[str]:
     """Read ``profiles.enabled`` from the layered config rooted at *target*.
 
     Args:
@@ -189,6 +190,8 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
             honours the full layer stack (built-in → global → workspace →
             repo → local → env). For the sync surface we treat *target* as
             the repo anchor.
+        workspace: The ``--workspace`` root, whose ``.ea/profiles`` is the
+            workspace profile layer; ``None`` when the flag is absent.
 
     Returns:
         The ``profiles.enabled`` list, validated as a list of strings. Empty
@@ -203,7 +206,7 @@ def _resolve_enabled_profiles(target: Path) -> list[str]:
     from eawf.platform.profiles.selection import resolve_enabled_profiles
 
     try:
-        return resolve_enabled_profiles(target)
+        return resolve_enabled_profiles(target, workspace=workspace)
     except Exception as exc:
         raise cli_errors.UserError(f"profile selection failed: {exc}", kind="InvalidInput") from exc
 
@@ -229,7 +232,9 @@ def _seed_shadow(
         dst_manifest.write_bytes(src_manifest.read_bytes())
 
 
-def _rule_projections(target_dir: Path, *, write: bool, rules: bool) -> tuple[list[str], list[str]]:
+def _rule_projections(
+    target_dir: Path, *, write: bool, rules: bool
+) -> tuple[list[str], list[str], list[str]]:
     """Render, or diff, the rule-graph projections of *target_dir*.
 
     Args:
@@ -241,12 +246,16 @@ def _rule_projections(target_dir: Path, *, write: bool, rules: bool) -> tuple[li
 
     Returns:
         The projection targets that changed (``write``) or would change,
-        and the host-fact warnings the render recorded in its manifest:
-        readers held to a cap they have not certified, and stale facts.
+        ``.gitignore`` among them when its managed block does; the
+        host-fact warnings the render recorded in its manifest: readers
+        held to a cap they have not certified, and stale facts; and the
+        shipped ignore patterns the managed block lacked (``write`` only).
 
     Raises:
-        ValidationError: The rule source, compilation or render refused.
+        ValidationError: The rule source, compilation or render refused, or
+            the ``.gitignore`` markers cannot be spliced safely.
     """
+    from eawf.platform.install.managed_block import ManagedBlockError
     from eawf.platform.rules import RuleCompileError, RuleModuleError, RuleSourceError
     from eawf.platform.rules.render import (
         RuleProjectionError,
@@ -257,15 +266,17 @@ def _rule_projections(target_dir: Path, *, write: bool, rules: bool) -> tuple[li
     from eawf.platform.rules.views import RuleViewError
 
     if not rules:
-        return [], []
+        return [], [], []
     try:
         plan = plan_rule_projections(target_dir)
         warnings = list(plan.manifest.host_fact_warnings)
         for warning in warnings:
             logger.warning(f"sync_cmd host_fact_warning detail={warning!r}")
         if not write:
-            return list(projection_drift(target_dir, plan)), warnings
-        return list(write_rule_projections(target_dir, plan).changed), warnings
+            return list(projection_drift(target_dir, plan)), warnings, []
+        written = write_rule_projections(target_dir, plan)
+    except ManagedBlockError as exc:
+        raise cli_errors.ValidationError(f".gitignore not updated: {exc}") from exc
     except (
         RuleSourceError,
         RuleCompileError,
@@ -274,34 +285,10 @@ def _rule_projections(target_dir: Path, *, write: bool, rules: bool) -> tuple[li
         RuleViewError,
     ) as exc:
         raise cli_errors.ValidationError(f"rule projection render refused: {exc}") from exc
-
-
-def _ignore_rule_projections(target_dir: Path, *, rules: bool) -> list[str]:
-    """Add the shipped ignore patterns a pre-existing managed block lacks.
-
-    Args:
-        target_dir: Repository root.
-        rules: Whether the repository authors a rule source; ``False``
-            touches nothing, since no generated projection is written.
-
-    Returns:
-        The patterns added to the managed ``.gitignore`` block.
-
-    Raises:
-        ValidationError: The ``.gitignore`` markers cannot be spliced safely.
-    """
-    from eawf.platform.install.gitignore_writer import add_missing_gitignore_patterns
-    from eawf.platform.install.managed_block import ManagedBlockError
-
-    if not rules:
-        return []
-    try:
-        added = add_missing_gitignore_patterns(target_dir)
-    except ManagedBlockError as exc:
-        raise cli_errors.ValidationError(f".gitignore not updated: {exc}") from exc
+    added = list(written.gitignore_patterns_added)
     if added:
-        logger.info(f"sync_cmd gitignore_patterns_added patterns={list(added)!r}")
-    return list(added)
+        logger.info(f"sync_cmd gitignore_patterns_added patterns={added!r}")
+    return list(written.changed), warnings, added
 
 
 def _card_changed(*, rules: bool, projections: list[str], legacy: bool) -> bool:
@@ -335,7 +322,8 @@ def _shim_changed(*, rules: bool, projections: list[str], legacy: bool) -> bool:
 def _render_into(
     *,
     target_root: Path,
-    profile_workspace: Path,
+    profile_repo: Path,
+    profile_workspace: Path | None,
     enabled_profiles: list[str],
     generator: str,
     write_manifest: bool,
@@ -343,9 +331,10 @@ def _render_into(
 ) -> tuple[RenderResult, Manifest, Manifest]:
     """Run the AGENTS.md + CLAUDE.md + manifest pipeline against *target_root*.
 
-    Profile discovery stays anchored at *profile_workspace*. Dry-run and check
+    Profile discovery stays anchored at *profile_repo* and *profile_workspace*,
+    the same pair ``config profile enable`` resolves against. Dry-run and check
     render into a shadow tree, but their profiles must still resolve from the
-    real ``--target`` workspace and its ``.ea/profiles`` overlay.
+    real ``--target`` repository and its ``.ea/profiles`` overlay.
 
     Returns:
         ``(agents_result, manifest_before, manifest_after)`` — the renderer
@@ -370,7 +359,10 @@ def _render_into(
         manifest = load_manifest((target_root / _MANIFEST_RELPATH).resolve())
         return RenderResult(target=(target_root / _AGENTS_MD).resolve()), manifest, manifest
     composed = compose(
-        [load_profile(profile_id, workspace=profile_workspace) for profile_id in enabled_profiles]
+        [
+            load_profile(profile_id, repo=profile_repo, workspace=profile_workspace)
+            for profile_id in enabled_profiles
+        ]
     )
     agents_md_path = (target_root / _AGENTS_MD).resolve()
     claude_md_path = (target_root / _CLAUDE_MD).resolve()
@@ -534,7 +526,7 @@ def sync_cmd(
         bool,
         typer.Option(
             "--check",
-            help="Exit 4 if any managed region would be added/updated.",
+            help="Exit 2 if any managed region would be added/updated.",
         ),
     ] = False,
 ) -> None:
@@ -550,9 +542,9 @@ def sync_cmd(
     | True        | False       | Compute report; never write; exit 0.       |
     +-------------+-------------+--------------------------------------------+
     | False       | True        | Compute report; never write;               |
-    |             |             | exit 4 if any region added/updated.        |
+    |             |             | exit 2 if any region added/updated.        |
     +-------------+-------------+--------------------------------------------+
-    | True        | True        | Same as --check (no write, exit 4 on drift)|
+    | True        | True        | Same as --check (no write, exit 2 on drift)|
     +-------------+-------------+--------------------------------------------+
 
     The detection is hash-stable: re-running ``eawf sync`` after a successful
@@ -563,7 +555,7 @@ def sync_cmd(
     target_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        enabled_profiles = _resolve_enabled_profiles(target_dir)
+        enabled_profiles = _resolve_enabled_profiles(target_dir, workspace=flags.workspace)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
@@ -581,13 +573,14 @@ def sync_cmd(
             try:
                 agents_result, _before, _after = _render_into(
                     target_root=shadow,
-                    profile_workspace=target_dir,
+                    profile_repo=target_dir,
+                    profile_workspace=flags.workspace,
                     enabled_profiles=enabled_profiles,
                     generator="eawf-sync",
                     write_manifest=True,  # in shadow, not the real workspace
                     rules=rules,
                 )
-                projections, host_fact_warnings = _rule_projections(
+                projections, host_fact_warnings, _added = _rule_projections(
                     target_dir, write=False, rules=rules
                 )
             except cli_errors.CliError as exc:
@@ -629,7 +622,7 @@ def sync_cmd(
         )
         emit_json_or_text(payload, _format_text(payload), flags=flags)
         if check:
-            # Spec: exit 4 (VALIDATION_FAILED) when sync would emit any
+            # Spec: exit 2 (VALIDATION_ERROR) when sync would emit any
             # added/updated region OR any memory view would change. Unchanged
             # regions and unchanged views are not drift.
             any_drift = (
@@ -639,21 +632,23 @@ def sync_cmd(
                 or bool(report["projections_changed"])
             )
             if any_drift:
-                raise typer.Exit(code=4)
+                raise typer.Exit(code=exit_codes.VALIDATION_ERROR)
         return
 
     # Default path — re-render in place.
     try:
         agents_result, _before, _after = _render_into(
             target_root=target_dir,
-            profile_workspace=target_dir,
+            profile_repo=target_dir,
+            profile_workspace=flags.workspace,
             enabled_profiles=enabled_profiles,
             generator="eawf-sync",
             write_manifest=True,
             rules=rules,
         )
-        projections, host_fact_warnings = _rule_projections(target_dir, write=True, rules=rules)
-        gitignore_added = _ignore_rule_projections(target_dir, rules=rules)
+        projections, host_fact_warnings, gitignore_added = _rule_projections(
+            target_dir, write=True, rules=rules
+        )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return

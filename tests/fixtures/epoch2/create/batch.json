@@ -1,0 +1,8 @@
+{
+  "key": "BAT-0001",
+  "milestone_ref": "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/milestone/MLS-0001",
+  "repository_ref": "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/repository/REP-CANARY",
+  "task_refs": [
+    "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/task/CANARY-0001"
+  ]
+}

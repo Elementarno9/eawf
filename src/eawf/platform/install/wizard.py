@@ -77,6 +77,7 @@ from eawf.platform.install.steps import (
 )
 from eawf.platform.profiles.compose import compose
 from eawf.platform.profiles.loader import list_profiles, load_profile
+from eawf.platform.rules.render import refresh_rule_projections, rule_source_present
 from eawf.runtime.lock import portalock
 from eawf.surfaces.cli.errors import UserError
 from eawf.surfaces.render.agents_md import render_agents_md
@@ -688,21 +689,26 @@ def run_wizard_no_input(
             added = _materialise_state_keys(state_path, required)
             materialised.extend(added)
 
-    # Render AGENTS.md (composed body) + manifest + CLAUDE.md shim.
-    composed = compose([load_profile(p) for p in answers.profiles])
     agents_md_path = (target_dir / "AGENTS.md").resolve()
-    manifest_path = (ea_dir / "indexes" / "generated.json").resolve()
-    manifest_path.parent.mkdir(parents=True, exist_ok=True)
-    seed_manifest = Manifest(version=1, generated={})
-    _, updated_manifest = render_agents_md(
-        composed,
-        agents_md_path,
-        seed_manifest,
-        generator="eawf-init",
-    )
-    save_manifest_atomic(manifest_path, updated_manifest)
     claude_md_path = (target_dir / "CLAUDE.md").resolve()
-    render_claude_md(claude_md_path)
+    manifest_path = (ea_dir / "indexes" / "generated.json").resolve()
+    if rule_source_present(target_dir):
+        # A repository authoring .ea/rules.yaml has switched: its legacy
+        # render blocks are migration input only, so the rule graph renders.
+        refresh_rule_projections(target_dir)
+    else:
+        # Render AGENTS.md (composed body) + manifest + CLAUDE.md shim.
+        composed = compose([load_profile(p) for p in answers.profiles])
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        seed_manifest = Manifest(version=1, generated={})
+        _, updated_manifest = render_agents_md(
+            composed,
+            agents_md_path,
+            seed_manifest,
+            generator="eawf-init",
+        )
+        save_manifest_atomic(manifest_path, updated_manifest)
+        render_claude_md(claude_md_path)
     auto_installed_plugins = (
         _auto_install_runtime_plugin(
             target_dir=target_dir,

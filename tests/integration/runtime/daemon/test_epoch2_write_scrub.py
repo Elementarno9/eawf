@@ -81,9 +81,15 @@ def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.fixture
 def canary(tmp_path: Path) -> CanaryProvision:
-    """A canary holding one drafted Task, ready to be promoted."""
+    """A canary holding one drafted Task and the Batch it is promoted into."""
     provisioned = provision(tmp_path / "repo", code="SCRUB")
-    seed(provisioned, {"task": {"EAWF-0042": seed_row("task", "DRAFT")}})
+    seed(
+        provisioned,
+        {
+            "task": {"EAWF-0042": seed_row("task", "DRAFT")},
+            "batch": {"BAT-0007": seed_row("batch", "ACTIVE")},
+        },
+    )
     return provisioned
 
 

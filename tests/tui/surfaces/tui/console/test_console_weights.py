@@ -19,15 +19,13 @@ def _bold(row: str) -> dict[str, bool]:
     }
 
 
-@pytest.mark.parametrize(
-    "word", ["COMPLETED", "ACTIVE", "PLANNED", "FAILED", "WAIT-USER", "? unknown", "⊘ denied"]
-)
+@pytest.mark.parametrize("word", ["COMPLETED", "ACTIVE", "PLANNED", "FAILED", "WAIT-USER"])
 def test_a_heavy_class_is_drawn_bold(word: str) -> None:
     assert _bold(f"    MLS-0100 Close out the milestone      {word}")[word]
 
 
-@pytest.mark.parametrize("word", ["∅ unavailable", "✗ purged"])
-def test_a_dim_token_stays_at_the_body_weight(word: str) -> None:
+@pytest.mark.parametrize("word", ["∅ unavailable", "✗ purged", "? unknown", "⊘ denied"])
+def test_a_truth_token_stays_at_the_body_weight(word: str) -> None:
     assert not _bold(f"    MLS-0100 Close out the milestone      {word}")[word]
 
 

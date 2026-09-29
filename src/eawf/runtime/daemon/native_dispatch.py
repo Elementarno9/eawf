@@ -50,6 +50,7 @@ from eawf.kernel.config.providers import (
     ProviderRegistry,
     parse_provider_configuration,
 )
+from eawf.kernel.economics.governor import AdmissionDecision, EconomicsPolicy
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.capsule import AuthorityCapsule, CapsuleBudget, StopCondition
 from eawf.kernel.runtime.compiled import (
@@ -87,6 +88,13 @@ from eawf.kernel.store.ledger import (
 )
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.control.reducer import reduce_run_control
+from eawf.runtime.daemon.admission import (
+    EconomicsPolicyError,
+    admission_drift,
+    admit_run,
+    latest_receipts,
+    load_economics,
+)
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
@@ -172,6 +180,9 @@ class DispatchRefusal(StrEnum):
     LEASE_UNAVAILABLE = "dispatch_lease_unavailable"
     SPAWN_FAILED = "dispatch_spawn_failed"
     BUDGET_EXHAUSTED = "dispatch_budget_exhausted"
+    ECONOMICS_INVALID = "dispatch_economics_invalid"
+    ADMISSION_QUEUED = "dispatch_admission_queued"
+    ADMISSION_DENIED = "dispatch_admission_denied"
     SUCCESSOR_REQUIRED = "retry_successor_required"
     SUCCESSOR_REFUSED = "retry_successor_refused"
     ATTEMPT_ABSENT = "retry_attempt_absent"
@@ -808,18 +819,22 @@ def open_attempt(
     *,
     spec: CompiledRunSpec,
     capsule: AuthorityCapsule,
+    economics: EconomicsPolicy,
     now: datetime,
 ) -> _AttemptState:
     """Return the Run's one attempt, minting it only if it has none.
 
     The binding is written in the same locked pass, so a Run that carries
     an attempt always carries the contract that attempt was compiled
-    under and a handshake can be judged against it.
+    under and a handshake can be judged against it. A new attempt is
+    minted only once the governor admits the Run, in that same pass, so
+    admission is decided before any lease or provider exists.
 
     Raises:
         DaemonValidationError: The Run holds no record, it has already
-            stopped, or a standing attempt was compiled from a contract
-            this call's compile no longer produces.
+            stopped, a standing attempt was compiled from a contract or
+            admitted under a budget policy this call no longer produces,
+            or the governor queued or denied the Run.
     """
     with context.session([args.urn]) as session:
         records = read_ledger_records(run_ledger(session))
@@ -848,7 +863,35 @@ def open_attempt(
                     "dispatch key; only the request that opened an attempt resumes it, so a "
                     "second dispatcher cannot start a second worker under one identity",
                 )
+            drifted = admission_drift(latest_receipts(records).get(str(args.urn)), economics)
+            if drifted is not None:
+                raise refused(
+                    DispatchRefusal.CONTRACT_DRIFT,
+                    f"run {args.urn.entity_key!r} was admitted under another {drifted} "
+                    "policy, so resuming it would apply the change silently",
+                )
             return _AttemptState(attempt=standing, resumed=True)
+        receipt = admit_run(
+            session,
+            records,
+            policy=economics,
+            capsule=capsule,
+            prompt=args.prompt,
+            status_of=lambda urn: (
+                reduce_run_control(
+                    status=stored_run(session, records, urn).status,
+                    facts=control_facts_of(records, urn),
+                ).status
+            ),
+            now=now,
+        )
+        if receipt.decision is not AdmissionDecision.ADMITTED:
+            code = (
+                DispatchRefusal.ADMISSION_QUEUED
+                if receipt.decision is AdmissionDecision.QUEUED
+                else DispatchRefusal.ADMISSION_DENIED
+            )
+            raise refused(code, f"run {args.urn.entity_key!r} {receipt.reason}")
         attempt = DispatchAttempt.model_validate(
             {
                 "attempt_ref": f"ATT-{secrets.token_hex(_ATTEMPT_ENTROPY_BYTES)}",
@@ -1122,7 +1165,11 @@ async def dispatch_run(
     table = NATIVE_LAUNCHERS if launchers is None else launchers
     spec = compile_for_dispatch(args, now=now)
     capsule = seal_capsule(spec=spec, request=args.capsule)
-    state = open_attempt(context, args, spec=spec, capsule=capsule, now=now)
+    try:
+        economics = load_economics(context.identity.tree_root.parent)
+    except EconomicsPolicyError as error:
+        raise refused(DispatchRefusal.ECONOMICS_INVALID, str(error)) from error
+    state = open_attempt(context, args, spec=spec, capsule=capsule, economics=economics, now=now)
     attempt, lease = lease_workspace(context, args, attempt=state.attempt, spec=spec, now=now)
     attempt, outcome = await launch_worker(
         context,

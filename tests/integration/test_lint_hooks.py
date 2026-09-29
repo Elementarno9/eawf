@@ -614,7 +614,7 @@ def test_eawf002_log_key_cli_blocks_on_id_suffix(tmp_path: Path) -> None:
     bad.write_text(
         "import logging\n"
         "logger = logging.getLogger(__name__)\n"
-        'logger.info(f"close_wave wave_id={1} done")\n',
+        'logger.info(f"complete_task task_id={1} done")\n',
         encoding="utf-8",
     )
     result = runner.invoke(app, ["hook", "eawf002-log-key", str(bad)])
@@ -627,7 +627,7 @@ def test_eawf002_log_key_cli_clean_exits_zero(tmp_path: Path) -> None:
     good.write_text(
         "import logging\n"
         "logger = logging.getLogger(__name__)\n"
-        'logger.info(f"close_wave wave={1} done")\n',
+        'logger.info(f"complete_task task={1} done")\n',
         encoding="utf-8",
     )
     result = runner.invoke(app, ["hook", "eawf002-log-key", str(good)])

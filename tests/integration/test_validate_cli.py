@@ -11,6 +11,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 
 runner = CliRunner()
@@ -57,7 +58,7 @@ def test_validate_rejects_invalid_with_specific_codes() -> None:
     assert len(fixtures) >= 10, f"need >=10 invalid fixtures, found {len(fixtures)}"
     for fixture in fixtures:
         result = runner.invoke(app, ["validate", str(fixture), "--json"])
-        assert result.exit_code == 4, (
+        assert result.exit_code == exit_codes.VALIDATION_ERROR, (
             f"invalid fixture should fail: {fixture.name}\n{result.output}"
         )
         body = json.loads(result.output.strip().splitlines()[-1])
@@ -82,7 +83,7 @@ def test_validate_strict_does_not_affect_invariant_exit_code() -> None:
     fixture = FIXTURES / "invalid" / "02-iter-references-missing-phase.json"
     for args in (["validate", str(fixture)], ["validate", "--strict", str(fixture)]):
         result = runner.invoke(app, args)
-        assert result.exit_code == 4, (args, result.output)
+        assert result.exit_code == exit_codes.VALIDATION_ERROR, (args, result.output)
         assert "INV.PARENT.ITER_PHASE_MISSING" in result.output
 
 
@@ -93,7 +94,7 @@ def test_validate_strict_flags_missing_optional_keys() -> None:
     lenient = runner.invoke(app, ["validate", str(fixture)])
     assert lenient.exit_code == 0, lenient.output
     strict = runner.invoke(app, ["validate", "--strict", str(fixture)])
-    assert strict.exit_code == 4, strict.output
+    assert strict.exit_code == exit_codes.VALIDATION_ERROR, strict.output
     assert "STRICT.OPTIONAL_MISSING" in strict.output
 
 
@@ -115,7 +116,7 @@ def test_validate_json_output_on_ok() -> None:
 def test_validate_human_output_lists_violations() -> None:
     fixture = FIXTURES / "invalid" / "10-mcp-non-eawf-owner.json"
     result = runner.invoke(app, ["validate", str(fixture)])
-    assert result.exit_code == 4
+    assert result.exit_code == exit_codes.VALIDATION_ERROR
     assert "INV.OWNER.MCP_NON_EAWF" in result.output
     assert "/mcp_servers/filesystem/owner" in result.output
 

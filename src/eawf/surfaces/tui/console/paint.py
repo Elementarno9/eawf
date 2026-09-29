@@ -23,8 +23,15 @@ from enum import StrEnum
 from itertools import pairwise
 from types import MappingProxyType
 
+from eawf.surfaces.tui.console.action_menu import Disabled
 from eawf.surfaces.tui.console.cells import Mark, spans
-from eawf.surfaces.tui.console.frame import Lensed, RailReceded, Receded
+from eawf.surfaces.tui.console.frame import (
+    LeadReceded,
+    Lensed,
+    RailReceded,
+    Receded,
+    Titled,
+)
 from eawf.surfaces.tui.console.header import CrumbPart, crumb_runs
 from eawf.surfaces.tui.console.keybar import GAP
 from eawf.surfaces.tui.console.lifecycle import WORD_CLASSES
@@ -71,12 +78,13 @@ class Stroke:
                 raise ValueError(f"surface {name!r} is not in the token map")
 
 
-# A truth token names an absence, so it is read at the severity the packet gives its word;
-# a quality marker only qualifies a value, so it recedes to the hint tone the value stays
-# legible in. A genuine zero is a value and keeps the text colour.
+# A truth token names an absence, so it is read at the severity the packet gives its word:
+# the packet's canvases draw an unknown in the info tone, a denial as a warning and an
+# invalidation as an error. A quality marker only qualifies a value, so it recedes to the
+# hint tone the value stays legible in. A genuine zero is a value and keeps the text colour.
 MARK_SURFACE: Mapping[Mark, str | None] = MappingProxyType(
     {
-        Mark.UNKNOWN: "warn",
+        Mark.UNKNOWN: "info",
         Mark.UNAVAILABLE: "dim",
         Mark.DENIED: "warn",
         Mark.PURGED: "dim",
@@ -90,15 +98,19 @@ MARK_SURFACE: Mapping[Mark, str | None] = MappingProxyType(
 # The lifecycle and state words the console colours, each at the severity the packet's
 # prototype gives it. Only these words are chips; prose around them stays plain.
 _STATUS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\b(?:RUNNING|ACTIVE|SUCCEEDED|COMPLETED|READY_TO_INTEGRATE|passed)\b"), "ok"),
+    (re.compile(r"\b(?:RUNNING|ACTIVE|SUCCEEDED|COMPLETED|READY_TO_INTEGRATE)\b"), "ok"),
+    # ``passed`` is a verdict only as a cell of its own; in a sentence the word is prose, and
+    # prose may negate it ("none reads passed") or mean an overrun ("budget passed").
+    (re.compile(r"(?<=  )passed(?= {2,}|\s*$)"), "ok"),
     (re.compile(r"\b(?:LOST|FAILED|REJECTED)\b"), "err"),
     (re.compile(r"\b(?:WAIT-[A-Z]+|ACCEPTANCE_REVIEW|SUSPENDED|STALLED|STALE)\b|≠ denied"), "warn"),
     (re.compile(r"\b(?:QUEUED|PLANNED|STARTING|CHECKING)\b"), "info"),
-    # The exception buckets name their severity in words beside a count.
-    (re.compile(r"\b(?:needs operator|unknown control outcome)(?= +\d)"), "warn"),
-    (re.compile(r"\b(?:lost or stale|failed)(?= +\d)"), "err"),
-    (re.compile(r"\b(?:checking or integrating|terminal recent)(?= +\d)"), "info"),
-    (re.compile(r"\brunning(?= +\d)"), "ok"),
+    # The exception buckets name their severity in words beside a count; the count may be
+    # unknown or estimated, and the bucket keeps its colour whether or not it is known.
+    (re.compile(r"\b(?:needs operator|unknown control outcome)(?= +[\d?≈])"), "warn"),
+    (re.compile(r"\b(?:lost or stale|failed)(?= +[\d?≈])"), "err"),
+    (re.compile(r"\b(?:checking or integrating|terminal recent)(?= +[\d?≈])"), "info"),
+    (re.compile(r"\brunning(?= +[\d?≈])"), "ok"),
 )
 
 # Every epoch-2 state word, in the severity class its family table gives it: colour carries
@@ -119,10 +131,10 @@ _CHIP_ROW = re.compile(
     r"|FAILED|DENIED|DRAFTS|DEFERRED|PROMOTION|WAIT-[A-Z]+|ACCEPTANCE_REVIEW"
     r"|READY_TO_INTEGRATE)\s*$"
 )
-# Column heads: upper-case tokens separated by column gaps; a head may be two words.
-_HEADS = re.compile(
-    r"^(\s*)([A-Z][A-Z0-9]*(?: [A-Z0-9]+)*(?: {2,}[A-Z][A-Z0-9]*(?: [A-Z0-9]+)*)+)\s*$"
-)
+# Column heads: upper-case tokens separated by column gaps; a head may be two words, or two
+# names joined by a middle dot (``REASON · LAST RESULT``).
+_HEAD = r"[A-Z][A-Z0-9]*(?:(?: | · )[A-Z0-9]+)*"
+_HEADS = re.compile(rf"^(\s*)({_HEAD}(?: {{2,}}{_HEAD})+)\s*$")
 _ONE_HEAD = re.compile(r"^(\s*)([A-Z][A-Z0-9]*(?: [A-Z0-9]+)*)\s*$")
 # A pane label is a position: an upper-case name at the start of the row, then a gap.
 _PANE_LABEL = re.compile(rf"^[ {CARET}]{{0,4}}([A-Z][A-Z0-9]*(?: [A-Z0-9]+)*)(?= {{2,}}|\s*$)")
@@ -150,7 +162,18 @@ _RULES = re.compile(r"[═─┄]+")
 # A junction or corner joins a rail to a rule: it takes the rail's tone, as the packet's
 # join does, rather than the text colour no line around it is drawn in.
 _JUNCTIONS = re.compile(r"[├┤┬┴┼╤╧╪┌┐└┘]")
-_CURSOR_ROW = re.compile(rf"^\s*{CARET}")
+# The caret a pane leads with: the pane's first glyph, or the first after its label. A caret
+# anywhere else is a separator in prose (``LAYER ▸ repo``) and marks nothing.
+_LEAD_CARET = rf"(?:[A-Z][A-Z0-9]*(?: [A-Z0-9]+)* {{2,}})?({CARET})"
+_CURSOR_ROW = re.compile(rf"^\s*{_LEAD_CARET}")
+_PANE_CARET = re.compile(rf"(?:^|[│├])\s*{_LEAD_CARET}")
+# Where a rail meets a row: its own glyph, or the tee a rule crossing it is joined by.
+_RAIL_EDGE = re.compile("[│├]")
+# A boxed card's row: its two edges, and the pane between them read as a row of its own.
+_BOX_ROW = re.compile(r"^(\s*│)(.*)│\s*$")
+# A keybar's pairs are one gap apart; past a wider run the rest is a legend to the frame's
+# glyphs, drawn as one faint run, as the packet's footer draws it.
+_LEGEND = re.compile(rf"(?<=\S) {{{len(GAP) + 1},}}(\S.*?)\s*$")
 # A typed entity id is a link: a Run's eight hex digits, a Track's code, or any capital
 # prefix and dash before a key that starts with a digit (MLS-0100, EAWF-0042, EVT-2218).
 _TYPED_ID = re.compile(
@@ -206,7 +229,13 @@ class _Canvas:
             self.underline[i] = self.underline[i] or underline
 
     def strokes(self) -> tuple[Stroke, ...]:
-        """Return the row as runs, a marked span always its own run."""
+        """Return the row as runs, a marked span always its own run.
+
+        The heavy classes are bolded before the marks are laid, so a mark keeps its own
+        weight: a truth token is never drawn heavier than its word.
+        """
+        for i, surface in enumerate(self.surface):
+            self.bold[i] = self.bold[i] or surface in _HEAVY
         marks: list[tuple[Mark | None, int]] = [(None, -1)] * self.size
         at = 0
         for index, span in enumerate(spans(self.row)):
@@ -219,8 +248,6 @@ class _Canvas:
                     self.bold[i] = False
                     self.underline[i] = False
             at = end
-        for i, surface in enumerate(self.surface):
-            self.bold[i] = self.bold[i] or surface in _HEAVY
         out: list[Stroke] = []
         start = 0
         for i in range(1, self.size + 1):
@@ -264,12 +291,19 @@ def paint(row: str, part: Part) -> tuple[Stroke, ...]:
         _keybar(canvas)
     elif isinstance(row, Receded):
         _receded(canvas)
+    elif isinstance(row, Disabled):
+        canvas.put(0, canvas.size, "dim")
+    elif isinstance(row, Titled):
+        _pane_labels(canvas, row, 0)
     elif not _block(canvas):
         _body(canvas)
         _links(canvas)
         _cursor(canvas)
         if isinstance(row, RailReceded) and RAIL in row:
             _receded(canvas, start=row.rindex(RAIL) + 1)
+        edge = _RAIL_EDGE.search(row) if isinstance(row, LeadReceded) else None
+        if edge is not None:
+            _receded(canvas, end=edge.start())
     return canvas.strokes()
 
 
@@ -302,20 +336,21 @@ def _cursor(canvas: _Canvas) -> None:
         canvas.ground[i] = "cursor"
 
 
-def _receded(canvas: _Canvas, start: int = 0) -> None:
-    """Draw a row, from ``start`` on, in the receded tone, keeping what needs the operator.
+def _receded(canvas: _Canvas, start: int = 0, end: int | None = None) -> None:
+    """Draw a row, from ``start`` to ``end``, in the receded tone, keeping what needs the operator.
 
     Recession never hides an outstanding count, so ``!N`` keeps its weight and colour,
-    and a pane label keeps its weight.
+    and the row's pane labels and column heads keep their weight: the pane loses its
+    colours, never its structure.
     """
-    canvas.put(start, canvas.size, "recede")
-    for i in range(start, canvas.size):
+    stop = canvas.size if end is None else end
+    for i in range(start, stop):
         canvas.bold[i] = False
         canvas.underline[i] = False
-    label = _PANE_LABEL.match(canvas.row) if start == 0 else None
-    if label is not None:
-        canvas.put(label.start(1), label.end(1), None, bold=True)
-    for count in _OUTSTANDING.finditer(canvas.row, start):
+    if start == 0 and not _heads(canvas, canvas.row[:stop], 0):
+        _pane_labels(canvas, canvas.row[:stop], 0)
+    canvas.put(start, stop, "recede")
+    for count in _OUTSTANDING.finditer(canvas.row, start, stop):
         canvas.put(count.start(), count.end(), "warn", bold=True)
 
 
@@ -352,6 +387,10 @@ def _keybar(canvas: _Canvas) -> None:
     is always lower-case.
     """
     row = canvas.row
+    legend = _LEGEND.search(row)
+    if legend is not None:
+        canvas.put(legend.start(1), legend.end(1), "dim")
+        row = row[: legend.start()]
     at = 0
     for chunk in row.split(GAP):
         words = list(re.finditer(r"\S+", chunk))
@@ -404,14 +443,21 @@ def _block(canvas: _Canvas) -> bool:
 
 
 def _body(canvas: _Canvas) -> None:
-    """Paint the rules, rail, heads, pane labels, caret, counts and state words."""
+    """Paint the rules, rail, heads, pane labels, caret, counts and state words.
+
+    A boxed card's row is read between its edges, so its heads and labels are found as
+    they are on an open row. A row of heads is bold and nothing else: its words name
+    columns, never a state.
+    """
     row = canvas.row
-    chip_row = _CHIP_ROW.search(row) is not None
-    if not chip_row and not _heads(canvas):
-        _pane_labels(canvas)
-    for pattern, surface in (*_STATUS, *_LIFECYCLE):
-        for found in pattern.finditer(row):
-            canvas.put(found.start(), found.end(), surface)
+    box = _BOX_ROW.match(row)
+    at, inner = (box.end(1), box.group(2)) if box is not None else (0, row)
+    # a row ending in a state word is a label and its value, never a row of column heads
+    if _CHIP_ROW.search(inner) is not None or not _heads(canvas, inner, at):
+        _pane_labels(canvas, inner, at)
+        for pattern, surface in (*_STATUS, *_LIFECYCLE):
+            for found in pattern.finditer(row):
+                canvas.put(found.start(), found.end(), surface)
     for count in _OUTSTANDING.finditer(row):
         canvas.put(count.start(), count.end(), "warn", bold=True)
     for rule in _RULES.finditer(row):
@@ -421,43 +467,53 @@ def _body(canvas: _Canvas) -> None:
     for i, ch in enumerate(row):
         if ch == RAIL:
             canvas.put(i, i + 1, "rail")
-        elif ch == CARET:
-            canvas.put(i, i + 1, "caret", bold=True)
+    for caret in _PANE_CARET.finditer(row):
+        canvas.put(caret.start(1), caret.end(1), "caret", bold=True)
     _settings(canvas)
 
 
-def _pane_labels(canvas: _Canvas) -> None:
-    """Bold the pane label that opens the row, and the one that opens the pane past a rail."""
-    row = canvas.row
+def _pane_labels(canvas: _Canvas, row: str, at: int) -> None:
+    """Bold the pane label that opens ``row``, and the one that opens the pane past a rail.
+
+    Args:
+        canvas: The row being painted.
+        row: The part of the canvas row read, starting at position ``at``.
+        at: Where ``row`` starts in the canvas row.
+    """
     offset = row.rfind(RAIL) + 1 if row.count(RAIL) == 1 else 0
-    for at in dict.fromkeys((0, offset)):
-        label = _PANE_LABEL.match(row[at:])
+    for start in dict.fromkeys((0, offset)):
+        label = _PANE_LABEL.match(row[start:])
         if label is not None:
             surface = _LABEL_SURFACE.get(label.group(1))
-            canvas.put(at + label.start(1), at + label.end(1), surface, bold=True)
+            first = at + start
+            canvas.put(first + label.start(1), first + label.end(1), surface, bold=True)
 
 
-def _heads(canvas: _Canvas) -> bool:
-    """Bold a row of column heads, each side of a rail on its own; return whether it was one."""
-    row = canvas.row
+def _heads(canvas: _Canvas, row: str, at: int) -> bool:
+    """Bold a row of column heads, each side of a rail on its own; return whether it was one.
+
+    Args:
+        canvas: The row being painted.
+        row: The part of the canvas row read, starting at position ``at``.
+        at: Where ``row`` starts in the canvas row.
+    """
     halves = row.split(RAIL)
     if len(halves) == 2:
         left, right = _HEADS.match(halves[0]), _HEADS.match(halves[1]) or _ONE_HEAD.match(halves[1])
+        offset = at + len(halves[0]) + len(RAIL)
         if left is not None and right is not None:
-            offset = len(halves[0]) + len(RAIL)
-            canvas.put(left.start(2), left.end(2), None, bold=True)
+            canvas.put(at + left.start(2), at + left.end(2), None, bold=True)
             canvas.put(offset + right.start(2), offset + right.end(2), None, bold=True)
             return True
         # the pane right of the rail carries its own heads whatever the left pane holds
         right = _HEADS.match(halves[1])
         if right is not None:
-            offset = len(halves[0]) + len(RAIL)
             canvas.put(offset + right.start(2), offset + right.end(2), None, bold=True)
             return True
     whole = _HEADS.match(row)
     if whole is None:
         return False
-    canvas.put(whole.start(2), whole.end(2), None, bold=True)
+    canvas.put(at + whole.start(2), at + whole.end(2), None, bold=True)
     return True
 
 

@@ -563,7 +563,7 @@
     },
     "Claim": {
       "additionalProperties": false,
-      "description": "A single typed claim in a research-campaign ledger.\n\nThe Claim ledger is the prerequisite of the pruning pass and the\nSaturationReport: a campaign accumulates claims as it surveys sources,\nand the ledger lets a downstream pass detect saturation (no new claims\narriving) and prune subsumed rows. Each claim names a single assertion\n(``title``) with optional long-form context (``description``) and carries\nthe ``evidence_refs`` that ratify it — repo-relative paths, Eawf URNs, or\nexternal URLs — so the EviBound scorer can score \"every claim resolves\"\nover the ledger.\n\nThe field shape mirrors the sibling research entity\n:class:`Hypothesis`: a bounded imperative ``title`` (no trailing period),\na 500-char optional ``description``, a ``scope_id`` binding the claim to\nits campaign scope, and a closed :class:`ClaimStatus` lifecycle.\n``answers_question_id`` back-links a claim to the separate\n:class:`OpenQuestion` entity it resolves; it defaults to ``None`` for a\nfree-standing claim.\n\nAttributes:\n    id: Stable claim id (``IdStr`` — non-empty, no whitespace).\n    scope_id: Campaign / research scope the claim belongs to.\n    title: Imperative noun-phrase stating the claim, bounded at 72\n        characters with no trailing period (entity-title convention).\n    description: Optional long-form statement bounded at 500 characters.\n    status: Closed :class:`ClaimStatus` lifecycle position.\n    evidence_refs: Repo-relative / URN / external-URL strings that\n        ratify the claim. Default empty so a freshly logged claim whose\n        evidence is not yet attached still validates (the EviBound gate\n        scores resolution downstream, not at ingestion).\n    source_artifact_id: Optional id of the artifact (notebook, brief,\n        dataset) the claim was distilled from.\n    answers_question_id: Optional :class:`OpenQuestion` id this claim\n        answers; ``None`` for a claim not tied to a tracked question.\n    created_at: When the claim was logged into the ledger.\n    superseded_by: Id of the later claim that subsumes this one when\n        :attr:`status` is :attr:`ClaimStatus.SUPERSEDED`; ``None``\n        otherwise.",
+      "description": "A single typed claim in a research-campaign ledger.\n\nThe Claim ledger is the prerequisite of the pruning pass and the\nSaturationReport: a campaign accumulates claims as it surveys sources,\nand the ledger lets a downstream pass detect saturation (no new claims\narriving) and prune subsumed rows. Each claim names a single assertion\n(``title``) with optional long-form context (``description``) and carries\nthe ``evidence_refs`` that ratify it — repo-relative paths, Eawf URNs, or\nexternal URLs — so the EviBound scorer can score \"every claim resolves\"\nover the ledger.\n\nThe field shape mirrors the sibling research entity\n:class:`Hypothesis`: a bounded imperative ``title`` (no trailing period),\na 500-char optional ``description``, a ``scope_id`` binding the claim to\nits campaign scope, and a closed :class:`ClaimStatus` lifecycle.\n``answers_question_id`` back-links a claim to the separate\n:class:`OpenQuestion` entity it resolves; it defaults to ``None`` for a\nfree-standing claim.\n\nAttributes:\n    id: Stable claim id (``IdStr`` — non-empty, no whitespace).\n    scope_id: Campaign / research scope the claim belongs to.\n    title: Imperative noun-phrase stating the claim, bounded at 72\n        characters with no trailing period (entity-title convention).\n    description: Optional long-form statement bounded at 500 characters.\n    falsifier: Optional prose, at most 300 characters, naming the\n        observation that would take the claim away. Prose rather than a\n        measurement, so an absent value renders no row at all.\n    implication: Optional prose, at most 300 characters, naming what the\n        claim buys if it stands; absent renders no row, as above.\n    status: Closed :class:`ClaimStatus` lifecycle position.\n    evidence_refs: Repo-relative / URN / external-URL strings that\n        ratify the claim. Default empty so a freshly logged claim whose\n        evidence is not yet attached still validates (the EviBound gate\n        scores resolution downstream, not at ingestion).\n    source_artifact_id: Optional id of the artifact (notebook, brief,\n        dataset) the claim was distilled from.\n    answers_question_id: Optional :class:`OpenQuestion` id this claim\n        answers; ``None`` for a claim not tied to a tracked question.\n    created_at: When the claim was logged into the ledger.\n    superseded_by: Id of the later claim that subsumes this one when\n        :attr:`status` is :attr:`ClaimStatus.SUPERSEDED`; ``None``\n        otherwise.",
       "properties": {
         "answers_question_id": {
           "anyOf": [
@@ -603,11 +603,39 @@
           "title": "Evidence Refs",
           "type": "array"
         },
+        "falsifier": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Falsifier"
+        },
         "id": {
           "minLength": 1,
           "pattern": "^\\S+$",
           "title": "Id",
           "type": "string"
+        },
+        "implication": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Implication"
         },
         "scope_id": {
           "title": "Scope Id",
@@ -2140,7 +2168,7 @@
     },
     "Hypothesis": {
       "additionalProperties": false,
-      "description": "Research hypothesis with confirm/reject thresholds.",
+      "description": "Research hypothesis with confirm/reject thresholds.\n\n``defined_at`` is when the hypothesis was stated: an audit completed\nbefore then cannot have evaluated it, so a verdict citing one is\nrefused as stale. It is ``None`` on a hypothesis stated before the\nfield existed, whose audits are then not dated against it.",
       "properties": {
         "audit_id": {
           "anyOf": [
@@ -2157,6 +2185,19 @@
         "confirm": {
           "title": "Confirm",
           "type": "string"
+        },
+        "defined_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Defined At"
         },
         "description": {
           "anyOf": [

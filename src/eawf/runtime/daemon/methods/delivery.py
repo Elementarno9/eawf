@@ -90,6 +90,11 @@ from eawf.kernel.store.ledger import (
     read_ledger_records,
 )
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.runtime.daemon.epoch2_recovery import (
+    canonical_params_digest,
+    read_idempotency_receipt,
+    record_idempotency_receipt,
+)
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
@@ -160,6 +165,86 @@ INTEGRATION_WORKSPACE_FACTORY: IntegrationWorkspaceFactory = git_integration_wor
 
 #: The client's name for one request.
 IdempotencyKey = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=128)]
+
+
+def _keyed(context: Epoch2RootContext, *, method: str, key: str) -> str:
+    """Return *key* inside this root's namespace and the namespace of *method*.
+
+    A key is scoped to its verb as well as its root, so the same client
+    key sent to two verbs names two requests rather than a conflict.
+    """
+    return context.idempotency_key(f"{method}:{key}")
+
+
+def keyed_answer(
+    context: Epoch2RootContext, *, method: str, key: str, params: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Return the answer an earlier call of *method* under *key* already earned.
+
+    Args:
+        context: The native context of the addressed root.
+        method: The verb the key was sent to.
+        key: The client's idempotency key.
+        params: The validated request, as its JSON payload.
+
+    Returns:
+        The stored answer when *key* already answered these parameters, or
+        ``None`` when it has answered nothing on this root.
+
+    Raises:
+        DaemonValidationError: The key already answered different
+            parameters, so this call is not a retry of it; or the stored
+            answer cannot be read, so whether the call already ran is
+            unknown and running it again could repeat its effect.
+    """
+    try:
+        stored = read_idempotency_receipt(
+            context, namespaced_key=_keyed(context, method=method, key=key)
+        )
+    except ValueError as error:
+        raise DaemonValidationError(
+            f"validation_failed: schema_validation_failed: the answer stored for idempotency "
+            f"key {key!r} cannot be read, so whether this request already ran is unknown"
+        ) from error
+    if stored is None:
+        return None
+    if stored.params_digest != canonical_params_digest(params):
+        raise DaemonValidationError(
+            f"validation_failed: idempotency_conflict: idempotency key {key!r} already answered "
+            "a request with different parameters, so this one is not a retry of it"
+        )
+    return stored.receipt
+
+
+def file_keyed_answer(
+    context: Epoch2RootContext,
+    *,
+    method: str,
+    key: str,
+    params: dict[str, Any],
+    answer: dict[str, Any],
+    at: datetime,
+) -> None:
+    """File the answer one call earned, so a retry under *key* replays it.
+
+    Called only once the call's ledger appends are durable, because the
+    stored answer is a promise that its effect happened.
+
+    Args:
+        context: The native context of the addressed root.
+        method: The verb the key was sent to.
+        key: The client's idempotency key.
+        params: The validated request, as its JSON payload.
+        answer: The answer the call returned, as its JSON payload.
+        at: When the effect became durable.
+    """
+    record_idempotency_receipt(
+        context,
+        namespaced_key=_keyed(context, method=method, key=key),
+        params_digest=canonical_params_digest(params),
+        receipt=answer,
+        recorded_at=at,
+    )
 
 
 class DeliveryIntegrateParams(BaseModel):
@@ -1012,7 +1097,9 @@ __all__ = [
     "BatchVerifyParams",
     "DeliveryIntegrateAnswer",
     "DeliveryIntegrateParams",
+    "file_keyed_answer",
     "integrate_delivery",
+    "keyed_answer",
     "sealed_bundles",
     "verify_batch",
 ]

@@ -194,6 +194,7 @@ def load_rule_source(repo_root: Path) -> LoadedRuleSource:
         workspace=document.workspace,
         modules=document.modules,
         rules=records,
+        legacy=document.legacy,
     )
 
 

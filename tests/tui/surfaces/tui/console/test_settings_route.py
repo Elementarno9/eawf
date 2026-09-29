@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, get_args, get_type_hints
@@ -41,7 +42,6 @@ from eawf.kernel.projection.settings import (
     LayerKind,
     SettingsLeaf,
     build_settings_view,
-    category_assignment_defects,
 )
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
@@ -52,7 +52,7 @@ from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
-from eawf.surfaces.tui.console.frame import View
+from eawf.surfaces.tui.console.frame import LeadReceded, Receded, View
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
     SETTING_SET_METHOD,
@@ -62,6 +62,7 @@ from eawf.surfaces.tui.console.operations import (
     VerbRequest,
     address_setting,
 )
+from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.provenance import (
     GLYPH_DEFAULT,
@@ -281,21 +282,43 @@ def test_ui052_no_settings_frame_names_a_layer_the_enum_lacks(tree: Path, fixtur
 # ---------- UI-057: one route, six categories, every catalog section once ----------
 
 
+def _category_assignment_defects(sections: Iterable[str]) -> tuple[str, ...]:
+    """Return every way the category table fails to file ``sections`` exactly once.
+
+    Args:
+        sections: The catalog's sections.
+
+    Returns:
+        One message per section the table does not file, files twice, or files although
+        the catalog has no such section; empty when the assignment is total.
+    """
+    filed = [section for _name, members in SETTINGS_CATEGORIES for section in members]
+    wanted = set(sections)
+    defects = [f"section {s!r} is filed under no category" for s in sorted(wanted - set(filed))]
+    defects += [
+        f"section {s!r} is filed twice" for s in sorted({s for s in filed if filed.count(s) > 1})
+    ]
+    defects += [
+        f"category table files {s!r}, which the catalog lacks" for s in sorted(set(filed) - wanted)
+    ]
+    return tuple(defects)
+
+
 def test_ui057_every_catalog_section_is_filed_exactly_once() -> None:
     """The category table is total over the kernel's catalog, the lint the rail relies on."""
     domains = {entry.domain for entry in LEAF_KEY_REGISTRY.values()}
 
-    assert category_assignment_defects(domains) == ()
+    assert _category_assignment_defects(domains) == ()
 
 
 def test_ui057_the_assignment_lint_names_each_way_it_fails() -> None:
     """Missing, doubled and phantom sections are each named rather than passed."""
     filed = {s for _name, members in SETTINGS_CATEGORIES for s in members}
 
-    assert category_assignment_defects(filed | {"newsection"}) == (
+    assert _category_assignment_defects(filed | {"newsection"}) == (
         "section 'newsection' is filed under no category",
     )
-    assert category_assignment_defects(filed - {"vcs"}) == (
+    assert _category_assignment_defects(filed - {"vcs"}) == (
         "category table files 'vcs', which the catalog lacks",
     )
 
@@ -443,8 +466,8 @@ def test_ui053_the_stack_is_every_layer_with_kind_and_template_place(
         assert kind.value in row
         assert where[:20] in row
     assert str(tree) not in body
-    assert "WINNING   local [beta]" in body
-    assert "LENS      repo" in body
+    assert "WINNING    local [beta]" in body
+    assert "LENS       repo" in body
     assert "repo sets [alpha], and the local layer above it wins." in body
 
 
@@ -453,7 +476,7 @@ def test_ui053_the_second_tier_is_absent_until_stated(tree: Path, fixture: Fixtu
     view = _view(tree)
     body = "\n".join(_frame(fixture, view, _on(_session("settings.stack"), view, BOOL_KEY)))
 
-    for label in (" DENIED BY ", " CONSTRAINED BY ", " NEEDS     ", " SECRET    "):
+    for label in (" DENIED BY  ", " CONSTRAINED BY  ", " NEEDS      ", " SECRET     "):
         assert label not in body
 
 
@@ -476,10 +499,10 @@ def test_ui053_a_denied_degraded_secret_key_draws_the_whole_tuple_at_80(
     rows = _frame(fixture, denied, _on(_session("settings.stack"), denied, BOOL_KEY))
     body = "\n".join(rows)
 
-    assert "DENIED BY org policy" in body
-    assert "CONSTRAINED BY workspace profile" in body
-    assert "NEEDS     network.egress · ? certification unknown" in body
-    assert "SECRET    ref://vault/deploy · the value never renders" in body
+    assert "DENIED BY  org policy" in body
+    assert "CONSTRAINED BY  workspace profile" in body
+    assert "NEEDS      network.egress · ? certification unknown" in body
+    assert "SECRET     ref://vault/deploy · the value never renders" in body
     assert "⊘ true" in body
     route = "\n".join(_frame(fixture, denied, _on(_session(), denied, BOOL_KEY)))
     assert "⊘ denied" in route
@@ -492,7 +515,7 @@ def test_ui053_the_stack_opens_on_i_and_reads_the_same_view(tree: Path, fixture:
 
     _press(fixture, view, session, ["i"])
     assert session.route == "settings.stack"
-    assert f"KEY       {LITERAL_KEY}" in "\n".join(_frame(fixture, view, session))
+    assert f"KEY        {LITERAL_KEY}" in "\n".join(_frame(fixture, view, session))
     _press(fixture, view, session, ["Escape"])
     assert session.route == "settings"
 
@@ -776,3 +799,24 @@ def test_edit_a_refused_write_changes_no_file_and_keeps_the_view(tree: Path) -> 
     assert seam.outstanding == ()
     assert not (tree / ".ea" / "local" / "config.yaml").exists()
     assert seam.settings is before
+
+
+# ---------- V-17: an open editor recedes the rail and the key list ----------
+
+
+def test_v17_an_open_editor_recedes_the_rail_and_keys_and_keeps_the_readout_lit(
+    tree: Path, fixture: Fixture
+) -> None:
+    view = _view(tree)
+    session = _on(_session(), view, BOOL_KEY)
+    browsing = _frame(fixture, view, session)
+    assert not any(isinstance(row, (Receded, LeadReceded)) for row in browsing)
+
+    _press(fixture, view, session, ["Enter"], send=_Link())
+    assert session.edit is not None
+    rows = _frame(fixture, view, session)[3:-2]
+    readout = next(i for i, row in enumerate(rows) if "├─" in row)
+    assert all(isinstance(row, Receded) for row in rows[:readout])
+    assert all(isinstance(row, LeadReceded) for row in rows[readout:])
+    lit = [s for s in paint(rows[-1], Part.BODY) if s.text.strip() and s.surface != "recede"]
+    assert lit, "the readout beside the rail is drawn as usual"

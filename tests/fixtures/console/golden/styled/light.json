@@ -85,9 +85,9 @@
     },
     "cursor": {
       "channel": "background",
-      "token": "panel-2",
+      "token": "cursor-ground",
       "fg": "#1a1d21",
-      "bg": "#f6f8fa"
+      "bg": "#e4e6e8"
     },
     "ok": {
       "channel": "color",

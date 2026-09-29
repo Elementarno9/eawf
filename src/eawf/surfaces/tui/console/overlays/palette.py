@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.surfaces.tui.console import derive as dv
+from eawf.surfaces.tui.console.cells import value_cell
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View, build, header
 from eawf.surfaces.tui.console.keybar import keybar
@@ -37,8 +38,7 @@ def entities(fixture: Fixture, rows: Sequence[ProjectionRow] = ()) -> list[Palet
         route = COLLECTION_ROUTES.get(held.collection)
         if route is not None and held.key not in seen:
             seen.add(held.key)
-            what = held.title or REGISTRY.route_word(route)
-            out.append(PaletteEntity(id=held.key, route=route, what=what))
+            out.append(PaletteEntity(id=held.key, route=route, what=held.title or _untitled(held)))
     for row in fixture.proto.fleet:
         if row.run and row.run not in seen:
             seen.add(row.run)
@@ -56,6 +56,18 @@ def entities(fixture: Fixture, rows: Sequence[ProjectionRow] = ()) -> list[Palet
             seen.add(named.id)
             out.append(named)
     return out
+
+
+def _untitled(held: ProjectionRow) -> str:
+    """Return what an untitled record is shown as: its kind and its state.
+
+    A route id is the console's own address and names nothing an operator filed, so a
+    record with no title is described by the facts its row does state. Its parent's id is
+    left out: the text is matched against a query, and a Batch is not a hit for its
+    Milestone's id.
+    """
+    kind = held.collection.value.replace("_", " ").capitalize()
+    return f"{kind} · {value_cell(held.status).slot}"
 
 
 def palette_hits(query: str, fixture: Fixture, rows: Sequence[ProjectionRow] = ()) -> list[Hit]:

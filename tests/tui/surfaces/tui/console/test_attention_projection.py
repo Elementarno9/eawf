@@ -280,12 +280,11 @@ def test_ui_062_holes_state_zero_and_unstated_buckets_state_no_count() -> None:
 
 
 def test_ui_062_a_row_stating_no_status_lands_in_no_bucket() -> None:
-    """An unstated row is reported apart rather than filed under a bucket it never named."""
+    """An unstated row is filed under no bucket it never named."""
     view = build_attention_view(
         _attention({"pending_action": {"ACT-0009": {"urn": ACTION_URN, "revision": 1}}})
     )
     assert view.items == ()
-    assert view.unplaced == ("ACT-0009",)
 
 
 def test_ui_062_the_strip_the_rail_and_the_summary_are_one_derivation() -> None:

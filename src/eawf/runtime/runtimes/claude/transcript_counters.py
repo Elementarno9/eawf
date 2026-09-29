@@ -19,8 +19,12 @@ and headless cost attribution consistent.
 Two transcript quirks the aggregator must handle:
 
 - **Duplicate usage rows.** A single assistant message is appended once per
-  content block, each copy repeating the *same* ``message.usage``. Summing rows
-  blindly multiplies the token tally, so rows are deduplicated by message id.
+  content block, each copy repeating ``message.usage``. Summing rows blindly
+  multiplies the token tally, so rows are deduplicated by message id -- and the
+  message's usage is read off its COMPLETING row, the last one written. A
+  streamed message's first row is a partial reading (its output count is the
+  tokens streamed so far), and a field-wise maximum across rows is a record no
+  request produced.
 - **Duration lives off the message, and lands late.** Per-turn time is emitted on
   ``type: "system"`` / ``subtype: "turn_duration"`` rows as a top-level
   ``durationMs``, not inside the assistant message -- and that row is written
@@ -63,7 +67,7 @@ import json
 import logging
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -107,7 +111,10 @@ _HARNESS_ID = "claude-code"
 #:     is split at it (:func:`_pre_cutoff_share_ms`). Version 7 banked a turn to
 #:     whichever snapshot first saw its ``turn_duration`` row, so a wave claimed
 #:     mid-turn was charged the whole turn, the minutes before its claim included.
-MEASURE_VERSION: int = 8
+#: 9 = a message's usage is its COMPLETING row's, not its first row's. Version 8
+#:     kept the first row of each message id, which for a streamed message is the
+#:     partial reading taken before its output finished.
+MEASURE_VERSION: int = 9
 
 #: Optional override for the Claude projects root, used by tests to redirect
 #: transcript lookups away from the real ``~/.claude/`` tree.
@@ -124,6 +131,7 @@ class _TokenTally:
     cache_read_input_tokens: int = 0
     cache_creation_5m_input_tokens: int = 0
     cache_creation_1h_input_tokens: int = 0
+    observed: set[str] = field(default_factory=set)
 
     @property
     def total(self) -> int:
@@ -224,8 +232,29 @@ def _non_negative_int(raw: Any) -> int:
     return raw
 
 
+#: The token classes a usage block reports, in the tally's own field names.
+_TOKEN_CLASSES: Final[tuple[str, ...]] = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
 def _add_usage(tally: _TokenTally, usage: dict[str, Any]) -> None:
-    """Fold one message's usage block into *tally*."""
+    """Fold one message's usage block into *tally*.
+
+    A class the block actually carries is recorded as observed, so a
+    consumer can tell a class no message reported from one that summed to
+    zero.
+    """
+    tally.observed.update(
+        name
+        for name in _TOKEN_CLASSES
+        if not isinstance(usage.get(name), bool)
+        and isinstance(usage.get(name), int)
+        and usage[name] >= 0
+    )
     tally.input_tokens += _non_negative_int(usage.get("input_tokens"))
     tally.output_tokens += _non_negative_int(usage.get("output_tokens"))
     tally.cache_creation_input_tokens += _non_negative_int(usage.get("cache_creation_input_tokens"))
@@ -352,7 +381,7 @@ def _price(model: str | None, tally: _TokenTally) -> Decimal | None:
 
 
 @dataclass
-class _TranscriptScan:
+class TranscriptScan:
     """What one pass over the transcript rows yields.
 
     Attributes:
@@ -365,6 +394,12 @@ class _TranscriptScan:
             so a zero (the Stop-hook race) and a clamp are both legible.
         model: The last billed model id seen, or ``None``.
         messages: How many distinct billed messages the tally covers.
+        measured_turns: How many completed turns the duration sums, so a
+            duration no turn reported reads as unmeasured rather than zero.
+        straddled: Whether a completed turn straddles the *as_of* instant
+            and so contributes only its proportional pre-instant share.
+        unmeasurable: Whether the turn durations outran the transcript's
+            own lifetime, which reports no duration at all.
     """
 
     tally: _TokenTally
@@ -372,6 +407,9 @@ class _TranscriptScan:
     turn_duration_ms: int
     model: str | None
     messages: int
+    measured_turns: int = 0
+    straddled: bool = False
+    unmeasurable: bool = False
 
 
 def _utc_timestamp(row: dict[str, Any]) -> datetime | None:
@@ -444,10 +482,20 @@ def _pre_cutoff_share_ms(
     return int(duration_ms * fraction)
 
 
+@dataclass(frozen=True, slots=True)
+class _TurnDurations:
+    """The completed-turn fold: its sum and how the sum was reached."""
+
+    total_ms: int
+    interrupted: int
+    measured: int
+    straddled: bool
+
+
 def _completed_turn_durations(
     rows: list[dict[str, Any]], *, as_of: datetime | None = None
-) -> tuple[int, int]:
-    """Return ``(summed duration of COMPLETED turns, count of interrupted turns)``.
+) -> _TurnDurations:
+    """Return the summed duration of COMPLETED turns and how it was reached.
 
     An INTERRUPTED turn's figure is that turn's WALL CLOCK, not its work. Claude
     excludes the operator's waiting only for a turn it COMPLETES; when the operator
@@ -468,6 +516,8 @@ def _completed_turn_durations(
     cut = len(rows) if as_of is None else _cutoff_index(rows, as_of)
     total_ms = 0
     interrupted = 0
+    measured = 0
+    straddled = False
     turn_start = 0
     for index, row in enumerate(rows):
         if not _is_turn_duration_row(row):
@@ -479,30 +529,39 @@ def _completed_turn_durations(
         duration_ms = _non_negative_int(row.get("durationMs"))
         if index < cut:
             total_ms += duration_ms
+            measured += 1
         elif start < cut and as_of is not None:
             total_ms += _pre_cutoff_share_ms(
                 rows[start : index + 1], duration_ms, pre_rows=cut - start, as_of=as_of
             )
-    return total_ms, interrupted
+            measured += 1
+            straddled = True
+    return _TurnDurations(
+        total_ms=total_ms, interrupted=interrupted, measured=measured, straddled=straddled
+    )
 
 
-def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> _TranscriptScan:
+def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> TranscriptScan:
     """Fold the transcript rows into token, duration, and attribution totals.
 
     With *as_of*, tokens and the model come only from rows at or before it, and
     the duration is the work done by then (:func:`_completed_turn_durations`).
     """
     tally = _TokenTally()
-    seen: set[str] = set()
-    turn_duration_ms, interrupted_turns = _completed_turn_durations(rows, as_of=as_of)
+    turns = _completed_turn_durations(rows, as_of=as_of)
+    turn_duration_ms, interrupted_turns = turns.total_ms, turns.interrupted
     # The lifetime ceiling below judges the WHOLE file, so a snapshot taken as of
     # an earlier instant trips it exactly when the full reading does; otherwise
     # the two readings of one transcript could disagree on whether it is sane.
     full_turn_duration_ms = (
-        turn_duration_ms if as_of is None else _completed_turn_durations(rows)[0]
+        turn_duration_ms if as_of is None else _completed_turn_durations(rows).total_ms
     )
     counted = rows if as_of is None else rows[: _cutoff_index(rows, as_of)]
     model: str | None = None
+    # One entry per billed message, overwritten by each later row of it, so a
+    # message's usage is the one its completing row carries.
+    completing: dict[str, dict[str, Any]] = {}
+    keyless: list[dict[str, Any]] = []
     for row in counted:
         message = row.get("message")
         if not isinstance(message, dict):
@@ -514,10 +573,11 @@ def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> 
         if not isinstance(usage, dict):
             continue
         key = _usage_key(row, message)
-        if key is not None:
-            if key in seen:
-                continue
-            seen.add(key)
+        if key is None:
+            keyless.append(usage)
+        else:
+            completing[key] = usage
+    for usage in (*completing.values(), *keyless):
         _add_usage(tally, usage)
 
     # Claude measures each completed turn itself and writes it as a `turn_duration`
@@ -548,7 +608,8 @@ def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> 
     # above, no real transcript reaches this branch: it is a canary, not a path.
     span_ms = _transcript_span_ms(rows)
     duration_ms = turn_duration_ms
-    if full_turn_duration_ms > span_ms:
+    unmeasurable = full_turn_duration_ms > span_ms
+    if unmeasurable:
         duration_ms = 0
         logger.warning(
             f"_scan_rows turn_duration_ms={full_turn_duration_ms} span_ms={span_ms} "
@@ -562,13 +623,86 @@ def _scan_rows(rows: list[dict[str, Any]], *, as_of: datetime | None = None) -> 
             "status='excluded'; an interrupted turn is closed out with its wall clock, "
             "so its figure is not agent runtime and contributes none"
         )
-    return _TranscriptScan(
+    return TranscriptScan(
         tally=tally,
         duration_ms=duration_ms,
         turn_duration_ms=turn_duration_ms,
         model=model,
-        messages=len(seen),
+        messages=len(completing) + len(keyless),
+        measured_turns=turns.measured,
+        straddled=turns.straddled,
+        unmeasurable=unmeasurable,
     )
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptReading:
+    """One read of a transcript: its rows, their fold, and the counters.
+
+    Attributes:
+        rows: The decoded rows, whole-file, in written order.
+        scan: The fold of those rows as of the reading's instant.
+        counters: The counters the fold yields, or ``None`` when it yields
+            neither a duration nor a token tally.
+    """
+
+    rows: tuple[dict[str, Any], ...]
+    scan: TranscriptScan
+    counters: RuntimeCounters | None
+
+
+def _counters_of(scan: TranscriptScan) -> RuntimeCounters | None:
+    """Return the runtime counters *scan* yields, or ``None`` when it yields none."""
+    tally = scan.tally
+    duration_ms = scan.duration_ms
+    if duration_ms == 0 and tally.total == 0:
+        return None
+    return RuntimeCounters(
+        measure_version=MEASURE_VERSION,
+        api_duration_ms=duration_ms,
+        total_duration_ms=duration_ms,
+        cost_usd=_price(scan.model, tally),
+        input_tokens=tally.input_tokens,
+        output_tokens=tally.output_tokens,
+        cache_creation_input_tokens=tally.cache_creation_input_tokens,
+        cache_read_input_tokens=tally.cache_read_input_tokens,
+        harness=_HARNESS_ID,
+        model=scan.model,
+    )
+
+
+def read_transcript(
+    transcript_path: Path, *, as_of: datetime | None = None
+) -> TranscriptReading | None:
+    """Read and fold a Claude session transcript as of an instant.
+
+    Args:
+        transcript_path: Path to the session JSONL.
+        as_of: The instant to read the counters at; ``None`` reads the
+            whole file.
+
+    Returns:
+        The reading, or ``None`` when the file cannot be read.
+
+    Raises:
+        ValueError: When *as_of* carries no timezone, since the transcript's
+            stamps are UTC and a naive instant names no point on that clock.
+    """
+    if as_of is not None and as_of.tzinfo is None:
+        raise ValueError(f"as_of must be timezone-aware: {as_of!r}")
+    try:
+        rows = _read_rows(transcript_path)
+    except OSError as exc:
+        logger.debug(f"read_transcript path={transcript_path.name!r} err={exc!r}")
+        return None
+    scan = _scan_rows(rows, as_of=as_of)
+    counters = _counters_of(scan)
+    logger.debug(
+        f"read_transcript rows={len(rows)} messages={scan.messages} "
+        f"duration_ms={scan.duration_ms} turn_duration_ms={scan.turn_duration_ms} "
+        f"tokens={scan.tally.total} model={scan.model!r}"
+    )
+    return TranscriptReading(rows=tuple(rows), scan=scan, counters=counters)
 
 
 def aggregate_transcript_counters(
@@ -606,44 +740,16 @@ def aggregate_transcript_counters(
         raise ValueError(f"as_of must be timezone-aware: {as_of!r}")
     if transcript_path is None:
         return None
-    path = Path(transcript_path)
-    try:
-        rows = _read_rows(path)
-    except OSError as exc:
-        logger.debug(f"aggregate_transcript_counters path={path.name!r} err={exc!r}")
-        return None
-
-    scan = _scan_rows(rows, as_of=as_of)
-    tally = scan.tally
-    model = scan.model
-    duration_ms = scan.duration_ms
-    if duration_ms == 0 and tally.total == 0:
-        return None
-
-    cost_usd = _price(model, tally)
-    counters = RuntimeCounters(
-        measure_version=MEASURE_VERSION,
-        api_duration_ms=duration_ms,
-        total_duration_ms=duration_ms,
-        cost_usd=cost_usd,
-        input_tokens=tally.input_tokens,
-        output_tokens=tally.output_tokens,
-        cache_creation_input_tokens=tally.cache_creation_input_tokens,
-        cache_read_input_tokens=tally.cache_read_input_tokens,
-        harness=_HARNESS_ID,
-        model=model,
-    )
-    logger.debug(
-        f"aggregate_transcript_counters rows={len(rows)} messages={scan.messages} "
-        f"duration_ms={duration_ms} turn_duration_ms={scan.turn_duration_ms} "
-        f"tokens={tally.total} model={model!r}"
-    )
-    return counters
+    reading = read_transcript(Path(transcript_path), as_of=as_of)
+    return None if reading is None else reading.counters
 
 
 __all__ = [
     "MEASURE_VERSION",
+    "TranscriptReading",
+    "TranscriptScan",
     "aggregate_transcript_counters",
     "projects_root",
+    "read_transcript",
     "transcript_path_for_session",
 ]

@@ -421,7 +421,7 @@ def test_con_123_an_empty_second_tier_draws_no_row(tree: Path) -> None:
 
 def test_con_123_an_authority_denied_key_keeps_the_denied_token_in_its_value(tree: Path) -> None:
     frame = _stack(tree, deny_chain=("org.policy",))
-    assert any(row.startswith("│ DENIED BY org.policy") for row in frame)
+    assert any(row.startswith("│ DENIED BY  org.policy") for row in frame)
     repo = next(row for row in frame if re.match(r"^│\s+.?\s*repo\s", row))
     assert "⊘ strict" in repo
 

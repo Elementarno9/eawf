@@ -7,8 +7,9 @@ rather than a verdict. This module is the producer for the five facts a
 working copy can answer at tag time -- version consistency, the
 changelog section, the migration note, ancestry against the publishing
 remote, and tree cleanliness -- plus one fact it can only *refute*: a
-module-length exemption that has outlived its grant reds the realization
-row, but a clean check leaves that row unproven rather than green.
+lint rule with no governing disposition, or a module-length exemption
+that has outlived its grant, reds the realization row, but a clean check
+leaves that row unproven rather than green.
 
 The probes read their subject out of a frozen
 :class:`TagPreflightInputs` record instead of out of the running process
@@ -41,6 +42,7 @@ from typing import Final
 
 from eawf.platform.install.dist_tag import npm_version_for
 from eawf.platform.lint import load_lint_config
+from eawf.platform.lint.dispositions import disposition_findings
 from eawf.platform.lint.exclusion_expiry import (
     ExclusionConfigError,
     decision_ids_from_state,
@@ -562,6 +564,44 @@ def _probe_module_length_exclusion(
     )
 
 
+def _probe_lint_realization(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Red the realization row on a lint rule the disposition table does not govern.
+
+    A rule shipping with no disposition, or still naming an epoch-1
+    lifecycle identifier its row gives no reason for, is a suite nobody
+    decided the fate of; tagging would ship that undecided. A clean table
+    hands the row on to the module-length exclusion check.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the working copy.
+        context: The sweep's context for this signal.
+
+    Returns:
+        A failing outcome naming every disposition finding, else the
+        exclusion check's outcome.
+
+    Raises:
+        SyntaxError: A rule module does not parse, which the sweep
+            converts into a blocked row.
+        ExclusionConfigError: When the exclusion list is malformed.
+    """
+    findings = disposition_findings(inputs.repo_root)
+    if findings:
+        logger.warning(
+            f"_probe_lint_realization signal={context.signal.value!r} "
+            f"disposition_findings={len(findings)} version={inputs.version!r}"
+        )
+        return _failing(
+            f"rule_disposition: {len(findings)} lint rule(s) lack a governing disposition: "
+            f"{'; '.join(finding.render() for finding in findings)}; record one in "
+            f"eawf.platform.lint.dispositions before tagging {inputs.tag}",
+            *(f"rule_disposition:{finding.rule}" for finding in findings),
+        )
+    return _probe_module_length_exclusion(inputs, context)
+
+
 def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalProbe]:
     """Return the probe registry the tag chokepoint sweeps *inputs* with.
 
@@ -592,7 +632,7 @@ def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, Rele
         ReleaseSignalName.ANCESTRY: partial(_probe_ancestry, inputs),
         ReleaseSignalName.TREE_CLEANLINESS: partial(_probe_tree_cleanliness, inputs),
         ReleaseSignalName.MIGRATION: partial(_probe_migration, inputs),
-        ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_module_length_exclusion, inputs),
+        ReleaseSignalName.PERFECT_REALIZATION: partial(_probe_lint_realization, inputs),
     }
 
 

@@ -414,7 +414,7 @@ def test_a_second_commit_for_a_task_is_capped_and_its_amend_is_not(
     monkeypatch.setattr(
         mod,
         "_prior_wave_commits",
-        lambda terms, **_kw: [prior] if terms == ["Task: EAWF-0137"] else [],
+        lambda terms, **_kw: [prior] if "Task: EAWF-0137" in terms else [],
     )
     monkeypatch.setattr(mod, "_head_identity", lambda _root: (prior, "1788883700"))
     state = native / "state.json"

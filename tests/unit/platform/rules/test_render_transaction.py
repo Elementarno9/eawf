@@ -267,6 +267,7 @@ def test_render_rule_projections_second_render_changes_nothing(repo: Path) -> No
         "CLAUDE.md",
         ".ea/rules/views/eawf.craft.python.md",
         *_builtin_carriers(),
+        ".gitignore",
     )
     second = render_rule_projections(repo)
     assert second.changed == ()
@@ -520,6 +521,7 @@ def test_refresh_rule_projections_with_rule_source_renders(repo: Path) -> None:
         "CLAUDE.md",
         ".ea/rules/views/eawf.craft.python.md",
         *_builtin_carriers(),
+        ".gitignore",
     )
 
 
@@ -552,7 +554,7 @@ def test_sync_adds_the_policy_ignore_to_a_block_written_before_it_shipped(repo: 
     gitignore = repo / ".gitignore"
     gitignore.write_text(_OLD_BLOCK, encoding="utf-8")
 
-    added = sync._ignore_rule_projections(repo, rules=True)
+    _changed, _warnings, added = sync._rule_projections(repo, write=True, rules=True)
 
     lines = gitignore.read_text(encoding="utf-8").splitlines()
     assert POLICY_TARGET in added
@@ -560,14 +562,14 @@ def test_sync_adds_the_policy_ignore_to_a_block_written_before_it_shipped(repo: 
     assert lines[0] == "node_modules/"
     assert "/custom/state.lock" in lines
     assert lines.count("CLAUDE.md") == 1
-    assert sync._ignore_rule_projections(repo, rules=True) == []
+    assert sync._rule_projections(repo, write=True, rules=True)[2] == []
 
 
 def test_sync_leaves_the_gitignore_alone_without_a_rule_source(tmp_path: Path) -> None:
     gitignore = tmp_path / ".gitignore"
     gitignore.write_text(_OLD_BLOCK, encoding="utf-8")
 
-    assert sync._ignore_rule_projections(tmp_path, rules=False) == []
+    assert sync._rule_projections(tmp_path, write=True, rules=False) == ([], [], [])
     assert gitignore.read_text(encoding="utf-8") == _OLD_BLOCK
 
 
@@ -575,4 +577,4 @@ def test_sync_refuses_a_gitignore_with_unpaired_markers(repo: Path) -> None:
     gitignore = repo / ".gitignore"
     gitignore.write_text("# BEGIN EAWF:gitignore\nCLAUDE.md\n", encoding="utf-8")
     with pytest.raises(sync.cli_errors.ValidationError, match=r"\.gitignore not updated"):
-        sync._ignore_rule_projections(repo, rules=True)
+        sync._rule_projections(repo, write=True, rules=True)

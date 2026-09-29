@@ -257,6 +257,26 @@ def recede_rail(line: str, w: int) -> RailReceded:
     return RailReceded(pad(line, w))
 
 
+class LeadReceded(Fixed):
+    """A laid-out row whose rail, the part before its first rail glyph, recedes.
+
+    While an editor is open the rail beside it does not own the arrows, so the rail
+    recedes on every row, the editor's own rows beside it included.
+    """
+
+    __slots__ = ()
+
+
+class Titled(Fixed):
+    """A laid-out row opening a pane: its label is bold and the rest is drawn plain.
+
+    What follows the label is a legend to the pane's glyphs, not a row of column heads,
+    though it is written in capitals as heads are.
+    """
+
+    __slots__ = ()
+
+
 def bar(w: int) -> str:
     """Return the heavy rule under a frame's title rows."""
     return RULE_HEAVY * w
@@ -539,9 +559,25 @@ def make_room(body: Sequence[str], n: int) -> list[str] | None:
     return kept if not need else None
 
 
+# The padding between a header's crumb and its state slot.
+_SLOT_GAP = re.compile(r" {3,}(?=\S)")
+
+
+def _inset(head: str) -> str:
+    """Return the header with its state slot one cell in from the band's right edge.
+
+    The crumb opens one cell inside the band, so the slot closes one cell inside it too; the
+    cell comes out of the padding before the slot, which keeps the two cells it needs.
+    """
+    gap = _SLOT_GAP.search(head)
+    if gap is None or head.endswith(" "):
+        return head
+    return head[: gap.start()] + head[gap.start() + 1 :] + " "
+
+
 def _laid(row: str, w: int) -> str:
     """Return ``row`` at ``w`` cells: a fixed row padded as it is, a receded one kept so."""
-    if isinstance(row, (Receded, RailReceded)):
+    if isinstance(row, (Receded, RailReceded, LeadReceded)):
         return type(row)(row + " " * max(0, w - cell_len(row)))
     if isinstance(row, Fixed):
         # a row already as wide as the frame keeps its type, and what its type tells
@@ -595,6 +631,8 @@ def build(view: View, rows: Sequence[str], keys: str) -> list[str]:
         session.bar_keys = bar_keys(keys)
     session.absent = False
     out: list[str] = [_laid(row, w) for row in rows[: h - 1]]
+    if view.gutter and out:
+        out[0] = _inset(out[0])
     out.extend(" " * w for _ in range(h - 1 - len(out)))
     if view.verbose:
         paint_verbose(session, out, w)

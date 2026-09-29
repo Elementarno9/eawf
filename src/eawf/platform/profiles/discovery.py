@@ -2,13 +2,17 @@
 
 Discovery roots, highest precedence first:
 
-1. Workspace overlay — ``<workspace>/.ea/profiles/*.yaml``.
-2. User overlay — ``~/.eawf/profiles/*.yaml``.
-3. Built-in bundle — ``eawf.platform.profiles.data`` (``importlib.resources``).
+1. Repository overlay — ``<repo>/.ea/profiles/*.yaml``.
+2. Workspace overlay — ``<workspace>/.ea/profiles/*.yaml``.
+3. User overlay (the global layer) — ``~/.eawf/profiles/*.yaml``.
+4. Built-in bundle — ``eawf.platform.profiles.data`` (``importlib.resources``).
 
 A profile id present in a higher layer wins over the same id in a
 lower layer. Discovery + load operate on the union of ids; lookup
-yields the file path from the highest available layer.
+yields the file path from the highest available layer. These declared
+roots are the only places a custom profile is found: each is read one
+level deep for ``*.yaml`` and never walked, and no other directory is
+inferred from the layout around it.
 
 Cache strategy: ``@functools.cache`` is replaced with a manual
 mtime-keyed dict so editing a profile YAML invalidates that one slot
@@ -42,8 +46,8 @@ _YAML_SUFFIX: str = ".yaml"
 class ProfileLocation:
     """Where a profile id resolved from + its on-disk mtime (if any).
 
-    ``source`` is one of ``"workspace"``, ``"user"``, or ``"builtin"``.
-    ``path`` is the resolved file path (workspace/user overlays) or
+    ``source`` is one of ``"repo"``, ``"workspace"``, ``"user"``, or
+    ``"builtin"``. ``path`` is the resolved file path (overlays) or
     ``None`` for built-in bundle entries (the ``importlib.resources``
     traversable is not a filesystem path on every platform).
     ``mtime_ns`` is ``None`` for built-in entries.
@@ -61,8 +65,21 @@ def user_profiles_dir() -> Path:
 
 
 def workspace_profiles_dir(workspace: Path | str) -> Path:
-    """``<workspace>/.ea/profiles`` — workspace-scope profile overlay root."""
+    """``<root>/.ea/profiles`` — the overlay root of a workspace or repository."""
     return Path(workspace) / ".ea" / "profiles"
+
+
+def _overlay_roots(
+    *, repo: Path | str | None, workspace: Path | str | None
+) -> tuple[tuple[str, Path], ...]:
+    """Return the declared ``(source, root)`` overlay pairs, highest precedence first."""
+    roots: list[tuple[str, Path]] = []
+    if repo is not None:
+        roots.append(("repo", workspace_profiles_dir(repo)))
+    if workspace is not None:
+        roots.append(("workspace", workspace_profiles_dir(workspace)))
+    roots.append(("user", user_profiles_dir()))
+    return tuple(roots)
 
 
 def _iter_yaml(root: Path) -> dict[str, Path]:
@@ -99,37 +116,31 @@ def _builtin_ids() -> tuple[str, ...]:
 def discover_profile(
     profile_id: str,
     *,
+    repo: Path | str | None = None,
     workspace: Path | str | None = None,
 ) -> ProfileLocation:
-    """Resolve *profile_id* across workspace > user > builtin layers.
+    """Resolve *profile_id* across repo > workspace > user > builtin layers.
 
     Args:
         profile_id: Profile name (YAML stem; e.g. ``"core"``).
+        repo: Optional repository root. When given, its ``.ea/profiles/``
+            is consulted first.
         workspace: Optional workspace root. When given, its
-            ``.ea/profiles/`` is consulted before the user overlay.
+            ``.ea/profiles/`` is consulted after the repository overlay and
+            before the user overlay.
 
     Raises:
         UserError: The id is not present in any layer (``kind="InvalidInput"``).
     """
-    if workspace is not None:
-        ws_map = _iter_yaml(workspace_profiles_dir(workspace))
-        if profile_id in ws_map:
-            path = ws_map[profile_id]
+    for source, root in _overlay_roots(repo=repo, workspace=workspace):
+        path = _iter_yaml(root).get(profile_id)
+        if path is not None:
             return ProfileLocation(
                 profile_id=profile_id,
-                source="workspace",
+                source=source,
                 path=path,
                 mtime_ns=path.stat().st_mtime_ns,
             )
-    user_map = _iter_yaml(user_profiles_dir())
-    if profile_id in user_map:
-        path = user_map[profile_id]
-        return ProfileLocation(
-            profile_id=profile_id,
-            source="user",
-            path=path,
-            mtime_ns=path.stat().st_mtime_ns,
-        )
     if profile_id in _builtin_ids():
         return ProfileLocation(
             profile_id=profile_id,
@@ -137,21 +148,24 @@ def discover_profile(
             path=None,
             mtime_ns=None,
         )
-    choices = list(list_profiles_all(workspace=workspace))
+    choices = list(list_profiles_all(repo=repo, workspace=workspace))
     raise UserError(f"unknown profile {profile_id!r}; choose from {choices}", kind="InvalidInput")
 
 
-def list_profiles_all(*, workspace: Path | str | None = None) -> tuple[str, ...]:
-    """Return the union of profile ids visible across all three layers.
+def list_profiles_all(
+    *,
+    repo: Path | str | None = None,
+    workspace: Path | str | None = None,
+) -> tuple[str, ...]:
+    """Return the union of profile ids visible across every layer.
 
     Each id is reported once. Order is stable (sorted). Useful when the
     CLI surfaces a "choose a profile" list — the operator should see
     every id resolvable via :func:`discover_profile`.
     """
     ids: set[str] = set(_builtin_ids())
-    ids.update(_iter_yaml(user_profiles_dir()).keys())
-    if workspace is not None:
-        ids.update(_iter_yaml(workspace_profiles_dir(workspace)).keys())
+    for _source, root in _overlay_roots(repo=repo, workspace=workspace):
+        ids.update(_iter_yaml(root).keys())
     return tuple(sorted(ids))
 
 
@@ -181,15 +195,16 @@ def _parse_and_validate(profile_id: str, raw: str) -> ProfileBody:
 def load_profile_with_discovery(
     profile_id: str,
     *,
+    repo: Path | str | None = None,
     workspace: Path | str | None = None,
 ) -> ProfileBody:
     """Discover + read + Pydantic-validate *profile_id*.
 
-    Uses the workspace > user > builtin precedence order. Each on-disk
-    location is cached per ``(source, path, mtime_ns)`` — touching a
-    profile YAML invalidates only its own slot.
+    Uses the repo > workspace > user > builtin precedence order. Each
+    on-disk location is cached per ``(source, path, mtime_ns)`` — touching
+    a profile YAML invalidates only its own slot.
     """
-    loc = discover_profile(profile_id, workspace=workspace)
+    loc = discover_profile(profile_id, repo=repo, workspace=workspace)
     key: tuple[str, str, int | None]
     if loc.source == "builtin":
         key = ("builtin", profile_id, None)

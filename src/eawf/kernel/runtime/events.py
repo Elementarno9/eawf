@@ -45,6 +45,7 @@ from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_vali
 
 from eawf.kernel.runtime.compiled import BoundedText
 from eawf.kernel.runtime.provider import ArtifactUrn, CommandFamilyId, RuntimeRecord
+from eawf.kernel.runtime.usage import BudgetPayload, UsagePayload
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import RunUrn
 from eawf.kernel.state.types import UtcDatetime
@@ -133,6 +134,7 @@ class EventPayloadKind(StrEnum):
     FILE_CHANGE = "file_change"
     QUESTION_ACTION = "question_action"
     USAGE = "usage"
+    BUDGET = "budget"
     CHECKPOINT = "checkpoint"
     REROUTE = "reroute"
     ERROR = "error"
@@ -178,6 +180,7 @@ _PAYLOAD_PHASES: Final[Mapping[EventPayloadKind, tuple[str, ...]]] = {
     EventPayloadKind.FILE_CHANGE: (),
     EventPayloadKind.QUESTION_ACTION: ("raised", "requested", "resolved"),
     EventPayloadKind.USAGE: (),
+    EventPayloadKind.BUDGET: ("warning", "exhausted"),
     EventPayloadKind.CHECKPOINT: (),
     EventPayloadKind.REROUTE: (),
     EventPayloadKind.ERROR: (),
@@ -232,8 +235,8 @@ _DECLARED_EVENT_CONTRACTS: Final[Mapping[RunEventKind, tuple[EventPayloadKind, s
     RunEventKind.APPROVAL_REQUESTED: (EventPayloadKind.QUESTION_ACTION, "requested"),
     RunEventKind.APPROVAL_RESOLVED: (EventPayloadKind.QUESTION_ACTION, "resolved"),
     RunEventKind.USAGE_OBSERVED: (EventPayloadKind.USAGE, None),
-    RunEventKind.BUDGET_WARNING: (EventPayloadKind.USAGE, None),
-    RunEventKind.BUDGET_EXHAUSTED: (EventPayloadKind.USAGE, None),
+    RunEventKind.BUDGET_WARNING: (EventPayloadKind.BUDGET, "warning"),
+    RunEventKind.BUDGET_EXHAUSTED: (EventPayloadKind.BUDGET, "exhausted"),
     RunEventKind.CHECKPOINT_CREATED: (EventPayloadKind.CHECKPOINT, None),
     RunEventKind.REROUTED: (EventPayloadKind.REROUTE, None),
     RunEventKind.ERROR_OBSERVED: (EventPayloadKind.ERROR, None),
@@ -446,7 +449,7 @@ class EventGapPayload(RuntimeRecord):
 
 #: The payload variants that exist today, discriminated on payload kind.
 RunEventPayload = Annotated[
-    ReasoningSummaryPayload | CommandPayload | EventGapPayload,
+    ReasoningSummaryPayload | CommandPayload | EventGapPayload | UsagePayload | BudgetPayload,
     Field(discriminator="payload_kind"),
 ]
 
@@ -456,6 +459,8 @@ _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
         EventPayloadKind.REASONING_SUMMARY,
         EventPayloadKind.COMMAND,
         EventPayloadKind.EVENT_GAP,
+        EventPayloadKind.USAGE,
+        EventPayloadKind.BUDGET,
     }
 )
 

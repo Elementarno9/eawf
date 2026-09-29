@@ -227,23 +227,56 @@ def _stated_status(row: ProjectionRow) -> str | None:
     return status.value
 
 
-def _unknown(*, reason: str, revision: int, refs: tuple[str, ...]) -> TruthField[str]:
-    """Return the truth field a register or a reading with no producer comes back as."""
+def count_field(
+    *,
+    value: int | None,
+    revision: int,
+    refs: tuple[str, ...],
+    reason: str | None,
+    estimate: bool = False,
+) -> TruthField[str]:
+    """Return one register count as a truth field.
+
+    Args:
+        value: The count, or ``None`` when the register cannot state one.
+        revision: The producer revision the count is stated at.
+        refs: The records or scope the count rests on.
+        reason: Why the count is unknown, or why an estimate is not exact;
+            ignored for an exact count.
+        estimate: Whether a stated count is a bounded estimate rather than
+            an exact one.
+
+    Returns:
+        Known and exact, known and estimated naming why, or unknown naming
+        why when ``value`` is ``None``.
+    """
+    if value is None:
+        return TruthField[str](
+            value=None,
+            state=TruthState.UNKNOWN,
+            truth_kind=TruthKind.DERIVED,
+            producer=PROJECTION_PRODUCER,
+            producer_revision=revision,
+            precision=Precision.UNAVAILABLE,
+            measurement_quality=MeasurementQuality.UNAVAILABLE,
+            freshness=Freshness.LIVE,
+            provenance_refs=refs,
+            missing_reason=reason,
+        )
     return TruthField[str](
-        value=None,
-        state=TruthState.UNKNOWN,
-        truth_kind=TruthKind.DERIVED,
+        value=str(value),
+        state=TruthState.KNOWN,
+        truth_kind=TruthKind.ESTIMATED if estimate else TruthKind.DERIVED,
         producer=PROJECTION_PRODUCER,
         producer_revision=revision,
-        precision=Precision.UNAVAILABLE,
-        measurement_quality=MeasurementQuality.UNAVAILABLE,
+        precision=Precision.BOUNDED if estimate else Precision.EXACT,
+        measurement_quality=MeasurementQuality.ESTIMATED if estimate else MeasurementQuality.EXACT,
         freshness=Freshness.LIVE,
         provenance_refs=refs,
-        missing_reason=reason,
     )
 
 
-def _revision_of(view: RegisterView) -> int:
+def revision_of(view: RegisterView) -> int:
     """Return the producer revision a derived field of ``view`` is stated at.
 
     The cursor is the revision: two views built at one cursor state one answer, and the
@@ -330,10 +363,11 @@ def budget_reading(view: RegisterView) -> BudgetReading:
         control=BUDGET_TERMINATION_CONTROL.value,
         terminal_status=BUDGET_TERMINATION_STATUS.value,
         interrupts=notice_interrupts(),
-        stopped=_unknown(
-            reason=BUDGET_UNSTATED_REASON,
-            revision=_revision_of(view),
+        stopped=count_field(
+            value=None,
+            revision=revision_of(view),
             refs=(view.scope_id,),
+            reason=BUDGET_UNSTATED_REASON,
         ),
     )
 
@@ -350,5 +384,7 @@ __all__ = [
     "RegisterView",
     "budget_reading",
     "build_register_view",
+    "count_field",
     "notice_interrupts",
+    "revision_of",
 ]

@@ -20,8 +20,8 @@ Mutation discipline (per ``AGENTS.md`` rule 4 + spec):
   which already handles the lock + atomic write.
 
 ``enable_profile`` resolves *profile_id* and its ``fields_required`` through
-:mod:`eawf.platform.profiles.loader` (workspace overlay > user overlay >
-built-in bundle) -- the same registry
+:mod:`eawf.platform.profiles.loader` (repository overlay > workspace overlay >
+user overlay > built-in bundle) -- the same registry
 :func:`eawf.platform.profiles.selection.resolve_enabled_profiles` feeds to
 the AGENTS.md renderer -- so a profile defined only under a workspace
 overlay enables the same way a built-in one does.
@@ -30,7 +30,7 @@ Public API:
 
     KNOWN_PROFILES               # built-in-only id -> required state field keys
     enable_profile(profile_id, *, layer, layer_file_path, state_path,
-                    workspace=None) -> dict
+                    repo=None, workspace=None) -> dict
 """
 
 from __future__ import annotations
@@ -168,6 +168,7 @@ def enable_profile(
     layer: str,
     layer_file_path: Path,
     state_path: Path | None = None,
+    repo: Path | None = None,
     workspace: Path | None = None,
 ) -> dict[str, Any]:
     """Enable *profile_id* by writing it to *layer* and materialising state keys.
@@ -188,9 +189,12 @@ def enable_profile(
             ``fields_required`` for the profile are materialised as ``{}``.
             When ``None``, materialisation is skipped (the next
             ``eawf init/sync`` performs it).
+        repo: Optional repository root. When given, its ``.ea/profiles/``
+            overlay is consulted first when resolving *profile_id*.
         workspace: Optional workspace root. When given, its
-            ``.ea/profiles/`` overlay is consulted (ahead of the user
-            overlay and the built-in bundle) when resolving *profile_id*.
+            ``.ea/profiles/`` overlay is consulted (after the repository
+            overlay, ahead of the user overlay and the built-in bundle)
+            when resolving *profile_id*.
 
     Returns:
         Response envelope (dict) with keys ``profile``, ``layer``,
@@ -204,7 +208,7 @@ def enable_profile(
             matching id is present but its YAML body is malformed or
             fails schema validation.
     """
-    known_ids = list_profiles(workspace=workspace)
+    known_ids = list_profiles(repo=repo, workspace=workspace)
     if profile_id not in known_ids:
         raise UserError(
             f"unknown profile {profile_id!r}; choose from {sorted(known_ids)}",
@@ -217,7 +221,7 @@ def enable_profile(
             f"layer {layer!r} is read-only; cannot enable a profile here", kind="InvalidInput"
         )
 
-    profile_body = load_profile(profile_id, workspace=workspace)
+    profile_body = load_profile(profile_id, repo=repo, workspace=workspace)
     required_fields = list(profile_body.state_extensions.fields_required)
 
     with portalock.acquire(layer_file_path):

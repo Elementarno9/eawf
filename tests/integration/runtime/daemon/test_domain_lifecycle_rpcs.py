@@ -201,7 +201,10 @@ COMMITTED_CASES: tuple[Case, ...] = (
     ),
     Case(
         method="domain.task.promote",
-        rows={"task": {"EAWF-0042": seed_row("task", "DRAFT")}},
+        rows={
+            "task": {"EAWF-0042": seed_row("task", "DRAFT")},
+            "batch": {"BAT-0007": seed_row("batch", "ACTIVE")},
+        },
         urn=TASK_URN,
         params={
             "updates": {

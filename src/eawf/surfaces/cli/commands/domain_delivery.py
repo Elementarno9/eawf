@@ -42,13 +42,13 @@ from eawf.surfaces.cli.commands.domain import (
     TASK_CLAIM,
     TASK_COMPLETE,
     TASK_READY,
-    _load_create_document,
     _run_create_verb,
     _run_verb,
 )
 from eawf.surfaces.cli.commands.domain_consequence import DryRun, Yes
 from eawf.surfaces.cli.commands.lifecycle import batch_app, run_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
+from eawf.surfaces.cli.verb_contract import read_spec_document
 
 _URN_HELP: Final = "URN of the record to move."
 _REVISION_HELP: Final = "Revision the record was read at (compare-and-swap token)."
@@ -74,9 +74,15 @@ _Urn = Annotated[str, typer.Argument(help=_URN_HELP)]
 _Key = Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)]
 _Actor = Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)]
 _Spec = Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)]
-_TaskRevision = Annotated[int, typer.Option("--expected-task-revision", help=_REVISION_HELP)]
-_RunRevision = Annotated[int, typer.Option("--expected-run-revision", help=_REVISION_HELP)]
-_BatchRevision = Annotated[int, typer.Option("--expected-batch-revision", help=_REVISION_HELP)]
+_TaskRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-task-revision", help=_REVISION_HELP)
+]
+_RunRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-run-revision", help=_REVISION_HELP)
+]
+_BatchRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-batch-revision", help=_REVISION_HELP)
+]
 
 
 def _move(
@@ -162,7 +168,7 @@ def task_complete_cmd(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        document = _load_create_document(assessment)
+        document = read_spec_document(assessment)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
@@ -188,7 +194,8 @@ def run_create_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_CREATE_URN_HELP)],
     expected_revision: Annotated[
-        int, typer.Option("--expected-tree-revision", help=_TREE_REVISION_HELP)
+        int,
+        typer.Option("--expected-revision", "--expected-tree-revision", help=_TREE_REVISION_HELP),
     ],
     idempotency_key: _Key,
     actor: _Actor,

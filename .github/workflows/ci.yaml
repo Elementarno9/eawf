@@ -118,7 +118,21 @@ jobs:
         # Coverage is collected on the ubuntu leg only: the ${{ }} expression
         # appends the --cov flags on ubuntu and an empty string on macOS, so
         # the macOS leg runs the identical suite without coverage.
-        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report=xml --cov-fail-under=0' || '' }}
+        run: uv run pytest -n auto --ignore=tests/snapshots/tui --ignore=tests/perf/surfaces/tui --ignore=tests/perf/surfaces/cli --junitxml=pytest-junit.xml ${{ startsWith(matrix.os, 'ubuntu-') && '--cov=eawf --cov-report=xml --cov-fail-under=0' || '' }}
+      - name: Duration budget (advisory)
+        # Diffs every test's wall time in the parallel leg against the
+        # committed baseline: a test past twice its baseline, or a fast-tier
+        # test past its tier ceiling, is reported. Advisory for its first
+        # checkpoint, so a finding reports and does not fail the job.
+        if: startsWith(matrix.os, 'ubuntu-')
+        continue-on-error: true
+        run: uv run python tools/duration_budget_gate.py check pytest-junit.xml tests/duration-baseline.json
+      - name: Quarantine lane (reports, never blocks)
+        # Every blocking leg deselects the tests in tests/quarantine.json;
+        # this lane runs only those and prints how many failed. It exits
+        # clean whatever they did, so a known flake never reds the build.
+        if: startsWith(matrix.os, 'ubuntu-')
+        run: uv run pytest -n0 --quarantine-lane
       - name: Pytest (TUI render snapshots)
         # Four workers, not serial: each test builds its own event loop and
         # offscreen driver inside app.run_test(), so there is no shared
@@ -231,6 +245,29 @@ jobs:
 
       - name: Snapshot pairing gate
         run: uv run python tools/snapshot_pairing_gate.py "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
+
+  commit-grammar:
+    name: Commit grammar over the pull request's commits
+    # The commit-msg hook runs only where it is installed, so this lints the
+    # subject and Task-trailer grammar of every commit the pull request adds.
+    # History is read, never state: a commit predating the epoch-2 switch
+    # may carry any epoch-1 bracket form it was written in.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.14"
+
+      - name: Commit grammar
+        run: uv run --no-project python tools/commit_prefix_lint.py --check-history "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
 
   requirement-trace:
     name: Requirement trace census (value-fresh)
@@ -530,6 +567,7 @@ jobs:
         test,
         tool-install-smoke,
         snapshot-pairing,
+        commit-grammar,
         requirement-trace,
         skill-eval,
         linux-jail,

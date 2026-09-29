@@ -62,6 +62,17 @@ _TASK_URN = f"{_ROOT}/task/CANARY-0001"
 _RUN_URN = f"{_ROOT}/run/RUN-00000001"
 _APPROVAL_URN = f"{_ROOT}/pending-action/ACT-0001"
 
+#: One create document per kind that parses through the kind's strict model.
+_CREATE_DOCUMENTS = Path(__file__).resolve().parents[1] / "fixtures" / "epoch2" / "create"
+
+
+def _create_document(kind: str) -> dict[str, Any]:
+    """Return the committed valid create document of *kind*."""
+    document = orjson.loads((_CREATE_DOCUMENTS / f"{kind}.json").read_bytes())
+    assert isinstance(document, dict)
+    return document
+
+
 #: Every command line under test, with the RPC it must forward to and the
 #: per-entity revision flag it declares. One row per registered verb.
 _VERB_ROWS: tuple[tuple[list[str], str, str, str], ...] = (
@@ -597,7 +608,7 @@ def test_milestone_accept_without_an_approval_is_the_daemon_refusal(
             *_base_args(["milestone", "accept"], "--expected-milestone-revision", _MILESTONE_URN),
         ],
     )
-    assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
+    assert result.exit_code == exit_codes.NEEDS_OPERATOR
     _, params = _FakeClient.calls[0]
     assert "approval_receipt_ref" not in params
     assert DomainErrorCode.PROTECTED_APPROVAL_REQUIRED.value in result.output
@@ -751,7 +762,7 @@ def test_create_verb_forwards_exactly_one_rpc(
     urn: str,
 ) -> None:
     """Each create verb sends its own RPC once, with the whole document."""
-    document = {"key": "CANARY-0001", "title": "Canary"}
+    document = _create_document(verb[0])
     spec = tmp_path / "create.json"
     spec.write_bytes(orjson.dumps(document))
     _install(monkeypatch, result=_created(method, urn))
@@ -790,7 +801,7 @@ def test_create_zero_tree_revision_is_accepted(
 ) -> None:
     """Boundary: 0 addresses a tree nothing has committed to yet, and is legal."""
     spec = tmp_path / "create.json"
-    spec.write_bytes(orjson.dumps({"key": "TRK-CANARY"}))
+    spec.write_bytes(orjson.dumps(_create_document("track")))
     _install(monkeypatch, result=_created(domain_cmd.TRACK_CREATE, _TRACK_URN))
     result = runner.invoke(
         app,
@@ -818,7 +829,7 @@ def test_create_negative_tree_revision_is_refused_before_the_wire(
 ) -> None:
     """Boundary: the cursor cannot be negative, unlike a move's revision."""
     spec = tmp_path / "create.json"
-    spec.write_bytes(orjson.dumps({"key": "TRK-CANARY"}))
+    spec.write_bytes(orjson.dumps(_create_document("track")))
     _install(monkeypatch, result=_created(domain_cmd.TRACK_CREATE, _TRACK_URN))
     result = runner.invoke(
         app,
@@ -906,7 +917,7 @@ def test_create_refusal_surfaces_the_daemon_code_and_exits_nonzero(
 ) -> None:
     """A refused create prints the daemon's code, guard and remediation."""
     spec = tmp_path / "create.json"
-    spec.write_bytes(orjson.dumps({"key": "MLS-0001"}))
+    spec.write_bytes(orjson.dumps(_create_document("milestone")))
     answer = _refused(
         domain_cmd.MILESTONE_CREATE,
         code=TransactionRefusalCode.SCHEMA_VALIDATION_FAILED,

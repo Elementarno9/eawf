@@ -1,0 +1,11 @@
+{
+  "key": "RUN-00000001",
+  "scope": {
+    "scope_kind": "task",
+    "purpose": "implement",
+    "task_ref": "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/task/CANARY-0001",
+    "write_set": [
+      "src"
+    ]
+  }
+}

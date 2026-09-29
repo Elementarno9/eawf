@@ -136,6 +136,7 @@ from eawf.runtime.daemon.methods.domain_envelope import (
 )
 from eawf.runtime.daemon.methods.domain_guards import GUARD_COMPUTERS, GuardInputs
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.run_capture_updates import bind_run_capture
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
 from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
@@ -792,12 +793,7 @@ def _bind_integration(
         raise TypeError(f"{verb.method} parses through TaskCompleteParams")
     inputs = params.assessment
     args = TaskCompletionParams.model_validate(
-        {
-            **inputs.model_dump(mode="json"),
-            "urn": str(params.urn),
-            "actor": params.actor,
-            "idempotency_key": params.idempotency_key,
-        }
+        {**inputs.model_dump(mode="json"), "urn": str(params.urn), "actor": params.actor}
     )
     try:
         answer, binding = completion_binding(
@@ -918,6 +914,20 @@ async def _run_verb(
             refused = bound
         else:
             request_params = bound
+    if refused is None and isinstance(verb.to_status, RunStatus):
+        try:
+            captured = await asyncio.to_thread(
+                bind_run_capture,
+                context,
+                urn=request_params.urn,
+                to_status=verb.to_status,
+                updates=request_params.updates,
+            )
+        except ValidationError as error:
+            return schema_refusal(error, params=params, operation=verb.method).model_dump(
+                mode="json"
+            )
+        request_params = request_params.model_copy(update={"updates": captured})
     if refused is not None:
         logger.info(f"_run_verb refused method={verb.method} code={refused.errors[0].code.value}")
         return refused.model_dump(mode="json")

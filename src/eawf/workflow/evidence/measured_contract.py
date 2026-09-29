@@ -928,13 +928,16 @@ def refresh_contract_metadata(
 
 
 def _require_citable_here(state: State, artifact: Artifact) -> None:
-    """Refuse *artifact* when its recorded environment names another repository.
+    """Refuse *artifact* when its measurement does not bind this repository.
 
     Only a promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
-    row carries an ``environment`` key in its metadata, so any other
-    artifact kind passes through unchecked; a contract whose environment
+    row points at :data:`CONTRACT_BODY_URI`, so any other artifact passes
+    through unchecked. A contract row carrying no ``environment`` names
+    nowhere its measurement binds, so it is citable only inside the report
+    that produced it and never from a plan. A contract whose environment
     carries no ``repository`` (or a state with no ``project`` to compare
-    against) is likewise unrestricted.
+    against) is unrestricted. A refused contract does not transfer as
+    measured: the remedy is to re-run its recorded ``probe_command`` here.
 
     Args:
         state: State the citation was resolved against.
@@ -942,11 +945,21 @@ def _require_citable_here(state: State, artifact: Artifact) -> None:
 
     Raises:
         UserError: ``kind="contract_environment_incompatible"`` when the
-            artifact's recorded environment names a repository other than
-            *state*'s own project.
+            contract row records no environment, or its environment names a
+            repository other than *state*'s own project.
     """
+    if artifact.uri != CONTRACT_BODY_URI:
+        return
     environment = artifact.metadata.get("environment")
-    if not isinstance(environment, Mapping) or state.project is None:
+    reprobe = f"re-probe here with: {artifact.metadata.get('probe_command', '<probe_command>')}"
+    if not isinstance(environment, Mapping):
+        logger.warning(f"resolve_contract_citation environment_absent artifact_id={artifact.id!r}")
+        raise UserError(
+            f"contract {artifact.id} records no measurement environment, so it is citable "
+            f"only inside the report that produced it; {reprobe}",
+            kind="contract_environment_incompatible",
+        )
+    if state.project is None:
         return
     measured_in = environment.get("repository")
     if measured_in is not None and measured_in != state.project.code:
@@ -956,7 +969,8 @@ def _require_citable_here(state: State, artifact: Artifact) -> None:
         )
         raise UserError(
             f"contract {artifact.id} was measured in repository {measured_in!r}, not "
-            f"{state.project.code!r}; a measurement does not transfer across repositories",
+            f"{state.project.code!r}; a measurement does not transfer across repositories, "
+            f"so {reprobe}",
             kind="contract_environment_incompatible",
         )
 

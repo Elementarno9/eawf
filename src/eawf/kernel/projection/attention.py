@@ -38,20 +38,18 @@ from typing import Final
 
 from pydantic import ConfigDict
 
-from eawf.kernel.projection.compute import PROJECTION_PRODUCER, ProjectionRow
+from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
     BUDGET_UNSTATED_REASON,
     RegisterView,
+    count_field,
+    revision_of,
 )
 from eawf.kernel.projection.truth import (
-    Freshness,
-    Precision,
     TruthField,
-    TruthKind,
     TruthState,
 )
-from eawf.kernel.state.enums import MeasurementQuality
 from eawf.kernel.state.epoch2.base import Epoch2Model
 from eawf.kernel.state.epoch2.pending_action import PendingActionStatus
 from eawf.kernel.state.epoch2.run import SuspensionReason
@@ -141,9 +139,6 @@ BUCKET_SOURCES: Final[Mapping[AttentionBucket, BucketSource]] = MappingProxyType
 
 #: Why the console's ``mine`` count is unknown when it acts as nobody.
 NO_PRINCIPAL_MINE_REASON: Final = "this console acts as no principal, so nothing here is yours"
-
-#: Why an item's bucket is unknown: its record states no status the reducer reads.
-UNPLACED_REASON: Final = "the record states no status, so it lands in no bucket"
 
 #: The pending-action statuses that are open and in front of the operator.
 _ASKED: Final = frozenset({PendingActionStatus.WAITING.value})
@@ -278,8 +273,6 @@ class AttentionItem:
         revision: The source record's exact revision, which an answer is addressed to.
         bucket: The exception bucket the item lands in.
         need: The ``needs operator`` sub-bucket; ``None`` in every other bucket.
-        notice: Whether the item is a notice, which blocks nothing and is never counted
-            as needing anyone.
         assignee_ref: The one principal the item is addressed to; ``None`` addresses it
             to every principal.
         notification_class: What the item is announced as.
@@ -290,7 +283,6 @@ class AttentionItem:
     revision: int
     bucket: AttentionBucket
     need: AttentionNeedKind | None
-    notice: bool
     assignee_ref: str | None
     notification_class: NotificationClass
 
@@ -331,21 +323,19 @@ class AttentionView:
         scope_id: The scope the register was read for.
         source_cursor: The committed ``canonical_sequence`` it was read through.
         items: Every open item, severity-first, then by key.
-        unplaced: The keys of rows that state no status, so land in no bucket.
     """
 
     scope_id: str
     source_cursor: str
     items: tuple[AttentionItem, ...]
-    unplaced: tuple[str, ...]
 
     def open_for(self, principal: str) -> tuple[AttentionItem, ...]:
-        """Return the open non-notice items ``principal`` is in the audience of."""
-        return tuple(i for i in self.items if not i.notice and i.addressed_to(principal))
+        """Return the open items ``principal`` is in the audience of."""
+        return tuple(i for i in self.items if i.addressed_to(principal))
 
     def blocking(self) -> tuple[AttentionItem, ...]:
-        """Return every open non-notice item, whoever it is addressed to."""
-        return tuple(i for i in self.items if not i.notice)
+        """Return every open item, whoever it is addressed to."""
+        return self.items
 
     def bucket_counts(self) -> tuple[BucketCount, ...]:
         """Return every bucket in order, the ``needs operator`` needs after their parent.
@@ -394,7 +384,6 @@ def _item(row: ProjectionRow) -> AttentionItem | None:
         revision=row.revision,
         bucket=bucket,
         need=need,
-        notice=False,
         assignee_ref=row.assignee_ref,
         notification_class=NotificationClass.NEEDS_ANSWER,
     )
@@ -407,7 +396,7 @@ def build_attention_view(register: RegisterView) -> AttentionView:
         register: The Attention route's read model.
 
     Returns:
-        The open items, severity-first, and the rows that landed in no bucket.
+        The open items, severity-first.
 
     Raises:
         ValueError: ``register`` is another route's read model, whose rows are not items.
@@ -419,12 +408,8 @@ def build_attention_view(register: RegisterView) -> AttentionView:
         )
     order = {bucket: index for index, bucket in enumerate(AttentionBucket)}
     items: list[AttentionItem] = []
-    unplaced: list[str] = []
     for row in register.rows:
         if row.collection is not Epoch2Collection.PENDING_ACTION:
-            continue
-        if row.status.state is not TruthState.KNOWN:
-            unplaced.append(row.key)
             continue
         item = _item(row)
         if item is not None:
@@ -434,26 +419,6 @@ def build_attention_view(register: RegisterView) -> AttentionView:
         scope_id=register.scope_id,
         source_cursor=register.source_cursor,
         items=tuple(items),
-        unplaced=tuple(unplaced),
-    )
-
-
-def _count_field(
-    *, value: int | None, revision: int, refs: tuple[str, ...], reason: str | None
-) -> TruthField[str]:
-    """Return a derived count as a truth field: known with its value, or unknown naming why."""
-    known = value is not None
-    return TruthField[str](
-        value=str(value) if known else None,
-        state=TruthState.KNOWN if known else TruthState.UNKNOWN,
-        truth_kind=TruthKind.DERIVED,
-        producer=PROJECTION_PRODUCER,
-        producer_revision=revision,
-        precision=Precision.EXACT if known else Precision.UNAVAILABLE,
-        measurement_quality=MeasurementQuality.EXACT if known else MeasurementQuality.UNAVAILABLE,
-        freshness=Freshness.LIVE,
-        provenance_refs=refs,
-        missing_reason=None if known else reason,
     )
 
 
@@ -465,20 +430,20 @@ def attention_mine(register: RegisterView, *, principal: str | None) -> TruthFie
         principal: Who the console acts as; ``None`` when it acts as nobody.
 
     Returns:
-        The count of open non-notice items addressed to ``principal``; unknown naming why
+        The count of open items addressed to ``principal``; unknown naming why
         when the console acts as nobody, rather than the all-principals count.
 
     Raises:
         ValueError: ``register`` is another route's read model.
     """
     view = build_attention_view(register)
-    revision = int(view.source_cursor) + 1
+    revision = revision_of(register)
     if principal is None:
-        return _count_field(
+        return count_field(
             value=None, revision=revision, refs=(view.scope_id,), reason=NO_PRINCIPAL_MINE_REASON
         )
     mine = view.open_for(principal)
-    return _count_field(
+    return count_field(
         value=len(mine),
         revision=revision,
         refs=tuple(i.source_ref for i in mine) or (view.scope_id,),
@@ -487,16 +452,16 @@ def attention_mine(register: RegisterView, *, principal: str | None) -> TruthFie
 
 
 def attention_all(register: RegisterView) -> TruthField[str]:
-    """Return the open non-notice item count across every principal.
+    """Return the open item count across every principal.
 
     Raises:
         ValueError: ``register`` is another route's read model.
     """
     view = build_attention_view(register)
     blocking = view.blocking()
-    return _count_field(
+    return count_field(
         value=len(blocking),
-        revision=int(view.source_cursor) + 1,
+        revision=revision_of(register),
         refs=tuple(i.source_ref for i in blocking) or (view.scope_id,),
         reason=None,
     )
@@ -563,7 +528,6 @@ __all__ = [
     "CLASS_SOURCES",
     "NOTIFICATION_MATRIX",
     "NO_PRINCIPAL_MINE_REASON",
-    "UNPLACED_REASON",
     "AttentionBucket",
     "AttentionItem",
     "AttentionNeedKind",

@@ -198,7 +198,6 @@ def params(**overrides) -> TaskCompletionParams:
     fields = {
         "urn": world.TASK,
         "actor": "OPERATOR-LOCAL",
-        "idempotency_key": "completion-1",
         "base": world.BASE,
         "report_verdict": AgentReportVerdict.PASS,
         "gates": (world.gate("CR-01"), world.gate("CR-02")),

@@ -38,7 +38,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Final
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.budget_notice import BUDGET_TERMINATION_CONTROL, BudgetNotice
@@ -48,6 +48,7 @@ from eawf.kernel.runtime.control import (
     ControlFact,
     ControlPhase,
     ControlRequestId,
+    RunBinding,
 )
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictNonNegativeInt, StrictPositiveInt
@@ -80,7 +81,8 @@ from eawf.runtime.daemon.epoch2_transaction import (
     run_transaction,
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
+from eawf.runtime.daemon.run_capture_updates import terminal_capture_updates
 from eawf.runtime.runtimes.metering import InFlightMeter, MeterReading, UsageSample, meter_stream
 
 logger = logging.getLogger(__name__)
@@ -149,25 +151,6 @@ class RunBudgetAnswer(BaseModel):
     run_status: RunStatus
     control_cursor: StrictNonNegativeInt
     warnings: tuple[str, ...] = ()
-
-
-def _validated(params: dict[str, Any]) -> _MeterParams:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return _MeterParams.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
 
 
 def _ledger(session: RootSession) -> Path:
@@ -247,6 +230,16 @@ def _notice_of(records: tuple[LedgerRecord, ...], ref: ControlRequestId) -> Budg
     return None
 
 
+def _contract_digest(records: tuple[LedgerRecord, ...], urn: QualifiedUrn) -> str | None:
+    """Return the compiled contract the Run was dispatched under, if bound."""
+    for item in records:
+        if item.payload.get("payload_kind") == "run_binding":
+            binding = RunBinding.model_validate(item.payload)
+            if binding.run_ref == urn:
+                return binding.compiled_spec_digest
+    return None
+
+
 def _standing_fact(
     facts: tuple[ControlFact, ...], *, ref: ControlRequestId, phase: ControlPhase
 ) -> ControlFact | None:
@@ -271,14 +264,15 @@ def _terminal_updates(run: Run, *, now: datetime) -> dict[str, Any]:
 
     A Run cancelled out of the queue never started, so the edge requires
     the start stamp as well: the duration of a stopped Run is a recorded
-    fact rather than a difference against now.
+    fact rather than a difference against now. A budget stop is also the
+    Run's terminal counter reading, so the captured runtime lands with it.
     """
     updates: dict[str, Any] = {"ended_at": now.isoformat()}
     if run.status is RunStatus.QUEUED:
         updates["started_at"] = now.isoformat()
     if run.status is RunStatus.SUSPENDED:
         updates["suspension_reason"] = None
-    return updates
+    return {**updates, **terminal_capture_updates(run, ended_at=now)}
 
 
 class _BudgetLedger:
@@ -321,13 +315,16 @@ class _BudgetLedger:
                 self.envelopes.append(_append_notice(session, notice, now=self._now))
             recorded = standing if standing is not None else notice
             self.notice = recorded
+            contract = _contract_digest(records, self._args.urn)
             facts = self._request(session, facts)
             facts, disposition = self._acknowledge(session, facts)
         # The run-ledger line is the control's receipt; the notice readers
         # list is the one ledger row it folds into, written outside the entity
         # lock because the notice ledger holds its own.
         emit_termination_notice(
-            notices_path(self._context.identity.tree_root / _STATE_FILENAME), recorded
+            notices_path(self._context.identity.tree_root / _STATE_FILENAME),
+            recorded,
+            contract_digest=contract,
         )
         self._opened = True
         logger.info(
@@ -615,7 +612,7 @@ async def _meter_run_budget(
     published once the locks are released; a replay that wrote nothing
     publishes nothing.
     """
-    args = _validated(params)
+    args = native_params(_MeterParams, params)
     context = ctx.native_root_context(authority.root)
     try:
         answer, envelopes = await asyncio.to_thread(_meter, context, args, now=datetime.now(UTC))

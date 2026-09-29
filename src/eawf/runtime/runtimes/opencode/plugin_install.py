@@ -222,17 +222,19 @@ def _user_config_root(
 ) -> Path:
     """Return the user-scope OpenCode config root.
 
-    Precedence: explicit *opencode_config_dir* kwarg → ``$OPENCODE_CONFIG_DIR``
-    env var → ``<home>/.config/opencode/``. ``home`` defaults to
-    :func:`pathlib.Path.home`.
+    Precedence: explicit *opencode_config_dir* kwarg → injected *home* →
+    ``$OPENCODE_CONFIG_DIR`` env var → ``~/.config/opencode/``. An injected
+    home is the whole root, so a render aimed at a fixture never writes into
+    the configuration directory of the machine running it.
     """
     if opencode_config_dir is not None:
         return Path(opencode_config_dir)
+    if home is not None:
+        return home / ".config" / "opencode"
     env_value = os.environ.get(_OPENCODE_CONFIG_DIR_ENV)
     if env_value:
         return Path(env_value)
-    base = home if home is not None else Path.home()
-    return base / ".config" / "opencode"
+    return Path.home() / ".config" / "opencode"
 
 
 def _plugins_dir(

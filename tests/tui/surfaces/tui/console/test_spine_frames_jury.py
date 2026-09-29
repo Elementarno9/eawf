@@ -24,9 +24,10 @@ from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx
+from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.renderers.history import NO_FEED
-from eawf.surfaces.tui.console.renderers.run_detail import NO_EVENTS, TIMELINE_HEAD
+from eawf.surfaces.tui.console.renderers.run_detail import NO_EVENTS, TIMELINE_LEGEND, timeline_head
 from eawf.surfaces.tui.console.renderers.timeline import NO_DATE, week_header
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.workflow.projection.acceptance import build_acceptance_view
@@ -311,9 +312,9 @@ def test_j1_10_the_milestone_frame_lists_its_batches_under_its_track() -> None:
 def test_j1_10_tab_moves_the_visible_section_focus() -> None:
     session = _session("milestone", "MLS-0100")
     before = _frame("milestone", session=session)
-    assert "▸glance" in "\n".join(before)
+    assert "[glance]" in "\n".join(before)
     after = _press(session, "milestone", "Tab")
-    assert "▸try" in "\n".join(after)
+    assert "[try]" in "\n".join(after)
     assert any(row.lstrip().startswith("TRY") for row in after)
 
 
@@ -351,8 +352,8 @@ def test_j1_11_the_timeline_draws_one_lane_per_track_over_the_weeks_around_now()
     frame = _frame("timeline", w=160)
     weeks = next(row for row in frame if "│" in row and "W38" in row)
     assert weeks.rstrip() == week_header(AT, 12).rstrip()
-    lanes = [row for row in frame if row.startswith(("▸TRK-", " TRK-"))]
-    assert [lane[1:9] for lane in lanes] == ["TRK-CORE", "TRK-DOCS"]
+    lanes = [row for row in frame if row.startswith(("▸ TRK-", "  TRK-"))]
+    assert [lane[2:10] for lane in lanes] == ["TRK-CORE", "TRK-DOCS"]
     assert not any("┼" in lane for lane in lanes), "the keyline crosses a lane as a plain line"
     assert lanes[0][weeks.index("│")] == "│", "the keyline sits under now"
     assert not any("ROW " in row for row in frame), "the chart is not the record table"
@@ -385,8 +386,8 @@ def test_j1_11_an_undated_milestone_opens_on_enter() -> None:
 
 def test_j1_06_the_run_frame_draws_the_timeline_pane_first_with_an_honest_empty_state() -> None:
     frame = _frame("run.detail", "RUN-00000001")
-    assert frame[3].rstrip() == TIMELINE_HEAD
-    assert frame[3].rstrip().endswith("P0  P1  P2")
+    assert frame[3] == timeline_head(120)
+    assert frame[3].endswith(f"{TIMELINE_LEGEND} ")
     assert frame[4].strip() == NO_EVENTS
     labels = [row.split()[0] for row in frame[6:] if row.startswith(" ") and row[1].isupper()]
     order = [
@@ -448,3 +449,53 @@ def test_j3_02_enter_on_the_held_ledger_opens_no_prototype_card() -> None:
     session = _session("history", None)
     _press(session, "history", "Enter")
     assert session.overlay is None
+
+
+# ---------- V-07, V-10, V-15: the cursor row, the Run's groups and the caret's slot ----------
+
+
+def _grounded(frame: list[str]) -> list[int]:
+    return [
+        i
+        for i, row in enumerate(frame[1:-1], start=1)
+        if any(stroke.ground == "cursor" for stroke in paint(row, Part.BODY))
+    ]
+
+
+def test_v07_the_milestone_frame_grounds_its_cursor_batch_and_not_its_section_strip() -> None:
+    session = _session("milestone", "MLS-0100")
+    frame = _frame("milestone", session=session)
+    assert [frame[i].lstrip()[:7] for i in _grounded(frame)] == ["BATCHES"]
+    strip = next(row for row in frame if "[glance]" in row)
+    assert "▸" not in strip, "the section strip marks a section, not the cursor"
+    after = _press(session, "milestone", "ArrowDown")
+    assert [after[i].strip()[:10] for i in _grounded(after)] == ["▸ BAT-0101"]
+
+
+def test_v07_the_batch_frame_grounds_its_cursor_task() -> None:
+    frame = _frame("batch.detail", "BAT-0100")
+    grounded = _grounded(frame)
+    assert len(grounded) == 1 and "TSK-0001" in frame[grounded[0]]
+
+
+def test_v10_the_run_frame_rules_off_usage_and_controls_as_their_own_groups() -> None:
+    frame = _frame("run.detail", "RUN-00000001")
+    usage = next(i for i, row in enumerate(frame) if row.startswith(" USAGE"))
+    controls = next(i for i, row in enumerate(frame) if row.startswith(" CONTROLS"))
+    assert set(frame[usage - 1]) == {"─"}
+    assert set(frame[controls - 1]) == {"─"}
+    assert frame[controls + 1].startswith(" LINEAGE"), "controls and lineage are one group"
+
+
+@pytest.mark.parametrize("w", [80, 120, 160])
+def test_v10_the_run_frame_keeps_every_fact_at_each_size(w: int) -> None:
+    for run in ("RUN-00000001", "RUN-00000002"):
+        text = "\n".join(_frame("run.detail", run, w=w))
+        for label in (" USAGE", " CONTROLS", " LINEAGE"):
+            assert label in text, (run, w, label)
+
+
+def test_v15_a_timeline_lane_keeps_a_space_between_its_caret_and_its_key() -> None:
+    frame = _frame("timeline", w=160)
+    lane = next(row for row in frame if "TRK-CORE" in row and "─" in row)
+    assert lane.startswith("▸ TRK-CORE ")

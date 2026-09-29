@@ -98,6 +98,7 @@ from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
+from eawf.kernel.state.epoch2.measurement import DAEMON_READ_RUN_FIELDS
 from eawf.kernel.state.epoch2.task import TaskStatus
 from eawf.kernel.state.epoch2.transitions import (
     ENTITY_STATUS_ENUM,
@@ -325,6 +326,24 @@ class TransitionRequest(BaseModel):
     reason_code: SlugStr | None = None
     binding_refs: tuple[str, ...] = ()
     correlation_id: Annotated[str, StringConstraints(strict=True, max_length=128)] | None = None
+
+
+def _request_digest(request: BaseModel) -> str:
+    """Return the digest a retry of *request* is matched against.
+
+    The counter readings the daemon takes at a Run edge are left out of a
+    transition's updates: a retry takes them again and reads later
+    numbers, and a retry must replay its receipt rather than be refused
+    as a different request.
+    """
+    payload = request.model_dump(mode="json")
+    if isinstance(request, TransitionRequest):
+        payload["updates"] = {
+            key: value
+            for key, value in payload["updates"].items()
+            if key not in DAEMON_READ_RUN_FIELDS
+        }
+    return canonical_params_digest(payload)
 
 
 class MutationReceipt(BaseModel):
@@ -575,7 +594,7 @@ def _persist(
     record_idempotency_receipt(
         context,
         namespaced_key=context.idempotency_key(request.idempotency_key),
-        params_digest=canonical_params_digest(request.model_dump(mode="json")),
+        params_digest=_request_digest(request),
         receipt=receipt.model_dump(mode="json"),
         recorded_at=now,
     )
@@ -954,7 +973,7 @@ def _replayed_receipt(
             entity_ref=str(request.urn),
             remediation="Remove the invalid receipt from the root local store and retry.",
         ) from error
-    if stored.params_digest != canonical_params_digest(request.model_dump(mode="json")):
+    if stored.params_digest != _request_digest(request):
         raise TransactionRefusedError(
             code=TransactionRefusalCode.IDEMPOTENCY_CONFLICT,
             detail=f"idempotency key {request.idempotency_key!r} already committed a request "
@@ -1020,20 +1039,31 @@ def _batch_membership(
         now: When the promotion happened.
 
     Returns:
-        The Batch key and its successor row, or ``None`` when the document
-        holds no native Batch under that key or the Task is listed already.
+        The Batch key and its successor row, or ``None`` when the Task is
+        listed already.
 
     Raises:
-        TransactionRefusedError: The Batch has moved past ``ACTIVE``, so a
-            Task joining it now would not be part of what it merges.
+        TransactionRefusedError: The document holds no live native Batch
+            under that key -- it never existed, it closed and was compacted
+            into its ledger, or its row is not a native Batch -- or the
+            Batch has moved past ``ACTIVE``. Either way a Task joining it
+            now would not be part of anything it merges.
     """
     row = document_rows(document, Epoch2Collection.BATCH).get(batch_ref.entity_key)
-    if row is None:
-        return None
     try:
-        batch = DeliveryBatch.model_validate(row)
+        batch = None if row is None else DeliveryBatch.model_validate(row)
     except ValueError:
-        return None
+        batch = None
+    if batch is None:
+        raise TransactionRefusedError(
+            code=TransactionRefusalCode.TRANSITION_GUARD_FAILED,
+            detail=f"the tree holds no live batch {batch_ref.entity_key}; a Task joins only a "
+            "PLANNED or ACTIVE Batch",
+            entity_ref=str(request.urn),
+            guard=TransitionGuard.PROMOTION_CONTRACT_COMPLETE.value,
+            remediation="Promote the Task into a Batch that exists and is still PLANNED or ACTIVE.",
+            revision=record.revision,
+        )
     if batch.status not in _OPEN_BATCH_STATUSES:
         raise TransactionRefusedError(
             code=TransactionRefusalCode.TRANSITION_GUARD_FAILED,

@@ -129,7 +129,7 @@ def native_frame(view: View, model: GitPrReadModel) -> list[str]:
         *_commit_rows(view, model),
         thin(w),
         label("REVIEW", f"{UNAVAILABLE} · waiting on {PULL_REQUEST_PRODUCER}"),
-        label("CHECKS", f"{UNKNOWN_WORD} · no check outcome is recorded, so none reads passed"),
+        label("CHECKS", f"{UNKNOWN_WORD} · no check outcome is recorded yet"),
         thin(w),
         label("ACTION", READ_ONLY),
         more("the merge-conflict card also only displays"),

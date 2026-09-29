@@ -1,0 +1,21 @@
+{
+  "key": "MLS-0001",
+  "primary_track_ref": "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/track/TRK-CANARY",
+  "title": "Activate one Milestone through the CLI",
+  "outcome": "The Milestone reaches ACTIVE through the operator surface.",
+  "appetite": "S",
+  "exclusions": [
+    "any provider process"
+  ],
+  "acceptance_journey": [
+    {
+      "step_id": "AS-01",
+      "actor": "operator",
+      "action": "read the Milestone status",
+      "expected_observation": "the Milestone is ACTIVE",
+      "evidence_kinds": [
+        "artifact"
+      ]
+    }
+  ]
+}

@@ -106,7 +106,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusal,
     AcceptanceRefusedError,
@@ -903,24 +903,6 @@ def seal_acceptance_approval(
     )
 
 
-def _validated[T: BaseModel](model: type[T], params: dict[str, Any]) -> T:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The detail is
-            reduced to field paths so a submitted value never reaches a log.
-    """
-    try:
-        return model.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
-
-
 def _published(ctx: MethodContext, envelopes: Iterable[Envelope]) -> None:
     """Publish the committed rows after the locks are released."""
     for envelope in envelopes:
@@ -933,7 +915,7 @@ async def _open_acceptance_approval(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Open the protected approval a verified Milestone's acceptance needs."""
-    args = _validated(ApprovalOpenParams, params)
+    args = native_params(ApprovalOpenParams, params)
     context = ctx.native_root_context(authority.root)
     commit = await asyncio.to_thread(open_acceptance_approval, context, args, now=datetime.now(UTC))
     _published(ctx, commit.envelopes)
@@ -945,7 +927,7 @@ async def _seal_acceptance_approval(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Seal a waiting acceptance question with the operator's answer."""
-    args = _validated(ApprovalSealParams, params)
+    args = native_params(ApprovalSealParams, params)
     context = ctx.native_root_context(authority.root)
     commit = await asyncio.to_thread(seal_acceptance_approval, context, args, now=datetime.now(UTC))
     _published(ctx, commit.envelopes)

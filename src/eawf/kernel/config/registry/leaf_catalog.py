@@ -36,6 +36,7 @@ from eawf.kernel.config.registry.leaf_keys import (
     _WRITABLE_RUNTIME_PREFERENCE,
     LeafKey,
 )
+from eawf.kernel.config.schema import DEFAULT_STALL_INTERVAL_SECONDS
 from eawf.kernel.spec.research import DEFAULT_RESEARCH_DEPTH, RESEARCH_DEPTH_VALUES
 
 # Catalog data table — declaration-ordered by domain section for review.
@@ -289,6 +290,30 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         default=(),
         writable_layers=_WRITABLE_GWR,
         description="Optional cheap/mid/top model ladder for the opencode runtime.",
+    ),
+    LeafKey(
+        key="runtime.claude.stall_interval_s",
+        domain="runtime",
+        type="int",
+        default=DEFAULT_STALL_INTERVAL_SECONDS,
+        writable_layers=_WRITABLE_GWR,
+        description="Seconds a Claude Run may produce nothing before it is flagged stalled.",
+    ),
+    LeafKey(
+        key="runtime.codex.stall_interval_s",
+        domain="runtime",
+        type="int",
+        default=DEFAULT_STALL_INTERVAL_SECONDS,
+        writable_layers=_WRITABLE_GWR,
+        description="Seconds a Codex Run may produce nothing before it is flagged stalled.",
+    ),
+    LeafKey(
+        key="runtime.opencode.stall_interval_s",
+        domain="runtime",
+        type="int",
+        default=DEFAULT_STALL_INTERVAL_SECONDS,
+        writable_layers=_WRITABLE_GWR,
+        description="Seconds an opencode Run may produce nothing before it is flagged stalled.",
     ),
     # Per-adapter sub-keys (claude / codex / opencode).
     LeafKey(
@@ -1656,6 +1681,11 @@ _CONSUMER_BY_KEY: dict[str, str] = {
     "runtime.models.claude": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.codex": "eawf.kernel.config.layered.resolve_runtime_tier_models",
     "runtime.models.opencode": "eawf.kernel.config.layered.resolve_runtime_tier_models",
+    "runtime.claude.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
+    "runtime.codex.stall_interval_s": "eawf.kernel.config.layered.resolve_stall_interval_seconds",
+    "runtime.opencode.stall_interval_s": (
+        "eawf.kernel.config.layered.resolve_stall_interval_seconds"
+    ),
     "ship.gauntlet": "eawf.workflow.skills.ship._resolve_gauntlet",
     "telemetry.db_kind": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",
     "telemetry.enabled": "eawf.surfaces.cli.commands.metrics._read_telemetry_config",

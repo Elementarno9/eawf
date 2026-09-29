@@ -584,10 +584,12 @@ Roadmap planner (propose / revise / apply / drop / show).
 
 ### `eawf rules`
 
-Read the rule views rendered from .ea/rules.yaml.
+Read, migrate and roll back the projections rendered from .ea/rules.yaml.
 
 | Verb | Summary |
 |---|---|
+| `migrate` | Check every legacy block and profile field has exactly one disposition. |
+| `rollback` | Re-select a complete stored generation of the rule projections. |
 | `view` | Print the detailed view of one selected rule module. |
 
 ### `eawf run`

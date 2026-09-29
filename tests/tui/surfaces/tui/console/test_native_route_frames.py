@@ -52,11 +52,10 @@ from eawf.surfaces.tui.console.renderers.campaign import replay_line
 from eawf.surfaces.tui.console.renderers.crash_recovery import doors
 from eawf.surfaces.tui.console.renderers.health import NOTHING_TO_REPAIR, checks_line, checks_of
 from eawf.surfaces.tui.console.renderers.read_model import UNKNOWN_WORD
-from eawf.surfaces.tui.console.renderers.run_detail import TIMELINE_HEAD
+from eawf.surfaces.tui.console.renderers.run_detail import timeline_head
 from eawf.surfaces.tui.console.renderers.scope_home import NO_TRACK, groups_of, tree_of
 from eawf.surfaces.tui.console.renderers.search import matched
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup
-from eawf.surfaces.tui.console.width import pad
 
 AT = datetime(2026, 9, 17, 12, 0, tzinfo=UTC)
 SCOPE = "EAWF"
@@ -714,7 +713,7 @@ def test_run_frame_draws_one_runs_facts_under_its_task() -> None:
     assert frame[1].startswith(" Run RUN-00000001 · RUNNING")
     for label in (" STATE", " TASK", " PROVIDER", " USAGE", " CONTROLS", " LINEAGE"):
         assert any(row.startswith(label) for row in frame), label
-    assert frame[3] == pad(TIMELINE_HEAD, len(frame[3])), "the timeline pane comes first"
+    assert frame[3] == timeline_head(len(frame[3])), "the timeline pane comes first"
 
 
 def test_run_frame_with_no_run_says_so() -> None:
