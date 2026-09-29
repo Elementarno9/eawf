@@ -68,8 +68,15 @@ def _criterion(*, signal: str = _SIGNAL, gate_ids: list[str] | None = None) -> C
 
 
 def _gate(argv: list[str], *, kind: str = "command_exit_zero") -> GateSpec:
-    """Build a gate row whose ``args['argv']`` is *argv*."""
-    return GateSpec(
+    """Build a gate row whose ``args['argv']`` is *argv*.
+
+    Built without validation: the L0 argv policy already refuses an eawf
+    verb outside its read-only set, and the walk under test has to see
+    such an argv to prove it names the verb path on its own.
+    """
+    return GateSpec.model_construct(
+        required=True,
+        timeout_s=None,
         id="G-01",
         criterion_id="CR-01",
         kind=kind,
@@ -244,7 +251,7 @@ _BODY_TEMPLATE = textwrap.dedent(
     """
 )
 
-_UNKNOWN_VERB_YAML = _BODY_TEMPLATE.format(argv="eawf, telemetry, sync")
+_UNKNOWN_VERB_YAML = _BODY_TEMPLATE.format(argv="eawf, doctor, frobnicate")
 _REAL_VERB_YAML = _BODY_TEMPLATE.format(argv="uv, run, eawf, release, show, REL-1")
 
 
@@ -370,7 +377,7 @@ def test_sync_refuses_an_unknown_verb_before_any_write(tmp_path: Path) -> None:
     assert ctx.wal_dir is not None
 
     async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="eawf telemetry sync"):
+        with pytest.raises(DaemonValidationError, match="eawf doctor frobnicate"):
             await sync(ctx, {"wave_id": _WAVE_ID, "repo_root": str(repo_root)})
 
     _run(body)

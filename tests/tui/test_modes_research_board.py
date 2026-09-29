@@ -449,7 +449,7 @@ def test_persisted_campaign_surfaces_as_board_topic_node(tmp_path: Path) -> None
 
     Exercises the P29-I09-W07 deliverable end to end: the same
     ``persist_campaign`` helper the ``research.create_campaign`` RPC + the
-    ``eawf research campaign new`` offline fallback share writes the campaign
+    ``eawf campaign new`` offline fallback share writes the campaign
     row, and the board's ``read_campaign_rows`` + ``build_tree_nodes`` lift it
     into a campaign node with its staged-domain topic children.
     """

@@ -299,7 +299,9 @@ def apply_transition[RecordT: LifecycleRecord](
             guard=None,
             message=f"{entity.value} {record.status!s} -> {to!s} requires {sorted(missing)}",
         )
-    successor = _successor(record, to=to, at=at, supplied=supplied)
+    fields = type(record).model_fields
+    cleared = {name: fields[name].default for name in outcome.cleared_fields}
+    successor = _successor(record, to=to, at=at, supplied={**cleared, **supplied})
     event = DomainEvent(
         name=domain_event_name(entity, outcome.verb),
         subject=record.urn,

@@ -151,7 +151,15 @@ def _candidate() -> Release:
 
 def _approve(readiness: ReleaseReadiness) -> Release:
     """Approve the pinned candidate against *readiness*."""
-    return approve_release(_candidate(), readiness, approval_ref=APPROVAL_REF, approved_at=NOW)
+    return approve_release(
+        _candidate(),
+        readiness,
+        _config(),
+        approval_ref=APPROVAL_REF,
+        approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
+    )
 
 
 def _approve_over_rpc(readiness: ReleaseReadiness, state_root: Path) -> dict[str, Any]:
@@ -173,6 +181,7 @@ def _approve_over_rpc(readiness: ReleaseReadiness, state_root: Path) -> dict[str
                 "release": _candidate().model_dump(mode="json"),
                 "readiness": readiness.model_dump(mode="json"),
                 "approval_ref": APPROVAL_REF,
+                "proof_digest": f"sha256:{'c' * 64}",
             },
         )
     )

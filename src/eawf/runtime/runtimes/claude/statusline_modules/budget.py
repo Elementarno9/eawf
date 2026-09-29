@@ -1,14 +1,20 @@
-"""``budget`` statusline module — the active wave's spend against its one ceiling.
+"""``budget`` statusline module — the active scope's spend against its one ceiling.
 
-The ceiling is the one the daemon meters, notices and enforces against:
-:meth:`~eawf.runtime.budget.policy.BudgetConfig.ceiling` over the repo's
-validated ``flow.budget`` table. An open limit-reached notice for the same
-wave, read from the notice ledger beside ``state.json``, marks the segment.
+On an epoch-1 tree the scope is the active wave: its budget and spend are
+document fields, and the ceiling is the one the daemon meters, notices and
+enforces against, :meth:`~eawf.runtime.budget.policy.BudgetConfig.ceiling`
+over the repo's validated ``flow.budget`` table. An open limit-reached
+notice for the same wave, read from the notice ledger beside ``state.json``,
+marks the segment.
 
-The wave's budget and spend are epoch-1 document fields, read through
-:func:`~._document.read_legacy_document`, so on an epoch-2 tree the segment
-names ``no-epoch2-source``. Every failure degrades to an explicit
-``budget:n/a(<reason>)`` marker rather than a guessed number.
+On an epoch-2 tree the scope is the Run bound to the host's session, and its
+reading is the budget notice the daemon's in-flight meter filed for it: the
+consumption it observed and the cap it tested against. The meter holds a
+reading below the cap in memory only, so a Run that never reached its cap
+has no stored reading and the segment says so rather than guessing one.
+
+Every failure degrades to an explicit ``budget:n/a(<reason>)`` marker rather
+than a guessed number.
 """
 
 from __future__ import annotations
@@ -16,12 +22,16 @@ from __future__ import annotations
 import logging
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from pydantic import ValidationError
 
-from eawf.kernel.projection.truth import Precision
-from eawf.runtime.budget.notices import load_notice_ledger, notices_path
+from eawf.kernel.projection.truth import Precision, TruthKind
+from eawf.runtime.budget.notices import (
+    BudgetThresholdNotice,
+    load_notice_ledger,
+    notices_path,
+)
 from eawf.runtime.budget.policy import DuplicateCeilingError
 from eawf.runtime.budget.service import load_budget_config
 from eawf.runtime.runtimes.claude.statusline_modules._document import (
@@ -29,7 +39,13 @@ from eawf.runtime.runtimes.claude.statusline_modules._document import (
     document_source,
     read_legacy_document,
 )
+from eawf.runtime.runtimes.claude.statusline_modules._spine import (
+    SPINE_PRODUCER,
+    selected_generation,
+    session_run,
+)
 from eawf.surfaces.render.statusline import (
+    SegmentSource,
     StatuslineSegment,
     budget_segment,
     budget_unavailable_segment,
@@ -37,8 +53,14 @@ from eawf.surfaces.render.statusline import (
 
 logger = logging.getLogger(__name__)
 
+#: The producer an epoch-2 reading names: the notice ledger the in-flight meter files into.
+NOTICE_PRODUCER: Final = "eawf.budget-notice-ledger"
+
 # The stored counts are exact; the rendered figures are rounded to a tenth of a thousand.
 _SOURCE = replace(document_source("waves.token_budget"), precision=Precision.APPROXIMATE)
+_RUN_SOURCE = SegmentSource(
+    producer=SPINE_PRODUCER, provenance="generation#run", truth_kind=TruthKind.STORED
+)
 
 
 def _active_wave(payload: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
@@ -66,22 +88,69 @@ def _notice_open(state_path: Path, wave_id: str) -> bool:
     )
 
 
+def _run_reading(
+    notices: list[BudgetThresholdNotice], run_key: str
+) -> BudgetThresholdNotice | None:
+    """Return the latest token reading filed for *run_key*, or ``None``."""
+    readings = [
+        notice
+        for notice in notices
+        if notice.scope_id == run_key
+        and notice.axis == "tokens"
+        and notice.budget_value is not None
+    ]
+    return max(readings, key=lambda notice: notice.last_observed_at, default=None)
+
+
+def _run_budget(claude_payload: dict[str, Any], state_path: Path) -> StatuslineSegment:
+    """Return the session Run's last metered reading against its cap."""
+    document_path = selected_generation(state_path)
+    if isinstance(document_path, str):
+        return budget_unavailable_segment(document_path, _RUN_SOURCE)
+    run = session_run(claude_payload, document_path)
+    if isinstance(run, str):
+        return budget_unavailable_segment(run, _RUN_SOURCE)
+    path = notices_path(state_path)
+    try:
+        ledger = load_notice_ledger(path)
+    except (OSError, ValidationError) as exc:
+        logger.debug(f"_run_budget notice-ledger-unreadable error={exc}")
+        return budget_unavailable_segment("notices-unreadable", _RUN_SOURCE)
+    notice = _run_reading(list(ledger.notices.values()), run.key)
+    if notice is None or notice.budget_value is None:
+        return budget_unavailable_segment("no-run-budget-reading", _RUN_SOURCE)
+    source = SegmentSource(
+        producer=NOTICE_PRODUCER,
+        provenance=f"{path.relative_to(state_path.parent.parent).as_posix()}#{notice.notice_key}",
+        revision=notice.revision,
+        truth_kind=TruthKind.STORED,
+        precision=Precision.APPROXIMATE,
+    )
+    return budget_segment(
+        spent=notice.observed_value,
+        limit=notice.budget_value,
+        notice_open=notice.status == "OPEN",
+        source=source,
+    )
+
+
 def build(claude_payload: dict[str, Any], state_path: Path | None) -> StatuslineSegment:
-    """Return the ``budget:<spent>/<limit>`` segment for the active wave.
+    """Return the ``budget:<spent>/<limit>`` segment for the active scope.
 
     Args:
-        claude_payload: Decoded Claude stdin JSON; unused, kept for the
-            uniform module signature.
+        claude_payload: Decoded Claude stdin JSON, read for ``session_id`` on
+            an epoch-2 tree.
         state_path: Resolved ``.ea/state.json`` path, or ``None``.
 
     Returns:
         The spend-against-ceiling segment, or a ``budget:n/a(<reason>)``
         marker naming why it cannot be drawn.
     """
-    del claude_payload
     if state_path is None:
         return budget_unavailable_segment(DocumentGap.NO_STATE.value, _SOURCE)
     payload = read_legacy_document(state_path)
+    if payload is DocumentGap.NO_EPOCH2_SOURCE:
+        return _run_budget(claude_payload, state_path)
     if isinstance(payload, DocumentGap):
         return budget_unavailable_segment(payload.value, _SOURCE)
     active = _active_wave(payload)
@@ -111,4 +180,4 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
     )
 
 
-__all__ = ["build"]
+__all__ = ["NOTICE_PRODUCER", "build"]

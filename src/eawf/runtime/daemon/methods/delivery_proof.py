@@ -52,7 +52,7 @@ from eawf.kernel.identity import EntityKind, IdentityError, format_entity_key
 from eawf.kernel.spec.common import GateSpec
 from eawf.kernel.state.enums import GateReceiptResult
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import TaskUrn
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -70,6 +70,7 @@ from eawf.runtime.daemon.methods.delivery import (
     keyed_answer,
     read_generation_ledger,
 )
+from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.methods.delivery_completion import (
     PROOF_KEY_PREFIX,
     PROOF_PAYLOAD_KIND,
@@ -111,6 +112,9 @@ class TaskProveParams(BaseModel):
         urn: The Task being proved.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         gates: The gates the Task's criteria reference. Omitted, the gates
             of the Task's earlier proof runs are run again.
     """
@@ -120,6 +124,7 @@ class TaskProveParams(BaseModel):
     urn: TaskUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     gates: tuple[GateSpec, ...] = ()
 
 
@@ -544,6 +549,7 @@ async def _prove_task(
     """Run one Task's unproven legs and file their receipts."""
     args = native_params(TaskProveParams, params)
     context = ctx.native_root_context(authority.root)
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     answer = await asyncio.to_thread(prove_task, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 

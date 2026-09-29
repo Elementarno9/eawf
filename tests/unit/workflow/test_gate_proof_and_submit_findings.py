@@ -43,7 +43,8 @@ def test_prove_gates_hands_the_proof_path_to_the_serving_daemon(
 
     def fake_run(argv: list[str], **kwargs: Any) -> SimpleNamespace:
         calls.append((list(argv), kwargs.get("env")))
-        return SimpleNamespace(returncode=0, stdout=json.dumps({"receipts": []}), stderr="")
+        envelope = {"status": "ok", "result": {"receipts": []}}
+        return SimpleNamespace(returncode=0, stdout=json.dumps(envelope), stderr="")
 
     monkeypatch.setattr("subprocess.run", fake_run)
     host = GitHubReleaseHost(tmp_path, state_path=tmp_path / "state.json")

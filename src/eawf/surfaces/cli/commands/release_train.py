@@ -19,15 +19,13 @@ from typing import Annotated, Any
 import typer
 
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.commands.release import (
     RELEASE_RPC_METHODS,
-    _dispatch,
+    _answer,
     _read_json_document,
     release_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.output import emit_json_or_text
 
 logger = logging.getLogger(__name__)
 
@@ -55,22 +53,6 @@ def _proof_wait_seconds(version: str) -> float:
         raise cli_errors.UserError(
             f"cannot prove the gates of {version!r}: {exc}", kind="NotFound"
         ) from exc
-
-
-def _receipts_text(result: dict[str, Any]) -> str:
-    """Return the operator-facing summary of a ``release.produce_receipts`` reply."""
-    lines = [f"{result.get('release_key')} at {result.get('source_sha')}"]
-    lines.extend(
-        f"  pass {row.get('gate'):<26} {row.get('receipt_ref')} expires {row.get('expires_at')}"
-        for row in result.get("receipts") or ()
-        if isinstance(row, dict)
-    )
-    lines.extend(
-        f"  FAIL {row.get('gate'):<26} {row.get('detail')}"
-        for row in result.get("refused") or ()
-        if isinstance(row, dict)
-    )
-    return "\n".join(lines)
 
 
 @release_app.command("receipts")
@@ -131,11 +113,7 @@ def release_receipts(
             params["acknowledgements"] = _read_json_document(
                 acknowledgements_file, label="acknowledgement rows"
             )["acknowledgements"]
-        result = _dispatch(
-            RELEASE_RPC_METHODS["receipts"],
-            params,
-            call_timeout_seconds=_proof_wait_seconds(version),
-        )
+        wait = _proof_wait_seconds(version)
     except KeyError as exc:
         cli_errors.emit_error(
             cli_errors.ValidationError(f"waiver document is missing the {exc} key"), flags=flags
@@ -144,9 +122,14 @@ def release_receipts(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    emit_json_or_text(result, _receipts_text(result), flags=flags)
-    if result.get("refused"):
-        raise typer.Exit(exit_codes.STATE_CONFLICT)
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["receipts"],
+        params,
+        subject=version,
+        call_timeout_seconds=wait,
+        failed_guard=lambda result: "every_gate_proven" if result.get("refused") else None,
+    )
 
 
 @release_app.command("advance")
@@ -168,13 +151,17 @@ def release_advance(
     The advance opens no record. Open the next checkpoint with
     ``eawf release create``, which runs its measured admission.
     """
-    flags: GlobalFlags = ctx.obj
-    try:
-        result = _dispatch(RELEASE_RPC_METHODS["advance"], {"release_key": release_key})
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    closed = result.get("closed") or {}
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["advance"],
+        {"release_key": release_key},
+        subject=release_key,
+        links=_next_create,
+    )
+
+
+def _next_create(result: dict[str, Any]) -> dict[str, str]:
+    """Return the command that opens the rung an advance left open, if any."""
     train = result.get("train") or {}
     opened = next(
         (
@@ -184,14 +171,7 @@ def release_advance(
         ),
         None,
     )
-    text = (
-        f"advanced past {closed.get('key')} ({closed.get('status')}) -> "
-        f"{train.get('current_checkpoint')} open\n"
-        f"  index: {train.get('current_checkpoint_index')}\n"
-        f"  receipts: {', '.join(result.get('receipt_refs') or ()) or '(none)'}\n"
-        f"  next: eawf release create {opened}"
-    )
-    emit_json_or_text(result, text, flags=flags)
+    return {} if opened is None else {"next": f"eawf release create {opened}"}
 
 
 __all__ = ["release_advance", "release_receipts"]

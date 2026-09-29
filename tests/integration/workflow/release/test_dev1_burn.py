@@ -111,6 +111,7 @@ from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
 from tests._release_helpers import (
+    MANIFEST_DIGEST,
     NOW,
     SOURCE_SHA,
     TREE_SHA,
@@ -294,8 +295,11 @@ def walk_to_recovery() -> tuple[list[ReleaseStatus], Release, PublicationOperati
     approved = approve_release(
         candidate,
         green_sweep(),
+        dev1_config(),
         approval_ref=BURN_PATH_APPROVAL_REF,
         approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
     )
     statuses.append(approved.status)
 
@@ -668,6 +672,8 @@ def test_terminal_burn_cli_forwards_the_operator_reason(
             str(record),
             "--reason",
             BURN_REASON,
+            "--expected-revision",
+            "7",
             "--idempotency-key",
             "burn-01",
         ],

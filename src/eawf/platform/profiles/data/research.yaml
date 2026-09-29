@@ -9,7 +9,7 @@ state_extensions:
 
 instrument_requirements: []
 
-# Default campaign domains so `eawf research campaign new` stages a campaign
+# Default campaign domains so `eawf campaign new` stages a campaign
 # on a fresh repo; a later profile's own research: block replaces this one.
 research:
   default_depth: medium

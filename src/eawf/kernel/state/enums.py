@@ -757,6 +757,7 @@ class StoreKind(StrEnum):
     RELEASE_TRAIN_ADVANCE = "release_train_advance"
     CONFORMANCE_STAGE = "conformance_stage"
     CONDUCT_DEVIATION = "conduct_deviation"
+    VERIFICATION_DEBT = "verification_debt"
 
 
 class ArtifactKind(StrEnum):

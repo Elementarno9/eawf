@@ -22,7 +22,11 @@ from eawf.runtime.runtimes.codex.plugin_install import install_plugin
 
 _BEGIN = "# ---- __eawf_managed begin ----"
 _END = "# ---- __eawf_managed end ----"
-_BLOCK = f"{_BEGIN}\n[plugins.eawf]\nenabled = true\n{_END}\n".encode()
+_BLOCK = (
+    f"{_BEGIN}\n[plugins.eawf]\nenabled = true\n"
+    "[agents]\nmax_concurrent_threads_per_session = 8\nmax_depth = 1\n"
+    f"{_END}\n"
+).encode()
 
 # A blank line inside a section is where a pattern-based section removal
 # measured swallowing every later section, trust records included.

@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 from types import MappingProxyType
 
 from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import attention as att
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import drill
@@ -26,10 +27,12 @@ from eawf.surfaces.tui.console.navigation import (
 )
 from eawf.surfaces.tui.console.operations import (
     ANSWER_OPTIONS,
+    PERMISSION_VERBS,
     RUN_CONTROLS,
     RUN_KINDS,
     AnswerRequest,
     ControlRequest,
+    PermissionDecision,
     VerbRequest,
 )
 from eawf.surfaces.tui.console.overlays.bound_keys import open_held_row
@@ -93,11 +96,18 @@ def confirm(ctx: Ctx) -> None:
     action_id = row.key
     verb = att.VERB[s.verb or "a"]
     refusal = write_refusal(s, ctx.fixture, verb=verb.name, kind=att.ATTENTION_ROUTE)
-    option = ANSWER_OPTIONS.get(verb.name)
+    # a provider permission is decided by its own verb, never sealed as an answer
+    permission = row.collection is Epoch2Collection.PERMISSION
+    option = (PERMISSION_VERBS if permission else ANSWER_OPTIONS).get(verb.name)
     if refusal or option is None:
         ctx.log("Enter", f"{verb.name} {action_id} refused — {refusal}")
         return
-    send_verb(ctx, "Enter", AnswerRequest(target=action_id, option_id=option), verb.name)
+    request: VerbRequest = (
+        PermissionDecision(target=action_id, verb=option)
+        if permission
+        else AnswerRequest(target=action_id, option_id=option)
+    )
+    send_verb(ctx, "Enter", request, verb.name)
 
 
 def _selected_row(s: Session, rows: tuple[ProjectionRow, ...]) -> ProjectionRow | None:

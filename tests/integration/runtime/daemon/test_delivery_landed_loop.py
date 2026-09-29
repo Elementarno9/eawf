@@ -265,14 +265,15 @@ def test_landed_work_walks_to_an_accepted_milestone_through_the_cli(
     eawf(root, "task", "ready", TASK_URN, "--expected-task-revision", "1",
          "--idempotency-key", "ready-1", "--actor", ACTOR, "--from-spec", ready)  # fmt: skip
     adopted = eawf(root, "batch", "adopt-landed", BATCH_URN, "--head", head, "--base", base,
-                   "--task", TASK_URN, "--evidence", AUDIT_ID,
-                   "--idempotency-key", "adopt-1", "--actor", ACTOR)  # fmt: skip
+                   "--task", TASK_URN, "--evidence", AUDIT_ID, "--expected-batch-revision", "1",
+                   "--idempotency-key", "adopt-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert adopted["generation"] == 2
     proved = eawf(root, "task", "prove", TASK_URN, "--gates", gates_file(tmp_path),
-                  "--idempotency-key", "prove-1", "--actor", ACTOR)  # fmt: skip
+                  "--expected-task-revision", "2",
+                  "--idempotency-key", "prove-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert proved["passed"] is True
     out = tmp_path / "assessment.json"
-    assessed = eawf(root, "task", "assess", TASK_URN, "--actor", ACTOR, "--out", str(out))
+    assessed = eawf(root, "task", "assess", TASK_URN, "--actor", ACTOR, "--out", str(out))["result"]
     assert assessed["integrated_commit"] == head
     eawf(root, "task", "complete", TASK_URN, "--expected-task-revision", "2",
          "--idempotency-key", "complete-1", "--actor", ACTOR,
@@ -289,8 +290,8 @@ def test_landed_work_walks_to_an_accepted_milestone_through_the_cli(
          "--idempotency-key", "bready-1", "--actor", ACTOR, "--from-spec", batch_ready)  # fmt: skip
     eawf(root, "batch", "merge", BATCH_URN, "--expected-batch-revision", "2",
          "--idempotency-key", "merge-1", "--actor", ACTOR)  # fmt: skip
-    reconciled = eawf(root, "batch", "reconcile", BATCH_URN,
-                      "--idempotency-key", "reconcile-1", "--actor", ACTOR)  # fmt: skip
+    reconciled = eawf(root, "batch", "reconcile", BATCH_URN, "--expected-batch-revision", "3",
+                      "--idempotency-key", "reconcile-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert reconciled["outcome"] == "landed"
     merge_facts = {
         "observations": ["host_merge_observed"],
@@ -304,9 +305,10 @@ def test_landed_work_walks_to_an_accepted_milestone_through_the_cli(
     review = spec(tmp_path, "review.json", {"updates": {"acceptance_bundle_revision": 1}})
     eawf(root, "milestone", "open-review", MILESTONE_URN, "--expected-milestone-revision", "1",
          "--idempotency-key", "review-1", "--actor", ACTOR, "--from-spec", review)  # fmt: skip
-    evidence = eawf(root, "record", "evidence", MILESTONE_URN, "--kind", "audit",
-                    "--summary", f"audit {AUDIT_ID} passed on {head}",
-                    "--idempotency-key", "evd-1", "--actor", ACTOR)["evidence_ref"]  # fmt: skip
+    recorded = eawf(root, "record", "evidence", MILESTONE_URN, "--kind", "audit",
+                    "--summary", f"audit {AUDIT_ID} passed on {head}", "--expected-revision", "2",
+                    "--idempotency-key", "evd-1", "--actor", ACTOR)  # fmt: skip
+    evidence = recorded["result"]["evidence_ref"]
     approval = spec(tmp_path, "approval.json", {
         "requested_by": {"principal_kind": "human", "principal_id": ACTOR},
         "steps": [{"step_id": "AS-01", "passed": True, "observation": "the fix holds on main",
@@ -315,11 +317,12 @@ def test_landed_work_walks_to_an_accepted_milestone_through_the_cli(
     })  # fmt: skip
     bundle = tmp_path / "bundle.json"
     opened = eawf(root, "milestone", "open-approval", MILESTONE_URN, "--actor", ACTOR,
-                  "--from-spec", approval, "--bundle-out", str(bundle))  # fmt: skip
+                  "--expected-milestone-revision", "2",
+                  "--from-spec", approval, "--bundle-out", str(bundle))["result"]  # fmt: skip
     sealed = eawf(root, "milestone", "seal-approval", opened["action_ref"],
                   "--expected-approval-revision", str(opened["revision"]),
                   "--idempotency-key", "seal-1", "--actor", ACTOR,
-                  "--option-id", "approve", "--receipt-ref", evidence)  # fmt: skip
+                  "--option-id", "approve", "--receipt-ref", evidence)["result"]  # fmt: skip
     eawf(root, "milestone", "accept", MILESTONE_URN, "--expected-milestone-revision", "2",
          "--idempotency-key", "accept-1", "--actor", ACTOR,
          "--approval-receipt-ref", sealed["action_ref"],

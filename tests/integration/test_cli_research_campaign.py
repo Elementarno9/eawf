@@ -1,13 +1,13 @@
-"""CLI dispatch tests for ``eawf research campaign new``.
+"""CLI dispatch tests for ``eawf campaign new``.
 
 Drives the Typer app via :class:`CliRunner` against a temp workspace and
 checks the campaign-staging sub-verb:
 
-- ``research campaign new <topic>`` stages + persists when the daemon proxy
+- ``campaign new <topic>`` stages + persists when the daemon proxy
   succeeds (params forwarded to the ``research.create_campaign`` RPC).
 - The offline fallback (daemon unreachable) appends the campaign row directly
   via the shared ``persist_campaign`` helper so the row lands in the store.
-- ``research campaign new`` with no ``research:`` block fails fast as
+- ``campaign new`` with no ``research:`` block fails fast as
   ``InvalidInput`` (exit code 1) and writes no row.
 - ``--json`` emits the typed campaign envelope.
 
@@ -158,7 +158,7 @@ def test_campaign_new_daemon_proxy_forwards_params(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "Survey the pricing landscape"],
+        ["-w", str(workspace), "campaign", "new", "Survey the pricing landscape"],
     )
     assert result.exit_code == 0, result.output
     assert _FakeOkClient.captured["method"] == "research.create_campaign"
@@ -188,7 +188,6 @@ def test_campaign_new_forwards_budget_limits_the_rpc_accepts(
         [
             "-w",
             str(workspace),
-            "research",
             "campaign",
             "new",
             "--budget-rounds",
@@ -212,7 +211,7 @@ def test_campaign_new_offline_fallback_persists_budget(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "--budget-rounds", "2", "Topic"],
+        ["-w", str(workspace), "campaign", "new", "--budget-rounds", "2", "Topic"],
     )
     assert result.exit_code == 0, result.output
     rows = _read_rows(workspace / ".ea" / "state.json")
@@ -229,7 +228,7 @@ def test_campaign_new_rejects_negative_budget(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "--budget-usd", "-1", "Topic"],
+        ["-w", str(workspace), "campaign", "new", "--budget-usd", "-1", "Topic"],
     )
     assert result.exit_code == 1
     assert _read_rows(workspace / ".ea" / "state.json") == []
@@ -245,7 +244,7 @@ def test_campaign_new_offline_fallback_appends_row(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "Offline campaign topic"],
+        ["-w", str(workspace), "campaign", "new", "Offline campaign topic"],
     )
     assert result.exit_code == 0, result.output
     state_path = workspace / ".ea" / "state.json"
@@ -268,7 +267,7 @@ def test_campaign_new_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 
     result = runner.invoke(
         app,
-        ["--json", "-w", str(workspace), "research", "campaign", "new", "Json campaign topic"],
+        ["--json", "-w", str(workspace), "campaign", "new", "Json campaign topic"],
     )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
@@ -287,7 +286,7 @@ def test_campaign_new_no_research_block_fails(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "No block topic"],
+        ["-w", str(workspace), "campaign", "new", "No block topic"],
     )
     assert result.exit_code == 1, result.output
     assert "no research: block configured for this scope" in result.output
@@ -295,14 +294,14 @@ def test_campaign_new_no_research_block_fails(
 
 
 def test_campaign_new_no_args_is_help() -> None:
-    """``research campaign`` with no sub-verb prints help (no_args_is_help)."""
-    result = runner.invoke(app, ["research", "campaign"])
+    """``campaign`` with no sub-verb prints help (no_args_is_help)."""
+    result = runner.invoke(app, ["campaign"])
     assert result.exit_code in (0, 2)
     assert "new" in result.output
 
 
 # --------------------------------------------------------------------------
-# W27: ``research campaign run`` -- the operator trigger for research.run
+# W27: ``campaign run`` -- the operator trigger for research.run
 # --------------------------------------------------------------------------
 
 
@@ -313,9 +312,7 @@ def test_campaign_run_forwards_to_research_run_rpc(
     workspace = _make_workspace(tmp_path)
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeRunHandleClient)
 
-    result = runner.invoke(
-        app, ["-w", str(workspace), "research", "campaign", "run", "campaign-xyz"]
-    )
+    result = runner.invoke(app, ["-w", str(workspace), "campaign", "run", "campaign-xyz"])
 
     assert result.exit_code == 0, result.output
     assert _FakeRunHandleClient.captured["method"] == "research.run"
@@ -335,7 +332,6 @@ def test_campaign_run_forwards_round_budget(
         [
             "-w",
             str(workspace),
-            "research",
             "campaign",
             "run",
             "campaign-xyz",
@@ -355,9 +351,7 @@ def test_campaign_run_daemon_unreachable_is_invalid_input(
     workspace = _make_workspace(tmp_path)
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
 
-    result = runner.invoke(
-        app, ["-w", str(workspace), "research", "campaign", "run", "campaign-xyz"]
-    )
+    result = runner.invoke(app, ["-w", str(workspace), "campaign", "run", "campaign-xyz"])
 
     assert result.exit_code == 1
     assert "started research run" not in result.output
@@ -370,9 +364,7 @@ def test_campaign_run_daemon_rejection_is_invalid_input(
     workspace = _make_workspace(tmp_path)
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeRejectClient)
 
-    result = runner.invoke(
-        app, ["-w", str(workspace), "research", "campaign", "run", "unknown-campaign"]
-    )
+    result = runner.invoke(app, ["-w", str(workspace), "campaign", "run", "unknown-campaign"])
 
     assert result.exit_code == 1
     assert "started research run" not in result.output

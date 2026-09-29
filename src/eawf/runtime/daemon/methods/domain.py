@@ -134,7 +134,11 @@ from eawf.runtime.daemon.methods.domain_envelope import (
     refused_envelope,
     schema_refusal,
 )
-from eawf.runtime.daemon.methods.domain_guards import GUARD_COMPUTERS, GuardInputs
+from eawf.runtime.daemon.methods.domain_guards import (
+    GUARD_COMPUTERS,
+    GuardInputs,
+    milestone_watchlist,
+)
 from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
 from eawf.runtime.daemon.run_capture_updates import bind_run_capture
 from eawf.workflow.delivery.acceptance import AcceptanceRefusedError, require_sealed_acceptance
@@ -313,6 +317,12 @@ DOMAIN_LIFECYCLE_VERBS: Final[tuple[LifecycleVerb, ...]] = (
         kind=EntityKind.TASK,
         from_statuses=(TaskStatus.DRAFT,),
         to_status=TaskStatus.PLANNED,
+    ),
+    LifecycleVerb(
+        method="domain.task.demote",
+        kind=EntityKind.TASK,
+        from_statuses=(TaskStatus.PLANNED,),
+        to_status=TaskStatus.DRAFT,
     ),
     LifecycleVerb(
         method="domain.task.claim",
@@ -946,9 +956,34 @@ async def _run_verb(
     # the event the original commit already fanned out.
     if committed.envelope is not None and not publish_projection(ctx.bus, committed.envelope):
         warnings = (PROJECTION_DEGRADED,)
+    if verb.to_status is MilestoneStatus.ACTIVE:
+        warnings += await asyncio.to_thread(_activation_watchlist, context, request_params.urn)
     return accepted_envelope(
         committed.receipt, operation=verb.method, warnings=warnings
     ).model_dump(mode="json")
+
+
+def _activation_watchlist(context: Epoch2RootContext, urn: QualifiedUrn) -> tuple[str, ...]:
+    """Return the advisory WIP signals a just-activated Milestone raises.
+
+    Read after the commit, so the count includes the activation itself.
+
+    Args:
+        context: The native context of the addressed root.
+        urn: The activated Milestone.
+
+    Returns:
+        The watchlist lines, or nothing when the Milestone row is not
+        readable or its Track is within its advisory ceiling.
+    """
+    with context.session([urn]) as session:
+        document = session.read_document()
+    row = document_rows(document, Epoch2Collection.MILESTONE).get(urn.entity_key)
+    try:
+        milestone = Milestone.model_validate(row)
+    except ValidationError:
+        return ()
+    return milestone_watchlist(document, milestone)
 
 
 def _register_verb(verb: LifecycleVerb) -> None:

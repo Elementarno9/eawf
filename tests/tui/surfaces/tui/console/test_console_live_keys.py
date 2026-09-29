@@ -214,11 +214,10 @@ _WALKS: tuple[
 ] = (
     (
         "C2-02 u climbs a Run to its Track through the chain the rows state",
-        SessionSetup(route="activity", size=SIZE),
+        # starts on a finished Run, not the Nth Activity row: new Runs reorder Activity,
+        # and the drill onto the caret row is pinned by the test above
+        SessionSetup(route="run.detail", size=SIZE, subjId="RUN-00000005"),
         (
-            ("ArrowDown", None),
-            ("ArrowDown", None),
-            ("Enter", ("run.detail", "RUN-00000005")),
             ("u", ("task.detail", "EAWF-0101")),
             ("u", ("batch.detail", "BAT-0101")),
             ("u", ("milestone", "MLS-0101")),

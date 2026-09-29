@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from pydantic import BaseModel, ConfigDict, Field
+
 from eawf.kernel.state.enums import DecisionStatus, StoreKind
 from eawf.kernel.state.models import Decision, State
 from eawf.kernel.store.envelope import Envelope
@@ -17,6 +19,28 @@ from eawf.surfaces.cli.errors import UserError
 from eawf.workflow.evidence import _io
 
 logger = logging.getLogger(__name__)
+
+
+class DecisionRequest(BaseModel):
+    """The whole request ``decision add`` records, as flags or as a document.
+
+    Attributes:
+        decision_id: The new decision's id, e.g. ``D012``.
+        scope_id: The scope that owns it.
+        summary: The one-line summary that becomes its title.
+        rationale: Why it was decided.
+        alternatives: The alternatives considered, in the order weighed.
+        supersedes: The ACTIVE decision it retires, or ``None``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    decision_id: str = Field(min_length=1)
+    scope_id: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+    alternatives: list[str] = Field(default_factory=list)
+    supersedes: str | None = None
 
 
 def _check_decision_title_clarity(summary: str, *, decision_id: str) -> None:

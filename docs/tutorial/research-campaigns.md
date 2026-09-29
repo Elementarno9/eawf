@@ -11,7 +11,7 @@ This page walks the operator surface end to end. The same actions are available 
 Stage a campaign for the active scope. The topic fans out across the domains declared in the scope's `research:` profile block:
 
 ```bash
-eawf research campaign new "Survey the options-pricing landscape"
+eawf campaign new "Survey the options-pricing landscape"
 ```
 
 The command stages the plan-only campaign and persists it; the staged record surfaces in the Research board's topic tree. Staging never spawns a subprocess — it is a plan-only hand-off.
@@ -21,19 +21,19 @@ The command stages the plan-only campaign and persists it; the staged record sur
 A campaign accumulates open questions as it surveys. Add one (the title is an imperative noun-phrase, 1–72 characters):
 
 ```bash
-eawf research question add "which curve model fits the short tenor"
+eawf question add "which curve model fits the short tenor"
 ```
 
 Mark a question as blocking when its answer gates further work — a blocking question is the one the balanced-autonomy interrupt raises to the operator:
 
 ```bash
-eawf research question add "is the venue feed authoritative" --blocking
+eawf question add "is the venue feed authoritative" --blocking
 ```
 
 List the scope's open questions:
 
 ```bash
-eawf research question list
+eawf question list
 ```
 
 Each row renders its id, status (`open` / `blocked` / `answered` / `dropped`), and a `blocking` marker when set. The verb exits `0` with `no open questions` when the scope has none.

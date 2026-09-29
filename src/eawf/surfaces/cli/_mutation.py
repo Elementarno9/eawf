@@ -136,7 +136,9 @@ def _refuse_frozen_tree(state_path: Path) -> None:
     try:
         refuse_legacy_write(state_path)
     except LegacyOperationRemovedError as exc:
-        raise cli_errors.ValidationError(str(exc), kind="LegacyOperationRemoved") from exc
+        raise cli_errors.ValidationError(
+            str(exc), kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND
+        ) from exc
 
 
 @contextmanager

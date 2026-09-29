@@ -15,7 +15,10 @@ filed on records this projection does not carry -- and a bucket nothing produces
 declared hole whose zero is the absence of a producer, not a count that was taken.
 
 Whose. An item is *mine* when the console acts as a principal the item is addressed to:
-the one principal its record names, or every principal when it names none. A console
+the one principal its record names, or every principal when it names none. A provider
+permission names no principal but the classes that may decide it, and a principal on a
+console acts as an operator, so it is addressed to every principal only when the operator
+class may approve or deny it. A console
 acting as nobody has no ``mine`` to count, so the count comes back unknown naming that,
 rather than borrowing the all-principals count. A notice never counts: it blocks nothing.
 
@@ -145,6 +148,12 @@ _ASKED: Final = frozenset({PendingActionStatus.WAITING.value})
 
 #: The pending-action statuses that are open and not yet in front of anyone.
 _NOT_YET_ASKED: Final = frozenset({PendingActionStatus.CREATED.value})
+
+#: The status the register states an unresolved provider permission under.
+_PERMISSION_OPEN: Final = "open"
+
+#: The principal class a named principal acts as on a console: a person answering.
+CONSOLE_PRINCIPAL_CLASS: Final = "operator"
 
 
 class NotificationPolicy(Epoch2Model):
@@ -276,6 +285,8 @@ class AttentionItem:
         assignee_ref: The one principal the item is addressed to; ``None`` addresses it
             to every principal.
         notification_class: What the item is announced as.
+        deciding_classes: The principal classes that may decide the item, for a record
+            that names classes rather than a principal; ``None`` when it names none.
     """
 
     key: str
@@ -285,9 +296,12 @@ class AttentionItem:
     need: AttentionNeedKind | None
     assignee_ref: str | None
     notification_class: NotificationClass
+    deciding_classes: frozenset[str] | None = None
 
     def addressed_to(self, principal: str) -> bool:
         """Return whether ``principal`` is in this item's audience."""
+        if self.deciding_classes is not None:
+            return CONSOLE_PRINCIPAL_CLASS in self.deciding_classes
         return self.assignee_ref is None or self.assignee_ref == principal
 
 
@@ -389,6 +403,28 @@ def _item(row: ProjectionRow) -> AttentionItem | None:
     )
 
 
+def _permission_item(row: ProjectionRow) -> AttentionItem | None:
+    """Return the open item a provider permission row is, or ``None`` once it is resolved."""
+    if row.status.state is not TruthState.KNOWN or row.status.value != _PERMISSION_OPEN:
+        return None
+    deciding = {
+        name.strip()
+        for verb in ("approve", "deny")
+        for name in row.facts.get(verb, "").split(",")
+        if name.strip()
+    }
+    return AttentionItem(
+        key=row.key,
+        source_ref=row.urn,
+        revision=row.revision,
+        bucket=AttentionBucket.NEEDS_OPERATOR,
+        need=AttentionNeedKind.PERMISSION,
+        assignee_ref=None,
+        notification_class=NotificationClass.NEEDS_PERMISSION,
+        deciding_classes=frozenset(deciding),
+    )
+
+
 def build_attention_view(register: RegisterView) -> AttentionView:
     """Return the Attention register reduced to its open items.
 
@@ -409,9 +445,12 @@ def build_attention_view(register: RegisterView) -> AttentionView:
     order = {bucket: index for index, bucket in enumerate(AttentionBucket)}
     items: list[AttentionItem] = []
     for row in register.rows:
-        if row.collection is not Epoch2Collection.PENDING_ACTION:
+        if row.collection is Epoch2Collection.PERMISSION:
+            item = _permission_item(row)
+        elif row.collection is Epoch2Collection.PENDING_ACTION:
+            item = _item(row)
+        else:
             continue
-        item = _item(row)
         if item is not None:
             items.append(item)
     items.sort(key=lambda i: (order[i.bucket], i.key))
@@ -526,6 +565,7 @@ def deliveries(
 __all__ = [
     "BUCKET_SOURCES",
     "CLASS_SOURCES",
+    "CONSOLE_PRINCIPAL_CLASS",
     "NOTIFICATION_MATRIX",
     "NO_PRINCIPAL_MINE_REASON",
     "AttentionBucket",

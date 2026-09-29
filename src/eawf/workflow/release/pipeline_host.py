@@ -321,9 +321,10 @@ class GitHubReleaseHost:
         finally:
             shutil.rmtree(scratch, ignore_errors=True)
         try:
-            reply = json.loads(result.stdout)
+            envelope = json.loads(result.stdout)
         except json.JSONDecodeError:
-            reply = None
+            envelope = None
+        reply = envelope.get("result") if isinstance(envelope, dict) else None
         if not isinstance(reply, dict) or "receipts" not in reply:
             detail = (result.stdout or result.stderr).strip()[-400:]
             raise PipelineHostError(f"release receipts exited {result.returncode}: {detail}")

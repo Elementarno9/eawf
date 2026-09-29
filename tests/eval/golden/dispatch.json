@@ -1,6 +1,7 @@
 {
   "body_keys": [
     "batch_ref",
+    "contract",
     "dispatched",
     "frontier",
     "kind",

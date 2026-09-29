@@ -35,6 +35,7 @@ from eawf.workflow.verify.release_readiness import (
     derive_required_signals,
 )
 from tests._release_helpers import (
+    MANIFEST_DIGEST,
     NOW,
     all_passing,
     dev1_config,
@@ -194,8 +195,11 @@ def test_approval_of_a_red_sweep_names_the_first_red_gate() -> None:
         approve_release(
             release_record(),
             sweep,
+            dev1_config(),
             approval_ref="receipt://approval/0029",
             approved_at=NOW,
+            proof_digest=MANIFEST_DIGEST,
+            verification_debts=(),
         )
     assert excinfo.value.code is ReleaseDenialCode.RELEASE_NOT_READY
     assert "release_not_ready" in str(excinfo.value)
@@ -217,8 +221,11 @@ def test_a_component_gate_going_red_names_the_component_gate() -> None:
         approve_release(
             release_record(),
             sweep,
+            dev1_config(),
             approval_ref="receipt://approval/0029",
             approved_at=NOW,
+            proof_digest=MANIFEST_DIGEST,
+            verification_debts=(),
         )
     assert "dependencies.inventory" in str(excinfo.value)
 
@@ -230,8 +237,11 @@ def test_a_waiver_only_denial_names_the_waivers_not_a_gate() -> None:
         approve_release(
             release_record(),
             sweep,
+            dev1_config(),
             approval_ref="receipt://approval/0029",
             approved_at=NOW,
+            proof_digest=MANIFEST_DIGEST,
+            verification_debts=(),
         )
     assert "every gate is green" in str(excinfo.value)
     assert "unexplained" in str(excinfo.value)
@@ -241,8 +251,11 @@ def test_a_green_sweep_approves_and_binds_the_receipt() -> None:
     approved = approve_release(
         release_record(),
         _sweep(),
+        dev1_config(),
         approval_ref="receipt://approval/0029",
         approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
     )
     assert approved.status is ReleaseStatus.APPROVED
     assert approved.approval_ref == "receipt://approval/0029"
@@ -253,8 +266,11 @@ def test_approval_from_a_non_candidate_keeps_the_illegal_transition_code() -> No
         approve_release(
             release_record(status=ReleaseStatus.PREFLIGHT_FAILED),
             _sweep(),
+            dev1_config(),
             approval_ref="receipt://approval/0029",
             approved_at=NOW,
+            proof_digest=MANIFEST_DIGEST,
+            verification_debts=(),
         )
     assert excinfo.value.code is ReleaseDenialCode.ILLEGAL_RELEASE_TRANSITION
 
@@ -266,8 +282,11 @@ def test_approval_refuses_a_naive_timestamp() -> None:
         approve_release(
             release_record(),
             _sweep(),
+            dev1_config(),
             approval_ref="receipt://approval/0029",
             approved_at=datetime(2026, 9, 4, 12, 0),
+            proof_digest=MANIFEST_DIGEST,
+            verification_debts=(),
         )
 
 

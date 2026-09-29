@@ -189,15 +189,29 @@ class ReleaseInvalidationCause(StrEnum):
     Recorded on :attr:`Release.last_invalidation` so the return to DRAFT
     is a typed fact rather than an inference from a status history.
 
+    The first six name which approved input moved, so an invalidated
+    approval says what has to be re-approved rather than only that
+    something did.
+
     Values:
+        HEAD_MOVED: The source commit or tree differs from the approved one.
+        MEMBERSHIP_CHANGED: The accepted membership bundles differ.
+        ARTIFACT_CHANGED: The manifest or the proof digest differs.
+        NOTES_CHANGED: The release notes differ.
+        TARGETS_CHANGED: The publication target set differs.
+        POLICY_CHANGED: The policy generation differs.
         INPUTS_REPLACED: Candidate inputs changed before any effect.
         PREFLIGHT_FAILED: A required readiness signal came back non-pass.
-        APPROVAL_INVALIDATED: Approved inputs changed before any effect.
     """
 
+    HEAD_MOVED = "head_moved"
+    MEMBERSHIP_CHANGED = "membership_changed"
+    ARTIFACT_CHANGED = "artifact_changed"
+    NOTES_CHANGED = "notes_changed"
+    TARGETS_CHANGED = "targets_changed"
+    POLICY_CHANGED = "policy_changed"
     INPUTS_REPLACED = "inputs_replaced"
     PREFLIGHT_FAILED = "preflight_failed"
-    APPROVAL_INVALIDATED = "approval_invalidated"
 
 
 #: PEP 440 grammar this train accepts: ``X.Y.Z``, ``X.Y.ZrcN`` or
@@ -348,6 +362,8 @@ class ReleaseInvalidation(_StrictModel):
         detail: Non-blank prose naming what changed, dense enough that a
             reader can tell which input moved.
         prior_status: The status the record left.
+        invalidated_approval_ref: The approval the edge voided, or ``None``
+            when the record held no approval.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -356,6 +372,53 @@ class ReleaseInvalidation(_StrictModel):
     invalidated_at: UtcDatetime
     detail: Annotated[str, Field(min_length=1, max_length=1000)]
     prior_status: ReleaseStatus
+    invalidated_approval_ref: ReferenceStr | None = None
+
+
+class ReleaseApprovalFreeze(_StrictModel):
+    """The exact inputs one release approval accepted.
+
+    An approval is a decision about these values, not about whatever the
+    record holds later, so they are copied out at approval and compared
+    against the live inputs before any external effect. The manifest
+    digest covers the artifact inventory, the per-target artifact claims,
+    the platform claims and the notes, so artifacts and claims are frozen
+    through it rather than restated here.
+
+    Attributes:
+        membership_refs: The accepted Milestone acceptance bundles.
+        source_sha: The commit the artifacts were built from.
+        source_tree_sha: The tree of that commit.
+        tag: The tag the release publishes under.
+        manifest_ref: Pointer to the approved manifest.
+        manifest_digest: Digest of that manifest.
+        target_ids: The publication targets, sorted.
+        policy_revision: The policy generation the approval was given under.
+        proof_digest: Digest of the exact artifact set approved.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    membership_refs: tuple[ReferenceStr, ...]
+    source_sha: ShaStr
+    source_tree_sha: ShaStr
+    tag: Annotated[str, Field(pattern=r"^v\d+\.\d+\.\d+(?:rc\d+|\.dev\d+)?$")]
+    manifest_ref: ReferenceStr
+    manifest_digest: Sha256DigestStr
+    target_ids: Annotated[tuple[TargetIdStr, ...], Field(min_length=1)]
+    policy_revision: Annotated[int, Field(ge=1)]
+    proof_digest: Sha256DigestStr
+
+    @model_validator(mode="after")
+    def _targets_are_a_sorted_set(self) -> ReleaseApprovalFreeze:
+        """Keep one spelling per target set, so equal sets compare equal.
+
+        Raises:
+            ValueError: When a target repeats or the ids are not sorted.
+        """
+        if list(self.target_ids) != sorted(set(self.target_ids)):
+            raise ValueError(f"target_ids must be sorted and distinct, got {list(self.target_ids)}")
+        return self
 
 
 class AdoptedTargetObservation(_StrictModel):
@@ -623,6 +686,8 @@ class Release(_StrictModel):
         publication_operation_ref: Set once external effect starts.
         supersedes_release_ref: Correction lineage for a burned version.
         last_invalidation: Typed record of the last return to DRAFT.
+        approved_inputs: The inputs the current approval accepted; set with
+            :attr:`approval_ref` and cleared when the approval is voided.
         adoption: Typed record of an out-of-band publication adopted into
             this checkpoint. Mutually exclusive with
             :attr:`approval_ref`.
@@ -649,6 +714,7 @@ class Release(_StrictModel):
     publication_operation_ref: ReferenceStr | None = None
     supersedes_release_ref: ReleaseKeyStr | None = None
     last_invalidation: ReleaseInvalidation | None = None
+    approved_inputs: ReleaseApprovalFreeze | None = None
     adoption: ReleaseAdoption | None = None
     revision: Annotated[int, Field(ge=0)] = 0
 
@@ -700,7 +766,8 @@ class Release(_StrictModel):
                 or later is missing its source binding or its manifest
                 digest, or when a record at
                 :attr:`ReleaseStatus.APPROVED` or later carries no
-                approval reference.
+                approval reference, or when approved inputs are carried
+                without an approval or name another tag.
         """
         if self.adoption is not None:
             return self
@@ -719,6 +786,13 @@ class Release(_StrictModel):
                 raise ValueError(f"status {self.status.value!r} requires pinned fields: {missing}")
         if self.status in _APPROVED_STATUSES and self.approval_ref is None:
             raise ValueError(f"status {self.status.value!r} requires approval_ref")
+        if self.approved_inputs is not None:
+            if self.approval_ref is None:
+                raise ValueError("approved_inputs belong to an approval; approval_ref is unset")
+            if self.approved_inputs.tag != f"v{self.version}":
+                raise ValueError(
+                    f"approved tag {self.approved_inputs.tag!r} is not v{self.version}"
+                )
         return self
 
     @model_validator(mode="after")
@@ -877,6 +951,7 @@ __all__ = [
     "ReferenceStr",
     "Release",
     "ReleaseAdoption",
+    "ReleaseApprovalFreeze",
     "ReleaseChannel",
     "ReleaseCheckpoint",
     "ReleaseGateProfile",

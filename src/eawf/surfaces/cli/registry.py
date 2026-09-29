@@ -2,7 +2,7 @@
 
 :mod:`eawf.surfaces.cli.app` builds the root :class:`typer.Typer` and wires its
 inline-defined surfaces (root callback, ``version`` / ``scope-debug`` /
-``tui`` commands, logging, ``main``). Everything else — the ~50 sub-Typer
+``ui`` commands, logging, ``main``). Everything else — the ~50 sub-Typer
 groups and the handful of direct commands that hang off the root — is
 declared here as data and mounted by :func:`register_commands`.
 
@@ -191,6 +191,9 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("mcp", "eawf.surfaces.cli.commands.mcp", "mcp_app"),
     GroupRow("plan", "eawf.surfaces.cli.commands.plan", "plan_app"),
     GroupRow("research", "eawf.surfaces.cli.commands.research", "research_app"),
+    # The campaign and question entity groups, beside the research reads.
+    GroupRow("campaign", "eawf.surfaces.cli.commands.research", "campaign_app"),
+    GroupRow("question", "eawf.surfaces.cli.commands.research", "question_app"),
     GroupRow("draft", "eawf.surfaces.cli.commands.draft", "draft_app"),
     # Wave-attached verbs (fix-ci, review, policy) — imported for side
     # effect; each attaches its verb onto the already-mounted wave group.

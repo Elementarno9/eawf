@@ -394,8 +394,10 @@ def test_release_advance_cli_sends_only_the_key_and_prints_the_next_step(
 
     assert result.exit_code == 0, result.output
     assert calls == [{"method": "release.advance_train", "params": {"release_key": DEV2_KEY}}]
-    assert f"advanced past {DEV2_KEY} (baked) -> {DEV3_KEY} open" in result.output
-    assert "next: eawf release create 0.7.0.dev3" in result.output
+    assert f"result.closed.key: {DEV2_KEY}" in result.output
+    assert "result.closed.status: baked" in result.output
+    assert f"result.train.current_checkpoint: {DEV3_KEY}" in result.output
+    assert "link next: eawf release create 0.7.0.dev3" in result.output
 
 
 def test_release_advance_cli_emits_the_reply_as_json(
@@ -412,7 +414,7 @@ def test_release_advance_cli_emits_the_reply_as_json(
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
-    assert payload["advance"]["opened_key"] == DEV3_KEY
+    assert payload["result"]["advance"]["opened_key"] == DEV3_KEY
 
 
 def test_release_advance_cli_takes_no_record_file() -> None:

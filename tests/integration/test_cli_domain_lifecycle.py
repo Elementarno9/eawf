@@ -112,6 +112,7 @@ _VERB_ROWS: tuple[tuple[list[str], str, str, str], ...] = (
     ),
     (["batch", "complete"], domain_cmd.BATCH_COMPLETE, "--expected-batch-revision", _BATCH_URN),
     (["task", "promote"], domain_cmd.TASK_PROMOTE, "--expected-task-revision", _TASK_URN),
+    (["task", "demote"], domain_cmd.TASK_DEMOTE, "--expected-task-revision", _TASK_URN),
     (["task", "claim"], domain_cmd.TASK_CLAIM, "--expected-task-revision", _TASK_URN),
     (["task", "start"], domain_cmd.TASK_START, "--expected-task-revision", _TASK_URN),
     (["task", "ready"], domain_cmd.TASK_READY, "--expected-task-revision", _TASK_URN),
@@ -698,6 +699,7 @@ def test_operator_verb_spelling_of_each_method() -> None:
         "batch observe-merge",
         "batch complete",
         "task promote",
+        "task demote",
         "task claim",
         "task start",
         "task ready",
@@ -1130,6 +1132,8 @@ def test_task_submit_forwards_the_changed_paths(
             "src/eawf/two.py",
             "--resulting-tree-digest",
             "sha256:" + "b" * 64,
+            "--expected-run-revision",
+            "2",
             "--idempotency-key",
             "submit-0001",
             "--actor",
@@ -1141,6 +1145,7 @@ def test_task_submit_forwards_the_changed_paths(
     assert method == domain_cmd.CANDIDATE_SUBMIT
     assert params["changed_paths"] == ["src/eawf/one.py", "src/eawf/two.py"]
     assert params["task_ref"] == _TASK_URN
+    assert params["expected_revision"] == 2
     assert "candidate recorded" in result.output
 
 
@@ -1168,6 +1173,8 @@ def test_task_submit_without_a_changed_path_is_refused_before_the_wire(
             f"artifact://git/commit/{'a' * 40}",
             "--resulting-tree-digest",
             "sha256:" + "b" * 64,
+            "--expected-run-revision",
+            "2",
             "--idempotency-key",
             "submit-0001",
             "--actor",
@@ -1207,6 +1214,8 @@ def test_task_submit_refusal_renders_the_daemons_code_unchanged(
             "src/eawf/one.py",
             "--resulting-tree-digest",
             "sha256:" + "b" * 64,
+            "--expected-run-revision",
+            "2",
             "--idempotency-key",
             "submit-0001",
             "--actor",

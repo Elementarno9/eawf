@@ -23,12 +23,10 @@ import typer
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.commands.release import (
     RELEASE_RPC_METHODS,
-    _dispatch,
-    _record_line,
+    _answer,
     release_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.output import emit_json_or_text
 
 logger = logging.getLogger(__name__)
 
@@ -72,40 +70,27 @@ def release_candidate(
     record pins is accepted there.
     """
     flags: GlobalFlags = ctx.obj
+    result = _answer(
+        ctx,
+        RELEASE_RPC_METHODS["candidate"],
+        {
+            "version": version,
+            "receipts_dir": str(receipts_dir),
+            "source_sha": source,
+            "manifest_ref": manifest_ref,
+        },
+        subject=version,
+    )
+    if result is None or manifest_out is None:
+        return
     try:
-        result = _dispatch(
-            RELEASE_RPC_METHODS["candidate"],
-            {
-                "version": version,
-                "receipts_dir": str(receipts_dir),
-                "source_sha": source,
-                "manifest_ref": manifest_ref,
-            },
-        )
-        if manifest_out is not None:
-            manifest_out.parent.mkdir(parents=True, exist_ok=True)
-            manifest_out.write_bytes(
-                orjson.dumps(result.get("manifest"), option=orjson.OPT_INDENT_2)
-            )
+        manifest_out.parent.mkdir(parents=True, exist_ok=True)
+        manifest_out.write_bytes(orjson.dumps(result.get("manifest"), option=orjson.OPT_INDENT_2))
     except OSError as exc:
         cli_errors.emit_error(
             cli_errors.UserError(f"cannot write the frozen manifest: {exc}", kind="InvalidInput"),
             flags=flags,
         )
-        return
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    saved = "" if manifest_out is None else f"\n  manifest saved: {manifest_out}"
-    record = result.get("release") or {}
-    text = (
-        f"{_record_line(result)}\n"
-        f"  record: {result.get('release_record_id')}\n"
-        f"  source: {record.get('source_sha')} tree {result.get('source_tree_sha')}\n"
-        f"  manifest: {result.get('manifest_digest')}\n"
-        f"  supersedes: {result.get('supersedes_release_ref') or '(nothing)'}{saved}"
-    )
-    emit_json_or_text(result, text, flags=flags)
 
 
 __all__ = ["release_candidate"]

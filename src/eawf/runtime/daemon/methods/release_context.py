@@ -6,7 +6,9 @@ into, is the payload a record this train declares, is the caller holding
 the current revision, and which authored checkpoint configuration
 applies. Answering them differently in two handlers is how a verb ends
 up accepting a record another one would have refused, so they live here
-once and both handler modules import them.
+once and both handler modules import them. The check that an approval
+still binds the inputs it froze runs before external effect for the same
+reason.
 
 This module imports no sibling handler module, which is what keeps the
 release family's import graph a layer rather than a tangle.
@@ -16,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +36,9 @@ from eawf.workflow.release.ledger import (
     StaleReleaseRevisionError,
     assert_fresh_revision,
 )
+from eawf.workflow.release.lifecycle import ReleaseTransitionError
+from eawf.workflow.release.preflight import invalidate_changed_approval
+from eawf.workflow.release.records import record_release
 from eawf.workflow.release.train import V07_TRAIN, checkpoint_config_yaml
 
 logger = logging.getLogger(__name__)
@@ -142,9 +148,54 @@ def assert_revision(release: Release, expected_revision: int) -> None:
         raise DaemonValidationError(f"validation_failed: {exc}") from exc
 
 
+def void_changed_approval(
+    state_path: Path,
+    release: Release,
+    config: ReleaseConfig,
+    *,
+    proof_digest: str,
+    now: datetime,
+) -> None:
+    """Return *release* to DRAFT and refuse when an approved input moved.
+
+    The returned-to-DRAFT record is persisted before the refusal, so the
+    voided approval is a recorded fact rather than a lost reply.
+
+    Args:
+        state_path: Path to ``state.json``.
+        release: The approved record about to publish.
+        config: Its checkpoint configuration.
+        proof_digest: Digest of the artifact set about to publish.
+        now: Timezone-aware UTC instant of the check.
+
+    Raises:
+        DaemonValidationError: ``approval_invalidated`` naming the typed
+            cause when an approved input changed; or the transition or
+            validation error the check itself raised.
+    """
+    try:
+        voided = invalidate_changed_approval(release, config, proof_digest=proof_digest, at=now)
+    except ReleaseTransitionError as exc:
+        raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
+    except (ValidationError, ValueError) as exc:
+        raise DaemonValidationError(f"validation_failed: {exc}") from exc
+    if voided is None or voided.last_invalidation is None:
+        return
+    record_release(
+        state_path, voided, recorded_at=now, summary=f"invalidate {voided.key}: approval void"
+    )
+    cause = voided.last_invalidation.cause.value
+    raise DaemonValidationError(
+        f"validation_failed: approval_invalidated: {cause}: "
+        f"{voided.last_invalidation.detail}; {voided.key} is back at draft, "
+        f"so re-pin and approve it again"
+    )
+
+
 __all__ = [
     "assert_revision",
     "require_state_path",
     "resolve_config",
     "validated_release",
+    "void_changed_approval",
 ]

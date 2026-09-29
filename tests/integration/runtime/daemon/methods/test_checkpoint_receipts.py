@@ -748,8 +748,9 @@ def test_release_receipts_cli_exits_non_zero_naming_each_refused_gate(
     result = CliRunner().invoke(app, ["release", "receipts", "0.7.0.dev2"])
 
     assert result.exit_code == exit_codes.STATE_CONFLICT
-    assert "pass migration" in result.output
-    assert "FAIL schema_strictness" in result.output
+    assert "guard: every_gate_proven" in result.output
+    assert '"gate":"migration"' in result.output
+    assert '"gate":"schema_strictness"' in result.output
     assert "proof exited 1" in result.output
 
 

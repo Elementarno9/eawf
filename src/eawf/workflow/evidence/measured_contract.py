@@ -927,7 +927,9 @@ def refresh_contract_metadata(
     )
 
 
-def _require_citable_here(state: State, artifact: Artifact) -> None:
+def _require_citable_here(
+    state: State, artifact: Artifact, *, provider_tuple: tuple[str, ...] | None
+) -> None:
     """Refuse *artifact* when its measurement does not bind this repository.
 
     Only a promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
@@ -936,17 +938,24 @@ def _require_citable_here(state: State, artifact: Artifact) -> None:
     nowhere its measurement binds, so it is citable only inside the report
     that produced it and never from a plan. A contract whose environment
     carries no ``repository`` (or a state with no ``project`` to compare
-    against) is unrestricted. A refused contract does not transfer as
-    measured: the remedy is to re-run its recorded ``probe_command`` here.
+    against) is unrestricted. A provider-scoped contract -- one whose
+    environment records a non-empty ``provider_tuple`` -- transfers only on
+    an exact match with *provider_tuple*. A refused contract does not
+    transfer as measured: the remedy is to re-run its recorded
+    ``probe_command`` here.
 
     Args:
         state: State the citation was resolved against.
         artifact: The resolved artifact row.
+        provider_tuple: The providers the citing plan's Runs dispatch to,
+            or ``None`` when the citation is read outside any plan and so
+            has no dispatch environment to be judged against.
 
     Raises:
         UserError: ``kind="contract_environment_incompatible"`` when the
-            contract row records no environment, or its environment names a
-            repository other than *state*'s own project.
+            contract row records no environment, its environment names a
+            repository other than *state*'s own project, or it was
+            measured through providers other than exactly *provider_tuple*.
     """
     if artifact.uri != CONTRACT_BODY_URI:
         return
@@ -957,6 +966,18 @@ def _require_citable_here(state: State, artifact: Artifact) -> None:
         raise UserError(
             f"contract {artifact.id} records no measurement environment, so it is citable "
             f"only inside the report that produced it; {reprobe}",
+            kind="contract_environment_incompatible",
+        )
+    measured_through = tuple(environment.get("provider_tuple") or ())
+    if provider_tuple is not None and measured_through and measured_through != provider_tuple:
+        logger.warning(
+            f"resolve_contract_citation provider_refused artifact_id={artifact.id!r} "
+            f"measured_through={measured_through!r} provider_tuple={provider_tuple!r}"
+        )
+        raise UserError(
+            f"contract {artifact.id} was measured through providers {list(measured_through)}, "
+            f"but the citing plan dispatches to {list(provider_tuple)}; a provider-scoped "
+            f"measurement transfers only on an exact provider match, so {reprobe}",
             kind="contract_environment_incompatible",
         )
     if state.project is None:
@@ -975,7 +996,9 @@ def _require_citable_here(state: State, artifact: Artifact) -> None:
         )
 
 
-def resolve_contract_citation(state: State, citation: str) -> Artifact:
+def resolve_contract_citation(
+    state: State, citation: str, *, provider_tuple: tuple[str, ...] | None = None
+) -> Artifact:
     """Resolve *citation* to a promoted artifact row.
 
     Accepts an artifact id or a full ``urn:eawf:v1:artifact:<scope>/<id>``
@@ -983,12 +1006,15 @@ def resolve_contract_citation(state: State, citation: str) -> Artifact:
     outright: that path means the contract was never promoted, so the
     error names the promotion command rather than reporting a bare
     not-found the operator cannot act on. A citation that resolves to a
-    contract measured in another repository is refused too -- see
+    contract measured in another repository, or through providers other
+    than exactly *provider_tuple*, is refused too -- see
     :func:`_require_citable_here`.
 
     Args:
         state: State to resolve against.
         citation: Artifact id, artifact URN, or a raw spike path.
+        provider_tuple: The providers the citing plan's Runs dispatch to;
+            ``None`` when the citation is read outside any plan.
 
     Returns:
         The registered :class:`~eawf.kernel.state.models.Artifact`.
@@ -999,7 +1025,8 @@ def resolve_contract_citation(state: State, citation: str) -> Artifact:
             ``kind="InvalidInput"`` when it is a malformed or
             non-artifact URN; ``kind="NotFound"`` when the id is not
             registered; ``kind="contract_environment_incompatible"`` when
-            it resolves to a contract measured in another repository.
+            it resolves to a contract measured in another repository or
+            through other providers.
     """
     if _is_local_spike_citation(citation):
         contract_id = _contract_id_for_observation_ref(citation)
@@ -1020,7 +1047,7 @@ def resolve_contract_citation(state: State, citation: str) -> Artifact:
         artifact = show_artifact(state, parsed.id)
     else:
         artifact = show_artifact(state, citation)
-    _require_citable_here(state, artifact)
+    _require_citable_here(state, artifact, provider_tuple=provider_tuple)
     return artifact
 
 

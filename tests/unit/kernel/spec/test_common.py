@@ -733,10 +733,11 @@ def test_gate_spec_command_exit_zero_accepts_bare_eawf_head() -> None:
     """A bare ``eawf`` head constructs without a wrapper in front of it.
 
     The floor admits whole argv heads, not wrapper-qualified forms, so
-    the unwrapped invocation is accepted on the same footing.
+    the unwrapped invocation is accepted on the same footing as long as
+    it names a read-only sub-verb.
     """
-    gate = _gate(args={"argv": ["eawf"]})
-    assert gate.args["argv"] == ["eawf"]
+    gate = _gate(args={"argv": ["eawf", "status"]})
+    assert gate.args["argv"] == ["eawf", "status"]
 
 
 def test_gate_spec_command_exit_zero_rejects_unlisted_head_under_uv_run() -> None:

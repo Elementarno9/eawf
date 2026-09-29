@@ -1,8 +1,8 @@
 """``research.*`` JSON-RPC methods: typed append to ``research_campaign.jsonl``.
 
 The :func:`create_campaign` method is the daemon-canonical writer for
-``<state_dir>/store/research_campaign.jsonl``. The ``eawf research campaign
-new`` CLI surface proxies a staged campaign through this RPC so the
+``<state_dir>/store/research_campaign.jsonl``. The ``eawf campaign new``
+CLI surface proxies a staged campaign through this RPC so the
 single-writer invariant in AGENTS rule 4 holds; it falls back to the shared
 :func:`persist_campaign` helper directly only when the daemon is unavailable
 (CI / one-shot / a daemon predating this method).
@@ -576,7 +576,7 @@ class AddQuestionParams(BaseModel):
     """Params for :func:`add_question`.
 
     The campaign control-plane ``add_question`` channel: the operator (via the
-    TUI ``o`` key or the headless ``eawf research question add`` verb) injects a
+    TUI ``o`` key or the headless ``eawf question add`` verb) injects a
     new :class:`~eawf.kernel.state.models.OpenQuestion` into the campaign ledger
     mid-run. The TUI sends only ``title``; the other fields default so the row
     lands as an ordinary advisory open question unless the operator escalates
@@ -677,7 +677,7 @@ async def add_question(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     """Write an :class:`OpenQuestion` row through the canonical state writer.
 
     The daemon-canonical mutator for ``state.open_questions`` (AGENTS rule 4);
-    the TUI ``o`` key + the headless ``eawf research question add`` verb proxy
+    the TUI ``o`` key + the headless ``eawf question add`` verb proxy
     here. The row lands through the same per-file portalock + WAL + event-append
     path every state mutator uses (:func:`commit_worktree_state`), so the
     single-writer invariant holds and the board re-renders the new question on
@@ -848,7 +848,7 @@ async def resolve_question(ctx: MethodContext, params: dict[str, Any]) -> dict[s
 
     The daemon-canonical mutator that unblocks a campaign halted on a blocking
     question (AGENTS rule 4); the TUI ``a`` approve key on a surfaced blocking
-    question + the headless ``eawf research question resolve`` verb proxy here.
+    question + the headless ``eawf question resolve`` verb proxy here.
     The row moves to a terminal status with its ``blocking`` bit cleared through
     the same per-file portalock + WAL + event-append path every state mutator
     uses (:func:`commit_worktree_state`), so the single-writer invariant holds

@@ -44,11 +44,12 @@ import uuid
 from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, ValidationError
 
-from eawf.kernel.identity import EntityKind, QualifiedUrn
+from eawf.kernel.identity import EntityKind, QualifiedUrn, parse_qualified_urn
+from eawf.kernel.runtime.delegation import ChildCeilingBreach, SubtreeOverrun
 from eawf.kernel.state.canonical_sequence import CanonicalSequenceAllocator
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import Epoch2Model, PrincipalKey, StrictNonNegativeInt
@@ -63,8 +64,9 @@ from eawf.kernel.state.epoch2.urns import AnyEntityUrn
 from eawf.kernel.state.epoch2.values import EntityOrigin
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.store.ledger import LedgerError, read_ledger_records
+from eawf.kernel.store.ledger import LedgerError, LedgerRecord, read_ledger_records
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
+from eawf.runtime.daemon.delegation import delegation_overrun
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import (
     CANONICAL_SEQUENCE_KEY,
@@ -78,6 +80,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
     _high_water_mark,
     _persist,
     _replayed_receipt,
+    commit_ledger_append,
 )
 from eawf.workflow.lifecycle.epoch2 import LifecycleRecord
 
@@ -114,6 +117,9 @@ CREATE_SPECS: Final[Mapping[LifecycleEntity, type[Epoch2Model]]] = {
     LifecycleEntity.TASK: TaskCreateSpec,
     LifecycleEntity.RUN: RunCreateSpec,
 }
+
+#: The run-ledger key a child admitted past its ``child_runs`` ceiling is filed under.
+_CHILD_CEILING_KEY_PREFIX: Final = "CHILD-CEILING-"
 
 #: The origin every record admitted here carries.
 _NATIVE_ORIGIN: Final = EntityOrigin(kind="native", mapping_basis="native", confidence="exact")
@@ -162,6 +168,7 @@ def run_create(
     context: Epoch2RootContext,
     request: CreateRequest,
     now: datetime,
+    over_ceiling: Literal["refuse", "record"] = "refuse",
 ) -> CommittedTransaction:
     """Admit one new record into the tree, or refuse it having written nothing.
 
@@ -175,6 +182,11 @@ def run_create(
         request: The already-validated request parameters.
         now: When the record was created. Supplied by the caller so the
             stored record, the event and the WAL record all agree.
+        over_ceiling: What a child Run that takes its delegation subtree
+            past a ``child_runs`` ceiling meets. A delegation is refused; a
+            child the host already started is admitted and the breach is
+            filed on the run ledger, because refusing its record would hide
+            the child rather than stop it.
 
     Returns:
         The receipt of the committed create beside the firehose envelope
@@ -187,8 +199,9 @@ def run_create(
             different parameters, names a kind with no lifecycle machine,
             carries a create document that does not validate, was decided
             against a cursor the tree has moved past, names a key already
-            taken, names a parent that is not a live row, or carries free
-            text with a leak shape. Nothing was written.
+            taken, names a parent that is not a live row, delegates past a
+            ``child_runs`` ceiling under ``refuse``, or carries free text
+            with a leak shape. Nothing was written.
         NativeAuthorityRequiredError: The tree left epoch 2.
         MigrationDualAuthorityError: The tree's select is not whole.
         LockTimeout: A lock stayed held past the lock timeout.
@@ -209,6 +222,9 @@ def run_create(
         _require_cursor(document, request=request)
         _require_key_free(session, document=document, collection=collection, request=request)
         _require_live_parents(document, spec=spec, request=request)
+        overrun = _child_ceiling_overrun(
+            session, document, spec=spec, request=request, over_ceiling=over_ceiling
+        )
         allocator = CanonicalSequenceAllocator.recover(
             workspace_key=request.urn.workspace_key,
             high_water_mark=_high_water_mark(document),
@@ -245,7 +261,9 @@ def run_create(
                 f"epoch2 create committed root={context.identity.root_id} "
                 f"event={receipt.event_name} sequence={receipt.canonical_sequence}"
             )
-            return CommittedTransaction(receipt=receipt, envelope=plan.envelope)
+        if overrun is not None:
+            _file_breach(session, overrun, child=request.urn, now=now)
+        return CommittedTransaction(receipt=receipt, envelope=plan.envelope)
 
 
 def _create_spec(entity: LifecycleEntity, *, request: CreateRequest) -> Epoch2Model:
@@ -426,6 +444,66 @@ def _require_live_parents(
             guard="parent_record_live",
             remediation=f"Create the {parent.kind.value} before placing records under it.",
         )
+
+
+def _child_ceiling_overrun(
+    session: RootSession,
+    document: dict[str, Any],
+    *,
+    spec: Epoch2Model,
+    request: CreateRequest,
+    over_ceiling: Literal["refuse", "record"],
+) -> SubtreeOverrun | None:
+    """Return the ceiling a delegated Run passes, refusing it unless it is recorded.
+
+    Every Run above the child is checked, because each sealed a ceiling of its
+    own and the child counts in every one of their subtrees.
+
+    Raises:
+        TransactionRefusedError: The child passes a ceiling under ``refuse``.
+    """
+    if not isinstance(spec, RunCreateSpec) or spec.parent_run_ref is None:
+        return None
+    records = read_ledger_records(session.ledger_path(Epoch2Collection.RUN))
+    overrun = delegation_overrun(document, records, child=request.urn, parent=spec.parent_run_ref)
+    if overrun is None or over_ceiling == "record":
+        return overrun
+    raise TransactionRefusedError(
+        code=TransactionRefusalCode.TRANSITION_GUARD_FAILED,
+        detail=f"run {overrun.ancestor!r} resolves child_runs={overrun.ceiling}, and this "
+        f"child would make its delegation subtree {overrun.descendants} Runs",
+        entity_ref=str(request.urn),
+        guard="child_runs_ceiling",
+        remediation="Wait for the subtree to finish, or delegate under a Run whose "
+        "policy resolves a higher child_runs ceiling.",
+    )
+
+
+def _file_breach(
+    session: RootSession, overrun: SubtreeOverrun, *, child: QualifiedUrn, now: datetime
+) -> None:
+    """Append the breach of a child admitted past a ceiling to the run ledger."""
+    breach = ChildCeilingBreach(
+        child_run_ref=child,
+        ancestor_run_ref=parse_qualified_urn(overrun.ancestor),
+        ceiling=overrun.ceiling,
+        descendants=overrun.descendants,
+        recorded_at=now,
+    )
+    commit_ledger_append(
+        session,
+        LedgerRecord(
+            collection=Epoch2Collection.RUN,
+            record_key=f"{_CHILD_CEILING_KEY_PREFIX}{child.entity_key}",
+            status="breached",
+            recorded_at=now,
+            payload=breach.model_dump(mode="json"),
+        ),
+    )
+    logger.warning(
+        f"_file_breach child={child.entity_key} ancestor={overrun.ancestor} "
+        f"ceiling={overrun.ceiling} descendants={overrun.descendants}"
+    )
 
 
 def _create_envelope(

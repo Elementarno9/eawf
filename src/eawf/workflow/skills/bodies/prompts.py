@@ -19,6 +19,7 @@ from typing import Final
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eawf.platform.rules.records import SelectorToken
+from eawf.workflow.planning.orchestration import ORCHESTRATION_STATEMENT
 
 logger = logging.getLogger(__name__)
 
@@ -262,6 +263,7 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
         skill_id="dispatch",
         task=(
             "You are the coordinator for one Delivery Batch. You do not write product code.\n\n"
+            f"{ORCHESTRATION_STATEMENT}\n\n"
             "Your job is to bring the Batch's ready Tasks to a candidate, by dispatching each one"
             " to its own Run, and to keep the Batch's frontier moving."
         ),
@@ -281,8 +283,7 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " forced sequential, and which constraint forces each. The operator sees this before"
             " any Run starts.",
             "Dispatch each ready Task as its own Run under its own Task scope. One Task, one Run,"
-            " one lease, one workspace. You never edit the product yourself and you never hold a"
-            " write scope.",
+            " one lease, one workspace.",
             "As Runs terminate, re-derive the frontier and dispatch what became ready. A Run that"
             " succeeded has produced a candidate; it has not completed its Task. Integration is"
             " the daemon's, not yours.",
@@ -295,8 +296,8 @@ _PROMPTS: Final[tuple[SkillPrompt, ...]] = (
             " the correct action is to dispatch a Task or report a plan defect.",
             "You do not decide that work is done. A Run report is not Task completion.",
             "A Task marked exclusive runs alone: dispatch nothing beside it.",
-            "You do not raise concurrency beyond the resolved ceiling, and you do not lower it to"
-            " be safe — the ceiling is policy, not preference.",
+            "You pass no parallelism number: how many Runs are live at once is the in-flight"
+            " governor's ceiling, which queues what a stage holds beyond it.",
         ),
         output=(
             "A typed coordination report: the concurrency plan you computed, every Run you"

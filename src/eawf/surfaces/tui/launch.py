@@ -1,4 +1,4 @@
-"""``eawf tui``'s launcher: resolve a tree's authority, then open the right app.
+"""``eawf ui``'s launcher: resolve a tree's authority, then open the right app.
 
 A tree is in epoch 1 or epoch 2 (:func:`~eawf.kernel.state.epoch2.authority.resolve_authority`),
 and the launcher opens a different app for each: the epoch-2 console
@@ -64,7 +64,7 @@ WORKSPACE_KEY_ENV = "EAWF_WORKSPACE_KEY"
 
 #: Printed before the epoch-1 app opens on an ordinary epoch-1 tree, so an operator who
 #: expected the native console knows why they did not get it.
-EPOCH1_NOTICE = "eawf tui: this tree is epoch-1; opening the classic console"
+EPOCH1_NOTICE = "eawf ui: this tree is epoch-1; opening the classic console"
 
 
 def project_name(state_path: Path, repo_root: Path) -> str:
@@ -118,7 +118,7 @@ def hand_over(state: EntryState) -> str:
     Returns:
         The lines to print, the state's title first.
     """
-    return "\n".join((f"eawf tui: {state.title}", *(f"  {c}" for c in state.commands if c)))
+    return "\n".join((f"eawf ui: {state.title}", *(f"  {c}" for c in state.commands if c)))
 
 
 def resolve_operator(*, actor: str | None, receipt_ref: str | None) -> Operator | None:

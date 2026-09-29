@@ -10,6 +10,10 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 from eawf.kernel.state.enums import AgentSessionRole
 
 CommitSubjectStyle = Literal["bracket", "trailer"]
+
+#: A runtime adapter ``runtime.preference`` and ``runtime.adapters`` may name.
+RuntimeAdapterId = Literal["claude-code", "codex", "opencode"]
+
 #: The unit of one verified delivery commit: under ``batch`` the daemon
 #: squashes a Batch's sealed candidates at integration; ``task`` keeps one
 #: delivery commit per Task.
@@ -124,6 +128,7 @@ class VerifyConfig(BaseModel):
     require_iter_audit_accepted: bool = False
     waiver_mode: VerifyWaiverMode = "B"
     juror_wall_clock_seconds: float = Field(default=600.0, gt=0.0)
+    retyped_rule_threshold: int = Field(default=3, ge=1)
 
 
 class ProseLevel(StrEnum):
@@ -401,6 +406,7 @@ __all__ = [
     "ProseConfig",
     "ProseLevel",
     "ReleaseCadence",
+    "RuntimeAdapterId",
     "RuntimeLivenessConfig",
     "RuntimeModelsConfig",
     "TaskReference",

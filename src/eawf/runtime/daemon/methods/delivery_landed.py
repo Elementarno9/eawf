@@ -48,7 +48,7 @@ from eawf.kernel.migration.epoch2.continuation import ledger_ids
 from eawf.kernel.runtime.candidate import DELIVERABLE_VERDICTS
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.urns import BatchUrn, TaskUrn
@@ -72,6 +72,7 @@ from eawf.runtime.daemon.methods.delivery_acceptance import (
     MergeReconcileParams,
     reconcile_batch_merge,
 )
+from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.recovery import generation_record_key, integration_generation_id
 from eawf.workflow.integration.reconcile import HostMergeObservation
@@ -108,6 +109,9 @@ class AdoptLandedParams(BaseModel):
         urn: The Batch the change is adopted onto.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         task_refs: The Tasks whose work the landed change carries.
         base_commit: The commit the change started from.
         head_sha: The landed commit.
@@ -123,6 +127,7 @@ class AdoptLandedParams(BaseModel):
     urn: BatchUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     task_refs: tuple[TaskUrn, ...] = Field(min_length=1)
     base_commit: ShaStr
     head_sha: ShaStr
@@ -182,6 +187,9 @@ class ReadBackParams(BaseModel):
         urn: The merging Batch.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -189,6 +197,7 @@ class ReadBackParams(BaseModel):
     urn: BatchUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
 
 
 def _refused(code: str, detail: str) -> DaemonValidationError:
@@ -626,6 +635,7 @@ async def _adopt_landed(
     """Adopt one already-landed change as a Batch's next generation."""
     args = native_params(AdoptLandedParams, params)
     context = ctx.native_root_context(authority.root)
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     answer = await asyncio.to_thread(adopt_landed, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 
@@ -637,6 +647,7 @@ async def _read_back_merge(
     """Read a merging Batch's target branch back and reconcile it."""
     args = native_params(ReadBackParams, params)
     context = ctx.native_root_context(authority.root)
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     answer = await asyncio.to_thread(read_back_merge, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 

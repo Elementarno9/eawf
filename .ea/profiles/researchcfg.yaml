@@ -1,8 +1,8 @@
 name: researchcfg
 version: '1.0'
-description: 'Research-campaign config: per-domain depth + focus for eawf research campaign new'
+description: 'Research-campaign config: per-domain depth + focus for eawf campaign new'
 
-# Per-domain research-campaign config. `eawf research campaign new "<topic>"`
+# Per-domain research-campaign config. `eawf campaign new "<topic>"`
 # fans the topic across every domain below, one staged dispatch each.
 # Edit the domains/focus to taste, then enable this profile for your scope:
 #   eawf config profile enable researchcfg repo   # or workspace | user

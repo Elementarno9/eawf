@@ -44,6 +44,7 @@ CLI handler treats two events with the same triple as the same event;
 | `iter_close`     | `eawf iter close <iter>` succeeds                             | `{ "iter_id": str, "verdict": str }`                                                                     |
 | `phase_open`     | `eawf phase open <phase>` succeeds                            | `{ "phase_id": str }`                                                                                    |
 | `phase_close`    | `eawf phase close <phase>` succeeds                           | `{ "phase_id": str, "outcome": str }`                                                                    |
+| `permission_request` | The host holds a tool call for its operator (Claude `PermissionRequest`) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_input": dict }` |
 
 The shapes above are illustrative — at v1 the router merely forwards the
 incoming dict under the chosen key. Strict shape validation (per
@@ -61,6 +62,7 @@ The translation table is owned by `runtimes/claude/hooks_router.py`:
 | `Stop`                   | `session_end`                                   |
 | `PreToolUse` (Bash)      | `pre_commit` if `git commit`; `pre_push` if `git push` |
 | `PostToolUse` (Bash)     | `post_commit` if `git commit`; `post_push` if `git push` |
+| `PermissionRequest`      | `permission_request`                            |
 
 Unrecognised payloads (missing `hook_event_name`, unknown event,
 non-Bash tools without a v1 mapping) → `route_claude_payload` returns

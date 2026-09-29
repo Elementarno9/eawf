@@ -204,12 +204,12 @@ async def live_console(
             already-walked canary, or this repository itself.
         runtime_root: Where the daemon context this suite serves keeps its WAL --
             for a canary, the same directory its walk was produced against.
-        launched: Whether to add what ``eawf tui`` adds around the frame -- the outer
+        launched: Whether to add what ``eawf ui`` adds around the frame -- the outer
             gutter and the project name in the crumb -- so a key's effect is judged on
             the frame an operator sees; the grid checks read the bare frame.
 
     Yields:
-        The console (packaged chrome plus a live seam, as ``eawf tui`` builds it for an
+        The console (packaged chrome plus a live seam, as ``eawf ui`` builds it for an
         epoch-2 tree), already connected, and the seam itself.
     """
     ctx = method_context(runtime_root)

@@ -44,6 +44,9 @@ from typing import Any
 
 import eawf
 from eawf.kernel.config.layered import resolve_agent_extra_tools
+from eawf.kernel.economics.governor import InFlightGovernor
+from eawf.runtime.daemon.admission import load_economics
+from eawf.runtime.harness.fan_out import fan_out_values
 from eawf.runtime.hooks.event import HookEventType
 from eawf.runtime.runtimes.claude.hook_map import PLUGIN_HOOK_REGISTRY
 from eawf.runtime.runtimes.claude.statusline_install import build_statusline_command
@@ -83,8 +86,9 @@ _DEFAULT_TIMESTAMP: str = "1970-01-01T00:00:00+00:00"
 # wrapper that exits 0 with an empty result list, so installing it would
 # subscribe the operator's session to a no-op script (and paint a false-green
 # "hooks:<n>" in the statusline). SESSION_START (the rule-projection
-# staleness check), SESSION_END (runtime.capture) and the two subagent events
-# (runtime.host_subagent) are the handler-backed events today — see
+# staleness check), SESSION_END (runtime.capture), the two subagent events
+# (runtime.host_subagent) and PERMISSION_REQUEST (runtime.host_permission) are
+# the handler-backed events today — see
 # HookSpec.has_handler.
 _INSTALLED_HOOKS: tuple[HookSpec, ...] = tuple(spec for spec in HOOK_REGISTRY if spec.has_handler)
 _INSTALLED_EVENTS: frozenset[HookEventType] = frozenset(
@@ -326,7 +330,9 @@ def _merge_settings_hooks(
     return merged
 
 
-def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> bytes:
+def _patch_settings_json(
+    target_path: Path, managed_body: dict[str, Any], *, governor: InFlightGovernor
+) -> bytes:
     """Return the new ``settings.json`` bytes with the Eä keys patched in.
 
     Behaviour:
@@ -343,6 +349,9 @@ def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> byt
     - Wire ``statusLine`` to ``eawf cc statusline`` so the project renders
       the Eä statusline, unless the operator already set a statusline of
       their own, which is kept.
+    - Write the fan-out keys into ``env``, so Claude Code's own scheduler
+      holds the Run ceiling of *governor* and the contract's one level of
+      delegation; every other ``env`` entry is kept.
     - Every other key is preserved verbatim.
     - Render the resulting object as deterministic JSON (sorted keys,
       2-space indent, trailing newline) so two installs are byte-stable.
@@ -369,6 +378,11 @@ def _patch_settings_json(target_path: Path, managed_body: dict[str, Any]) -> byt
         parsed["hooks"] = merged_hooks
     if _STATUSLINE_KEY not in parsed:
         parsed[_STATUSLINE_KEY] = build_statusline_command()
+    env = parsed.get("env")
+    env = dict(env) if isinstance(env, dict) else {}
+    for path, value in fan_out_values("claude", governor=governor).items():
+        env[path.removeprefix("env.")] = str(value)
+    parsed["env"] = env
     rendered = json.dumps(parsed, sort_keys=True, indent=2) + "\n"
     return rendered.encode("utf-8")
 
@@ -442,7 +456,9 @@ def _build_manifest(
         )
     settings_path = _settings_target(target_dir)
     managed_body = _render_managed_block(timestamp)
-    settings_bytes = _patch_settings_json(settings_path, managed_body)
+    settings_bytes = _patch_settings_json(
+        settings_path, managed_body, governor=load_economics(target_dir).governor
+    )
     new_generated[f"{settings_path.as_posix()}::plugin.claude.settings"] = ManifestEntry(
         target=settings_path.as_posix(),
         region_id="plugin.claude.settings",
@@ -605,7 +621,9 @@ def install_plugin(
     # Patch settings.json.
     settings_path = _settings_target(target_dir)
     managed_body = _render_managed_block(ts)
-    settings_bytes = _patch_settings_json(settings_path, managed_body)
+    settings_bytes = _patch_settings_json(
+        settings_path, managed_body, governor=load_economics(target_dir).governor
+    )
     settings_action = _classify(settings_path, settings_bytes)
     if not dry_run:
         _ensure_dir(settings_path.parent)

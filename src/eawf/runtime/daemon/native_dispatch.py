@@ -60,6 +60,7 @@ from eawf.kernel.runtime.compiled import (
     RuntimeBinding,
 )
 from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES, ControlFact, RunBinding
+from eawf.kernel.runtime.delegation import child_grant
 from eawf.kernel.runtime.handshake import (
     RUNTIME_HANDSHAKE_MISMATCH,
     HandshakeDisposition,
@@ -95,6 +96,7 @@ from eawf.runtime.daemon.admission import (
     latest_receipts,
     load_economics,
 )
+from eawf.runtime.daemon.delegation import delegation_parent
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError
@@ -653,7 +655,11 @@ def _reject_capsule_widening(*, spec: CompiledRunSpec, request: CapsuleRequest) 
 
 
 def seal_capsule(
-    *, spec: CompiledRunSpec, request: CapsuleRequest, parent_run_ref: str | None = None
+    *,
+    spec: CompiledRunSpec,
+    request: CapsuleRequest,
+    parent_run_ref: str | None = None,
+    parent_ceiling: AuthorityCapsule | None = None,
 ) -> AuthorityCapsule:
     """Seal the authority capsule one compiled spec is dispatched under.
 
@@ -663,12 +669,15 @@ def seal_capsule(
     the spec but never looser. The requested grants are then narrowed to the
     intersection of the Run's role, its task and its certification, so the
     sealed capsule -- and every MCP configuration rendered from it -- carries
-    no tool one of the three withheld.
+    no tool one of the three withheld. A delegated Run is sealed a capsule of
+    its own, never its parent's, and its grant is further cut to the parent's.
 
     Args:
         spec: The compiled spec the capsule accompanies.
         request: The capsule fields the spec cannot supply.
-        parent_run_ref: The Run this one was forked from, if any.
+        parent_run_ref: The Run that delegated this one, if any.
+        parent_ceiling: That Run's sealed capsule, when its dispatch recorded
+            one; a parent the host spawned was never sealed one.
 
     Returns:
         The sealed capsule.
@@ -683,6 +692,11 @@ def seal_capsule(
     intersection = intersect_run_tools(
         role=spec.agent_role, task_grants=request.tool_grants, capabilities=spec.capabilities
     )
+    grants, authority = tuple(tool.value for tool in intersection.granted), spec.authority
+    if parent_ceiling is not None:
+        grants, authority = child_grant(
+            tool_grants=grants, authority=authority, parent=parent_ceiling
+        )
     return AuthorityCapsule.seal(
         {
             "run_ref": spec.run_ref,
@@ -691,8 +705,8 @@ def seal_capsule(
             "scope_digest": spec.scope_digest,
             "agent_role": spec.agent_role,
             "purpose": spec.purpose,
-            "authority": spec.authority,
-            "tool_grants": tuple(tool.value for tool in intersection.granted),
+            "authority": authority,
+            "tool_grants": grants,
             "tool_denials": request.tool_denials,
             "filesystem_policy_ref": spec.sandbox.filesystem_policy_ref,
             "network_policy_ref": spec.sandbox.network_policy_ref,
@@ -915,6 +929,7 @@ def open_attempt(
                 authority_capsule_digest=capsule.contract_digest,
                 route_policy_revision=spec.route_policy_revision,
                 bound_at=now,
+                capsule=capsule,
             ),
             records=records,
         )
@@ -1164,7 +1179,13 @@ async def dispatch_run(
     """
     table = NATIVE_LAUNCHERS if launchers is None else launchers
     spec = compile_for_dispatch(args, now=now)
-    capsule = seal_capsule(spec=spec, request=args.capsule)
+    with context.session([args.urn]) as session:
+        parent, ceiling = delegation_parent(
+            session.read_document(), read_ledger_records(run_ledger(session)), args.urn
+        )
+    capsule = seal_capsule(
+        spec=spec, request=args.capsule, parent_run_ref=parent, parent_ceiling=ceiling
+    )
     try:
         economics = load_economics(context.identity.tree_root.parent)
     except EconomicsPolicyError as error:

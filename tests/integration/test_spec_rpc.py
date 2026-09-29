@@ -442,7 +442,11 @@ def test_promote_to_ready_passes_when_body_carries_clean_gate(
             "id": "G_OK",
             "criterion_id": "C1",
             "kind": "command_exit_zero",
-            "args": {"argv": ["uv", "run", "pytest", "-q"]},
+            "args": {
+                "argv": ["uv", "run", "pytest", "-q"],
+                "scope": "all",
+                "timeout_class": "quick",
+            },
             "policy": "block",
             "cadence": "every-wave",
         }
@@ -469,6 +473,51 @@ def test_promote_to_ready_passes_when_body_carries_clean_gate(
             },
         )
         assert result["status"] == "READY"
+
+    _run(body)
+
+
+def test_del_036_promote_to_ready_refuses_a_gate_off_convention(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The READY flip refuses a gate that leaves its scope to the runner default."""
+    ctx, repo_root, _ = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
+
+    from eawf.kernel.spec.common import GateSpec
+    from eawf.runtime.daemon.methods import spec as spec_module
+
+    defaulted = GateSpec.model_validate(
+        {
+            "id": "G_DEFAULTED",
+            "criterion_id": "C1",
+            "kind": "command_exit_zero",
+            "args": {"argv": ["uv", "run", "pytest", "-q"], "timeout_class": "quick"},
+            "policy": "block",
+            "cadence": "every-wave",
+        }
+    )
+    monkeypatch.setattr(spec_module, "_extract_gate_specs", lambda _body: [defaulted])
+
+    async def body() -> None:
+        await init(
+            ctx,
+            {
+                "scope_id": "P25",
+                "title": "Phase",
+                "repo_code": "EAWF",
+                "repo_root": str(repo_root),
+            },
+        )
+        with pytest.raises(ValueError, match="G_DEFAULTED' declares no scope"):
+            await promote(
+                ctx,
+                {
+                    "scope_id": "P25",
+                    "repo_code": "EAWF",
+                    "target_status": "READY",
+                    "repo_root": str(repo_root),
+                },
+            )
 
     _run(body)
 

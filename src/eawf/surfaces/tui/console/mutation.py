@@ -35,6 +35,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, Literal
 
+from eawf.kernel.projection.attention import CONSOLE_PRINCIPAL_CLASS
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, ProjectionRow
 from eawf.kernel.projection.settings import SettingsLeaf
 from eawf.kernel.projection.truth import TruthState
@@ -52,6 +53,7 @@ from eawf.kernel.state.epoch2.transitions import (
     TERMINAL_STATUSES,
     LifecycleEntity,
 )
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
 from eawf.surfaces.tui.console.attention import VERB, selected_open_row
 from eawf.surfaces.tui.console.fixture import Fixture
@@ -60,6 +62,7 @@ from eawf.surfaces.tui.console.navigation import Ctx, leave_overlay, open_overla
 from eawf.surfaces.tui.console.operations import (
     ANSWER_OPTIONS,
     ATTENTION_ROUTE,
+    PERMISSION_VERBS,
     RUN_CONTROLS,
     RUN_KINDS,
     SAME_VERB,
@@ -67,6 +70,7 @@ from eawf.surfaces.tui.console.operations import (
     ControlRequest,
     LifecycleRequest,
     OperationResult,
+    PermissionDecision,
     SettingRequest,
     VerbRequest,
     binding_refusal,
@@ -104,6 +108,7 @@ NATIVE_KEYS: Final[Mapping[str, str]] = MappingProxyType(
         "domain.batch.observe_merge": "b",
         "domain.batch.complete": "o",
         "domain.task.promote": "m",
+        "domain.task.demote": "o",
         "domain.task.claim": "l",
         "domain.task.start": "s",
         "domain.task.ready": "w",
@@ -489,15 +494,76 @@ def setting_card(request: SettingRequest, *, effect: str, token: str, now: float
     )
 
 
+def _permission_card(row: ProjectionRow, verb_key: str, *, principal: str, now: float) -> Card:
+    """Return the card previewing an operator's approval or denial of one provider permission.
+
+    The verb is refused on the card when it decides nothing or when the operator class is
+    not among the classes the permission admits for it; the daemon refuses both again at
+    commit. There is no hold to offer: the provider owns the deadline.
+    """
+    name = VERB[verb_key].name
+    decided = PERMISSION_VERBS.get(name)
+    revision = int(row.revision)
+    admitted = [c.strip() for c in row.facts.get(decided or "", "").split(",") if c.strip()]
+    refusal = None
+    request: VerbRequest | None = None
+    if decided is None:
+        refusal = Refusal(
+            code="unbound_verb",
+            reason=f"a provider permission is approved or denied, never {name}d",
+            remediation="Approve or deny it before the provider's deadline.",
+        )
+    elif CONSOLE_PRINCIPAL_CLASS not in admitted:
+        refusal = Refusal(
+            code="authority_denied",
+            reason=f"{decided} is for {', '.join(admitted) or 'no class'} only",
+            remediation="Ask a principal of that class to decide it.",
+        )
+    else:
+        request = PermissionDecision(target=row.key, verb=decided)
+    deadline = row.facts.get("deadline_at", "an unstated time")
+    item = Item(
+        key=row.key,
+        title=row.title,
+        revision=revision,
+        status=status_of(row),
+        effects=(
+            f"{row.key} is recorded {decided or name} in your name, as the operator",
+            f"the provider's own deadline still runs out at {deadline}",
+        ),
+        not_effects=(
+            "no pending action on the same run is answered",
+            "no hold is placed: the provider owns the deadline and it expires",
+        ),
+        refusal=refusal,
+        unknown="",
+        request=request,
+        stale_token=str(revision),
+    )
+    return Card(
+        kind="answer",
+        origin=verb_key,
+        action=name,
+        noun="provider permission",
+        items=(item,),
+        if_stale=if_stale(revision),
+        authority=_authority(CONSOLE_PRINCIPAL_CLASS, principal),
+        issuer=principal,
+        opened_at=now,
+    )
+
+
 def answer_card(row: ProjectionRow, verb_key: str, *, principal: str, now: float) -> Card:
-    """Return the card previewing an answer to one held pending action.
+    """Return the card previewing an answer to one held pending action or provider permission.
 
     Args:
-        row: The pending action as the Attention projection holds it.
+        row: The pending action or permission as the Attention projection holds it.
         verb_key: The attention verb letter the operator chose.
         principal: Who the answer is sealed in the name of.
         now: The console clock.
     """
+    if row.collection is Epoch2Collection.PERMISSION:
+        return _permission_card(row, verb_key, principal=principal, now=now)
     name = VERB[verb_key].name
     option = ANSWER_OPTIONS.get(name)
     revision = int(row.revision)

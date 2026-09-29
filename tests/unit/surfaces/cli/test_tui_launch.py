@@ -1,4 +1,4 @@
-"""``eawf tui``'s authority switch: which app opens, ``--verbose``, and SURF-085's exit 4.
+"""``eawf ui``'s authority switch: which app opens, ``--verbose``, and SURF-085's exit 4.
 
 Pins the launch contract at :func:`eawf.surfaces.tui.launch.launch_tui`, the library
 :func:`eawf.surfaces.cli.app._dispatch_tui` delegates to: an epoch-2 tree opens the
@@ -276,7 +276,7 @@ def test_an_undeclared_epoch1_tree_is_not_resolved_through_the_registry(
 def test_hand_over_names_the_title_and_skips_an_empty_command() -> None:
     state = load_chrome().entry[2].model_copy(update={"commands": ("eawf workspace list", "")})
     assert launch.hand_over(state).splitlines() == [
-        f"eawf tui: {state.title}",
+        f"eawf ui: {state.title}",
         "  eawf workspace list",
     ]
 

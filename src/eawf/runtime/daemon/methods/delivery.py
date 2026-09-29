@@ -54,6 +54,7 @@ import logging
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, contextmanager
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Annotated, Any, Final
 
@@ -79,7 +80,12 @@ from eawf.kernel.delivery.receipts import RevisionBinding, canonical_digest
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.runtime.candidate import CandidateBundle, CandidateId
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import BranchName, PrincipalKey, StrictNonNegativeInt
+from eawf.kernel.state.epoch2.base import (
+    BranchName,
+    PrincipalKey,
+    StrictNonNegativeInt,
+    StrictPositiveInt,
+)
 from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, BatchUrn, EvidenceUrn
 from eawf.kernel.store.compaction import document_rows
@@ -98,8 +104,9 @@ from eawf.runtime.daemon.epoch2_recovery import (
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_dispatch import run_ledger
-from eawf.runtime.daemon.native_guard import REPO_ROOT_PARAM, native_mutator
+from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.apply import (
     IntegrationRefusal,
     IntegrationRefusedError,
@@ -247,6 +254,47 @@ def file_keyed_answer(
     )
 
 
+def keyed_call(
+    context: Epoch2RootContext,
+    *,
+    method: str,
+    key: str,
+    params: dict[str, Any],
+    call: Callable[[], BaseModel],
+    at: datetime,
+) -> dict[str, Any]:
+    """Run *call* once per idempotency key and replay its answer on a retry.
+
+    A verb whose request carries an idempotency key promises that a retry
+    returns the first answer instead of acting twice, so the answer is
+    looked up before *call* runs and filed after it returns. A call that
+    raises files nothing, so a retry of a refusal runs again.
+
+    Args:
+        context: The native context of the addressed root.
+        method: The verb the key was sent to.
+        key: The client's idempotency key.
+        params: The validated request, as its JSON payload.
+        call: The verb's effect, run only when *key* answered nothing yet.
+        at: When the effect became durable.
+
+    Returns:
+        The stored answer on a retry, otherwise the answer *call* earned.
+
+    Raises:
+        DaemonValidationError: *key* already answered different
+            parameters, the stored answer cannot be read, or *call*
+            refused.
+    """
+    replayed = keyed_answer(context, method=method, key=key, params=params)
+    if replayed is not None:
+        logger.info(f"keyed_call method={method} replayed=True")
+        return replayed
+    answer = call().model_dump(mode="json")
+    file_keyed_answer(context, method=method, key=key, params=params, answer=answer, at=at)
+    return answer
+
+
 class DeliveryIntegrateParams(BaseModel):
     """Params of :data:`DELIVERY_INTEGRATE_METHOD`.
 
@@ -254,6 +302,9 @@ class DeliveryIntegrateParams(BaseModel):
         urn: The Batch being delivered.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         base: The revision the Batch starts from, used as the target base
             until the Batch has a generation of its own.
         branch: The integration branch a conflict would be seen on.
@@ -270,6 +321,7 @@ class DeliveryIntegrateParams(BaseModel):
     urn: BatchUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     base: RevisionBinding
     branch: BranchName
     subject: CommitSubject
@@ -310,25 +362,6 @@ class DeliveryIntegrateAnswer(BaseModel):
 def _refused(code: IntegrationRefusal | CompletionRefusal, detail: str) -> DaemonValidationError:
     """Return the wire form of one delivery refusal."""
     return DaemonValidationError(f"validation_failed: {code.value}: {detail}")
-
-
-def _params(params: dict[str, Any]) -> DeliveryIntegrateParams:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return DeliveryIntegrateParams.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
 
 
 def _vcs_config(tree_root: Path) -> VcsConfig:
@@ -760,12 +793,18 @@ async def _integrate_delivery(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Integrate one Batch's sealed candidates into its next delivery."""
-    args = _params(params)
+    args = native_params(DeliveryIntegrateParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(
-        _integrate_in_workspace, context, args, factory=INTEGRATION_WORKSPACE_FACTORY
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
+    return await asyncio.to_thread(
+        keyed_call,
+        context,
+        method=DELIVERY_INTEGRATE_METHOD,
+        key=args.idempotency_key,
+        params=args.model_dump(mode="json"),
+        call=partial(_integrate_in_workspace, context, args, factory=INTEGRATION_WORKSPACE_FACTORY),
+        at=datetime.now(UTC),
     )
-    return answer.model_dump(mode="json")
 
 
 def _integrate_in_workspace(
@@ -847,25 +886,6 @@ class BatchVerifyAnswer(BaseModel):
     exit: dict[str, Any] | None = None
     merge_ready: bool
     reason: str
-
-
-def _verify_params(params: dict[str, Any]) -> BatchVerifyParams:
-    """Validate request params, dropping the key the fence already used.
-
-    Raises:
-        DaemonValidationError: The request does not parse. The pydantic
-            detail is reduced to field paths so the refusal never repeats
-            a submitted value into a log.
-    """
-    try:
-        return BatchVerifyParams.model_validate(
-            {key: value for key, value in params.items() if key != REPO_ROOT_PARAM}
-        )
-    except ValidationError as error:
-        fields = sorted({".".join(str(part) for part in row["loc"]) for row in error.errors()})
-        raise DaemonValidationError(
-            f"validation_failed: schema_validation_failed: check {', '.join(fields)}"
-        ) from error
 
 
 def _cycle_record_key(batch_ref: BatchUrn) -> str:
@@ -1084,7 +1104,7 @@ async def _verify_batch(
     ctx: MethodContext, params: dict[str, Any], authority: RootAuthority
 ) -> dict[str, Any]:
     """Walk one Batch's verification cycle and file where it landed."""
-    args = _verify_params(params)
+    args = native_params(BatchVerifyParams, params)
     context = ctx.native_root_context(authority.root)
     answer = await asyncio.to_thread(verify_batch, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
@@ -1100,6 +1120,7 @@ __all__ = [
     "file_keyed_answer",
     "integrate_delivery",
     "keyed_answer",
+    "keyed_call",
     "sealed_bundles",
     "verify_batch",
 ]

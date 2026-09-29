@@ -66,15 +66,48 @@ CLAUDE_HARNESS: Final = "claude-code"
 #: The suffix the statusline gives a session's counter sidecar file.
 _SIDECAR_SUFFIX: Final = ".runtime-counters.json"
 
+#: The directory a session keeps its subagents' transcripts in, and their name prefix.
+_SUBAGENT_DIRNAME: Final = "subagents"
+_SUBAGENT_PREFIX: Final = "agent-"
+
+
+def _transcript_session(path: Path) -> str:
+    """Return the session id a transcript file is named for.
+
+    A subagent's transcript sits under its spawning session as
+    ``subagents/agent-<id>.jsonl``, and the id its Run is adopted under is the
+    agent id alone, so the prefix is not part of the session.
+    """
+    if path.parent.name == _SUBAGENT_DIRNAME:
+        return path.stem.removeprefix(_SUBAGENT_PREFIX)
+    return path.stem
+
 
 def _transcript_for(digest: str) -> Path | None:
-    """Return the transcript whose session id hashes to *digest*, if any."""
+    """Return the transcript whose session id hashes to *digest*, if any.
+
+    A session's own transcript and a subagent's are separate files, so a
+    subagent's Run reads only its own rows and never the session that spawned it.
+    """
+    root = projects_root()
     try:
-        candidates = sorted(projects_root().glob("*/*.jsonl"))
+        candidates = sorted(
+            [
+                *root.glob("*/*.jsonl"),
+                *root.glob(f"*/*/{_SUBAGENT_DIRNAME}/{_SUBAGENT_PREFIX}*.jsonl"),
+            ]
+        )
     except OSError as exc:
         logger.debug(f"_transcript_for err={exc!r}")
         return None
-    return next((path for path in candidates if hash_vendor_session_id(path.stem) == digest), None)
+    return next(
+        (
+            path
+            for path in candidates
+            if hash_vendor_session_id(_transcript_session(path)) == digest
+        ),
+        None,
+    )
 
 
 def _sidecar_for(digest: str) -> Path | None:

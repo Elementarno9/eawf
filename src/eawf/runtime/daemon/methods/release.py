@@ -127,6 +127,7 @@ from eawf.runtime.daemon.methods.release_context import (
     require_state_path,
     resolve_config,
     validated_release,
+    void_changed_approval,
 )
 from eawf.runtime.daemon.methods.release_disposition import burn_adopted_record
 from eawf.runtime.daemon.methods.release_keyed import (
@@ -182,6 +183,7 @@ from eawf.workflow.release.settlement import follow_guarded_edges, observe_targe
 from eawf.workflow.release.target_machine import TargetTransitionError
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.release.train_store import read_checkpoint_receipts, read_train_advances
+from eawf.workflow.release.verification_debts import read_verification_debts
 from eawf.workflow.verify.checkpoint_succession import (
     CheckpointSuccessionError,
     assert_predecessor_terminal,
@@ -249,12 +251,14 @@ class ApproveParams(BaseModel):
         release: Serialized candidate record being approved.
         readiness: Serialized sweep the approval binds.
         approval_ref: Reference to the approval receipt.
+        proof_digest: Digest of the exact artifact set approved.
     """
 
     model_config = ConfigDict(extra="forbid")
     release: dict[str, Any]
     readiness: dict[str, Any]
     approval_ref: str
+    proof_digest: str
 
 
 @register("release.show")
@@ -497,8 +501,11 @@ async def approve(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
         approved = approve_release(
             candidate,
             readiness,
+            config,
             approval_ref=args.approval_ref,
             approved_at=datetime.now(UTC),
+            proof_digest=args.proof_digest,
+            verification_debts=read_verification_debts(state_path),
         )
     except ReleaseTransitionError as exc:
         raise DaemonValidationError(f"validation_failed: {exc.code.value}: {exc}") from exc
@@ -700,6 +707,7 @@ async def publish(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     assert_revision(release, args.expected_revision)
     config = resolve_config(release.version, membership_refs=release.membership_refs)
     now = datetime.now(UTC)
+    void_changed_approval(state_path, release, config, proof_digest=args.proof_digest, now=now)
     try:
         readiness = _sweep(
             state_path,

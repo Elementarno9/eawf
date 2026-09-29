@@ -1,4 +1,4 @@
-"""Tests for the bare-``eawf`` / ``eawf tui`` dispatch after legacy removal.
+"""Tests for the bare-``eawf`` / ``eawf ui`` dispatch after legacy removal.
 
 The prior Rich-based TUI (and its ``EAWF_TUI_LEGACY=1`` escape hatch)
 has been removed — ``tui`` is the only TUI surface. These tests pin
@@ -128,7 +128,7 @@ def test_no_input_flag_falls_back_to_status_emitter(
 
 # --------------------------------------------------------------------------
 # CLI-level non-TTY contract (carried over from the removed legacy tests):
-# bare eawf / eawf tui emit the deterministic status frame, exit 0.
+# bare eawf / eawf ui emit the deterministic status frame, exit 0.
 # --------------------------------------------------------------------------
 
 
@@ -140,9 +140,9 @@ def test_bare_cli_non_tty_emits_status(tmp_path: Path) -> None:
     assert "keymap:" in result.stdout
 
 
-def test_tui_subcommand_non_tty_emits_status(tmp_path: Path) -> None:
+def test_ui_subcommand_non_tty_emits_status(tmp_path: Path) -> None:
     runner = CliRunner()
-    result = runner.invoke(app, ["-w", str(tmp_path), "--plain", "tui"])
+    result = runner.invoke(app, ["-w", str(tmp_path), "--plain", "ui"])
     assert result.exit_code == 0
     assert _WORDMARK in result.stdout
     assert "keymap:" in result.stdout

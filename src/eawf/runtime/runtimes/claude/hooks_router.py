@@ -48,6 +48,7 @@ _CLAUDE_TO_EAWF: dict[str, HookEventType] = {
     "SubagentStart": HookEventType.SUBAGENT_START,
     "SubagentStop": HookEventType.SUBAGENT_STOP,
     "PreCompact": HookEventType.PRE_COMPACT,
+    "PermissionRequest": HookEventType.PERMISSION_REQUEST,
 }
 
 # Tool-name → Eä event mapping for ``PreToolUse`` / ``PostToolUse`` payloads.

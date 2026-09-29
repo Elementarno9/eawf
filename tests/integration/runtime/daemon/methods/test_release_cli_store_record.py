@@ -1,4 +1,4 @@
-"""The registry CLI verbs act on the record the store holds.
+"""The registry CLI verbs act on the record the store holds, at the caller's revision.
 
 ``eawf release publish``, ``retry``, ``reconcile`` and ``observe`` used
 to require ``--release <file>``, and the file an operator held was the
@@ -6,7 +6,8 @@ record from before the previous verb -- one step stale, which the
 compare-and-swap then refused. Every registry verb now records the
 record it produces, so without ``--release`` the CLI reads the current
 record from the store and presents that; with ``--release`` it still
-presents the file.
+presents the file. The compare-and-swap anchor is never read off either:
+the caller names the revision it read with ``--expected-revision``.
 
 The CLI runs through the real Typer app against a ``DaemonClient``
 stand-in that dispatches into the real handlers, bound to the same dev1
@@ -18,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -134,8 +136,8 @@ def stored(ctx: MethodContext) -> dict[str, Any]:
     return record
 
 
-def publish_argv(*extra: str, key: str = "publish-cli-01") -> list[str]:
-    """Return the ``release publish`` argv, minus the record source."""
+def publish_argv(revision: int, *extra: str, key: str = "publish-cli-01") -> list[str]:
+    """Return the ``release publish`` argv at *revision*, minus the record source."""
     return [
         "publish",
         RELEASE_KEY,
@@ -143,13 +145,17 @@ def publish_argv(*extra: str, key: str = "publish-cli-01") -> list[str]:
         manifest_digest(),
         "--proof-digest",
         PROOF_DIGEST,
+        "--expected-revision",
+        str(revision),
         "--idempotency-key",
         key,
         *extra,
     ]
 
 
-def reconcile_argv(repo: Path, target_id: str, conclusion: str = "success") -> list[str]:
+def reconcile_argv(
+    repo: Path, target_id: str, revision: int, conclusion: str = "success"
+) -> list[str]:
     """Return a receipt-bearing ``release reconcile`` argv reading the store."""
     receipt = publication_receipt(target_id, job_conclusion=conclusion)
     return [
@@ -157,6 +163,8 @@ def reconcile_argv(repo: Path, target_id: str, conclusion: str = "success") -> l
         RELEASE_KEY,
         "--target",
         target_id,
+        "--expected-revision",
+        str(revision),
         "--idempotency-key",
         f"reconcile-cli-{target_id}",
         "--receipt",
@@ -164,13 +172,15 @@ def reconcile_argv(repo: Path, target_id: str, conclusion: str = "success") -> l
     ]
 
 
-def observe_argv(repo: Path, target_id: str, case: str = "match") -> list[str]:
+def observe_argv(repo: Path, target_id: str, revision: int, case: str = "match") -> list[str]:
     """Return a ``release observe`` argv reading the store."""
     return [
         "observe",
         RELEASE_KEY,
         "--target",
         target_id,
+        "--expected-revision",
+        str(revision),
         "--manifest",
         document(repo, "manifest.json", manifest_payload()),
         "--idempotency-key",
@@ -190,13 +200,13 @@ def test_publish_reads_the_approved_record_from_the_store(
     calls: list[dict[str, Any]],
 ) -> None:
     """The record the approval recorded is the one the publish presents."""
-    result = cli(dev1_checkout, *publish_argv())
+    result = cli(dev1_checkout, *publish_argv(approved["revision"]))
 
     assert result.exit_code == 0, result.output
     assert calls[0]["params"]["release"] == approved
     assert calls[0]["params"]["expected_revision"] == approved["revision"]
     assert stored(walk_ctx)["status"] == ReleaseStatus.PUBLISHING.value
-    assert f"{RELEASE_KEY} publishing" in result.output
+    assert "result.release.status: publishing" in result.output
 
 
 def test_reconcile_and_observe_walk_to_baked_reading_the_store(
@@ -206,13 +216,15 @@ def test_reconcile_and_observe_walk_to_baked_reading_the_store(
     calls: list[dict[str, Any]],
 ) -> None:
     """Each verb presents the record the verb before it recorded."""
-    assert cli(dev1_checkout, *publish_argv()).exit_code == 0
-    argvs = [reconcile_argv(dev1_checkout, target_id) for target_id in TARGET_IDS]
-    argvs += [observe_argv(dev1_checkout, target_id) for target_id in TARGET_IDS]
+    assert cli(dev1_checkout, *publish_argv(approved["revision"])).exit_code == 0
+    steps: list[tuple[Callable[[Path, str, int], list[str]], str]] = [
+        (reconcile_argv, target_id) for target_id in TARGET_IDS
+    ]
+    steps += [(observe_argv, target_id) for target_id in TARGET_IDS]
 
-    for argv in argvs:
+    for argv_of, target_id in steps:
         before = stored(walk_ctx)
-        result = cli(dev1_checkout, *argv)
+        result = cli(dev1_checkout, *argv_of(dev1_checkout, target_id, before["revision"]))
         assert result.exit_code == 0, result.output
         assert calls[-1]["params"]["release"] == before
         assert calls[-1]["params"]["expected_revision"] == before["revision"]
@@ -232,28 +244,44 @@ def test_retry_reads_the_recovering_record_from_the_store(
     calls: list[dict[str, Any]],
 ) -> None:
     """A contradicted read-back leaves RECOVERING in the store; retry acts on it."""
-    assert cli(dev1_checkout, *publish_argv()).exit_code == 0
-    assert cli(dev1_checkout, *reconcile_argv(dev1_checkout, "npm", "failure")).exit_code == 0
-    assert cli(dev1_checkout, *reconcile_argv(dev1_checkout, "pypi")).exit_code == 0
-    assert cli(dev1_checkout, *observe_argv(dev1_checkout, "pypi", "mismatch")).exit_code == 0
-    assert stored(walk_ctx)["status"] == ReleaseStatus.RECOVERING.value
+    assert cli(dev1_checkout, *publish_argv(approved["revision"])).exit_code == 0
+    for argv_of, target_id, case in (
+        (reconcile_argv, "npm", "failure"),
+        (reconcile_argv, "pypi", "success"),
+        (observe_argv, "pypi", "mismatch"),
+    ):
+        revision = stored(walk_ctx)["revision"]
+        assert cli(dev1_checkout, *argv_of(dev1_checkout, target_id, revision, case)).exit_code == 0
+    recovering = stored(walk_ctx)
+    assert recovering["status"] == ReleaseStatus.RECOVERING.value
 
-    result = cli(
-        dev1_checkout,
-        "retry",
-        RELEASE_KEY,
-        "--target",
-        "npm",
-        "--proof-digest",
-        PROOF_DIGEST,
-        "--idempotency-key",
-        "retry-cli-npm",
+    result = CliRunner().invoke(
+        app,
+        [
+            "--json",
+            "--workspace",
+            str(dev1_checkout),
+            "release",
+            "retry",
+            RELEASE_KEY,
+            "--target",
+            "npm",
+            "--proof-digest",
+            PROOF_DIGEST,
+            "--expected-revision",
+            str(recovering["revision"]),
+            "--idempotency-key",
+            "retry-cli-npm",
+        ],
     )
 
     assert result.exit_code == 0, result.output
     assert calls[-1]["params"]["release"]["status"] == ReleaseStatus.RECOVERING.value
     assert stored(walk_ctx)["status"] == ReleaseStatus.PUBLISHING.value
-    assert "npm#2=queued" in result.output
+    legs = json.loads(result.stdout)["result"]["operation"]["publication_receipts"]
+    assert {"target_id": "npm", "attempt": 2, "status": "queued"}.items() <= next(
+        leg for leg in legs if leg["target_id"] == "npm" and leg["attempt"] == 2
+    ).items()
 
 
 def test_the_store_read_honours_the_state_environment_variable(
@@ -266,7 +294,7 @@ def test_the_store_read_honours_the_state_environment_variable(
     """``EA_STATE`` names the state root when no workspace flag is given."""
     monkeypatch.setenv("EA_STATE", str(dev1_checkout / ".ea" / "state.json"))
 
-    result = CliRunner().invoke(app, ["release", *publish_argv()])
+    result = CliRunner().invoke(app, ["release", *publish_argv(approved["revision"])])
 
     assert result.exit_code == 0, result.output
     assert calls[0]["params"]["release"] == approved
@@ -279,17 +307,17 @@ def test_rerunning_a_command_after_the_record_moved_replays(
     calls: list[dict[str, Any]],
 ) -> None:
     """The rerun reads the moved record and still answers the first receipt."""
-    assert cli(dev1_checkout, *publish_argv()).exit_code == 0
+    assert cli(dev1_checkout, *publish_argv(approved["revision"])).exit_code == 0
     state_path = dev1_checkout / ".ea" / "state.json"
     before = (
         ledger_path(state_path).read_bytes(),
         release_records_path(state_path).read_bytes(),
     )
 
-    result = cli(dev1_checkout, *publish_argv())
+    result = cli(dev1_checkout, *publish_argv(approved["revision"]))
 
     assert result.exit_code == 0, result.output
-    assert "(replayed)" in result.output
+    assert "result.replayed: true" in result.output
     assert calls[1]["params"]["release"]["status"] == ReleaseStatus.PUBLISHING.value
     assert (
         ledger_path(state_path).read_bytes(),
@@ -308,7 +336,9 @@ def test_an_explicit_release_file_publishes_with_nothing_stored(
 
     result = cli(
         dev1_checkout,
-        *publish_argv("--release", document(dev1_checkout, "release.json", payload)),
+        *publish_argv(
+            payload["revision"], "--release", document(dev1_checkout, "release.json", payload)
+        ),
     )
 
     assert result.exit_code == 0, result.output
@@ -325,7 +355,9 @@ def test_an_explicit_release_file_wins_over_the_store(
 
     result = cli(
         dev1_checkout,
-        *publish_argv("--release", document(dev1_checkout, "release.json", payload)),
+        *publish_argv(
+            payload["revision"], "--release", document(dev1_checkout, "release.json", payload)
+        ),
     )
 
     assert result.exit_code == 0, result.output
@@ -341,7 +373,7 @@ def test_an_explicit_release_file_for_another_key_is_refused(
 
     result = cli(
         dev1_checkout,
-        *publish_argv("--release", document(dev1_checkout, "release.json", payload)),
+        *publish_argv(1, "--release", document(dev1_checkout, "release.json", payload)),
     )
 
     assert result.exit_code != 0
@@ -358,7 +390,7 @@ def test_a_key_with_no_stored_record_is_refused_before_dispatch(
 ) -> None:
     """Nothing recorded and no file is a NotFound naming both ways forward."""
     argv = {
-        "publish": publish_argv(),
+        "publish": publish_argv(1),
         "retry": [
             "retry",
             RELEASE_KEY,
@@ -366,11 +398,13 @@ def test_a_key_with_no_stored_record_is_refused_before_dispatch(
             "pypi",
             "--proof-digest",
             PROOF_DIGEST,
+            "--expected-revision",
+            "1",
             "--idempotency-key",
             "retry-cli-none",
         ],
-        "reconcile": reconcile_argv(dev1_checkout, "pypi"),
-        "observe": observe_argv(dev1_checkout, "pypi"),
+        "reconcile": reconcile_argv(dev1_checkout, "pypi", 1),
+        "observe": observe_argv(dev1_checkout, "pypi", 1),
     }[verb]
 
     result = cli(dev1_checkout, *argv)
@@ -389,7 +423,7 @@ def test_a_corrupt_record_collection_is_refused_before_dispatch(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("{not an envelope\n", encoding="utf-8")
 
-    result = cli(dev1_checkout, *publish_argv())
+    result = cli(dev1_checkout, *publish_argv(1))
 
     assert result.exit_code != 0
     assert "release record collection is corrupt" in result.output

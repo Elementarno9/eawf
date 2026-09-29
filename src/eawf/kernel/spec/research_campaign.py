@@ -170,6 +170,23 @@ class StagedCampaign(BaseModel):
         return len(self.dispatches)
 
 
+class CampaignRequest(BaseModel):
+    """What an operator asks of a new campaign, before it is staged.
+
+    Attributes:
+        topic: The topic to fan out across the configured domains.
+        budget_rounds: Evidence-budget limit on rounds, or ``None`` for none.
+        budget_usd: Evidence-budget limit on researcher USD spend, or
+            ``None`` for none.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    topic: str = Field(min_length=1)
+    budget_rounds: float | None = None
+    budget_usd: float | None = None
+
+
 def stage_campaign(
     topic: str,
     block: ResearchProfileBlock,

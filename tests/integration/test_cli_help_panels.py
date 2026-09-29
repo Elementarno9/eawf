@@ -45,8 +45,8 @@ def test_panel_for_known_command_returns_panel() -> None:
     assert help_panels.panel_for("audit") == "audit"
     # ``wave`` lives in ``planning``.
     assert help_panels.panel_for("wave") == "planning"
-    # ``tui`` lives in ``ui``.
-    assert help_panels.panel_for("tui") == "ui"
+    # ``ui`` lives in ``ui``.
+    assert help_panels.panel_for("ui") == "ui"
 
 
 def test_panel_for_unknown_command_returns_none() -> None:

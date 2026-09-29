@@ -218,10 +218,14 @@ def _attention(document: dict[str, Any] | None = None, **kwargs: Any) -> Registe
     return _register(ATTENTION_ROUTE, document=AUDIENCE if document is None else document, **kwargs)
 
 
-def test_the_attention_route_binds_the_pending_action_register() -> None:
-    """The route reads one register, and a producer now writes it."""
-    assert ROUTE_COLLECTIONS[ATTENTION_ROUTE] == (Epoch2Collection.PENDING_ACTION,)
+def test_the_attention_route_binds_the_pending_action_and_permission_registers() -> None:
+    """The route reads pending actions and provider permissions, and producers write both."""
+    assert ROUTE_COLLECTIONS[ATTENTION_ROUTE] == (
+        Epoch2Collection.PENDING_ACTION,
+        Epoch2Collection.PERMISSION,
+    )
     assert Epoch2Collection.PENDING_ACTION not in UNWRITTEN_COLLECTIONS
+    assert Epoch2Collection.PERMISSION not in UNWRITTEN_COLLECTIONS
 
 
 def test_the_written_register_is_counted_rather_than_withheld() -> None:

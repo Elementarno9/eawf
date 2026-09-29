@@ -96,9 +96,11 @@
       "written_by": []
     },
     {
-      "consumer": "none",
+      "consumer": "console_route",
       "producer": "none",
-      "read_by": [],
+      "read_by": [
+        "projection.attention.read"
+      ],
       "record": "permission",
       "written_by": []
     },

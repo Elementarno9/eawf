@@ -29,14 +29,10 @@ from pydantic import ValidationError as PydanticValidationError
 
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-from eawf.surfaces.cli.commands.domain import (
-    DOMAIN_REFUSAL_EXIT,
-    _rpc_refusal,
-)
+from eawf.surfaces.cli.commands.domain import _rpc_refusal
 from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.verb_contract import read_spec_document
+from eawf.surfaces.cli.verb_contract import emit_envelope, read_spec_document
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
@@ -94,52 +90,17 @@ def _send(
         ) from exc
 
 
-def _envelope_text(envelope: DomainEnvelope, *, subject: str) -> str:
-    """Return the human-readable rendering of one continuation answer."""
-    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
-
-    if envelope.status is DomainStatus.OK:
-        result = envelope.result or {}
-        if "to_status" in result:
-            lines = [
-                f"{envelope.operation} ok {subject} "
-                f"{result['from_status']} -> {result['to_status']}"
-            ]
-            lines.extend(
-                f"  gate {item['gate_id']} {item['status']} receipt {item['receipt_id']}"
-                for item in result.get("gate_receipts", ())
-            )
-        else:
-            lines = [f"{envelope.operation} ok {subject} in {result.get('collection')} ledger"]
-    else:
-        lines = []
-        for row in envelope.errors:
-            lines.append(f"{envelope.operation} error {row.code.value} {row.entity_ref}")
-            lines.append(f"  {row.message}")
-            if row.guard is not None:
-                lines.append(f"  guard: {row.guard}")
-            lines.append(f"  remediation: {row.remediation}")
-    lines.extend(f"  warning: {warning}" for warning in envelope.warnings)
-    return "\n".join(lines)
-
-
 def _run(
     ctx: typer.Context, method: str, params: dict[str, Any], *, subject: str, verb_text: str
 ) -> None:
-    """Dispatch one verb, print its answer, and exit non-zero on a refusal."""
-    from eawf.runtime.daemon.methods.domain_envelope import DomainStatus
-
+    """Dispatch one verb, print its answer, and exit with its typed status."""
     flags: GlobalFlags = ctx.obj
     try:
         envelope = _send(method, params, subject=subject, verb_text=verb_text, flags=flags)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
-    emit_json_or_text(
-        envelope.model_dump(mode="json"), _envelope_text(envelope, subject=subject), flags=flags
-    )
-    if envelope.status is not DomainStatus.OK:
-        raise typer.Exit(DOMAIN_REFUSAL_EXIT)
+    emit_envelope(envelope, urn=subject, flags=flags)
 
 
 def _advance(

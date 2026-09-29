@@ -7,8 +7,10 @@ the write under, so sending the same operation twice is one write: that is what 
 reconnect reconcile an operation whose answer was lost by simply asking again under the
 same id, instead of guessing whether it landed.
 
-Four daemon mutators are bound. An answer to a pending action goes to the approval seal,
-which reports a later conflicting answer as superseded rather than refusing it; a Run
+Five daemon mutators are bound. An answer to a pending action goes to the approval seal,
+which reports a later conflicting answer as superseded rather than refusing it; an answer
+to a provider permission goes to the permission's own decide verb, as the operator, and
+never to the seal, because the two records resolve apart; a Run
 control goes to the control-request verb, which records that a principal asked and moves
 the Run not at all; a settings edit goes to the layered-config verbs, which write one
 layer file under the daemon's lock; and a lifecycle move goes to the per-entity verb that
@@ -28,6 +30,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Final
 
+from eawf.kernel.projection.attention import CONSOLE_PRINCIPAL_CLASS
 from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.kernel.state.epoch2.consequence import MUTATIONS_BY_METHOD
@@ -42,6 +45,9 @@ SEAL_METHOD: Final = "runtime.delivery.seal_acceptance_approval"
 
 #: The daemon verb that records a principal's request for a Run control.
 CONTROL_METHOD: Final = "runtime.run.control.request"
+
+#: The daemon verb that approves or denies a provider permission.
+PERMISSION_DECIDE_METHOD: Final = "runtime.permission.decide"
 
 #: The daemon verbs a settings edit writes and removes one layer's value through. The
 #: console never writes a layer file itself: the daemon holds the file lock and checks the
@@ -63,6 +69,10 @@ RUN_KINDS: Final = frozenset({"run.detail", "run"})
 ANSWER_OPTIONS: Final[Mapping[str, str]] = MappingProxyType(
     {"answer": "approve", "deny": "decline"}
 )
+
+#: The permission verb each attention verb decides a provider permission with. There is
+#: no hold among them: the provider owns the deadline, so there is nothing to hold.
+PERMISSION_VERBS: Final[Mapping[str, str]] = MappingProxyType({"answer": "approve", "deny": "deny"})
 
 #: The question overlay's numbered answers, in the order the approval offers them.
 QUESTION_OPTIONS: Final[tuple[str, ...]] = tuple(o.option_id for o in ACCEPTANCE_OPTIONS)
@@ -169,6 +179,28 @@ class AnswerRequest:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class PermissionDecision:
+    """An operator's approval or denial of one provider permission, before it is addressed.
+
+    Attributes:
+        target: The permission's public key.
+        verb: ``approve`` or ``deny``.
+    """
+
+    target: str
+    verb: str
+
+    def __post_init__(self) -> None:
+        """Refuse a verb that does not decide a permission.
+
+        Raises:
+            ValueError: ``verb`` is neither approve nor deny.
+        """
+        if self.verb not in PERMISSION_VERBS.values():
+            raise ValueError(f"verb {self.verb!r} does not decide a provider permission")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ControlRequest:
     """An operator's request for one Run control, before it is addressed.
 
@@ -251,7 +283,9 @@ class LifecycleRequest:
             raise ValueError("a lifecycle move needs the operation id its card minted")
 
 
-VerbRequest = AnswerRequest | ControlRequest | SettingRequest | LifecycleRequest
+VerbRequest = (
+    AnswerRequest | PermissionDecision | ControlRequest | SettingRequest | LifecycleRequest
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -404,7 +438,11 @@ def address_setting(request: SettingRequest) -> ConsoleOperation:
 
 
 def address(
-    request: AnswerRequest | ControlRequest, *, urn: str, revision: int, operator: Operator
+    request: AnswerRequest | PermissionDecision | ControlRequest,
+    *,
+    urn: str,
+    revision: int,
+    operator: Operator,
 ) -> ConsoleOperation | OperationResult:
     """Return the operation ``request`` is sent as, or why it cannot be sent.
 
@@ -429,6 +467,21 @@ def address(
                     "control_request_ref": ref,
                     "control": request.control.value,
                     "actor": operator.principal,
+                }
+            ),
+            target=request.target,
+        )
+    if isinstance(request, PermissionDecision):
+        return ConsoleOperation(
+            operation_id=_minted("PRM"),
+            method=PERMISSION_DECIDE_METHOD,
+            params=MappingProxyType(
+                {
+                    "urn": urn,
+                    "verb": request.verb,
+                    "principal_class": CONSOLE_PRINCIPAL_CLASS,
+                    "actor": operator.principal,
+                    "expected_revision": revision,
                 }
             ),
             target=request.target,
@@ -485,7 +538,7 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
     reason = answer.get("reason")
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
         disposition = ControlDisposition.SUPERSEDED
-    elif operation.method == SEAL_METHOD:
+    elif operation.method in (SEAL_METHOD, PERMISSION_DECIDE_METHOD):
         disposition = ControlDisposition.CONFIRMED
     else:
         # an answer that names no disposition says nothing about the effect
@@ -552,7 +605,8 @@ def outcome_detail(operation: ConsoleOperation, disposition: ControlDisposition)
     Returns:
         The target, the verb asked for, and the outcome's own sentence.
     """
-    verb = operation.params.get("control") or operation.params.get("option_id") or "request"
+    params = operation.params
+    verb = params.get("control") or params.get("option_id") or params.get("verb") or "request"
     return f"{operation.target} {verb} {OUTCOME_SENTENCES[disposition]}"
 
 
@@ -742,6 +796,8 @@ __all__ = [
     "CONTROL_METHOD",
     "NO_PRINCIPAL_REASON",
     "OUTCOME_SENTENCES",
+    "PERMISSION_DECIDE_METHOD",
+    "PERMISSION_VERBS",
     "QUESTION_OPTIONS",
     "RUN_CONTROLS",
     "RUN_KINDS",
@@ -759,6 +815,7 @@ __all__ = [
     "OperationResult",
     "OperationStatus",
     "Operator",
+    "PermissionDecision",
     "SettingRequest",
     "VerbRequest",
     "address",

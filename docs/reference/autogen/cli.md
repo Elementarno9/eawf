@@ -13,7 +13,7 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 | `render-output` | Convert between JSON and markdown forms of the output envelope (reads JSON or markdown from stdin). At a TTY with no piped data the command exits 2 with a hint instead of hanging. |
 | `status` | Show active pointers, blockers, and git head. |
 | `sync` | Re-render managed assets and report drift. |
-| `tui` | Open the Eä Textual TUI (or deterministic status fallback off-TTY). |
+| `ui` | Open the Eä Textual TUI (or deterministic status fallback off-TTY). |
 | `validate` | Validate a state or envelope document. |
 | `version` | Show the eawf version (text or JSON envelope). |
 | `why` | Explain why an EAWF entity has its current trust tier. |
@@ -130,6 +130,16 @@ Perf bench harness — seed corpora, time harnesses, flag regressions.
 | `run` | Seed a corpus in-memory and time each harness against it. |
 | `turn-cost` | Render wall clock + cost per completed unit of work, or check it. |
 
+### `eawf campaign`
+
+Stage and persist multi-domain research campaigns.
+
+| Verb | Summary |
+|---|---|
+| `cancel` | Cancel an ACTIVE research campaign, tombstoning it in the store. |
+| `new` | Stage a research campaign for the active scope and persist it. |
+| `run` | Start a live research campaign run over the daemon's agent spawn. |
+
 ### `eawf cc`
 
 Claude Code adapter (statusline, plugin, hooks).
@@ -203,7 +213,7 @@ Manage decisions (add / supersede / list / graph).
 
 | Verb | Summary |
 |---|---|
-| `add` | Record a durable decision. |
+| `add` | Record a durable decision, from flags or from a ``--from-spec`` document. |
 | `graph` | Render the decision graph (text, Graphviz DOT, or Mermaid). |
 | `list` | List decisions filtered by scope. |
 | `promote` | — |
@@ -496,6 +506,16 @@ Project-level lifecycle (init).
 |---|---|
 | `init` | Create or upgrade a project record at the active state path. |
 
+### `eawf question`
+
+Add and list research-campaign open questions.
+
+| Verb | Summary |
+|---|---|
+| `add` | Add a research-campaign open question for the active scope. |
+| `list` | List the research-campaign open questions for the active scope. |
+| `resolve` | Resolve a blocking / open research-campaign question for the active scope. |
+
 ### `eawf record`
 
 Append audit, decision and artifact records to an epoch-2 tree.
@@ -694,6 +714,7 @@ Task lifecycle (promote, claim, start, submit, seal, prove, assess, ready, compl
 | `claim` | Claim a PLANNED Task for the actor that will run it. |
 | `complete` | Complete a Task on the Batch head its passing assessment proves. |
 | `create` | Admit a new Task's create document into the addressed tree. |
+| `demote` | Hand a PLANNED Task that was never claimed back to the backlog as a DRAFT. |
 | `promote` | Promote a DRAFT Task to PLANNED once its contract is complete. |
 | `prove` | Run a Task's gates at the generation each leg binds and file the receipts. |
 | `ready` | Declare a RUNNING Task ready to integrate on its bound report and evidence. |

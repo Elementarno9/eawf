@@ -246,6 +246,7 @@ def test_approve_denies_an_unacknowledged_waiver(ctx: MethodContext) -> None:
                     "release": candidate_payload(),
                     "readiness": readiness,
                     "approval_ref": "receipt://approval/dev1",
+                    "proof_digest": PROOF_DIGEST,
                 },
             )
         assert "awaiting_acknowledgement" in str(caught.value)
@@ -271,6 +272,7 @@ def test_approve_accepts_an_acknowledged_waiver(ctx: MethodContext) -> None:
                 "release": candidate_payload(),
                 "readiness": readiness,
                 "approval_ref": "receipt://approval/dev1",
+                "proof_digest": PROOF_DIGEST,
             },
         )
         captured.update(result)
@@ -293,6 +295,7 @@ def test_forged_ready_on_an_unacknowledged_sweep_is_refused(ctx: MethodContext) 
                     "release": candidate_payload(),
                     "readiness": readiness,
                     "approval_ref": "receipt://approval/dev1",
+                    "proof_digest": PROOF_DIGEST,
                 },
             )
 

@@ -1,12 +1,12 @@
-"""CLI dispatch tests for ``eawf research question`` + ``research status``.
+"""CLI dispatch tests for ``eawf question`` + ``research status``.
 
 Drives the Typer app via :class:`CliRunner` against a seeded temp workspace:
 
-- ``research question add <title>`` proxies the daemon ``research.add_question``
+- ``question add <title>`` proxies the daemon ``research.add_question``
   RPC, forwarding the title + blocking flag.
 - the offline fallback (daemon unreachable) writes the OpenQuestion row directly
   via ``state_transaction``.
-- ``research question list`` reads the ledger and exits 0 (empty + populated).
+- ``question list`` reads the ledger and exits 0 (empty + populated).
 - ``research status`` folds the campaign + round + checkpoint state, exiting 0
   with an honest "no campaign" line when none is staged.
 """
@@ -128,7 +128,7 @@ def test_question_add_daemon_proxy_forwards_title(
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "question", "add", "which model fits", "--blocking"],
+        ["-w", str(workspace), "question", "add", "which model fits", "--blocking"],
     )
     assert result.exit_code == 0, result.output
     assert _FakeOkClient.captured["method"] == "research.add_question"
@@ -146,7 +146,7 @@ def test_question_add_offline_fallback_writes_row(
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "question", "add", "offline question"],
+        ["-w", str(workspace), "question", "add", "offline question"],
     )
     assert result.exit_code == 0, result.output
     from eawf.kernel.state.models import State
@@ -163,7 +163,7 @@ def test_question_add_json_envelope(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
     result = runner.invoke(
         app,
-        ["--json", "-w", str(workspace), "research", "question", "add", "json question"],
+        ["--json", "-w", str(workspace), "question", "add", "json question"],
     )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
@@ -185,7 +185,7 @@ def test_question_resolve_daemon_proxy_forwards_id(
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "question", "resolve", "OQ-abc", "--drop"],
+        ["-w", str(workspace), "question", "resolve", "OQ-abc", "--drop"],
     )
     assert result.exit_code == 0, result.output
     assert _FakeOkClient.captured["method"] == "research.resolve_question"
@@ -202,7 +202,7 @@ def test_question_resolve_forwards_the_drop_reason_and_successor(
     workspace = _make_workspace(tmp_path)
     _FakeOkClient.captured = {}
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeOkClient)
-    argv = ["-w", str(workspace), "research", "question", "resolve", "OQ-abc", "--drop"]
+    argv = ["-w", str(workspace), "question", "resolve", "OQ-abc", "--drop"]
     result = runner.invoke(app, [*argv, "--reason", "superseded", "--superseded-by", "OQ-new"])
     assert result.exit_code == 0, result.output
     params = _FakeOkClient.captured["params"]
@@ -223,15 +223,13 @@ def test_question_resolve_offline_fallback_clears_blocking(
 
     workspace = _make_workspace(tmp_path)
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
-    runner.invoke(
-        app, ["-w", str(workspace), "research", "question", "add", "blocked q", "--blocking"]
-    )
+    runner.invoke(app, ["-w", str(workspace), "question", "add", "blocked q", "--blocking"])
     state = State.model_validate(orjson.loads((workspace / ".ea" / "state.json").read_bytes()))
     assert state.open_questions is not None
     qid = next(q.id for q in state.open_questions.values() if q.title == "blocked q")
     assert state.open_questions[qid].blocking is True
 
-    result = runner.invoke(app, ["-w", str(workspace), "research", "question", "resolve", qid])
+    result = runner.invoke(app, ["-w", str(workspace), "question", "resolve", qid])
     assert result.exit_code == 0, result.output
     resolved = State.model_validate(orjson.loads((workspace / ".ea" / "state.json").read_bytes()))
     assert resolved.open_questions is not None
@@ -247,9 +245,7 @@ def test_question_resolve_unknown_id_errors(
     """Resolving an absent id exits non-zero with the honest could-not-resolve line."""
     workspace = _make_workspace(tmp_path)
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
-    result = runner.invoke(
-        app, ["-w", str(workspace), "research", "question", "resolve", "OQ-nope"]
-    )
+    result = runner.invoke(app, ["-w", str(workspace), "question", "resolve", "OQ-nope"])
     assert result.exit_code != 0
     assert "could not resolve question" in result.output
 
@@ -262,7 +258,7 @@ def test_question_resolve_unknown_id_errors(
 def test_question_list_empty_exits_zero(tmp_path: Path) -> None:
     """A scope with no question exits 0 with the honest empty line."""
     workspace = _make_workspace(tmp_path)
-    result = runner.invoke(app, ["-w", str(workspace), "research", "question", "list"])
+    result = runner.invoke(app, ["-w", str(workspace), "question", "list"])
     assert result.exit_code == 0, result.output
     assert "no open questions" in result.stdout
 
@@ -271,11 +267,9 @@ def test_question_list_renders_rows(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     """A populated ledger renders one row per question with status + blocking."""
     workspace = _make_workspace(tmp_path)
     monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeUnreachableClient)
-    runner.invoke(app, ["-w", str(workspace), "research", "question", "add", "open one"])
-    runner.invoke(
-        app, ["-w", str(workspace), "research", "question", "add", "blocked one", "--blocking"]
-    )
-    result = runner.invoke(app, ["--json", "-w", str(workspace), "research", "question", "list"])
+    runner.invoke(app, ["-w", str(workspace), "question", "add", "open one"])
+    runner.invoke(app, ["-w", str(workspace), "question", "add", "blocked one", "--blocking"])
+    result = runner.invoke(app, ["--json", "-w", str(workspace), "question", "list"])
     assert result.exit_code == 0, result.output
     rows = json.loads(result.stdout)["questions"]
     assert {r["title"] for r in rows} == {"open one", "blocked one"}

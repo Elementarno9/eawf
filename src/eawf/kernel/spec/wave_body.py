@@ -54,7 +54,7 @@ e.g. a criterion whose ``measurable_signal`` is missing or under the
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import Field, model_validator
 
@@ -86,6 +86,10 @@ class WaveSpecBody(_StrictModel):
     typo (a gate pointing at a deleted criterion) fails the parse rather
     than the close gate.
 
+    ``timeout_exception`` is the one place a wave says its targeted run
+    needs more than the ``quick`` class; promotion refuses a gate past
+    ``quick`` on a wave that states none.
+
     ``criteria`` may be empty: an advisory backend wave can carry no
     typed criteria, and an empty block is a valid (if uninteresting)
     document. ``gates`` may likewise be empty (an attested criterion
@@ -94,6 +98,9 @@ class WaveSpecBody(_StrictModel):
 
     criteria: list[CriterionSpec] = Field(default_factory=list)
     gates: list[GateSpec] = Field(default_factory=list)
+    #: Why this wave's targeted run genuinely exceeds the ``quick`` timeout
+    #: class; stated once here rather than every gate defaulting past it.
+    timeout_exception: Annotated[str, Field(min_length=20, max_length=500)] | None = None
 
     @model_validator(mode="after")
     def _gate_criterion_refs_resolve(self) -> WaveSpecBody:

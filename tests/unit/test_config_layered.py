@@ -120,11 +120,13 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
         "require_iter_audit_accepted": False,
+        "retyped_rule_threshold": 3,
         "waiver_mode": "B",
     }
     assert sources["verify.juror_wall_clock_seconds"] == "built-in"
     assert sources["verify.odr_blocking"] == "built-in"
     assert sources["verify.require_iter_audit_accepted"] == "built-in"
+    assert sources["verify.retyped_rule_threshold"] == "built-in"
     assert sources["verify.waiver_mode"] == "built-in"
 
 

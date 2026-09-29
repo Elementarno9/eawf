@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
+from itertools import pairwise
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import (
@@ -93,6 +94,33 @@ ProviderId = ProviderRecordId
 DriverManifestId = ProviderRecordId
 ProviderProfileId = ProviderRecordId
 RoutePolicyId = ProviderRecordId
+
+
+def _canonical_provider_order(values: tuple[str, ...]) -> tuple[str, ...]:
+    """Refuse a provider tuple not spelled in strictly ascending order.
+
+    Exact equality is how a provider-scoped measurement is matched against
+    the providers a plan dispatches to, so one provider set must have one
+    spelling: a reordered or repeated tuple would compare unequal to the
+    same set.
+
+    Args:
+        values: The declared providers, in author order.
+
+    Returns:
+        *values* unchanged.
+
+    Raises:
+        ValueError: A provider repeats or the tuple is out of order.
+    """
+    if any(earlier >= later for earlier, later in pairwise(values)):
+        raise ValueError(f"a provider tuple lists distinct providers in sorted order: {values}")
+    return values
+
+
+#: The exact set of providers a measurement was taken on, or a plan's Runs
+#: dispatch to, in its one canonical (sorted, distinct) spelling.
+ProviderTuple = Annotated[tuple[ProviderId, ...], AfterValidator(_canonical_provider_order)]
 
 #: A secret-free identifier such as a package, codec, locale, or zone.
 #: A leading separator is refused, so a host path cannot pose as one.

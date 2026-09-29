@@ -41,6 +41,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Final, Literal, NoReturn
 
+import click
 import typer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -229,6 +230,11 @@ class ErrorEnvelope(BaseModel):
 
 # --- Subclass-to-hint mapping ----------------------------------------------
 
+#: The ``data.kind`` an epoch-1 write refused on an epoch-2 tree carries,
+#: whichever site raised it and whether the daemon or the in-process path
+#: refused it.
+LEGACY_OPERATION_REMOVED_KIND: Final = "LegacyOperationRemoved"
+
 _DEFAULT_HINTS: dict[str, str] = {
     "UserError": "run `eawf <verb> --help` for option shapes; check ids and env",
     "ValidationError": "run `eawf validate` to inspect schema errors",
@@ -264,6 +270,10 @@ _KIND_HINTS: dict[str, str] = {
     "DaemonMutationIndeterminate": (
         "the mutation may or may not have applied; re-check state "
         "(`eawf state show`) before retrying to avoid a double-apply"
+    ),
+    LEGACY_OPERATION_REMOVED_KIND: (
+        "this tree runs on epoch 2, so epoch-1 writes refuse; run the epoch-2 verb the "
+        "error names, and read the native state with `eawf status`"
     ),
 }
 
@@ -316,6 +326,32 @@ def _resolve_hint(canonical: str, kind: str | None) -> str:
     return _DEFAULT_HINTS.get(canonical, _DEFAULT_HINTS["InternalError"])
 
 
+def _flag_day_refusal(message: str) -> str | None:
+    """Return ``message`` with the replacement verb appended, when it is a flag-day refusal.
+
+    The refusal is raised at the ``state.json`` write chokepoint, below
+    every verb, and reaches the CLI either as the kernel's exception or as
+    a daemon validation message; both lead with the stable code, and this
+    is the one place every rendered CLI error passes, so the running
+    command's path is read here rather than threaded through each site.
+
+    Args:
+        message: The error's message.
+
+    Returns:
+        The message with the epoch-2 replacement for the running command
+        appended, or ``None`` when the message is not a flag-day refusal.
+    """
+    from eawf.kernel.state.io import LEGACY_OPERATION_REMOVED
+    from eawf.surfaces.cli.flag_day import replacement_guidance
+
+    if LEGACY_OPERATION_REMOVED not in message:
+        return None
+    ctx = click.get_current_context(silent=True)
+    command_path = " ".join(ctx.command_path.split()[1:]) if ctx is not None else ""
+    return f"{message}; {replacement_guidance(command_path)}"
+
+
 def build_envelope(
     err: CliError,
     *,
@@ -354,13 +390,17 @@ def build_envelope(
     canonical = _canonical_error_name(err)
     concrete = _concrete_kind(err)
     merged_data: dict[str, Any] = dict(data) if data else {}
+    message = str(err)
     threaded = concrete if concrete is not None else err.kind
+    if (refusal := _flag_day_refusal(message)) is not None:
+        message = refusal
+        threaded = LEGACY_OPERATION_REMOVED_KIND
     if threaded is not None and "kind" not in merged_data:
         merged_data["kind"] = threaded
     kind = merged_data.get("kind")
     return ErrorEnvelope(
         error=canonical,
-        message=str(err),
+        message=message,
         exit_code=err.exit_code,
         exit_name=exit_codes.name_for(err.exit_code),
         suggested_next_step=_resolve_hint(canonical, kind),

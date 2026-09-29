@@ -1,4 +1,8 @@
-"""Research store read commands + the campaign-staging surface."""
+"""Research store read commands + the campaign and question entity groups.
+
+``research`` keeps the store reads; ``campaign`` and ``question`` are entity
+groups of their own, mounted at the CLI root by the command registry.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +27,7 @@ if TYPE_CHECKING:
     from eawf.kernel.spec.research_campaign import ResearchProfileBlock
     from eawf.kernel.store.envelope import Envelope
     from eawf.kernel.store.kinds.research_campaign import ResearchCampaignPayload
+    from eawf.runtime.daemon.methods.research import AddQuestionParams
 
 logger = logging.getLogger(__name__)
 
@@ -37,14 +42,12 @@ campaign_app = typer.Typer(
     help="Stage and persist multi-domain research campaigns.",
     no_args_is_help=True,
 )
-research_app.add_typer(campaign_app, name="campaign")
 
 question_app = typer.Typer(
     name="question",
     help="Add and list research-campaign open questions.",
     no_args_is_help=True,
 )
-research_app.add_typer(question_app, name="question")
 
 install_promote_command(research_app, "research")
 
@@ -78,7 +81,9 @@ def resolve_research_block(flags: GlobalFlags) -> ResearchProfileBlock | None:
 @campaign_app.command("new")
 def campaign_new(
     ctx: typer.Context,
-    topic: Annotated[str, typer.Argument(help="The campaign topic to fan out across domains.")],
+    topic: Annotated[
+        str | None, typer.Argument(help="The campaign topic to fan out across domains.")
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option(
@@ -100,6 +105,13 @@ def campaign_new(
             help="Evidence-budget limit on researcher USD spend; a run halts before exceeding it.",
         ),
     ] = None,
+    from_spec: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-spec",
+            help="JSON file (or - for stdin) carrying the topic and budgets, in place of flags.",
+        ),
+    ] = None,
 ) -> None:
     """Stage a research campaign for the active scope and persist it.
 
@@ -117,29 +129,37 @@ def campaign_new(
 
     ``--budget-rounds`` / ``--budget-usd`` set the campaign's evidence-budget
     limits; ``campaign run`` charges every round against them and halts
-    before a round would exceed one.
+    before a round would exceed one. The topic and budgets, or the
+    ``--from-spec`` document carrying them, parse through the closed
+    :class:`~eawf.kernel.spec.research_campaign.CampaignRequest` model first.
     """
     from pydantic import ValidationError
 
-    from eawf.kernel.spec.research_campaign import stage_campaign
+    from eawf.kernel.spec.research_campaign import CampaignRequest, stage_campaign
     from eawf.kernel.store.kinds.research_campaign import (
         ResearchCampaignPayload,
         open_evidence_budget,
     )
+    from eawf.surfaces.cli.verb_contract import request_document
 
     flags: GlobalFlags = ctx.obj
     try:
+        request = request_document(
+            CampaignRequest,
+            from_spec,
+            {"topic": topic, "budget_rounds": budget_rounds, "budget_usd": budget_usd},
+        )
         state_path = resolve_state_path(flags.workspace)
         block = resolve_research_block(flags)
         if block is None:
             raise errors.UserError(
                 "no research: block configured for this scope", kind="InvalidInput"
             )
-        campaign = stage_campaign(topic, block)
+        campaign = stage_campaign(request.topic, block)
         campaign_id = f"campaign-{uuid.uuid4().hex}"
         limits = {
             axis: limit
-            for axis, limit in (("rounds", budget_rounds), ("usd", budget_usd))
+            for axis, limit in (("rounds", request.budget_rounds), ("usd", request.budget_usd))
             if limit is not None
         }
         payload = ResearchCampaignPayload(
@@ -384,30 +404,46 @@ def research_show(
 @question_app.command("add")
 def question_add(
     ctx: typer.Context,
-    title: Annotated[str, typer.Argument(help="The open-question text (1..72 chars).")],
+    title: Annotated[
+        str | None, typer.Argument(help="The open-question text (1..72 chars).")
+    ] = None,
     blocking: Annotated[
         bool,
         typer.Option("--blocking", help="Mark the question as gating further work (D-2)."),
     ] = False,
+    from_spec: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-spec",
+            help="JSON file (or - for stdin) carrying the whole question, in place of the flags.",
+        ),
+    ] = None,
 ) -> None:
     """Add a research-campaign open question for the active scope.
 
     Proxies the daemon ``research.add_question`` RPC (the canonical writer for
     ``state.open_questions``), falling back to a direct ``state_transaction``
     write when the daemon is unavailable (CI / one-shot). The persisted row
-    surfaces in the TUI Research board's tree + the ``eawf research question
-    list`` verb.
+    surfaces in the TUI Research board's tree + the ``eawf question list``
+    verb. The title and ``--blocking``, or the ``--from-spec`` document, parse
+    through the RPC's own closed params model before anything is sent.
     """
+    from eawf.runtime.daemon.methods.research import AddQuestionParams
+    from eawf.surfaces.cli.verb_contract import request_document
+
     flags: GlobalFlags = ctx.obj
     try:
         state_path = resolve_state_path(flags.workspace)
+        request = request_document(
+            AddQuestionParams, from_spec, {"title": title, "blocking": blocking or None}
+        )
     except errors.CliError as exc:
         errors.emit_error(exc, flags=flags)
         return
-    result = _add_question_via_daemon_or_fallback(state_path, title=title, blocking=blocking)
+    result = _add_question_via_daemon_or_fallback(state_path, request)
     if result is None:
         errors.emit_error(
-            errors.UserError("could not add question (over-cap title?)", kind="InvalidInput"),
+            errors.UserError("the daemon refused the question", kind="InvalidInput"),
             flags=flags,
         )
         return
@@ -416,20 +452,18 @@ def question_add(
 
 
 def _add_question_via_daemon_or_fallback(
-    state_path: Path, *, title: str, blocking: bool
+    state_path: Path, request: AddQuestionParams
 ) -> dict[str, str] | None:
     """Add an open question through the daemon RPC, else a direct state write.
 
     Tries the daemon ``research.add_question`` RPC (the canonical writer per
-    AGENTS rule 4). On ANY daemon failure -- a connection error or a typed
-    rejection -- falls back to a direct ``state_transaction`` write so the verb
-    works offline / in CI. Returns ``None`` when the write is rejected (an
-    over-cap / empty title).
+    AGENTS rule 4). On a connection failure falls back to a direct
+    ``state_transaction`` write so the verb works offline / in CI; a typed
+    rejection from the daemon returns ``None``.
 
     Args:
         state_path: Path to the scope's ``state.json``.
-        title: The question text.
-        blocking: Whether the question gates further work.
+        request: The validated question.
 
     Returns:
         A result dict (``question_id`` / ``status`` / ``scope_id``), or ``None``
@@ -439,7 +473,10 @@ def _add_question_via_daemon_or_fallback(
 
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
-    params = {"title": title, "blocking": blocking, "repo_root": str(state_path.parent.parent)}
+    params = {
+        **request.model_dump(mode="json", exclude_none=True),
+        "repo_root": str(state_path.parent.parent),
+    }
     try:
         with DaemonClient() as client:
             result = client.call("research.add_question", params)
@@ -459,21 +496,22 @@ def _add_question_via_daemon_or_fallback(
     from eawf.kernel.state.models import OpenQuestion
     from eawf.surfaces.cli._mutation import state_transaction
 
-    if len(title) < 1 or len(title) > 72:
-        return None
-    question_id = f"OQ-{uuid.uuid4().hex[:8]}"
-    status = OpenQuestionStatus.BLOCKED if blocking else OpenQuestionStatus.OPEN
+    question_id = request.question_id or f"OQ-{uuid.uuid4().hex[:8]}"
+    status = OpenQuestionStatus.BLOCKED if request.blocking else OpenQuestionStatus.OPEN
     with state_transaction(state_path) as state:
         from datetime import UTC, datetime
 
-        scope_id = state.project.code if state.project is not None else "research"
+        project_code = state.project.code if state.project is not None else "research"
+        scope_id = request.scope_id or project_code
         questions = dict(state.open_questions or {})
         questions[question_id] = OpenQuestion(
             id=question_id,
             scope_id=scope_id,
-            title=title,
+            title=request.title,
+            description=request.description,
             status=status,
-            blocking=blocking,
+            blocking=request.blocking,
+            urgency=request.urgency,
             created_at=datetime.now(UTC),
         )
         state.open_questions = questions

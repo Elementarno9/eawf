@@ -374,6 +374,7 @@ def approve_dev2(
                 "release": candidate.model_dump(mode="json"),
                 "readiness": readiness.model_dump(mode="json"),
                 "approval_ref": APPROVAL_REF,
+                "proof_digest": f"sha256:{'c' * 64}",
             },
         )
     )

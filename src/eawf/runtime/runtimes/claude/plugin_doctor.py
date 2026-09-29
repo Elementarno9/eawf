@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from eawf.kernel.config.layered import resolve_agent_extra_tools
+from eawf.runtime.harness.fan_out import unwritten_plan_keys
 from eawf.runtime.lock import portalock
 from eawf.runtime.runtimes.claude.plugin_install import (
     _event_type_for,
@@ -275,12 +276,36 @@ def doctor_plugin(target_dir: Path) -> DoctorReport:
                 expected_hash=expected_settings_hash,
             )
             (ok if kind == "ok" else drifted).append(entry)
+            # A concurrency plan Claude Code's own scheduler never reads is
+            # prose, so an unwritten fan-out key is drift on its own.
+            if _unwritten_fan_out(live):
+                drifted.append(
+                    DoctorEntry(
+                        region_id="plugin.claude.fan_out",
+                        path=settings_path,
+                        kind="drifted",
+                        on_disk_hash=live_hash,
+                        expected_hash=expected_settings_hash,
+                    )
+                )
 
     logger.info(
         f"doctor_plugin target={target_dir} ok={len(ok)} drifted={len(drifted)} "
         f"missing={len(missing)}"
     )
     return DoctorReport(target_dir=target_dir, ok=ok, drifted=drifted, missing=missing)
+
+
+def _unwritten_fan_out(settings_bytes: bytes) -> tuple[str, ...]:
+    """Return the fan-out plan keys ``settings.json`` leaves unset.
+
+    A file that does not parse as a JSON object sets none of them.
+    """
+    try:
+        document = json.loads(settings_bytes)
+    except UnicodeDecodeError, json.JSONDecodeError:
+        document = {}
+    return unwritten_plan_keys("claude", document if isinstance(document, dict) else {})
 
 
 def doctor_plugin_strict(target_dir: Path, *, timeout: float = 5.0) -> DoctorReport:

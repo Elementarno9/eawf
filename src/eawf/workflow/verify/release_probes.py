@@ -7,9 +7,10 @@ rather than a verdict. This module is the producer for the five facts a
 working copy can answer at tag time -- version consistency, the
 changelog section, the migration note, ancestry against the publishing
 remote, and tree cleanliness -- plus one fact it can only *refute*: a
-lint rule with no governing disposition, or a module-length exemption
-that has outlived its grant, reds the realization row, but a clean check
-leaves that row unproven rather than green.
+lint rule with no governing disposition, a rule the operator re-typed
+past the configured threshold with no triage, or a module-length
+exemption that has outlived its grant, reds the realization row, but a
+clean check leaves that row unproven rather than green.
 
 The probes read their subject out of a frozen
 :class:`TagPreflightInputs` record instead of out of the running process
@@ -40,6 +41,12 @@ from functools import partial
 from pathlib import Path
 from typing import Final
 
+from eawf.observability.reflect.retyped import (
+    RETYPED_TRIAGE_PATH,
+    RetypedTriage,
+    store_retyped_rows,
+    triage_retyped_rules,
+)
 from eawf.platform.install.dist_tag import npm_version_for
 from eawf.platform.lint import load_lint_config
 from eawf.platform.lint.dispositions import disposition_findings
@@ -564,6 +571,97 @@ def _probe_module_length_exclusion(
     )
 
 
+def _release_window_start(inputs: TagPreflightInputs) -> datetime | None:
+    """Return when the release being tagged began: the commit time of the previous tag.
+
+    Args:
+        inputs: The chokepoint's inputs; the source is the pinned commit when one is
+            set, HEAD otherwise.
+
+    Returns:
+        The previous ``v*`` tag's commit time, or ``None`` when the source has no
+        earlier release tag, so the window is the whole history.
+    """
+    source = inputs.revision or "HEAD"
+    described = _git(
+        inputs.repo_root,
+        "describe",
+        "--tags",
+        "--abbrev=0",
+        "--match",
+        "v*",
+        "--exclude",
+        inputs.tag,
+        source,
+    )
+    if described.returncode:
+        return None
+    committed = _git(inputs.repo_root, "log", "-1", "--format=%cI", described.stdout.strip())
+    return datetime.fromisoformat(committed.stdout.strip()) if committed.returncode == 0 else None
+
+
+def _retyped_listing(triage: RetypedTriage) -> str:
+    """Return every subject over the threshold with the disposition it has or needs."""
+    parts = []
+    for row in triage.over:
+        named = row.subject if row.rule_title is None else f"{row.subject} ({row.rule_title})"
+        disposition = triage.dispositions.get(row.subject)
+        needs = (
+            "needs guard | dispatch_default | lens | memory_row | argued_prose"
+            if disposition is None
+            else f"triaged as {disposition.disposition}"
+        )
+        parts.append(f"{named} x{row.count}: {needs}")
+    return "; ".join(parts)
+
+
+def _probe_retyped_triage(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Red the realization row on a re-typed rule the release leaves in untriaged prose.
+
+    A rule the operator had to type again more often than the configured threshold
+    since the previous release is a rule the harness does not carry, and restating it
+    once more will not change that. Every such subject needs a disposition in the
+    committed triage -- a mechanism with its location, or prose with its argument.
+
+    The row names subjects by rule id and count only: operator wording never enters
+    the release record. The counted rows, exemplars included, are written to the local
+    reflection collection for the operator to triage from.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the working copy and the day.
+        context: The sweep's context for this signal.
+
+    Returns:
+        A failing outcome listing every subject over the threshold, else the
+        module-length exclusion check's outcome.
+
+    Raises:
+        RuleSourceError: The rule source fails to load, which the sweep converts into
+            a blocked row.
+        pydantic.ValidationError: The threshold, the triage or a Run row does not
+            validate.
+    """
+    since = _release_window_start(inputs)
+    triage = triage_retyped_rules(inputs.repo_root, since=since)
+    if not triage.untriaged:
+        return _probe_module_length_exclusion(inputs, context)
+    stored = store_retyped_rows(inputs.repo_root / ".ea", triage.over, today=inputs.today)
+    logger.warning(
+        f"_probe_retyped_triage signal={context.signal.value!r} "
+        f"untriaged={len(triage.untriaged)} threshold={triage.threshold} version={inputs.version!r}"
+    )
+    window = "the first release" if since is None else since.date().isoformat()
+    return _failing(
+        f"retyped_rule_triage: {len(triage.untriaged)} rule(s) re-typed more than "
+        f"{triage.threshold} time(s) since {window} carry no disposition: "
+        f"{_retyped_listing(triage)}; record one per subject in {RETYPED_TRIAGE_PATH} "
+        f"(exemplars in {stored.relative_to(inputs.repo_root)}) before tagging {inputs.tag}",
+        *(f"retyped_rule_triage:{row.subject}:{row.count}" for row in triage.untriaged),
+    )
+
+
 def _probe_lint_realization(
     inputs: TagPreflightInputs, context: ReleaseSignalContext
 ) -> ReleaseSignalOutcome:
@@ -572,7 +670,7 @@ def _probe_lint_realization(
     A rule shipping with no disposition, or still naming an epoch-1
     lifecycle identifier its row gives no reason for, is a suite nobody
     decided the fate of; tagging would ship that undecided. A clean table
-    hands the row on to the module-length exclusion check.
+    hands the row on to the re-typed rule triage.
 
     Args:
         inputs: The chokepoint's inputs, naming the working copy.
@@ -580,7 +678,7 @@ def _probe_lint_realization(
 
     Returns:
         A failing outcome naming every disposition finding, else the
-        exclusion check's outcome.
+        re-typed rule triage's outcome.
 
     Raises:
         SyntaxError: A rule module does not parse, which the sweep
@@ -599,7 +697,7 @@ def _probe_lint_realization(
             f"eawf.platform.lint.dispositions before tagging {inputs.tag}",
             *(f"rule_disposition:{finding.rule}" for finding in findings),
         )
-    return _probe_module_length_exclusion(inputs, context)
+    return _probe_retyped_triage(inputs, context)
 
 
 def build_tag_probes(inputs: TagPreflightInputs) -> dict[ReleaseSignalName, ReleaseSignalProbe]:

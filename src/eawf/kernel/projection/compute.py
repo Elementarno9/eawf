@@ -94,7 +94,7 @@ _IMPORT_REVISION: Final = 1
 #: The fields a record's title is read from, in preference order, where they are not
 #: simply ``title``.
 _TITLE_FIELDS: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
-    {Epoch2Collection.TASK: ("title", "intent")}
+    {Epoch2Collection.TASK: ("title", "intent"), Epoch2Collection.PERMISSION: ("request_scope",)}
 )
 
 #: The stored field a pending action names the principal it is addressed to in, which is
@@ -156,7 +156,9 @@ DIAGNOSTICS_CORPUS: Final[tuple[Epoch2Collection, ...]] = (
 ROUTE_COLLECTIONS: Final[Mapping[str, tuple[Epoch2Collection, ...]]] = MappingProxyType(
     {
         "activity": (Epoch2Collection.RUN,),
-        "attention": (Epoch2Collection.PENDING_ACTION,),
+        # a provider permission waits on a principal as a pending action does; its rows
+        # are the open ones on the run ledger, which the daemon supplies beside the document
+        "attention": (Epoch2Collection.PENDING_ACTION, Epoch2Collection.PERMISSION),
         "backlog": (Epoch2Collection.TASK,),
         # a Batch frame lists the Tasks filed under it, so it reads them beside the Batch
         "batch.detail": (Epoch2Collection.BATCH, Epoch2Collection.TASK),
@@ -859,6 +861,31 @@ def _run_facts(key: str, fields: Mapping[str, Any], links: _Links) -> dict[str, 
     return {name: value for name, value in facts.items() if value}
 
 
+def _permission_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a provider permission states: its Run, its deadline and who may decide it.
+
+    The approve and deny authorities are stated apart, because they need not be one
+    class, and whether the repository may approve is stated as the record resolved it,
+    so a surface renders that affordance disabled with the approving classes named.
+    """
+    authority = fields.get("approval_authority")
+    classes = authority if isinstance(authority, dict) else {}
+    may = fields.get("repository_may_approve")
+    facts = {
+        "kind": "provider_permission",
+        "subject": _key_of(fields.get("run_ref")),
+        "question": _text(fields.get("request_scope")),
+        "tool": _text(fields.get("tool_id")),
+        "action_class": _text(fields.get("action_class")),
+        "deadline_at": _text(fields.get("deadline_at")),
+        "deadline_owner": _text(fields.get("deadline_owner")),
+        "approve": ", ".join(str(c) for c in classes.get("approve", ())),
+        "deny": ", ".join(str(c) for c in classes.get("deny", ())),
+        "repository_may_approve": ("yes" if may else "no") if isinstance(may, bool) else None,
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
 def _action_facts(fields: Mapping[str, Any], links: _Links) -> dict[str, str]:
     """Return what the document states about a pending action and where its subject sits."""
     requested = fields.get("requested_by")
@@ -905,6 +932,32 @@ def _batch_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     return {name: value for name, value in facts.items() if value}
 
 
+def _task_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a stored Task states beyond its status, blanks left out.
+
+    The graph fields travel with the row so a coordinator derives the
+    concurrency plan from the Tasks it reads rather than being told one.
+    """
+    stated = {
+        "due": _key_of(fields.get("due_scope")),
+        "updated_at": _text(fields.get("updated_at")),
+        "priority": _text(fields.get("priority")),
+        "run": _key_of(fields.get("active_run_ref")),
+    }
+    criteria = fields.get("criteria")
+    if isinstance(criteria, list | tuple) and criteria:
+        stated["criteria"] = str(len(criteria))
+    depends_on = fields.get("depends_on")
+    if isinstance(depends_on, list | tuple):
+        stated["depends_on"] = ",".join(key for ref in depends_on if (key := _key_of(ref)))
+    claims = fields.get("write_claims")
+    if isinstance(claims, list | tuple):
+        stated["write_claims"] = ",".join(claim for item in claims if (claim := _text(item)))
+    if fields.get("exclusive") is True:
+        stated["exclusive"] = "true"
+    return {name: value for name, value in stated.items() if value}
+
+
 def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow:
     """Return ``row`` with the facts the document states about it, beyond its status.
 
@@ -922,17 +975,10 @@ def _with_facts(row: ProjectionRow, stored: Any, links: _Links) -> ProjectionRow
         facts.update(_run_facts(row.key, fields, links))
     elif row.collection is Epoch2Collection.PENDING_ACTION:
         facts.update(_action_facts(fields, links))
+    elif row.collection is Epoch2Collection.PERMISSION:
+        facts.update(_permission_facts(fields))
     elif row.collection is Epoch2Collection.TASK:
-        stated = {
-            "due": _key_of(fields.get("due_scope")),
-            "updated_at": _text(fields.get("updated_at")),
-            "priority": _text(fields.get("priority")),
-            "run": _key_of(fields.get("active_run_ref")),
-        }
-        criteria = fields.get("criteria")
-        if isinstance(criteria, list | tuple) and criteria:
-            stated["criteria"] = str(len(criteria))
-        facts.update({name: value for name, value in stated.items() if value})
+        facts.update(_task_facts(fields))
     elif row.collection is Epoch2Collection.BATCH:
         facts.update(_batch_facts(fields))
     elif row.collection in (Epoch2Collection.TRACK, Epoch2Collection.MILESTONE):

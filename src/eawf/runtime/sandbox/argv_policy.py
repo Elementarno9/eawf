@@ -28,6 +28,11 @@ Two special cases extend the floor:
   be in :data:`GIT_ALLOWED_SUBVERBS` (read-only verbs only); any
   member of :data:`GIT_DENIED_SUBVERBS` or an unknown sub-verb is
   rejected even if ``git`` itself is allowlisted.
+- ``eawf`` and ``just`` scope — the project CLI and its task runner are
+  admitted the way ``git`` is: ``eawf`` only in the read-only forms of
+  :data:`EAWF_READ_ONLY_SUBVERBS` (a preview verb only with its preview
+  flag, never with a flag in :data:`EAWF_MUTATING_FLAGS`), and ``just``
+  only for a recipe in :data:`JUST_READ_ONLY_RECIPES`.
 - Wrapper recursion — when ``argv[0]`` is in
   :data:`WRAPPER_HEADS` (``uv``, ``uvx``, ``npm``, ``pnpm``, ``yarn``,
   ``npx``, ``cargo``, ``python``, ``python3``, ``poetry``, ``pdm``,
@@ -163,6 +168,36 @@ GIT_DENIED_SUBVERBS: frozenset[str] = frozenset(
 )
 
 
+#: ``eawf`` sub-verbs a gate may run. Admitting the project's own CLI is
+#: interim: it exists so a criterion whose truth is this command line has
+#: an admissible falsifier without a test that shells it, and it retires
+#: once the gate contract names registered command families instead of
+#: bare argv heads. Like ``git`` it is scoped to forms that observe and
+#: report, never to a verb that writes state.
+EAWF_READ_ONLY_SUBVERBS: frozenset[str] = frozenset(
+    {"--version", "version", "status", "validate", "doctor", "why", "bench", "release"}
+)
+
+#: ``eawf`` verb groups that also carry mutating sub-verbs, mapped to the
+#: sub-verbs of each a gate may run.
+EAWF_SCOPED_SUBVERBS: dict[str, frozenset[str]] = {
+    "bench": frozenset({"turn-cost"}),
+    "release": frozenset({"show", "tag"}),
+}
+
+#: ``eawf`` commands that act unless the argv asks for their preview, mapped
+#: to the flag that makes them a preview.
+EAWF_PREVIEW_FLAGS: dict[tuple[str, str], str] = {("release", "tag"): "--dry-run"}
+
+#: Flags that turn an otherwise read-only ``eawf`` form into a mutation.
+EAWF_MUTATING_FLAGS: frozenset[str] = frozenset({"--fix", "--yes", "--push"})
+
+#: ``just`` recipes a gate may run: the test recipes the repository's
+#: justfile declares, each of which runs the suite and writes nothing back.
+#: Retires with the ``eawf`` widening above, for the same reason.
+JUST_READ_ONLY_RECIPES: frozenset[str] = frozenset({"test", "test-all", "test-tui"})
+
+
 class ArgvPolicyError(ValueError):
     """Raised when :func:`validate_gate_argv` rejects an argv vector.
 
@@ -187,11 +222,14 @@ def _check_head_shell_deny(head: str) -> None:
         raise ArgvPolicyError(f"argv[0] is in the shell-deny floor: {head!r}")
 
 
-def _check_head_allowlisted(head: str, *, allowlist: frozenset[str]) -> None:
-    """Refuse if *head* is not in *allowlist*."""
+def _check_head_allowlisted(argv: list[str], *, allowlist: frozenset[str]) -> None:
+    """Refuse if ``argv[0]`` is not in *allowlist*, quoting the argv it heads."""
+    head = argv[0]
     if head not in allowlist:
         logger.warning(f"validate_gate_argv reject head={head!r} reason=not-in-allowlist")
-        raise ArgvPolicyError(f"argv[0] {head!r} is not in the caller-supplied allowlist")
+        raise ArgvPolicyError(
+            f"argv[0] {head!r} is not in the caller-supplied allowlist (argv {argv!r})"
+        )
 
 
 def _check_metachars(argv: list[str]) -> None:
@@ -222,6 +260,46 @@ def _check_git_subverb(argv: list[str]) -> None:
         raise ArgvPolicyError(f"git sub-verb {subverb!r} is not in the read-only allow set")
 
 
+def _check_eawf_form(argv: list[str]) -> None:
+    """Apply the read-only scope when ``argv[0] == "eawf"``."""
+    subverb = argv[1] if len(argv) > 1 else None
+    if subverb not in EAWF_READ_ONLY_SUBVERBS:
+        logger.warning(f"validate_gate_argv reject subverb={subverb!r} reason=eawf-not-read-only")
+        raise ArgvPolicyError(
+            f"eawf sub-verb {subverb!r} is not in the read-only allow set (argv {argv!r})"
+        )
+    scoped = EAWF_SCOPED_SUBVERBS.get(subverb)
+    command = subverb if scoped is None else (argv[2] if len(argv) > 2 else None)
+    if scoped is not None and command not in scoped:
+        logger.warning(
+            f"validate_gate_argv reject command={subverb!r}/{command!r} reason=eawf-not-read-only"
+        )
+        raise ArgvPolicyError(
+            f"eawf {subverb} {command!r} is not in the read-only allow set (argv {argv!r})"
+        )
+    mutating = sorted(EAWF_MUTATING_FLAGS.intersection(argv))
+    if mutating:
+        logger.warning(f"validate_gate_argv reject flags={mutating!r} reason=eawf-mutating-flag")
+        raise ArgvPolicyError(f"eawf argv carries mutating flag(s) {mutating} (argv {argv!r})")
+    preview = EAWF_PREVIEW_FLAGS.get((subverb, command or ""))
+    if preview is not None and preview not in argv:
+        logger.warning(f"validate_gate_argv reject command={subverb!r} reason=eawf-not-preview")
+        raise ArgvPolicyError(
+            f"eawf {subverb} {command} acts unless run as {preview} (argv {argv!r})"
+        )
+
+
+def _check_just_recipe(argv: list[str]) -> None:
+    """Apply the declared-recipe scope when ``argv[0] == "just"``."""
+    recipe = argv[1] if len(argv) > 1 else None
+    if recipe not in JUST_READ_ONLY_RECIPES:
+        logger.warning(f"validate_gate_argv reject recipe={recipe!r} reason=just-undeclared")
+        raise ArgvPolicyError(
+            f"just recipe {recipe!r} is not in the read-only allow set "
+            f"{sorted(JUST_READ_ONLY_RECIPES)} (argv {argv!r})"
+        )
+
+
 def _check_list_of_str(argv: object) -> list[str]:
     """Narrow *argv* to ``list[str]`` or raise."""
     if not isinstance(argv, list):
@@ -248,10 +326,14 @@ def _validate_one_level(argv: list[str], *, allowlist: frozenset[str]) -> None:
     head = argv[0]
     _check_head_path_qualified(head)
     _check_head_shell_deny(head)
-    _check_head_allowlisted(head, allowlist=allowlist)
+    _check_head_allowlisted(argv, allowlist=allowlist)
     _check_metachars(argv)
     if head == "git":
         _check_git_subverb(argv)
+    elif head == "eawf":
+        _check_eawf_form(argv)
+    elif head == "just":
+        _check_just_recipe(argv)
 
 
 def _effective_wrapper_argv(argv: list[str]) -> list[str] | None:
@@ -344,8 +426,13 @@ def validate_gate_argv(argv: list[str], *, allowlist: list[str]) -> list[str]:
 
 
 __all__ = [
+    "EAWF_MUTATING_FLAGS",
+    "EAWF_PREVIEW_FLAGS",
+    "EAWF_READ_ONLY_SUBVERBS",
+    "EAWF_SCOPED_SUBVERBS",
     "GIT_ALLOWED_SUBVERBS",
     "GIT_DENIED_SUBVERBS",
+    "JUST_READ_ONLY_RECIPES",
     "SHELL_DENY_HEADS",
     "SHELL_METACHARS",
     "WRAPPER_HEADS",

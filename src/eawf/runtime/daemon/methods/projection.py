@@ -91,6 +91,7 @@ from eawf.runtime.daemon.epoch2_root import RootIdentity
 from eawf.runtime.daemon.epoch2_transaction import CANONICAL_SEQUENCE_KEY
 from eawf.runtime.daemon.methods import DaemonValidationError, Handler, MethodContext, register
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
+from eawf.runtime.daemon.methods.permission import open_permission_rows
 from eawf.runtime.daemon.native_guard import require_native_call
 from eawf.workflow.delivery.acceptance import (
     AcceptanceApproval,
@@ -139,11 +140,16 @@ LEDGER_MERGE_ROW_LIMIT: Final = 20
 
 #: The collections a route projection also reads through their ledger, so a
 #: record does not vanish from a route that lists it the instant it compacts
-#: out of the document. Milestone and Batch both leave the document on the
-#: commit that moves them to a terminal status, and the Milestone and roadmap
-#: routes list both; a collection joins here once a route that lists it needs
-#: the same read.
-LEDGER_MERGED_COLLECTIONS: Final = (Epoch2Collection.MILESTONE, Epoch2Collection.BATCH)
+#: out of the document. Milestone, Batch and Run all leave the document on the
+#: commit that moves them to a terminal status; the Milestone and roadmap routes
+#: list the first two, and Activity lists Runs, whose recently finished bucket
+#: would otherwise never hold one. A collection joins here once a route that
+#: lists it needs the same read.
+LEDGER_MERGED_COLLECTIONS: Final = (
+    Epoch2Collection.MILESTONE,
+    Epoch2Collection.BATCH,
+    Epoch2Collection.RUN,
+)
 
 
 class ReconnectParams(BaseModel):
@@ -264,12 +270,19 @@ def _terminal_ledger_rows(
 def _ledger_rows_for(
     *, route: str, authority: RootAuthority
 ) -> dict[Epoch2Collection, tuple[dict[str, Any], ...]]:
-    """Return the ledger-held rows *route*'s merged collections contribute."""
-    return {
+    """Return the ledger-held rows *route*'s merged collections contribute.
+
+    A provider permission is filed on the run ledger rather than a ledger of its
+    own, so a route that renders permissions reads the open ones from there.
+    """
+    rows: dict[Epoch2Collection, tuple[dict[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
         for collection in ROUTE_COLLECTIONS.get(route, ())
         if collection in LEDGER_MERGED_COLLECTIONS
     }
+    if Epoch2Collection.PERMISSION in ROUTE_COLLECTIONS.get(route, ()):
+        rows[Epoch2Collection.PERMISSION] = open_permission_rows(authority)
+    return rows
 
 
 def _project(*, route: str, authority: RootAuthority) -> RouteProjection:

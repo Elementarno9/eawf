@@ -7,11 +7,14 @@ work is done: a Run report is not Task completion.
 
 What the pass can read and what it cannot is the whole shape of this
 skill. The Batch and Task read models bind the subject at an exact
-cursor, and they carry each record's lifecycle status. They do not carry
-a Task's dependency edges or its ownership claims, so the *candidate*
-frontier is derivable here and the *ready* frontier is not. The pass says
-so with a stop code instead of guessing an order: an invented parallelism
-plan is the one failure the graph exists to prevent.
+cursor, and each Task row carries its lifecycle status beside its place
+in the graph: the Tasks it depends on, the paths it claims and whether it
+runs alone. The concurrency plan is derived from those facts before
+anything is dispatched -- which Tasks fan out, which wait, and why --
+and never from a parallelism number typed on the invocation: an invented
+parallelism plan is the one failure the graph exists to prevent. The
+lease scheduler enforces the same graph, so a dispatch that ignored the
+plan would be refused rather than run.
 
 The same honesty governs the dispatch arm. Opening a Run needs a compiled
 run specification -- provider documents, a certified binding set, an
@@ -39,6 +42,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from eawf.runtime.runtimes.plugin_manifest import SkillManifest
 from eawf.surfaces.render.envelope import SkillName
+from eawf.workflow.planning.orchestration import GraphTask, derive_concurrency_plan
 from eawf.workflow.skills._common import probe_skill_instruments
 from eawf.workflow.skills.bodies.dispatch import (
     ConcurrencyPlan,
@@ -93,7 +97,7 @@ RPC_SCOPE: Final = RpcScope(
 #: The complete accepted invocation, brackets optional and ``...`` repeatable.
 INVOCATION_GRAMMAR: Final = (
     "/dispatch <batch-ref> [--task <ref>...] "
-    "[--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] "
+    "[--until <frontier-empty|candidate-ready|attention>] "
     "[--provider <id>] [--resume <run-ref>] [--run <run-ref>] [--run-request <compiled>] "
     "[--budget <tokens>] [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]"
 )
@@ -120,8 +124,9 @@ TERMINAL_OUTCOMES: Final[tuple[DispatchOutcome, ...]] = (
 #: The Task lifecycle status a candidate-frontier row stands in.
 _PLANNED_STATUS: Final = "PLANNED"
 
-#: Why the pass cannot promote the candidate frontier to a ready frontier.
-_FRONTIER_STOP: Final = "dependency_proof_unreadable"
+#: The Task statuses whose work is no longer pending, so the plan leaves
+#: them out and an edge to one of them orders nothing.
+_SETTLED_STATUSES: Final = frozenset({"COMPLETED", "CANCELLED", "FAILED", "DROPPED"})
 
 #: Why the pass cannot open a Run from this grammar.
 _DISPATCH_STOP: Final = "run_request_uncompilable"
@@ -156,6 +161,32 @@ def _budgeted_request(run_request: Mapping[str, Any], budget: int | None) -> dic
     return {**run_request, "capsule": capsule}
 
 
+def _graph_tasks(tasks: dict[str, Any]) -> tuple[GraphTask, ...]:
+    """Return the unfinished Tasks of a Task read model as graph nodes.
+
+    A row states its graph as projected facts; a row that states none
+    depends on nothing, claims nothing and does not run alone.
+    """
+    nodes: list[GraphTask] = []
+    for row in tasks.get("rows", ()):
+        key = str(row.get("key", ""))
+        truth = row.get("status", {})
+        if not key or truth.get("value") in _SETTLED_STATUSES:
+            continue
+        facts = row.get("facts", {})
+        nodes.append(
+            GraphTask(
+                ref=key,
+                depends_on=tuple(part for part in facts.get("depends_on", "").split(",") if part),
+                write_claims=tuple(
+                    part for part in facts.get("write_claims", "").split(",") if part
+                ),
+                exclusive=facts.get("exclusive") == "true",
+            )
+        )
+    return tuple(nodes)
+
+
 class DispatchArgs(BaseModel):
     """The accepted invocation of ``/dispatch``, parsed and validated.
 
@@ -166,8 +197,6 @@ class DispatchArgs(BaseModel):
         batch_ref: The Batch to coordinate.
         task: Tasks to restrict the pass to; empty means the whole Batch.
         until: How far the pass runs before it reports.
-        max_parallel: The concurrency the plan may use. The resolved
-            ceiling is policy, so the pass neither raises nor lowers it.
         provider: The provider id a dispatched Run would bind.
         resume: A Run reference to resume instead of opening new work.
         run: The Run the one named Task is dispatched under.
@@ -188,7 +217,6 @@ class DispatchArgs(BaseModel):
     batch_ref: str = Field(min_length=1)
     task: tuple[str, ...] = ()
     until: Literal["frontier-empty", "candidate-ready", "attention"] = "frontier-empty"
-    max_parallel: int = Field(default=1, ge=1, le=64)
     provider: str | None = None
     resume: str | None = None
     run: str | None = None
@@ -335,31 +363,34 @@ class DispatchSkill(Skill):
     ) -> SkillResult:
         """Fold the read models into the coordination report."""
         sent = {row.task_ref for row in dispatched if row.method == RUN_DISPATCH_METHOD}
-        candidates = [key for key in row_keys(tasks, status=_PLANNED_STATUS) if key not in sent]
+        derived = derive_concurrency_plan(_graph_tasks(tasks))
+        planned = set(row_keys(tasks, status=_PLANNED_STATUS)) - sent
         if args.task:
-            wanted = set(args.task)
-            candidates = [key for key in candidates if key in wanted]
+            planned &= set(args.task)
+        candidates = [key for key in derived.fan_out if key in planned]
         cursor = batch.get("header", {}).get("source_cursor")
+        plan = ConcurrencyPlan(
+            parallel=list(derived.fan_out),
+            sequential=list(derived.sequential),
+            stages=[list(stage) for stage in derived.stages],
+            reasons={ref: list(why) for ref, why in derived.reasons.items()},
+        )
         if not candidates:
+            waiting = len(planned)
             return self._ok(
                 args,
                 outcome="frontier_empty",
                 cursor=cursor,
+                plan=plan,
                 dispatched=dispatched,
                 frontier=[],
                 stopped_on=[],
                 reason=(
                     f"batch {args.batch_ref} has no undispatched Task standing at "
-                    f"{_PLANNED_STATUS}, so the candidate frontier is empty"
+                    f"{_PLANNED_STATUS} on the first stage of its derived plan"
+                    + (f"; {waiting} wait on earlier stages" if waiting else "")
                 ),
             )
-        plan = ConcurrencyPlan(
-            parallel=candidates[: args.max_parallel],
-            sequential=candidates[args.max_parallel :],
-            constraint="the resolved concurrency ceiling"
-            if len(candidates) > args.max_parallel
-            else "",
-        )
         return self._needs_operator(
             args,
             cursor=cursor,
@@ -367,9 +398,9 @@ class DispatchSkill(Skill):
             dispatched=dispatched,
             frontier=candidates,
             reason=(
-                f"{len(candidates)} Task(s) stand at {_PLANNED_STATUS} on batch "
-                f"{args.batch_ref}; the read models carry no dependency edge and no compiled run "
-                "specification, so the pass stops rather than inventing an order or a request"
+                f"{len(candidates)} Task(s) stand ready on the first stage of batch "
+                f"{args.batch_ref}'s derived plan; no compiled run specification reaches this "
+                "pass, so it stops rather than inventing a request"
             ),
         )
 
@@ -379,6 +410,7 @@ class DispatchSkill(Skill):
         *,
         outcome: DispatchOutcome,
         cursor: int | None,
+        plan: ConcurrencyPlan,
         dispatched: list[DispatchedRun],
         frontier: list[str],
         stopped_on: list[str],
@@ -388,6 +420,7 @@ class DispatchSkill(Skill):
         body = DispatchBody(
             batch_ref=args.batch_ref,
             source_cursor=cursor,
+            plan=plan,
             dispatched=dispatched,
             frontier=frontier,
             stopped_on=stopped_on,
@@ -417,19 +450,21 @@ class DispatchSkill(Skill):
             plan=plan,
             dispatched=dispatched,
             frontier=frontier,
-            stopped_on=[_FRONTIER_STOP, _DISPATCH_STOP],
+            stopped_on=[_DISPATCH_STOP],
             outcome="needs_operator",
             reason=reason,
             user_question=UserQuestion(
-                question=f"How should the frontier of batch {args.batch_ref} be resolved?",
+                question=f"How should the ready Tasks of batch {args.batch_ref} be dispatched?",
                 options=[
                     UserQuestionOption(
-                        label="name the ready Tasks",
-                        description="Re-invoke with --task for each Task whose dependencies hold.",
+                        label="present compiled requests",
+                        description=(
+                            "Re-invoke with --task, --run and --run-request for each ready Task."
+                        ),
                     ),
                     UserQuestionOption(
                         label="stop the pass",
-                        description="Leave the Batch where it stands and resolve the plan defect.",
+                        description="Leave the Batch where it stands; nothing is dispatched.",
                     ),
                 ],
             ),

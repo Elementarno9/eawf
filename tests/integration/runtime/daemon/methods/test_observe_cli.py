@@ -345,6 +345,8 @@ def cli_files(tmp_path: Path) -> Callable[[dict[str, Any], str, str], list[str]]
             str(_write(tmp_path / "release.json", release)),
             "--manifest",
             str(_write(tmp_path / "manifest.json", manifest_payload())),
+            "--expected-revision",
+            str(release["revision"]),
             "--idempotency-key",
             f"observe-cli-{target_id}-{case}",
             "--response",
@@ -370,7 +372,8 @@ def test_the_cli_emits_the_observation(
     assert result.exit_code == 0, result.output
     assert calls[0]["method"] == "release.observe_target"
     assert calls[0]["params"]["target_id"] == "pypi"
-    assert "match (matched)" in result.output
+    assert "result.observation.result: match" in result.output
+    assert "result.observation.code: matched" in result.output
     assert "observation://package_index/pypi/eawf@0.7.0.dev1" in result.output
 
 
@@ -428,6 +431,8 @@ def test_the_cli_refuses_a_missing_release_file(
             str(tmp_path / "absent.json"),
             "--manifest",
             str(_write(tmp_path / "manifest.json", manifest_payload())),
+            "--expected-revision",
+            "1",
             "--idempotency-key",
             "observe-cli-absent",
         ],
@@ -461,6 +466,8 @@ def test_the_cli_refuses_an_unparseable_manifest(
             str(_write(tmp_path / "release.json", state["release"])),
             "--manifest",
             str(broken),
+            "--expected-revision",
+            "1",
             "--idempotency-key",
             "observe-cli-broken",
         ],

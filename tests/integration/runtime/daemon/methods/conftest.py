@@ -505,6 +505,7 @@ async def approve_pinned(ctx: MethodContext, repo: Path) -> dict[str, Any]:
             "release": candidate,
             "readiness": swept["readiness"],
             "approval_ref": "receipt://approval/dev1",
+            "proof_digest": PROOF_DIGEST,
         },
     )
     release: dict[str, Any] = approved["release"]

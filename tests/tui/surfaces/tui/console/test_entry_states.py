@@ -1,7 +1,7 @@
 """The process layer drawn from the real attach path: CON-001 to CON-009, CON-011, CON-012.
 
 Every state here is reached through :func:`eawf.surfaces.tui.launch.launch_tui` exactly as
-``eawf tui`` reaches it, over a temporary tree, a temporary machine registry and a real
+``eawf ui`` reaches it, over a temporary tree, a temporary machine registry and a real
 condition -- an unregistered root, two workspaces claiming one root, a declared tree with
 no marker, a stopped cutover journal, a marker or state document written by a newer
 console. Only the event loop is stood in for (``_run_console`` hands back the app it was
@@ -176,7 +176,7 @@ def world(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[SimpleNam
 def _launch(
     monkeypatch: pytest.MonkeyPatch, *, tty: bool = True, **kwargs: Any
 ) -> tuple[int, ConsoleApp | None]:
-    """Launch ``eawf tui`` bare, the way an operator standing in the repository does."""
+    """Launch ``eawf ui`` bare, the way an operator standing in the repository does."""
 
     class _Stdout:
         @staticmethod

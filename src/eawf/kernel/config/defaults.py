@@ -226,6 +226,9 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
         "require_iter_audit_accepted": False,
+        # A rule the operator re-types more often than this within a release
+        # must be triaged into a mechanism before the release tags.
+        "retyped_rule_threshold": 3,
         "waiver_mode": "B",
     },
     "prose": {

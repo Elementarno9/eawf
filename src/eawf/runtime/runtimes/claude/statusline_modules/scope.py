@@ -15,19 +15,17 @@ that does not validate.
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
-from typing import Any, Final
+from typing import Any
 
-from pydantic import ValidationError
-
-from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.truth import TruthKind
-from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.run import Run
-from eawf.kernel.store.compaction import read_document
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.session.vendor_id import hash_vendor_session_id
+from eawf.runtime.runtimes.claude.statusline_modules._spine import (
+    SPINE_PRODUCER,
+    selected_generation,
+    session_run,
+)
 from eawf.surfaces.render.statusline import (
     SegmentSource,
     StatuslineSegment,
@@ -35,32 +33,12 @@ from eawf.surfaces.render.statusline import (
     unavailable_segment,
 )
 
-logger = logging.getLogger(__name__)
-
-#: The producer the scope segment names: the tree's selected epoch-2 generation.
-SPINE_PRODUCER: Final = "eawf.epoch2-generation"
-
 _MODULE = "scope"
 _SPINE_SOURCE = SegmentSource(
     producer=SPINE_PRODUCER,
     provenance=f"generation#{Epoch2Collection.RUN.value}",
     truth_kind=TruthKind.STORED,
 )
-
-
-def _session_runs(document: dict[str, Any], session_id: str) -> list[dict[str, Any]]:
-    """Return the raw Run rows whose vendor session is ``session_id``."""
-    digest = hash_vendor_session_id(session_id)
-    rows = document.get(Epoch2Collection.RUN.value)
-    if not isinstance(rows, dict):
-        return []
-    return [
-        row
-        for row in rows.values()
-        if isinstance(row, dict)
-        and isinstance(row.get("vendor_session"), dict)
-        and row["vendor_session"].get("session_digest") == digest
-    ]
 
 
 def _scope_key(run: Run) -> str:
@@ -83,30 +61,12 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
     """
     if state_path is None:
         return unavailable_segment(_MODULE, _MODULE, "no-workspace", _SPINE_SOURCE)
-    authority = resolve_authority(state_path.parent)
-    target, generation = authority.target, authority.generation_id
-    if target is None or generation is None:
-        # An epoch-1 answer always names its gap, such as marker_absent.
-        gap = str(authority.gap).replace("_", "-")
-        return unavailable_segment(_MODULE, _MODULE, f"epoch1-{gap}", _SPINE_SOURCE)
-    session_id = claude_payload.get("session_id")
-    if not isinstance(session_id, str) or not session_id:
-        return unavailable_segment(_MODULE, _MODULE, "no-session", _SPINE_SOURCE)
-    path = target.generation_path(generation) / GENERATION_DOCUMENT
-    try:
-        document = read_document(path)
-    except (OSError, ValueError) as exc:
-        logger.debug(f"build generation-unreadable error={exc}")
-        return unavailable_segment(_MODULE, _MODULE, "generation-unreadable", _SPINE_SOURCE)
-    rows = _session_runs(document, session_id)
-    if not rows:
-        return unavailable_segment(_MODULE, _MODULE, "no-run-for-session", _SPINE_SOURCE)
-    try:
-        runs = [Run.model_validate(row) for row in rows]
-    except ValidationError as exc:
-        logger.debug(f"build run-invalid error={exc}")
-        return unavailable_segment(_MODULE, _MODULE, "run-invalid", _SPINE_SOURCE)
-    run = max(runs, key=lambda candidate: candidate.updated_at)
+    document_path = selected_generation(state_path)
+    if isinstance(document_path, str):
+        return unavailable_segment(_MODULE, _MODULE, document_path, _SPINE_SOURCE)
+    run = session_run(claude_payload, document_path)
+    if isinstance(run, str):
+        return unavailable_segment(_MODULE, _MODULE, run, _SPINE_SOURCE)
     source = SegmentSource(
         producer=SPINE_PRODUCER,
         provenance=str(run.urn),

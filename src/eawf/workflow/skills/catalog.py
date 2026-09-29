@@ -527,7 +527,7 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
         description="Coordinate one Delivery Batch: bring its ready Tasks to a candidate.",
         grammar=_grammar(
             "/dispatch <batch-ref> [--task <ref>...]"
-            " [--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>]"
+            " [--until <frontier-empty|candidate-ready|attention>]"
             " [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]"
         ),
         effects=EffectsBoundary(

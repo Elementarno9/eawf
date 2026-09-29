@@ -1,13 +1,13 @@
 """Deterministic, non-interactive text renderers for the ``tui`` surface.
 
 The interactive Textual app (:mod:`eawf.surfaces.tui.app`) only runs at a TTY.
-Headless callers — piped ``eawf`` / ``eawf tui``, ``--plain`` /
+Headless callers — piped ``eawf`` / ``eawf ui``, ``--plain`` /
 ``--no-input``, CI scrapes, and ``eawf workspace registry-status`` — need a
 deterministic single-frame text emission that never opens a Textual screen.
 This module owns both:
 
 * :func:`build_status_text` + :func:`emit_status` — the repo/workspace
-  *status frame* the bare-``eawf`` / ``eawf tui`` non-TTY fallback prints
+  *status frame* the bare-``eawf`` / ``eawf ui`` non-TTY fallback prints
   (``Eä  <breadcrumb>`` header + a one-line lifecycle-count summary +
   a ``keymap:`` line). Exit code is always ``0``; no Textual paint.
 * :func:`offline_render` — the *workspace registry dashboard* rendered to a
@@ -139,7 +139,7 @@ def build_status_text(state: State | None) -> str:
     """Build the deterministic single-frame status text from typed *state*.
 
     The three-line frame is the non-TTY fallback contract for bare
-    ``eawf`` / ``eawf tui``:
+    ``eawf`` / ``eawf ui``:
 
     1. ``◉ Eä  <breadcrumb>`` — the leading brand glyph then the two-tone
        green brand wordmark (the ``ä`` carries the reskin accent) outside-left
@@ -180,7 +180,7 @@ def emit_status(
     """Print the deterministic status frame and return a clean exit code.
 
     The non-TTY / ``--plain`` / ``--no-input`` fallback for the bare
-    ``eawf`` / ``eawf tui`` dispatch. Loads ``<workspace>/.ea/state.json``
+    ``eawf`` / ``eawf ui`` dispatch. Loads ``<workspace>/.ea/state.json``
     read-only (best effort — a missing or corrupt file degrades to the
     fresh-workspace placeholder frame) and prints :func:`build_status_text`.
 

@@ -42,6 +42,7 @@ from typing import Any, Final
 
 from pydantic import ConfigDict
 
+from eawf.kernel.config.layered import resolve_dispatch_provider_tuple
 from eawf.kernel.identity import QualifiedUrn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.spec.common import grade_criterion_grounding
@@ -53,6 +54,7 @@ from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
 from eawf.kernel.state.epoch2.plan_revision import (
     PlanApproval,
     PlanBody,
+    PlannedTask,
     PlanRevision,
     PlanRevisionKey,
     PlanRevisionStatus,
@@ -85,6 +87,7 @@ from eawf.surfaces.cli.errors import UserError
 from eawf.surfaces.cli.errors import ValidationError as CliValidationError
 from eawf.workflow.evidence._io import load_state
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
+from eawf.workflow.lifecycle.epoch2 import TransitionDenied, apply_transition
 from eawf.workflow.planning.lenses import blocking_findings, run_plan_lenses
 from eawf.workflow.planning.revision import (
     ObservedPlanWorld,
@@ -243,7 +246,11 @@ def grade_plan_grounding(body: PlanBody) -> PlanBody:
 
 
 def validate_plan_proposal(
-    document: dict[str, Any], *, proposal: PlanRevisionProposal, at: UtcDatetime
+    document: dict[str, Any],
+    *,
+    proposal: PlanRevisionProposal,
+    at: UtcDatetime,
+    provider_tuple: tuple[str, ...] = (),
 ) -> PlanRevisionAdvanced | PlanRefusal:
     """Return the VALIDATED successor *proposal* earns, or why it earns none.
 
@@ -261,6 +268,9 @@ def validate_plan_proposal(
             observed from.
         proposal: The strict create document the planner emitted.
         at: When the submission happened, stamped on the successor.
+        provider_tuple: The providers the plan's Runs dispatch to, as the
+            submitting daemon observed them; a verdict-only caller that
+            records nothing leaves it empty.
 
     Returns:
         The validated revision beside the event it emits, or the typed
@@ -333,6 +343,7 @@ def validate_plan_proposal(
             "base_state_revision": world.track_revision,
             "policy_revision": world.policy_revision,
             "head_bindings": list(_head_bindings(world)),
+            "provider_tuple": list(provider_tuple),
             "body": body.model_dump(mode="json"),
             "parent_key": proposal.parent_key,
         }
@@ -371,12 +382,47 @@ def observe_plan_world(document: dict[str, Any], *, body: PlanBody) -> ObservedP
     )
 
 
+def _promotable_draft(document: dict[str, Any], *, key: str) -> Task | None:
+    """Return the native backlog Task the plan may promote under *key*, if any.
+
+    A plan names an existing Task to promote it: the backlog row keeps its
+    identifier, and the apply takes it through the ordinary promotion edge
+    rather than minting a second record. Only a native ``DRAFT`` qualifies.
+    A row imported from the previous epoch is immutable to this lifecycle,
+    and a row past the backlog is already placed, so either stays a claimed
+    key the apply refuses.
+
+    Args:
+        document: The locked document.
+        key: The Task key the plan names.
+
+    Returns:
+        The validated draft, or ``None``.
+    """
+    row = document_rows(document, Epoch2Collection.TASK).get(key)
+    try:
+        task = None if row is None else Task.model_validate(row)
+    except ValueError:
+        return None
+    if task is None or task.status is not TaskStatus.DRAFT or task.origin.kind == "legacy":
+        return None
+    return task
+
+
 def _claimed_keys(document: dict[str, Any], *, body: PlanBody) -> tuple[str, ...]:
-    """Return the locators the document already holds that the plan creates."""
+    """Return the locators the document already holds that the plan creates.
+
+    A backlog draft the plan promotes is not claimed: the plan places it
+    rather than creating it.
+    """
     wanted: dict[Epoch2Collection, tuple[str, ...]] = {
         Epoch2Collection.MILESTONE: (body.milestone_urn.entity_key,),
         Epoch2Collection.BATCH: tuple(batch.urn.entity_key for batch in body.batches),
-        Epoch2Collection.TASK: tuple(task.urn.entity_key for task in body.tasks),
+        Epoch2Collection.TASK: tuple(
+            task.urn.entity_key
+            for task in body.tasks
+            if _promotable_draft(document, key=task.urn.entity_key) is None
+        ),
     }
     return tuple(
         f"{collection.value}/{key}"
@@ -434,11 +480,39 @@ def _planned_batches(body: PlanBody, *, at: UtcDatetime) -> tuple[DeliveryBatch,
     )
 
 
-def _planned_tasks(body: PlanBody, *, at: UtcDatetime) -> tuple[Task, ...]:
-    """Return the PLANNED Tasks *body* materialises, in declared order."""
-    return tuple(
-        Task.model_validate(
+def _planned_task(
+    document: dict[str, Any], *, body: PlanBody, task: PlannedTask, at: UtcDatetime
+) -> Task:
+    """Return the PLANNED Task one plan entry materialises.
+
+    An entry naming a backlog draft promotes that draft through the
+    registry's own promotion edge, so the Task keeps its identifier, its
+    history and any due scope the draft already carried. Every other entry
+    creates the Task at revision one.
+
+    Args:
+        document: The locked document.
+        body: The plan content.
+        task: The plan entry.
+        at: When the apply happened.
+
+    Returns:
+        The PLANNED Task.
+
+    Raises:
+        ValidationError: The Task does not satisfy its own model.
+    """
+    placement = {
+        "batch_ref": str(task.batch_ref),
+        "priority": task.priority.value,
+        "intent": task.intent,
+        "criteria": [item.model_dump(mode="json") for item in task.criteria],
+    }
+    draft = _promotable_draft(document, key=task.urn.entity_key)
+    if draft is None:
+        return Task.model_validate(
             {
+                **placement,
                 "uid": str(uuid.uuid5(uuid.NAMESPACE_URL, str(task.urn))),
                 "key": task.urn.entity_key,
                 "urn": str(task.urn),
@@ -446,17 +520,22 @@ def _planned_tasks(body: PlanBody, *, at: UtcDatetime) -> tuple[Task, ...]:
                 "revision": 1,
                 "created_at": at.isoformat(),
                 "updated_at": at.isoformat(),
-                "batch_ref": str(task.batch_ref),
                 "due_scope": str(body.milestone_urn),
-                "priority": task.priority.value,
-                "intent": task.intent,
                 "contract_revision": 1,
-                "criteria": [item.model_dump(mode="json") for item in task.criteria],
                 "status": TaskStatus.PLANNED.value,
+                "depends_on": [str(ref) for ref in task.depends_on],
+                "write_claims": list(task.write_claims),
+                "exclusive": task.exclusive,
             }
         )
-        for task in body.tasks
+    due_scope = draft.due_scope if draft.due_scope is not None else body.milestone_urn
+    promoted = apply_transition(
+        draft, to=TaskStatus.PLANNED, at=at, updates={**placement, "due_scope": str(due_scope)}
     )
+    # The draft was just read as a native DRAFT and every promotion field
+    # is supplied, so the edge cannot be denied here.
+    assert not isinstance(promoted, TransitionDenied), promoted
+    return promoted.record
 
 
 def materialise_plan(
@@ -491,7 +570,8 @@ def materialise_plan(
     for batch in _planned_batches(body, at=at):
         batches[batch.key] = batch.model_dump(mode="json")
     tasks = new_document.setdefault(Epoch2Collection.TASK.value, {})
-    for task in _planned_tasks(body, at=at):
+    for entry in body.tasks:
+        task = _planned_task(document, body=body, task=entry, at=at)
         tasks[task.key] = task.model_dump(mode="json")
     new_document.setdefault(PLAN_REVISION_COLLECTION.value, {})[record.key] = record.model_dump(
         mode="json"
@@ -575,6 +655,12 @@ def submit_plan_revision(
 ) -> CommittedTransaction | PlanRefusal:
     """Record one proposal as a VALIDATED revision, or refuse it.
 
+    The revision records the providers its Runs dispatch to, read here
+    from the repository's runtime configuration rather than from the
+    proposal, for the same reason the head bindings are observed: a
+    planner that could name its own providers could name the environment
+    it wished its cited measurements had been taken in.
+
     Args:
         context: The native context of the addressed root.
         proposal: The strict create document.
@@ -589,8 +675,11 @@ def submit_plan_revision(
         NativeAuthorityRequiredError: The tree left epoch 2.
         MigrationDualAuthorityError: The tree's select is not whole.
         LockTimeout: A lock stayed held past the lock timeout.
+        pydantic.ValidationError: The runtime configuration names an
+            adapter no provider backs.
     """
     body = proposal.body
+    provider_tuple = resolve_dispatch_provider_tuple(context.identity.tree_root.parent)
     digest = _request_digest(
         "submit", {"proposal": proposal.model_dump(mode="json"), "actor": actor}
     )
@@ -599,7 +688,9 @@ def submit_plan_revision(
         if replayed is not None:
             return replayed
         document = session.read_document()
-        outcome = validate_plan_proposal(document, proposal=proposal, at=at)
+        outcome = validate_plan_proposal(
+            document, proposal=proposal, at=at, provider_tuple=provider_tuple
+        )
         if isinstance(outcome, PlanRefusal):
             return outcome
         return _commit(
@@ -641,7 +732,9 @@ def _refuse_every_citation(_ref: str) -> bool:
     return False
 
 
-def _build_citation_resolvers(context: Epoch2RootContext) -> _CitationResolvers:
+def _build_citation_resolvers(
+    context: Epoch2RootContext, *, provider_tuple: tuple[str, ...]
+) -> _CitationResolvers:
     """Return the contract and Decision resolvers for *context*'s v1 state.
 
     A promoted :class:`~eawf.kernel.spec.measured_contract.MeasuredContract`
@@ -661,6 +754,9 @@ def _build_citation_resolvers(context: Epoch2RootContext) -> _CitationResolvers:
 
     Args:
         context: The native context of the addressed root.
+        provider_tuple: The providers the plan's Runs dispatch to, which a
+            provider-scoped contract must have been measured through
+            exactly.
 
     Returns:
         The two resolvers, both ``None`` when *state_path* is absent, or
@@ -679,7 +775,7 @@ def _build_citation_resolvers(context: Epoch2RootContext) -> _CitationResolvers:
 
     def contract_resolves(ref: str) -> bool:
         try:
-            resolve_contract_citation(state, ref)
+            resolve_contract_citation(state, ref, provider_tuple=provider_tuple)
         except UserError:
             return False
         return True
@@ -777,7 +873,7 @@ def approve_plan_revision(
             policy_revision=record.policy_revision,
             head_bindings=record.head_bindings,
         )
-        resolvers = _build_citation_resolvers(context)
+        resolvers = _build_citation_resolvers(context, provider_tuple=record.provider_tuple)
         outcome = advance_plan_revision(
             record,
             to=PlanRevisionStatus.APPROVED,

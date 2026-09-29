@@ -203,8 +203,8 @@ def test_dispatch_reports_an_empty_frontier_as_a_drained_batch() -> None:
     assert result.status == "ok"
 
 
-def test_dispatch_stops_for_an_operator_when_the_frontier_is_underivable() -> None:
-    """A PLANNED Task with no readable dependency edge stops the pass, with a question."""
+def test_dispatch_stops_for_an_operator_when_no_run_request_is_presented() -> None:
+    """A ready PLANNED Task with no compiled run request stops the pass, with a question."""
     caller = RecordingCaller(
         {
             dispatch_skill.TASK_READ_METHOD: {
@@ -216,14 +216,14 @@ def test_dispatch_stops_for_an_operator_when_the_frontier_is_underivable() -> No
             }
         }
     )
-    result = _run(dispatch_skill, {"batch_ref": "batch-1", "max_parallel": 1}, caller)
+    result = _run(dispatch_skill, {"batch_ref": "batch-1"}, caller)
 
     body = _body(result, DispatchBody)
     assert isinstance(body, DispatchBody)
     assert body.outcome == "needs_operator"
     assert body.frontier == ["task-a"]
-    assert body.plan.parallel == ["task-a"]
-    assert body.stopped_on == ["dependency_proof_unreadable", "run_request_uncompilable"]
+    assert body.plan.parallel == ["task-a", "task-b"]
+    assert body.stopped_on == ["run_request_uncompilable"]
     assert body.user_question is not None
     assert result.status == "needs_user"
 

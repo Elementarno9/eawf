@@ -185,17 +185,13 @@ def test_surf_080_every_lifecycle_group_is_an_entity_group() -> None:
 def test_surf_080_unmounted_groups_are_the_known_gap() -> None:
     """Pin the declared groups not yet mounted at the root, so a new mount is seen.
 
-    ``campaign`` and ``question`` still live under ``research``, ``ui`` is the
-    ``tui`` command, and ``action`` has no group.
+    ``action`` has no verb: a pending action is answered through the verb of
+    the entity it gates (``milestone seal-approval``), so there is no operation
+    of its own to mount.
     """
     mounted = set(_root().commands)
     declared = verb_contract.ENTITY_GROUPS + verb_contract.CROSS_CUTTING_GROUPS
-    assert {group for group in declared if group not in mounted} == {
-        "campaign",
-        "question",
-        "action",
-        "ui",
-    }
+    assert {group for group in declared if group not in mounted} == {"action"}
 
 
 # ---- SURF-081 ---------------------------------------------------------------
@@ -477,14 +473,17 @@ def test_surf_084_a_publication_answers_with_its_operation_reference_on_submissi
             "sha256:" + "a" * 64,
             "--proof-digest",
             "sha256:" + "b" * 64,
+            "--expected-revision",
+            "3",
             "--idempotency-key",
             "publish-0001",
         ],
     )
     assert result.exit_code == exit_codes.OK, result.output
     assert sent == [release_cmd.RELEASE_RPC_METHODS["publish"]]
-    assert "operation: op://release/REL-0.7.0.dev9/1" in result.stdout
-    assert "pypi#1=queued" in result.stdout
+    assert "result.operation_ref: op://release/REL-0.7.0.dev9/1" in result.stdout
+    assert '"target_id":"pypi","attempt":1,"status":"queued"' in result.stdout
+    assert "revision 3 -> 4" in result.stdout
 
 
 # ---- SURF-086 ---------------------------------------------------------------
@@ -501,7 +500,7 @@ _READ_VERBS: tuple[tuple[str, ...], ...] = (
     ("memory", "list"),
     ("memory", "stale"),
     ("migrate", "status"),
-    ("research", "question", "list"),
+    ("question", "list"),
     ("research", "status"),
     ("workspace", "list"),
 )

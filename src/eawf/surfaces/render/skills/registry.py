@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 
 from eawf.surfaces.render.skills.render import SkillSpec
+from eawf.workflow.planning.orchestration import ORCHESTRATION_STATEMENT
 
 logger = logging.getLogger(__name__)
 
@@ -364,20 +365,23 @@ and tier (or a reason on the needs_user path).
 _DISPATCH_BODY = (
     "# /dispatch\n"
     "\n"
+    "## Orchestration contract\n"
+    "\n"
+    f"{ORCHESTRATION_STATEMENT}\n"
+    "\n"
     "## Canonical algorithm\n"
     "\n"
     "1. Bind the Batch and its Task graph at one exact read cursor. Every Task named later"
     " carries the key it was read under, so a head that moves during the pass is detectable"
     " rather than silent.\n"
-    "2. Compute the candidate frontier: the Tasks standing at PLANNED. The read models carry"
-    " each record's lifecycle status and no dependency edge and no ownership claim, so"
-    " promoting that candidate set to a ready frontier needs facts this surface cannot see."
-    " Do not invent a parallelism plan: the graph is the plan, and two Tasks you expected to"
-    " run together that conflict on ownership are a plan defect to report rather than to"
-    " silently serialize around.\n"
+    "2. Derive the concurrency plan from the Task graph each Task row carries: the Tasks it"
+    " depends on, the paths it claims, and whether it runs alone. Do not invent a parallelism"
+    " plan: the graph is the plan, and an ordering you expected that the graph does not carry"
+    " is a plan defect to fix in the graph rather than a number to type here.\n"
     "3. Render the concurrency plan before dispatching anything: which Tasks fan out, which"
-    " are forced sequential, and which constraint forces each. The operator sees this before"
-    " any Run starts.\n"
+    " are forced sequential, and which dependency, shared claim or exclusivity forces each."
+    " The ready frontier is the PLANNED Tasks on the first stage. The operator sees this"
+    " before any Run starts.\n"
     "4. Dispatch each ready Task as its own Run under its own Task scope: one Task, one Run,"
     " one lease, one workspace. Opening a Run needs a compiled run specification, and no"
     " surface this grammar reaches produces one, so the pass stops with"
@@ -392,7 +396,7 @@ _DISPATCH_BODY = (
     "\n"
     "```text\n"
     "/dispatch <batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|"
-    "attention>] [--max-parallel <N>] [--provider <id>] [--resume <run-ref>] [--budget <spec>]"
+    "attention>] [--provider <id>] [--resume <run-ref>] [--budget <spec>]"
     " [--dry-run] [--idempotency-key <key>] [--output <human|json|markdown>]\n"
     "```\n"
     "\n"
@@ -410,15 +414,15 @@ _DISPATCH_BODY = (
     "\n"
     "- [ ] The Batch reference names a Batch in a native tree; a tree without that authority"
     " refuses at the first read.\n"
-    "- [ ] `--max-parallel` matches the resolved ceiling. The ceiling is policy, not"
-    " preference: do not raise it, and do not lower it to be safe.\n"
+    "- [ ] How many Runs are live at once is the in-flight governor's ceiling; a stage wider"
+    " than it is admitted in part and queued for the rest.\n"
     "- [ ] A Task marked exclusive runs alone, so nothing is dispatched beside it.\n"
     "\n"
     "## Decision surfaces\n"
     "\n"
-    "A frontier the read models cannot settle stops the pass at `needs_operator` with a"
-    " two-option question: name the ready Tasks with `--task`, or stop and resolve the plan"
-    " defect. Stopping is a valid outcome rather than a failure.\n"
+    "A ready frontier with no compiled run specification stops the pass at `needs_operator`"
+    " with a two-option question: present a compiled request for each ready Task, or stop."
+    " Stopping is a valid outcome rather than a failure.\n"
     "\n"
     "## Output contract\n"
     "\n"
@@ -633,9 +637,7 @@ SKILL_REGISTRY: tuple[SkillSpec, ...] = (
     SkillSpec(
         skill_name="dispatch",
         description=("Coordinate one Delivery Batch: bring its ready Tasks to a candidate."),
-        argument_hint=(
-            "<batch-ref> [--task=<ref>] [--max-parallel=<n>] [--resume=<run-ref>] [--dry-run]"
-        ),
+        argument_hint=("<batch-ref> [--task=<ref>] [--resume=<run-ref>] [--dry-run]"),
         user_invocable=True,
         disable_model_invocation=True,
         body=_DISPATCH_BODY,

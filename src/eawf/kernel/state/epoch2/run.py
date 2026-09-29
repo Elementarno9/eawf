@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
+from pathlib import PurePosixPath
 from typing import Annotated, ClassVar, Final, Literal, Self
 
 from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
@@ -60,6 +61,22 @@ WriteSetPath = Annotated[
     str,
     StringConstraints(strict=True, min_length=1, max_length=500, pattern=r"^[^/\\][^\\]*$"),
 ]
+
+
+def write_path_covers(root: str, path: str) -> bool:
+    """Return whether writing under *root* reaches *path*.
+
+    Paths are compared segment by segment rather than as strings, so
+    ``src/app`` covers ``src/app/x.py`` and not ``src/application``.
+
+    Args:
+        root: A repository-relative write root.
+        path: A repository-relative path.
+
+    Returns:
+        ``True`` when *path* is *root* or sits under it.
+    """
+    return PurePosixPath(path).is_relative_to(PurePosixPath(root))
 
 
 class RunPurpose(StrEnum):
@@ -467,4 +484,5 @@ __all__ = [
     "TaskScope",
     "WorkspaceScope",
     "WriteSetPath",
+    "write_path_covers",
 ]

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 from enum import StrEnum
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -210,10 +211,10 @@ def incident_view(
 @decision_app.command("add")
 def decision_add(
     ctx: typer.Context,
-    decision_id: Annotated[str, typer.Argument(help="Decision id (e.g. D012)")],
-    scope_id: Annotated[str, typer.Option("--scope-id", help="Owning scope id")],
-    summary: Annotated[str, typer.Option("--summary", help="One-line summary")],
-    rationale: Annotated[str, typer.Option("--rationale", help="Why this decision")],
+    decision_id: Annotated[str | None, typer.Argument(help="Decision id (e.g. D012)")] = None,
+    scope_id: Annotated[str | None, typer.Option("--scope-id", help="Owning scope id")] = None,
+    summary: Annotated[str | None, typer.Option("--summary", help="One-line summary")] = None,
+    rationale: Annotated[str | None, typer.Option("--rationale", help="Why this decision")] = None,
     alternative: Annotated[
         list[str] | None,
         typer.Option("--alternative", help="Alternative considered (repeatable)"),
@@ -226,9 +227,17 @@ def decision_add(
             "status to SUPERSEDED and sets parent.superseded_by atomically.",
         ),
     ] = None,
+    from_spec: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-spec",
+            help="JSON file (or - for stdin) carrying the whole decision, in place of flags.",
+        ),
+    ] = None,
 ) -> None:
-    """Record a durable decision."""
+    """Record a durable decision, from flags or from a ``--from-spec`` document."""
     from eawf.surfaces.cli._mutation import state_transaction
+    from eawf.surfaces.cli.verb_contract import request_document
     from eawf.workflow.evidence import decision as decision_evi
     from eawf.workflow.evidence._io import append_jsonl, store_paths
 
@@ -236,15 +245,27 @@ def decision_add(
     state_path = _state_path(flags)
 
     try:
+        request = request_document(
+            decision_evi.DecisionRequest,
+            from_spec,
+            {
+                "decision_id": decision_id,
+                "scope_id": scope_id,
+                "summary": summary,
+                "rationale": rationale,
+                "alternatives": alternative or None,
+                "supersedes": supersedes,
+            },
+        )
         with state_transaction(state_path) as state:
             record, event = decision_evi.add_decision(
                 state,
-                decision_id=decision_id,
-                scope_id=scope_id,
-                summary=summary,
-                rationale=rationale,
-                alternatives=list(alternative or []),
-                supersedes=supersedes,
+                decision_id=request.decision_id,
+                scope_id=request.scope_id,
+                summary=request.summary,
+                rationale=request.rationale,
+                alternatives=request.alternatives,
+                supersedes=request.supersedes,
             )
             paths = store_paths(state_path)
             append_jsonl(paths[StoreKind.DECISION], record)
@@ -254,14 +275,16 @@ def decision_add(
         return
 
     payload: dict[str, str] = {
-        "decision_id": decision_id,
-        "scope_id": scope_id,
-        "summary": summary,
+        "decision_id": request.decision_id,
+        "scope_id": request.scope_id,
+        "summary": request.summary,
         "status": "active",
     }
-    if supersedes is not None:
-        payload["supersedes"] = supersedes
-    text = f"decision {decision_id} added" + (f" (supersedes {supersedes})" if supersedes else "")
+    if request.supersedes is not None:
+        payload["supersedes"] = request.supersedes
+    text = f"decision {request.decision_id} added" + (
+        f" (supersedes {request.supersedes})" if request.supersedes else ""
+    )
     _emit(payload, text, flags)
 
 

@@ -43,6 +43,7 @@ from eawf.kernel.runtime.compiled import (
     SandboxNarrowing,
     ToolNarrowing,
 )
+from eawf.kernel.runtime.delegation import resolved_child_runs
 from eawf.kernel.runtime.provider import (
     AUTHORITY_LEVEL_ORDER,
     NETWORK_MODE_ORDER,
@@ -50,7 +51,7 @@ from eawf.kernel.runtime.provider import (
     SOURCE_LAYER_PRECEDENCE,
     SourceLayer,
 )
-from eawf.kernel.state.epoch2.run import MUTATING_PURPOSES, TaskScope
+from eawf.kernel.state.epoch2.run import MUTATING_PURPOSES
 
 SAFE_BASELINE_REF: Final = "policy://baseline/compiled"
 
@@ -303,7 +304,7 @@ def safe_baseline(request: RunCompileRequest) -> PolicyOverlay:
             publish="none",
             merge="none",
         ),
-        limits=LimitCeilings(child_runs=0 if isinstance(request.run_scope, TaskScope) else 32),
+        limits=LimitCeilings(child_runs=resolved_child_runs(request.run_scope)),
     )
 
 

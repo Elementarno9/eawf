@@ -30,6 +30,7 @@ from eawf.kernel.release.waiver import (
     WaiverDisposition,
     classify_waivers,
 )
+from eawf.kernel.spec.release import ReleaseChannel
 from eawf.kernel.spec.release_config import ReleaseGateName
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
 from tests._release_helpers import (
@@ -195,7 +196,7 @@ def test_a_negative_waiver_count_is_refused() -> None:
 
 def test_classify_waivers_refuses_more_rows_than_are_counted() -> None:
     with pytest.raises(ValueError, match="every row is a counted waiver"):
-        classify_waivers((_EXPLAINED, _EXPLAINED), waiver_count=1)
+        classify_waivers((_EXPLAINED, _EXPLAINED), waiver_count=1, channel=ReleaseChannel.DEV)
 
 
 def test_waiver_rejects_an_unknown_field() -> None:

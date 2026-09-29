@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from eawf.runtime.harness.fan_out import unwritten_plan_keys
 from eawf.runtime.runtimes.codex.hook_map import (
     codex_hook_event_name,
     codex_hook_name,
@@ -93,6 +94,18 @@ class DoctorReport:
             and not self.missing
             and all(entry.status == "trusted" for entry in self.hook_trust)
         )
+
+
+def _unwritten_fan_out(config_bytes: bytes) -> tuple[str, ...]:
+    """Return the fan-out plan keys ``config.toml`` leaves unset.
+
+    A file that does not parse sets none of them.
+    """
+    try:
+        document = tomllib.loads(config_bytes.decode("utf-8"))
+    except UnicodeDecodeError, tomllib.TOMLDecodeError:
+        document = {}
+    return unwritten_plan_keys("codex", document)
 
 
 def _hash_bytes(payload: bytes) -> str:
@@ -391,7 +404,8 @@ def doctor_plugin(
             DoctorEntry(region_id="plugin.codex.config", path=config_path, kind="config")
         )
     else:
-        on_disk_hash = _hash_bytes(config_path.read_bytes())
+        config_bytes = config_path.read_bytes()
+        on_disk_hash = _hash_bytes(config_bytes)
         ok.append(
             DoctorEntry(
                 region_id="plugin.codex.config",
@@ -401,6 +415,18 @@ def doctor_plugin(
                 expected_hash=None,
             )
         )
+        # A concurrency plan Codex's own scheduler never reads is prose,
+        # so an unwritten fan-out key is drift even though the rest of
+        # the file is the operator's to author.
+        if _unwritten_fan_out(config_bytes):
+            drifted.append(
+                DoctorEntry(
+                    region_id="plugin.codex.fan_out",
+                    path=config_path,
+                    kind="config",
+                    on_disk_hash=on_disk_hash,
+                )
+            )
 
     legacy = _detect_legacy_paths(
         target_dir,

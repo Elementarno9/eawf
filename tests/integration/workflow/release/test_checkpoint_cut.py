@@ -306,7 +306,13 @@ def test_approved_eight_gates_carry_the_pinned_candidate_to_approved() -> None:
     sweep = green_sweep()
     assert sweep.ready is True
     approved = approve_release(
-        pinned_candidate(), sweep, approval_ref=APPROVAL_REF, approved_at=NOW
+        pinned_candidate(),
+        sweep,
+        dev1_config(),
+        approval_ref=APPROVAL_REF,
+        approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
     )
     assert approved.status is ReleaseStatus.APPROVED
     assert approved.approval_ref == APPROVAL_REF
@@ -383,8 +389,11 @@ def test_approved_no_effect_leaves_every_target_row_not_started() -> None:
     approved = approve_release(
         pinned_candidate(target_statuses=targets),
         green_sweep(),
+        dev1_config(),
         approval_ref=APPROVAL_REF,
         approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
     )
     assert dict(approved.target_statuses) == targets
     assert set(approved.target_statuses.values()) == {ReleaseTargetStatus.NOT_STARTED}
@@ -392,7 +401,13 @@ def test_approved_no_effect_leaves_every_target_row_not_started() -> None:
 
 def test_approved_no_effect_leaves_the_publication_operation_ref_null() -> None:
     approved = approve_release(
-        pinned_candidate(), green_sweep(), approval_ref=APPROVAL_REF, approved_at=NOW
+        pinned_candidate(),
+        green_sweep(),
+        dev1_config(),
+        approval_ref=APPROVAL_REF,
+        approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
     )
     assert approved.publication_operation_ref is None
     assert approved.target_statuses == {}
@@ -406,7 +421,13 @@ def test_approved_no_effect_binds_a_proof_digest_the_bake_can_reuse() -> None:
     # purely to prove the approved manifest digest is reusable as the
     # proof digest, so the bake never has to re-pin the record.
     approved = approve_release(
-        pinned_candidate(), green_sweep(), approval_ref=APPROVAL_REF, approved_at=NOW
+        pinned_candidate(),
+        green_sweep(),
+        dev1_config(),
+        approval_ref=APPROVAL_REF,
+        approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
     )
     published, operation = begin_publication(
         approved,
@@ -434,7 +455,15 @@ def test_approved_creates_no_local_tag() -> None:
     """
     before = _git("tag", "--list")
     assert before.returncode == 0, before.stderr
-    approve_release(pinned_candidate(), green_sweep(), approval_ref=APPROVAL_REF, approved_at=NOW)
+    approve_release(
+        pinned_candidate(),
+        green_sweep(),
+        dev1_config(),
+        approval_ref=APPROVAL_REF,
+        approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
+    )
     after = _git("tag", "--list")
     assert after.returncode == 0, after.stderr
     assert after.stdout == before.stdout
@@ -453,7 +482,15 @@ def test_approved_creates_no_tag_on_the_publishing_remote() -> None:
     before = _git("ls-remote", "--tags", PUBLISHING_REMOTE, f"refs/tags/{DEV1_TAG}")
     if before.returncode != 0:
         pytest.skip(f"{PUBLISHING_REMOTE!r} is unreachable: {before.stderr.strip()}")
-    approve_release(pinned_candidate(), green_sweep(), approval_ref=APPROVAL_REF, approved_at=NOW)
+    approve_release(
+        pinned_candidate(),
+        green_sweep(),
+        dev1_config(),
+        approval_ref=APPROVAL_REF,
+        approved_at=NOW,
+        proof_digest=MANIFEST_DIGEST,
+        verification_debts=(),
+    )
     after = _git("ls-remote", "--tags", PUBLISHING_REMOTE, f"refs/tags/{DEV1_TAG}")
     if after.returncode != 0:
         pytest.skip(f"{PUBLISHING_REMOTE!r} is unreachable: {after.stderr.strip()}")

@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from eawf.workflow.planning.orchestration import ORCHESTRATION_CONTRACT, OrchestrationContract
 from eawf.workflow.skills.bodies.user_question import UserQuestion
 
 #: The closed terminal outcomes of one ``/dispatch`` invocation.
@@ -30,20 +31,24 @@ DispatchRunOutcome = Literal["dispatched", "retried", "refused"]
 
 
 class ConcurrencyPlan(BaseModel):
-    """What the coordinator decided to fan out and what it had to serialize.
+    """The concurrency plan derived from the Task graph, before anything moved.
 
     Attributes:
-        parallel: Task references dispatched side by side.
-        sequential: Task references the plan forced into an order.
-        constraint: Why the sequential arm is sequential, in one phrase.
-            Empty when nothing was serialized.
+        parallel: Task references that run side by side now: the first
+            stage of the derived plan.
+        sequential: Task references the graph forces to wait for an
+            earlier stage.
+        stages: Every stage of the derived plan, in order.
+        reasons: Why each waiting Task waits: the dependency, the shared
+            write claim, or the exclusivity that placed it.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     parallel: list[str] = Field(default_factory=list)
     sequential: list[str] = Field(default_factory=list)
-    constraint: str = ""
+    stages: list[list[str]] = Field(default_factory=list)
+    reasons: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class DispatchedRun(BaseModel):
@@ -74,6 +79,8 @@ class DispatchBody(BaseModel):
         batch_ref: The Batch this pass coordinated.
         source_cursor: The projection cursor the Batch was read at, or
             ``None`` when no read model was bound.
+        contract: The orchestration contract the pass ran under, stated
+            as the resolved default rather than left to the operator.
         plan: The concurrency plan computed before anything was dispatched.
         dispatched: Every Run addressed, in the order it was addressed.
         frontier: Task references still ready and not yet dispatched.
@@ -89,6 +96,7 @@ class DispatchBody(BaseModel):
     kind: Literal["coordination_report"] = "coordination_report"
     batch_ref: str
     source_cursor: int | None = None
+    contract: OrchestrationContract = ORCHESTRATION_CONTRACT
     plan: ConcurrencyPlan = Field(default_factory=ConcurrencyPlan)
     dispatched: list[DispatchedRun] = Field(default_factory=list)
     frontier: list[str] = Field(default_factory=list)

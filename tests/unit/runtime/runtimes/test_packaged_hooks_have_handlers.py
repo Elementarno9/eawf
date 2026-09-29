@@ -65,7 +65,13 @@ def test_claude_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None
     claude_package_plugin(target)
     emitted = {p.stem for p in (target / "hooks").iterdir()}
     _assert_emitted_are_handler_backed(emitted, _CLAUDE_HANDLER_BACKED)
-    assert emitted == {"session_start", "session_end", "subagent_start", "subagent_stop"}
+    assert emitted == {
+        "session_start",
+        "session_end",
+        "subagent_start",
+        "subagent_stop",
+        "permission_request",
+    }
 
 
 def test_codex_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None:

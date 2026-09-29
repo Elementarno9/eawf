@@ -30,8 +30,10 @@ from eawf.kernel.state.epoch2.measurement import (
     ExcludedRuntime,
     Observed,
     UncapturedRuntime,
+    Unobserved,
 )
 from eawf.kernel.store.paths import LOCAL_DIRNAME
+from eawf.observability.measurement.fold import SubtreeFold
 from eawf.observability.reflect.runs import RunReading
 from eawf.platform.scrub.scan import redact_text
 
@@ -179,8 +181,36 @@ def _transcript_line(block: TranscriptBlock) -> str:
     return f"transcript {block.sequence} {block.lane} {said}"
 
 
+def _fold_lines(fold: SubtreeFold) -> tuple[str, ...]:
+    """Return the facts of the Run's delegation subtree, folded into it."""
+    lines = [
+        f"usage_and_cost subtree {len(fold.descendant_keys)} descendants"
+        f" · {fold.sources} sources · unmeasured {', '.join(fold.unmeasured_keys) or 'none'}"
+    ]
+    for name, counter in fold.counters.items():
+        if isinstance(counter, Unobserved):
+            lines.append(f"usage_and_cost subtree {name.value} unobserved: {counter.reason}")
+            continue
+        lines.append(
+            f"usage_and_cost subtree {name.value} provider {counter.provider_total}"
+            f" · inherited {counter.inherited_baseline} · steps {counter.accepted_step_total}"
+            f" · root {counter.root_share} · descendants {counter.descendant_share}"
+            f" · residual {counter.residual}"
+        )
+    if fold.unreconciled:
+        names = ", ".join(name.value for name in fold.unreconciled)
+        lines.append(f"usage_and_cost reconciliation failure: non-zero residual on {names}")
+    return tuple(lines)
+
+
 def _usage_lines(reading: RunReading) -> tuple[str, ...]:
-    """Return the usage and cost facts the Run's captured runtime states."""
+    """Return the usage and cost facts the Run's captured runtime and its subtree state."""
+    subtree = () if reading.fold is None else _fold_lines(reading.fold)
+    return _own_usage_lines(reading) + subtree
+
+
+def _own_usage_lines(reading: RunReading) -> tuple[str, ...]:
+    """Return the usage and cost facts the Run's own captured runtime states."""
     captured = reading.run.captured_runtime
     if captured is None:
         return ("usage_and_cost unavailable: the Run holds no captured runtime",)

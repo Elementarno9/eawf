@@ -18,22 +18,34 @@ two renderings of it and the exit status it maps to:
 - :func:`envelope_exit_code` maps the envelope to a typed exit status: ``0``
   for a committed answer, the needs-operator code for a refusal only an
   operator can clear, and the refusal code for every other refusal.
+
+The verbs whose daemon answers with its own typed shape rather than an
+envelope -- the integration and release verbs -- are wrapped into one here:
+:func:`answer_envelope` wraps an answer, and :func:`refusal_envelope` wraps a
+refusal the daemon raised. A refusal code finer than the closed vocabulary
+travels in the row's ``guard``, the same way a registry denial does.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 import orjson
+import typer
+from pydantic import BaseModel
+from pydantic import ValidationError as PydanticValidationError
 
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
+from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope
+    from eawf.surfaces.cli.flags import GlobalFlags
 
 #: The entity groups, one per entity whose legal operations are its verbs.
 ENTITY_GROUPS: Final[tuple[str, ...]] = (
@@ -63,6 +75,16 @@ CROSS_CUTTING_GROUPS: Final[tuple[str, ...]] = (
 
 #: The ``--from-spec`` value that reads the document from stdin.
 STDIN_SPEC: Final = "-"
+
+#: The prefix the daemon leads every refusal message with.
+_REFUSAL_PREFIX: Final = "validation_failed: "
+
+#: The shape of a refusal code the daemon leads its detail with.
+_CODE_PATTERN: Final = re.compile(r"[a-z][a-z0-9_]*")
+
+#: What an operator does about an answer the daemon gave but that did not
+#: hold, or a refusal that carries no remediation of its own.
+_ANSWER_REMEDIATION: Final = "Read the reason, repair what it names, and retry."
 
 
 def read_spec_document(path: Path) -> dict[str, Any]:
@@ -102,6 +124,153 @@ def read_spec_document(path: Path) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise cli_errors.UserError(f"--from-spec {path} must be a JSON object", kind="InvalidInput")
     return raw
+
+
+def request_document[T: BaseModel](
+    model: type[T], from_spec: Path | None, given: Mapping[str, Any]
+) -> T:
+    """Return a create verb's request, from ``--from-spec`` or from its flags.
+
+    Both spellings parse through *model*, the closed model the receiving end
+    validates the request with, so the flags are a shorthand for a document
+    rather than a second contract beside it.
+
+    Args:
+        model: The closed request model.
+        from_spec: The ``--from-spec`` path, ``-`` for stdin, or ``None`` to
+            build the request from the flags.
+        given: The flag values by field name; ``None`` for a flag not set.
+
+    Returns:
+        The validated request.
+
+    Raises:
+        UserError: A flag was set beside ``--from-spec``, which carries the
+            whole request; the document cannot be read; or the request does
+            not validate, naming the offending fields.
+    """
+    named = {key: value for key, value in given.items() if value is not None}
+    if from_spec is not None:
+        if named:
+            raise cli_errors.UserError(
+                f"--from-spec carries the whole request; drop {', '.join(sorted(named))}",
+                kind="InvalidInput",
+            )
+        document = read_spec_document(from_spec)
+    else:
+        document = named
+    try:
+        return model.model_validate(document)
+    except PydanticValidationError as exc:
+        fields = sorted({".".join(str(part) for part in row["loc"]) for row in exc.errors()})
+        raise cli_errors.UserError(
+            f"the request does not validate; check {', '.join(fields) or model.__name__}",
+            kind="InvalidInput",
+        ) from exc
+
+
+def answer_envelope(
+    answer: dict[str, Any],
+    *,
+    operation: str,
+    urn: str,
+    revision_before: int | None,
+    revision_after: int | None,
+    failed_guard: str | None = None,
+    links: Mapping[str, str] | None = None,
+) -> DomainEnvelope:
+    """Return the envelope one typed daemon answer stands for.
+
+    Args:
+        answer: The daemon's answer, which becomes the result whole.
+        operation: The dotted JSON-RPC name that earned it.
+        urn: The subject the request addressed.
+        revision_before: The subject's revision the request was anchored at,
+            or ``None`` for a verb that takes no anchor.
+        revision_after: The subject's revision the answer reports, or
+            ``None`` when it reports none.
+        failed_guard: The check the answer did not pass -- a proof that
+            did not pass, a seal whose checks failed -- named by its answer
+            field where it has one, or ``None`` when the answer stands. The
+            answer's own ``reason``, when it carries one, is the refusal text.
+        links: Named commands or references a caller may follow next, or
+            ``None`` for none.
+
+    Returns:
+        An ``ok`` envelope, or an ``error`` one whose row names the guard.
+    """
+    from eawf.runtime.daemon.methods.domain_envelope import (
+        ENVELOPE_SCHEMA_VERSION,
+        DomainEnvelope,
+        DomainError,
+        DomainErrorCode,
+        DomainStatus,
+    )
+
+    errors: tuple[DomainError, ...] = ()
+    if failed_guard is not None:
+        errors = (
+            DomainError(
+                code=DomainErrorCode.TRANSITION_GUARD_FAILED,
+                message=str(answer.get("reason") or f"{failed_guard} does not hold"),
+                entity_ref=urn,
+                guard=failed_guard,
+                remediation=_ANSWER_REMEDIATION,
+            ),
+        )
+    return DomainEnvelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
+        status=DomainStatus.OK if failed_guard is None else DomainStatus.ERROR,
+        operation=operation,
+        revision_before=revision_before,
+        revision_after=revision_after,
+        result=answer,
+        errors=errors,
+        links=dict(links or {}),
+    )
+
+
+def refusal_envelope(message: str, *, operation: str, urn: str) -> DomainEnvelope:
+    """Return the envelope one refusal the daemon raised stands for.
+
+    Args:
+        message: The daemon's ``validation_failed`` message.
+        operation: The dotted JSON-RPC name that earned it.
+        urn: The subject the request addressed.
+
+    Returns:
+        An ``error`` envelope. A code in the closed vocabulary is the row's
+        code; a finer one is the row's guard under
+        ``transition_guard_failed``; a message leading with no code keeps
+        the guard empty. The message itself is carried unchanged.
+    """
+    from eawf.runtime.daemon.methods.domain_envelope import (
+        ENVELOPE_SCHEMA_VERSION,
+        DomainEnvelope,
+        DomainError,
+        DomainErrorCode,
+        DomainStatus,
+    )
+
+    detail = message.removeprefix(_REFUSAL_PREFIX)
+    token = detail.split(": ", 1)[0]
+    declared = {code.value: code for code in DomainErrorCode}
+    code = declared.get(token, DomainErrorCode.TRANSITION_GUARD_FAILED)
+    guard = token if token not in declared and _CODE_PATTERN.fullmatch(token) else None
+    return DomainEnvelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
+        status=DomainStatus.ERROR,
+        operation=operation,
+        errors=(
+            DomainError(
+                code=code,
+                message=detail,
+                entity_ref=urn,
+                guard=guard,
+                remediation=_ANSWER_REMEDIATION,
+            ),
+        ),
+    )
 
 
 def _scalar(value: Any) -> str:
@@ -178,11 +347,36 @@ def envelope_exit_code(envelope: DomainEnvelope) -> int:
     return exit_codes.STATE_CONFLICT
 
 
+def emit_envelope(envelope: DomainEnvelope, *, urn: str, flags: GlobalFlags) -> None:
+    """Print one envelope and exit with its typed status when it refused.
+
+    Args:
+        envelope: The answer to print.
+        urn: The subject the request addressed.
+        flags: Resolved global flags, which pick the machine or human mode.
+
+    Raises:
+        typer.Exit: With the envelope's typed exit status when it is not
+            ``ok``. The envelope prints first either way, so a caller
+            reading stdout gets the code whichever branch it took.
+    """
+    emit_json_or_text(
+        envelope.model_dump(mode="json"), envelope_text(envelope, urn=urn), flags=flags
+    )
+    code = envelope_exit_code(envelope)
+    if code != exit_codes.OK:
+        raise typer.Exit(code)
+
+
 __all__ = [
     "CROSS_CUTTING_GROUPS",
     "ENTITY_GROUPS",
     "STDIN_SPEC",
+    "answer_envelope",
+    "emit_envelope",
     "envelope_exit_code",
     "envelope_text",
     "read_spec_document",
+    "refusal_envelope",
+    "request_document",
 ]

@@ -189,7 +189,14 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             newly wired verb without dispatch coverage reds this module.
     """
     record = _record_file(tmp_path)
-    keyed = ["--release", record, "--idempotency-key", f"{subcommand}-01"]
+    keyed = [
+        "--release",
+        record,
+        "--expected-revision",
+        "4",
+        "--idempotency-key",
+        f"{subcommand}-01",
+    ]
     table: dict[str, list[str]] = {
         "show": ["show", "0.7.0.dev1"],
         "readiness": ["readiness", "0.7.0.dev1", "--release", record],
@@ -211,6 +218,8 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             _write(tmp_path / "readiness.json", {"release_key": RELEASE_KEY}),
             "--approval-ref",
             "receipt://approval/dev1",
+            "--proof-digest",
+            PROOF_DIGEST,
         ],
         "publish": [
             "publish",
@@ -245,6 +254,8 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             RELEASE_KEY,
             "--release",
             record,
+            "--expected-revision",
+            "4",
             "--idempotency-key",
             "burn-01",
             "--reason",
@@ -257,6 +268,8 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             record,
             "--adoption",
             _write(tmp_path / "adoption.json", ADOPTION),
+            "--expected-revision",
+            "4",
         ],
         "cancel": [
             "cancel",
@@ -265,6 +278,8 @@ def _argv(subcommand: str, tmp_path: Path) -> list[str]:
             record,
             "--reason",
             "nothing was ever published under it",
+            "--expected-revision",
+            "4",
         ],
         "advance": ["advance", RELEASE_KEY],
         "receipts": ["receipts", "0.7.0.dev1"],
@@ -322,7 +337,7 @@ def test_show_sends_the_requested_version(tmp_path: Path, calls: list[dict[str, 
     result = CliRunner().invoke(app, _argv("show", tmp_path))
     assert result.exit_code == 0, result.output
     assert calls[0]["params"] == {"version": "0.7.0.dev1"}
-    assert "never opened" in result.output
+    assert "result.record: null" in result.output
 
 
 def test_show_without_a_version_asks_for_the_open_rung(calls: list[dict[str, Any]]) -> None:
@@ -368,6 +383,8 @@ def test_reconcile_sends_the_downloaded_receipt(
             "pypi",
             "--release",
             _record_file(tmp_path),
+            "--expected-revision",
+            "4",
             "--idempotency-key",
             "reconcile-01",
             "--receipt",
@@ -394,6 +411,8 @@ def test_reconcile_refuses_both_result_sources(tmp_path: Path, calls: list[dict[
             "pypi",
             "--release",
             _record_file(tmp_path),
+            "--expected-revision",
+            "4",
             "--idempotency-key",
             "reconcile-01",
             "--status",
@@ -421,6 +440,8 @@ def test_reconcile_refuses_neither_result_source(
             "pypi",
             "--release",
             _record_file(tmp_path),
+            "--expected-revision",
+            "4",
             "--idempotency-key",
             "reconcile-01",
         ],
@@ -457,6 +478,8 @@ def test_a_missing_record_file_is_refused(tmp_path: Path, calls: list[dict[str, 
             _write(tmp_path / "readiness.json", {}),
             "--approval-ref",
             "receipt://approval/dev1",
+            "--proof-digest",
+            PROOF_DIGEST,
         ],
     )
     assert result.exit_code != 0
@@ -470,7 +493,17 @@ def test_an_unparseable_record_file_is_refused(tmp_path: Path, calls: list[dict[
     broken.write_text("{not json", encoding="utf-8")
     result = CliRunner().invoke(
         app,
-        ["release", "cancel", RELEASE_KEY, "--release", str(broken), "--reason", "spent"],
+        [
+            "release",
+            "cancel",
+            RELEASE_KEY,
+            "--release",
+            str(broken),
+            "--reason",
+            "spent",
+            "--expected-revision",
+            "4",
+        ],
     )
     assert result.exit_code != 0
     assert "release record is not valid JSON" in result.output
@@ -485,7 +518,17 @@ def test_a_record_file_holding_a_json_array_is_refused(
     listed.write_text("[]", encoding="utf-8")
     result = CliRunner().invoke(
         app,
-        ["release", "cancel", RELEASE_KEY, "--release", str(listed), "--reason", "spent"],
+        [
+            "release",
+            "cancel",
+            RELEASE_KEY,
+            "--release",
+            str(listed),
+            "--reason",
+            "spent",
+            "--expected-revision",
+            "4",
+        ],
     )
     assert result.exit_code != 0
     assert "must be a JSON object" in result.output

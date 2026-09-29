@@ -415,8 +415,8 @@ def test_batch_unit_squashes_into_one_commit_with_one_trailer_per_task() -> None
         f"{TASK_TRAILER_KEY}: EAWF-0003",
     ]
     provenance = f"{PROVENANCE_TRAILER_KEY}: {PROVENANCE_SCHEME}{manifest.manifest_id}"
-    assert delivery.trailers[-1] == provenance
-    assert delivery.message.endswith(provenance)
+    assert delivery.trailers[0] == provenance
+    assert delivery.message.endswith(f"{TASK_TRAILER_KEY}: EAWF-0003")
     assert delivery.message.splitlines()[0] == "deliver the batch"
     assert len(delivery.bullets) == 3
 
@@ -431,8 +431,8 @@ def test_batch_unit_squashes_a_single_candidate_into_one_commit() -> None:
 
     assert len(commits) == 1
     assert commits[0].trailers == (
-        f"{TASK_TRAILER_KEY}: EAWF-0001",
         f"{PROVENANCE_TRAILER_KEY}: {PROVENANCE_SCHEME}{manifest.manifest_id}",
+        f"{TASK_TRAILER_KEY}: EAWF-0001",
     )
 
 
@@ -445,7 +445,7 @@ def test_task_unit_delivers_one_commit_per_task() -> None:
     )
 
     assert len(commits) == 2
-    assert [commit.trailers[0] for commit in commits] == [
+    assert [commit.trailers[-1] for commit in commits] == [
         f"{TASK_TRAILER_KEY}: EAWF-0001",
         f"{TASK_TRAILER_KEY}: EAWF-0002",
     ]

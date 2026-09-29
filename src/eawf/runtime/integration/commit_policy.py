@@ -313,13 +313,15 @@ def _trailers(
 ) -> tuple[str, ...]:
     """Return the trailer lines one commit carries, in render order.
 
-    The Task trailers come first and the provenance trailer last, so the
-    provenance line is the one a reader's eye lands on however many Tasks
-    a squashed Batch carries.
+    The provenance trailer comes first and the Task trailers last, because
+    Task identity is read from a fixed position in every commit: the last
+    trailers, followed only by the co-author trailers a runtime appends.
+    A delivery commit that put anything after them would read differently
+    from an agent's own commit under the same grammar.
     """
     lines = [f"{TASK_TRAILER_KEY}: {ref.entity_key}" for ref in task_refs]
     rendered = lines if task_reference == "trailer" else []
-    return (*rendered, f"{PROVENANCE_TRAILER_KEY}: {PROVENANCE_SCHEME}{manifest_id}")
+    return (f"{PROVENANCE_TRAILER_KEY}: {PROVENANCE_SCHEME}{manifest_id}", *rendered)
 
 
 def render_delivery_commits(

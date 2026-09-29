@@ -216,7 +216,13 @@ def test_surf_076_every_claude_manifest_event_has_a_registered_handler() -> None
     assert set(SUBAGENT_EVENTS) <= declared
     assert declared <= registered_handler_event_types()
     manifest_events = set(build_plugin_hooks_json()["hooks"])
-    assert manifest_events == {"SessionStart", "Stop", "SubagentStart", "SubagentStop"}
+    assert manifest_events == {
+        "SessionStart",
+        "Stop",
+        "SubagentStart",
+        "SubagentStop",
+        "PermissionRequest",
+    }
 
 
 def test_surf_076_every_codex_manifest_event_has_a_registered_handler() -> None:

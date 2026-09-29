@@ -8,7 +8,7 @@ stateDiagram-v2
     COMPLETED
     CANCELLED
     FAILED
-    PLANNED --> ACTIVE: activated [target_branch_pinned]
+    PLANNED --> ACTIVE: activated [target_branch_pinned+batch_wip_admits]
     PLANNED --> CANCELLED: cancelled [reason_recorded]
     ACTIVE --> READY_TO_MERGE: ready [tasks_ready_to_integrate+head_binding_pinned]
     ACTIVE --> CANCELLED: cancelled [reason_recorded]

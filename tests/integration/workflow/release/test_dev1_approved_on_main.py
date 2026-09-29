@@ -305,6 +305,7 @@ def approve_via_rpc(ctx: MethodContext, repo: Path) -> dict[str, Any]:
                 "release": pinned_candidate(repo).model_dump(mode="json"),
                 "readiness": green_sweep(repo).model_dump(mode="json"),
                 "approval_ref": APPROVAL_REF,
+                "proof_digest": f"sha256:{'c' * 64}",
             },
         )
     )

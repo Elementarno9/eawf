@@ -436,6 +436,8 @@ def _census_rows(proposal_spec: Path) -> tuple[tuple[list[str], str, dict[str, A
                 "src/eawf/example.py",
                 "--resulting-tree-digest",
                 _DIGEST,
+                "--expected-run-revision",
+                "1",
                 "--idempotency-key",
                 "key-0001",
                 "--actor",

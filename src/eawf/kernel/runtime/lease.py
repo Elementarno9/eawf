@@ -162,6 +162,8 @@ class WorkLease(RuntimeRecord):
         quarantine_reason: Why residue was left alone, on a quarantined
             lease and on no other.
         recovery_handle: How that residue is found again.
+        exclusive: Whether the Task this lease serves runs alone, so no
+            other Task's Run is leased a workspace while it is active.
     """
 
     schema_version: Literal["1"] = LEASE_SCHEMA_VERSION
@@ -181,6 +183,9 @@ class WorkLease(RuntimeRecord):
     status: LeaseStatus
     quarantine_reason: QuarantineReason | None = None
     recovery_handle: RecoveryHandle | None = None
+    # Omitted while unset, so a lease filed before the field existed
+    # reads and re-serializes byte for byte.
+    exclusive: bool = Field(default=False, exclude_if=lambda value: value is False)
 
     @model_validator(mode="after")
     def _purpose_is_a_writing_one(self) -> Self:

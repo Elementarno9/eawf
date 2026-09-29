@@ -1,4 +1,4 @@
-"""``eawf research campaign new`` runs on a fresh repo off the shipped profile data.
+"""``eawf campaign new`` runs on a fresh repo off the shipped profile data.
 
 Unlike :mod:`tests.integration.test_cli_research_campaign`, nothing here
 monkeypatches ``resolve_research_block``: the ``research:`` block is composed
@@ -86,7 +86,7 @@ def test_campaign_new_succeeds_on_fresh_repo_with_research_profile(
     repo = _fresh_repo(tmp_path, monkeypatch, ["core", "research"])
 
     result = runner.invoke(
-        app, ["--json", "-w", str(repo), "research", "campaign", "new", "Survey caching options"]
+        app, ["--json", "-w", str(repo), "campaign", "new", "Survey caching options"]
     )
 
     assert result.exit_code == 0, result.output
@@ -104,9 +104,7 @@ def test_campaign_new_dry_run_on_fresh_repo_persists_nothing(
     """The resolve-check reports the default domain count and writes no row."""
     repo = _fresh_repo(tmp_path, monkeypatch, ["core", "research"])
 
-    result = runner.invoke(
-        app, ["--json", "-w", str(repo), "research", "campaign", "new", "t", "--dry-run"]
-    )
+    result = runner.invoke(app, ["--json", "-w", str(repo), "campaign", "new", "t", "--dry-run"])
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["domain_count"] == len(_DEFAULT_DOMAINS)
@@ -119,7 +117,7 @@ def test_campaign_new_without_research_profile_fails(
     """The default block rides the research profile only; core alone has none."""
     repo = _fresh_repo(tmp_path, monkeypatch, ["core"])
 
-    result = runner.invoke(app, ["-w", str(repo), "research", "campaign", "new", "Topic"])
+    result = runner.invoke(app, ["-w", str(repo), "campaign", "new", "Topic"])
 
     assert result.exit_code == 1, result.output
     assert "no research: block configured for this scope" in result.output

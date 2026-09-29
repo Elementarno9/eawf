@@ -91,6 +91,8 @@ from eawf.runtime.daemon.methods.state_context import (
 )
 from eawf.runtime.daemon.wal import WalRecord
 from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
+from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
+from eawf.workflow.verify.gate_conventions import GateConventionError, validate_gate_conventions
 
 logger = logging.getLogger(__name__)
 
@@ -727,9 +729,18 @@ async def promote(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
             # A scaffold body with no ``eawf-wave-body`` fenced block
             # yields an empty list and the call is a no-op pass-through.
             gates_in_body: list[GateSpec] = _extract_gate_specs(body)
+            parsed = _parse_wave_body(body)
+            is_wave = spec_writer.classify_scope(args.scope_id) == "wave"
             try:
                 validate_argv_gates(gates_in_body)
-            except SpecPromoteValidationError as exc:
+                validate_gate_conventions(
+                    gates_in_body,
+                    wave_has_commit=(
+                        is_wave and derive_wave_sha(args.scope_id, repo_root=repo_root) is not None
+                    ),
+                    timeout_exception=None if parsed is None else parsed.timeout_exception,
+                )
+            except (SpecPromoteValidationError, GateConventionError) as exc:
                 raise ValueError(f"validation_failed: {exc}") from exc
         entry = spec_writer.build_entry(
             spec_urn=spec_urn,

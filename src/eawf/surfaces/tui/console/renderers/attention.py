@@ -18,6 +18,7 @@ from types import MappingProxyType
 from eawf.kernel.projection.attention import (
     AttentionBucket,
     AttentionItem,
+    AttentionNeedKind,
     attention_all,
     attention_mine,
     build_attention_view,
@@ -185,7 +186,11 @@ NO_DEADLINE = "due –"  # noqa: RUF001
 
 # The action kinds, as the selected row's second line names them.
 _KIND_WORDS: Mapping[str, str] = MappingProxyType(
-    {"protected_approval": "approval", "operator_decision": "decision"}
+    {
+        "protected_approval": "approval",
+        "operator_decision": "decision",
+        "provider_permission": "permission",
+    }
 )
 
 
@@ -267,6 +272,42 @@ def eligibility_line(row: ProjectionRow, principal: str | None, holders: int) ->
     return "you are the only eligible answer" if holders <= 1 else "you may answer"
 
 
+def due_cell(row: ProjectionRow) -> str:
+    """Return the due cell: a permission's provider deadline as UTC hours and minutes."""
+    deadline = row.facts.get("deadline_at")
+    return deadline[11:16] if deadline and len(deadline) >= 16 else NO_DEADLINE
+
+
+def permission_lines(row: ProjectionRow) -> list[str]:
+    """Return who may decide a provider permission, when it expires, and what it lacks.
+
+    The repository affordance is drawn disabled naming the classes that may approve,
+    never left out, and there is no hold: the provider owns the deadline and it expires.
+    """
+    approve = row.facts.get("approve", UNKNOWN_WORD)
+    repository = (
+        "repository approve enabled"
+        if row.facts.get("repository_may_approve") == "yes"
+        else f"repository approve disabled · approve is {approve} only"
+    )
+    stated = row.facts.get("deadline_at", "")
+    deadline = f"{stated[11:19]} UTC" if len(stated) >= 19 else UNKNOWN_WORD
+    return [
+        f"approve {approve} · deny {row.facts.get('deny', UNKNOWN_WORD)} · {repository}",
+        f"expires {deadline} · no hold: the provider owns the deadline",
+    ]
+
+
+def _selected_lines(
+    row: ProjectionRow, item: AttentionItem, principal: str | None, holders: int
+) -> list[str]:
+    """Return the selected row's second lines: its kind and who may act, then any authority."""
+    lines = [_KIND_INDENT + f"{kind_word(row)} · {eligibility_line(row, principal, holders)}"]
+    if item.need is AttentionNeedKind.PERMISSION:
+        lines.extend(_KIND_INDENT + line for line in permission_lines(row))
+    return lines
+
+
 def _in_bucket(item: AttentionItem, bucket: str | None) -> bool:
     """Return whether ``item`` is listed under the chosen bucket; a need counts in its parent."""
     if bucket is None:
@@ -339,7 +380,9 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
         body.extend(_empty_lines(register, s.bucket))
     else:
         holders = len({row.assignee_ref for row in register.rows} - {None} | {principal} - {None})
-        table = Table([9, max(30, col - 32), 10, 0], 2)
+        # a key column fits the longest key listed: a PERM- key is one wider than an ACT- one
+        key_w = max(9, *(cell_len(item.key) + 1 for item in listed))
+        table = Table([key_w, max(30, col - 23 - key_w), 10, 0], 2)
         win = window_rows(view, total=len(listed), cursor=cursor, chrome=len(top) + 5)
         last: AttentionBucket | None = None
         for index in range(win.start, win.stop):
@@ -351,11 +394,10 @@ def native_frame(view: View, register: RegisterView) -> list[str]:
                 last = item.bucket
             subject = row.facts.get("subject", UNKNOWN_WORD)
             question = row.facts.get("question") or row.title or row.urn
-            cells = [row.key, f"{subject} {question}", value_cell(row.status).slot, NO_DEADLINE]
+            cells = [row.key, f"{subject} {question}", value_cell(row.status).slot, due_cell(row)]
             body.append(table.row(cells, index == cursor))
             if index == cursor:
-                who = eligibility_line(row, principal, holders)
-                body.append(_KIND_INDENT + f"{kind_word(row)} · {who}")
+                body.extend(_selected_lines(row, item, principal, holders))
         others = sum(1 for item in listed if audience_refusal(item.assignee_ref, principal))
         if others:
             held = "is" if others == 1 else "are"

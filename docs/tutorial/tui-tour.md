@@ -11,10 +11,10 @@ For implementation detail, see [TUI surface architecture](../architecture/tui.md
 From a managed repository:
 
 ```bash
-eawf tui
+eawf ui
 ```
 
-In a non-TTY environment, `eawf tui` prints the deterministic status fallback instead of opening the interactive app:
+In a non-TTY environment, `eawf ui` prints the deterministic status fallback instead of opening the interactive app:
 
 ```text
 Eä  repo ❯ EAWF ❯ P28
@@ -98,4 +98,4 @@ Text screenshot: [`docs/_static/tutorial/tui-command-palette.txt`](../_static/tu
 
 Use `F5` after another terminal changes state. The TUI reloads the current state and redraws the active view. Use `?` for in-app help and `q` to exit.
 
-If `eawf tui` prints the one-frame fallback instead of opening an interactive surface, check that the command is attached to a TTY and that the repository has a readable `.ea/state.json`.
+If `eawf ui` prints the one-frame fallback instead of opening an interactive surface, check that the command is attached to a TTY and that the repository has a readable `.ea/state.json`.

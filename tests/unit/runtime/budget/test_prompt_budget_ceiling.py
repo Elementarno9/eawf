@@ -18,6 +18,7 @@ from typing import Any, Final
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.economics.governor import DEFAULT_GOVERNOR
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
 from eawf.kernel.state.models import State
 from eawf.kernel.store.compaction import read_document
@@ -368,11 +369,11 @@ def test_budget_module_names_why_it_cannot_draw(tmp_path: Path) -> None:
 
 def test_plugin_settings_wire_the_statusline_and_keep_a_foreign_one(tmp_path: Path) -> None:
     fresh = tmp_path / "fresh.json"
-    rendered = _patch_settings_json(fresh, {})
+    rendered = _patch_settings_json(fresh, {}, governor=DEFAULT_GOVERNOR)
     assert b'"command": "eawf cc statusline"' in rendered
     foreign = tmp_path / "foreign.json"
     foreign.write_text('{"statusLine": {"type": "command", "command": "mine"}}', encoding="utf-8")
-    assert b'"command": "mine"' in _patch_settings_json(foreign, {})
+    assert b'"command": "mine"' in _patch_settings_json(foreign, {}, governor=DEFAULT_GOVERNOR)
 
 
 # ---------- the claim guard and consume agree at the ceiling ----------

@@ -11,7 +11,10 @@ is a repository-scoped Run observing the repository it runs in, and it writes no
 Eawf integrates. The Run's vendor session is the subagent's own id, so its counters
 are read against that session. When the spawning session is itself the vendor session
 of exactly one live Run, that Run is recorded as the parent, which is the delegation
-lineage a subtree is counted over.
+lineage a subtree is counted over. The subagent is already running when it is adopted,
+so one that takes its subtree past a ``child_runs`` ceiling is admitted and the breach
+is filed on the run ledger rather than refused: refusing the record would hide the
+subagent, not stop it.
 
 ``stop`` bridges the subagent's transcript into the Run's own stream, then completes
 the Run. The stop hook is the harness saying the subagent has returned its final
@@ -276,7 +279,7 @@ def _create(
             spec=spec.model_dump(mode="json"),
         )
         try:
-            committed = run_create(context=context, request=request, now=now)
+            committed = run_create(context=context, request=request, now=now, over_ceiling="record")
         except TransactionRefusedError as refusal:
             if refusal.code is not TransactionRefusalCode.REVISION_CONFLICT:
                 raise

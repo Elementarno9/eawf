@@ -99,7 +99,7 @@ from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.epoch2.base import PrincipalKey, SlugStr, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.measurement import DAEMON_READ_RUN_FIELDS
-from eawf.kernel.state.epoch2.task import TaskStatus
+from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.transitions import (
     ENTITY_STATUS_ENUM,
     DenialCode,
@@ -128,6 +128,7 @@ from eawf.kernel.store.ledger import (
 from eawf.kernel.store.paths import ledger_path, store_path
 from eawf.kernel.store.tiers import ENTITY_COLLECTIONS, Epoch2Collection, StorageTier, tier_for
 from eawf.observability.logging.state_leak import state_leak_refusal
+from eawf.runtime.daemon.epoch2_edges import batch_unlisting, edge_updates, locked_unmet
 from eawf.runtime.daemon.epoch2_recovery import (
     LEDGER_LINE_KEY,
     canonical_params_digest,
@@ -504,14 +505,19 @@ def run_transaction(
             record,
             to=target,
             at=now,
-            ctx=GuardContext(observations=frozenset(request.observations)),
-            updates=request.updates,
+            ctx=GuardContext(
+                unmet=locked_unmet(document, record=record, target=target),
+                observations=frozenset(request.observations),
+            ),
+            updates=edge_updates(record, target=target, updates=request.updates, now=now),
         )
         if isinstance(outcome, TransitionDenied):
             raise _denied(outcome, request=request, revision=record.revision)
         membership = (
             _batch_membership(document, batch_ref=joined, record=record, request=request, now=now)
             if joined is not None and record.status is TaskStatus.DRAFT
+            else batch_unlisting(document, record=record, now=now)
+            if isinstance(record, Task) and target is TaskStatus.DRAFT
             else None
         )
         allocator = CanonicalSequenceAllocator.recover(
@@ -1218,8 +1224,9 @@ def _plan_commit(
     diffs the two payloads and an in-place edit would leave it comparing
     one payload with itself.
 
-    A promotion's Batch membership, when it has one, is written in the same
-    document so the Task and the Batch listing it can never disagree.
+    The Batch row a promotion lists its Task on, or a demotion takes it
+    off, is written in the same document so the Task and the Batch listing
+    it can never disagree.
 
     The successor is written into the document even when it is terminal
     and about to be compacted out of it. That is what puts its new free

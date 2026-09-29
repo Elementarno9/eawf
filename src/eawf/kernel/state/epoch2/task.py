@@ -13,6 +13,11 @@ The draft head is what the field rules below encode. ``batch_ref`` and
 first draft, so a backlog row is readable and orderable without opening a
 plan. A draft is never dispatchable: every dispatch guard requires
 ``PLANNED``, so the missing contract cannot be mistaken for an empty one.
+
+Demotion runs the promotion edge backwards, and only until the first
+claim. ``first_claimed_at`` is the fact that closes it: stamped on the
+first claim and never cleared, it survives a released lease, so a Task
+that was once claimed can never read as a backlog row again.
 """
 
 from __future__ import annotations
@@ -20,12 +25,14 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Final, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.state.epoch2.base import Epoch2Model, NonEmptyStr, StrictPositiveInt
+from eawf.kernel.state.epoch2.run import WriteSetPath
 from eawf.kernel.state.epoch2.urns import BatchUrn, DueScopeUrn, RunUrn, TaskUrn
 from eawf.kernel.state.epoch2.values import Epoch2Record, ExactRevisionBinding
+from eawf.kernel.state.types import UtcDatetime
 
 
 class TaskPriority(StrEnum):
@@ -99,6 +106,13 @@ class Task(Epoch2Record):
     The public key is stable across move, replan and retry: moving a Task
     between two PLANNED Batches changes its placement and nothing about
     its identity.
+
+    ``depends_on``, ``write_claims`` and ``exclusive`` are the Task's
+    place in the dependency graph, carried from the plan that created it
+    so a scheduler reads the graph off the Task rather than off a
+    per-dispatch instruction: the Tasks it must not start ahead of, the
+    repository paths its Runs may write (empty means no narrowing was
+    declared), and whether it runs alone.
     """
 
     urn: TaskUrn
@@ -111,17 +125,28 @@ class Task(Epoch2Record):
     status: TaskStatus
     active_run_ref: RunUrn | None = None
     integrated_binding: ExactRevisionBinding | None = None
+    # The graph fields are omitted from the dump while unset, so a record
+    # written before they existed reads and re-serializes byte for byte.
+    depends_on: tuple[TaskUrn, ...] = Field(default=(), exclude_if=lambda value: not value)
+    write_claims: tuple[WriteSetPath, ...] = Field(default=(), exclude_if=lambda value: not value)
+    exclusive: bool = Field(default=False, exclude_if=lambda value: value is False)
+    first_claimed_at: UtcDatetime | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def _placement_matches_draft_head(self) -> Self:
         """Require a Batch and criteria exactly from the planned states onward.
 
         Raises:
-            ValueError: A backlog Task carries a Batch or criteria, or a
-                planned-or-later Task carries neither.
+            ValueError: A backlog Task carries a Batch, criteria or a claim
+                stamp, or a planned-or-later Task carries no Batch or no
+                criteria.
         """
         unplaced = self.status in _DRAFT_HEAD
         if unplaced:
+            if self.first_claimed_at is not None:
+                raise ValueError(f"a {self.status.value} Task was never claimed")
             if self.batch_ref is not None:
                 raise ValueError(f"a {self.status.value} Task is unplaced and takes no batch_ref")
             if self.criteria:

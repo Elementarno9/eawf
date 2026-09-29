@@ -18,9 +18,10 @@ from eawf.kernel.runtime.events import RunEventRecord
 from eawf.kernel.state.epoch2.authority import resolve_authority
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.compaction import document_rows, read_document
-from eawf.kernel.store.ledger import read_ledger_records
+from eawf.kernel.store.ledger import effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.measurement.fold import SubtreeFold, fold_subtree
 from eawf.runtime.daemon.run_events import run_events_of
 
 logger = logging.getLogger(__name__)
@@ -38,11 +39,14 @@ class RunReading:
         events: The Run's event lines, in ledger order.
         canonical_sequence: The tree's committed canonical sequence at the read,
             which is the projection revision the reading stands at.
+        fold: The Run's delegation subtree folded into it, or ``None`` when it
+            delegated nothing.
     """
 
     run: Run
     events: tuple[RunEventRecord, ...]
     canonical_sequence: int
+    fold: SubtreeFold | None = None
 
 
 def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
@@ -69,12 +73,26 @@ def read_tree_runs(tree_root: Path) -> tuple[RunReading, ...]:
     rows = document_rows(document, Epoch2Collection.RUN)
     records = read_ledger_records(ledger_path(document_path, Epoch2Collection.RUN))
     sequence = int(document.get(CANONICAL_SEQUENCE_KEY, 0))
-    readings = []
-    for key in sorted(rows):
-        run = Run.model_validate(rows[key])
-        readings.append(
-            RunReading(run=run, events=run_events_of(records, run.urn), canonical_sequence=sequence)
+    live = [Run.model_validate(rows[key]) for key in sorted(rows)]
+    # A delegated child usually finishes first, so it is read from the ledger it
+    # was compacted into; a subtree read off the document alone would miss it.
+    compacted = [
+        Run.model_validate(item.payload)
+        for item in effective_records(records)
+        if "payload_kind" not in item.payload
+        and item.payload.get("key") == item.record_key
+        and item.record_key not in rows
+    ]
+    tree = (*live, *compacted)
+    readings = [
+        RunReading(
+            run=run,
+            events=run_events_of(records, run.urn),
+            canonical_sequence=sequence,
+            fold=fold_subtree(run, tree),
         )
+        for run in live
+    ]
     logger.debug(f"read_tree_runs root={tree_root.name} runs={len(readings)}")
     return tuple(readings)
 

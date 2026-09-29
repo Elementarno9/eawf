@@ -1,7 +1,7 @@
 ---
 name: dispatch
 description: "Coordinate one Delivery Batch: bring its ready Tasks to a candidate."
-argument-hint: "<batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]"
+argument-hint: "<batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]"
 user-invocable: true
 disable-model-invocation: true
 ---
@@ -29,10 +29,12 @@ Resolve the subject before acting. Name every entity with its identifier and its
 
 You are the coordinator for one Delivery Batch. You do not write product code.
 
+The coordinating Run proposes and dispatches and holds no write scope; every Task executes in its own child or sibling Run under its own Task scope, and which Tasks run side by side is derived from the Task dependency graph and write claims, never from a parallelism number typed at dispatch.
+
 Your job is to bring the Batch's ready Tasks to a candidate, by dispatching each one to its own Run, and to keep the Batch's frontier moving.
 
 ```text
-/dispatch <batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--max-parallel <N>] [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]
+/dispatch <batch-ref> [--task <ref>...] [--until <frontier-empty|candidate-ready|attention>] [--provider <id>] [--resume <operation-ref>] [--budget <spec>] [--dry-run]
 ```
 
 ## 4. Method
@@ -40,7 +42,7 @@ Your job is to bring the Batch's ready Tasks to a candidate, by dispatching each
 1. Read the Batch and its Task graph. For each Task, note its state, its dependencies, the proof each dependency requires, and its ownership claims.
 2. Compute the ready frontier: Tasks whose dependencies are satisfied at the proof level they demand, and whose ownership claims do not overlap a Task already running. Do not invent a parallelism plan — the graph is the plan. If two Tasks you expected to run together conflict on ownership, that is a plan defect: report it, do not serialize around it silently.
 3. Render the concurrency plan before dispatching: which Tasks fan out, which are forced sequential, and which constraint forces each. The operator sees this before any Run starts.
-4. Dispatch each ready Task as its own Run under its own Task scope. One Task, one Run, one lease, one workspace. You never edit the product yourself and you never hold a write scope.
+4. Dispatch each ready Task as its own Run under its own Task scope. One Task, one Run, one lease, one workspace.
 5. As Runs terminate, re-derive the frontier and dispatch what became ready. A Run that succeeded has produced a candidate; it has not completed its Task. Integration is the daemon's, not yours.
 6. Stop and raise for the operator when: a dependency proof cannot be satisfied, a Task exhausts its retry budget, an ownership conflict has no ordering, or the Batch's exact head moves under you.
 
@@ -71,7 +73,7 @@ The obligations the effective rule graph holds for activities `implement`. They 
 - You hold no write scope and no lease. If you find yourself wanting to edit a file, the correct action is to dispatch a Task or report a plan defect.
 - You do not decide that work is done. A Run report is not Task completion.
 - A Task marked exclusive runs alone: dispatch nothing beside it.
-- You do not raise concurrency beyond the resolved ceiling, and you do not lower it to be safe — the ceiling is policy, not preference.
+- You pass no parallelism number: how many Runs are live at once is the in-flight governor's ceiling, which queues what a stage holds beyond it.
 - Stopping is a valid outcome, not a failure: when the answer needs an operator or a precondition fails, return `needs_operator` or `blocked` with the reason rather than guessing.
 
 ## 6. Output

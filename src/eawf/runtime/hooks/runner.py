@@ -30,7 +30,7 @@ import time
 from collections.abc import Callable, Iterable
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import orjson
 from pydantic import BaseModel, ConfigDict
@@ -626,6 +626,69 @@ def adopt_host_subagent(
     return HookResult(name=name, output=f"{name} ok run={answer.get('run_ref')}")
 
 
+#: The verb a held host call is recorded through.
+_HOST_PERMISSION_METHOD: Final = "runtime.host.permission.request"
+
+
+def record_host_permission(
+    event: HookEvent,
+    *,
+    daemon_client_factory: DaemonClientFactory | None = None,
+    repo_root: Path | None = None,
+) -> HookResult:
+    """Record a call the host is holding for its operator as a provider permission.
+
+    The host fires this while it asks its own operator whether a tool call may
+    run. The hook never answers for the host and never waits on an answer: it
+    records the held call with the daemon, bound to the Run on the host's
+    session, and returns at once, so the host goes on asking. Inside a
+    subagent the host names the subagent, whose own Run the call belongs to.
+
+    Args:
+        event: The PERMISSION_REQUEST event.
+        daemon_client_factory: Opens the daemon client; the default one when
+            ``None``.
+        repo_root: The repository the harness runs in; the process working
+            directory when ``None``.
+
+    Returns:
+        A non-blocking :class:`HookResult` naming the recorded permission, or
+        the reason none was recorded.
+    """
+    name = "runtime.host_permission"
+    harness = _HOST_HARNESSES.get(event.runtime)
+    if harness is None:
+        return HookResult(name=name, output=f"{name} skipped: {event.runtime} holds no call")
+    payload = _session_end_payload(event)
+    session = next(
+        (
+            value
+            for value in (payload.get("agent_id"), payload.get("session_id"))
+            if isinstance(value, str) and value
+        ),
+        None,
+    )
+    tool_name = payload.get("tool_name")
+    if session is None or not isinstance(tool_name, str) or not tool_name:
+        return HookResult(name=name, output=f"{name} skipped: missing session_id or tool_name")
+    tool_input = payload.get("tool_input")
+    params: dict[str, Any] = {
+        "harness": harness,
+        "host_session_id": session,
+        "tool_name": tool_name,
+        "tool_input": tool_input if isinstance(tool_input, dict) else {},
+        "repo_root": str(repo_root if repo_root is not None else Path.cwd()),
+    }
+    factory = daemon_client_factory or _default_daemon_client_factory
+    try:
+        with factory() as client:
+            answer = client.call(_HOST_PERMISSION_METHOD, params)
+    except Exception as exc:
+        return HookResult(name=name, output=repr(exc))
+    key = answer.get("permission", {}).get("key")
+    return HookResult(name=name, output=f"{name} ok permission={key}")
+
+
 def register_runtime_capture_hooks(
     runner: HookRunner,
     *,
@@ -668,6 +731,15 @@ def register_runtime_capture_hooks(
 
     for subagent_event_type in _HOST_SUBAGENT_METHODS:
         runner.register(subagent_event_type, _host_subagent_hook, name="runtime.host_subagent")
+
+    def _host_permission_hook(event: HookEvent) -> HookResult:
+        return record_host_permission(
+            event, daemon_client_factory=daemon_client_factory, repo_root=repo_root
+        )
+
+    runner.register(
+        HookEventType.PERMISSION_REQUEST, _host_permission_hook, name="runtime.host_permission"
+    )
 
     def _end_stamp_hook(event: HookEvent) -> HookResult:
         return stamp_session_end_on_exit(event, repo_root=repo_root)
@@ -829,6 +901,7 @@ __all__ = [
     "append_event_idempotent",
     "capture_codex_lifecycle",
     "capture_runtime_on_session_end",
+    "record_host_permission",
     "register_runtime_capture_hooks",
     "registered_handler_event_types",
     "stamp_session_end_on_exit",

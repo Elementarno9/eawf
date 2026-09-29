@@ -3,7 +3,7 @@
 The canary walk's planning step seeds an epoch-2 tree -- an active Track with an open
 Milestone under it, an active Batch, a planned Task -- and this suite serves it over a
 private socket through the real daemon's connection handler. The console is built the way
-``eawf tui`` builds it for such a tree, with a seam acting as the walk's operator.
+``eawf ui`` builds it for such a tree, with a seam acting as the walk's operator.
 
 Three things are proved on the live path. A claim previews the edge from the Task's own
 status and revision, writes nothing while it previews, and once confirmed shows the

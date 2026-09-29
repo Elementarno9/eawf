@@ -56,7 +56,7 @@ from eawf.kernel.runtime.lease import WorkLease
 from eawf.kernel.runtime.provider import ArtifactUrn, Digest, SchemaUrn
 from eawf.kernel.state.enums import AgentReportVerdict
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import PrincipalKey
+from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.urns import RunUrn, TaskUrn
 from eawf.kernel.store.ledger import LedgerRecord, read_ledger_records
 from eawf.runtime.candidate.seal import (
@@ -73,6 +73,7 @@ from eawf.runtime.candidate.seal import (
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_dispatch import active_lease_of, run_ledger, stored_run
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.runtime.integration.git_workspace import CandidatePinError, pin_submission_commit
@@ -97,6 +98,9 @@ class CandidateSubmitParams(BaseModel):
         urn: The Run submitting the work.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         task_ref: The Task the work was done for, checked against the
             lease rather than trusted.
         submission_ref: The artifact carrying the work.
@@ -109,6 +113,7 @@ class CandidateSubmitParams(BaseModel):
     urn: RunUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     task_ref: TaskUrn
     submission_ref: ArtifactUrn
     changed_paths: ChangedPaths
@@ -124,6 +129,9 @@ class CandidateReportParams(BaseModel):
             it is recorded rather than required to match.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         candidate_ref: The candidate the report is about.
         report_schema_ref: The schema the accepted body satisfies, or
             ``None`` to resolve it from the Run's own accepted report.
@@ -142,6 +150,7 @@ class CandidateReportParams(BaseModel):
     urn: RunUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     candidate_ref: CandidateId
     report_schema_ref: SchemaUrn | None = None
     report_digest: Digest | None = None
@@ -512,6 +521,7 @@ async def _submit_candidate(
     """Record one worker's claim, immutably and with no report bound to it."""
     args = native_params(CandidateSubmitParams, params)
     context = ctx.native_root_context(authority.root)
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     answer = await asyncio.to_thread(submit_candidate, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 
@@ -523,6 +533,7 @@ async def _bind_candidate_report(
     """Bind the accepted report and seal the candidate if every check holds."""
     args = native_params(CandidateReportParams, params)
     context = ctx.native_root_context(authority.root)
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     answer = await asyncio.to_thread(accept_report, context, args, now=datetime.now(UTC))
     return answer.model_dump(mode="json")
 

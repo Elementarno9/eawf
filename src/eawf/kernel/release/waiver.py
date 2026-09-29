@@ -13,6 +13,11 @@ red: no acknowledgement can clear it, because there is nothing to
 acknowledge. A fully explained set is not red -- it is *reported for
 acknowledgement*, so the operator approving the checkpoint sees exactly
 which protections they are accepting the loss of.
+
+That reading is a bridge, and it holds on the development channel only.
+From the first release candidate on, the bypass lane it bridged is gone,
+so any counted waiver is red whatever it says: an explanation admitted
+past the gap it spans would turn the bridge into the road.
 """
 
 from __future__ import annotations
@@ -23,6 +28,7 @@ from enum import StrEnum
 from pydantic import ConfigDict
 
 from eawf.kernel.spec.common import _StrictModel
+from eawf.kernel.spec.release import ReleaseChannel
 
 
 class WaiverDisposition(StrEnum):
@@ -36,11 +42,15 @@ class WaiverDisposition(StrEnum):
         UNEXPLAINED: At least one counted waiver is missing one of the
             three fields, or is counted with no row at all. Red, and not
             acknowledgeable -- the waiver is documented or dropped.
+        FORBIDDEN: A waiver is counted against a release-candidate or
+            stable checkpoint, where no explanation is admitted. Red, and
+            not acknowledgeable -- the waiver is dropped.
     """
 
     NONE = "none"
     AWAITING_ACKNOWLEDGEMENT = "awaiting_acknowledgement"
     UNEXPLAINED = "unexplained"
+    FORBIDDEN = "forbidden"
 
 
 class ReleaseWaiver(_StrictModel):
@@ -81,7 +91,9 @@ class ReleaseWaiver(_StrictModel):
         return tuple(name for name, value in present.items() if not value.strip())
 
 
-def classify_waivers(waivers: Sequence[ReleaseWaiver], *, waiver_count: int) -> WaiverDisposition:
+def classify_waivers(
+    waivers: Sequence[ReleaseWaiver], *, waiver_count: int, channel: ReleaseChannel
+) -> WaiverDisposition:
     """Return the disposition *waiver_count* waivers described by *waivers* imply.
 
     A count larger than the number of rows means some waiver was counted
@@ -92,9 +104,13 @@ def classify_waivers(waivers: Sequence[ReleaseWaiver], *, waiver_count: int) -> 
         waivers: The explained-or-not waiver rows.
         waiver_count: How many waivers are counted against the
             checkpoint.
+        channel: The checkpoint's channel. Only a development checkpoint
+            admits an explained waiver.
 
     Returns:
         :attr:`WaiverDisposition.NONE` when nothing is counted,
+        :attr:`WaiverDisposition.FORBIDDEN` when anything is counted
+        outside the development channel,
         :attr:`WaiverDisposition.UNEXPLAINED` when any counted waiver
         lacks one of the three fields or has no row, and
         :attr:`WaiverDisposition.AWAITING_ACKNOWLEDGEMENT` otherwise.
@@ -112,6 +128,8 @@ def classify_waivers(waivers: Sequence[ReleaseWaiver], *, waiver_count: int) -> 
         )
     if waiver_count == 0:
         return WaiverDisposition.NONE
+    if channel is not ReleaseChannel.DEV:
+        return WaiverDisposition.FORBIDDEN
     if len(waivers) < waiver_count or any(not waiver.explained for waiver in waivers):
         return WaiverDisposition.UNEXPLAINED
     return WaiverDisposition.AWAITING_ACKNOWLEDGEMENT

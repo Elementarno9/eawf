@@ -954,6 +954,7 @@ class _PipelineRun:
                 "release": record,
                 "readiness": readiness,
                 "approval_ref": f"repo:{self.facts['evidence_dir']}/receipts.json",
+                "proof_digest": record.get("manifest_digest"),
             },
         )
         approved = reply.get("release") or {}

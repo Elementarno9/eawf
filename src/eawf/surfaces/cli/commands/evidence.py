@@ -312,7 +312,9 @@ def _append_direct(record: EvidenceRecord, *, state_path: Path) -> str:
     try:
         refuse_legacy_write(state_path)
     except LegacyOperationRemovedError as exc:
-        raise cli_errors.ValidationError(str(exc), kind="LegacyOperationRemoved") from exc
+        raise cli_errors.ValidationError(
+            str(exc), kind=cli_errors.LEGACY_OPERATION_REMOVED_KIND
+        ) from exc
     evidence_path = store_path(state_path, StoreKind.EVIDENCE)
     envelope = Envelope(
         id=record.id,

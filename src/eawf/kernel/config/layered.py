@@ -645,6 +645,49 @@ def resolve_runtime_tier_models(repo_root: Path) -> dict[str, tuple[str, str, st
     return override or None
 
 
+#: The provider each configurable runtime adapter dispatches through, in the
+#: ``provider_id`` vocabulary a driver manifest and a worker hello announce.
+_ADAPTER_PROVIDER: dict[str, str] = {
+    "claude-code": "claude",
+    "codex": "codex",
+    "opencode": "opencode",
+}
+
+
+def resolve_dispatch_provider_tuple(repo_root: Path) -> tuple[str, ...]:
+    """Return the providers a Task dispatched in *repo_root* may run on.
+
+    A dispatch that pins no runtime takes the first entry of the merged
+    ``runtime.preference`` ladder (``runtime.adapters`` when no ladder is
+    set) and falls back along the rest, so every entry is a provider the
+    work may actually run through. A provider-scoped measurement transfers
+    only to work dispatched to exactly its providers, which is why the
+    whole ladder counts rather than its head.
+
+    Args:
+        repo_root: Repo root the layered config is composed against.
+
+    Returns:
+        The distinct provider ids, sorted; empty when no runtime is
+        configured.
+
+    Raises:
+        pydantic.ValidationError: The ladder names an adapter no provider
+            backs.
+    """
+    from pydantic import TypeAdapter
+
+    from eawf.kernel.config.schema import RuntimeAdapterId
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    runtime = merged.get("runtime")
+    if not isinstance(runtime, dict):
+        return ()
+    raw = runtime.get("preference") or runtime.get("adapters") or []
+    adapters = TypeAdapter(list[RuntimeAdapterId]).validate_python(raw)
+    return tuple(sorted({_ADAPTER_PROVIDER[adapter] for adapter in adapters}))
+
+
 def resolve_stall_interval_seconds(repo_root: Path, runtime: str | None) -> int:
     """Return the stall interval ``runtime.<runtime>.stall_interval_s`` resolves to.
 

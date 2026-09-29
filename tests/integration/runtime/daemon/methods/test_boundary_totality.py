@@ -59,6 +59,7 @@ EXPECTED_SITES = frozenset(
         "lifecycle:advance_release",
         "lifecycle:cancel_release",
         "preflight:approve_release",
+        "preflight:invalidate_changed_approval",
         "preflight:record_preflight_result",
         "publication:begin_publication",
         "publication:begin_verification",

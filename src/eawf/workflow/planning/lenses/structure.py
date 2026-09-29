@@ -26,11 +26,15 @@ today:
   plan targets, so it reaches no criterion and nothing it promises can
   ever be shown to be done.
 - DAG: a Task whose ``depends_on`` names a Task the plan does not
-  create, or a dependency cycle among the plan's own Tasks.
+  create, a dependency cycle among the plan's own Tasks, or a Task whose
+  intent carries a parallelism instruction -- "run these in parallel",
+  "one at a time", "run alone" -- that the graph should encode instead,
+  since prose ordering reaches no scheduler.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -79,6 +83,7 @@ class PlanFindingCode(StrEnum):
     OUTCOME_BATCH_UNREACHED = "plan_outcome_batch_unreached"
     DAG_DEPENDENCY_UNRESOLVED = "plan_dag_dependency_unresolved"
     DAG_CYCLE_DETECTED = "plan_dag_cycle_detected"
+    DAG_ORDERING_IN_PROSE = "plan_dag_ordering_in_prose"
     WRITE_CLAIM_OVERLAP_UNORDERED = "plan_write_claim_overlap_unordered"
     CRITERION_FIDELITY_UNRESOLVED = "plan_criterion_fidelity_unresolved"
     TASK_WRITE_CLAIM_MISSING = "plan_task_write_claim_missing"
@@ -306,18 +311,66 @@ def _find_cycle(tasks: tuple[PlannedTask, ...]) -> tuple[TaskUrn, ...] | None:
     return tuple(sorted((urn for urn in task_urns if urn not in resolved), key=str))
 
 
-def _dag_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
-    """Require the plan's Task dependency graph to resolve and stay acyclic.
+#: A parallelism or ordering instruction written into a Task's intent. The
+#: graph already carries all three things such a phrase tries to say --
+#: what fans out, what waits, what runs alone -- so the phrase is either
+#: redundant or a constraint no scheduler will ever read.
+_ORDERING_PROSE: Final = re.compile(
+    r"\b(?:in parallel|concurrently|sequentially|one at a time|fan(?:s|ned)? out|"
+    r"runs? alone|(?:never|not) concurrent)\b",
+    re.IGNORECASE,
+)
+
+
+def _ordering_in_prose(body: PlanBody) -> tuple[PlanFinding, ...]:
+    """Flag each Task whose intent types an ordering the graph should carry.
 
     Args:
         body: The plan content.
 
     Returns:
-        Zero findings, one blocking finding for a dangling dependency, or
-        one blocking finding naming a cycle. A dangling edge is checked
-        first and short-circuits the cycle search, which assumes every
-        edge already resolves.
+        One blocking finding per Task whose intent carries a parallelism
+        or ordering instruction.
     """
+    findings: list[PlanFinding] = []
+    for task in body.tasks:
+        match = _ORDERING_PROSE.search(task.intent)
+        if match is None:
+            continue
+        findings.append(
+            PlanFinding(
+                lens=PlanLens.DAG,
+                severity="blocking",
+                code=PlanFindingCode.DAG_ORDERING_IN_PROSE,
+                entity_refs=(str(task.urn),),
+                message=(
+                    f"{task.urn} types the ordering {match.group(0)!r} into its intent, "
+                    "where no scheduler reads it"
+                ),
+                remediation=(
+                    "Encode the ordering in the graph: a depends_on edge for what must "
+                    "wait, disjoint write_claims for what may fan out, exclusive for what "
+                    "runs alone; then drop the phrase from the intent."
+                ),
+            )
+        )
+    return tuple(findings)
+
+
+def _dag_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
+    """Require the plan's Task dependency graph to resolve, stay acyclic, and carry the ordering.
+
+    Args:
+        body: The plan content.
+
+    Returns:
+        One blocking finding per Task that types an ordering into its
+        intent, followed by zero findings, one blocking finding for a
+        dangling dependency, or one blocking finding naming a cycle. A
+        dangling edge is checked first and short-circuits the cycle
+        search, which assumes every edge already resolves.
+    """
+    prose = _ordering_in_prose(body)
     declared = frozenset(task.urn for task in body.tasks)
     dangling = tuple(
         (str(task.urn), str(dep))
@@ -328,6 +381,7 @@ def _dag_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
     if dangling:
         entity_refs = tuple(sorted({ref for pair in dangling for ref in pair}))
         return (
+            *prose,
             PlanFinding(
                 lens=PlanLens.DAG,
                 severity="blocking",
@@ -345,9 +399,10 @@ def _dag_lens(body: PlanBody) -> tuple[PlanFinding, ...]:
         )
     cycle = _find_cycle(body.tasks)
     if cycle is None:
-        return ()
+        return prose
     rendered = tuple(str(ref) for ref in cycle)
     return (
+        *prose,
         PlanFinding(
             lens=PlanLens.DAG,
             severity="blocking",

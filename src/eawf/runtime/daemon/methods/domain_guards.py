@@ -27,6 +27,7 @@ from pydantic import ValidationError
 from eawf.kernel.identity import EntityKind, IdentityError, parse_qualified_urn
 from eawf.kernel.state.epoch2.batch import BatchStatus, DeliveryBatch
 from eawf.kernel.state.epoch2.milestone import Milestone, MilestoneStatus
+from eawf.kernel.state.epoch2.policy import TrackPolicy
 from eawf.kernel.state.epoch2.task import Task, TaskStatus
 from eawf.kernel.state.epoch2.track import Track, TrackStatus
 from eawf.kernel.state.epoch2.transitions import TransitionGuard
@@ -97,6 +98,11 @@ class GuardInputs:
     reason_code: str | None
     binding_refs: tuple[str, ...] = ()
     ledger_statuses: dict[Epoch2Collection, Mapping[str, str]] = field(default_factory=dict)
+
+
+#: The code a watchlist line leads with, so a client can tell an advisory
+#: ceiling from any other note on an accepted answer.
+WIP_WATCHLIST_SIGNAL: Final = "wip_active_milestones_advisory"
 
 
 #: A predicate over the document and the request. ``True`` means the guard
@@ -286,6 +292,121 @@ def _run_bound(inputs: GuardInputs) -> bool:
     return parsed.entity_key in document_rows(inputs.document, Epoch2Collection.RUN)
 
 
+def _entity_key(ref: Any) -> str | None:
+    """Return the public key a stored reference addresses, or ``None``."""
+    if not isinstance(ref, str):
+        return None
+    try:
+        return parse_qualified_urn(ref).entity_key
+    except IdentityError:
+        return None
+
+
+def _track_policy(document: dict[str, Any], track_ref: Any) -> TrackPolicy | None:
+    """Return the policy of the Track *track_ref* names, or ``None``.
+
+    Args:
+        document: The document to read.
+        track_ref: A stored Track reference.
+
+    Returns:
+        The validated policy, or ``None`` when the reference, the Track
+        row or its policy is not readable.
+    """
+    key = _entity_key(track_ref)
+    track = None if key is None else document_rows(document, Epoch2Collection.TRACK).get(key)
+    try:
+        return TrackPolicy.model_validate(_row_field(track, "policy"))
+    except ValidationError:
+        return None
+
+
+def _milestone_track(milestones: Mapping[str, Any], milestone_ref: Any) -> Any:
+    """Return the primary Track reference of the Milestone *milestone_ref* names."""
+    key = _entity_key(milestone_ref)
+    return None if key is None else _row_field(milestones.get(key), "primary_track_ref")
+
+
+def batch_activation_admitted(document: dict[str, Any], batch: DeliveryBatch) -> bool:
+    """Return whether *batch* may activate under its Track's hard WIP ceiling.
+
+    The ceiling counts the Track's Batches already ACTIVE in the same
+    repository, because integration is serialised per repository and a
+    second active Batch there keeps invalidating the first one's
+    exact-head proof. Batches of other Tracks, and of other repositories,
+    are not counted: the ceiling is per Track per repository, and there is
+    no workspace-wide one.
+
+    Args:
+        document: The locked document.
+        batch: The Batch asking to activate.
+
+    Returns:
+        ``True`` when the ceiling admits one more; ``False`` when it does
+        not, or when the Batch's Milestone or Track cannot be read, since
+        an unreadable ceiling cannot be shown to admit anything.
+    """
+    milestones = document_rows(document, Epoch2Collection.MILESTONE)
+    track_ref = _milestone_track(milestones, str(batch.milestone_ref))
+    policy = _track_policy(document, track_ref)
+    if policy is None:
+        return False
+    active = sum(
+        1
+        for key, row in document_rows(document, Epoch2Collection.BATCH).items()
+        if key != batch.key
+        and _row_field(row, "status") == BatchStatus.ACTIVE.value
+        and _row_field(row, "repository_ref") == str(batch.repository_ref)
+        and _milestone_track(milestones, _row_field(row, "milestone_ref")) == track_ref
+    )
+    return policy.admits_batch_activation(active_batches_in_repo=active)
+
+
+def milestone_watchlist(document: dict[str, Any], milestone: Milestone) -> tuple[str, ...]:
+    """Return the advisory signals activating *milestone* raises, if any.
+
+    The active-Milestone ceiling never refuses anything: it bounds split
+    attention rather than protecting a proof, so exceeding it is reported
+    beside an accepted answer instead of shutting the edge.
+
+    Args:
+        document: A document holding the Milestone at its new status.
+        milestone: The Milestone just activated.
+
+    Returns:
+        One watchlist line when the Track now carries more ACTIVE
+        Milestones than its policy advises, else nothing.
+    """
+    track_ref = str(milestone.primary_track_ref)
+    policy = _track_policy(document, track_ref)
+    if policy is None:
+        return ()
+    active = sum(
+        1
+        for row in document_rows(document, Epoch2Collection.MILESTONE).values()
+        if _row_field(row, "primary_track_ref") == track_ref
+        and _row_field(row, "status") == MilestoneStatus.ACTIVE.value
+    )
+    if not policy.exceeds_milestone_advisory(active_milestones=active):
+        return ()
+    return (
+        f"{WIP_WATCHLIST_SIGNAL}: track {milestone.primary_track_ref.entity_key} carries "
+        f"{active} active milestones, past its advisory {policy.wip.active_milestones}",
+    )
+
+
+def _batch_wip_admits(inputs: GuardInputs) -> bool:
+    """Return whether the Batch's Track admits one more active Batch in its repository."""
+    if not isinstance(inputs.record, DeliveryBatch):
+        return False
+    return batch_activation_admitted(inputs.document, inputs.record)
+
+
+def _never_claimed(inputs: GuardInputs) -> bool:
+    """Return whether the Task has never been claimed, which demotion requires."""
+    return isinstance(inputs.record, Task) and inputs.record.first_claimed_at is None
+
+
 def _criteria_evidence_bound(inputs: GuardInputs) -> bool:
     """Return whether the request binds evidence for the Task's criteria.
 
@@ -353,6 +474,8 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
     TransitionGuard.REQUIRED_BATCHES_COMPLETED: _required_batches_completed,
     TransitionGuard.TASKS_READY_TO_INTEGRATE: _tasks_ready_to_integrate,
     TransitionGuard.TARGET_BRANCH_PINNED: _target_branch_pinned,
+    TransitionGuard.BATCH_WIP_ADMITS: _batch_wip_admits,
+    TransitionGuard.NEVER_CLAIMED: _never_claimed,
     TransitionGuard.HEAD_BINDING_PINNED: _head_binding_pinned,
     TransitionGuard.PROMOTION_CONTRACT_COMPLETE: _promotion_contract_complete,
     TransitionGuard.RUN_BOUND: _run_bound,
@@ -365,6 +488,9 @@ GUARD_COMPUTERS: Final[Mapping[TransitionGuard, GuardComputer]] = {
 
 __all__ = [
     "GUARD_COMPUTERS",
+    "WIP_WATCHLIST_SIGNAL",
     "GuardComputer",
     "GuardInputs",
+    "batch_activation_admitted",
+    "milestone_watchlist",
 ]

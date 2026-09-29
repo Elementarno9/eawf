@@ -451,7 +451,10 @@ def test_meas_043_no_segment_renders_a_bare_unknown_token(tmp_path: Path, state:
         assert_truthful(segment)
 
 
-def test_meas_043_document_segments_never_read_a_frozen_epoch1_document(tmp_path: Path) -> None:
+def test_meas_043_document_segments_never_read_a_frozen_epoch1_document(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     state_path = canary_state_path(tmp_path, {})
     state_path.write_text(
         json.dumps(
@@ -466,11 +469,12 @@ def test_meas_043_document_segments_never_read_a_frozen_epoch1_document(tmp_path
         encoding="utf-8",
     )
 
-    assert mcp_health.build({}, state_path).text == "mcp:n/a(no-epoch2-source)"
-    assert memory.build({}, state_path).text == "mem:n/a(no-epoch2-source)"
-    assert hooks_plugins.build({}, state_path).text == "hooks:0 plugins:n/a(no-epoch2-source)"
+    # Each segment answers from its epoch-2 producer, none of which holds a value here.
+    assert mcp_health.build({}, state_path).text == "mcp:n/a(no-mcp-servers)"
+    assert memory.build({}, state_path).text == "mem:n/a(no-memory-records)"
+    assert hooks_plugins.build({}, state_path).text == "hooks:0 plugins:n/a(no-plugin-record)"
     budget_segment = budget.build({}, state_path)
-    assert budget_segment.text == "budget:n/a(no-epoch2-source)"
+    assert budget_segment.text == "budget:n/a(no-session)"
     assert budget_segment.truth.state is TruthState.UNAVAILABLE
 
 

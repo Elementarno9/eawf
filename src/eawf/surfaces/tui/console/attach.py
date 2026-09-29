@@ -1,6 +1,6 @@
 """The console attach path: which pre-session state a launch lands in, from what it read.
 
-``eawf tui`` resolves a tree before any projection exists, and every way that can end
+``eawf ui`` resolves a tree before any projection exists, and every way that can end
 short of a session is one of the entry layer's states (:data:`ENTRY_STATES`). This module
 decides which one from real conditions -- the workspace registry, the tree's epoch
 evidence, its cutover journal and the state schema it was written at -- and fills the

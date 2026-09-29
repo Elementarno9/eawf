@@ -25,16 +25,19 @@ such verb:
   ``milestone accept --acceptance-bundle`` takes;
 - ``record evidence`` sends ``runtime.delivery.record_evidence``.
 
-The commands are dispatch and rendering only. A refusal prints the
-daemon's own code and detail unchanged and exits
-:data:`~eawf.surfaces.cli.commands.domain.DOMAIN_REFUSAL_EXIT`, as does a
-proof or assessment that answered but did not pass, so a script can gate
-on the exit status.
+The commands are dispatch and rendering only. Every mutating command
+names the revision the caller read its subject at (``--expected-revision``)
+and the daemon refuses a stale one with ``revision_conflict``. Each answer
+is wrapped into the one machine envelope and printed through
+:func:`~eawf.surfaces.cli.verb_contract.envelope_text`: a refusal carries the
+daemon's own code and detail unchanged, and a proof, seal, integration or
+assessment that answered but did not pass is an ``error`` envelope naming
+the field that did not hold, so both exit with the typed status
+:func:`~eawf.surfaces.cli.verb_contract.envelope_exit_code` gives them.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Final
 
@@ -42,18 +45,22 @@ import orjson
 import typer
 
 from eawf.surfaces.cli import errors as cli_errors
+from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.commands.domain import (
     CANDIDATE_SUBMIT,
     DELIVERY_SEAL_APPROVAL,
-    DOMAIN_REFUSAL_EXIT,
-    _call_native_rpc,
     _check_idempotency_key,
+    _native_answer,
 )
 from eawf.surfaces.cli.commands.domain_legacy import record_app
 from eawf.surfaces.cli.commands.lifecycle import batch_app, milestone_app, task_app
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.verb_contract import read_spec_document
+from eawf.surfaces.cli.verb_contract import (
+    answer_envelope,
+    emit_envelope,
+    read_spec_document,
+    refusal_envelope,
+)
 
 #: The dotted JSON-RPC name each command forwards to, spelled here so the
 #: Typer tree builds without the daemon method registry on the path.
@@ -85,6 +92,7 @@ INTEGRATION_CLI_METHODS: Final[tuple[str, ...]] = (
 )
 
 _KEY_HELP: Final = "Caller's name for this request; a retry replays its receipt."
+_REVISION_HELP: Final = "Revision the subject was read at (compare-and-swap token)."
 _ACTOR_HELP: Final = "Principal key the request is attributed to."
 _CORRELATION_HELP: Final = "Caller's thread of related requests."
 _APPROVAL_URN_HELP: Final = "URN of the PendingAction acceptance question."
@@ -132,6 +140,19 @@ _KIND_HELP: Final = "Evidence kind: audit, artifact, decision, store_record or e
 _SUMMARY_HELP: Final = "What the evidence shows, naming the ids it points at."
 
 _Key = Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)]
+_Revision = Annotated[int, typer.Option("--expected-revision", help=_REVISION_HELP)]
+_RunRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-run-revision", help=_REVISION_HELP)
+]
+_TaskRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-task-revision", help=_REVISION_HELP)
+]
+_BatchRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-batch-revision", help=_REVISION_HELP)
+]
+_MilestoneRevision = Annotated[
+    int, typer.Option("--expected-revision", "--expected-milestone-revision", help=_REVISION_HELP)
+]
 _Actor = Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)]
 
 
@@ -140,28 +161,39 @@ def _send(
     method: str,
     params: dict[str, Any],
     *,
+    urn: str,
     verb_text: str,
     key: str | None,
     gated: bool = False,
 ) -> dict[str, Any] | None:
-    """Send one native RPC and return its answer, or report the failure.
+    """Send one native RPC and return its answer, or print why there is none.
 
     Args:
         ctx: Typer context carrying the resolved global flags.
         method: The dotted JSON-RPC name.
         params: The wire parameters, less ``repo_root``.
+        urn: The subject the request addresses, named by a refusal.
         verb_text: The command spelling an operator typed.
         key: The retry key to bound-check, or ``None`` for a read.
         gated: Whether the verb runs gates or git work inside the request.
 
     Returns:
-        The answer, or ``None`` after the error was emitted.
+        The answer, or ``None`` after a refusal envelope or an error was
+        printed (both exit, so ``None`` is reached only under test doubles).
     """
     flags: GlobalFlags = ctx.obj
     try:
         if key is not None:
             _check_idempotency_key(key)
-        return _call_native_rpc(method, params, flags=flags, verb_text=verb_text, gated=gated)
+        return _native_answer(method, params, flags=flags, verb_text=verb_text, gated=gated)
+    except DaemonRpcError as exc:
+        if exc.code != cli_errors.RPC_VALIDATION_FAILED:
+            cli_errors.emit_error(cli_errors.cli_error_for_rpc(exc.code, exc.message), flags=flags)
+            return None
+        emit_envelope(
+            refusal_envelope(exc.message, operation=method, urn=urn), urn=urn, flags=flags
+        )
+        return None
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return None
@@ -176,17 +208,34 @@ def _document(ctx: typer.Context, path: Path) -> dict[str, Any] | None:
         return None
 
 
-def _emit(
+def _answer(
     ctx: typer.Context,
     answer: dict[str, Any],
-    render: Callable[[dict[str, Any]], str],
     *,
-    passed: bool = True,
+    operation: str,
+    urn: str,
+    revision: int | None,
+    failed_guard: str | None = None,
 ) -> None:
-    """Print *answer* and exit non-zero when it did not pass."""
-    emit_json_or_text(answer, render(answer), flags=ctx.obj)
-    if not passed:
-        raise typer.Exit(DOMAIN_REFUSAL_EXIT)
+    """Print *answer* as its envelope and exit with the envelope's status.
+
+    Args:
+        ctx: Typer context carrying the resolved global flags.
+        answer: The daemon's answer.
+        operation: The dotted JSON-RPC name that earned it.
+        urn: The subject the request addressed.
+        revision: The anchor the request was sent under, or ``None`` for a read.
+        failed_guard: The answer field that did not hold, or ``None``.
+    """
+    envelope = answer_envelope(
+        answer,
+        operation=operation,
+        urn=urn,
+        revision_before=revision,
+        revision_after=None,
+        failed_guard=failed_guard,
+    )
+    emit_envelope(envelope, urn=urn, flags=ctx.obj)
 
 
 def _write(path: Path, payload: dict[str, Any]) -> None:
@@ -207,6 +256,7 @@ def task_submit_cmd(
     resulting_tree_digest: Annotated[
         str, typer.Option("--resulting-tree-digest", help=_TREE_DIGEST_HELP)
     ],
+    expected_revision: _RunRevision,
     idempotency_key: _Key,
     actor: _Actor,
 ) -> None:
@@ -217,6 +267,7 @@ def task_submit_cmd(
     """
     params: dict[str, Any] = {
         "urn": urn,
+        "expected_revision": expected_revision,
         "actor": actor,
         "idempotency_key": idempotency_key,
         "task_ref": task_ref,
@@ -224,16 +275,11 @@ def task_submit_cmd(
         "changed_paths": list(changed_path),
         "resulting_tree_digest": resulting_tree_digest,
     }
-    answer = _send(ctx, CANDIDATE_SUBMIT, params, verb_text="task submit", key=idempotency_key)
+    answer = _send(
+        ctx, CANDIDATE_SUBMIT, params, urn=urn, verb_text="task submit", key=idempotency_key
+    )
     if answer is not None:
-        _emit(
-            ctx,
-            answer,
-            lambda a: (
-                f"{CANDIDATE_SUBMIT} ok {a['candidate_ref']} run {a['run_ref']} "
-                f"replayed={a['replayed']}\n  {a['reason']}"
-            ),
-        )
+        _answer(ctx, answer, operation=CANDIDATE_SUBMIT, urn=urn, revision=expected_revision)
 
 
 @task_app.command("seal")
@@ -244,6 +290,7 @@ def task_seal_cmd(
     resulting_tree_digest: Annotated[
         str, typer.Option("--resulting-tree-digest", help=_TREE_DIGEST_HELP)
     ],
+    expected_revision: _RunRevision,
     idempotency_key: _Key,
     actor: _Actor,
     verdict: Annotated[str | None, typer.Option("--verdict", help=_VERDICT_HELP)] = None,
@@ -257,6 +304,7 @@ def task_seal_cmd(
     """Bind a Run's accepted report to its candidate and attempt the seal."""
     params: dict[str, Any] = {
         "urn": urn,
+        "expected_revision": expected_revision,
         "actor": actor,
         "idempotency_key": idempotency_key,
         "candidate_ref": candidate_ref,
@@ -265,17 +313,17 @@ def task_seal_cmd(
         "report_digest": report_digest,
         "report_schema_ref": report_schema_ref,
     }
-    answer = _send(ctx, CANDIDATE_REPORT_BIND, params, verb_text="task seal", key=idempotency_key)
+    answer = _send(
+        ctx, CANDIDATE_REPORT_BIND, params, urn=urn, verb_text="task seal", key=idempotency_key
+    )
     if answer is not None:
-        failed = ", ".join(answer.get("failed_checks") or ()) or "none"
-        _emit(
+        _answer(
             ctx,
             answer,
-            lambda a: (
-                f"{CANDIDATE_REPORT_BIND} sealed={a['sealed']} {a['candidate_ref']} "
-                f"failed={failed}\n  {a['reason']}"
-            ),
-            passed=bool(answer["sealed"]),
+            operation=CANDIDATE_REPORT_BIND,
+            urn=urn,
+            revision=expected_revision,
+            failed_guard=None if answer["sealed"] else "sealed",
         )
 
 
@@ -283,33 +331,40 @@ def task_seal_cmd(
 def task_prove_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_TASK_URN_HELP)],
+    expected_revision: _TaskRevision,
     idempotency_key: _Key,
     actor: _Actor,
     gates: Annotated[Path | None, typer.Option("--gates", help=_GATES_HELP)] = None,
 ) -> None:
     """Run a Task's gates at the generation each leg binds and file the receipts."""
-    params: dict[str, Any] = {"urn": urn, "actor": actor, "idempotency_key": idempotency_key}
+    params: dict[str, Any] = {
+        "urn": urn,
+        "expected_revision": expected_revision,
+        "actor": actor,
+        "idempotency_key": idempotency_key,
+    }
     if gates is not None:
         document = _document(ctx, gates)
         if document is None:
             return
         params["gates"] = document.get("gates", [])
     answer = _send(
-        ctx, DELIVERY_PROVE, params, verb_text="task prove", key=idempotency_key, gated=True
+        ctx,
+        DELIVERY_PROVE,
+        params,
+        urn=urn,
+        verb_text="task prove",
+        key=idempotency_key,
+        gated=True,
     )
     if answer is not None:
-        _emit(
+        _answer(
             ctx,
             answer,
-            lambda a: "\n".join(
-                [f"{DELIVERY_PROVE} passed={a['passed']} {a['task_ref']}"]
-                + [
-                    f"  {leg['gate_id']} {leg['result']} {leg['receipt_id']} at {leg['head_sha']}"
-                    for leg in a["legs"]
-                ]
-                + [f"  {a['reason']}"]
-            ),
-            passed=bool(answer["passed"]),
+            operation=DELIVERY_PROVE,
+            urn=urn,
+            revision=expected_revision,
+            failed_guard=None if answer["passed"] else "passed",
         )
 
 
@@ -325,6 +380,7 @@ def task_assess_cmd(
         ctx,
         DELIVERY_TASK_ASSESSMENT,
         {"urn": urn, "actor": actor},
+        urn=urn,
         verb_text="task assess",
         key=None,
     )
@@ -332,17 +388,13 @@ def task_assess_cmd(
         return
     if out is not None:
         _write(out, answer["assessment"])
-    judged = answer["answer"]
-    _emit(
+    _answer(
         ctx,
         answer,
-        lambda a: (
-            f"{DELIVERY_TASK_ASSESSMENT} completable={judged['completable']} "
-            f"{judged['task_ref']} integrated_commit={a['integrated_commit']}\n"
-            f"  rerun: {', '.join(judged['rerun_gate_ids']) or 'none'}\n"
-            f"  {judged['reason']}"
-        ),
-        passed=bool(judged["completable"]),
+        operation=DELIVERY_TASK_ASSESSMENT,
+        urn=urn,
+        revision=None,
+        failed_guard=None if answer["answer"]["completable"] else "completable",
     )
 
 
@@ -353,14 +405,15 @@ def task_assess_cmd(
 def batch_integrate_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_BATCH_URN_HELP)],
+    expected_revision: _BatchRevision,
     actor: _Actor,
     from_spec: Annotated[Path, typer.Option("--from-spec", help=_REFS_HELP)],
 ) -> None:
     """Integrate a Batch's sealed candidates into its next generation.
 
     The daemon assembles the integrate request from the Batch's plan and
-    the references the file names, then runs it; assembling the same plan
-    again names the same idempotency key, so a retry replays.
+    the references the file names, then runs it under the anchor; assembling
+    the same plan again names the same idempotency key, so a retry replays.
     """
     refs = _document(ctx, from_spec)
     if refs is None:
@@ -369,23 +422,29 @@ def batch_integrate_cmd(
         ctx,
         DELIVERY_ASSEMBLE,
         {"urn": urn, "actor": actor, **refs},
+        urn=urn,
         verb_text="batch integrate",
         key=None,
     )
     if request is None:
         return
     answer = _send(
-        ctx, DELIVERY_INTEGRATE, request, verb_text="batch integrate", key=None, gated=True
+        ctx,
+        DELIVERY_INTEGRATE,
+        {**request, "expected_revision": expected_revision},
+        urn=urn,
+        verb_text="batch integrate",
+        key=None,
+        gated=True,
     )
     if answer is not None:
-        _emit(
+        _answer(
             ctx,
             answer,
-            lambda a: (
-                f"{DELIVERY_INTEGRATE} delivered={a['delivered']} {a['batch_ref']} "
-                f"generations={', '.join(a['generation_ids']) or 'none'}\n  {a['reason']}"
-            ),
-            passed=bool(answer["delivered"]),
+            operation=DELIVERY_INTEGRATE,
+            urn=urn,
+            revision=expected_revision,
+            failed_guard=None if answer["delivered"] else "delivered",
         )
 
 
@@ -397,6 +456,7 @@ def batch_adopt_landed_cmd(
     base: Annotated[str, typer.Option("--base", help=_BASE_HELP)],
     task: Annotated[list[str], typer.Option("--task", help=_ADOPT_TASK_HELP)],
     evidence: Annotated[list[str], typer.Option("--evidence", help=_EVIDENCE_REF_HELP)],
+    expected_revision: _BatchRevision,
     idempotency_key: _Key,
     actor: _Actor,
     verdict: Annotated[str, typer.Option("--verdict", help=_ADOPT_VERDICT_HELP)] = "pass",
@@ -413,6 +473,7 @@ def batch_adopt_landed_cmd(
     """
     params: dict[str, Any] = {
         "urn": urn,
+        "expected_revision": expected_revision,
         "actor": actor,
         "idempotency_key": idempotency_key,
         "task_refs": list(task),
@@ -423,23 +484,22 @@ def batch_adopt_landed_cmd(
         "affected_criterion_ids": list(affected or ()),
     }
     answer = _send(
-        ctx, DELIVERY_ADOPT_LANDED, params, verb_text="batch adopt-landed", key=idempotency_key
+        ctx,
+        DELIVERY_ADOPT_LANDED,
+        params,
+        urn=urn,
+        verb_text="batch adopt-landed",
+        key=idempotency_key,
     )
     if answer is not None:
-        _emit(
-            ctx,
-            answer,
-            lambda a: (
-                f"{DELIVERY_ADOPT_LANDED} ok {a['batch_ref']} {a['generation_id']} "
-                f"head={a['head_sha']} replayed={a['replayed']}\n  {a['reason']}"
-            ),
-        )
+        _answer(ctx, answer, operation=DELIVERY_ADOPT_LANDED, urn=urn, revision=expected_revision)
 
 
 @batch_app.command("reconcile")
 def batch_reconcile_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_BATCH_URN_HELP)],
+    expected_revision: _BatchRevision,
     idempotency_key: _Key,
     actor: _Actor,
     observation: Annotated[
@@ -452,7 +512,12 @@ def batch_reconcile_cmd(
     commits read back, not by the observation saying so. Without
     ``--observation`` the daemon reads the branch from the repository.
     """
-    params: dict[str, Any] = {"urn": urn, "actor": actor, "idempotency_key": idempotency_key}
+    params: dict[str, Any] = {
+        "urn": urn,
+        "expected_revision": expected_revision,
+        "actor": actor,
+        "idempotency_key": idempotency_key,
+    }
     method = DELIVERY_READ_BACK_MERGE
     if observation is not None:
         document = _document(ctx, observation)
@@ -460,16 +525,9 @@ def batch_reconcile_cmd(
             return
         params["observation"] = document
         method = DELIVERY_RECONCILE_MERGE
-    answer = _send(ctx, method, params, verb_text="batch reconcile", key=idempotency_key)
+    answer = _send(ctx, method, params, urn=urn, verb_text="batch reconcile", key=idempotency_key)
     if answer is not None:
-        _emit(
-            ctx,
-            answer,
-            lambda a: (
-                f"{method} ok {a['batch_ref']} outcome {a['outcome']} "
-                f"record {a['record_key']}\n  {a['reason']}"
-            ),
-        )
+        _answer(ctx, answer, operation=method, urn=urn, revision=expected_revision)
 
 
 # ---- Milestone --------------------------------------------------------------
@@ -479,6 +537,7 @@ def batch_reconcile_cmd(
 def milestone_open_approval_cmd(
     ctx: typer.Context,
     urn: Annotated[str, typer.Argument(help=_MILESTONE_URN_HELP)],
+    expected_revision: _MilestoneRevision,
     actor: _Actor,
     from_spec: Annotated[Path, typer.Option("--from-spec", help=_APPROVAL_SPEC_HELP)],
     bundle_out: Annotated[Path | None, typer.Option("--bundle-out", help=_BUNDLE_OUT_HELP)] = None,
@@ -490,7 +549,8 @@ def milestone_open_approval_cmd(
     answer = _send(
         ctx,
         DELIVERY_OPEN_APPROVAL,
-        {"urn": urn, "actor": actor, **spec},
+        {"urn": urn, "expected_revision": expected_revision, "actor": actor, **spec},
+        urn=urn,
         verb_text="milestone open-approval",
         key=None,
     )
@@ -498,14 +558,7 @@ def milestone_open_approval_cmd(
         return
     if bundle_out is not None and answer.get("acceptance_bundle") is not None:
         _write(bundle_out, answer["acceptance_bundle"])
-    _emit(
-        ctx,
-        answer,
-        lambda a: (
-            f"{DELIVERY_OPEN_APPROVAL} ok {a['action_ref']} status {a['status']} "
-            f"revision {a['revision']}\n  {a['reason']}"
-        ),
-    )
+    _answer(ctx, answer, operation=DELIVERY_OPEN_APPROVAL, urn=urn, revision=expected_revision)
 
 
 @milestone_app.command("seal-approval")
@@ -559,18 +612,12 @@ def milestone_seal_approval_cmd(
         ctx,
         DELIVERY_SEAL_APPROVAL,
         params,
+        urn=urn,
         verb_text="milestone seal-approval",
         key=idempotency_key,
     )
     if answer is not None:
-        _emit(
-            ctx,
-            answer,
-            lambda a: (
-                f"{DELIVERY_SEAL_APPROVAL} ok {a['action_ref']} "
-                f"status {a['status']} revision {a['revision']}\n  {a['reason']}"
-            ),
-        )
+        _answer(ctx, answer, operation=DELIVERY_SEAL_APPROVAL, urn=urn, revision=expected_revision)
 
 
 # ---- Evidence ---------------------------------------------------------------
@@ -582,25 +629,30 @@ def record_evidence_cmd(
     urn: Annotated[str, typer.Argument(help=_EVIDENCE_URN_HELP)],
     kind: Annotated[str, typer.Option("--kind", help=_KIND_HELP)],
     summary: Annotated[str, typer.Option("--summary", help=_SUMMARY_HELP)],
+    expected_revision: _Revision,
     idempotency_key: _Key,
     actor: _Actor,
 ) -> None:
     """File one evidence row an acceptance step or answer may cite."""
     params: dict[str, Any] = {
         "urn": urn,
+        "expected_revision": expected_revision,
         "actor": actor,
         "idempotency_key": idempotency_key,
         "kind": kind,
         "summary": summary,
     }
     answer = _send(
-        ctx, DELIVERY_RECORD_EVIDENCE, params, verb_text="record evidence", key=idempotency_key
+        ctx,
+        DELIVERY_RECORD_EVIDENCE,
+        params,
+        urn=urn,
+        verb_text="record evidence",
+        key=idempotency_key,
     )
     if answer is not None:
-        _emit(
-            ctx,
-            answer,
-            lambda a: f"{DELIVERY_RECORD_EVIDENCE} ok {a['evidence_ref']} created={a['created']}",
+        _answer(
+            ctx, answer, operation=DELIVERY_RECORD_EVIDENCE, urn=urn, revision=expected_revision
         )
 
 

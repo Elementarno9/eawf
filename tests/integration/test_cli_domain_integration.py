@@ -137,6 +137,7 @@ def test_task_seal_forwards_the_candidate_and_exits_nonzero_when_unsealed(
         "task", "seal", _RUN,
         "--candidate-ref", "CND-1",
         "--resulting-tree-digest", "sha256:" + "c" * 64,
+        "--expected-run-revision", "1",
         "--idempotency-key", "seal-1",
         "--actor", "OPERATOR",
     )  # fmt: skip
@@ -159,6 +160,7 @@ def test_task_prove_sends_the_gates_file(tmp_path: Path) -> None:
     result = _invoke(
         tmp_path,
         "task", "prove", _TASK,
+        "--expected-task-revision", "2",
         "--idempotency-key", "prove-1",
         "--actor", "OPERATOR",
         "--gates", str(_json(tmp_path, "gates.json", {"gates": gates})),
@@ -167,7 +169,8 @@ def test_task_prove_sends_the_gates_file(tmp_path: Path) -> None:
     method, params = _FakeClient.calls[0]
     assert method == integration_cmd.DELIVERY_PROVE
     assert params["gates"] == gates
-    assert "G-01 pass RCP-0001" in result.output
+    assert params["expected_revision"] == 2
+    assert '"receipt_id":"RCP-0001"' in result.output
 
 
 def test_task_prove_without_gates_reruns_the_filed_ones(tmp_path: Path) -> None:
@@ -176,8 +179,9 @@ def test_task_prove_without_gates_reruns_the_filed_ones(tmp_path: Path) -> None:
         "task_ref": _TASK, "legs": [], "passed": False, "reason": "a leg failed",
     }  # fmt: skip
     result = _invoke(
-        tmp_path, "task", "prove", _TASK, "--idempotency-key", "prove-1", "--actor", "OPERATOR"
-    )
+        tmp_path, "task", "prove", _TASK, "--expected-revision", "2",
+        "--idempotency-key", "prove-1", "--actor", "OPERATOR",
+    )  # fmt: skip
     assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
     assert "gates" not in _FakeClient.calls[0][1]
 
@@ -209,7 +213,7 @@ def test_task_assess_writes_the_document_task_complete_takes(tmp_path: Path) -> 
     result = _invoke(tmp_path, "task", "assess", _TASK, "--actor", "OPERATOR", "--out", str(out))
     assert result.exit_code == exit_codes.OK, result.output
     assert orjson.loads(out.read_bytes()) == {"report_verdict": "pass"}
-    assert f"integrated_commit={_SHA}" in result.output
+    assert f"result.integrated_commit: {_SHA}" in result.output
     assert "idempotency_key" not in _FakeClient.calls[0][1]
 
 
@@ -217,7 +221,8 @@ def test_task_assess_exits_nonzero_while_a_leg_is_unproven(tmp_path: Path) -> No
     _FakeClient.answers[integration_cmd.DELIVERY_TASK_ASSESSMENT] = _assessment(completable=False)
     result = _invoke(tmp_path, "task", "assess", _TASK, "--actor", "OPERATOR")
     assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
-    assert "rerun: G-01" in result.output
+    assert 'result.answer.rerun_gate_ids: ["G-01"]' in result.output
+    assert "guard: completable" in result.output
 
 
 def test_batch_integrate_assembles_then_integrates(tmp_path: Path) -> None:
@@ -236,6 +241,7 @@ def test_batch_integrate_assembles_then_integrates(tmp_path: Path) -> None:
     result = _invoke(
         tmp_path,
         "batch", "integrate", _BATCH,
+        "--expected-batch-revision", "1",
         "--actor", "OPERATOR",
         "--from-spec", str(_json(tmp_path, "refs.json", refs)),
     )  # fmt: skip
@@ -246,6 +252,8 @@ def test_batch_integrate_assembles_then_integrates(tmp_path: Path) -> None:
     ]
     assert _FakeClient.calls[0][1]["base"] == {"head_sha": _BASE}
     assert _FakeClient.calls[1][1]["idempotency_key"] == "assembled-1"
+    assert _FakeClient.calls[1][1]["expected_revision"] == 1
+    assert "expected_revision" not in _FakeClient.calls[0][1]
 
 
 def test_batch_integrate_stops_when_assembly_is_refused(tmp_path: Path) -> None:
@@ -255,6 +263,7 @@ def test_batch_integrate_stops_when_assembly_is_refused(tmp_path: Path) -> None:
     result = _invoke(
         tmp_path,
         "batch", "integrate", _BATCH,
+        "--expected-batch-revision", "1",
         "--actor", "OPERATOR",
         "--from-spec", str(_json(tmp_path, "refs.json", {})),
     )  # fmt: skip
@@ -283,6 +292,7 @@ def test_batch_adopt_landed_forwards_every_fact(tmp_path: Path) -> None:
         "--head", _SHA, "--base", _BASE,
         "--task", _TASK, "--task", f"{_ROOT}/task/CANARY-0002",
         "--evidence", "A-P36-I01-eval-r4",
+        "--expected-batch-revision", "1",
         "--idempotency-key", "adopt-1",
         "--actor", "OPERATOR",
     )  # fmt: skip
@@ -294,6 +304,7 @@ def test_batch_adopt_landed_forwards_every_fact(tmp_path: Path) -> None:
     assert params["report_verdict"] == "pass"
     assert params["evidence_refs"] == ["A-P36-I01-eval-r4"]
     assert params["affected_criterion_ids"] == []
+    assert params["expected_revision"] == 1
 
 
 def test_batch_adopt_landed_without_evidence_is_refused_by_typer(tmp_path: Path) -> None:
@@ -301,7 +312,7 @@ def test_batch_adopt_landed_without_evidence_is_refused_by_typer(tmp_path: Path)
     result = _invoke(
         tmp_path,
         "batch", "adopt-landed", _BATCH,
-        "--head", _SHA, "--base", _BASE, "--task", _TASK,
+        "--head", _SHA, "--base", _BASE, "--task", _TASK, "--expected-revision", "1",
         "--idempotency-key", "adopt-1", "--actor", "OPERATOR",
     )  # fmt: skip
     assert result.exit_code == 2
@@ -325,6 +336,7 @@ def test_batch_reconcile_with_an_observation_forwards_it(tmp_path: Path) -> None
     result = _invoke(
         tmp_path,
         "batch", "reconcile", _BATCH,
+        "--expected-batch-revision", "3",
         "--idempotency-key", "reconcile-1", "--actor", "OPERATOR",
         "--observation", str(_json(tmp_path, "obs.json", document)),
     )  # fmt: skip
@@ -338,13 +350,14 @@ def test_batch_reconcile_without_an_observation_reads_the_branch_back(tmp_path: 
     _FakeClient.answers[integration_cmd.DELIVERY_READ_BACK_MERGE] = _RECONCILED
     result = _invoke(
         tmp_path,
-        "batch", "reconcile", _BATCH, "--idempotency-key", "reconcile-1", "--actor", "OPERATOR",
+        "batch", "reconcile", _BATCH, "--expected-revision", "3",
+        "--idempotency-key", "reconcile-1", "--actor", "OPERATOR",
     )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output
     method, params = _FakeClient.calls[0]
     assert method == integration_cmd.DELIVERY_READ_BACK_MERGE
     assert "observation" not in params
-    assert "outcome landed" in result.output
+    assert "result.outcome: landed" in result.output
 
 
 @pytest.mark.parametrize("length", [0, 129])
@@ -353,7 +366,8 @@ def test_batch_reconcile_key_bounds_are_refused_before_the_wire(
 ) -> None:
     result = _invoke(
         tmp_path,
-        "batch", "reconcile", _BATCH, "--idempotency-key", "k" * length, "--actor", "OPERATOR",
+        "batch", "reconcile", _BATCH, "--expected-revision", "3",
+        "--idempotency-key", "k" * length, "--actor", "OPERATOR",
     )  # fmt: skip
     assert result.exit_code == exit_codes.USER_ERROR
     assert _FakeClient.calls == []
@@ -365,7 +379,8 @@ def test_batch_reconcile_refusal_renders_the_daemons_code(tmp_path: Path) -> Non
     )
     result = _invoke(
         tmp_path,
-        "batch", "reconcile", _BATCH, "--idempotency-key", "reconcile-1", "--actor", "OPERATOR",
+        "batch", "reconcile", _BATCH, "--expected-revision", "3",
+        "--idempotency-key", "reconcile-1", "--actor", "OPERATOR",
     )  # fmt: skip
     assert result.exit_code == domain_cmd.DOMAIN_REFUSAL_EXIT
     assert "reconcile_batch_not_merging" in result.output
@@ -386,6 +401,7 @@ def test_milestone_open_approval_writes_the_bundle(tmp_path: Path) -> None:
     result = _invoke(
         tmp_path,
         "milestone", "open-approval", _MILESTONE,
+        "--expected-milestone-revision", "2",
         "--actor", "OPERATOR",
         "--from-spec", str(_json(tmp_path, "approval.json", spec)),
         "--bundle-out", str(out),
@@ -404,6 +420,7 @@ def test_record_evidence_forwards_the_row(tmp_path: Path) -> None:
         tmp_path,
         "record", "evidence", _MILESTONE,
         "--kind", "audit", "--summary", "audit A-P36-I01-eval-r4 passed",
+        "--expected-revision", "2",
         "--idempotency-key", "evd-1", "--actor", "OPERATOR",
     )  # fmt: skip
     assert result.exit_code == exit_codes.OK, result.output

@@ -33,6 +33,7 @@ from typing import Annotated, Final, Literal
 
 from pydantic import AfterValidator, ConfigDict, Field
 
+from eawf.kernel.runtime.provider import ProviderTuple
 from eawf.kernel.spec.common import _StrictModel
 from eawf.kernel.state.types import UtcDatetime
 
@@ -163,6 +164,12 @@ class MeasurementEnvironment(_StrictModel):
             citation from a different repository is refused rather than
             silently treated as if the same surface had been measured
             twice in two places.
+        provider_tuple: The exact providers the probe ran through, sorted
+            and distinct, when the measured surface is provider-scoped;
+            empty when the measurement does not depend on which provider
+            ran it. Non-empty, the contract transfers only to a plan whose
+            Runs dispatch to exactly this tuple, because a limit observed
+            through one provider says nothing about another.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -173,6 +180,7 @@ class MeasurementEnvironment(_StrictModel):
     host_platform: NonBlankStr
     toolchain: NonBlankStr
     repository: NonBlankStr | None = None
+    provider_tuple: ProviderTuple = ()
 
 
 class ObservedLimit(_StrictModel):

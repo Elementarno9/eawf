@@ -133,7 +133,7 @@ def test_campaign_new_dry_run_reports_count_and_persists_nothing(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "--dry-run", "Sanity resolve check"],
+        ["-w", str(workspace), "campaign", "new", "--dry-run", "Sanity resolve check"],
     )
     assert result.exit_code == 0, result.output
     assert "dry-run" in result.stdout
@@ -149,7 +149,7 @@ def test_campaign_new_dry_run_json_body(tmp_path: Path, monkeypatch: pytest.Monk
 
     result = runner.invoke(
         app,
-        ["--json", "-w", str(workspace), "research", "campaign", "new", "--dry-run", "Topic"],
+        ["--json", "-w", str(workspace), "campaign", "new", "--dry-run", "Topic"],
     )
     assert result.exit_code == 0, result.output
     body = json.loads(result.stdout)
@@ -168,7 +168,7 @@ def test_campaign_new_without_dry_run_still_persists(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "new", "Persisted topic"],
+        ["-w", str(workspace), "campaign", "new", "Persisted topic"],
     )
     assert result.exit_code == 0, result.output
     assert len(_read_rows(workspace / ".ea" / "state.json")) == 1
@@ -192,7 +192,6 @@ def test_campaign_cancel_forwards_to_daemon(
         [
             "-w",
             str(workspace),
-            "research",
             "campaign",
             "cancel",
             "campaign-abc123",
@@ -218,7 +217,7 @@ def test_campaign_cancel_reason_is_optional(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "cancel", "campaign-xyz"],
+        ["-w", str(workspace), "campaign", "cancel", "campaign-xyz"],
     )
     assert result.exit_code == 0, result.output
     assert "reason" not in _FakeCancelClient.captured["params"]
@@ -233,6 +232,6 @@ def test_campaign_cancel_daemon_error_is_hard_error(
 
     result = runner.invoke(
         app,
-        ["-w", str(workspace), "research", "campaign", "cancel", "unknown-campaign"],
+        ["-w", str(workspace), "campaign", "cancel", "unknown-campaign"],
     )
     assert result.exit_code == 1, result.output

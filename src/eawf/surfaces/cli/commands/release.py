@@ -3,7 +3,11 @@
 Two kinds of verb live here. ``changelog``, ``notes`` and ``train show``
 are local: they read the checkout and print. The rest dispatch to the
 daemon's ``release.*`` JSON-RPC namespace, because they read or write
-records the daemon owns.
+records the daemon owns, and answer with the one machine envelope of
+:mod:`eawf.surfaces.cli.verb_contract`: a refusal is an ``error`` envelope
+carrying the daemon's code, and exits with the envelope's typed status. A
+verb that mutates a record names the revision the caller read it at with
+``--expected-revision``; the anchor is never read off the record it sends.
 
 :data:`RELEASE_RPC_METHODS` is the parity map between the dispatching
 verbs and the daemon -- every registered ``release.*`` method names the
@@ -25,7 +29,7 @@ imported.
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
@@ -37,6 +41,12 @@ from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
+from eawf.surfaces.cli.verb_contract import (
+    answer_envelope,
+    emit_envelope,
+    refusal_envelope,
+    request_document,
+)
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
@@ -330,10 +340,10 @@ def _dispatch(
         The handler's result object.
 
     Raises:
+        DaemonRpcError: The daemon refused the call, left for
+            :func:`_answer` to render as a refusal envelope.
         cli_errors.UserError: With ``data.kind="DaemonError"`` when the
-            daemon refuses the call or cannot be reached. The refusal is
-            surfaced verbatim: a release verb denied for a named reason
-            is the answer, not a failure to be reworded.
+            daemon cannot be reached.
     """
     from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
 
@@ -345,33 +355,83 @@ def _dispatch(
         )
         with client:
             return client.call(method, params)
-    except DaemonRpcError as exc:
-        raise cli_errors.UserError(
-            f"daemon rejected {method}: code={exc.code} {exc.message}", kind="DaemonError"
-        ) from exc
+    except DaemonRpcError:
+        raise
     except (OSError, RuntimeError) as exc:
         raise cli_errors.UserError(
             f"daemon unavailable for {method}: {exc}", kind="DaemonError"
         ) from exc
 
 
-def _record_line(result: dict[str, Any]) -> str:
-    """Return the one-line summary of a reply carrying a release record."""
-    record = result.get("release") or {}
-    return f"{record.get('key')} {record.get('status')} revision={record.get('revision')}"
+def _answer(
+    ctx: typer.Context,
+    method: str,
+    params: dict[str, Any],
+    *,
+    subject: str,
+    revision: int | None = None,
+    call_timeout_seconds: float | None = None,
+    failed_guard: Callable[[dict[str, Any]], str | None] | None = None,
+    links: Callable[[dict[str, Any]], dict[str, str]] | None = None,
+) -> dict[str, Any] | None:
+    """Send one release verb and print its answer as the machine envelope.
 
+    Args:
+        ctx: Typer context carrying the resolved global flags.
+        method: Fully-qualified method name.
+        params: Already-assembled JSON-RPC params.
+        subject: The release key or version the request addresses.
+        revision: The record revision the caller anchored the request at,
+            or ``None`` for a verb that takes no anchor.
+        call_timeout_seconds: How long to wait for the reply, or ``None``.
+        failed_guard: Names the check the answer did not pass, if any,
+            so an answer the daemon gave but that refused part of the work
+            exits with the refusal status.
+        links: Derives the commands a caller may follow next from the answer.
 
-def _operation_line(result: dict[str, Any]) -> str:
-    """Return the operator-facing summary of a publication-verb reply."""
-    operation = result.get("operation") or {}
-    rows = operation.get("publication_receipts") or ()
-    legs = ", ".join(
-        f"{row.get('target_id')}#{row.get('attempt')}={row.get('status')}"
-        for row in rows
-        if isinstance(row, dict)
+    Returns:
+        The answer when it stood; ``None`` after a refusal or an error was
+        printed (both exit, so ``None`` is reached only under test doubles).
+    """
+    from eawf.surfaces.cli._daemon_client import DaemonRpcError
+
+    flags: GlobalFlags = ctx.obj
+    try:
+        result = _dispatch(method, params, call_timeout_seconds=call_timeout_seconds)
+    except DaemonRpcError as exc:
+        if exc.code != cli_errors.RPC_VALIDATION_FAILED:
+            cli_errors.emit_error(
+                cli_errors.UserError(
+                    f"daemon rejected {method}: code={exc.code} {exc.message}", kind="DaemonError"
+                ),
+                flags=flags,
+            )
+            return None
+        emit_envelope(
+            refusal_envelope(exc.message, operation=method, urn=subject), urn=subject, flags=flags
+        )
+        return None
+    except cli_errors.CliError as exc:
+        cli_errors.emit_error(exc, flags=flags)
+        return None
+    record = result.get("release")
+    envelope = answer_envelope(
+        result,
+        operation=method,
+        urn=subject,
+        revision_before=revision,
+        revision_after=record.get("revision") if isinstance(record, dict) else None,
+        failed_guard=None if failed_guard is None else failed_guard(result),
+        links=None if links is None else links(result),
     )
-    replayed = " (replayed)" if result.get("replayed") else ""
-    return f"{_record_line(result)}{replayed}\n  operation: {result.get('operation_ref')}\n  {legs}"
+    emit_envelope(envelope, urn=subject, flags=flags)
+    return result
+
+
+_ExpectedRevision = Annotated[
+    int,
+    typer.Option("--expected-revision", help="Record revision the caller read (compare-and-swap)."),
+]
 
 
 @release_app.command("observe")
@@ -387,6 +447,7 @@ def release_observe(
         Path,
         typer.Option("--manifest", help="Path to the frozen manifest the release approved."),
     ],
+    expected_revision: _ExpectedRevision,
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this read-back.")
     ],
@@ -421,14 +482,14 @@ def release_observe(
     success refuses as ``observation_inconclusive``. A ``--response``
     must carry what the reader adds (npm tarball digest, repository).
 
-    Without ``--release`` it observes the record the store holds.
+    Without ``--release`` it observes the record the store holds, at the
+    revision the caller names.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _current_record(release_file, release_key, workspace=flags.workspace)
         params: dict[str, Any] = {
-            "release": record,
-            "expected_revision": record.get("revision", 0),
+            "release": _current_record(release_file, release_key, workspace=flags.workspace),
+            "expected_revision": expected_revision,
             "idempotency_key": idempotency_key,
             "target_id": target,
             "manifest": _read_json_document(manifest_file, label="frozen manifest"),
@@ -436,20 +497,16 @@ def release_observe(
         }
         if response_file is not None:
             params["response"] = _read_json_document(response_file, label="recorded response")
-        result = _dispatch(RELEASE_RPC_METHODS["observe"], params)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    observation = result.get("observation") or {}
-    observed = result.get("release") or {}
-    text = (
-        f"{release_key} target {target}: {observation.get('result')} "
-        f"({observation.get('code')}) -> release {observed.get('status')}\n"
-        f"  identity: {observation.get('queried_identity')}\n"
-        f"  evidence: {observation.get('evidence_ref')}\n"
-        f"  {observation.get('detail')}"
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["observe"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
     )
-    emit_json_or_text(result, text, flags=flags)
 
 
 @release_app.command("show")
@@ -466,24 +523,14 @@ def release_show(
     questions. The ladder answers the first from source; the second is
     the recorded release, which the daemon reads back -- so an operator
     asking where a checkpoint stands never has to open a store file. A
-    rung nobody has opened answers ``record: none`` rather than refusing.
+    rung nobody has opened answers ``record: null`` rather than refusing.
     """
-    flags: GlobalFlags = ctx.obj
-    try:
-        result = _dispatch(RELEASE_RPC_METHODS["show"], {"version": version})
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(exc, flags=flags)
-        return
-    checkpoint = result.get("checkpoint") or {}
-    record = result.get("record")
-    standing = "none (never opened)" if record is None else _record_line({"release": record})
-    text = (
-        f"{result.get('train_id')} -> {result.get('target_version')}  "
-        f"index={result.get('current_checkpoint_index')}\n"
-        f"  checkpoint: {checkpoint.get('version')} ({checkpoint.get('release_key')})\n"
-        f"  record: {standing}"
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["show"],
+        {"version": version},
+        subject=version or "open rung",
     )
-    emit_json_or_text(result, text, flags=flags)
 
 
 @release_app.command("readiness")
@@ -541,7 +588,6 @@ def release_readiness(
             )["acknowledgements"]
         if release_file is not None:
             params["release"] = _read_json_document(release_file, label="release record")
-        result = _dispatch(RELEASE_RPC_METHODS["readiness"], params)
     except KeyError as exc:
         cli_errors.emit_error(
             cli_errors.ValidationError(f"waiver document is missing the {exc} key"), flags=flags
@@ -550,29 +596,25 @@ def release_readiness(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    readiness = result.get("readiness") or {}
-    rows = readiness.get("signals") or ()
-    lines = [
-        f"{readiness.get('release_key')}  ready={readiness.get('ready')}  "
-        f"waivers={readiness.get('waiver_count')}"
-    ]
-    lines.extend(
-        f"  {row.get('signal'):<20} {row.get('status')}" for row in rows if isinstance(row, dict)
-    )
-    if result.get("first_red") is not None:
-        lines.append(f"first red: {result['first_red']}")
-    if "next_status" in result:
-        lines.append(f"candidate would become: {result['next_status']}")
-    emit_json_or_text(result, "\n".join(lines), flags=flags)
+    _answer(ctx, RELEASE_RPC_METHODS["readiness"], params, subject=version)
 
 
 @release_app.command("create")
 def release_create(
     ctx: typer.Context,
-    version: Annotated[str, typer.Argument(help="Checkpoint version to open, e.g. 0.7.0.dev2.")],
+    version: Annotated[
+        str | None, typer.Argument(help="Checkpoint version to open, e.g. 0.7.0.dev2.")
+    ] = None,
     membership_ref: Annotated[
         list[str] | None,
         typer.Option("--membership-ref", help="Milestone acceptance bundle; repeatable."),
+    ] = None,
+    from_spec: Annotated[
+        Path | None,
+        typer.Option(
+            "--from-spec",
+            help="JSON file (or - for stdin) carrying the whole request, in place of the flags.",
+        ),
     ] = None,
 ) -> None:
     """Open one checkpoint's DRAFT record, after measured admission.
@@ -580,24 +622,28 @@ def release_create(
     A checkpoint the admission table covers cannot be opened until every
     measured contract backing it is promoted and resolvable. The refusal
     names the single missing contract plus the command that promotes it,
-    so the next action is in the error rather than in a runbook.
+    so the next action is in the error rather than in a runbook. The
+    version and membership refs, or the ``--from-spec`` document, parse
+    through the RPC's own closed params model before anything is sent.
     """
+    from eawf.runtime.daemon.methods.release import CreateParams
+
     flags: GlobalFlags = ctx.obj
     try:
-        result = _dispatch(
-            RELEASE_RPC_METHODS["create"],
-            {"version": version, "membership_refs": list(membership_ref or ())},
+        request = request_document(
+            CreateParams,
+            from_spec,
+            {"version": version, "membership_refs": list(membership_ref or ()) or None},
         )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    contracts = ", ".join(result.get("measured_contracts") or ()) or "(none required)"
-    text = (
-        f"{_record_line(result)}\n"
-        f"  record: {result.get('release_record_id')}\n"
-        f"  measured contracts: {contracts}"
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["create"],
+        request.model_dump(mode="json"),
+        subject=request.version,
     )
-    emit_json_or_text(result, text, flags=flags)
 
 
 @release_app.command("approve")
@@ -617,6 +663,9 @@ def release_approve(
     approval_ref: Annotated[
         str, typer.Option("--approval-ref", help="Reference to the approval receipt.")
     ],
+    proof_digest: Annotated[
+        str, typer.Option("--proof-digest", help="Digest of the exact artifact set approved.")
+    ],
 ) -> None:
     """Approve a candidate against a readiness sweep, and record it.
 
@@ -627,19 +676,16 @@ def release_approve(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        result = _dispatch(
-            RELEASE_RPC_METHODS["approve"],
-            {
-                "release": _release_document(release_file, release_key),
-                "readiness": _read_json_document(readiness_file, label="readiness sweep"),
-                "approval_ref": approval_ref,
-            },
-        )
+        params = {
+            "release": _release_document(release_file, release_key),
+            "readiness": _read_json_document(readiness_file, label="readiness sweep"),
+            "approval_ref": approval_ref,
+            "proof_digest": proof_digest,
+        }
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    text = f"{_record_line(result)}\n  record: {result.get('release_record_id')}"
-    emit_json_or_text(result, text, flags=flags)
+    _answer(ctx, RELEASE_RPC_METHODS["approve"], params, subject=release_key)
 
 
 @release_app.command("publish")
@@ -654,6 +700,7 @@ def release_publish(
     proof_digest: Annotated[
         str, typer.Option("--proof-digest", help="Digest binding the exact artifact set.")
     ],
+    expected_revision: _ExpectedRevision,
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this publication.")
     ],
@@ -680,27 +727,30 @@ def release_publish(
     the same request returns the original receipt instead of publishing
     twice, even after the record has moved on.
 
-    Without ``--release`` it publishes the record the store holds.
+    Without ``--release`` it publishes the record the store holds, at the
+    revision the caller names.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _current_record(release_file, release_key, workspace=flags.workspace)
-        result = _dispatch(
-            RELEASE_RPC_METHODS["publish"],
-            {
-                "release": record,
-                "expected_revision": record.get("revision", 0),
-                "idempotency_key": idempotency_key,
-                "approved_manifest_digest": approved_manifest_digest,
-                "proof_digest": proof_digest,
-                "observed_revision": source,
-                "waiver_count": waiver_count,
-            },
-        )
+        params = {
+            "release": _current_record(release_file, release_key, workspace=flags.workspace),
+            "expected_revision": expected_revision,
+            "idempotency_key": idempotency_key,
+            "approved_manifest_digest": approved_manifest_digest,
+            "proof_digest": proof_digest,
+            "observed_revision": source,
+            "waiver_count": waiver_count,
+        }
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    emit_json_or_text(result, _operation_line(result), flags=flags)
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["publish"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
+    )
 
 
 @release_app.command("retry")
@@ -712,6 +762,7 @@ def release_retry(
         str,
         typer.Option("--proof-digest", help="Artifact-set digest; must equal the operation's."),
     ],
+    expected_revision: _ExpectedRevision,
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this retry.")
     ],
@@ -727,25 +778,28 @@ def release_retry(
     version, and the verb refuses it ``unsafe_release_retry`` rather than
     letting one version mean two builds.
 
-    Without ``--release`` it retries the record the store holds.
+    Without ``--release`` it retries the record the store holds, at the
+    revision the caller names.
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _current_record(release_file, release_key, workspace=flags.workspace)
-        result = _dispatch(
-            RELEASE_RPC_METHODS["retry"],
-            {
-                "release": record,
-                "expected_revision": record.get("revision", 0),
-                "idempotency_key": idempotency_key,
-                "target_id": target,
-                "proof_digest": proof_digest,
-            },
-        )
+        params = {
+            "release": _current_record(release_file, release_key, workspace=flags.workspace),
+            "expected_revision": expected_revision,
+            "idempotency_key": idempotency_key,
+            "target_id": target,
+            "proof_digest": proof_digest,
+        }
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    emit_json_or_text(result, _operation_line(result), flags=flags)
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["retry"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
+    )
 
 
 @release_app.command("reconcile")
@@ -753,6 +807,7 @@ def release_reconcile(
     ctx: typer.Context,
     release_key: Annotated[str, typer.Argument(help="Release key whose leg is settled.")],
     target: Annotated[str, typer.Option("--target", help="The leg whose adapter reported late.")],
+    expected_revision: _ExpectedRevision,
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this reconciliation.")
     ],
@@ -785,7 +840,7 @@ def release_reconcile(
 
     A ``--receipt`` names the run that published the leg, so it also
     settles a leg nothing marked as dispatched. Without ``--release`` it
-    reconciles the record the store holds.
+    reconciles the record the store holds, at the revision the caller names.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -795,10 +850,9 @@ def release_reconcile(
                 "(the publish job's own, which decides the status)",
                 kind="InvalidInput",
             )
-        record = _current_record(release_file, release_key, workspace=flags.workspace)
         params: dict[str, Any] = {
-            "release": record,
-            "expected_revision": record.get("revision", 0),
+            "release": _current_record(release_file, release_key, workspace=flags.workspace),
+            "expected_revision": expected_revision,
             "idempotency_key": idempotency_key,
             "target_id": target,
             "effect_receipt_ref": effect_receipt_ref,
@@ -809,11 +863,16 @@ def release_reconcile(
             params["receipt"] = _read_json_document(
                 Path(str(receipt_file)), label="publication receipt"
             )
-        result = _dispatch(RELEASE_RPC_METHODS["reconcile"], params)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    emit_json_or_text(result, _operation_line(result), flags=flags)
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["reconcile"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
+    )
 
 
 @release_app.command("burn")
@@ -827,6 +886,7 @@ def release_burn(
     reason: Annotated[
         str, typer.Option("--reason", help="Why the version is spent; recorded with the burn.")
     ],
+    expected_revision: _ExpectedRevision,
     idempotency_key: Annotated[
         str, typer.Option("--idempotency-key", help="Replay identity of this burn.")
     ],
@@ -847,24 +907,22 @@ def release_burn(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _release_document(release_file, release_key)
-        result = _dispatch(
-            RELEASE_RPC_METHODS["burn"],
-            {
-                "release": record,
-                "expected_revision": record.get("revision", 0),
-                "idempotency_key": idempotency_key,
-                "reason": reason,
-            },
-        )
+        params = {
+            "release": _release_document(release_file, release_key),
+            "expected_revision": expected_revision,
+            "idempotency_key": idempotency_key,
+            "reason": reason,
+        }
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    settled = _operation_line(result) if result.get("operation_ref") else _record_line(result)
-    text = (
-        f"{settled}\n  record: {result.get('release_record_id')}\n  reason: {result.get('reason')}"
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["burn"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
     )
-    emit_json_or_text(result, text, flags=flags)
 
 
 @release_app.command("adopt")
@@ -881,6 +939,7 @@ def release_adopt(
         Path,
         typer.Option("--adoption", help="Path to the observed per-target facts, as JSON."),
     ],
+    expected_revision: _ExpectedRevision,
 ) -> None:
     """Adopt a publication that ran without a release record.
 
@@ -902,28 +961,21 @@ def release_adopt(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _release_document(release_file, release_key)
-        result = _dispatch(
-            RELEASE_RPC_METHODS["adopt"],
-            {
-                "release": record,
-                "expected_revision": record.get("revision", 0),
-                "adoption": _read_json_document(adoption_file, label="adoption"),
-            },
-        )
+        params = {
+            "release": _release_document(release_file, release_key),
+            "expected_revision": expected_revision,
+            "adoption": _read_json_document(adoption_file, label="adoption"),
+        }
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    observed = result.get("observed_targets") or {}
-    legs = ", ".join(f"{target}={status}" for target, status in sorted(observed.items()))
-    unconfigured = ", ".join(result.get("unconfigured_targets") or ()) or "(none)"
-    text = (
-        f"{_record_line(result)}\n"
-        f"  record: {result.get('release_record_id')}\n"
-        f"  observed: {legs}\n"
-        f"  not configured: {unconfigured}"
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["adopt"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
     )
-    emit_json_or_text(result, text, flags=flags)
 
 
 @release_app.command("cancel")
@@ -937,6 +989,7 @@ def release_cancel(
     reason: Annotated[
         str, typer.Option("--reason", help="Why the checkpoint is abandoned; recorded with it.")
     ],
+    expected_revision: _ExpectedRevision,
 ) -> None:
     """Abandon a checkpoint that never touched a registry, or refuse.
 
@@ -951,24 +1004,21 @@ def release_cancel(
     """
     flags: GlobalFlags = ctx.obj
     try:
-        record = _release_document(release_file, release_key)
-        result = _dispatch(
-            RELEASE_RPC_METHODS["cancel"],
-            {
-                "release": record,
-                "expected_revision": record.get("revision", 0),
-                "reason": reason,
-            },
-        )
+        params = {
+            "release": _release_document(release_file, release_key),
+            "expected_revision": expected_revision,
+            "reason": reason,
+        }
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return
-    text = (
-        f"{_record_line(result)}\n"
-        f"  record: {result.get('release_record_id')}\n"
-        f"  reason: {result.get('reason')}"
+    _answer(
+        ctx,
+        RELEASE_RPC_METHODS["cancel"],
+        params,
+        subject=release_key,
+        revision=expected_revision,
     )
-    emit_json_or_text(result, text, flags=flags)
 
 
 # ---- command registration ---------------------------------------------------

@@ -141,7 +141,7 @@ def _dispatch_tui(
     ``4`` instead (SURF-085) rather than misstating a tree the resolver could not
     attach to. See :mod:`eawf.surfaces.tui.launch` for the full decision.
 
-    ``tui`` is the only TUI surface, so both the interactive launch and
+    ``ui`` is the only TUI surface, so both the interactive launch and
     the non-TTY fallback route through it.
 
     Args:
@@ -190,13 +190,13 @@ def scope_debug(ctx: typer.Context) -> None:
     typer.echo(text)
 
 
-# --- TUI command (inline: wraps the shared _dispatch_tui resolver) ---
+# --- ui command (inline: wraps the shared _dispatch_tui resolver) ---
 @app.command(
-    name="tui",
+    name="ui",
     help="Open the Eä Textual TUI (or deterministic status fallback off-TTY).",
-    rich_help_panel=panel_for("tui"),
+    rich_help_panel=panel_for("ui"),
 )
-def _tui_cmd(
+def _ui_cmd(
     ctx: typer.Context,
     verbose: Annotated[
         bool,

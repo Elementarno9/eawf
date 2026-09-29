@@ -168,12 +168,12 @@ def _waivers_cleared(disposition: WaiverDisposition, outstanding: Sequence[Relea
 
     Returns:
         ``True`` when nothing is counted, or when every counted waiver
-        is explained and acknowledged. An ``UNEXPLAINED`` set is never
-        cleared: there is nothing to acknowledge.
+        is explained and acknowledged. An ``UNEXPLAINED`` or ``FORBIDDEN``
+        set is never cleared: neither admits an acknowledgement.
     """
     if disposition is WaiverDisposition.NONE:
         return True
-    if disposition is WaiverDisposition.UNEXPLAINED:
+    if disposition is not WaiverDisposition.AWAITING_ACKNOWLEDGEMENT:
         return False
     return not outstanding
 
@@ -314,7 +314,9 @@ class ReleaseReadiness(_StrictModel):
             raise ValueError(
                 f"required signals absent from the sweep: {[name.value for name in undeclared]}"
             )
-        derived_disposition = classify_waivers(self.waivers, waiver_count=self.waiver_count)
+        derived_disposition = classify_waivers(
+            self.waivers, waiver_count=self.waiver_count, channel=self.channel
+        )
         if self.waiver_disposition is not derived_disposition:
             raise ValueError(
                 f"waiver_disposition={self.waiver_disposition.value!r} disagrees with the "
@@ -529,6 +531,13 @@ def _waiver_gate_verdict(
     """
     if _waivers_cleared(disposition, outstanding):
         return ReleaseSignalStatus.PASS, ""
+    if disposition is WaiverDisposition.FORBIDDEN:
+        return (
+            ReleaseSignalStatus.FAIL,
+            f"gate {gate.value!r}: a waiver is counted against a release-candidate or stable "
+            f"checkpoint, where the waiver count must be zero and no explanation is "
+            f"admitted; produce the waived evidence or drop the checkpoint",
+        )
     if disposition is WaiverDisposition.UNEXPLAINED:
         return (
             ReleaseSignalStatus.FAIL,
@@ -681,7 +690,7 @@ def compute_readiness(
         )
     bindings = gate_bindings_for(config.gates.profile)
     required = derive_required_signals(config)
-    disposition = classify_waivers(tuple(waivers), waiver_count=counted)
+    disposition = classify_waivers(tuple(waivers), waiver_count=counted, channel=config.channel)
     outstanding = _unacknowledged_waivers(waivers, acknowledgements, disposition)
     ready = _is_ready(rows, required, disposition, outstanding)
     readiness = ReleaseReadiness(

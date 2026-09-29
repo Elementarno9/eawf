@@ -689,6 +689,15 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         choices=("A", "B", "C", "disabled"),
     ),
     LeafKey(
+        key="verify.retyped_rule_threshold",
+        domain="verify",
+        type="int",
+        default=3,
+        writable_layers=_WRITABLE_GWR,
+        description="Re-typings of one rule within a release above which it must be triaged.",
+        consumer="eawf.observability.reflect.retyped.resolve_retyped_rule_threshold",
+    ),
+    LeafKey(
         key="verify.juror_wall_clock_seconds",
         domain="verify",
         type="float",

@@ -231,6 +231,7 @@ def test_install_plugin_omits_handler_less_hooks(tmp_path: Path) -> None:
         "session_end.sh",
         "subagent_start.sh",
         "subagent_stop.sh",
+        "permission_request.sh",
     }
     for event in (
         "pre_commit",

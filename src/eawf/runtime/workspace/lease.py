@@ -34,7 +34,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Final
+from typing import Annotated, Any, Final
 
 import orjson
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -58,9 +58,12 @@ from eawf.kernel.runtime.lease import (
     renew_lease,
     write_admitted,
 )
-from eawf.kernel.state.epoch2.run import MUTATING_PURPOSES, RunPurpose
+from eawf.kernel.state.epoch2.run import MUTATING_PURPOSES, RunPurpose, write_path_covers
+from eawf.kernel.state.epoch2.task import Task
 from eawf.kernel.state.types import UtcDatetime
 from eawf.kernel.state.writer import atomic_write_json
+from eawf.kernel.store.compaction import document_rows
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, canonical_entity_urn
 from eawf.runtime.sandbox.cwd_guard import is_path_inside
 from eawf.surfaces.cli import errors as cli_errors
@@ -129,6 +132,9 @@ class LeaseRefusalCode(StrEnum):
     PURPOSE_NOT_MUTATING = "purpose_not_mutating"
     SCOPE_ESCAPE = "scope_escape"
     LEASE_ALREADY_ACTIVE = "lease_already_active"
+    SCOPE_WIDENED = "scope_widened"
+    OWNERSHIP_CONFLICT = "ownership_conflict"
+    EXCLUSIVE_CONFLICT = "exclusive_conflict"
 
 
 class LeaseRefusedError(ValueError):
@@ -374,9 +380,17 @@ def issue_lease(
         The ``ACTIVE`` lease. Its ``workspace_handle`` is what a worker
         is told; the path it resolves to is not.
 
+    The Task's own graph fields bind the lease: a writable root outside
+    the paths the Task claims is refused, and so is a lease that would
+    run beside another Task's live lease on an overlapping root, or
+    beside one when either Task runs alone. The scheduler is these
+    refusals; no caller has to remember to serialize the work.
+
     Raises:
-        LeaseRefusedError: The purpose writes nothing, or this Run
-            already holds an active lease.
+        LeaseRefusedError: The purpose writes nothing, this Run already
+            holds an active lease, a writable root widens the Task's
+            write claims, or another Task's live lease conflicts on an
+            overlapping root or on exclusivity.
         UserError: The base ref does not resolve, or git is absent.
         StateConflict: ``git worktree add`` failed; the lease is left
             ``FAILED`` rather than removed.
@@ -391,8 +405,19 @@ def issue_lease(
     task_urn = parse_qualified_urn(task_ref)
     repo_root = context.identity.tree_root.parent
     base_commit = git.commit_sha(repo_root, base)
-    with context.session([run_urn]):
+    with context.session([run_urn]) as session:
         _refuse_second_active_lease(context, run_ref=run_ref, now=now)
+        task = _declared_task(session.read_document(), task_key=task_urn.entity_key)
+        exclusive = task is not None and task.exclusive
+        if task is not None:
+            _refuse_widened_scope(task, writable_roots=writable_roots)
+        _refuse_conflicting_lease(
+            context,
+            task_ref=task_ref,
+            writable_roots=writable_roots,
+            exclusive=exclusive,
+            now=now,
+        )
         handle = f"wsh-{secrets.token_hex(16)}"
         lease = WorkLease(
             schema_version=LEASE_SCHEMA_VERSION,
@@ -414,6 +439,7 @@ def issue_lease(
             expires_at=now + ttl,
             status_at=now,
             status=INITIAL_LEASE_STATUS,
+            exclusive=exclusive,
         )
         write_lease(context, lease)
         lease = apply_lease_transition(lease, to=LeaseStatus.MATERIALIZING, at=now)
@@ -872,6 +898,96 @@ def _refuse_second_active_lease(context: Epoch2RootContext, *, run_ref: str, now
             raise LeaseRefusedError(
                 code=LeaseRefusalCode.LEASE_ALREADY_ACTIVE,
                 detail=f"{run_ref} already holds lease {held.lease_id}; one active lease per run",
+            )
+
+
+def _declared_task(document: dict[str, Any], *, task_key: str) -> Task | None:
+    """Return the native Task record a lease is issued for, if the tree holds one.
+
+    A row the epoch-2 cutover imported wraps an epoch-1 record and states
+    no URN; it was never planned with graph fields, so it declares no
+    narrowing and no exclusivity, the same as a Task the tree does not
+    hold.
+    """
+    row = document_rows(document, Epoch2Collection.TASK).get(task_key)
+    if not isinstance(row, dict) or "urn" not in row:
+        return None
+    return Task.model_validate(row)
+
+
+def _refuse_widened_scope(task: Task, *, writable_roots: tuple[str, ...]) -> None:
+    """Refuse a writable root the Task's declared write claims do not cover.
+
+    The narrowing is declared once, on the Task, and every lease of every
+    Run of it is held to it; an empty claim set declares no narrowing.
+
+    Raises:
+        LeaseRefusedError: A root falls outside every claim.
+    """
+    if not task.write_claims:
+        return
+    widened = [
+        root
+        for root in writable_roots
+        if not any(write_path_covers(claim, root) for claim in task.write_claims)
+    ]
+    if widened:
+        raise LeaseRefusedError(
+            code=LeaseRefusalCode.SCOPE_WIDENED,
+            detail=(
+                f"{', '.join(widened)} lies outside the write claims of {task.urn}: "
+                f"{', '.join(task.write_claims)}"
+            ),
+        )
+
+
+def _refuse_conflicting_lease(
+    context: Epoch2RootContext,
+    *,
+    task_ref: str,
+    writable_roots: tuple[str, ...],
+    exclusive: bool,
+    now: datetime,
+) -> None:
+    """Refuse a lease another Task's live lease conflicts with.
+
+    Two Tasks conflict when their roots overlap, or when either of them
+    runs alone. Leases of the same Task never conflict here: a retry's
+    successor Run inherits the Task's workspace claim, and the one-lease-
+    per-Run rule already governs it.
+
+    Raises:
+        LeaseRefusedError: A live lease of another Task overlaps a root,
+            or it or the requested lease is exclusive.
+    """
+    wanted = canonical_entity_urn(task_ref)
+    for held in root_leases(context):
+        if held.status is not LeaseStatus.ACTIVE or lease_has_expired(held, now=now):
+            continue
+        if canonical_entity_urn(held.task_ref) == wanted:
+            continue
+        if exclusive or held.exclusive:
+            alone = task_ref if exclusive else str(held.task_ref)
+            raise LeaseRefusedError(
+                code=LeaseRefusalCode.EXCLUSIVE_CONFLICT,
+                detail=(
+                    f"{alone} runs alone and {held.task_ref} holds lease {held.lease_id}; "
+                    "the lease waits until the other one is released"
+                ),
+            )
+        shared = sorted(
+            root
+            for root in writable_roots
+            for other in held.writable_roots
+            if write_path_covers(root, other) or write_path_covers(other, root)
+        )
+        if shared:
+            raise LeaseRefusedError(
+                code=LeaseRefusalCode.OWNERSHIP_CONFLICT,
+                detail=(
+                    f"{', '.join(shared)} overlaps what {held.task_ref} holds under lease "
+                    f"{held.lease_id}; the two Tasks write the same paths and run in order"
+                ),
             )
 
 

@@ -1,7 +1,7 @@
 """A launched console acts as the operator named at launch, or refuses every write with why.
 
 The console is opened through :func:`eawf.surfaces.tui.launch.launch_tui` exactly as
-``eawf tui`` opens it, on a temporary epoch-2 tree. Only two things are stood in for:
+``eawf ui`` opens it, on a temporary epoch-2 tree. Only two things are stood in for:
 the event loop the console would block on (``_run_console`` hands back the app and seam
 it was given) and the daemon behind the binding's JSON-RPC client, which serves route
 reads and records every write. A verb is then handed to the running app the way a
@@ -239,8 +239,8 @@ def test_tui_command_passes_the_named_operator_to_the_launcher(
     monkeypatch.delenv("EAWF_ACTOR", raising=False)
     monkeypatch.setenv("EAWF_RECEIPT_REF", RECEIPT)
 
-    flagged = CliRunner().invoke(cli, ["tui", "--actor", ACTOR])
-    bare = CliRunner().invoke(cli, ["tui"], env={"EAWF_RECEIPT_REF": None})
+    flagged = CliRunner().invoke(cli, ["ui", "--actor", ACTOR])
+    bare = CliRunner().invoke(cli, ["ui"], env={"EAWF_RECEIPT_REF": None})
 
     assert flagged.exit_code == 0, flagged.output
     assert bare.exit_code == 0, bare.output
@@ -248,7 +248,7 @@ def test_tui_command_passes_the_named_operator_to_the_launcher(
 
 
 def test_tui_command_rejects_a_malformed_principal() -> None:
-    result = CliRunner().invoke(cli, ["tui", "--actor", "someone@example.test"])
+    result = CliRunner().invoke(cli, ["ui", "--actor", "someone@example.test"])
 
     assert result.exit_code == 2
     assert "not a principal key" in result.output

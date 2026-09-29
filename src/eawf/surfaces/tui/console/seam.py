@@ -648,8 +648,9 @@ class ProjectionSeam:
         )
         if isinstance(addressed, OperationResult):
             return addressed
-        receipt = self._operator.receipt_ref
-        if isinstance(request, AnswerRequest) and receipt is not None:
+        # only an answer to a pending action is recorded under an evidence receipt
+        receipt = self._operator.receipt_ref if isinstance(request, AnswerRequest) else None
+        if receipt is not None:
             self._answered_under[receipt] = request.target
         self._operations.open(addressed)
         result = await self._send(addressed)

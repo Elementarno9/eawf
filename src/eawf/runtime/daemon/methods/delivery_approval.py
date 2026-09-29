@@ -106,6 +106,7 @@ from eawf.runtime.daemon.epoch2_transaction import (
 )
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
+from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusal,
@@ -192,6 +193,9 @@ class ApprovalOpenParams(BaseModel):
     Attributes:
         urn: The Milestone whose acceptance is asked about.
         actor: Who asked.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         requested_by: The principal the question is recorded as asked by.
         steps: What the acceptance journey showed.
         accepted_binding: The exact tree the acceptance is taken on.
@@ -203,6 +207,7 @@ class ApprovalOpenParams(BaseModel):
 
     urn: MilestoneUrn
     actor: PrincipalKey
+    expected_revision: StrictPositiveInt | None = None
     requested_by: ActionPrincipal
     steps: tuple[AcceptanceStepOutcome, ...] = Field(min_length=1)
     accepted_binding: ExactRevisionBinding
@@ -946,6 +951,7 @@ async def _open_acceptance_approval(
     """Open the protected approval a verified Milestone's acceptance needs."""
     args = native_params(ApprovalOpenParams, params)
     context = ctx.native_root_context(authority.root)
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
     commit = await asyncio.to_thread(open_acceptance_approval, context, args, now=datetime.now(UTC))
     _published(ctx, commit.envelopes)
     return commit.answer.model_dump(mode="json")

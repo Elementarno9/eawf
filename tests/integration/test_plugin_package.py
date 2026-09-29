@@ -72,7 +72,8 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
     # Only handler-backed hooks are emitted by default -- today
-    # SESSION_START, SESSION_END and the two subagent events, so the five
+    # SESSION_START, SESSION_END, the two subagent events and
+    # PERMISSION_REQUEST, so the five
     # idle no-op wrappers (PreToolUse/PostToolUse, PreCompact) are absent.
     assert (target / "hooks").exists()
     assert (target / "hooks.json").exists()
@@ -85,13 +86,15 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert not (target / "hooks" / "pre_compact.sh").exists()
     assert (target / "hooks" / "subagent_start.sh").exists()
     assert (target / "hooks" / "subagent_stop.sh").exists()
-    assert len(list((target / "hooks").iterdir())) == 4
+    assert (target / "hooks" / "permission_request.sh").exists()
+    assert len(list((target / "hooks").iterdir())) == 5
     hooks_manifest = json.loads((target / "hooks.json").read_text())
     assert set(hooks_manifest["hooks"].keys()) == {
         "SessionStart",
         "Stop",
         "SubagentStart",
         "SubagentStop",
+        "PermissionRequest",
     }
     # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
     # variable so the manifest installs cleanly regardless of where CC

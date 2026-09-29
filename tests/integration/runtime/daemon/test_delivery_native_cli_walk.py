@@ -62,7 +62,8 @@ def test_native_work_walks_from_a_lease_to_a_completed_task_through_the_cli(
                      "--submission-ref", submission_ref,
                      *[arg for path in claim["changed_paths"] for arg in ("--changed-path", path)],
                      "--resulting-tree-digest", claim["resulting_tree_digest"],
-                     "--idempotency-key", "submit-1", "--actor", ACTOR)  # fmt: skip
+                     "--expected-run-revision", "1",
+                     "--idempotency-key", "submit-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert submitted["candidate_ref"] == candidate_identity(
         task_ref=world.TASK, resulting_tree_digest=claim["resulting_tree_digest"]
     )
@@ -70,28 +71,34 @@ def test_native_work_walks_from_a_lease_to_a_completed_task_through_the_cli(
                   "--resulting-tree-digest", report["resulting_tree_digest"],
                   "--verdict", report["verdict"], "--report-digest", report["report_digest"],
                   "--report-schema-ref", report["report_schema_ref"],
-                  "--idempotency-key", "seal-1", "--actor", ACTOR)  # fmt: skip
+                  "--expected-run-revision", "1",
+                  "--idempotency-key", "seal-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert sealed["sealed"] is True
-    diagnostic = eawf(root, "record", "evidence", world.BATCH, "--kind", "artifact",
-                      "--summary", "integration diagnostics for the canary batch",
-                      "--idempotency-key", "evd-1", "--actor", ACTOR)["evidence_ref"]  # fmt: skip
+    recorded = eawf(root, "record", "evidence", world.BATCH, "--kind", "artifact",
+                    "--summary", "integration diagnostics for the canary batch",
+                    "--expected-revision", "1",
+                    "--idempotency-key", "evd-1", "--actor", ACTOR)  # fmt: skip
+    diagnostic = recorded["result"]["evidence_ref"]
     refs = spec(tmp_path, "refs.json", {
         "base": world.binding(generation=1, head_sha=base).model_dump(mode="json"),
         "exit_refs": {"repair_task": REPAIR_TASK, "rebase_task": REPAIR_TASK},
         "diagnostic_ref": diagnostic,
     })  # fmt: skip
     integrated = eawf(root, "batch", "integrate", world.BATCH, "--actor", ACTOR,
-                      "--from-spec", refs)  # fmt: skip
+                      "--expected-batch-revision", "1", "--from-spec", refs)["result"]  # fmt: skip
     assert integrated["delivered"] is True
     ready = spec(tmp_path, "ready.json",
                  {"observations": ["run_report_bound"], "binding_refs": [diagnostic]})  # fmt: skip
     eawf(root, "task", "ready", world.TASK, "--expected-task-revision", "1",
          "--idempotency-key", "ready-1", "--actor", ACTOR, "--from-spec", ready)  # fmt: skip
     proved = eawf(root, "task", "prove", world.TASK, "--gates", gates_file(tmp_path),
-                  "--idempotency-key", "prove-1", "--actor", ACTOR)  # fmt: skip
+                  "--expected-task-revision", "2",
+                  "--idempotency-key", "prove-1", "--actor", ACTOR)["result"]  # fmt: skip
     assert proved["passed"] is True
     out = tmp_path / "assessment.json"
-    assessed = eawf(root, "task", "assess", world.TASK, "--actor", ACTOR, "--out", str(out))
+    assessed = eawf(root, "task", "assess", world.TASK, "--actor", ACTOR, "--out", str(out))[
+        "result"
+    ]
     delivered = assessed["integrated_commit"]
     assert git(root, "rev-parse", f"{delivered}^") == base
     eawf(root, "task", "complete", world.TASK, "--expected-task-revision", "2",

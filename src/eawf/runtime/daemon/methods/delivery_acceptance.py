@@ -49,6 +49,7 @@ import asyncio
 import logging
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
@@ -64,7 +65,7 @@ from eawf.kernel.delivery.acceptance import (
 from eawf.kernel.delivery.integration import IdempotencyKey
 from eawf.kernel.spec.common import EvidenceKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
-from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey
+from eawf.kernel.state.epoch2.base import NonEmptyStr, PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.batch import DeliveryBatch
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.state.epoch2.urns import AnyEntityUrn, BatchUrn, MilestoneUrn
@@ -79,6 +80,8 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.daemon.epoch2_root import Epoch2RootContext, RootSession
 from eawf.runtime.daemon.epoch2_transaction import commit_ledger_append
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods.delivery import keyed_call
+from eawf.runtime.daemon.methods.delivery_anchor import require_anchor
 from eawf.runtime.daemon.native_guard import native_mutator, native_params
 from eawf.workflow.delivery.acceptance import (
     AcceptanceRefusal,
@@ -128,6 +131,9 @@ class MergeReconcileParams(BaseModel):
         urn: The Batch whose merge is in flight.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         observation: What reading the target branch back found. Presented
             because nothing in the tree talks to a host; it decides
             nothing on its own, because a landing is the Batch's own
@@ -139,6 +145,7 @@ class MergeReconcileParams(BaseModel):
     urn: BatchUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     observation: HostMergeObservation
 
 
@@ -339,8 +346,16 @@ async def _reconcile_merge(
     """Reconcile one Batch's in-flight merge against what the branch holds."""
     args = native_params(MergeReconcileParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(reconcile_batch_merge, context, args)
-    return answer.model_dump(mode="json")
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
+    return await asyncio.to_thread(
+        keyed_call,
+        context,
+        method=DELIVERY_RECONCILE_MERGE_METHOD,
+        key=args.idempotency_key,
+        params=args.model_dump(mode="json"),
+        call=partial(reconcile_batch_merge, context, args),
+        at=datetime.now(UTC),
+    )
 
 
 class RecordEvidenceParams(BaseModel):
@@ -351,6 +366,9 @@ class RecordEvidenceParams(BaseModel):
             evidence row is addressed under.
         actor: Who asked.
         idempotency_key: The client's name for this request.
+        expected_revision: The revision the caller read the subject at, or
+            ``None`` for a caller that sends no anchor. A stale one is
+            refused with ``revision_conflict``.
         kind: What kind of record the evidence is.
         summary: What it shows, including the ids it points at.
     """
@@ -360,6 +378,7 @@ class RecordEvidenceParams(BaseModel):
     urn: AnyEntityUrn
     actor: PrincipalKey
     idempotency_key: IdempotencyKey
+    expected_revision: StrictPositiveInt | None = None
     kind: EvidenceKind
     summary: NonEmptyStr
 
@@ -433,8 +452,17 @@ async def _record_evidence(
     """File one evidence row an acceptance may cite."""
     args = native_params(RecordEvidenceParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(record_evidence, context, args, now=datetime.now(UTC))
-    return answer.model_dump(mode="json")
+    await asyncio.to_thread(require_anchor, context, args.urn, args.expected_revision)
+    now = datetime.now(UTC)
+    return await asyncio.to_thread(
+        keyed_call,
+        context,
+        method=DELIVERY_RECORD_EVIDENCE_METHOD,
+        key=args.idempotency_key,
+        params=args.model_dump(mode="json"),
+        call=partial(record_evidence, context, args, now=now),
+        at=now,
+    )
 
 
 def _bundle_record_key(milestone_ref: MilestoneUrn, revision: int) -> str:
@@ -599,8 +627,16 @@ async def _request_acceptance_repair(
     """Open the successor acceptance bundle revision and file it."""
     args = native_params(AcceptanceRepairParams, params)
     context = ctx.native_root_context(authority.root)
-    answer = await asyncio.to_thread(open_acceptance_repair, context, args, now=datetime.now(UTC))
-    return answer.model_dump(mode="json")
+    now = datetime.now(UTC)
+    return await asyncio.to_thread(
+        keyed_call,
+        context,
+        method=DELIVERY_ACCEPTANCE_REPAIR_METHOD,
+        key=args.idempotency_key,
+        params=args.model_dump(mode="json"),
+        call=partial(open_acceptance_repair, context, args, now=now),
+        at=now,
+    )
 
 
 __all__ = [

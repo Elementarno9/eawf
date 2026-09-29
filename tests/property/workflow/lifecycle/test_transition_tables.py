@@ -606,8 +606,11 @@ def test_release_approval_denies_release_not_ready_on_a_red_sweep() -> None:
         approve_release(
             _release_record(),
             _release_readiness(ready=False),
+            load_release_config(DEV1_RELEASE_CONFIG_YAML, train=V07_TRAIN),
             approval_ref="receipt://approval/0001",
             approved_at=_RELEASE_NOW,
+            proof_digest=_RELEASE_DIGEST,
+            verification_debts=(),
         )
     assert excinfo.value.code is ReleaseDenialCode.RELEASE_NOT_READY
 
@@ -617,8 +620,11 @@ def test_release_approval_binds_the_receipt_on_a_green_sweep() -> None:
     approved = approve_release(
         _release_record(),
         _release_readiness(ready=True),
+        load_release_config(DEV1_RELEASE_CONFIG_YAML, train=V07_TRAIN),
         approval_ref="receipt://approval/0001",
         approved_at=_RELEASE_NOW,
+        proof_digest=_RELEASE_DIGEST,
+        verification_debts=(),
     )
     assert approved.status is ReleaseStatus.APPROVED
     assert approved.approval_ref == "receipt://approval/0001"
@@ -631,6 +637,9 @@ def test_release_approval_rejects_a_naive_approval_timestamp() -> None:
         approve_release(
             _release_record(),
             _release_readiness(ready=True),
+            load_release_config(DEV1_RELEASE_CONFIG_YAML, train=V07_TRAIN),
             approval_ref="receipt://approval/0001",
             approved_at=datetime(2026, 9, 4, 12, 0),
+            proof_digest=_RELEASE_DIGEST,
+            verification_debts=(),
         )

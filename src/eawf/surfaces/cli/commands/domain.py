@@ -43,10 +43,11 @@ shell line. A refused envelope still prints in full and then exits with the
 typed status :func:`~eawf.surfaces.cli.verb_contract.envelope_exit_code`
 gives it, so a script can branch on the exit status without losing the code.
 
-The verbs that answer outside the :class:`DomainEnvelope` shape -- the
-candidate, integration, proof, approval and evidence verbs -- live in
-:mod:`eawf.surfaces.cli.commands.domain_integration` and reach the daemon
-through :func:`_call_native_rpc`.
+The verbs whose daemon answers outside the :class:`DomainEnvelope` shape --
+the candidate, integration, proof, approval and evidence verbs -- live in
+:mod:`eawf.surfaces.cli.commands.domain_integration`, reach the daemon
+through :func:`_native_answer`, and wrap its answer into the same envelope
+before printing it.
 """
 
 from __future__ import annotations
@@ -76,8 +77,7 @@ from eawf.surfaces.cli.commands.lifecycle import (
     track_app,
 )
 from eawf.surfaces.cli.flags import GlobalFlags
-from eawf.surfaces.cli.output import emit_json_or_text
-from eawf.surfaces.cli.verb_contract import envelope_exit_code, envelope_text, read_spec_document
+from eawf.surfaces.cli.verb_contract import emit_envelope, read_spec_document
 
 if TYPE_CHECKING:
     from eawf.runtime.daemon.methods.domain_envelope import DomainEnvelope, DomainErrorCode
@@ -100,6 +100,7 @@ BATCH_MERGE: Final = "domain.batch.merge"
 BATCH_OBSERVE_MERGE: Final = "domain.batch.observe_merge"
 BATCH_COMPLETE: Final = "domain.batch.complete"
 TASK_PROMOTE: Final = "domain.task.promote"
+TASK_DEMOTE: Final = "domain.task.demote"
 TASK_CLAIM: Final = "domain.task.claim"
 TASK_START: Final = "domain.task.start"
 TASK_READY: Final = "domain.task.ready"
@@ -124,6 +125,7 @@ DOMAIN_CLI_METHODS: Final[tuple[str, ...]] = (
     BATCH_OBSERVE_MERGE,
     BATCH_COMPLETE,
     TASK_PROMOTE,
+    TASK_DEMOTE,
     TASK_CLAIM,
     TASK_START,
     TASK_READY,
@@ -695,29 +697,6 @@ def _call_domain_create(request: DomainCreateRequest, *, flags: GlobalFlags) -> 
         ) from exc
 
 
-def _emit(envelope: DomainEnvelope, *, urn: str, flags: GlobalFlags) -> None:
-    """Print one envelope and exit non-zero when it refused.
-
-    Args:
-        envelope: The daemon's answer.
-        urn: The subject the request addressed.
-        flags: Resolved global flags.
-
-    Raises:
-        typer.Exit: With the envelope's typed exit status when the mutation
-            was refused. The envelope prints first either way, so a caller
-            reading stdout gets the code whichever branch it took.
-    """
-    emit_json_or_text(
-        envelope.model_dump(mode="json"),
-        envelope_text(envelope, urn=urn),
-        flags=flags,
-    )
-    code = envelope_exit_code(envelope)
-    if code != exit_codes.OK:
-        raise typer.Exit(code)
-
-
 def _run_verb(
     ctx: typer.Context,
     *,
@@ -768,7 +747,7 @@ def _run_verb(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
-    _emit(envelope, urn=request.urn, flags=flags)
+    emit_envelope(envelope, urn=request.urn, flags=flags)
 
 
 def _run_create_verb(
@@ -816,10 +795,10 @@ def _run_create_verb(
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
-    _emit(envelope, urn=request.urn, flags=flags)
+    emit_envelope(envelope, urn=request.urn, flags=flags)
 
 
-def _call_native_rpc(
+def _native_answer(
     method: str,
     params: dict[str, Any],
     *,
@@ -829,11 +808,11 @@ def _call_native_rpc(
 ) -> dict[str, Any]:
     """Send one non-envelope native RPC and return its raw answer.
 
-    ``milestone seal-approval`` and ``task submit`` answer with their own
-    typed shape rather than a :class:`DomainEnvelope`, and the daemon
-    raises their refusal as a JSON-RPC error rather than returning it as
-    an ok-shaped result -- that is the daemon's own answer contract for
-    these two verbs, not a choice made here.
+    The candidate, integration, proof, approval and evidence verbs answer
+    with their own typed shape rather than a :class:`DomainEnvelope`, and
+    the daemon raises their refusal as a JSON-RPC error rather than
+    returning it as an ok-shaped result -- that is the daemon's own answer
+    contract for these verbs, not a choice made here.
 
     Args:
         method: The dotted JSON-RPC name to send.
@@ -849,12 +828,9 @@ def _call_native_rpc(
 
     Raises:
         UserError: ``--daemonless`` was asked for.
-        StateConflict: The daemon refused the request. The message
-            carries the daemon's own code and detail unchanged, and the
-            exit status matches :data:`DOMAIN_REFUSAL_EXIT`.
+        DaemonRpcError: The daemon answered an error, left for the caller
+            to render.
         DaemonUnreachable: The daemon could not be reached.
-        CliError: The daemon answered a transport-level failure outside
-            the refusal vocabulary.
     """
     from eawf.surfaces.cli import _dispatch
 
@@ -872,12 +848,47 @@ def _call_native_rpc(
         _dispatch.escalate_mutation(verb_text, flags=flags)
         with DaemonClient(call_timeout_seconds=timeout) as client:
             return client.call(method, wire_params)
+    except DaemonRpcError:
+        raise
+    except (OSError, RuntimeError, TimeoutError) as exc:
+        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
+
+
+def _call_native_rpc(
+    method: str,
+    params: dict[str, Any],
+    *,
+    flags: GlobalFlags,
+    verb_text: str,
+    gated: bool = False,
+) -> dict[str, Any]:
+    """Send one non-envelope native RPC, mapping a refusal onto the CLI taxonomy.
+
+    Args:
+        method: The dotted JSON-RPC name to send.
+        params: The wire parameters, less ``repo_root``.
+        flags: Resolved global flags.
+        verb_text: The command spelling an operator typed.
+        gated: Whether the verb runs gates inside the request.
+
+    Returns:
+        The daemon's answer, as a JSON-mode mapping.
+
+    Raises:
+        UserError: ``--daemonless`` was asked for.
+        StateConflict: The daemon refused the request. The message
+            carries the daemon's own code and detail unchanged, and the
+            exit status matches :data:`DOMAIN_REFUSAL_EXIT`.
+        DaemonUnreachable: The daemon could not be reached.
+        CliError: The daemon answered a transport-level failure outside
+            the refusal vocabulary.
+    """
+    try:
+        return _native_answer(method, params, flags=flags, verb_text=verb_text, gated=gated)
     except DaemonRpcError as exc:
         if exc.code == cli_errors.RPC_VALIDATION_FAILED:
             raise cli_errors.StateConflict(exc.message) from exc
         raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
-    except (OSError, RuntimeError, TimeoutError) as exc:
-        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
 
 
 # ---- Track ------------------------------------------------------------------
@@ -1238,6 +1249,33 @@ def task_promote_cmd(
         dry_run=dry_run,
         yes=yes,
         method=TASK_PROMOTE,
+        urn=urn,
+        expected_revision=expected_revision,
+        idempotency_key=idempotency_key,
+        actor=actor,
+        from_spec=from_spec,
+    )
+
+
+@task_app.command("demote")
+def task_demote_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_URN_HELP)],
+    expected_revision: Annotated[
+        int, typer.Option("--expected-revision", "--expected-task-revision", help=_REVISION_HELP)
+    ],
+    idempotency_key: Annotated[str, typer.Option("--idempotency-key", help=_KEY_HELP)],
+    actor: Annotated[str, typer.Option("--actor", help=_ACTOR_HELP)],
+    from_spec: Annotated[Path | None, typer.Option("--from-spec", help=_SPEC_HELP)] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Hand a PLANNED Task that was never claimed back to the backlog as a DRAFT."""
+    _run_verb(
+        ctx,
+        dry_run=dry_run,
+        yes=yes,
+        method=TASK_DEMOTE,
         urn=urn,
         expected_revision=expected_revision,
         idempotency_key=idempotency_key,

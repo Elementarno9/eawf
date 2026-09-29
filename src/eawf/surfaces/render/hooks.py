@@ -4,7 +4,8 @@
 for any :class:`~eawf.runtime.hooks.event.HookEventType`. Which events an
 installer actually writes to disk is the installer's decision — the Claude
 installer subscribes only handler-backed events (:attr:`HookSpec.has_handler`,
-today ``SESSION_START``, ``SESSION_END``, ``SUBAGENT_START`` and ``SUBAGENT_STOP``), while
+today ``SESSION_START``, ``SESSION_END``, ``SUBAGENT_START``, ``SUBAGENT_STOP`` and
+``PERMISSION_REQUEST``), while
 the Codex installer renders every event with ``runtime="codex"``.
 
 The output is a small POSIX-bash wrapper that:
@@ -74,7 +75,10 @@ class HookSpec:
             :data:`HookEventType.SESSION_START` has the rule-projection
             staleness check ``eawf hook run`` registers, and the two subagent
             events have ``runtime.host_subagent``, which adopts a
-            harness-spawned subagent as a Run. Every other
+            harness-spawned subagent as a Run, and
+            :data:`HookEventType.PERMISSION_REQUEST` has
+            ``runtime.host_permission``, which records the held call as a
+            provider permission. Every other
             event's wrapper exits ``0`` with an empty result list (an idle
             contract), so the Claude installer subscribes
             only handler-backed events and never wires the operator's
@@ -199,6 +203,11 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
         has_handler=True,
     ),
     HookSpec(event_type=HookEventType.PRE_COMPACT, claude_event_name="PreCompact"),
+    HookSpec(
+        event_type=HookEventType.PERMISSION_REQUEST,
+        claude_event_name="PermissionRequest",
+        has_handler=True,
+    ),
 )
 
 

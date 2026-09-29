@@ -367,6 +367,7 @@ def approve_params() -> dict[str, Any]:
         "release": candidate().model_dump(mode="json"),
         "readiness": readiness.model_dump(mode="json"),
         "approval_ref": "receipt://approval/dev3",
+        "proof_digest": f"sha256:{'c' * 64}",
     }
 
 

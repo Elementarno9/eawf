@@ -15,6 +15,7 @@ stateDiagram-v2
     DRAFT --> PLANNED: promoted [promotion_contract_complete]
     DEFERRED --> DRAFT: reactivated [none]
     DEFERRED --> DROPPED: dropped [reason_recorded]
+    PLANNED --> DRAFT: demoted [never_claimed+reason_recorded]
     PLANNED --> CLAIMED: claimed [lease_held]
     PLANNED --> CANCELLED: cancelled [reason_recorded]
     CLAIMED --> RUNNING: started [run_bound]

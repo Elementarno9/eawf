@@ -237,7 +237,13 @@ def test_claude_installer_emits_only_handler_backed_hooks(tmp_path: Path) -> Non
         if region.startswith("plugin.claude.hook.")
     }
     assert emitted == _handler_backed_hook_values()
-    assert emitted == {"session_start", "session_end", "subagent_start", "subagent_stop"}
+    assert emitted == {
+        "session_start",
+        "session_end",
+        "subagent_start",
+        "subagent_stop",
+        "permission_request",
+    }
 
 
 def test_codex_installer_emits_supported_lifecycle_hooks(tmp_path: Path) -> None:

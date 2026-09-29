@@ -85,6 +85,7 @@ class TransitionVerb(StrEnum):
     CLAIMED = "claimed"
     COMPLETED = "completed"
     DEFERRED = "deferred"
+    DEMOTED = "demoted"
     DROPPED = "dropped"
     FAILED = "failed"
     INVALIDATED = "invalidated"
@@ -124,6 +125,7 @@ class TransitionGuard(StrEnum):
 
     ACCEPTANCE_JOURNEY_PASSED = "acceptance_journey_passed"
     APPROVAL_FRESH = "approval_fresh"
+    BATCH_WIP_ADMITS = "batch_wip_admits"
     CLEARING_FACT_OBSERVED = "clearing_fact_observed"
     CRITERIA_EVIDENCE_BOUND = "criteria_evidence_bound"
     GATES_GREEN = "gates_green"
@@ -134,6 +136,7 @@ class TransitionGuard(StrEnum):
     INTEGRATED_BINDING_PINNED = "integrated_binding_pinned"
     LEASE_HELD = "lease_held"
     MANIFEST_COMPLETE = "manifest_complete"
+    NEVER_CLAIMED = "never_claimed"
     NO_EXTERNAL_EFFECT = "no_external_effect"
     NO_OPEN_MILESTONES = "no_open_milestones"
     OBSERVED_PRERELEASE = "observed_prerelease"
@@ -173,6 +176,7 @@ class DenialCode(StrEnum):
     BATCH_RECONCILIATION_PENDING = "batch_reconciliation_pending"
     BATCH_TARGET_BRANCH_UNSET = "batch_target_branch_unset"
     BATCH_TASKS_OPEN = "batch_tasks_open"
+    BATCH_WIP_CEILING_REACHED = "batch_wip_ceiling_reached"
     HOST_MERGE_NOT_REFUSED = "host_merge_not_refused"
     HOST_MERGE_UNOBSERVED = "host_merge_unobserved"
     MILESTONE_BATCHES_OPEN = "milestone_batches_open"
@@ -186,6 +190,7 @@ class DenialCode(StrEnum):
     RUN_REPORT_UNBOUND = "run_report_unbound"
     RUN_SUSPENSION_REASON_MISSING = "run_suspension_reason_missing"
     TARGET_RESULTS_INCOMPLETE = "target_results_incomplete"
+    TASK_ALREADY_CLAIMED = "task_already_claimed"
     TASK_EVIDENCE_UNBOUND = "task_evidence_unbound"
     TASK_INTEGRATION_UNPROVEN = "task_integration_unproven"
     TASK_LEASE_UNHELD = "task_lease_unheld"
@@ -240,6 +245,9 @@ class TransitionRow:
             the target status makes them facts. A move missing one is
             denied rather than attempted, so a record is never handed to
             a validator that would reject it.
+        cleared_fields: Successor fields the move resets to empty because
+            the target status forbids them. The reducer clears them itself
+            rather than asking the caller to spell the absence.
     """
 
     entity: LifecycleEntity
@@ -248,6 +256,7 @@ class TransitionRow:
     verb: TransitionVerb
     guards: tuple[TransitionGuard, ...] = ()
     required_updates: tuple[str, ...] = ()
+    cleared_fields: tuple[str, ...] = ()
 
 
 #: Which status enum each entity's rows are drawn from. The parity check
@@ -267,6 +276,7 @@ ENTITY_STATUS_ENUM: Final[Mapping[LifecycleEntity, type[StrEnum]]] = {
 GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.ACCEPTANCE_JOURNEY_PASSED: DenialCode.ACCEPTANCE_JOURNEY_INCOMPLETE,
     TransitionGuard.APPROVAL_FRESH: DenialCode.APPROVAL_STALE,
+    TransitionGuard.BATCH_WIP_ADMITS: DenialCode.BATCH_WIP_CEILING_REACHED,
     TransitionGuard.CLEARING_FACT_OBSERVED: DenialCode.RUN_CLEARING_FACT_UNOBSERVED,
     TransitionGuard.CRITERIA_EVIDENCE_BOUND: DenialCode.TASK_EVIDENCE_UNBOUND,
     TransitionGuard.GATES_GREEN: DenialCode.RELEASE_NOT_READY,
@@ -277,6 +287,7 @@ GUARD_DENIALS: Final[Mapping[TransitionGuard, DenialCode]] = {
     TransitionGuard.INTEGRATED_BINDING_PINNED: DenialCode.TASK_INTEGRATION_UNPROVEN,
     TransitionGuard.LEASE_HELD: DenialCode.TASK_LEASE_UNHELD,
     TransitionGuard.MANIFEST_COMPLETE: DenialCode.RELEASE_MANIFEST_INCOMPLETE,
+    TransitionGuard.NEVER_CLAIMED: DenialCode.TASK_ALREADY_CLAIMED,
     TransitionGuard.NO_EXTERNAL_EFFECT: DenialCode.RELEASE_EFFECT_ALREADY_STARTED,
     TransitionGuard.NO_OPEN_MILESTONES: DenialCode.TRACK_HAS_OPEN_MILESTONES,
     TransitionGuard.OBSERVED_PRERELEASE: DenialCode.PUBLICATION_NOT_OBSERVED,
@@ -332,6 +343,9 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     DenialCode.BATCH_TASKS_OPEN: (
         "Finish or cancel every Task in the Batch before declaring it ready to merge."
     ),
+    DenialCode.BATCH_WIP_CEILING_REACHED: (
+        "Land or cancel an active Batch of this Track in the repository before activating another."
+    ),
     DenialCode.HOST_MERGE_NOT_REFUSED: (
         "The host has neither landed nor refused the merge; read it back before deciding."
     ),
@@ -370,6 +384,9 @@ DENIAL_REMEDIATION: Final[Mapping[DenialCode, str]] = {
     ),
     DenialCode.TARGET_RESULTS_INCOMPLETE: (
         "Every configured publication leg must carry a result before verification opens."
+    ),
+    DenialCode.TASK_ALREADY_CLAIMED: (
+        "A Task that was ever claimed stays planned; cancel it and draft a new one instead."
     ),
     DenialCode.TASK_EVIDENCE_UNBOUND: (
         "Bind evidence to every success criterion before the Task may integrate."
@@ -479,7 +496,7 @@ _BATCH_ROWS: Final[tuple[TransitionRow, ...]] = (
         frm=BatchStatus.PLANNED,
         to=BatchStatus.ACTIVE,
         verb=TransitionVerb.ACTIVATED,
-        guards=(TransitionGuard.TARGET_BRANCH_PINNED,),
+        guards=(TransitionGuard.TARGET_BRANCH_PINNED, TransitionGuard.BATCH_WIP_ADMITS),
         required_updates=("target_branch",),
     ),
     # A Batch may lack a target branch only while it is PLANNED, so a
@@ -608,6 +625,17 @@ _TASK_ROWS: Final[tuple[TransitionRow, ...]] = (
         to=TaskStatus.DROPPED,
         verb=TransitionVerb.DROPPED,
         guards=(TransitionGuard.REASON_RECORDED,),
+    ),
+    # Demotion hands a planned Task back to the backlog. It is open only
+    # until the first claim: a claimed Task may have work, a lease history
+    # and a Run behind it, none of which a draft can carry.
+    TransitionRow(
+        entity=LifecycleEntity.TASK,
+        frm=TaskStatus.PLANNED,
+        to=TaskStatus.DRAFT,
+        verb=TransitionVerb.DEMOTED,
+        guards=(TransitionGuard.NEVER_CLAIMED, TransitionGuard.REASON_RECORDED),
+        cleared_fields=("batch_ref", "criteria"),
     ),
     TransitionRow(
         entity=LifecycleEntity.TASK,

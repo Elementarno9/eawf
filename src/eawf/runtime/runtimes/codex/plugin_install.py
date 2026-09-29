@@ -40,6 +40,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import subprocess
 import tomllib
 from collections.abc import Mapping
@@ -50,6 +51,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 import eawf
+from eawf.kernel.economics.governor import InFlightGovernor
 from eawf.platform.install.managed_block import (
     ManagedBlockError,
     render_managed_block,
@@ -57,6 +59,8 @@ from eawf.platform.install.managed_block import (
     unmanaged_bytes,
     unmanaged_survives,
 )
+from eawf.runtime.daemon.admission import load_economics
+from eawf.runtime.harness.fan_out import fan_out_values
 from eawf.runtime.runtimes.codex.hook_map import (
     CODEX_HOOK_EVENT_TYPES,
     codex_hook_event_name,
@@ -577,47 +581,77 @@ def _sidecar_fingerprint(payload: bytes) -> str:
     return hashlib.blake2b(body, digest_size=8).hexdigest()
 
 
+#: An explicit ``[agents]`` header, which the managed block owns.
+_AGENTS_HEADER = re.compile(r"^\s*\[\s*agents\s*\]", re.MULTILINE)
+
 _BEGIN_MARKER: str = f"# ---- {_MANAGED_TABLE} begin ----"
 _END_MARKER: str = f"# ---- {_MANAGED_TABLE} end ----"
 
 
-def _render_enabled_block() -> bytes:
-    """Render the marker-wrapped ``[plugins.eawf]`` enabled block."""
+def _render_enabled_block(fan_out: Mapping[str, str | int]) -> bytes:
+    """Render the marker-wrapped block: the plugin enable and the fan-out keys.
+
+    Args:
+        fan_out: The ``[agents]`` fan-out values, keyed by dotted host path.
+    """
+    agents = [f"{path.rpartition('.')[2]} = {json.dumps(value)}" for path, value in fan_out.items()]
     return render_managed_block(
         begin=_BEGIN_MARKER,
         end=_END_MARKER,
-        body_lines=(f"[plugins.{_PLUGIN_NAME}]", "enabled = true"),
+        body_lines=(f"[plugins.{_PLUGIN_NAME}]", "enabled = true", "[agents]", *agents),
     )
 
 
-def _patch_config_toml(target_path: Path) -> bytes:
+def _patch_config_toml(target_path: Path, *, governor: InFlightGovernor) -> bytes:
     """Return rewritten ``config.toml`` bytes with the managed block patched in.
 
     Only the lines between the ``__eawf_managed begin/end`` markers change;
     every byte outside them, line endings included, is kept. A file with no
-    block gets one appended, and a missing file is the block alone.
+    block gets one appended, and a missing file is the block alone. The
+    block carries the fan-out keys the concurrency plan sets, so the host's
+    own scheduler holds the same ceiling the dispatcher does.
+
+    Args:
+        target_path: The ``config.toml`` to patch.
+        governor: The in-flight governor whose Run ceiling the thread
+            count is written from.
 
     Raises:
         ManagedBlockError: When the existing file's markers are not exactly
-            one ordered pair.
+            one ordered pair, the content outside the block already owns
+            the ``[agents]`` table, or the coordinator's reasoning effort
+            is not one Codex accepts.
     """
     existing = target_path.read_bytes() if target_path.exists() else b""
-    _refuse_duplicate_plugin_key(target_path, existing)
+    outside = _refuse_duplicate_plugin_key(target_path, existing)
+    effort = outside.get("model_reasoning_effort")
+    try:
+        fan_out = fan_out_values(
+            "codex", governor=governor, coordinator_effort=None if effort is None else str(effort)
+        )
+    except ValueError as exc:
+        raise ManagedBlockError(f"{target_path} model_reasoning_effort: {exc}") from exc
     return splice_managed_block(
-        existing, begin=_BEGIN_MARKER, end=_END_MARKER, block=_render_enabled_block()
+        existing, begin=_BEGIN_MARKER, end=_END_MARKER, block=_render_enabled_block(fan_out)
     )
 
 
-def _refuse_duplicate_plugin_key(target_path: Path, existing: bytes) -> None:
+def _refuse_duplicate_plugin_key(target_path: Path, existing: bytes) -> dict[str, object]:
     """Refuse a block that would declare the plugin beside a declaration outside it.
 
     Codex keys a marketplace install as ``eawf@<marketplace>``; a bare
     ``eawf`` table in the block next to it declares the same plugin twice,
-    and a second bare table is a TOML error Codex refuses to load.
+    and a second bare table is a TOML error Codex refuses to load. The
+    block also opens the ``[agents]`` table, so a header or a key of that
+    table outside the block would be declared twice the same way.
+
+    Returns:
+        The content outside the block, parsed.
 
     Raises:
         ManagedBlockError: When the content outside the block is not valid
-            TOML, or already declares the plugin under any marketplace.
+            TOML, already declares the plugin under any marketplace, or
+            already opens the ``[agents]`` table.
     """
     outside = unmanaged_bytes(existing, begin=_BEGIN_MARKER, end=_END_MARKER)
     try:
@@ -634,6 +668,19 @@ def _refuse_duplicate_plugin_key(target_path: Path, existing: bytes) -> None:
             f"{target_path} already declares {', '.join(f'plugins.{key}' for key in duplicates)} "
             f"outside the eawf block; remove it or the block would declare the plugin twice"
         )
+    agents = declared.get("agents")
+    scalars = sorted(
+        key
+        for key, value in (agents if isinstance(agents, dict) else {}).items()
+        if not isinstance(value, dict)
+    )
+    if scalars or _AGENTS_HEADER.search(outside.decode("utf-8")):
+        named = f" ({', '.join(scalars)})" if scalars else ""
+        raise ManagedBlockError(
+            f"{target_path} opens the [agents] table outside the eawf block{named}; the block "
+            "writes the fan-out keys there, so move them out of that table or remove it"
+        )
+    return declared
 
 
 def _ensure_dir(path: Path) -> None:
@@ -647,6 +694,7 @@ def _persist_manifest(
     timestamp: str,
     plugin_root: Path,
     home: Path | None,
+    governor: InFlightGovernor,
 ) -> None:
     """Append codex plugin entries to ``.ea/indexes/generated.json``.
 
@@ -757,7 +805,7 @@ def _persist_manifest(
         generated_at=timestamp,
         scope=scope,
     )
-    config_body = _patch_config_toml(config_path)
+    config_body = _patch_config_toml(config_path, governor=governor)
     new_generated[f"{config_path.as_posix()}::plugin.codex.config"] = ManifestEntry(
         target=config_path.as_posix(),
         region_id="plugin.codex.config",
@@ -823,7 +871,8 @@ def install_plugin(
     # Patched before any byte lands so a config.toml whose managed markers
     # are damaged refuses the whole install instead of half of it.
     config_path = _config_target(target_dir, scope=scope, home=home)
-    config_bytes = _patch_config_toml(config_path)
+    governor = load_economics(target_dir).governor
+    config_bytes = _patch_config_toml(config_path, governor=governor)
 
     skill_deltas = [
         _write_managed_file(
@@ -867,7 +916,14 @@ def install_plugin(
     config_delta = _write_config(config_path, config_bytes, dry_run=dry_run)
 
     if not dry_run:
-        _persist_manifest(target_dir, scope=scope, timestamp=ts, plugin_root=plugin_root, home=home)
+        _persist_manifest(
+            target_dir,
+            scope=scope,
+            timestamp=ts,
+            plugin_root=plugin_root,
+            home=home,
+            governor=governor,
+        )
 
     logger.info(
         f"install_plugin runtime=codex scope={scope} plugin_root={plugin_root} "

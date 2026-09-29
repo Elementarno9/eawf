@@ -434,6 +434,9 @@ _EXPECTED_CATALOG_ONLY_CONSUMERS: dict[str, str] = {
         "eawf.workflow.verify.readiness._overlay_repo_verify_leaves"
     ),
     "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
+    "verify.retyped_rule_threshold": (
+        "eawf.observability.reflect.retyped.resolve_retyped_rule_threshold"
+    ),
 }
 
 _DECLARATIVE_CONSUMER = "eawf.kernel.config.layered.merge_config"

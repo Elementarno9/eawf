@@ -36,6 +36,7 @@ from typing import Annotated, Final, Literal, Self
 
 from pydantic import StringConstraints, model_validator
 
+from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.provider import ControlKind, Digest, RuntimeRecord
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
 from eawf.kernel.state.epoch2.run import RunStatus
@@ -350,6 +351,9 @@ class RunBinding(RuntimeRecord):
         authority_capsule_digest: The exact redacted authority capsule.
         route_policy_revision: The routing policy the compiler resolved.
         bound_at: When the binding was recorded.
+        capsule: The sealed capsule itself, when the dispatcher recorded it. A
+            child is sealed under it and its ``child_runs`` ceiling bounds the
+            subtree, so both are read from the binding rather than recompiled.
     """
 
     payload_kind: Literal["run_binding"] = "run_binding"
@@ -358,6 +362,22 @@ class RunBinding(RuntimeRecord):
     authority_capsule_digest: Digest
     route_policy_revision: StrictPositiveInt
     bound_at: UtcDatetime
+    capsule: AuthorityCapsule | None = None
+
+    @model_validator(mode="after")
+    def _capsule_is_the_bound_one(self) -> Self:
+        """Refuse a recorded capsule other than the one the digest binds.
+
+        Raises:
+            ValueError: The capsule names another Run or carries another digest.
+        """
+        if self.capsule is None:
+            return self
+        if self.capsule.run_ref != self.run_ref:
+            raise ValueError("the recorded capsule belongs to another Run")
+        if self.capsule.contract_digest != self.authority_capsule_digest:
+            raise ValueError("the recorded capsule is not the one authority_capsule_digest binds")
+        return self
 
 
 __all__ = [

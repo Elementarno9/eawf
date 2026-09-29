@@ -166,7 +166,11 @@ COMMITTED_CASES: tuple[Case, ...] = (
     ),
     Case(
         method="domain.batch.activate",
-        rows={"batch": {"BAT-0007": seed_row("batch", "PLANNED")}},
+        rows={
+            "track": {"TRK-RUNTIME": seed_row("track", "ACTIVE")},
+            "milestone": {"MLS-0030": seed_row("milestone", "ACTIVE")},
+            "batch": {"BAT-0007": seed_row("batch", "PLANNED")},
+        },
         urn=BATCH_URN,
         params={"updates": {"target_branch": BRANCH}},
         event_name="domain.batch.activated",
@@ -214,6 +218,16 @@ COMMITTED_CASES: tuple[Case, ...] = (
             }
         },
         event_name="domain.task.promoted",
+    ),
+    Case(
+        method="domain.task.demote",
+        rows={
+            "task": {"EAWF-0042": seed_row("task", "PLANNED")},
+            "batch": {"BAT-0007": _batch("ACTIVE", task_refs=[TASK_URN])},
+        },
+        urn=TASK_URN,
+        params={"reason_code": "back-to-backlog"},
+        event_name="domain.task.demoted",
     ),
     Case(
         method="domain.task.claim",
@@ -376,6 +390,21 @@ REFUSED_CASES: tuple[Case, ...] = (
         },
         code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
         guard="promotion_contract_complete",
+    ),
+    Case(
+        method="domain.task.demote",
+        rows={
+            "task": {
+                "EAWF-0042": {
+                    **seed_row("task", "PLANNED"),
+                    "first_claimed_at": "2026-09-08T01:00:00Z",
+                }
+            }
+        },
+        urn=TASK_URN,
+        params={"reason_code": "back-to-backlog"},
+        code=DomainErrorCode.TRANSITION_GUARD_FAILED.value,
+        guard="never_claimed",
     ),
     Case(
         method="domain.task.claim",

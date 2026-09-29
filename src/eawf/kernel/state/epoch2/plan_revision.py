@@ -33,9 +33,10 @@ from enum import StrEnum
 from typing import Annotated, Final, Self
 
 import orjson
-from pydantic import ConfigDict, StringConstraints, field_validator, model_validator
+from pydantic import ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from eawf.kernel.identity import EntityKind, QualifiedUrn
+from eawf.kernel.runtime.provider import ProviderTuple
 from eawf.kernel.spec.common import CriterionSpec
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
@@ -254,6 +255,9 @@ class PlannedTask(Epoch2Model):
             leaves it undeclared. Only a declared mutating purpose is
             checked against ``write_claims``, so a plan that says nothing
             here earns no role-authority finding.
+        exclusive: Whether this Task runs alone: while its Run holds a
+            workspace no other Task's Run is leased one, and it is not
+            leased one while another Task's Run holds one.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -266,6 +270,9 @@ class PlannedTask(Epoch2Model):
     depends_on: tuple[TaskUrn, ...] = ()
     write_claims: tuple[WriteSetPath, ...] = ()
     run_purpose: RunPurpose | None = None
+    # Omitted from the dump while unset, so a plan written before the
+    # field existed keeps the content digest its approval is bound to.
+    exclusive: bool = Field(default=False, exclude_if=lambda value: value is False)
 
     @field_validator("criteria")
     @classmethod
@@ -480,6 +487,12 @@ class PlanRevision(Epoch2Model):
             written over.
         policy_revision: The Track policy revision it was written under.
         head_bindings: The repository heads it was written over.
+        provider_tuple: The providers its Runs dispatch to, observed from
+            the repository's runtime configuration when it was submitted.
+            A provider-scoped measured contract its criteria cite counts
+            as measured only when measured through exactly these
+            providers; empty on a revision recorded before the field
+            existed, which therefore admits no provider-scoped contract.
         body: What an apply would materialise.
         approval: The sealed approval, present exactly from ``APPROVED``.
         parent_key: The revision this one repairs, when it repairs one.
@@ -497,6 +510,7 @@ class PlanRevision(Epoch2Model):
     base_state_revision: StrictPositiveInt
     policy_revision: StrictPositiveInt
     head_bindings: tuple[RepositoryHeadBinding, ...] = ()
+    provider_tuple: ProviderTuple = ()
     body: PlanBody
     approval: PlanApproval | None = None
     parent_key: PlanRevisionKey | None = None
