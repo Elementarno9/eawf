@@ -456,18 +456,21 @@ class CorpusImportPlan(StrictMigrationModel):
 
         Returns:
             The corpus import plan, with the measurement re-point already
-            proven free of orphans.
+            proven free of orphans and reconciled row for row against the
+            source.
 
         Raises:
             FileNotFoundError: When ``allowlist_path`` does not exist.
             MigrationFabricationDetectedError: When a measurement
-                re-points at a Task the import never wrote, or when the
-                project block records no project code.
+                re-points at a Task the import never wrote or would
+                import a rewritten row, or when the project block records
+                no project code.
             MigrationSourceUnreadableError: When the snapshot holds no
                 audit ledger.
             MigrationCountMismatchError: When a row carries a status
                 outside the closed map, cannot default its intent, or
-                reaches no classifier arm.
+                reaches no classifier arm, or when a measurement
+                collection does not import one record per source row.
             ValidationError: When a source row is unreadable.
         """
         lifecycle = LifecycleImportPlan.build(snapshot=snapshot, allowlist_path=allowlist_path)
@@ -477,6 +480,7 @@ class CorpusImportPlan(StrictMigrationModel):
             source_schema_version=lifecycle.source_index.source_schema_version,
         )
         measurements.require_no_orphans()
+        measurements.require_reconciled(snapshot.document)
         envelopes = EnvelopeImportPlan.build(
             document=snapshot.document,
             audit_ledger_rows=snapshot.ledger(AUDIT_LEDGER),

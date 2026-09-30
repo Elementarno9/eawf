@@ -49,7 +49,7 @@ from eawf.surfaces.tui.console.navigation import (
     remember,
     return_focus,
 )
-from eawf.surfaces.tui.console.notices import notice_verb
+from eawf.surfaces.tui.console.notices import NOTICE_VERBS, notice_verb
 from eawf.surfaces.tui.console.operations import (
     QUESTION_OPTIONS,
     AnswerRequest,
@@ -531,6 +531,9 @@ def _menu_key(ctx: Ctx, k: str) -> bool:
         return True
     if verb is None:
         return False
+    # a notice's verbs are the notice ledger's, so the notice under the cursor claims them
+    if s.route == att.ATTENTION_ROUTE and k in NOTICE_VERBS and notice_verb(ctx, k):
+        return True
     if att.is_light(verb):
         fire_light(ctx, verb, k)
         return True

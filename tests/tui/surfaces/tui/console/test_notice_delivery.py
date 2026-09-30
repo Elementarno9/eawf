@@ -225,8 +225,12 @@ def test_ui_016_each_revision_is_announced_at_most_once() -> None:
 
 
 def test_ui_016_a_dismissal_the_record_does_not_define_is_refused() -> None:
-    """A pending action defines no snooze, so the console binds none rather than faking one."""
-    assert binding_refusal(ATTENTION_ROUTE, "snooze")
+    """A pending action closes only by its answer, so the console binds no bare resolve.
+
+    Its snooze is one principal's own row, which the daemon defines, so that one is bound.
+    """
+    assert binding_refusal(ATTENTION_ROUTE, "resolve")
+    assert binding_refusal(ATTENTION_ROUTE, "snooze") == ""
 
 
 # ---------- UI-018: clean load, replay and reconnect converge ----------

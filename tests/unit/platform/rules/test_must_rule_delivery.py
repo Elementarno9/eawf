@@ -36,6 +36,8 @@ from eawf.platform.rules.render import (
 )
 from eawf.surfaces.render.agents import AGENT_REGISTRY
 
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 _SOURCES: dict[str, dict[str, str]] = {

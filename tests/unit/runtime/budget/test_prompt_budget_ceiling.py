@@ -2,9 +2,10 @@
 
 The ``flow.budget`` table is the only place a ceiling is derived from. A
 second ceiling declared beside it is refused rather than silently ignored,
-the daemon's live accrual stops a hard-enforced wave at exactly the ceiling
-the statusline draws, the notice opens there and never before it, and a
-native Run metered past its sealed ceiling ends cancelled.
+the daemon's live accrual stops a hard-enforced scope at exactly its ceiling,
+the notice opens there and never before it, and a native Run metered past its
+sealed ceiling ends cancelled. The statusline draws only a Run's sealed
+ceiling, never the frozen epoch-1 document's.
 """
 
 from __future__ import annotations
@@ -134,11 +135,6 @@ def fake_ladder(monkeypatch: pytest.MonkeyPatch) -> list[int]:
     return reaped
 
 
-def render_budget(state_path: Path) -> str:
-    """Render the budget segment the way the statusline orchestrator does."""
-    return budget_module.build({}, state_path).text
-
-
 # ---------- the one ceiling and its duplicate refusal ----------
 
 
@@ -227,7 +223,6 @@ def test_accrue_tokens_consumed_stops_at_the_configured_ceiling(
     )
     assert below is not None and not below.terminated
     assert not notices_path(state_path).exists()
-    assert render_budget(state_path) == "budget:2.0k/2.0k"
 
     at = accrue_tokens_consumed(ctx, wave_id=_WAVE_ID, tokens=tokens(1), pgid=77, budget=budget)
     assert at is not None and at.terminated
@@ -238,7 +233,6 @@ def test_accrue_tokens_consumed_stops_at_the_configured_ceiling(
         "hard_limit",
         2000,
     )
-    assert render_budget(state_path) == "budget:2.0k/2.0k !limit"
 
 
 def test_accrue_tokens_consumed_soft_ceiling_notices_but_never_reaps(
@@ -319,13 +313,14 @@ def test_in_flight_run_meter_crossing_the_sealed_ceiling_cancels_the_run(
 _SEGMENT_SOURCE = SegmentSource(producer="test", provenance="test#waves.token_budget")
 
 
-def test_statusline_render_pipeline_shows_spent_over_limit(
+def test_statusline_render_pipeline_never_draws_an_epoch1_ceiling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     state_path = write_repo(tmp_path, budget=40_000)
     monkeypatch.setattr(statusline_orchestrator, "_safe_resolve_state_path", lambda _w: state_path)
     line = statusline_orchestrator.render_pipeline({}, workspace=None, theme_name="ascii-fallback")
-    assert "budget:0/60.0k" in line
+    assert "budget:n/a(epoch1-undeclared)" in line
+    assert "60.0k" not in line
 
 
 @pytest.mark.parametrize(
@@ -359,12 +354,8 @@ def test_budget_unavailable_segment_refuses_a_bad_reason(reason: str) -> None:
 
 def test_budget_module_names_why_it_cannot_draw(tmp_path: Path) -> None:
     assert budget_module.build({}, None).text == "budget:n/a(no-state)"
-    assert render_budget(write_repo(tmp_path / "a", budget=None)) == "budget:n/a(no-budget)"
-    duplicate = write_repo(tmp_path / "b", budget=10, config="flow:\n  budget:\n    cap: 5\n")
-    assert render_budget(duplicate) == "budget:n/a(duplicate-ceiling)"
-    corrupt = tmp_path / "c.json"
-    corrupt.write_text("{", encoding="utf-8")
-    assert render_budget(corrupt) == "budget:n/a(state-unreadable)"
+    epoch1 = write_repo(tmp_path / "a", budget=None)
+    assert budget_module.build({}, epoch1).text == "budget:n/a(epoch1-undeclared)"
 
 
 def test_plugin_settings_wire_the_statusline_and_keep_a_foreign_one(tmp_path: Path) -> None:

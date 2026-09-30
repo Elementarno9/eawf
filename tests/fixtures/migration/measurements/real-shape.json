@@ -1,0 +1,128 @@
+{
+ "document": {
+  "actuals": {
+   "P01-I01-W01": {
+    "actual_cost_usd": 0.0,
+    "actual_tokens": 0,
+    "agent_runtime_eu": null,
+    "attention_eu": null,
+    "calibration_excluded": false,
+    "current_store_record_id": "ACT-P01-I01-W01-1790448313264088-3a86",
+    "elapsed_eu": 0.008786735,
+    "harness": null,
+    "id": "ACT-P01-I01-W01",
+    "model": null,
+    "scope_id": "P01-I01-W01",
+    "status": "done",
+    "updated_at": "2026-09-26T18:45:13.264088Z"
+   },
+   "P28-I02-W07": {
+    "actual_cost_usd": 0.0,
+    "actual_tokens": 0,
+    "agent_runtime_eu": null,
+    "attention_eu": null,
+    "calibration_excluded": false,
+    "current_store_record_id": "REC-P28-I02-W07",
+    "elapsed_eu": 0.0,
+    "harness": null,
+    "id": "ACT-P28-I02-W07",
+    "model": null,
+    "scope_id": "P28-I02-W07",
+    "status": "done",
+    "updated_at": "2026-05-27T15:48:36.464621Z"
+   },
+   "P30-I21-W46": {
+    "actual_cost_usd": 0.0,
+    "actual_tokens": 0,
+    "agent_runtime_eu": 0.0,
+    "attention_eu": null,
+    "calibration_excluded": true,
+    "current_store_record_id": "REC-P30-I21-W46",
+    "elapsed_eu": 0.0,
+    "harness": "claude-code",
+    "id": "ACT-P30-I21-W46",
+    "model": "claude-opus-4-8",
+    "scope_id": "P30-I21-W46",
+    "status": "done",
+    "updated_at": "2026-07-14T14:41:10.280988Z"
+   },
+   "P30-I23-W28": {
+    "actual_cost_usd": 10.079999999999984,
+    "actual_tokens": 84530000,
+    "agent_runtime_eu": 1.5555555555555556,
+    "attention_eu": null,
+    "calibration_excluded": false,
+    "current_store_record_id": "REC-P30-I23-W28",
+    "elapsed_eu": 1.5555555555555556,
+    "harness": "claude-code",
+    "id": "ACT-P30-I23-W28",
+    "model": "claude-fable-5",
+    "scope_id": "P30-I23-W28",
+    "status": "done",
+    "updated_at": "2026-07-02T23:11:12.615897Z"
+   },
+   "P30-I23-W45": {
+    "actual_cost_usd": 14.849999999999994,
+    "actual_tokens": 140750000,
+    "agent_runtime_eu": 2.5,
+    "attention_eu": null,
+    "calibration_excluded": false,
+    "current_store_record_id": "REC-P30-I23-W45",
+    "elapsed_eu": 2.5,
+    "harness": "claude-code",
+    "id": "ACT-P30-I23-W45",
+    "model": "claude-fable-5",
+    "scope_id": "P30-I23-W45",
+    "status": "done",
+    "updated_at": "2026-07-02T23:29:36.385725Z"
+   }
+  },
+  "estimates": {
+   "P30-I21-W46": {
+    "confidence": "low",
+    "current_store_record_id": "EST-P30-I21-W46-bucket-20260714T141659Z",
+    "display": "0.5 EU · exp ~15m · pess ~54m",
+    "expected_eu": 0.5,
+    "expected_minutes": 15.0,
+    "id": "EST-P30-I21-W46",
+    "pessimistic_eu": 1.8,
+    "pessimistic_minutes": 54.0,
+    "reference_class": "bucket:S",
+    "scope_id": "P30-I21-W46",
+    "updated_at": "2026-07-14T14:16:59.338720Z"
+   },
+   "P30-I23-W28": {
+    "confidence": "low",
+    "current_store_record_id": "EST-P30-I23-W28-bucket-20260702T224202Z",
+    "display": "0.5 EU · exp ~15m · pess ~54m",
+    "expected_eu": 0.5,
+    "expected_minutes": 15.0,
+    "id": "EST-P30-I23-W28",
+    "pessimistic_eu": 1.8,
+    "pessimistic_minutes": 54.0,
+    "reference_class": "bucket:S",
+    "scope_id": "P30-I23-W28",
+    "updated_at": "2026-07-02T22:42:02.120489Z"
+   },
+   "P30-I23-W45": {
+    "confidence": "low",
+    "current_store_record_id": "EST-P30-I23-W45-bucket-20260702T224328Z",
+    "display": "2.0 EU · exp ~60m · pess ~216m",
+    "expected_eu": 2.0,
+    "expected_minutes": 60.0,
+    "id": "EST-P30-I23-W45",
+    "pessimistic_eu": 7.2,
+    "pessimistic_minutes": 216.0,
+    "reference_class": "bucket:L",
+    "scope_id": "P30-I23-W45",
+    "updated_at": "2026-07-02T22:43:28.179089Z"
+   }
+  }
+ },
+ "task_ids": [
+  "P28-I02-W07",
+  "P30-I21-W46",
+  "P30-I23-W28",
+  "P30-I23-W45"
+ ]
+}

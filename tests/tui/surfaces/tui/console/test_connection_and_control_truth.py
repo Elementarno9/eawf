@@ -106,6 +106,7 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
     seed,
     seed_row,
 )
+from tests.tui.surfaces.tui.console import test_dispatch_queue_console as queue_console
 from tests.tui.surfaces.tui.console import test_native_route_frames as native_frames
 from tests.tui.surfaces.tui.console.test_console_live_smoke import (
     _LoopbackClient as _StreamingClient,
@@ -492,7 +493,7 @@ class _Link:
         return True
 
 
-@pytest.mark.parametrize(("key", "verb"), [("z", "snooze"), ("v", "resolve")])
+@pytest.mark.parametrize(("key", "verb"), [("v", "resolve")])
 def test_ui_014_an_unbound_attention_verb_sends_nothing_and_says_why(
     fixture: Fixture, key: str, verb: str
 ) -> None:
@@ -869,14 +870,10 @@ def test_ui_026_progress_is_a_truth_field_that_carries_its_freshness() -> None:
     assert progress.state is not TruthState.KNOWN
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no producer states an executing leg's elapsed time, resolved timeout budget or "
-    "progress mode, so the queue row carries none of them and cannot say it is opaque",
-)
 def test_ui_025_an_executing_leg_renders_its_elapsed_budget_and_progress_mode() -> None:
-    running = next(row for row in native_frames._frame("unattended") if "RUN-00000001" in row)
-    assert "opaque" in running or " of " in running
+    drawn = queue_console.frame(queue_console.queue_view())
+    running = next(row for row in drawn if "RUN-00000001" in row)
+    assert "opaque" in running and " of 45m" in running
 
 
 def _unattended_with(liveness: HeldLiveness | None, now: datetime) -> str:

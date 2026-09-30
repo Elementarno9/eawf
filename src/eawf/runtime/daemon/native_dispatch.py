@@ -64,6 +64,7 @@ from eawf.kernel.runtime.compiled import (
 )
 from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES, ControlFact, RunBinding
 from eawf.kernel.runtime.delegation import child_grant
+from eawf.kernel.runtime.dispatch_queue import admission_hold
 from eawf.kernel.runtime.handshake import (
     RUNTIME_HANDSHAKE_MISMATCH,
     HandshakeDisposition,
@@ -191,6 +192,7 @@ class DispatchRefusal(StrEnum):
     ECONOMICS_INVALID = "dispatch_economics_invalid"
     ADMISSION_QUEUED = "dispatch_admission_queued"
     ADMISSION_DENIED = "dispatch_admission_denied"
+    DISPATCH_HELD = "dispatch_held"
     SUCCESSOR_REQUIRED = "retry_successor_required"
     SUCCESSOR_REFUSED = "retry_successor_refused"
     ATTEMPT_ABSENT = "retry_attempt_absent"
@@ -891,6 +893,12 @@ def open_attempt(
                     "policy, so resuming it would apply the change silently",
                 )
             return _AttemptState(attempt=standing, resumed=True)
+        held = admission_hold(records)
+        if held is not None:
+            raise refused(
+                DispatchRefusal.DISPATCH_HELD,
+                f"run {args.urn.entity_key!r} waits: dispatch is held by a {held.value} request",
+            )
         receipt = admit_run(
             session,
             records,

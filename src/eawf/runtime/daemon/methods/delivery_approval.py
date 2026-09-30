@@ -177,7 +177,8 @@ class ActionCommitRequest(BaseModel):
         urn: The pending action the commit writes.
         idempotency_key: The name the commit's receipt is filed under.
         actor: Who asked.
-        operation: Whether the commit opens or seals the question.
+        operation: Whether the commit opens or seals the question, records one
+            principal's snooze of it, or re-addresses it.
         detail: The operation's own parameters, which the replay digest
             covers so one key cannot name two different answers.
     """
@@ -187,7 +188,7 @@ class ActionCommitRequest(BaseModel):
     urn: AnyEntityUrn
     idempotency_key: IdempotencyKey
     actor: PrincipalKey
-    operation: Literal["open", "seal"]
+    operation: Literal["open", "seal", "snooze", "assign"]
     detail: dict[str, Any]
 
 
@@ -735,7 +736,7 @@ def _append_bundle(session: RootSession, bundle: MilestoneAcceptanceBundle) -> E
     )
 
 
-def _action_at(document: dict[str, Any], urn: QualifiedUrn) -> PendingAction:
+def action_at(document: dict[str, Any], urn: QualifiedUrn) -> PendingAction:
     """Return the pending action the document holds under *urn*.
 
     Raises:
@@ -867,7 +868,7 @@ def seal_acceptance_approval(
     request = _seal_request(args)
     with context.session([str(args.urn)]) as session:
         replayed = _replayed_receipt(context, request=request)
-        action = _action_at(session.read_document(), args.urn)
+        action = action_at(session.read_document(), args.urn)
         if action.status is PendingActionStatus.SEALED:
             result = _answered_after_seal(action, args=args, now=now)
             logger.info(
@@ -918,6 +919,7 @@ def seal_acceptance_approval(
             principal_id=args.resolver.principal_id,
             outcome=AnswerOutcome.SEALED,
             option_id=args.option_id,
+            at=now,
         )
         committed = commit_action(
             context=context,

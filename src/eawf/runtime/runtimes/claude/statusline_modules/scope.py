@@ -4,7 +4,7 @@ The scope resolves through the epoch-2 delivery spine: the host's session id
 is hashed the way a Run's ``vendor_session`` stores it, the Run bound to that
 session is read from the tree's selected generation, and the segment renders
 the key of the record the Run is scoped to (a Task, a Batch, a Milestone...)
-as ``scope:<key>``. The epoch-1 document's wave pointers are never read.
+as ``scope:<key>``. The frozen epoch-1 document is never read.
 
 Every way the spine can fail to answer renders ``scope:n/a(<reason>)``, where
 the reason names what is missing so the operator knows what would fix it:

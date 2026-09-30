@@ -22,6 +22,17 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 
 ## Command groups
 
+### `eawf action`
+
+What the Attention register asks a principal about (snooze, assign, decide-permission, notice).
+
+| Verb | Summary |
+|---|---|
+| `assign` | Address a waiting pending action to one principal; anyone eligible may still answer. |
+| `decide-permission` | Approve or deny a provider permission as the operator, before its deadline. |
+| `notice` | Snooze, acknowledge or resolve a budget notice; none of them touches the work. |
+| `snooze` | Hide a waiting pending action from yourself alone for a while; it answers nothing. |
+
 ### `eawf backup`
 
 Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when present.
@@ -45,6 +56,7 @@ Delivery-batch lifecycle (activate, integrate, adopt-landed, ready, merge, recon
 | `complete` | Complete a merged Batch whose landed commit matches the head it pinned. |
 | `create` | Admit a new delivery Batch's create document into the addressed tree. |
 | `integrate` | Integrate a Batch's sealed candidates into its next generation. |
+| `label` | Pin the ground truth of one Batch criterion for the jury's calibration. |
 | `merge` | Authorise the merge of a READY_TO_MERGE Batch at the head it pinned. |
 | `observe-merge` | Record that the host landed a MERGING Batch, on a filed landed read-back. |
 | `ready` | Declare an ACTIVE Batch ready to merge. |
@@ -293,6 +305,7 @@ File and answer operator decisions.
 |---|---|
 | `answer` | Seal the option a reply to a numbered question prompt chooses. |
 | `open-decision` | File a reversible operator decision the host shows as a typed question. |
+| `reply` | Answer an open question a host asked, by one of its options or in your own words. |
 
 ### `eawf record`
 
@@ -379,10 +392,16 @@ Run lifecycle (create, start, finish, fail).
 
 | Verb | Summary |
 |---|---|
+| `cancel` | Ask a Run to end without finishing its work. |
 | `create` | Admit a QUEUED Run against the scope its create document names. |
+| `drain-dispatch` | Ask the scheduler to start nothing new and let what runs finish; cancels nothing. |
 | `fail` | Fail a RUNNING Run; the payload carries the reason, ended_at and failure. |
 | `finish` | Complete a RUNNING Run once its report is bound; updates carry ended_at. |
+| `interrupt` | Ask a Run to stop at its next safe point; it keeps its work. |
+| `pause-dispatch` | Ask the scheduler to admit no new Run until a resume; claimed Runs go on. |
+| `reconcile` | Ask a Run to reconcile a control whose outcome is unknown. |
 | `report` | Write the plain-text report of one Run; no record moves. |
+| `resume-dispatch` | Ask the scheduler to admit queued Runs again after a pause or a drain. |
 | `start` | Start a QUEUED Run; the payload's updates carry started_at. |
 
 ### `eawf schema`

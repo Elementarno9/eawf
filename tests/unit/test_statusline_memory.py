@@ -1,20 +1,12 @@
-"""Tests for the ``memory`` statusline module (Phase 4 W06)."""
+"""Tests for the ``memory`` statusline module on trees without a generation."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import orjson
+import pytest
 
 from eawf.runtime.runtimes.claude.statusline_modules import memory as memory_module
-
-
-def _seed_state(tmp_path: Path, payload: dict[str, object]) -> Path:
-    state_dir = tmp_path / ".ea"
-    state_dir.mkdir()
-    state_path = state_dir / "state.json"
-    state_path.write_bytes(orjson.dumps(payload))
-    return state_path
 
 
 def test_no_state_path_names_why() -> None:
@@ -23,44 +15,20 @@ def test_no_state_path_names_why() -> None:
     assert seg.status == "missing"
 
 
-def test_empty_index_names_why(tmp_path: Path) -> None:
-    state_path = _seed_state(tmp_path, {})
-    seg = memory_module.build({}, state_path)
-    assert seg.text == "mem:n/a(no-memory-index)"
-    assert seg.status == "missing"
-
-
-def test_index_count_renders_entries(tmp_path: Path) -> None:
-    state_path = _seed_state(
-        tmp_path,
-        {
-            "memory_index": {
-                "m1": {"id": "m1", "summary": "x"},
-                "m2": {"id": "m2", "summary": "y"},
-                "m3": {"id": "m3", "summary": "z"},
-            }
-        },
-    )
-    seg = memory_module.build({}, state_path)
-    assert seg.module == "memory"
-    assert seg.text.startswith("mem:3@")
-    assert seg.text.endswith("B")
-    assert seg.status == "ok"
-
-
-def test_size_reflects_jsonl_bytes(tmp_path: Path) -> None:
-    state_path = _seed_state(tmp_path, {"memory_index": {"m1": {"id": "m1"}}})
+@pytest.mark.parametrize(
+    "content",
+    [b"{}", b'{"memory_index": {"m1": {"id": "m1"}}}', b"not-json"],
+    ids=["empty", "indexed", "malformed"],
+)
+def test_an_epoch1_tree_names_the_authority_gap_not_its_index(
+    tmp_path: Path, content: bytes
+) -> None:
+    state_path = tmp_path / ".ea" / "state.json"
+    state_path.parent.mkdir()
+    state_path.write_bytes(content)
     store_dir = tmp_path / ".ea" / "store"
     store_dir.mkdir()
     (store_dir / "memory.jsonl").write_bytes(b"x" * 2048)
     seg = memory_module.build({}, state_path)
-    assert seg.text == "mem:1@2KiB"
-
-
-def test_malformed_state_names_why(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    state_path.parent.mkdir()
-    state_path.write_bytes(b"not-json")
-    seg = memory_module.build({}, state_path)
-    assert seg.text == "mem:n/a(state-unreadable)"
+    assert seg.text == "mem:n/a(epoch1-undeclared)"
     assert seg.status == "missing"

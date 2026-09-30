@@ -71,10 +71,9 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert len(list((target / "skills").iterdir())) == _SKILL_COUNT
     assert (target / "agents" / "auditor.md").exists()
     assert len(list((target / "agents").iterdir())) == 8
-    # Only handler-backed hooks are emitted by default -- today
-    # SESSION_START, SESSION_END, the two subagent events and
-    # PERMISSION_REQUEST, so the five
-    # idle no-op wrappers (PreToolUse/PostToolUse, PreCompact) are absent.
+    # Only handler-backed hooks are emitted by default, so the git-shaped
+    # idle no-op wrappers are absent while PreCompact, which snapshots the
+    # Run's contract anchors, is present.
     assert (target / "hooks").exists()
     assert (target / "hooks.json").exists()
     assert (target / "hooks" / "session_end.sh").exists()
@@ -83,24 +82,26 @@ def test_package_emits_full_tree(tmp_path: Path) -> None:
     assert not (target / "hooks" / "post_commit.sh").exists()
     assert not (target / "hooks" / "pre_push.sh").exists()
     assert not (target / "hooks" / "post_push.sh").exists()
-    assert not (target / "hooks" / "pre_compact.sh").exists()
+    assert (target / "hooks" / "pre_compact.sh").exists()
     assert (target / "hooks" / "subagent_start.sh").exists()
     assert (target / "hooks" / "subagent_stop.sh").exists()
     assert (target / "hooks" / "permission_request.sh").exists()
     assert (target / "hooks" / "pre_tool_use.sh").exists()
     assert (target / "hooks" / "post_tool_use.sh").exists()
     assert (target / "hooks" / "post_tool_use_failure.sh").exists()
-    assert len(list((target / "hooks").iterdir())) == 8
+    assert len(list((target / "hooks").iterdir())) == 10
     hooks_manifest = json.loads((target / "hooks.json").read_text())
     assert set(hooks_manifest["hooks"].keys()) == {
         "SessionStart",
         "Stop",
         "SubagentStart",
         "SubagentStop",
+        "PreCompact",
         "PermissionRequest",
         "PreToolUse",
         "PostToolUse",
         "PostToolUseFailure",
+        "UserPromptSubmit",
     }
     # Every command path uses the portable ``${CLAUDE_PLUGIN_ROOT}``
     # variable so the manifest installs cleanly regardless of where CC

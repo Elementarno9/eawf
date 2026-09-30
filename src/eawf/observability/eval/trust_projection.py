@@ -9,10 +9,12 @@ subject and the producer that reached it as ``(agent_role, runtime)``. Each is m
 with the authority the calibration gate returned, because a verification-site verdict
 blocks only where calibration has earned it.
 
-``calibration`` is the jury-validation report over the labelled cohort. The reducer is
-the one the close gate scores against; it is handed the cohort of native verdicts some
-ground truth labels, and no label names a native subject yet, so the report is
-``INSUFFICIENT``, every numeric field is absent, and the gate refuses on the cohort size.
+``calibration`` is the jury-validation report over the labelled cohort of native
+verdicts, each joined to the outcome its subject went on to have or to the gold label a
+principal pinned on it, and the authority the calibration gate returned for that report.
+The daemon scores it when it serves the route and files it as one row beside the
+verdicts; a projection that carries no such row has scored nothing, so the report reads
+``INSUFFICIENT`` with every numeric field absent and the gate refuses on the cohort.
 
 ``track_record`` tallies each producer's verdicts that cleared their criterion against
 those that did not. A producer that judged nothing has no rate: a rate over zero judged
@@ -22,14 +24,16 @@ attempts is undefined, never zero.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Final
 
 from eawf.kernel.delivery.batch_proof import AuditVerdict
+from eawf.kernel.projection.compute import CALIBRATION_KEY
 from eawf.kernel.projection.route_view import RouteReadModel, RouteRecord
 from eawf.kernel.projection.truth import TruthState
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.eval.jury import JurorBallot
 from eawf.observability.eval.jury_validation import (
     JuryValidationConfig,
     JuryValidationReport,
@@ -43,6 +47,16 @@ logger = logging.getLogger(__name__)
 #: The metric a calibration gate refuses on when the scored cohort is under its floor.
 COHORT_METRIC: Final = "n"
 
+#: The metric it refuses on when the jury's forecast is too poorly calibrated.
+BRIER_METRIC: Final = "Brier"
+
+#: The metric it refuses on when the jury waves known-bad subjects through, or was never
+#: tested against one.
+CO_ERROR_METRIC: Final = "co-error"
+
+#: The authority a jury holds once every threshold cleared.
+EARNED_AUTHORITY: Final = "blocking · earned"
+
 #: What a producer part no record states reads as.
 UNSTATED_PART: Final = "? unknown"
 
@@ -55,7 +69,7 @@ class CalibrationGroup:
         report: The report over the labelled cohort; its numeric fields are ``None``
             whenever it is ``INSUFFICIENT``.
         min_scored: The cohort floor the report is held against.
-        authority: What the gate returned: ``advisory`` or ``refused · <metric>``.
+        authority: What the gate returned: ``blocking · earned`` or ``refused · <metric>``.
     """
 
     report: JuryValidationReport
@@ -115,21 +129,107 @@ def _stated(row: RouteRecord, name: str) -> str | None:
     return field.value if field.state is TruthState.KNOWN else None
 
 
-def calibrate(config: JuryValidationConfig | None = None) -> CalibrationGroup:
-    """Return the calibration group over the labelled cohort of native verdicts.
+def calibration_authority(
+    report: JuryValidationReport, *, max_brier: float, max_co_error: float
+) -> str:
+    """Return the authority the calibration gate grants the jury on one report.
+
+    The gate is pure: it reads the report and never recomputes a metric. A report that
+    refused to score carries no number, and a cohort with no known-bad subject leaves the
+    co-error rate undefined, so neither can clear a ceiling.
 
     Args:
+        report: The jury-validation report over the labelled cohort.
+        max_brier: The highest Brier score that still earns authority.
+        max_co_error: The highest co-error rate that still earns authority.
+
+    Returns:
+        ``blocking · earned`` when every threshold cleared, else ``refused · <metric>``
+        naming the first metric that did not, in the order cohort, Brier, co-error.
+    """
+    co_error = report.unanimous_pass_on_known_bad_rate
+    if report.status is not JuryValidationStatus.SCORED:
+        metric = COHORT_METRIC
+    elif report.brier is None or report.brier > max_brier:
+        metric = BRIER_METRIC
+    elif co_error is None or co_error > max_co_error:
+        metric = CO_ERROR_METRIC
+    else:
+        return EARNED_AUTHORITY
+    return f"refused · {metric}"
+
+
+def calibrate(
+    cohort: ValidationCohort,
+    ballots: Mapping[str, tuple[JurorBallot, ...]],
+    *,
+    max_brier: float,
+    max_co_error: float,
+    config: JuryValidationConfig | None = None,
+) -> CalibrationGroup:
+    """Return the calibration group over a labelled cohort of native verdicts.
+
+    Args:
+        cohort: The verdicts joined to their ground truth.
+        ballots: The ballots each labelled verdict cast, by the verdict's key.
+        max_brier: The Brier ceiling the gate holds the report to.
+        max_co_error: The co-error ceiling the gate holds the report to.
         config: The jury-validation config; ``None`` takes its defaults.
 
     Returns:
-        The report and the gate's authority. No ground-truth label names a native
-        verdict subject, so the cohort is empty and the report is ``INSUFFICIENT``.
+        The report and the authority the gate returned for it.
+
+    Raises:
+        ValueError: A labelled verdict cast no ballot.
     """
     cfg = config if config is not None else JuryValidationConfig()
-    report = validate_jury(ValidationCohort(silver=[], gold=[]), {}, cfg)
-    refused = report.status is JuryValidationStatus.INSUFFICIENT
-    authority = f"refused · {COHORT_METRIC}" if refused else "advisory"
+    report = validate_jury(cohort, ballots, cfg)
+    authority = calibration_authority(report, max_brier=max_brier, max_co_error=max_co_error)
     return CalibrationGroup(report=report, min_scored=cfg.min_validation_n, authority=authority)
+
+
+def _number(row: RouteRecord, name: str) -> float | None:
+    """Return a calibration row's stated metric, or ``None`` when it states none."""
+    value = _stated(row, name)
+    return None if value is None else float(value)
+
+
+def calibration_of(model: RouteReadModel) -> CalibrationGroup:
+    """Return the calibration group the daemon filed beside the verdicts.
+
+    Args:
+        model: The Trust route's read model.
+
+    Returns:
+        The report and authority the calibration row states; with no such row, the
+        empty cohort's ``INSUFFICIENT`` report, refused on the cohort.
+    """
+    row = next(
+        (
+            item
+            for item in model.rows
+            if item.collection is Epoch2Collection.BATCH and item.key == CALIBRATION_KEY
+        ),
+        None,
+    )
+    floor = JuryValidationConfig().min_validation_n
+    if row is None:
+        report = validate_jury(ValidationCohort(silver=[], gold=[]), {})
+        return CalibrationGroup(
+            report=report, min_scored=floor, authority=f"refused · {COHORT_METRIC}"
+        )
+    report = JuryValidationReport(
+        n=int(_stated(row, "cohort") or 0),
+        status=JuryValidationStatus(_stated(row, "status") or JuryValidationStatus.INSUFFICIENT),
+        brier=_number(row, "brier"),
+        unanimous_pass_on_known_bad_rate=_number(row, "co_error"),
+        known_bad_n=int(_stated(row, "known_bad") or 0),
+    )
+    return CalibrationGroup(
+        report=report,
+        min_scored=int(_stated(row, "min_scored") or floor),
+        authority=_stated(row, "authority") or f"refused · {COHORT_METRIC}",
+    )
 
 
 def track_record(verdicts: Iterable[RouteRecord]) -> tuple[TrackRecordRow, ...]:
@@ -159,14 +259,12 @@ def build_trust_view(
     model: RouteReadModel,
     *,
     milestone: str | None,
-    config: JuryValidationConfig | None = None,
 ) -> TrustView:
     """Return the Trust view of one Milestone from the route's read model.
 
     Args:
         model: The Trust route's read model: the verdict observations and the claims.
         milestone: The Milestone to scope the verdicts to; ``None`` keeps them all.
-        config: The jury-validation config the calibration is held against.
 
     Returns:
         The three groups, each derived from the rows the projection carried.
@@ -175,6 +273,7 @@ def build_trust_view(
         row
         for row in model.rows
         if row.collection is Epoch2Collection.BATCH
+        and row.key != CALIBRATION_KEY
         and (milestone is None or _stated(row, "milestone") == milestone)
     )
     unobserved = tuple(row for row in model.rows if row.collection is Epoch2Collection.CLAIM)
@@ -182,7 +281,7 @@ def build_trust_view(
         milestone=milestone,
         verdicts=verdicts,
         unobserved=unobserved,
-        calibration=calibrate(config),
+        calibration=calibration_of(model),
         track_record=track_record(verdicts),
     )
     logger.debug(f"build_trust_view milestone={milestone} verdicts={len(verdicts)}")
@@ -190,12 +289,17 @@ def build_trust_view(
 
 
 __all__ = [
+    "BRIER_METRIC",
     "COHORT_METRIC",
+    "CO_ERROR_METRIC",
+    "EARNED_AUTHORITY",
     "UNSTATED_PART",
     "CalibrationGroup",
     "TrackRecordRow",
     "TrustView",
     "build_trust_view",
     "calibrate",
+    "calibration_authority",
+    "calibration_of",
     "track_record",
 ]

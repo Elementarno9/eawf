@@ -48,6 +48,8 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
 ) -> None:
     monkeypatch.setenv("EAWF_STATUSLINE_CACHE", str(tmp_path / "cache"))
     monkeypatch.delenv("EAWF_STATUSLINE_THEME", raising=False)
+    # The plugin count reads the host's install record under $HOME.
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
     _stub_no_git(monkeypatch)
 
     payload = {
@@ -88,15 +90,16 @@ def test_statusline_e2e_emits_single_line_with_zero_exit(
     # the segment text verbatim).
     for marker in (
         "scope:n/a(epoch1-undeclared)",
+        "budget:n/a(epoch1-undeclared)",
         "git:n/a(not-a-repository)",
         "model:claude-opus-4-7",
         "ses:ses-int-",
         "cwd:",
         "ctx:1.0k/200.0k",
         "cost:n/a(no-cost-reported)",
-        "mcp:n/a(no-state)",
-        "hooks:0 plugins:n/a(no-state)",
-        "mem:n/a(no-state)",
+        "mcp:n/a(epoch1-undeclared)",
+        "hooks:0 plugins:n/a(no-plugin-record)",
+        "mem:n/a(epoch1-undeclared)",
         "save:0%",
     ):
         assert marker in line, f"missing marker {marker!r} in line: {line!r}"

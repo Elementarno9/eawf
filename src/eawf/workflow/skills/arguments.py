@@ -11,12 +11,16 @@ parse cannot disagree about what a skill accepts.
 :func:`check_invocation` runs before a skill's producer is instantiated, so an
 unknown argument, an argument the selected action does not take, an operator
 lane restriction or an undeclared action is refused before any Run starts.
+A host-lane invocation arrives as the text the operator or the model typed
+after the slashed name; :func:`parse_host_arguments` reads that text against
+the same schema, so the host lane is validated by the same check.
 """
 
 from __future__ import annotations
 
 import logging
 import re
+import shlex
 from collections.abc import Mapping
 from typing import Any, Final, Literal
 
@@ -44,6 +48,7 @@ _OPTION_TOKEN: Final[re.Pattern[str]] = re.compile(
 )
 
 RefusalCode = Literal[
+    "unparseable_arguments",
     "unknown_argument",
     "action_undeclared",
     "action_incompatible",
@@ -183,6 +188,68 @@ def argument_schema(entry: SkillCatalogEntry) -> ArgumentSchema:
     )
 
 
+def _action_required(schema: ArgumentSchema) -> bool:
+    """Return whether the usage line makes the action a required first word."""
+    words = schema.usage.split(maxsplit=2)
+    return len(words) > 1 and words[1].startswith("<") and bool(schema.actions)
+
+
+def parse_host_arguments(entry: SkillCatalogEntry, text: str) -> dict[str, Any]:
+    """Read the argument text of a host-lane invocation into an argument mapping.
+
+    Options become fields as the schema spells them; the first bare word is the
+    action when it names one, or when the usage line requires an action, and the
+    remaining bare words are the subject. The mapping is what
+    :func:`check_invocation` then judges, so an unknown option survives the parse
+    to be refused there.
+
+    Args:
+        entry: The resolved catalog entry.
+        text: What followed the slashed name.
+
+    Returns:
+        The argument mapping.
+
+    Raises:
+        InvocationRefusedError: The text does not split into words.
+    """
+    schema = argument_schema(entry)
+    try:
+        words = shlex.split(text)
+    except ValueError as exc:
+        raise InvocationRefusedError(
+            code="unparseable_arguments", skill=entry.invocation_name, detail=str(exc)
+        ) from exc
+    by_flag = {option.flag: option for option in schema.options}
+    args: dict[str, Any] = {}
+    subject: list[str] = []
+    index = 0
+    while index < len(words):
+        word = words[index]
+        index += 1
+        if not word.startswith("--"):
+            first = not subject and ACTION_KEY not in args
+            if first and (word in schema.actions or _action_required(schema)):
+                args[ACTION_KEY] = word
+            else:
+                subject.append(word)
+            continue
+        flag, has_value, value = word.partition("=")
+        option = by_flag.get(flag)
+        takes_value = option.takes_value if option is not None else has_value == "="
+        if takes_value and not has_value and index < len(words):
+            value = words[index]
+            index += 1
+        given: Any = value if takes_value else True
+        if option is not None and option.repeatable:
+            args.setdefault(option.field, []).append(given)
+        else:
+            args[_field(flag)] = given
+    if subject:
+        args[schema.subject_field] = subject
+    return args
+
+
 def _given(value: object) -> bool:
     """Return whether an argument value was actually supplied."""
     return value is not None and value is not False and value != () and value != []
@@ -249,4 +316,5 @@ __all__ = [
     "InvocationRefusedError",
     "argument_schema",
     "check_invocation",
+    "parse_host_arguments",
 ]

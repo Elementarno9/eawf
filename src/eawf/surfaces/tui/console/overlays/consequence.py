@@ -27,6 +27,7 @@ _EFFECTS = {
     "z": "hidden for you only — other principals still see it",
     "x": "recorded as declined, with your reason — it does not answer",
     "v": "sealed for every principal — it leaves the active buckets and becomes immutable",
+    "s": "addressed to another principal — anyone eligible may still answer",
 }
 
 
@@ -49,6 +50,8 @@ def _not_text(verb: str, action: Action) -> str:
         return action.not_deny or "nothing is granted by declining"
     if verb == "z":
         return action.not_snooze or "it stays open for every other principal"
+    if verb == "s":
+        return "no authority moves: it is not answered, and nobody is barred from answering"
     return action.not_resolve or "it is closed as handled, not answered"
 
 

@@ -246,6 +246,8 @@ def test_claude_installer_emits_only_handler_backed_hooks(tmp_path: Path) -> Non
         "pre_tool_use",
         "post_tool_use",
         "post_tool_use_failure",
+        "pre_compact",
+        "user_prompt_submit",
     }
 
 

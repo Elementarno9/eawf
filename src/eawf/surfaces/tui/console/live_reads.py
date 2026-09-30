@@ -36,6 +36,7 @@ from eawf.kernel.projection.run_timeline import RunTimeline
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE, content_refs
 from eawf.kernel.projection.verification import HEALTH_ROUTE, RuntimeTupleVerdict
 from eawf.kernel.runtime.content import ResolvedContent
+from eawf.kernel.runtime.dispatch_queue import DispatchQueueView
 from eawf.kernel.runtime.events import ChildRunPayload, QuestionActionPayload, RunEventRecord
 from eawf.kernel.state.epoch2.transitions import AmbiguityLabel
 from eawf.kernel.store.tiers import Epoch2Collection
@@ -52,6 +53,7 @@ from eawf.runtime.daemon.methods.console_records import (
     ProofReceiptsAnswer,
     TargetResolution,
 )
+from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
 from eawf.runtime.daemon.methods.permission import PERMISSION_READ_METHOD, PermissionsAnswer
 from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD, RunEventsAnswer
 from eawf.runtime.daemon.methods.run_content import (
@@ -296,6 +298,10 @@ RUN_TIMELINE_READ: Final = f"{RUN_EVENTS_READ_METHOD}@{RUN_DETAIL_ROUTE}"
 LIVENESS_READ: Final = RUN_STALLS_READ_METHOD
 LIVENESS_ROUTES: Final = frozenset({ACTIVITY_ROUTE, RUN_DETAIL_ROUTE, "unattended"})
 
+#: The read the unattended route draws its queue's progress, plan and control from.
+DISPATCH_QUEUE_READ: Final = DISPATCH_QUEUE_READ_METHOD
+UNATTENDED_ROUTE: Final = "unattended"
+
 #: The address of a read that is about the whole tree rather than one record.
 _TREE: Final = "tree"
 
@@ -374,6 +380,17 @@ async def _fetch_liveness(host: LiveReadHost, _address: str) -> HeldLiveness:
     """Read every stall standing in the tree, with the instant the daemon answered."""
     answer = RunStallsAnswer.model_validate(await host.call(RUN_STALLS_READ_METHOD, {}))
     return HeldLiveness(stalls=answer.stalls, read_at=answer.read_at)
+
+
+async def _fetch_dispatch_queue(host: LiveReadHost, _address: str) -> DispatchQueueView:
+    """Read the dispatch queue: its Runs, running legs, plan and control."""
+    return DispatchQueueView.model_validate(await host.call(DISPATCH_QUEUE_READ, {}))
+
+
+def held_queue(live: Mapping[str, object]) -> DispatchQueueView | None:
+    """Return the dispatch queue among a frame's live answers, or ``None`` before its read."""
+    queue = live.get(DISPATCH_QUEUE_READ)
+    return queue if isinstance(queue, DispatchQueueView) else None
 
 
 def held_records(host: LiveReadHost) -> DecisionRecords | None:
@@ -616,6 +633,9 @@ LIVE_READS: Final[Mapping[str, LiveRead]] = MappingProxyType(
         LIVENESS_READ: LiveRead(
             routes=LIVENESS_ROUTES, address=_tree_address, fetch=_fetch_liveness
         ),
+        DISPATCH_QUEUE_READ: LiveRead(
+            routes=frozenset({UNATTENDED_ROUTE}), address=_tree_address, fetch=_fetch_dispatch_queue
+        ),
         # the questions and pauses the Attention rows open, with what the daemon projected
         OPEN_RECORDS_READ: LiveRead(
             routes=frozenset({ATTENTION_ROUTE}),
@@ -632,6 +652,7 @@ __all__ = [
     "CAMPAIGN_ROUTES",
     "CEILING_READ",
     "CONFLICTS_READ",
+    "DISPATCH_QUEUE_READ",
     "GENERATIONS_READ",
     "HEALTH_VERDICTS_READ",
     "LIVENESS_READ",
@@ -642,6 +663,7 @@ __all__ = [
     "RUN_TIMELINE_READ",
     "RUN_USAGE_ROUTE",
     "TRANSCRIPT_READ",
+    "UNATTENDED_ROUTE",
     "USAGE_READ",
     "HeldArtifact",
     "HeldCampaign",
@@ -649,5 +671,6 @@ __all__ = [
     "LiveRead",
     "LiveReadHost",
     "counted_replay",
+    "held_queue",
     "held_records",
 ]

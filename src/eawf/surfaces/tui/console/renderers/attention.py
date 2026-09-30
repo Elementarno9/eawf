@@ -557,7 +557,9 @@ def _bar_keys(view: View, selected: ProjectionRow | None, *, on_notice: bool) ->
         writable and selected is not None and not audience_refusal(selected.assignee_ref, principal)
     )
     verbs = set(_VERB_KEYS.values())
-    notice_verbs = {_VERB_KEYS[key] for key in NOTICE_VERBS} if writable and on_notice else set()
+    # acknowledge is offered on the action menu alone, so only the row's own keys show
+    row_keys = (_VERB_KEYS[key] for key in NOTICE_VERBS if key in _VERB_KEYS)
+    notice_verbs = set(row_keys) if writable and on_notice else set()
     return [
         key
         for key in native_keys(s.route, windowed=s.windowed)

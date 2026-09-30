@@ -31,6 +31,8 @@ from eawf.runtime.runtimes.opencode.plugin_install import install_plugin as inst
 from eawf.surfaces.render.agents import AGENT_REGISTRY, embed_role_rules
 from eawf.workflow.agents.specs.roles import ROLE_REGISTRY
 
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 _ROLES_MODULE = "eawf.core.roles"

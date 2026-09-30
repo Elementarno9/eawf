@@ -111,6 +111,79 @@ def test_con_060_the_block_names_target_revision_effects_and_non_effects() -> No
     assert "  if stale: if revision 3 moves before you confirm" in text
 
 
-def test_con_060_a_method_that_is_not_a_lifecycle_verb_has_no_block() -> None:
+def test_con_060_a_create_states_its_consequence_at_the_tree_cursor() -> None:
+    text = block_text(consequence_block("domain.task.create", _TASK_URN, 0))
+    assert (
+        text.splitlines()[0] == f"consequence: domain.task.create {_TASK_URN} at revision 0 · exact"
+    )
+    assert "  effect: a new task record is admitted from the create document" in text
+    assert "  not: no existing record moves" in text
+
+
+def test_con_060_an_unknown_write_has_no_block() -> None:
     with pytest.raises(KeyError):
-        consequence_block("domain.task.create", _TASK_URN, 3)
+        consequence_block("domain.task.teleport", _TASK_URN, 3)
+
+
+_ACTION_URN = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/pending-action/ACT-0001"
+_PERMISSION_URN = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/permission/PERM-0001"
+_RUN_URN = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/run/RUN-00000001"
+_QUESTION_URN = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY/question/QST-0001"
+_ANCHORED = ["--expected-revision", "3", "--actor", "OPERATOR"]
+
+#: Every Attention write and Run control the console sends, as its command line spells it.
+_ATTENTION_ROWS = [
+    (["action", "snooze", _ACTION_URN, *_ANCHORED, "--idempotency-key", "k-1"], "snooze"),
+    (
+        ["action", "assign", _ACTION_URN, *_ANCHORED, "--idempotency-key", "k-1", "--to", "OP-2"],
+        "assign",
+    ),
+    (["action", "decide-permission", _PERMISSION_URN, *_ANCHORED, "--verb", "deny"], "decide"),
+    (["action", "notice", "NTC-1", *_ANCHORED, "--disposition", "acknowledge"], "dispose"),
+    (["question", "reply", _QUESTION_URN, *_ANCHORED, "--option-key", "yes"], "answer"),
+    (
+        ["run", "interrupt", _RUN_URN, "--actor", "OPERATOR", "--idempotency-key", "CTL-1"],
+        "request",
+    ),
+    (["run", "cancel", _RUN_URN, "--actor", "OPERATOR", "--idempotency-key", "CTL-1"], "request"),
+    (
+        ["run", "reconcile", _RUN_URN, "--actor", "OPERATOR", "--idempotency-key", "CTL-1"],
+        "request",
+    ),
+    *(
+        (
+            ["run", f"{verb}-dispatch", "--actor", "OPERATOR", "--idempotency-key", "DSP-1"],
+            "request",
+        )
+        for verb in ("pause", "drain", "resume")
+    ),
+]
+
+
+@pytest.mark.parametrize(("args", "verb"), _ATTENTION_ROWS)
+def test_con_060_every_attention_write_dry_runs_its_consequence_and_sends_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, args: list[str], verb: str
+) -> None:
+    _install(monkeypatch, result={})
+    result = runner.invoke(app, ["--workspace", str(tmp_path), *args, "--dry-run"])
+    assert result.exit_code == exit_codes.OK, result.output
+    assert _FakeClient.calls == []
+    assert result.stdout.startswith("consequence: ")
+    assert f".{verb} " in result.stdout.splitlines()[0]
+    assert "dry run · nothing was sent" in result.stdout
+
+
+def test_con_060_a_snooze_prints_its_consequence_before_it_is_sent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    answer = {"action_ref": _ACTION_URN, "status": "WAITING", "revision": 3, "created": True}
+    _install(monkeypatch, result={**answer, "reason": "hidden for OPERATOR only"})
+    args = ["--workspace", str(tmp_path), *_ATTENTION_ROWS[0][0], "--yes"]
+    result = runner.invoke(app, args)
+    assert result.exit_code == exit_codes.OK, result.output
+    [(method, params)] = _FakeClient.calls
+    assert method == "runtime.pending_action.snooze"
+    assert (params["expected_revision"], params["actor"]) == (3, "OPERATOR")
+    assert result.output.index("consequence: runtime.pending_action.snooze") < result.output.index(
+        "hidden for OPERATOR only"
+    )

@@ -30,7 +30,9 @@ from eawf.kernel.economics.spend import CostCeilingView, RunUsageView
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
 from eawf.kernel.projection.run_timeline import reduce_timeline
+from eawf.kernel.runtime.dispatch_queue import DispatchControl, DispatchPlan, DispatchQueueView
 from eawf.kernel.runtime.events import RunEventRecord
+from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
@@ -53,7 +55,11 @@ from eawf.surfaces.tui.console.harness import (
     settle,
 )
 from eawf.surfaces.tui.console.normalisation import Normaliser, load_map
-from eawf.surfaces.tui.console.operations import CONTROL_METHOD, Operator
+from eawf.surfaces.tui.console.operations import (
+    CONTROL_METHOD,
+    DISPATCH_CONTROL_METHOD,
+    Operator,
+)
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import SIZES, SessionSetup
 from tests.tui.surfaces.tui.console import test_bulk_per_item_results as bulk
@@ -199,6 +205,14 @@ class DocumentDaemon:
             return self._run_usage(RunUsageReadParams.model_validate(params).urn.entity_key)
         if method == SPEND_CEILING_READ_METHOD:
             return self._ceiling()
+        if method == DISPATCH_QUEUE_READ_METHOD:
+            # no Run of the document was ever dispatched, so none carries a sealed budget
+            return DispatchQueueView(
+                runs=(),
+                plan=DispatchPlan(slots=None, in_use=0),
+                control=DispatchControl(),
+                read_at=bodies.AT,
+            ).model_dump(mode="json")
         return None
 
     def _run_usage(self, run_key: str) -> dict[str, Any]:
@@ -263,6 +277,8 @@ class DocumentDaemon:
             raise ConnectionError(f"the answer about {target} was lost")
         if method == CONTROL_METHOD:
             return {"disposition": self.control_disposition}
+        if method == DISPATCH_CONTROL_METHOD:
+            return {"disposition": "confirmed"}
         revision = int(params.get("expected_revision") or 1)
         return {"status": "ok", "revision_before": revision, "revision_after": revision + 1}
 

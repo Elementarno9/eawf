@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Annotated, Any, Final
 import typer
 
 from eawf.surfaces.cli import errors
-from eawf.surfaces.cli.commands.question_decision import question_answer, question_open_decision
+from eawf.surfaces.cli.commands.question_decision import (
+    question_answer,
+    question_open_decision,
+    question_reply,
+)
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 
@@ -37,6 +41,7 @@ question_app = typer.Typer(
 # an epoch-2 verb of this group, kept in a module of its own so it is not an epoch-1 one
 question_app.command("open-decision")(question_open_decision)
 question_app.command("answer")(question_answer)
+question_app.command("reply")(question_reply)
 
 
 #: The daemon verbs the campaign group forwards to, spelled here so the Typer tree

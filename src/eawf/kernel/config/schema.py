@@ -111,6 +111,8 @@ class VerifyConfig(BaseModel):
     waiver_mode: VerifyWaiverMode = "B"
     juror_wall_clock_seconds: float = Field(default=600.0, gt=0.0)
     retyped_rule_threshold: int = Field(default=3, ge=1)
+    jury_max_brier: float = Field(default=0.25, ge=0.0, le=1.0)
+    jury_max_co_error: float = Field(default=0.10, ge=0.0, le=1.0)
 
 
 class AgentsConfig(BaseModel):

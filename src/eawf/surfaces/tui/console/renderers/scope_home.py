@@ -18,7 +18,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eawf.kernel.projection.attention import AttentionItem, build_attention_view
+from eawf.kernel.projection.attention import (
+    CONSOLE_PRINCIPAL_CLASS,
+    AttentionItem,
+    build_attention_view,
+)
 from eawf.kernel.projection.registers import UNWRITTEN_REASON, RegisterView
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthField
@@ -323,17 +327,20 @@ def _tree_lines(
 
 
 def principal_line(view: View) -> list[str]:
-    """Return the row naming the operator, drawn only under more than one principal.
+    """Return the row naming the operator and their class, drawn only under several principals.
 
-    The register states no authority class yet, so the class wears the unknown token.
+    A named principal acts on a console in the operator class, the class the daemon checks
+    every console write under; a console acting as nobody has no class, so it wears the
+    unknown token there.
     """
     attention = _home_attention(view)
     if len(attention.holders()) < 2:
         return []
     who = view.principal or "nobody"
+    klass = f"{CONSOLE_PRINCIPAL_CLASS} class" if view.principal else f"class {UNKNOWN_WORD}"
     n = len(attention.mine())
     yours = f"{dv.plural(n, 'action')} {'is' if n == 1 else 'are'} yours"
-    return [f" PRINCIPAL  you are {who} · class {UNKNOWN_WORD} · {yours}"]
+    return [f" PRINCIPAL  you are {who} · {klass} · {yours}"]
 
 
 def attention_lines(

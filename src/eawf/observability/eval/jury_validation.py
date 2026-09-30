@@ -650,7 +650,9 @@ def validate_jury(
         The :class:`JuryValidationReport`. Every numeric field is ``None``
         exactly when the cohort refused to score (under the min-N floor); the
         unanimous-pass rate is additionally ``None`` when the cohort carries no
-        known-bad wave (an undefined rate, never a fabricated zero).
+        known-bad wave (an undefined rate, never a fabricated zero), and Fleiss
+        kappa is ``None`` unless every labelled wave carries the same two or more
+        ballots, since agreement among fewer than two jurors is undefined.
 
     Raises:
         ValueError: When a labelled wave in *cohort* has no recorded ballots in
@@ -690,13 +692,16 @@ def validate_jury(
         if row.ground_truth is False and refute_count == 0:
             unanimous_pass_on_known_bad += 1
 
-    fleiss_kappa = _fleiss_kappa(rating_matrix)
+    # agreement between jurors is undefined unless every subject had the same two or
+    # more of them, as a verification-site verdict is one juror's ballot on its subject
+    raters = {pass_count + refute_count for pass_count, refute_count in rating_matrix}
+    fleiss_kappa = _fleiss_kappa(rating_matrix) if len(raters) == 1 and min(raters) >= 2 else None
     brier, _reliability, _resolution = _murphy_decomposition(forecasts, outcomes)
     ece = expected_calibration_error(forecasts, outcomes, bins=cfg.ece_bins)
     unanimous_rate = unanimous_pass_on_known_bad / known_bad_n if known_bad_n > 0 else None
 
     logger.debug(
-        f"validate_jury n={n} status=scored fleiss={fleiss_kappa:.4f} brier={brier:.4f} "
+        f"validate_jury n={n} status=scored fleiss={fleiss_kappa} brier={brier:.4f} "
         f"ece={ece:.4f} known_bad={known_bad_n}"
     )
     return JuryValidationReport(

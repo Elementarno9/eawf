@@ -10,10 +10,10 @@ A decision's columns are the facts its sandbox-decision record states: the outco
 Run, the reason, the rule that decided with its value in force, and the policy revision it
 cites. A fact a row does not state -- a decision whose revision cannot be read, or any
 decision column on a policy row -- renders the unknown truth token saying so, never a
-guess. The queue state and the progress of a queued Run come from the dispatch-queue
-projection, which has not shipped, so those columns render the unknown token naming the
-item they wait on -- a different and more useful answer than a blank cell, and a very
-different answer from a zero.
+guess. The queue state and the progress of a Run are not columns of these rows: the route
+reads them from the daemon's dispatch-queue read beside the projection, so these columns
+render the unknown token naming it until that read arrives -- a different and more useful
+answer than a blank cell, and a very different answer from a zero.
 """
 
 from __future__ import annotations
@@ -53,8 +53,8 @@ UNREADABLE_REVISION: Final = "the policy revision this decision cites cannot be 
 #: Why a decision column reads unknown on a row that is not a decision.
 NOT_A_DECISION: Final = "this row is a policy, not a decision"
 
-#: The item whose producer would state the dispatch queue.
-DISPATCH_QUEUE_PRODUCER: Final = "the dispatch-queue projection"
+#: What states the dispatch queue's progress, plan and control beside the projection.
+DISPATCH_QUEUE_PRODUCER: Final = "the daemon's dispatch-queue read"
 
 #: What each operations route renders per row, in column order. The first field of every
 #: route is the status the document states; every other column names the producer it is

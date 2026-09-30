@@ -29,6 +29,7 @@ from eawf.kernel.state.epoch2.consequence import (
 )
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.eligibility import FIRST_ANSWER_WINS, eligible_pane
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.mutation import (
@@ -58,9 +59,12 @@ from eawf.surfaces.tui.console.operations import (
 from eawf.surfaces.tui.console.paint import Part, paint
 from eawf.surfaces.tui.console.renderers.attention import eligibility_line
 from eawf.surfaces.tui.console.session import SIZES, Session
+from eawf.surfaces.tui.console.tokens import TRUTH
 
 from . import test_native_route_bodies as bodies
 from .overlay_support import Host, chrome, prototype
+
+WALL = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
 
 AT = datetime(2026, 9, 27, 12, 0, tzinfo=UTC)
 ROOT = "eawf://EAWF/EAWF/EAWF"
@@ -513,7 +517,7 @@ def _superseded_session() -> tuple[Session, tuple[ProjectionRow, ...]]:
         "attention",
         {"pending_action": {"ACT-0001": _row("pending-action", "ACT-0001", "WAITING", 3)}},
     )
-    card = answer_card(rows[0], "a", principal="you", now=1000.0)
+    card = answer_card(rows[0], "a", principal="you", now=1000.0, wall=WALL, rows=rows)
     session = _session("attention", overlay=CARD)
     session.mutation = card
     link = Link()
@@ -662,12 +666,39 @@ def _second_eligible() -> dict[str, Any]:
     return document
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no producer states per-principal eligibility: the attention row carries no "
-    "authority class, last-seen time or per-principal state, so no eligible pane is drawn "
-    "and no card says that the first answer wins",
-)
 def test_con_062_the_eligible_pane_names_each_principal_and_that_the_first_answer_wins() -> None:
-    card = answer_card(_attention_rows()["ACT-0001"], "a", principal=bodies.ME, now=1000.0)
-    assert "first answer wins" in repr(card)
+    rows = tuple(_attention_rows().values())
+    card = answer_card(
+        _attention_rows()["ACT-0001"], "a", principal=bodies.ME, now=1000.0, wall=WALL, rows=rows
+    )
+    assert FIRST_ANSWER_WINS in card.eligible
+    heads, *principals = card.eligible[:-2]
+    assert heads.split() == ["PRINCIPAL", "CLASS", "LAST", "ACTED", "STATE"]
+    assert [line.split()[0] for line in principals] == sorted({bodies.ME, bodies.OTHER})
+    assert all(" operator " in line for line in principals)
+
+
+def test_con_062_one_eligible_principal_draws_no_pane() -> None:
+    only = _attention_rows()["ACT-0001"]
+    card = answer_card(only, "a", principal=bodies.ME, now=1000.0, wall=WALL, rows=(only,))
+    assert card.eligible == ()
+
+
+def test_con_070_a_principal_who_never_acted_has_an_empty_cell_on_the_live_card() -> None:
+    row = _attention_rows()["ACT-0001"].model_copy(
+        update={
+            "facts": {
+                **_attention_rows()["ACT-0001"].facts,
+                f"answered.{bodies.OTHER}": "superseded decline",
+                f"acted.{bodies.OTHER}": "2026-09-30T11:05:00+00:00",
+            }
+        }
+    )
+    pane = eligible_pane(row, frozenset({bodies.ME, bodies.OTHER}), bodies.ME)
+    mine = next(line for line in pane if line.startswith(f"{bodies.ME} (you)"))
+    other = next(line for line in pane if line.startswith(bodies.OTHER))
+    # never acted: the LAST ACTED and STATE cells are empty, no token borrowed
+    assert mine.split() == [bodies.ME, "(you)", "operator"]
+    assert TRUTH["unavailable"].unicode not in mine
+    assert other.split()[1:] == ["operator", "11:05", "UTC", "superseded", "·", "decline"]
+    assert pane[-1] == "every cell is per principal · an empty cell means never acted"

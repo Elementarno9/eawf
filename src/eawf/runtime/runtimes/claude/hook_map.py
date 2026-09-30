@@ -5,8 +5,8 @@ The Claude Code plugin tree emitted by
 ``hooks.json`` manifest that subscribes only to **session-level** Claude
 Code events that are also handler-backed (see
 :func:`handler_backed_plugin_hooks`) — today ``SESSION_START``,
-``SESSION_END``, ``SUBAGENT_START``, ``SUBAGENT_STOP``,
-``PERMISSION_REQUEST`` and the three tool events.
+``SESSION_END``, ``SUBAGENT_START``, ``SUBAGENT_STOP``, ``PRE_COMPACT``,
+``PERMISSION_REQUEST``, the three tool events and ``USER_PROMPT_SUBMIT``.
 Workflow-internal lifecycle events (``wave_*``, ``iter_*``, ``phase_*``,
 ``*_audit``) stay fired by explicit ``eawf hook run`` calls from the
 lifecycle surfaces — Claude Code's ``UserPromptSubmit`` matcher cannot
@@ -34,6 +34,7 @@ HookEventType       CC event               Matcher
 ``PRE_TOOL_USE``    ``PreToolUse``         (none: every tool)
 ``POST_TOOL_USE``   ``PostToolUse``        (none: every tool)
 ``POST_TOOL_...``   ``PostToolUseFailure`` (none: every tool)
+``USER_PROMPT_...`` ``UserPromptSubmit``   (none)
 ==================  =====================  ====================================
 
 Each entry resolves to a ``${CLAUDE_PLUGIN_ROOT}/hooks/<event>.sh``
@@ -105,6 +106,7 @@ PLUGIN_HOOK_REGISTRY: tuple[PluginHookSpec, ...] = (
     PluginHookSpec(event_type=HookEventType.PRE_TOOL_USE, cc_event="PreToolUse"),
     PluginHookSpec(event_type=HookEventType.POST_TOOL_USE, cc_event="PostToolUse"),
     PluginHookSpec(event_type=HookEventType.POST_TOOL_USE_FAILURE, cc_event="PostToolUseFailure"),
+    PluginHookSpec(event_type=HookEventType.USER_PROMPT_SUBMIT, cc_event="UserPromptSubmit"),
     PluginHookSpec(event_type=HookEventType.PRE_COMMIT, cc_event="PreToolUse", matcher="Bash"),
     PluginHookSpec(event_type=HookEventType.POST_COMMIT, cc_event="PostToolUse", matcher="Bash"),
     PluginHookSpec(event_type=HookEventType.PRE_PUSH, cc_event="PreToolUse", matcher="Bash"),
@@ -123,7 +125,8 @@ def _command_path(spec: PluginHookSpec) -> str:
 
 # Events with a real runner-registered handler (:data:`HookSpec.has_handler`
 # in :mod:`eawf.surfaces.render.hooks`) — today ``SESSION_START``,
-# ``SESSION_END``, the two subagent events and ``PERMISSION_REQUEST``. Every
+# ``SESSION_END``, the two subagent events, ``PRE_COMPACT``,
+# ``PERMISSION_REQUEST``, the three tool events and ``USER_PROMPT_SUBMIT``. Every
 # other :data:`PLUGIN_HOOK_REGISTRY` entry would render an idle wrapper (exit
 # 0, empty result list), so the packaged tree subscribes only this subset;
 # see :func:`handler_backed_plugin_hooks`.

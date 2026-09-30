@@ -20,8 +20,10 @@ from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.runtime.budget.notices import BudgetThresholdNotice, notice_key_for
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
+from eawf.surfaces.tui.console.action_menu import Disabled
 from eawf.surfaces.tui.console.app import compose_frame
 from eawf.surfaces.tui.console.dispatch import dispatch
+from eawf.surfaces.tui.console.drawers import action_rows
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.mutation import Card, notice_card
 from eawf.surfaces.tui.console.navigation import Ctx
@@ -150,6 +152,22 @@ def test_notice_verb_previews_then_sends_the_disposition(key: str, disposition: 
     assert isinstance(sent, NoticeRequest)
     assert (sent.target, sent.disposition, sent.revision) == (NOTICE.notice_key, disposition, 2)
     assert (sent.snooze_until is not None) == (disposition == "snooze")
+
+
+def test_con_125_the_action_menu_acknowledges_a_notice_for_this_principal_alone() -> None:
+    view, link = _view(sel_id=NOTICE.notice_key), Link()
+    _press(view, ".", link)
+    assert any(
+        " acknowledge " in row and not isinstance(row, Disabled) for row in action_rows(view)
+    )
+    _press(view, "n", link)
+    card = view.session.mutation
+    assert isinstance(card, Card) and (card.kind, card.action) == ("notice", "acknowledge")
+    assert "acknowledged by you alone, and not resolved" in card.items[0].effects[0]
+    _press(view, "Enter", link)
+    [sent] = link.sent
+    assert isinstance(sent, NoticeRequest)
+    assert (sent.disposition, sent.snooze_until) == ("acknowledge", None)
 
 
 @pytest.mark.parametrize(("key", "verb"), [("a", "answer"), ("x", "deny")])

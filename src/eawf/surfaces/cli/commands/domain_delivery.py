@@ -227,6 +227,8 @@ def run_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Admit a QUEUED Run against the scope its create document names."""
     _run_create_verb(
@@ -238,6 +240,8 @@ def run_create_cmd(
         actor=actor,
         from_spec=from_spec,
         correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
     )
 
 

@@ -1435,6 +1435,14 @@
   "verify.juror_wall_clock_seconds": [
    "how long a juror may take before it is abandoned"
   ],
+  "verify.jury_max_brier": [
+   "the highest Brier score a jury may score and still block a Batch",
+   "a jury whose calibration is above it stays advisory · lower is stricter"
+  ],
+  "verify.jury_max_co_error": [
+   "the highest share of known-bad subjects a jury may pass unanimously and still block",
+   "a jury never tested against a known-bad subject stays advisory"
+  ],
   "verify.odr_blocking": [
    "let the Oracle-Determinism-Ratio floor refuse an iter close",
    "this ORs onto the profile block — a layer can tighten it, never loosen it"

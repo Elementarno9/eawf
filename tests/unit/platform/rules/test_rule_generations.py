@@ -42,6 +42,8 @@ from eawf.platform.rules.render import (
 )
 from eawf.platform.rules.views import view_target
 
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+
 _MARKDOWN = "eawf.craft.markdown"
 
 

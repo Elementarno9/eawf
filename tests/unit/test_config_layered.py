@@ -105,12 +105,16 @@ def test_only_builtin_layer_contributes_for_empty_stack() -> None:
     assert merged["vcs"]["conventions"]["subject_style"] == "trailer"
     assert merged["vcs"]["conventions"]["release"] == {"cadence": "manual"}
     assert merged["verify"] == {
+        "jury_max_brier": 0.25,
+        "jury_max_co_error": 0.10,
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
         "require_iter_audit_accepted": False,
         "retyped_rule_threshold": 3,
         "waiver_mode": "B",
     }
+    assert sources["verify.jury_max_brier"] == "built-in"
+    assert sources["verify.jury_max_co_error"] == "built-in"
     assert sources["verify.juror_wall_clock_seconds"] == "built-in"
     assert sources["verify.odr_blocking"] == "built-in"
     assert sources["verify.require_iter_audit_accepted"] == "built-in"

@@ -1,11 +1,10 @@
-"""``memory`` statusline module — memory entry count + total size.
+"""``memory`` statusline module — the memory ledger's note count + size.
 
-On an epoch-1 tree, reads ``state.memory_index`` (cache projection) for the
-entry count and the byte size of ``store/memory.jsonl`` for the total. On an
-epoch-2 tree the cutover moved every memory note into the selected
-generation's memory ledger, so the count is the notes the ledger stands at
-and the size is the ledger's. Output is ``mem:<count>@<bytes>``. An
-unreadable source, or no memory at all, renders ``mem:n/a(<reason>)`` with
+Every memory note lives in the selected generation's memory ledger, so the
+count is the notes the ledger stands at (a correction replaces its note rather
+than adding one) and the size is the ledger's. Output is
+``mem:<count>@<bytes>``. No tree, a tree still in epoch 1, an unreadable
+ledger, or no note at all renders ``mem:n/a(<reason>)`` with
 ``status="missing"``.
 """
 
@@ -21,12 +20,10 @@ from eawf.kernel.projection.truth import TruthKind
 from eawf.kernel.store.ledger import LedgerError
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
-from eawf.runtime.runtimes.claude.statusline_modules._document import (
-    DocumentGap,
-    document_source,
-    read_legacy_document,
+from eawf.runtime.runtimes.claude.statusline_modules._spine import (
+    NO_STATE,
+    selected_generation,
 )
-from eawf.runtime.runtimes.claude.statusline_modules._spine import selected_generation
 from eawf.surfaces.render.statusline import (
     SegmentSource,
     StatuslineSegment,
@@ -38,8 +35,6 @@ logger = logging.getLogger(__name__)
 
 _MODULE = "memory"
 _LABEL = "mem"
-_SOURCE = document_source("memory_index")
-
 #: The producer an epoch-2 count names: the generation's memory ledger.
 LEDGER_PRODUCER: Final = "eawf.epoch2-memory-ledger"
 _LEDGER_SOURCE = SegmentSource(
@@ -56,26 +51,6 @@ def _format_bytes(num: int) -> str:
     if num < 1024 * 1024:
         return f"{num // 1024}KiB"
     return f"{num // (1024 * 1024)}MiB"
-
-
-def _memory_count(payload: dict[str, Any]) -> int:
-    """Return the number of entries in ``state.memory_index`` (0 if absent)."""
-    index = payload.get("memory_index")
-    if isinstance(index, dict):
-        return len(index)
-    return 0
-
-
-def _memory_size(state_path: Path) -> int:
-    """Return the byte size of ``<state_dir>/store/memory.jsonl`` or 0."""
-    memory_path = state_path.parent / "store" / "memory.jsonl"
-    if not memory_path.exists():
-        return 0
-    try:
-        return memory_path.stat().st_size
-    except OSError as exc:
-        logger.debug(f"_memory_size size-lookup-failed error={exc}")
-        return 0
 
 
 def _ledger_memory(state_path: Path) -> StatuslineSegment:
@@ -106,22 +81,12 @@ def build(claude_payload: dict[str, Any], state_path: Path | None) -> Statusline
 
     Returns:
         A :class:`StatuslineSegment` with ``module="memory"``. Status is
-        ``ok`` when at least one memory entry was indexed, ``missing``
-        otherwise.
+        ``ok`` when the ledger holds at least one note, ``missing`` otherwise.
     """
     del claude_payload  # accepted for uniform signature
     if state_path is None:
-        return unavailable_segment(_MODULE, _LABEL, DocumentGap.NO_STATE.value, _SOURCE)
-    payload = read_legacy_document(state_path)
-    if payload is DocumentGap.NO_EPOCH2_SOURCE:
-        return _ledger_memory(state_path)
-    if isinstance(payload, DocumentGap):
-        return unavailable_segment(_MODULE, _LABEL, payload.value, _SOURCE)
-    count = _memory_count(payload)
-    if count == 0:
-        return unavailable_segment(_MODULE, _LABEL, "no-memory-index", _SOURCE)
-    size = _memory_size(state_path)
-    return sourced_segment(_MODULE, _LABEL, f"{count}@{_format_bytes(size)}", _SOURCE)
+        return unavailable_segment(_MODULE, _LABEL, NO_STATE, _LEDGER_SOURCE)
+    return _ledger_memory(state_path)
 
 
 __all__ = ["LEDGER_PRODUCER", "build"]

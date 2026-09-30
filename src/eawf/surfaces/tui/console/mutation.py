@@ -62,28 +62,31 @@ from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.notices import BudgetThresholdNotice
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb
 from eawf.surfaces.tui.console.attention import VERB, selected_open_row
+from eawf.surfaces.tui.console.attention_verbs import action_request
 from eawf.surfaces.tui.console.bulk import BULK_METHODS, BulkRequest
+from eawf.surfaces.tui.console.eligibility import eligible_pane, principals_of
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.keymap import allowlist
+from eawf.surfaces.tui.console.live_reads import held_queue
 from eawf.surfaces.tui.console.navigation import Ctx, leave_overlay, open_overlay
 from eawf.surfaces.tui.console.notices import NOTICE_VERBS, notice_of, short_key
 from eawf.surfaces.tui.console.operations import (
-    ANSWER_OPTIONS,
     ATTENTION_ROUTE,
+    DISPATCH_KINDS,
+    DISPATCH_VERBS,
     PERMISSION_VERBS,
     RUN_CONTROLS,
     RUN_KINDS,
     SAME_VERB,
     SNOOZE_FOR,
-    AnswerRequest,
     ControlRequest,
+    DispatchRequest,
     LifecycleRequest,
     NoticeRequest,
     OperationResult,
     PermissionDecision,
     SettingRequest,
     VerbRequest,
-    binding_refusal,
     mint_lifecycle_id,
 )
 from eawf.surfaces.tui.console.reads import mut_reason, transport_lost, write_refusal
@@ -149,6 +152,7 @@ _ANSWER_NOT: Final = (
     "no lifecycle moves: no run is started, stopped or re-owned",
     "it does not accept the milestone the question is about",
 )
+_STAYS_OPEN: Final = "it stays open for the rest"
 _CONTROL_NOT: Final = "the run is not moved by the request itself; it moves only when it answers"
 
 
@@ -209,7 +213,7 @@ def gate(
     return Gate(GateKind.REFUSED, refusal) if refusal else Gate(GateKind.OPEN)
 
 
-Kind = Literal["lifecycle", "setting", "answer", "control", "notice"]
+Kind = Literal["lifecycle", "setting", "answer", "control", "notice", "dispatch"]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -307,6 +311,8 @@ class Card:
         note: What the card says about itself, such as a reload.
         sel: The result row the cursor is on.
         issuer: The principal the request is issued by; empty where the card names none.
+        eligible: The eligible pane of an action several principals may answer; empty
+            where one principal alone may.
     """
 
     kind: Kind
@@ -321,6 +327,7 @@ class Card:
     note: str = ""
     sel: int = 0
     issuer: str = ""
+    eligible: tuple[str, ...] = ()
 
     @property
     def bulk(self) -> bool:
@@ -568,7 +575,7 @@ def _permission_card(row: ProjectionRow, verb_key: str, *, principal: str, now: 
     if decided is None:
         refusal = Refusal(
             code="unbound_verb",
-            reason=f"a provider permission is approved or denied, never {name}d",
+            reason=f"a provider permission is approved or denied, never {name.rstrip('e')}ed",
             remediation="Approve or deny it before the provider's deadline.",
         )
     elif CONSOLE_PRINCIPAL_CLASS not in admitted:
@@ -611,36 +618,39 @@ def _permission_card(row: ProjectionRow, verb_key: str, *, principal: str, now: 
     )
 
 
-def answer_card(row: ProjectionRow, verb_key: str, *, principal: str, now: float) -> Card:
-    """Return the card previewing an answer to one held pending action or provider permission.
+def answer_card(
+    row: ProjectionRow,
+    verb_key: str,
+    *,
+    principal: str,
+    now: float,
+    wall: datetime,
+    rows: Sequence[ProjectionRow],
+) -> Card:
+    """Return the card previewing one attention verb on a held pending action or permission.
 
     Args:
         row: The pending action or permission as the Attention projection holds it.
         verb_key: The attention verb letter the operator chose.
         principal: Who the answer is sealed in the name of.
         now: The console clock.
+        wall: The wall-clock instant a snooze is measured from.
+        rows: The held Attention register, which names the principals who may answer.
     """
     if row.collection is Epoch2Collection.PERMISSION:
         return _permission_card(row, verb_key, principal=principal, now=now)
     name = VERB[verb_key].name
-    option = ANSWER_OPTIONS.get(name)
     revision = int(row.revision)
-    refusal = None
-    request: VerbRequest | None = None
-    if option is None:
-        why = binding_refusal(ATTENTION_ROUTE, name)
-        refusal = Refusal(code="unbound_verb", reason=why, remediation="Answer or deny instead.")
-    else:
-        request = AnswerRequest(target=row.key, option_id=option)
+    known = principals_of(rows, principal)
+    request, refusal, effects = action_request(
+        row, name, principal=principal, known=known, wall=wall
+    )
     item = Item(
         key=row.key,
         title=row.title,
         revision=revision,
         status=status_of(row),
-        effects=(
-            f"{row.key} is sealed {option!r} in your name, under your evidence receipt",
-            "the question closes for every principal; a later answer is superseded",
-        ),
+        effects=effects or (f"nothing is sent for {row.key}",),
         not_effects=_ANSWER_NOT,
         refusal=refusal,
         unknown="",
@@ -657,30 +667,32 @@ def answer_card(row: ProjectionRow, verb_key: str, *, principal: str, now: float
         authority=_authority("answer", principal),
         issuer=principal,
         opened_at=now,
+        eligible=eligible_pane(row, known, principal),
     )
 
 
 def notice_card(
     notice: BudgetThresholdNotice, verb_key: str, *, principal: str, now: float, wall: datetime
 ) -> Card:
-    """Return the card previewing a snooze or resolve of one held budget notice.
+    """Return the card previewing a disposition of one held budget notice.
 
     Args:
         notice: The notice as the operator's inbox holds it.
-        verb_key: ``z`` to snooze it or ``v`` to resolve it.
+        verb_key: ``z`` to snooze it, ``n`` to acknowledge it or ``v`` to resolve it.
         principal: Who the disposition is recorded as.
         now: The console clock.
         wall: The wall-clock instant a snooze is measured from.
     """
-    resolve = NOTICE_VERBS.get(verb_key) == "resolve"
-    disposition: Literal["snooze", "resolve"] = "resolve" if resolve else "snooze"
-    until = None if resolve else wall + SNOOZE_FOR
+    disposition = NOTICE_VERBS[verb_key]
+    until = wall + SNOOZE_FOR if disposition == "snooze" else None
     named = f"notice {short_key(notice)}"
-    effects = (
-        (f"{named} closes for its whole audience, resolved in your name",)
-        if until is None
-        else (f"{named} leaves your inbox until {until:%H:%M} UTC", "it stays open for the rest")
-    )
+    effects: tuple[str, ...]
+    if until is not None:
+        effects = (f"{named} leaves your inbox until {until:%H:%M} UTC", _STAYS_OPEN)
+    elif disposition == "acknowledge":
+        effects = (f"{named} is acknowledged by you alone, and not resolved", _STAYS_OPEN)
+    else:
+        effects = (f"{named} closes for its whole audience, resolved in your name",)
     item = Item(
         key=notice.notice_key,
         title=f"{notice.scope_id} {notice.axis} over budget",
@@ -743,6 +755,45 @@ def control_card(
         noun="run",
         items=(item,),
         if_stale=if_stale(revision),
+        authority=_authority("control", principal),
+        issuer=principal,
+        opened_at=now,
+    )
+
+
+def dispatch_card(
+    live: Mapping[str, object], target: Mapping[str, str], *, principal: str, now: float
+) -> Card:
+    """Return the card previewing one pause, drain or resume request of the dispatch queue.
+
+    Args:
+        live: The frame's live answers, the dispatch-queue read among them once it arrived.
+        target: The request the frame asked for: its verb, effects and non-effects.
+        principal: Who the request is recorded in the name of.
+        now: The console clock.
+    """
+    queue = held_queue(live)
+    verb, held = target["verb"], queue.control.holding if queue is not None else None
+    request = DispatchRequest(verb=DISPATCH_VERBS[verb])
+    item = Item(
+        key=request.target,
+        title="the daemon owns scheduling; this console only asks",
+        revision=None,
+        status=f"held by {held.value}" if held is not None else "dispatching",
+        effects=(f"a {verb} is recorded for the dispatch scheduler", target.get("effects", "")),
+        not_effects=("no claimed run is stopped or cancelled", target.get("not", "")),
+        refusal=None,
+        unknown="the daemon refuses a drain while a release is publishing",
+        request=request,
+        stale_token="",
+    )
+    return Card(
+        kind="dispatch",
+        origin=verb,
+        action=verb,
+        noun="dispatch queue",
+        items=(item,),
+        if_stale="nothing is compared: the daemon records a request as it arrives",
         authority=_authority("control", principal),
         issuer=principal,
         opened_at=now,
@@ -962,12 +1013,21 @@ def adopt(ctx: Ctx) -> None:
     if target is None and s.route == ATTENTION_ROUTE and ctx.attention is not None:
         row = selected_open_row(s, ctx.attention)
         if row is not None:
-            s.mutation = answer_card(row, s.verb or "a", principal=principal_of(ctx), now=now)
+            s.mutation = answer_card(
+                row,
+                s.verb or "a",
+                principal=principal_of(ctx),
+                now=now,
+                wall=ctx.clock.wall(),
+                rows=ctx.attention.rows,
+            )
         return
     if target is not None and target.get("kind") in RUN_KINDS and target["verb"] in RUN_CONTROLS:
         row = _row(ctx.rows, target["id"])
         if row is not None:
             s.mutation = control_card(row, target, principal=principal_of(ctx), now=now)
+    if target is not None and target.get("kind") in DISPATCH_KINDS:
+        s.mutation = dispatch_card(ctx.live, target, principal=principal_of(ctx), now=now)
 
 
 def _current_token(ctx: Ctx, card: Card, item: Item) -> str | None:
@@ -978,6 +1038,8 @@ def _current_token(ctx: Ctx, card: Card, item: Item) -> str | None:
     if card.kind == "notice":
         notice = notice_of(ctx.notices, item.key)
         return str(notice.revision) if notice is not None else None
+    if card.kind == "dispatch":  # a dispatch request names no revision to compare
+        return item.stale_token
     if card.kind == "answer" and ctx.attention is not None:
         row = _row(ctx.attention.rows, item.key)
     else:
@@ -1001,7 +1063,14 @@ def _reload(ctx: Ctx, card: Card, moved: Sequence[tuple[Item, str | None]]) -> N
     elif card.kind == "answer" and ctx.attention is not None:
         row = _row(ctx.attention.rows, card.items[0].key)
         if row is not None:
-            rebuilt = answer_card(row, card.origin, principal=principal_of(ctx), now=now)
+            rebuilt = answer_card(
+                row,
+                card.origin,
+                principal=principal_of(ctx),
+                now=now,
+                wall=ctx.clock.wall(),
+                rows=ctx.attention.rows,
+            )
     elif card.kind == "notice":
         notice = notice_of(ctx.notices, card.items[0].key)
         if notice is not None:

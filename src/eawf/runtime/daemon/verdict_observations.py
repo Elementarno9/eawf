@@ -7,6 +7,12 @@ Trust lists each as a verdict observation keyed by site, subject and producer, w
 producer is the reviewer's identity as ``(agent_role, runtime)``: the role its capsule
 was sealed with and the harness its vendor session ran under, never a runner's name.
 
+Beside them Trust draws the jury's calibration: every verdict any cycle line ever held is
+joined to the outcome its subject went on to have -- the Batch merged, or a repair or a
+head move refuted it -- or to the gold label a principal pinned on the subject, and the
+labelled cohort is scored and held to the ``verify.jury_max_brier`` and
+``verify.jury_max_co_error`` ceilings the calibration gate reads.
+
 Nothing is stored here. The rows are read off the ledgers each time a projection is
 built, so the Milestone a verdict is listed under holds no verdict of its own.
 """
@@ -18,20 +24,35 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any, Final
 
+from eawf.kernel.config.schema import VerifyConfig
 from eawf.kernel.delivery.batch_proof import BatchAudit, BatchVerificationCycle
-from eawf.kernel.projection.compute import VERDICT_OBSERVATION_KIND
+from eawf.kernel.delivery.gold_label import latest_gold_labels
+from eawf.kernel.projection.compute import (
+    CALIBRATION_KEY,
+    JURY_CALIBRATION_KIND,
+    VERDICT_OBSERVATION_KIND,
+)
 from eawf.kernel.runtime.control import RunBinding
+from eawf.kernel.state.enums import AgentSessionRole
+from eawf.kernel.state.epoch2.batch import BatchStatus
 from eawf.kernel.state.epoch2.run import Run
 from eawf.kernel.store.compaction import document_rows
 from eawf.kernel.store.ledger import LedgerRecord, effective_records, read_ledger_records
 from eawf.kernel.store.paths import ledger_path
 from eawf.kernel.store.tiers import Epoch2Collection
+from eawf.observability.eval.native_cohort import native_cohort, observe_verdict_outcomes
+from eawf.observability.eval.trust_projection import calibrate
 from eawf.runtime.daemon.methods.delivery import CYCLE_KEY_PREFIX
 
 logger = logging.getLogger(__name__)
 
 #: The site a Batch audit verdict is reached at.
 VERIFICATION_SITE: Final = "verification"
+
+#: The Batch states that mean it merged, so a verdict nothing refuted held.
+MERGED_STATUSES: Final = frozenset(
+    {BatchStatus.MERGED_PENDING_RECONCILIATION.value, BatchStatus.COMPLETED.value}
+)
 
 
 def _stored(
@@ -63,6 +84,15 @@ def _roles(records: tuple[LedgerRecord, ...]) -> Mapping[str, str]:
     return roles
 
 
+def _cycle_lines(records: tuple[LedgerRecord, ...]) -> tuple[BatchVerificationCycle, ...]:
+    """Return every verification cycle line, in the order the ledger appended them."""
+    return tuple(
+        BatchVerificationCycle.model_validate(item.payload)
+        for item in records
+        if item.record_key.startswith(CYCLE_KEY_PREFIX)
+    )
+
+
 def _current_cycles(records: tuple[LedgerRecord, ...]) -> tuple[BatchVerificationCycle, ...]:
     """Return each Batch's newest verification cycle, in the order the Batches were first cycled."""
     newest: dict[str, dict[str, Any]] = {}
@@ -70,6 +100,16 @@ def _current_cycles(records: tuple[LedgerRecord, ...]) -> tuple[BatchVerificatio
         if item.record_key.startswith(CYCLE_KEY_PREFIX):
             newest[item.record_key] = item.payload
     return tuple(BatchVerificationCycle.model_validate(payload) for payload in newest.values())
+
+
+def _runtimes(document: dict[str, Any], run_lines: tuple[LedgerRecord, ...]) -> Mapping[str, str]:
+    """Return the harness each Run's vendor session ran under, by Run key."""
+    runtimes: dict[str, str] = {}
+    for key, stored in _stored(document, run_lines, Epoch2Collection.RUN).items():
+        session = Run.model_validate(stored).vendor_session
+        if session is not None:
+            runtimes[key] = session.harness
+    return runtimes
 
 
 def _row(
@@ -135,4 +175,91 @@ def verdict_observation_rows(
     return tuple(rows)
 
 
-__all__ = ["VERIFICATION_SITE", "verdict_observation_rows"]
+def resolve_jury_thresholds(repo_root: Path) -> tuple[float, float]:
+    """Return the Brier and co-error ceilings the calibration gate holds the jury to.
+
+    Args:
+        repo_root: The repository whose layered config is composed.
+
+    Returns:
+        ``(verify.jury_max_brier, verify.jury_max_co_error)`` as configured.
+
+    Raises:
+        pydantic.ValidationError: The ``verify`` section does not validate.
+    """
+    from eawf.kernel.config.layered import merge_config
+
+    merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
+    verify = VerifyConfig.model_validate(merged["verify"])
+    return verify.jury_max_brier, verify.jury_max_co_error
+
+
+def jury_calibration_row(
+    document_file: Path, document: dict[str, Any], *, max_brier: float, max_co_error: float
+) -> dict[str, Any] | None:
+    """Return the jury's calibration over every verdict the Batch ledger holds, as a row.
+
+    Args:
+        document_file: The selected generation's document, which the ledgers sit beside.
+        document: That document, as read.
+        max_brier: The Brier ceiling the calibration gate holds the report to.
+        max_co_error: The co-error ceiling it holds the report to.
+
+    Returns:
+        The report's cohort, metrics and the authority the gate returned, addressed to
+        the repository the verdicts were reached in; ``None`` when no Batch has filed a
+        verification cycle, so there is no jury to calibrate.
+
+    Raises:
+        pydantic.ValidationError: A cycle, label, binding or Run line does not
+            validate, which means the ledger is corrupt.
+    """
+    batch_lines = read_ledger_records(ledger_path(document_file, Epoch2Collection.BATCH))
+    lines = _cycle_lines(batch_lines)
+    if not lines:
+        return None
+    run_lines = read_ledger_records(ledger_path(document_file, Epoch2Collection.RUN))
+    merged = frozenset(
+        key
+        for key, row in _stored(document, batch_lines, Epoch2Collection.BATCH).items()
+        if row.get("status") in MERGED_STATUSES
+    )
+    roles, runtimes = _roles(run_lines), _runtimes(document, run_lines)
+    producers = {
+        key: (AgentSessionRole(role), runtimes[key])
+        for key, role in roles.items()
+        if key in runtimes
+    }
+    cohort, ballots = native_cohort(
+        observe_verdict_outcomes(lines, merged_batches=merged),
+        producers=producers,
+        labels=latest_gold_labels(batch_lines),
+    )
+    group = calibrate(cohort, ballots, max_brier=max_brier, max_co_error=max_co_error)
+    report = group.report
+    logger.debug(
+        f"jury_calibration_row n={report.n} status={report.status.value} "
+        f"authority={group.authority}"
+    )
+    return {
+        "payload_kind": JURY_CALIBRATION_KIND,
+        "key": CALIBRATION_KEY,
+        "urn": str(lines[-1].head.repository_ref),
+        "revision": 1,
+        "status": report.status.value,
+        "cohort": report.n,
+        "known_bad": report.known_bad_n,
+        "min_scored": group.min_scored,
+        "brier": report.brier,
+        "co_error": report.unanimous_pass_on_known_bad_rate,
+        "authority": group.authority,
+    }
+
+
+__all__ = [
+    "MERGED_STATUSES",
+    "VERIFICATION_SITE",
+    "jury_calibration_row",
+    "resolve_jury_thresholds",
+    "verdict_observation_rows",
+]

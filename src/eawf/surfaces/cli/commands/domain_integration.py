@@ -14,6 +14,8 @@ such verb:
   integrate request and submits it to ``runtime.delivery.integrate``;
 - ``batch adopt-landed`` sends ``runtime.delivery.adopt_landed`` for work
   that already landed on the target branch outside the native loop;
+- ``batch label`` sends ``runtime.delivery.label_audit``, the ground truth a
+  principal pins on one criterion of the Batch for the jury's calibration;
 - ``task prove`` submits ``runtime.delivery.prove_task`` and ``task
   assess`` sends ``runtime.delivery.task_assessment``; ``task assess
   --out`` writes the document ``task complete --assessment`` takes;
@@ -75,6 +77,7 @@ CANDIDATE_REPORT_BIND: Final = "runtime.candidate.report.bind"
 DELIVERY_ASSEMBLE: Final = "runtime.delivery.assemble"
 DELIVERY_INTEGRATE: Final = "runtime.delivery.integrate"
 DELIVERY_ADOPT_LANDED: Final = "runtime.delivery.adopt_landed"
+DELIVERY_LABEL_AUDIT: Final = "runtime.delivery.label_audit"
 DELIVERY_PROVE: Final = "runtime.delivery.prove_task"
 DELIVERY_TASK_ASSESSMENT: Final = "runtime.delivery.task_assessment"
 DELIVERY_RECONCILE_MERGE: Final = "runtime.delivery.reconcile_merge"
@@ -89,6 +92,7 @@ INTEGRATION_CLI_METHODS: Final[tuple[str, ...]] = (
     DELIVERY_ASSEMBLE,
     DELIVERY_INTEGRATE,
     DELIVERY_ADOPT_LANDED,
+    DELIVERY_LABEL_AUDIT,
     DELIVERY_PROVE,
     DELIVERY_TASK_ASSESSMENT,
     DELIVERY_RECONCILE_MERGE,
@@ -136,6 +140,10 @@ _EVIDENCE_REF_HELP: Final = (
     "Recorded audit, decision, artifact or EVD id the verdict rests on (repeatable)."
 )
 _AFFECTED_HELP: Final = "Criterion the change invalidates (repeatable); default every criterion."
+_CRITERION_HELP: Final = "The criterion of the Batch the label is about."
+_GOOD_HELP: Final = "The subject was actually good as the Batch delivered it."
+_BAD_HELP: Final = "The subject was actually bad as the Batch delivered it."
+_NOTE_HELP: Final = "Why the label is pinned (at least 20 characters)."
 _OBSERVATION_HELP: Final = (
     "JSON file carrying a host merge observation; omit to have the daemon read the "
     "target branch back from the repository."
@@ -544,6 +552,46 @@ def batch_adopt_landed_cmd(
         _answer(ctx, answer, operation=DELIVERY_ADOPT_LANDED, urn=urn, revision=expected_revision)
 
 
+@batch_app.command("label")
+def batch_label_cmd(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help=_BATCH_URN_HELP)],
+    criterion: Annotated[str, typer.Option("--criterion", help=_CRITERION_HELP)],
+    note: Annotated[str, typer.Option("--note", help=_NOTE_HELP)],
+    expected_revision: _BatchRevision,
+    idempotency_key: _Key,
+    actor: _Actor,
+    good: Annotated[bool, typer.Option("--good", help=_GOOD_HELP)] = False,
+    bad: Annotated[bool, typer.Option("--bad", help=_BAD_HELP)] = False,
+) -> None:
+    """Pin the ground truth of one Batch criterion for the jury's calibration.
+
+    Exactly one of ``--good`` and ``--bad`` is required. Labels are
+    append-only: a relabelled subject gets a fresh label and the newest
+    wins, so a correction supersedes a mistake without rewriting it.
+    """
+    if good == bad:
+        cli_errors.emit_error(
+            cli_errors.UserError("pass exactly one of --good / --bad", kind="InvalidInput"),
+            flags=ctx.obj,
+        )
+        return
+    params: dict[str, Any] = {
+        "urn": urn,
+        "expected_revision": expected_revision,
+        "actor": actor,
+        "idempotency_key": idempotency_key,
+        "criterion_id": criterion,
+        "ground_truth": good,
+        "note": note,
+    }
+    answer = _send(
+        ctx, DELIVERY_LABEL_AUDIT, params, urn=urn, verb_text="batch label", key=idempotency_key
+    )
+    if answer is not None:
+        _answer(ctx, answer, operation=DELIVERY_LABEL_AUDIT, urn=urn, revision=expected_revision)
+
+
 @batch_app.command("reconcile")
 def batch_reconcile_cmd(
     ctx: typer.Context,
@@ -709,6 +757,7 @@ __all__ = [
     "INTEGRATION_CLI_METHODS",
     "batch_adopt_landed_cmd",
     "batch_integrate_cmd",
+    "batch_label_cmd",
     "batch_reconcile_cmd",
     "milestone_open_approval_cmd",
     "milestone_seal_approval_cmd",

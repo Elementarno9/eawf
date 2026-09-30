@@ -37,6 +37,10 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from eawf.kernel.state.epoch2.consequence import MUTATIONS_BY_METHOD
+from eawf.surfaces.cli.verb_effects import CLI_VERB_EFFECTS
+from eawf.surfaces.tui.console import operations
+from eawf.surfaces.tui.console.bulk import BULK_METHODS
 from eawf.surfaces.tui.console.chrome import ConsoleChrome, load_chrome
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
 from eawf.surfaces.tui.console.dispatch import dispatch, parent_of
@@ -777,6 +781,25 @@ def test_ui_011_every_entry_state_renders_to_plain_text(fixture: Fixture, index:
 
 def test_ui_011_plain_rows_of_an_empty_frame_is_empty() -> None:
     assert plain_rows([]) == []
+
+
+def _console_writes() -> set[str]:
+    """Return every daemon verb the console writes through, reads left out."""
+    reads = {operations.NOTICE_LIST_METHOD}
+    named = {
+        value
+        for name, value in vars(operations).items()
+        if name.endswith("_METHOD") and isinstance(value, str) and value not in reads
+    }
+    return named | set(MUTATIONS_BY_METHOD) | set(BULK_METHODS)
+
+
+def test_ui_011_every_console_write_has_a_command_line_journey() -> None:
+    """A keyboard without the console reaches every write the console sends."""
+    routes = {route for effect in CLI_VERB_EFFECTS.values() for route in effect.routes}
+    writes = _console_writes()
+    assert {operations.ACTION_SNOOZE_METHOD, operations.NOTICE_DISPOSE_METHOD} <= writes
+    assert writes - routes == set()
 
 
 # ---------- UI-040: one owner per composition fact ----------

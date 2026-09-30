@@ -62,7 +62,7 @@ from eawf.kernel.state.models import Project
 from eawf.observability.telemetry.models import RuntimeName
 from eawf.platform.install.gitignore_writer import plan_gitignore_block
 from eawf.platform.rules.carriers import carrier_stamp_matches_body, render_role_carriers
-from eawf.platform.rules.chain_budget import ChainBudgetReport
+from eawf.platform.rules.chain_budget import ChainBudgetReport, RenderMode
 from eawf.platform.rules.compile import (
     CompiledRule,
     RuleGraph,
@@ -286,6 +286,7 @@ class ProjectionManifest(RuleModel):
             delivery the render could not check.
         prompt_budget: Each runtime's loaded chain against the prompt-budget
             ceiling; ``None`` only in a manifest older than the check.
+        render_mode: How the render judged the global instruction documents.
     """
 
     schema_version: Literal[1] = 1
@@ -296,6 +297,7 @@ class ProjectionManifest(RuleModel):
     stale_host_facts: tuple[StaleHostFact, ...] = ()
     unmeasured_delivery_facts: tuple[UnmeasuredDeliveryFact, ...] = ()
     prompt_budget: ChainBudgetReport | None = None
+    render_mode: RenderMode = "local"
 
     @property
     def host_fact_warnings(self) -> tuple[str, ...]:
@@ -308,6 +310,12 @@ class ProjectionManifest(RuleModel):
             if record.uncertified_readers
         )
         return (*uncertified, *(fact.note for fact in self.stale_host_facts))
+
+    @property
+    def render_warnings(self) -> tuple[str, ...]:
+        """Return every operator line the render recorded: host facts, then budget overages."""
+        overages = self.prompt_budget.global_overages if self.prompt_budget is not None else ()
+        return (*self.host_fact_warnings, *(item.note for item in overages))
 
     @property
     def targets(self) -> tuple[str, ...]:
@@ -467,7 +475,9 @@ def load_project_brief(repo_root: Path) -> ProjectBrief:
     )
 
 
-def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> ProjectionPlan:
+def plan_rule_projections(
+    repo_root: Path, *, home: Path | None = None, mode: RenderMode = "local"
+) -> ProjectionPlan:
     """Compute the card, the policy projection and the manifest without writing.
 
     Reads the rule source and the brief sources only; no rendered projection
@@ -477,6 +487,8 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         repo_root: The repository root holding ``.ea/rules.yaml``.
         home: The directory holding the ``.eawf`` home that registers a
             workspace; ``None`` for the user's home directory.
+        mode: ``certified`` refuses a chain the operator's global instruction
+            documents put over its ceiling; ``local`` records it as a warning.
 
     Returns:
         The plan a render transaction writes.
@@ -486,8 +498,9 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         RuleCompileError: When the rules fail compilation.
         RuleProjectionBudgetError: When a projection exceeds the smallest
             certified cap among the runtimes that read it, none of them has
-            a certified cap, or a host's loaded chain is over a ceiling of
-            the configured prompt budget.
+            a certified cap, or a host's repository-authored chain is over a
+            ceiling of the configured prompt budget, or, in a certified render,
+            its chain is with the global instruction documents charged.
         RuleProjectionModelNamingError: When an output names a model.
         RuleProjectionError: When a brief source is unreadable.
         HostFactError: When the shipped host-fact record is untrustworthy.
@@ -558,7 +571,8 @@ def plan_rule_projections(repo_root: Path, *, home: Path | None = None) -> Proje
         generated=tuple(g.target for g in generated),
         stale_host_facts=stale_host_facts(host_facts, today=datetime.now(UTC).date()),
         unmeasured_delivery_facts=unmeasured_delivery_facts(host_facts),
-        prompt_budget=budgeted_chains(repo_root, outputs, host_facts),
+        prompt_budget=budgeted_chains(repo_root, outputs, host_facts, mode=mode),
+        render_mode=mode,
     )
     return ProjectionPlan(projections=projections, generated=generated, manifest=manifest)
 

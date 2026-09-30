@@ -27,6 +27,8 @@ from typing import Final
 
 from eawf.kernel.release.waiver import ReleaseWaiver
 from eawf.kernel.spec.release_config import ReleaseConfig
+from eawf.platform.rules.render import RuleProjectionBudgetError
+from eawf.platform.rules.render_checks import certify_steering_chain
 from eawf.workflow.release.signal_probes import build_receipt_probes
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
 from eawf.workflow.verify.release_readiness import (
@@ -61,7 +63,9 @@ def sweep_for_tag(
     """Return the readiness sweep for *version* over the checkout at *repo_root*.
 
     The tag probes and the receipt probes are both bound to *repo_root*,
-    so no row is read from the process's working directory.
+    so no row is read from the process's working directory. Before them, the
+    checkout's steering chain is rendered in certified mode, since a release
+    claims what an agent on this machine receives.
 
     Args:
         config: The checkpoint configuration the sweep is judged against.
@@ -91,9 +95,14 @@ def sweep_for_tag(
         checkpoint's profile admits.
 
     Raises:
-        ValueError: When an input is blank, *computed_at* is naive, or
-            the waiver block is rejected by the sweep.
+        ValueError: When an input is blank, *computed_at* is naive, the
+            waiver block is rejected by the sweep, or the certified render of
+            the checkout's steering chain refuses before any signal runs.
     """
+    try:
+        certify_steering_chain(repo_root)
+    except RuleProjectionBudgetError as exc:
+        raise ValueError(f"the certified steering render refuses the release: {exc}") from exc
     inputs = TagPreflightInputs(
         repo_root=repo_root,
         version=version,

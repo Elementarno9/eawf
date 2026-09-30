@@ -554,7 +554,7 @@ def test_sync_adds_the_policy_ignore_to_a_block_written_before_it_shipped(repo: 
     gitignore = repo / ".gitignore"
     gitignore.write_text(_OLD_BLOCK, encoding="utf-8")
 
-    _changed, _warnings, added = sync._rule_projections(repo, write=True, rules=True)
+    _changed, _warnings, added = sync._rule_projections(repo, write=True, rules=True, mode="local")
 
     lines = gitignore.read_text(encoding="utf-8").splitlines()
     assert POLICY_TARGET in added
@@ -562,14 +562,14 @@ def test_sync_adds_the_policy_ignore_to_a_block_written_before_it_shipped(repo: 
     assert lines[0] == "node_modules/"
     assert "/custom/state.lock" in lines
     assert lines.count("CLAUDE.md") == 1
-    assert sync._rule_projections(repo, write=True, rules=True)[2] == []
+    assert sync._rule_projections(repo, write=True, rules=True, mode="local")[2] == []
 
 
 def test_sync_leaves_the_gitignore_alone_without_a_rule_source(tmp_path: Path) -> None:
     gitignore = tmp_path / ".gitignore"
     gitignore.write_text(_OLD_BLOCK, encoding="utf-8")
 
-    assert sync._rule_projections(tmp_path, write=True, rules=False) == ([], [], [])
+    assert sync._rule_projections(tmp_path, write=True, rules=False, mode="local") == ([], [], [])
     assert gitignore.read_text(encoding="utf-8") == _OLD_BLOCK
 
 
@@ -577,4 +577,4 @@ def test_sync_refuses_a_gitignore_with_unpaired_markers(repo: Path) -> None:
     gitignore = repo / ".gitignore"
     gitignore.write_text("# BEGIN EAWF:gitignore\nCLAUDE.md\n", encoding="utf-8")
     with pytest.raises(sync.cli_errors.ValidationError, match=r"\.gitignore not updated"):
-        sync._rule_projections(repo, write=True, rules=True)
+        sync._rule_projections(repo, write=True, rules=True, mode="local")

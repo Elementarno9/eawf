@@ -211,7 +211,7 @@ def test_surf_101_generation_joins_a_well_formed_lifecycle_skill() -> None:
     ("effects", "finding"),
     [
         ({"rpcs": ("domain.task.teleport",)}, "names unregistered route 'domain.task.teleport'"),
-        ({"rpcs": ("runtime.run.control.request",)}, "which no verb carries"),
+        ({"rpcs": ("runtime.run.control.acknowledge",)}, "which no verb carries"),
         ({"rpcs": (), "verbs": ()}, "is a lifecycle skill that names no route"),
         ({"rpcs": (), "verbs": ("task teleport",)}, "which the verb catalog does not carry"),
     ],

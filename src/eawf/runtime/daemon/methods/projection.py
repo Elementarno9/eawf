@@ -99,7 +99,11 @@ from eawf.runtime.daemon.methods.delivery_acceptance import BUNDLE_KEY_PREFIX
 from eawf.runtime.daemon.methods.host_question import open_question_rows
 from eawf.runtime.daemon.methods.permission import open_permission_rows
 from eawf.runtime.daemon.native_guard import require_native_call
-from eawf.runtime.daemon.verdict_observations import verdict_observation_rows
+from eawf.runtime.daemon.verdict_observations import (
+    jury_calibration_row,
+    resolve_jury_thresholds,
+    verdict_observation_rows,
+)
 from eawf.workflow.delivery.acceptance import (
     AcceptanceApproval,
     AcceptanceRefusedError,
@@ -343,6 +347,20 @@ def _decision_rows(authority: RootAuthority) -> tuple[dict[str, Any], ...]:
     )
 
 
+def _trust_rows(authority: RootAuthority, document: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    """Return the verdicts the Batches' current cycles hold and the jury's calibration row.
+
+    The calibration is held to the ceilings the tree's layered config states.
+    """
+    document_file = document_path(authority)
+    max_brier, max_co_error = resolve_jury_thresholds(authority.root.parent)
+    calibration = jury_calibration_row(
+        document_file, document, max_brier=max_brier, max_co_error=max_co_error
+    )
+    verdicts = verdict_observation_rows(document_file, document)
+    return verdicts if calibration is None else (*verdicts, calibration)
+
+
 def _ledger_rows_for(
     *, route: str, authority: RootAuthority, document: dict[str, Any]
 ) -> dict[Epoch2Collection, tuple[dict[str, Any], ...]]:
@@ -353,7 +371,8 @@ def _ledger_rows_for(
     route that renders questions reads the open questions a host asked. A route
     that lists notices reads them from the ledger they are filed on: the live ceiling
     breaches from the run ledger, the sandbox decisions from the receipt ledger and
-    the audit verdicts of the Batches' current cycles from the Batch ledger.
+    the audit verdicts of the Batches' current cycles, with the jury's calibration over
+    every verdict, from the Batch ledger.
     """
     rows: dict[Epoch2Collection, tuple[dict[str, Any], ...]] = {
         collection: _terminal_ledger_rows(authority=authority, collection=collection)
@@ -370,7 +389,7 @@ def _ledger_rows_for(
     if Epoch2Collection.RECEIPT in notices:
         rows[Epoch2Collection.RECEIPT] = _decision_rows(authority)
     if Epoch2Collection.BATCH in notices:
-        rows[Epoch2Collection.BATCH] = verdict_observation_rows(document_path(authority), document)
+        rows[Epoch2Collection.BATCH] = _trust_rows(authority, document)
     return rows
 
 

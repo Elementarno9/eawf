@@ -5,7 +5,10 @@ freshness value and a measurement quality, and forbid a segment from rendering a
 value it cannot source or a bare unknown token. MEAS-029 makes the context and cost
 segments read the host payload directly. MEAS-030 resolves the scope segment through
 the epoch-2 delivery spine: the host's session id, the Run bound to it in the
-selected generation, and the record that Run is scoped to.
+selected generation, and the record that Run is scoped to. PRX-043 and MEAS-043 read
+the budget, MCP, memory and plugin segments from epoch-2 producers only: the session
+Run's sealed cap and usage readings, the generation's MCP registry, its memory ledger,
+and the host's own plugin install record.
 
 Every canary here is provisioned through the production provisioning path under the
 test's own tmp directory.
@@ -24,12 +27,24 @@ from typing import Any, Final
 import pytest
 import yaml
 
+from eawf.kernel.identity import parse_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.projection.truth import Freshness, Precision, TruthField, TruthKind, TruthState
-from eawf.kernel.state.enums import MeasurementQuality
+from eawf.kernel.runtime.capsule import AuthorityCapsule
+from eawf.kernel.runtime.control import RunBinding
+from eawf.kernel.runtime.events import RunEventKind, RunEventRecord
+from eawf.kernel.runtime.usage import UsagePayload, UsageQuality
+from eawf.kernel.state.enums import Confidence, McpRisk, McpStatus, MeasurementQuality
 from eawf.kernel.state.epoch2.authority import require_native_authority
+from eawf.kernel.state.models import McpServer
 from eawf.kernel.store.compaction import read_document, write_document
+from eawf.kernel.store.kinds.memory import MemoryNote
+from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record
+from eawf.kernel.store.paths import ledger_path
+from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.platform.install.canary import canary_ref, provision_canary
+from eawf.platform.memory.book import note_line
+from eawf.runtime.mcp.book import capability_row
 from eawf.runtime.runtimes.claude import statusline as orchestrator
 from eawf.runtime.runtimes.claude.statusline_modules import (
     budget,
@@ -40,7 +55,11 @@ from eawf.runtime.runtimes.claude.statusline_modules import (
     memory,
     scope,
 )
-from eawf.runtime.runtimes.claude.statusline_modules._host import HOST_PRODUCER
+from eawf.runtime.runtimes.claude.statusline_modules._host import (
+    HOST_PLUGIN_PRODUCER,
+    HOST_PRODUCER,
+)
+from eawf.runtime.runtimes.claude.statusline_modules._spine import SPINE_PRODUCER
 from eawf.runtime.session.vendor_id import hash_vendor_session_id
 from eawf.surfaces.render.statusline import (
     BARE_UNKNOWN_TOKENS,
@@ -49,6 +68,7 @@ from eawf.surfaces.render.statusline import (
     sourced_segment,
     unavailable_segment,
 )
+from tests.unit.kernel.runtime.test_authority_capsule import review_fields
 
 SEED_RECORDS: Final = (
     Path(__file__).resolve().parents[4]
@@ -78,11 +98,15 @@ HOST_PAYLOAD: Final[dict[str, Any]] = {
 
 
 @pytest.fixture(autouse=True)
-def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Allocate every canary runtime directory under this test's tmp dir."""
+def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Allocate every canary runtime directory and ``$HOME`` under this test's tmp dir."""
     scratch = tmp_path / "scratch"
     scratch.mkdir()
     monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    return home
 
 
 def run_row(key: str, *, session_id: str | None, task_key: str, updated_at: str) -> dict[str, Any]:
@@ -531,11 +555,6 @@ def test_prx_043_every_segment_renders_from_a_producer_with_a_freshness(tmp_path
 _EPOCH1_NOUNS: Final = re.compile(r"\b(?:active_wave\w*|waves?|phases?|iters?)\b")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the budget segment still reads the epoch-1 waves.token_budget fields on an "
-    "epoch-1 tree, and the budget, mcp, memory and plugin segments have no epoch-2 producer",
-)
 def test_prx_043_a_census_of_the_statusline_bundle_finds_no_epoch1_noun() -> None:
     package = Path(context_tokens.__file__).parent
     found = {
@@ -543,3 +562,393 @@ def test_prx_043_a_census_of_the_statusline_bundle_finds_no_epoch1_noun() -> Non
         for path in sorted(package.glob("*.py"))
     }
     assert {name: nouns for name, nouns in found.items() if nouns} == {}
+
+
+# ---- PRX-043 / MEAS-043: budget, mcp, memory and plugins read epoch-2 producers ----
+
+RUN_KEY: Final = "RUN-00000010"
+
+
+def session_state(tmp_path: Path) -> tuple[Path, dict[str, Any]]:
+    """Provision a canary whose generation binds ``RUN_KEY`` to the host session."""
+    run = run_row(
+        RUN_KEY, session_id=SESSION_ID, task_key="EAWF-0126", updated_at="2026-09-08T03:00:00Z"
+    )
+    return canary_state_path(tmp_path, {RUN_KEY: run}), run
+
+
+def run_line(state_path: Path, record_key: str, payload: dict[str, Any]) -> None:
+    """Append one line to the run ledger of the canary at ``state_path``."""
+    append_ledger_record(
+        ledger_path(generation_document(state_path), Epoch2Collection.RUN),
+        LedgerRecord(
+            collection=Epoch2Collection.RUN,
+            record_key=record_key,
+            status="recorded",
+            recorded_at=PROVISIONED_AT,
+            payload=payload,
+        ),
+    )
+
+
+def bind_token_cap(state_path: Path, run: dict[str, Any], tokens: int | None) -> None:
+    """File the dispatch binding whose sealed capsule caps the Run at ``tokens``."""
+    budget: dict[str, Any] = {"wall_seconds": 2400, "output_bytes": 1_048_576}
+    if tokens is not None:
+        budget["tokens"] = tokens
+    capsule = AuthorityCapsule.seal(review_fields(run_ref=run["urn"], budget=budget))
+    binding = RunBinding(
+        run_ref=parse_qualified_urn(run["urn"]),
+        compiled_spec_digest=capsule.compiled_spec_digest,
+        authority_capsule_digest=capsule.contract_digest,
+        route_policy_revision=1,
+        bound_at=PROVISIONED_AT,
+        capsule=capsule,
+    )
+    run_line(state_path, f"BND-{run['key']}", binding.model_dump(mode="json"))
+
+
+def observe_usage(
+    state_path: Path,
+    run: dict[str, Any],
+    sequence: int,
+    *,
+    tokens: int,
+    cumulative: bool = False,
+    quality: UsageQuality = "measured",
+) -> None:
+    """Append one ``usage_observed`` event of ``tokens`` input tokens for the Run."""
+    payload = UsagePayload(
+        input_tokens=tokens,
+        usage_source="provider_receipt",
+        is_cumulative=cumulative,
+        measurement_quality=quality,
+        coverage_fraction=1.0 if quality == "estimated" else None,
+    )
+    event = RunEventRecord(
+        event_ref=f"EVT-{sequence:08x}",
+        run_ref=parse_qualified_urn(run["urn"]),
+        run_sequence=sequence,
+        event_kind=RunEventKind.USAGE_OBSERVED,
+        provenance="provider_native",
+        payload=payload,
+        actor="OP-0001",
+        recorded_at=PROVISIONED_AT,
+    )
+    run_line(state_path, f"EVT-{sequence:08x}", event.model_dump(mode="json"))
+
+
+def register_mcp(state_path: Path, servers: dict[str, tuple[McpStatus, str]]) -> None:
+    """Write native ``capability`` rows, ``id -> (status, row status)``, to the generation."""
+    path = generation_document(state_path)
+    document = read_document(path)
+    rows = document.setdefault(Epoch2Collection.CAPABILITY.value, {})
+    for revision, (server_id, (status, row_status)) in enumerate(sorted(servers.items()), 1):
+        server = McpServer(
+            id=server_id,
+            owner="eawf",
+            command="serve",
+            risk=McpRisk.READ,
+            write_capable=False,
+            status=status,
+        )
+        rows[server_id] = capability_row(
+            server,
+            status="registered" if row_status == "registered" else "removed",
+            revision=revision,
+            at=PROVISIONED_AT,
+        )
+    write_document(path, document)
+
+
+def file_notes(state_path: Path, count: int) -> Path:
+    """File ``count`` memory notes into the generation's memory ledger; return it."""
+    ledger = ledger_path(generation_document(state_path), Epoch2Collection.MEMORY)
+    for index in range(1, count + 1):
+        note = MemoryNote(
+            id=f"MEM-{index}",
+            scope_id="QR",
+            title=f"note {index}",
+            summary=f"note {index}",
+            confidence=Confidence.MEDIUM,
+            created_at=PROVISIONED_AT,
+        )
+        append_ledger_record(ledger, note_line(note, at=PROVISIONED_AT, replaces=None))
+    return ledger
+
+
+def write_plugin_record(home: Path, plugins: dict[str, Any]) -> None:
+    """Write the host's installed-plugins record under ``home``."""
+    path = home / ".claude" / "plugins" / "installed_plugins.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"version": 2, "plugins": plugins}), encoding="utf-8")
+
+
+def epoch1_tree(tmp_path: Path, document: dict[str, Any]) -> Path:
+    """Write an unmarked tree whose frozen document is ``document``; return its state path."""
+    tree = tmp_path / "legacy" / ".ea"
+    tree.mkdir(parents=True)
+    state_path = tree / "state.json"
+    state_path.write_text(json.dumps(document), encoding="utf-8")
+    return state_path
+
+
+def test_prx_043_budget_reads_the_session_runs_sealed_cap_against_its_usage(
+    tmp_path: Path,
+) -> None:
+    state_path, run = session_state(tmp_path)
+    bind_token_cap(state_path, run, 10_000)
+    observe_usage(state_path, run, 1, tokens=1_000)
+    observe_usage(state_path, run, 2, tokens=500)
+
+    segment = budget.build({"session_id": SESSION_ID}, state_path)
+
+    assert segment.text == "budget:1.5k/10.0k"
+    assert segment.status == "ok"
+    assert_truthful(segment)
+    assert segment.truth.producer == budget.RUN_LEDGER_PRODUCER
+    assert segment.truth.provenance_refs == (run["urn"],)
+    assert segment.truth.producer_revision == run["revision"]
+    assert segment.truth.truth_kind is TruthKind.DERIVED
+    assert segment.truth.precision is Precision.APPROXIMATE
+    assert segment.truth.measurement_quality is MeasurementQuality.EXACT
+
+
+def test_prx_043_budget_never_counts_a_running_total_twice(tmp_path: Path) -> None:
+    state_path, run = session_state(tmp_path)
+    bind_token_cap(state_path, run, 10_000)
+    observe_usage(state_path, run, 1, tokens=800, cumulative=True)
+    observe_usage(state_path, run, 2, tokens=1_200, cumulative=True)
+
+    assert budget.build({"session_id": SESSION_ID}, state_path).text == "budget:1.2k/10.0k"
+
+
+@pytest.mark.parametrize(
+    ("spent", "text", "status"),
+    [
+        (999, "budget:999/1.0k", "ok"),
+        (1_000, "budget:1.0k/1.0k !limit", "warn"),
+        (1_001, "budget:1.0k/1.0k !limit", "warn"),
+    ],
+    ids=["one-below-cap", "at-cap", "one-past-cap"],
+)
+def test_meas_043_budget_marks_the_limit_exactly_at_the_sealed_cap(
+    tmp_path: Path, spent: int, text: str, status: str
+) -> None:
+    state_path, run = session_state(tmp_path)
+    bind_token_cap(state_path, run, 1_000)
+    observe_usage(state_path, run, 1, tokens=spent)
+
+    segment = budget.build({"session_id": SESSION_ID}, state_path)
+
+    assert (segment.text, segment.status) == (text, status)
+
+
+def test_meas_043_budget_of_an_estimated_reading_says_so(tmp_path: Path) -> None:
+    state_path, run = session_state(tmp_path)
+    bind_token_cap(state_path, run, 10_000)
+    observe_usage(state_path, run, 1, tokens=2_000, quality="estimated")
+
+    segment = budget.build({"session_id": SESSION_ID}, state_path)
+
+    assert segment.text == "budget:2.0k/10.0k"
+    assert segment.truth.measurement_quality is MeasurementQuality.ESTIMATED
+
+
+@pytest.mark.parametrize(
+    ("cap", "usage", "reason"),
+    [
+        pytest.param(None, None, "no-token-cap", id="unbound"),
+        pytest.param("uncapped", 10, "no-token-cap", id="sealed-without-a-token-cap"),
+        pytest.param(1_000, None, "no-usage-reading", id="no-reading-yet"),
+    ],
+)
+def test_meas_043_budget_without_a_cap_or_a_reading_names_why(
+    tmp_path: Path, cap: int | str | None, usage: int | None, reason: str
+) -> None:
+    state_path, run = session_state(tmp_path)
+    if cap is not None:
+        bind_token_cap(state_path, run, cap if isinstance(cap, int) else None)
+    if usage is not None:
+        observe_usage(state_path, run, 1, tokens=usage)
+
+    segment = budget.build({"session_id": SESSION_ID}, state_path)
+
+    assert segment.text == f"budget:n/a({reason})"
+    assert segment.truth.producer == budget.RUN_LEDGER_PRODUCER
+    assert_truthful(segment)
+
+
+def test_meas_043_budget_with_a_torn_run_ledger_names_why(tmp_path: Path) -> None:
+    state_path, _ = session_state(tmp_path)
+    ledger = ledger_path(generation_document(state_path), Epoch2Collection.RUN)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text('{"half": ', encoding="utf-8")
+
+    segment = budget.build({"session_id": SESSION_ID}, state_path)
+
+    assert segment.text == "budget:n/a(run-ledger-unreadable)"
+
+
+def test_prx_043_budget_never_reads_the_epoch1_budget_fields(tmp_path: Path) -> None:
+    state_path = epoch1_tree(
+        tmp_path,
+        {
+            "current": {"active_wave_ids": ["W1"]},
+            "waves": {"W1": {"token_budget": 10, "tokens_consumed": 1}},
+        },
+    )
+
+    segment = budget.build({"session_id": SESSION_ID}, state_path)
+
+    assert segment.text == "budget:n/a(epoch1-undeclared)"
+    assert segment.truth.state is TruthState.UNAVAILABLE
+
+
+def test_prx_043_mcp_reads_the_registry_on_the_selected_generation(tmp_path: Path) -> None:
+    state_path = canary_state_path(tmp_path, {})
+    register_mcp(
+        state_path,
+        {
+            "alpha": (McpStatus.INSTALLED, "registered"),
+            "beta": (McpStatus.CONFIGURED, "registered"),
+            "gone": (McpStatus.INSTALLED, "removed"),
+        },
+    )
+    (state_path.parent.parent / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {name: {"command": "x"} for name in "abcdef"}}),
+        encoding="utf-8",
+    )
+
+    segment = mcp_health.build({}, state_path)
+
+    assert segment.text == "mcp:1/2"
+    assert segment.status == "warn"
+    assert_truthful(segment)
+    assert segment.truth.producer == SPINE_PRODUCER
+    assert segment.truth.provenance_refs == ("generation#capability",)
+    assert segment.truth.producer_revision == 2
+    assert segment.truth.truth_kind is TruthKind.STORED
+
+
+@pytest.mark.parametrize(
+    ("servers", "text", "status"),
+    [
+        pytest.param({"alpha": McpStatus.INSTALLED}, "mcp:1/1", "ok", id="one-installed"),
+        pytest.param(
+            {"alpha": McpStatus.INSTALLED, "beta": McpStatus.INSTALLED},
+            "mcp:2/2",
+            "ok",
+            id="all-installed",
+        ),
+        pytest.param({"alpha": McpStatus.CONFIGURED}, "mcp:0/1", "degraded", id="none-installed"),
+        pytest.param(
+            {"alpha": McpStatus.INSTALLED, "beta": McpStatus.DEGRADED},
+            "mcp:1/2",
+            "degraded",
+            id="one-degraded",
+        ),
+    ],
+)
+def test_meas_043_mcp_status_follows_the_recorded_install_status(
+    tmp_path: Path, servers: dict[str, McpStatus], text: str, status: str
+) -> None:
+    state_path = canary_state_path(tmp_path, {})
+    register_mcp(state_path, {key: (value, "registered") for key, value in servers.items()})
+
+    segment = mcp_health.build({}, state_path)
+
+    assert (segment.text, segment.status) == (text, status)
+
+
+def test_meas_043_mcp_with_only_removed_servers_names_why(tmp_path: Path) -> None:
+    state_path = canary_state_path(tmp_path, {})
+    register_mcp(state_path, {"alpha": (McpStatus.INSTALLED, "removed")})
+
+    assert mcp_health.build({}, state_path).text == "mcp:n/a(no-mcp-servers)"
+
+
+def test_meas_043_mcp_with_a_malformed_registry_row_names_why(tmp_path: Path) -> None:
+    state_path = canary_state_path(tmp_path, {})
+    path = generation_document(state_path)
+    document = read_document(path)
+    document[Epoch2Collection.CAPABILITY.value] = {"alpha": ["not", "a", "row"]}
+    write_document(path, document)
+
+    assert mcp_health.build({}, state_path).text == "mcp:n/a(mcp-registry-unreadable)"
+
+
+def test_prx_043_mcp_never_reads_the_epoch1_document(tmp_path: Path) -> None:
+    state_path = epoch1_tree(tmp_path, {"mcp_servers": {"a": {"status": "up"}}})
+
+    assert mcp_health.build({}, state_path).text == "mcp:n/a(epoch1-undeclared)"
+
+
+def test_prx_043_memory_counts_the_notes_of_the_memory_ledger(tmp_path: Path) -> None:
+    state_path = canary_state_path(tmp_path, {})
+    ledger = file_notes(state_path, 3)
+
+    segment = memory.build({}, state_path)
+
+    size = ledger.stat().st_size
+    assert segment.text == (f"mem:3@{size}B" if size < 1024 else f"mem:3@{size // 1024}KiB")
+    assert_truthful(segment)
+    assert segment.truth.producer == memory.LEDGER_PRODUCER
+
+
+def test_prx_043_memory_never_counts_the_epoch1_memory_index(tmp_path: Path) -> None:
+    state_path = epoch1_tree(tmp_path, {"memory_index": {"m1": {}, "m2": {}}})
+
+    assert memory.build({}, state_path).text == "mem:n/a(epoch1-undeclared)"
+
+
+def test_prx_043_plugins_name_the_host_install_record_as_their_producer(
+    tmp_path: Path, canary_runtime_under_tmp: Path
+) -> None:
+    state_path = canary_state_path(tmp_path, {})
+    write_plugin_record(canary_runtime_under_tmp, {"a@m": [{"scope": "user"}]})
+
+    segment = hooks_plugins.build({}, state_path)
+
+    assert segment.text == "hooks:0 plugins:1"
+    assert_truthful(segment)
+    assert segment.truth.producer == HOST_PLUGIN_PRODUCER
+    assert segment.truth.provenance_refs == (
+        "~/.claude/plugins/installed_plugins.json#plugins",
+        ".claude/hooks",
+    )
+
+
+def test_prx_043_plugins_never_count_the_epoch1_document(
+    tmp_path: Path, canary_runtime_under_tmp: Path
+) -> None:
+    state_path = epoch1_tree(tmp_path, {"plugins": {"p": {}, "q": {}}})
+    write_plugin_record(canary_runtime_under_tmp, {})
+
+    segment = hooks_plugins.build({}, state_path)
+
+    assert segment.text == "hooks:0 plugins:0"
+    assert segment.truth.producer == HOST_PLUGIN_PRODUCER
+
+
+def test_prx_043_the_whole_line_renders_from_epoch2_producers(
+    tmp_path: Path, canary_runtime_under_tmp: Path
+) -> None:
+    state_path, run = session_state(tmp_path)
+    bind_token_cap(state_path, run, 10_000)
+    observe_usage(state_path, run, 1, tokens=4_000)
+    register_mcp(state_path, {"alpha": (McpStatus.INSTALLED, "registered")})
+    file_notes(state_path, 2)
+    write_plugin_record(canary_runtime_under_tmp, {"a@m": [{"scope": "user"}]})
+
+    segments = orchestrator._build_segments({**HOST_PAYLOAD, "cwd": str(tmp_path)}, state_path)
+
+    by_module = {segment.module: segment for segment in segments}
+    assert by_module["budget"].text == "budget:4.0k/10.0k"
+    assert by_module["mcp_health"].text == "mcp:1/1"
+    assert by_module["memory"].text.startswith("mem:2@")
+    assert by_module["hooks_plugins"].text == "hooks:0 plugins:1"
+    for segment in segments:
+        assert_truthful(segment)
+        assert segment.truth.freshness is Freshness.LIVE
+        assert segment.truth.producer != "eawf.state-document"

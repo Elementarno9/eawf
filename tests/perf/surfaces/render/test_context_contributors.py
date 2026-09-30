@@ -47,7 +47,6 @@ def test_surf_151_every_chain_names_every_contributor_class(
     [
         (ContextContributor.TOOL_RESULT, BudgetClassId.TOOL_CATALOG),
         (ContextContributor.HOST_ADVERTISING, BudgetClassId.STEERING_ZONE1),
-        (ContextContributor.GLOBAL, BudgetClassId.STEERING_ZONE1),
     ],
 )
 def test_surf_151_an_unauthored_contributor_is_charged_and_explained(

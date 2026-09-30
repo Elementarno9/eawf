@@ -9,9 +9,11 @@ host discovers. The files are read from the render's own output, so the
 measurement follows whatever the renderer emits and never re-enumerates what a
 projection contains.
 
-A contributor no render produces -- the operator's global instruction
-document, tool results, the host's own advertising block -- is declared as
-unmeasured rather than left out, because a budget report that cannot name a
+The operator's global instruction document is read from the host's own home
+and charged to zone 1 like the repository chain, because a rule loaded through
+a host mechanism counts against the ceiling wherever it lives. A contributor no
+render can see -- tool results, the host's own advertising block -- is declared
+as unmeasured rather than left out, because a budget report that cannot name a
 contributor cannot hold it; a chain report missing one fails validation.
 """
 
@@ -21,7 +23,7 @@ import posixpath
 from collections.abc import Mapping
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Final, Self
+from typing import Final, Literal, Self
 
 from pydantic import Field, NonNegativeInt, model_validator
 
@@ -38,6 +40,11 @@ from eawf.platform.rules.host_probe import SKILL_DISCOVERY
 from eawf.platform.rules.records import RuleModel
 from eawf.workflow.skills.catalog import SKILL_CATALOG
 
+#: How a render judges what only this machine loads: a ``local`` render warns
+#: when the operator's global instruction documents put a chain over its
+#: ceiling and renders anyway; a ``certified`` render refuses.
+RenderMode = Literal["local", "certified"]
+
 
 class ContextContributor(StrEnum):
     """The accounting classes a host session's context is charged in."""
@@ -52,13 +59,9 @@ class ContextContributor(StrEnum):
 
 #: Contributors a render cannot measure, the budget class each is charged to,
 #: and why it stays unmeasured. Tool results enter through the tool surface, so
-#: they are charged to the tool class; the global document and the host's
-#: advertising block are always on, so they are charged to zone 1.
+#: they are charged to the tool class; the host's advertising block is always
+#: on, so it is charged to zone 1.
 _UNMEASURED: Final[Mapping[ContextContributor, tuple[BudgetClassId, str]]] = {
-    ContextContributor.GLOBAL: (
-        BudgetClassId.STEERING_ZONE1,
-        "the operator's global instruction document is machine-local, outside the render",
-    ),
     ContextContributor.TOOL_RESULT: (
         BudgetClassId.TOOL_CATALOG,
         "tool-result bytes arrive during a session, after the render",
@@ -128,14 +131,58 @@ class ChainBudget(RuleModel):
         return self
 
 
+class GlobalDocumentFile(RuleModel):
+    """One file of a host's global instruction chain, as the budget measured it.
+
+    Attributes:
+        path: The file, home-relative (``~/...``) where it lies under the home.
+        byte_count: Its UTF-8 bytes.
+    """
+
+    path: str = Field(min_length=1)
+    byte_count: NonNegativeInt
+
+
+class GlobalDocumentOverage(RuleModel):
+    """A chain the operator's global instruction documents put over its ceiling.
+
+    Attributes:
+        runtime: The runtime whose chain is over.
+        class_id: The budget class that is over.
+        files: The global documents the chain charges.
+        measured_bytes: What the class measures, the global documents included.
+        ceiling_bytes: The class's byte ceiling.
+    """
+
+    runtime: RuntimeName
+    class_id: BudgetClassId
+    files: tuple[GlobalDocumentFile, ...] = Field(min_length=1)
+    measured_bytes: NonNegativeInt
+    ceiling_bytes: NonNegativeInt
+
+    @property
+    def note(self) -> str:
+        """Return the operator line naming each file, its bytes, the cap and the overage."""
+        files = ", ".join(f"{item.path} ({item.byte_count} bytes)" for item in self.files)
+        return (
+            f"the {self.runtime} chain charges {self.class_id.value} {self.measured_bytes} "
+            f"bytes with the global instruction documents {files}, "
+            f"{self.measured_bytes - self.ceiling_bytes} bytes over its "
+            f"{self.ceiling_bytes}-byte ceiling"
+        )
+
+
 class ChainBudgetReport(RuleModel):
     """Every supported runtime's loaded chain held to one prompt-budget policy.
 
     Attributes:
         chains: One chain per supported runtime.
+        global_overages: The chains only the global instruction documents put
+            over a ceiling, which a local render warns about and renders.
     """
 
     chains: tuple[ChainBudget, ...] = Field(min_length=1)
+    global_overages: tuple[GlobalDocumentOverage, ...] = ()
 
 
 def judge_loaded_chains(
@@ -145,6 +192,7 @@ def judge_loaded_chains(
     projections: Mapping[ProjectionKind, str],
     outputs: Mapping[str, str],
     installed_skills: Mapping[str, str],
+    global_documents: Mapping[RuntimeName, Mapping[str, str]],
 ) -> ChainBudgetReport:
     """Measure what each runtime loads once the render lands, and judge it.
 
@@ -155,13 +203,22 @@ def judge_loaded_chains(
         outputs: Every file the render writes, by repository-relative path.
         installed_skills: Skill files already on disk that the render does
             not write, by repository-relative path.
+        global_documents: Each runtime's global instruction chain, text by
+            display path; a runtime with none on this machine is absent.
 
     Returns:
         One chain per runtime, in registry order.
     """
     return ChainBudgetReport(
         chains=tuple(
-            _chain_budget(policy, record, projections, outputs, installed_skills)
+            _chain_budget(
+                policy,
+                record,
+                projections,
+                outputs,
+                installed_skills,
+                global_documents.get(record.runtime, {}),
+            )
             for record in registry.records
         )
     )
@@ -190,6 +247,7 @@ def _chain_budget(
     projections: Mapping[ProjectionKind, str],
     outputs: Mapping[str, str],
     installed_skills: Mapping[str, str],
+    global_document: Mapping[str, str],
 ) -> ChainBudget:
     """Measure and judge one runtime's chain.
 
@@ -199,6 +257,7 @@ def _chain_budget(
         projections: The repository-relative target of each projection kind.
         outputs: Every file the render writes.
         installed_skills: Skill files on disk the render does not write.
+        global_document: The runtime's global instruction chain.
 
     Returns:
         The runtime's chain with its verdict.
@@ -214,6 +273,12 @@ def _chain_budget(
     rows = [
         _measured(ContextContributor.ROOT, BudgetClassId.STEERING_ZONE1, (root,), outputs),
         _measured(ContextContributor.IMPORTED, BudgetClassId.STEERING_ZONE1, imported, outputs),
+        _measured(
+            ContextContributor.GLOBAL,
+            BudgetClassId.STEERING_ZONE1,
+            tuple(global_document),
+            global_document,
+        ),
     ]
     by_class: dict[BudgetClassId, list[str]] = {}
     for path in skills:
@@ -323,5 +388,8 @@ __all__ = [
     "ChainBudgetReport",
     "ContextContributor",
     "ContributorMeasure",
+    "GlobalDocumentFile",
+    "GlobalDocumentOverage",
+    "RenderMode",
     "judge_loaded_chains",
 ]

@@ -172,6 +172,8 @@ def _frame(
         linked=True,
         attention=model if route == "attention" else kwargs.get("attention"),
         replay=kwargs.get("replay"),
+        live=kwargs.get("live", {}),
+        now=kwargs.get("now"),
         **held,
     )
     frame = render_route(view)
@@ -578,12 +580,17 @@ def test_ui_023_the_route_observes_and_names_the_daemon_as_authority() -> None:
     assert "derived from the dependency graph" in _starts(frame, " PLAN")
     assert DISPATCH_QUEUE_PRODUCER in _text(frame)
     assert "every verb is a daemon request" in _starts(frame, " CONTROL")
-    # no dispatch-queue record is read yet, so a pause or drain has nothing to address
+    # pause and drain are daemon verbs: a is the pause request, drain is in the action menu
     assert frame[-1].split() == [
         "↑↓",
         "row",
         "Enter",
         "run",
+        "a",
+        "request",
+        "pause",
+        ".",
+        "actions",
         "Esc",
         "back",
     ]

@@ -13,8 +13,9 @@ tuple section with no verdict in it says so rather than drawing a healthy tuple 
 observed. A quarantined tuple names its trigger through the failure code its record was
 filed under, and where two triggers share one code the row names both rather than guessing.
 
-The dispatch-queue projection has no producer at this checkpoint, so every column that
-would come from it renders the unknown truth token naming the item it waits on. That is
+The unattended route's queue columns are not rows of its projection: they come from the
+daemon's dispatch-queue read, so until that read arrives every such column renders the
+unknown truth token naming the read it waits on. That is
 the point of declaring them: a blank cell and a cell waiting on a named producer are
 different answers to an operator. The sandbox log and Trust state their columns from the
 facts their decision and verdict rows carry, and a row that does not state one says why.

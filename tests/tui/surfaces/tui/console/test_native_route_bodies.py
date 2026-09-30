@@ -371,7 +371,7 @@ def test_con_085_an_incomplete_read_labels_the_second_count_known() -> None:
 
 def test_con_085_home_names_the_principal_under_more_than_one() -> None:
     frame = _frame("scope.home")
-    assert frame[3].startswith(f" PRINCIPAL  you are {ME} · class {UNKNOWN_WORD} · 1 action is")
+    assert frame[3].startswith(f" PRINCIPAL  you are {ME} · operator class · 1 action is")
     head = next(row for row in frame if "MILESTONES" in row)
     assert re.search(r"RUNS\s+MINE\s+ALL PRINCIPALS\s+PROGRESS", head)
     # a Track is a container, so its row never carries the caret

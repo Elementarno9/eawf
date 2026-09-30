@@ -1,4 +1,4 @@
-"""Statusline module bundle for ``eawf cc statusline`` (Phase 4 W06).
+"""Statusline module bundle for ``eawf cc statusline``.
 
 Each submodule exports a single :func:`build` function that takes a Claude
 JSON payload (already decoded into a ``dict``) and the resolved

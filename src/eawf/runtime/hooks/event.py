@@ -12,7 +12,7 @@ v0.x releases):
 post_audit | session_start | session_end | wave_open | wave_close |
 iter_open | iter_close | phase_open | phase_close | agent_end |
 subagent_start | subagent_stop | pre_compact | permission_request |
-pre_tool_use | post_tool_use | post_tool_use_failure``.
+pre_tool_use | post_tool_use | post_tool_use_failure | user_prompt_submit``.
 
 The optional ``payloads`` mapping carries per-event extension shapes;
 ``docs/hook-events.md`` enumerates the v1 shape for each
@@ -60,6 +60,7 @@ class HookEventType(StrEnum):
     PRE_TOOL_USE = "pre_tool_use"
     POST_TOOL_USE = "post_tool_use"
     POST_TOOL_USE_FAILURE = "post_tool_use_failure"
+    USER_PROMPT_SUBMIT = "user_prompt_submit"
 
 
 # Frozen runtime literal. ``"generic"`` is the catch-all used by the

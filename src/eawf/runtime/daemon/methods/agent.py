@@ -1863,8 +1863,10 @@ async def _spawn_and_dispatch(
     # The live-spawn path reads the spawned model's final message as a JSON
     # role-specific report body, so render the headless prompt: it pins the
     # report schema + an output-only-JSON instruction so the model emits a
-    # parseable body on the first try rather than answering in prose.
-    role_tier = resolve_role_blocks(state_path.parent.parent)
+    # parseable body on the first try rather than answering in prose. No
+    # operator attends a headless spawn, so an uncertified enriched profile
+    # never instructs it.
+    role_tier = resolve_role_blocks(state_path.parent.parent, unattended=True)
     envelope = render_dispatch_envelope(
         state,
         wave_id,

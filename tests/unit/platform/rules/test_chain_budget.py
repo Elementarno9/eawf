@@ -35,6 +35,7 @@ from eawf.platform.rules.chain_budget import (
     judge_loaded_chains,
 )
 from eawf.platform.rules.host_facts import load_host_facts
+from eawf.platform.rules.host_probe import global_document_chain
 from eawf.platform.rules.render import (
     CARD_TARGET,
     POLICY_TARGET,
@@ -96,6 +97,7 @@ def _judge(outputs: dict[str, str], installed: dict[str, str] | None = None) -> 
         projections=_PROJECTIONS,
         outputs=outputs,
         installed_skills=installed or {},
+        global_documents={},
     )
 
 
@@ -234,6 +236,114 @@ def test_surf_004_a_chain_with_no_imports_measures_zero_imported_bytes() -> None
     (imported,) = _rows(_chain(_judge(outputs), "codex"), ContextContributor.IMPORTED)
     assert imported.sources == ()
     assert imported.byte_count == 0
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    for variable in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "XDG_CONFIG_HOME"):
+        monkeypatch.delenv(variable, raising=False)
+    return tmp_path / "home"
+
+
+def test_surf_004_the_host_loaded_global_document_counts_against_the_ceiling(
+    repo: Path, home: Path
+) -> None:
+    (home / ".claude").mkdir(parents=True)
+    entry = "\n".join(["global rule", "@RTK.md", ""])
+    (home / ".claude" / "CLAUDE.md").write_text(entry, encoding="utf-8")
+    (home / ".claude" / "RTK.md").write_text("imported global rule\n", encoding="utf-8")
+    plan = plan_rule_projections(repo)
+    assert plan.manifest.prompt_budget is not None
+    claude = _chain(plan.manifest.prompt_budget, "claude")
+    (global_row,) = _rows(claude, ContextContributor.GLOBAL)
+    assert global_row.sources == ("~/.claude/CLAUDE.md", "~/.claude/RTK.md")
+    assert global_row.byte_count == len(entry) + len("imported global rule\n")
+    assert global_row.class_id is BudgetClassId.STEERING_ZONE1
+    outputs = dict(plan.outputs)
+    repo_chain = len(outputs["CLAUDE.md"].encode()) + len(outputs[POLICY_TARGET].encode())
+    zone1 = _verdict(claude, BudgetClassId.STEERING_ZONE1).measured_bytes
+    assert zone1 == repo_chain + global_row.byte_count
+
+
+def _overflowing_global_document(repo: Path, home: Path) -> tuple[int, int]:
+    """Write a codex global document one byte larger than the room under the ceiling.
+
+    Returns:
+        The ceiling the configuration now holds and the document's size.
+    """
+    codex = _verdict(_chain(_report(repo), "codex"), BudgetClassId.STEERING_ZONE1)
+    assert codex.measured_bytes is not None
+    ceiling = max(_largest_zone1(_report(repo)), codex.measured_bytes + 64)
+    _configure(repo, BudgetClassId.STEERING_ZONE1, max_bytes=ceiling)
+    (home / ".codex").mkdir(parents=True)
+    size = ceiling - codex.measured_bytes + 1
+    (home / ".codex" / "AGENTS.md").write_text("g" * size, encoding="utf-8")
+    return ceiling, size
+
+
+def test_surf_004_a_local_render_warns_about_a_global_overflow_and_renders(
+    repo: Path, home: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ceiling, size = _overflowing_global_document(repo, home)
+
+    manifest = plan_rule_projections(repo).manifest
+
+    assert manifest.render_mode == "local"
+    assert manifest.prompt_budget is not None
+    codex = _chain(manifest.prompt_budget, "codex")
+    assert _verdict(codex, BudgetClassId.STEERING_ZONE1).status is ClassStatus.EXHAUSTED
+    (overage,) = manifest.prompt_budget.global_overages
+    assert overage.runtime == "codex"
+    assert overage.measured_bytes - overage.ceiling_bytes == 1
+    note = next(line for line in manifest.render_warnings if "global instruction" in line)
+    assert f"~/.codex/AGENTS.md ({size} bytes)" in note
+    assert f"1 bytes over its {ceiling}-byte ceiling" in note
+    assert "global_document_over_ceiling runtime=codex class_id=steering_zone1" in caplog.text
+
+
+def test_surf_004_a_certified_render_refuses_a_global_overflow(repo: Path, home: Path) -> None:
+    _overflowing_global_document(repo, home)
+
+    with pytest.raises(RuleProjectionBudgetError, match=r"~/\.codex/AGENTS\.md \(\d+ bytes\)"):
+        plan_rule_projections(repo, mode="certified")
+
+
+def test_surf_004_a_certified_render_within_the_ceiling_records_its_mode(
+    repo: Path, home: Path
+) -> None:
+    assert plan_rule_projections(repo, mode="certified").manifest.render_mode == "certified"
+
+
+def test_surf_004_the_repository_chain_over_the_ceiling_still_fails_the_render(
+    repo: Path, home: Path
+) -> None:
+    _configure(repo, BudgetClassId.STEERING_ZONE1, max_bytes=64)
+    with pytest.raises(RuleProjectionBudgetError, match="chain charges steering_zone1"):
+        plan_rule_projections(repo)
+
+
+def test_surf_004_codex_reads_its_global_override_first(home: Path) -> None:
+    (home / ".codex").mkdir(parents=True)
+    (home / ".codex" / "AGENTS.md").write_text("base\n", encoding="utf-8")
+    (home / ".codex" / "AGENTS.override.md").write_text("override\n", encoding="utf-8")
+    assert global_document_chain("codex", {}, home) == {"~/.codex/AGENTS.override.md": "override\n"}
+
+
+def test_surf_004_a_configured_host_home_is_read_in_place_of_the_default(
+    tmp_path: Path, home: Path
+) -> None:
+    configured = home / "elsewhere"
+    configured.mkdir(parents=True)
+    (configured / "CLAUDE.md").write_text("moved\n", encoding="utf-8")
+    chain = global_document_chain("claude", {"CLAUDE_CONFIG_DIR": str(configured)}, home)
+    assert chain == {"~/elsewhere/CLAUDE.md": "moved\n"}
+
+
+def test_surf_004_no_global_document_measures_zero(repo: Path, home: Path) -> None:
+    for chain in _report(repo).chains:
+        (global_row,) = _rows(chain, ContextContributor.GLOBAL)
+        assert global_row.sources == ()
+        assert global_row.byte_count == 0
 
 
 # ---- SURF-006: the measurement reads the renderer's output ----

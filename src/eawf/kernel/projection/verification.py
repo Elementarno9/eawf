@@ -2,8 +2,8 @@
 
 Four routes answer the one question an operator asks of a verification surface: what is
 believed here, and on whose say-so. ``trust`` renders the audit verdicts the Batches'
-current verification cycles hold, each with the producer that reached it, beside the
-claims no verdict has been recorded for,
+current verification cycles hold, each with the producer that reached it, and the jury's
+calibration over them, beside the claims no verdict has been recorded for,
 ``evidence`` the claim and the rungs under it, ``evidence.digest`` one rung's record, and
 ``health`` the conformance verdicts a runtime tuple carries.
 
@@ -79,6 +79,10 @@ NOT_QUARANTINED_REASON: Final = "the tuple is in service, so no trigger fired"
 #: Why a Trust subject states no verdict: no observation was recorded for it.
 NO_OUTCOME_REASON: Final = "no outcome recorded"
 
+#: Why a calibration cell is silent: only the calibration row states it, and a metric the
+#: report left undefined is not stated there either.
+NO_CALIBRATION_REASON: Final = "the calibration row states no such value"
+
 #: Why a verdict names no Milestone: the Batch it was reached on is filed under none.
 NO_MILESTONE_REASON: Final = "the Batch this verdict was reached on is filed under no Milestone"
 
@@ -102,6 +106,12 @@ VERIFICATION_FIELDS: Final[Mapping[str, tuple[RouteFieldSpec, ...]]] = MappingPr
             stated("milestone", absent=NO_MILESTONE_REASON),
             stated("agent_role", absent=NO_OUTCOME_REASON),
             stated("runtime", absent=NO_OUTCOME_REASON),
+            stated("cohort", absent=NO_CALIBRATION_REASON),
+            stated("known_bad", absent=NO_CALIBRATION_REASON),
+            stated("min_scored", absent=NO_CALIBRATION_REASON),
+            stated("brier", absent=NO_CALIBRATION_REASON),
+            stated("co_error", absent=NO_CALIBRATION_REASON),
+            stated("authority", absent=NO_CALIBRATION_REASON),
         ),
         "evidence": status_and(unstated("outcome"), unstated("checked"), unstated("as_of")),
         "evidence.digest": status_and(unstated("found"), unstated("input_digest")),
@@ -304,6 +314,7 @@ __all__ = [
     "FAMILY",
     "HEALTH_ROUTE",
     "NOT_QUARANTINED_REASON",
+    "NO_CALIBRATION_REASON",
     "NO_MILESTONE_REASON",
     "NO_OUTCOME_REASON",
     "NO_PROVENANCE_REASON",

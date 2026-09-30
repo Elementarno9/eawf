@@ -15,15 +15,17 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-from eawf.kernel.projection.attention import build_attention_view
 from eawf.kernel.projection.compute import ProjectionRow
 from eawf.kernel.projection.spine import SpineRow, SpineView
 from eawf.kernel.projection.truth import TruthField
+from eawf.kernel.state.epoch2.consequence import MUTATIONS_BY_METHOD
 from eawf.surfaces.tui.console import derive as dv
 from eawf.surfaces.tui.console import prototype as pt
 from eawf.surfaces.tui.console.action_menu import Availability, MenuVerb, menu_rows
 from eawf.surfaces.tui.console.attention import ATTENTION_ROUTE, verb_available
+from eawf.surfaces.tui.console.attention_verbs import ONLY_PRINCIPAL
 from eawf.surfaces.tui.console.cells import value_cell
+from eawf.surfaces.tui.console.eligibility import principals_of
 from eawf.surfaces.tui.console.fixture import Fixture
 from eawf.surfaces.tui.console.format import group
 from eawf.surfaces.tui.console.frame import View, entry_state
@@ -35,12 +37,13 @@ from eawf.surfaces.tui.console.mutation import (
     menu_entity,
     verb_check,
 )
-from eawf.surfaces.tui.console.operations import binding_refusal
+from eawf.surfaces.tui.console.notices import NOTICE_VERBS, notice_of
 from eawf.surfaces.tui.console.renderers import copy_target
 from eawf.surfaces.tui.console.renderers.spine import offered_verbs
 from eawf.surfaces.tui.console.session import Session
 from eawf.surfaces.tui.console.tokens import TRUTH
 from eawf.surfaces.tui.console.width import pad
+from eawf.workflow.projection.acceptance import AcceptanceBundleView
 
 _UNKNOWN = TRUTH["unknown"].unicode
 
@@ -65,24 +68,51 @@ def go_rows(view: View) -> list[str]:
 
 #: The attention verb whose refusal depends on how many principals the register names.
 _ASSIGN = "assign"
-#: Why ``assign`` is refused while the register names no principal but this one.
-ONLY_PRINCIPAL = "you are the only principal"
 
 
 def _assign_refused(view: View, verb: MenuVerb) -> Availability | None:
-    """Return ``assign``'s refusal as the held register decides it.
+    """Return ``assign``'s refusal while the held register names nobody else to assign to.
 
-    While the register addresses items to no principal but this one there is nobody to
-    assign to, which is the first thing to say; once it names a second principal, that is
-    no longer why, and the daemon binding's reason is.
+    Once the register names a second principal the verb is judged like every other bound
+    attention verb, so ``None`` is returned and the ordinary gate decides.
     """
     held = view.attention
     if verb.verb != _ASSIGN or held is None or held.withheld:
         return None
-    named = {item.assignee_ref for item in build_attention_view(held).items} - {None}
-    if not named - {view.principal}:
+    if not principals_of(held.rows, view.principal) - {view.principal}:
         return Availability(False, ONLY_PRINCIPAL)
-    return Availability(False, binding_refusal(ATTENTION_ROUTE, _ASSIGN))
+    return None
+
+
+def _notice_takes(view: View, verb: MenuVerb) -> Availability | None:
+    """Return that a notice verb acts while the cursor is on a held notice, else ``None``.
+
+    A notice's verbs go to the notice ledger rather than to a pending action's mutators,
+    so while a notice is selected the menu offers exactly what its key path does.
+    """
+    if view.session.route != ATTENTION_ROUTE or verb.key not in NOTICE_VERBS:
+        return None
+    return Availability(True) if notice_of(view.notices, view.session.sel_id) else None
+
+
+#: The lifecycle verb whose refusal the acceptance journey's own checks can name.
+_ACCEPT = MUTATIONS_BY_METHOD["domain.milestone.accept"].action
+
+
+def _with_evidence(view: View, verb: MenuVerb, check: Availability) -> Availability:
+    """Return ``check`` naming the acceptance checks beside a refused accept.
+
+    A refusal names the evidence rather than a category, so while the held Milestone
+    states the steps its acceptance journey ran, a refused accept says how many passed.
+    """
+    record = view.projection
+    if check.ok or verb.verb != _ACCEPT or not isinstance(record, AcceptanceBundleView):
+        return check
+    if not record.criteria:
+        return check
+    state = "incomplete" if record.blocking() else "complete"
+    counted = f"checks {state}, {record.proven()} of {len(record.criteria)} passed"
+    return Availability(False, f"{counted} · {check.why}")
 
 
 def action_rows(view: View) -> list[str]:
@@ -101,9 +131,11 @@ def action_rows(view: View) -> list[str]:
     rows = menu_rows(
         (*chrome_kept(chrome, native), *native),
         guard=lambda v: (
-            verb_check(s, view.rows, decided, v)
+            _with_evidence(view, v, verb_check(s, view.rows, decided, v))
             if v.key in native_keys
-            else _assign_refused(view, v) or verb_available(s, fx, v, principal_refusal=refusal)
+            else _assign_refused(view, v)
+            or _notice_takes(view, v)
+            or verb_available(s, fx, v, principal_refusal=refusal)
         ),
         w=view.w,
     )

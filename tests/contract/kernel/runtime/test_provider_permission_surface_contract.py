@@ -12,6 +12,7 @@ stand in for that.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Final
 
 import pytest
@@ -40,6 +41,7 @@ from eawf.surfaces.tui.console.session import Session
 from tests.unit.kernel.projection.test_attention_permission import permission_row, register
 
 OPERATOR: Final = "OP-0001"
+WALL: Final = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
 URN: Final = "eawf://WSP-MAIN/PRJ-EAWF/_/permission/PERM-0001"
 
 
@@ -90,7 +92,7 @@ def test_run_052_the_frame_draws_repository_approval_only_where_the_record_grant
 def test_run_052_the_card_previews_no_hold() -> None:
     (row,) = register(permission_row()).rows
 
-    card = answer_card(row, "a", principal=OPERATOR, now=0.0)
+    card = answer_card(row, "a", principal=OPERATOR, now=0.0, wall=WALL, rows=())
 
     (item,) = card.items
     assert card.noun == "provider permission"
@@ -102,7 +104,7 @@ def test_run_052_the_card_previews_no_hold() -> None:
 def test_run_052_a_verb_that_decides_nothing_is_refused_on_the_card(key: str) -> None:
     (row,) = register(permission_row()).rows
 
-    (item,) = answer_card(row, key, principal=OPERATOR, now=0.0).items
+    (item,) = answer_card(row, key, principal=OPERATOR, now=0.0, wall=WALL, rows=()).items
 
     assert item.request is None
     assert item.refusal is not None
@@ -113,8 +115,8 @@ def test_run_052_a_verb_the_operator_class_lacks_is_refused_on_the_card() -> Non
     split = {"approve": ["repository"], "deny": ["operator"]}
     (row,) = register(permission_row(approval_authority=split)).rows
 
-    (approve,) = answer_card(row, "a", principal=OPERATOR, now=0.0).items
-    (deny,) = answer_card(row, "x", principal=OPERATOR, now=0.0).items
+    (approve,) = answer_card(row, "a", principal=OPERATOR, now=0.0, wall=WALL, rows=()).items
+    (deny,) = answer_card(row, "x", principal=OPERATOR, now=0.0, wall=WALL, rows=()).items
 
     assert approve.refusal is not None
     assert approve.refusal.code == "authority_denied"

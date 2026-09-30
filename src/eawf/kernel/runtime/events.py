@@ -596,6 +596,70 @@ class ErrorPayload(RuntimeRecord):
     diagnostic_ref: ArtifactUrn | None = None
 
 
+#: A contract anchor a context boundary snapshots.
+ContractAnchorName = Literal[
+    "authority_capsule_digest",
+    "compiled_spec_digest",
+    "criteria_digest",
+    "scope_digest",
+    "receipts_digest",
+]
+
+
+class ContractAnchors(RuntimeRecord):
+    """What a Run is bound to, read from the store rather than from any context.
+
+    Attributes:
+        authority_capsule_digest: The bound authority capsule, when the Run has one.
+        compiled_spec_digest: The exact compiled provider and policy input.
+        criteria_digest: The criteria the capsule binds.
+        scope_digest: The scope, exact base included, the capsule binds.
+        receipts_digest: Every decision receipt the Run's ledger holds, in order.
+        receipt_count: How many receipts ``receipts_digest`` covers.
+    """
+
+    authority_capsule_digest: Digest | None
+    compiled_spec_digest: Digest | None
+    criteria_digest: Digest | None
+    scope_digest: Digest | None
+    receipts_digest: Digest
+    receipt_count: Annotated[StrictInt, Field(ge=0)]
+
+
+class ContextBoundaryPayload(RuntimeRecord):
+    """A host compaction of the Run's context, on either side of it.
+
+    Compaction rewrites what the model remembers, never what the Run is bound
+    to. ``compacting`` snapshots the anchors before the host summarises;
+    ``resumed`` reads them again afterwards and names every anchor that no
+    longer matches, which is a contract mismatch rather than a new contract.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        boundary: ``compacting`` before the host compacts, ``resumed`` after.
+        trigger: Whether the operator or the host's own threshold asked for it.
+        anchors: The anchors as the store holds them at this boundary.
+        drift: The anchors that differ from the last ``compacting`` snapshot.
+    """
+
+    payload_kind: Literal["context_boundary"] = "context_boundary"
+    boundary: Literal["compacting", "resumed"]
+    trigger: Literal["manual", "auto"] | None = None
+    anchors: ContractAnchors
+    drift: tuple[ContractAnchorName, ...] = ()
+
+    @model_validator(mode="after")
+    def _drift_is_found_after_the_boundary(self) -> Self:
+        """Refuse drift on the snapshot it is measured against.
+
+        Raises:
+            ValueError: A ``compacting`` boundary names drift.
+        """
+        if self.boundary == "compacting" and self.drift:
+            raise ValueError("a compacting boundary is the snapshot, so it names no drift")
+        return self
+
+
 class EventGapPayload(RuntimeRecord):
     """A range of sequences the daemon never received.
 
@@ -645,7 +709,8 @@ RunEventPayload = Annotated[
     | ErrorPayload
     | EventGapPayload
     | UsagePayload
-    | BudgetPayload,
+    | BudgetPayload
+    | ContextBoundaryPayload,
     Field(discriminator="payload_kind"),
 ]
 
@@ -663,6 +728,7 @@ _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
         EventPayloadKind.EVENT_GAP,
         EventPayloadKind.USAGE,
         EventPayloadKind.BUDGET,
+        EventPayloadKind.CONTEXT_BOUNDARY,
     }
 )
 
@@ -744,6 +810,9 @@ __all__ = [
     "ChildRunPayload",
     "CommandExecutionId",
     "CommandPayload",
+    "ContextBoundaryPayload",
+    "ContractAnchorName",
+    "ContractAnchors",
     "ErrorPayload",
     "EventContract",
     "EventGapId",

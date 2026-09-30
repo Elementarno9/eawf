@@ -310,6 +310,24 @@ def host_session_isolation() -> Iterator[None]:
         monkeypatch.undo()
 
 
+@pytest.fixture
+def isolated_host_homes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point every host's home at an empty directory for a test that renders a repository.
+
+    A render charges each host's global instruction document to the prompt
+    budget, read from the host's home; a test rendering this repository would
+    otherwise read the operator's own documents and pass or fail by machine.
+
+    Returns:
+        The empty directory every host home points at.
+    """
+    homes = tmp_path / "host-homes"
+    homes.mkdir()
+    for variable in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "XDG_CONFIG_HOME"):
+        monkeypatch.setenv(variable, str(homes))
+    return homes
+
+
 # --- daemon leak witness -------------------------------------
 #
 # Every test in a worker shares the worker's runtime dir, so a daemon one

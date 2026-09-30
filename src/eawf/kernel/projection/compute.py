@@ -109,6 +109,13 @@ _ASSIGNEE_FIELD: Final = "assignee_ref"
 #: The stored field a suspended Run names why it waits in.
 _SUSPENSION_FIELD: Final = "suspension_reason"
 
+#: The fact prefixes one principal's own disposition of a pending action is stated under,
+#: each followed by that principal's key: what they answered, until when they snoozed it,
+#: and when they last did either.
+ANSWERED_FACT: Final = "answered."
+SNOOZED_FACT: Final = "snoozed."
+ACTED_FACT: Final = "acted."
+
 #: Where each record names the record it is filed under, as a path into the stored row.
 _PARENT_FIELD: Final[Mapping[Epoch2Collection, tuple[str, ...]]] = MappingProxyType(
     {
@@ -232,10 +239,18 @@ CEILING_BREACH_KIND: Final = "child_ceiling_breach"
 #: It is derived at read time and never stored beside the Milestone it is listed under.
 VERDICT_OBSERVATION_KIND: Final = "verdict_observation"
 
+#: The kind of the jury calibration Trust draws: the validation report over the labelled
+#: cohort of verdicts and the authority the calibration gate returned for it. It is scored
+#: when the route is served and never stored.
+JURY_CALIBRATION_KIND: Final = "jury_calibration"
+
+#: The key the one jury calibration row is listed under among the verdicts.
+CALIBRATION_KEY: Final = "jury-calibration"
+
 #: The kinds a notice row may be. Each is a line of a ledger a route lists from without
 #: binding the collection: a row of any other kind is a record of that collection.
 NOTICE_KINDS: Final = frozenset(
-    {CEILING_BREACH_KIND, SANDBOX_DECISION_KIND, VERDICT_OBSERVATION_KIND}
+    {CEILING_BREACH_KIND, SANDBOX_DECISION_KIND, VERDICT_OBSERVATION_KIND, JURY_CALIBRATION_KIND}
 )
 
 #: The collections a route lists notices from without binding the collection itself.
@@ -1010,6 +1025,23 @@ def _verdict_facts(fields: Mapping[str, Any]) -> dict[str, str]:
     return {name: value for name, value in facts.items() if value}
 
 
+def _calibration_facts(fields: Mapping[str, Any]) -> dict[str, str]:
+    """Return what a jury calibration states: its cohort, its metrics and the authority.
+
+    A metric the report left undefined is absent, never zero.
+    """
+    facts = {
+        "kind": JURY_CALIBRATION_KIND,
+        **{
+            name: str(value)
+            for name in ("cohort", "known_bad", "min_scored", "brier", "co_error")
+            if isinstance(value := fields.get(name), int | float) and not isinstance(value, bool)
+        },
+        "authority": _text(fields.get("authority")),
+    }
+    return {name: value for name, value in facts.items() if value}
+
+
 #: What each notice kind states about itself, by kind.
 _NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]] = (
     MappingProxyType(
@@ -1017,6 +1049,7 @@ _NOTICE_FACTS: Final[Mapping[str, Callable[[Mapping[str, Any]], dict[str, str]]]
             CEILING_BREACH_KIND: _breach_facts,
             SANDBOX_DECISION_KIND: _decision_facts,
             VERDICT_OBSERVATION_KIND: _verdict_facts,
+            JURY_CALIBRATION_KIND: _calibration_facts,
         }
     )
 )
@@ -1073,6 +1106,15 @@ def _action_facts(fields: Mapping[str, Any], links: _Links) -> dict[str, str]:
         "created_at": _text(fields.get("created_at")),
         "subject": _key_of(subject_ref),
     }
+    rows = fields.get("dispositions")
+    for row in rows if isinstance(rows, list) else ():
+        who = row.get("principal_id") if isinstance(row, dict) else None
+        if not isinstance(who, str):
+            continue
+        outcome, option = row.get("outcome"), row.get("option_id")
+        facts[f"{ANSWERED_FACT}{who}"] = f"{outcome} {option}" if outcome and option else None
+        facts[f"{SNOOZED_FACT}{who}"] = _text(row.get("snoozed_until"))
+        facts[f"{ACTED_FACT}{who}"] = _text(row.get("acted_at"))
     if subject_ref is not None:
         kind = subject_ref.rstrip("/").rsplit("/", 2)
         collection = next(
@@ -1233,10 +1275,14 @@ def _digest(*, route: str, cursor: int, rows: tuple[ProjectionRow, ...]) -> str:
 
 
 __all__ = [
+    "ACTED_FACT",
+    "ANSWERED_FACT",
+    "CALIBRATION_KEY",
     "CANONICAL_SEQUENCE_FIELD",
     "CEILING_BREACH_KIND",
     "DIAGNOSTICS_CORPUS",
     "FACTS_FIELD",
+    "JURY_CALIBRATION_KIND",
     "MISSING_STATUS_REASON",
     "NOTICE_KINDS",
     "PROJECTION_POLICY_REVISION",
@@ -1245,6 +1291,7 @@ __all__ = [
     "ROUTE_COLLECTIONS",
     "ROUTE_NOTICE_COLLECTIONS",
     "ROUTE_READ_MODELS",
+    "SNOOZED_FACT",
     "VERDICT_OBSERVATION_KIND",
     "ControlMark",
     "KeyedPatch",

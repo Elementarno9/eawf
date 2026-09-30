@@ -185,15 +185,15 @@ def test_surf_080_every_lifecycle_group_is_an_entity_group() -> None:
 def test_surf_080_unmounted_groups_are_the_known_gap() -> None:
     """Pin the declared groups not yet mounted at the root, so a new mount is seen.
 
-    ``action`` has no verb: a pending action is answered through the verb of
-    the entity it gates (``milestone seal-approval``), so there is no operation
-    of its own to mount.
+    ``action`` is mounted: a pending action's snooze and assignment, a provider
+    permission's decision and a budget notice's disposition are its verbs, while
+    its answer is still sealed through the verb of the entity it gates.
     """
     mounted = set(_root().commands)
     declared = verb_contract.ENTITY_GROUPS + verb_contract.CROSS_CUTTING_GROUPS
     # ``decision`` has no CLI verb since the flag day retired the epoch-1 decision
     # verbs; a Decision is opened through ``question open-decision``.
-    assert {group for group in declared if group not in mounted} == {"action", "decision"}
+    assert {group for group in declared if group not in mounted} == {"decision"}
 
 
 # ---- SURF-081 ---------------------------------------------------------------

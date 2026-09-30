@@ -1,10 +1,11 @@
 """The epoch-2 reads the spine-backed statusline segments share.
 
 A tree cut over to epoch 2 keeps its authority in the selected generation.
-The ``scope``, ``budget`` and ``memory`` segments read it there: the first
-two through the Run bound to the host's session, the third through the
-memory ledger. Every way the spine can fail to answer comes back as one
-reason token the segment renders as ``n/a(<reason>)``.
+The ``scope``, ``budget``, ``mcp_health`` and ``memory`` segments read it
+there: the first two through the Run bound to the host's session, the others
+through the MCP registry rows and the memory ledger. Every way the spine can
+fail to answer comes back as one reason token the segment renders as
+``n/a(<reason>)``.
 """
 
 from __future__ import annotations
@@ -26,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 #: The producer a segment read from the tree's selected epoch-2 generation names.
 SPINE_PRODUCER: Final = "eawf.epoch2-generation"
+
+#: The reason a segment names when no workspace, and so no tree, resolved.
+NO_STATE: Final = "no-state"
 
 
 def selected_generation(state_path: Path) -> Path | str:
@@ -93,4 +97,4 @@ def session_run(claude_payload: dict[str, Any], document_path: Path) -> Run | st
     return max(runs, key=lambda candidate: candidate.updated_at)
 
 
-__all__ = ["SPINE_PRODUCER", "selected_generation", "session_run"]
+__all__ = ["NO_STATE", "SPINE_PRODUCER", "selected_generation", "session_run"]

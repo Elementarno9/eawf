@@ -5,9 +5,11 @@ Two checks refuse a plan before it exists
 
 - the chain every host loads once the render lands is charged to the
   prompt-budget policy resolved from the ``economics`` configuration
-  (:mod:`eawf.platform.rules.chain_budget`), and a class over its ceiling
-  fails the render rather than warning, because the host cap bounds
-  delivery, not what the project has chosen to spend;
+  (:mod:`eawf.platform.rules.chain_budget`), and a repository-authored
+  class over its ceiling fails the render rather than warning, because the
+  host cap bounds delivery, not what the project has chosen to spend; the
+  operator's global instruction documents are charged too, and fail only a
+  certified render;
 - no output names a model or recommends choosing one outside a fenced
   example, because the model is a typed configuration leaf and a sentence
   naming one is a second source of truth nothing reconciles against it.
@@ -26,6 +28,8 @@ Two checks bracket the writes of :func:`eawf.platform.rules.render.write_rule_pr
 
 from __future__ import annotations
 
+import logging
+import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
@@ -36,15 +40,25 @@ from pydantic import ValidationError
 from eawf.kernel.config.layered import merge_config
 from eawf.kernel.economics.governor import economics_policy_from
 from eawf.kernel.economics.prompt_budget import ClassStatus
-from eawf.kernel.runtime.host_facts import HostFactRegistry
+from eawf.kernel.runtime.host_facts import HostFactRegistry, ProjectionKind
 from eawf.platform.install.gitignore_writer import (
     GitignoreBlockPlan,
     plan_gitignore_block,
     unenumerated_paths,
 )
-from eawf.platform.rules.chain_budget import ChainBudgetReport, judge_loaded_chains
+from eawf.platform.rules.chain_budget import (
+    ChainBudgetReport,
+    GlobalDocumentFile,
+    GlobalDocumentOverage,
+    RenderMode,
+    judge_loaded_chains,
+)
 from eawf.platform.rules.host_facts import load_host_facts
-from eawf.platform.rules.host_probe import SKILL_DISCOVERY, host_loaded_files
+from eawf.platform.rules.host_probe import (
+    SKILL_DISCOVERY,
+    global_document_chain,
+    host_loaded_files,
+)
 from eawf.platform.rules.render import (
     CARD_TARGET,
     POLICY_TARGET,
@@ -54,7 +68,11 @@ from eawf.platform.rules.render import (
     RuleProjectionError,
     RuleProjectionUnenumeratedError,
     classify_projection,
+    plan_rule_projections,
+    rule_source_present,
 )
+
+logger = logging.getLogger(__name__)
 
 _FENCE: Final[re.Pattern[str]] = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _MODEL_PROSE: Final[re.Pattern[str]] = re.compile(
@@ -121,22 +139,32 @@ def refuse_model_naming(outputs: Mapping[str, str]) -> None:
 
 
 def budgeted_chains(
-    repo_root: Path, outputs: Mapping[str, str], registry: HostFactRegistry
+    repo_root: Path, outputs: Mapping[str, str], registry: HostFactRegistry, *, mode: RenderMode
 ) -> ChainBudgetReport:
     """Charge every host's loaded chain to the configured prompt budget.
+
+    Each chain is charged with the operator's global instruction documents too,
+    since the host loads them. A repository-authored chain over a ceiling on its
+    own fails every render. A chain the global documents put over a ceiling
+    fails a certified render, which claims what an agent on this machine
+    receives, and is recorded as a warning by a local one, which renders anyway.
 
     Args:
         repo_root: The repository root whose layered configuration resolves
             the policy.
         outputs: Every file the render writes, by repository-relative path.
         registry: The certified host facts naming each runtime's discovery.
+        mode: ``local`` for an ordinary render, ``certified`` for the render a
+            release certifies.
 
     Returns:
-        The report the manifest records.
+        The report the manifest records, its global overages among it.
 
     Raises:
         RuleProjectionBudgetError: When the ``economics`` configuration is
-            invalid, or a class of some chain is over its ceiling.
+            invalid, a class of some repository-authored chain is over its
+            ceiling, or a certified render's chain is over one with the global
+            documents charged.
     """
     merged, _sources = merge_config(workspace=repo_root, repo=repo_root)
     try:
@@ -145,29 +173,118 @@ def budgeted_chains(
         raise RuleProjectionBudgetError(
             f"the economics configuration is invalid, so no prompt-budget ceiling resolves: {error}"
         ) from error
+    installed = _installed_skills(repo_root, outputs)
+    projections: dict[ProjectionKind, str] = {"card": CARD_TARGET, "policy": POLICY_TARGET}
+    global_documents = {
+        record.runtime: global_document_chain(record.runtime, os.environ, Path.home())
+        for record in registry.records
+    }
     report = judge_loaded_chains(
         policy,
         registry,
-        projections={"card": CARD_TARGET, "policy": POLICY_TARGET},
+        projections=projections,
         outputs=outputs,
-        installed_skills=_installed_skills(repo_root, outputs),
+        installed_skills=installed,
+        global_documents=global_documents,
     )
-    # A render cannot drop the steering it is writing, so a class the policy
-    # would drop under degrade_by_priority fails the render like an exhausted one.
-    over = [
-        f"the {chain.runtime} chain charges {verdict.class_id.value} "
-        f"{verdict.measured_bytes} bytes, over its {verdict.ceiling_bytes}-byte ceiling"
+    authored = judge_loaded_chains(
+        policy,
+        registry,
+        projections=projections,
+        outputs=outputs,
+        installed_skills=installed,
+        global_documents={},
+    )
+    over = _over_ceiling(authored)
+    if over:
+        raise RuleProjectionBudgetError(
+            f"{'; '.join(over.values())} (prompt-budget policy revision {policy.revision}); "
+            f"move rules out of the constitution or into a module, or raise the ceiling in the "
+            f"economics configuration"
+        )
+    overages = _global_overages(report, global_documents)
+    if overages and mode == "certified":
+        raise RuleProjectionBudgetError(
+            f"{'; '.join(item.note for item in overages)}; a certified render claims what an "
+            f"agent on this machine receives, so trim the global instruction documents"
+        )
+    for item in overages:
+        logger.warning(
+            f"budgeted_chains status=global_document_over_ceiling runtime={item.runtime} "
+            f"class_id={item.class_id.value} over_bytes={item.measured_bytes - item.ceiling_bytes}"
+        )
+    return report.model_copy(update={"global_overages": overages})
+
+
+def certify_steering_chain(repo_root: Path) -> None:
+    """Refuse a release whose steering chain a certified render would refuse.
+
+    A release certifies what an agent on this machine receives, so the
+    repository's rule projections are planned in certified mode: a chain the
+    operator's global instruction documents put over a ceiling refuses here,
+    naming each file, its bytes, the ceiling and the overage. A repository
+    that authors no rule source has no steering chain to certify.
+
+    Args:
+        repo_root: The checkout the release is cut from.
+
+    Raises:
+        RuleProjectionError: When the certified render refuses; a
+            :class:`RuleProjectionBudgetError` for a chain over a ceiling.
+        RuleSourceError: When the rule source fails to load.
+        RuleCompileError: When the rules fail compilation.
+    """
+    if rule_source_present(repo_root):
+        plan_rule_projections(repo_root, mode="certified")
+
+
+def _global_overages(
+    report: ChainBudgetReport, global_documents: Mapping[str, Mapping[str, str]]
+) -> tuple[GlobalDocumentOverage, ...]:
+    """Return every class the global documents put over its byte ceiling.
+
+    Args:
+        report: The chains, global documents charged.
+        global_documents: Each runtime's global chain, text by display path.
+
+    Returns:
+        One overage per runtime and class, in report order.
+    """
+    return tuple(
+        GlobalDocumentOverage(
+            runtime=chain.runtime,
+            class_id=verdict.class_id,
+            files=tuple(
+                GlobalDocumentFile(path=path, byte_count=len(text.encode("utf-8")))
+                for path, text in global_documents.get(chain.runtime, {}).items()
+            ),
+            measured_bytes=verdict.measured_bytes,
+            ceiling_bytes=verdict.ceiling_bytes,
+        )
         for chain in report.chains
         for verdict in chain.outcome.verdicts
         if verdict.status in (ClassStatus.EXHAUSTED, ClassStatus.DROPPED)
-    ]
-    if over:
-        raise RuleProjectionBudgetError(
-            f"{'; '.join(over)} (prompt-budget policy revision {policy.revision}); move rules "
-            f"out of the constitution or into a module, or raise the ceiling in the economics "
-            f"configuration"
+        and verdict.measured_bytes is not None
+        and verdict.ceiling_bytes is not None
+        and global_documents.get(chain.runtime)
+    )
+
+
+def _over_ceiling(report: ChainBudgetReport) -> dict[tuple[str, str], str]:
+    """Name every class of every chain over its ceiling, by runtime and class.
+
+    A render cannot drop the steering it is writing, so a class the policy would
+    drop under degrade_by_priority counts like an exhausted one.
+    """
+    return {
+        (chain.runtime, verdict.class_id.value): (
+            f"the {chain.runtime} chain charges {verdict.class_id.value} "
+            f"{verdict.measured_bytes} bytes, over its {verdict.ceiling_bytes}-byte ceiling"
         )
-    return report
+        for chain in report.chains
+        for verdict in chain.outcome.verdicts
+        if verdict.status in (ClassStatus.EXHAUSTED, ClassStatus.DROPPED)
+    }
 
 
 def _installed_skills(repo_root: Path, outputs: Mapping[str, str]) -> dict[str, str]:

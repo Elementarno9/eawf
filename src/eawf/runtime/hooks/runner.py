@@ -22,6 +22,9 @@ Design rules per Phase 4 W04 design spec §3.3 / acceptance §3:
   results to ``events.jsonl`` via :func:`eawf.kernel.store.append.append_envelope`).
 """
 
+# noqa: EAWF010 the one registry of every host hook handler the plugin declares; new
+# host-lane handlers live in eawf.runtime.hooks.host_lane rather than growing it further
+
 from __future__ import annotations
 
 import hashlib
@@ -1262,6 +1265,11 @@ def register_runtime_capture_hooks(
         runner, daemon_client_factory=daemon_client_factory, repo_root=repo_root
     )
     register_host_question_hooks(
+        runner, daemon_client_factory=daemon_client_factory, repo_root=repo_root
+    )
+    from eawf.runtime.hooks.host_lane import register_host_lane_hooks
+
+    register_host_lane_hooks(
         runner, daemon_client_factory=daemon_client_factory, repo_root=repo_root
     )
 

@@ -154,6 +154,7 @@ def test_the_supported_kinds_are_the_ones_whose_payload_model_exists() -> None:
         "command_output",
         "command_result",
         "command_started",
+        "context_boundary",
         "diff_summarized",
         "error_observed",
         "event_gap",

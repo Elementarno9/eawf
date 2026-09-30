@@ -29,7 +29,10 @@ from typing import Annotated, Any
 
 from pydantic import Field
 
-from eawf.kernel.migration.epoch2.errors import MigrationFabricationDetectedError
+from eawf.kernel.migration.epoch2.errors import (
+    MigrationCountMismatchError,
+    MigrationFabricationDetectedError,
+)
 from eawf.kernel.migration.epoch2.origins import build_legacy_origin
 from eawf.kernel.migration.epoch2.rules import StrictMigrationModel
 from eawf.kernel.state.epoch2.values import EntityOrigin, OriginConfidence
@@ -291,6 +294,43 @@ class MeasurementImportPlan(StrictMigrationModel):
             f"{len(self.orphan_keys)} measurements re-point at Tasks that were never "
             f"imported: {keys}"
         )
+
+    def require_reconciled(self, document: Mapping[str, Any]) -> None:
+        """Refuse a plan that does not carry every source measurement verbatim.
+
+        Each estimate and actual row of ``document`` must come out as
+        exactly one imported record whose preserved row equals the source
+        row. Counting alone would pass a plan that dropped one row and
+        duplicated another; comparing the rows is what keeps a null cost
+        null, a zero a zero, and the quality marker and exclusion flag
+        what the source recorded.
+
+        Args:
+            document: The decoded epoch-1 state document the plan was
+                built from.
+
+        Raises:
+            MigrationCountMismatchError: When a collection's imported
+                records do not match its source rows one for one.
+            MigrationFabricationDetectedError: When an imported record's
+                preserved row differs from its source row.
+        """
+        for kind in MeasurementKind:
+            name = MEASUREMENT_COLLECTIONS[kind]
+            collection = document.get(name)
+            source: Mapping[str, Any] = collection if isinstance(collection, Mapping) else {}
+            rows = self.for_kind(kind)
+            missing = sorted(set(map(str, source)) - {row.map_key for row in rows})
+            if missing or len(rows) != len(source):
+                raise MigrationCountMismatchError(
+                    f"{name} holds {len(source)} rows but the import carries {len(rows)}; "
+                    f"not carried: {', '.join(missing) or '-'}"
+                )
+            rewritten = [row.map_key for row in rows if row.payload != source[row.map_key]]
+            if rewritten:
+                raise MigrationFabricationDetectedError(
+                    f"{len(rewritten)} {name} rows would import rewritten: {', '.join(rewritten)}"
+                )
 
 
 def measurement_rule_payload() -> dict[str, Any]:

@@ -16,13 +16,17 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from typer.testing import CliRunner
 
 from eawf.platform.profiles.discovery import _clear_cache_for_tests
 from eawf.platform.rules.carriers import builtin_carrier_roles, carrier_target
+from eawf.platform.rules.render import PROJECTION_MANIFEST_PATH
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
+
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
 
 runner = CliRunner()
 
@@ -295,3 +299,51 @@ def test_sync_help_lists_flags() -> None:
     assert "--dry-run" in flag_names
     assert "--check" in flag_names
     assert "--target" in flag_names
+
+
+# ---- SURF-004: the host's global documents charge the budget --------------------
+
+
+def _global_overflow_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A repository with a rule source, and a host home whose codex document overflows zone 1."""
+    home = tmp_path / "home"
+    (home / ".codex").mkdir(parents=True)
+    (home / ".codex" / "AGENTS.md").write_text("g" * 40_000, encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    for variable in ("CLAUDE_CONFIG_DIR", "CODEX_HOME", "XDG_CONFIG_HOME"):
+        monkeypatch.delenv(variable, raising=False)
+    root = tmp_path / "demo"
+    (root / ".ea").mkdir(parents=True)
+    rules = {"schema_version": 1, "rules": []}
+    (root / ".ea" / "rules.yaml").write_text(yaml.safe_dump(rules), encoding="utf-8")
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "demo"\ndescription = "A demo project"\n', encoding="utf-8"
+    )
+    return root
+
+
+def test_surf_004_sync_warns_about_a_global_overflow_and_renders(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _global_overflow_repo(tmp_path, monkeypatch)
+
+    res = runner.invoke(app, ["-w", str(root), "sync"])
+
+    assert res.exit_code == exit_codes.OK, res.output
+    assert "~/.codex/AGENTS.md (40000 bytes)" in res.output
+    assert "-byte ceiling" in res.output
+    manifest = json.loads((root / PROJECTION_MANIFEST_PATH).read_text("utf-8"))
+    assert manifest["render_mode"] == "local"
+    assert (root / "AGENTS.md").is_file()
+
+
+def test_surf_004_certified_sync_refuses_a_global_overflow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _global_overflow_repo(tmp_path, monkeypatch)
+
+    res = runner.invoke(app, ["-w", str(root), "sync", "--certified"])
+
+    assert res.exit_code != exit_codes.OK
+    assert "~/.codex/AGENTS.md (40000 bytes)" in res.output
+    assert not (root / "AGENTS.md").exists()

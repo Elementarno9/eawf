@@ -27,6 +27,8 @@ from eawf.platform.rules.render import (
     plan_rule_projections,
 )
 
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _DOCS_RULES = _REPO_ROOT / "docs" / "rules"
 

@@ -1,5 +1,8 @@
 """``eawf question open-decision`` and ``eawf question answer``: ask the operator, and answer.
 
+``reply`` answers an open question a host asked, by option or in the operator's own
+words, over ``runtime.question.answer``, printing its consequence block first.
+
 ``open-decision`` is a dispatch over ``runtime.question.open_decision``: the
 document it sends is the daemon's own closed request, validated there, and
 the answer it prints is the daemon's typed answer, bound host question and
@@ -15,12 +18,14 @@ from typing import Annotated, Any, Final
 import typer
 
 from eawf.surfaces.cli import errors
+from eawf.surfaces.cli.commands.domain_consequence import DryRun, Yes, preview
 from eawf.surfaces.cli.flags import GlobalFlags
 
 #: The daemon verbs these commands forward to, spelled here so the Typer tree
 #: builds without the daemon method registry on the path.
 QUESTION_OPEN_DECISION: Final = "runtime.question.open_decision"
 QUESTION_ANSWER_NUMBERED: Final = "runtime.question.answer_numbered"
+QUESTION_ANSWER: Final = "runtime.question.answer"
 
 
 def question_open_decision(
@@ -54,7 +59,7 @@ def question_open_decision(
     except errors.CliError as exc:
         errors.emit_error(exc, flags=flags)
         return
-    _forward(
+    forward_answer(
         QUESTION_OPEN_DECISION,
         {**spec, "actor": actor},
         urn=str(spec.get("urn", "")),
@@ -86,7 +91,7 @@ def question_answer(
     read back to the persisted option daemon-side. Only a bare option number
     binds. The console answers the same record, and the first answer wins.
     """
-    _forward(
+    forward_answer(
         QUESTION_ANSWER_NUMBERED,
         {
             "urn": urn,
@@ -103,10 +108,57 @@ def question_answer(
     )
 
 
-def _forward(
+def question_reply(
+    ctx: typer.Context,
+    urn: Annotated[str, typer.Argument(help="The open question to answer.")],
+    expected_revision: Annotated[
+        int, typer.Option("--expected-revision", help="The revision the question was shown at.")
+    ],
+    actor: Annotated[str, typer.Option("--actor", help="Principal key of the person answering.")],
+    option_key: Annotated[
+        str | None, typer.Option("--option-key", help="The option chosen; or give --reply.")
+    ] = None,
+    reply: Annotated[
+        str | None, typer.Option("--reply", help="The answer in your own words.")
+    ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
+) -> None:
+    """Answer an open question a host asked, by one of its options or in your own words.
+
+    The console answers the same question, and the first answer wins; exactly one of
+    ``--option-key`` and ``--reply`` is given.
+    """
+    flags: GlobalFlags = ctx.obj
+    if (option_key is None) == (reply is None):
+        errors.emit_error(
+            errors.UserError("give exactly one of --option-key and --reply", kind="InvalidInput"),
+            flags=flags,
+        )
+        return
+    said = {"option_key": option_key} if reply is None else {"reply": reply}
+    if preview(QUESTION_ANSWER, urn, expected_revision, flags=flags, dry_run=dry_run, yes=yes):
+        forward_answer(
+            QUESTION_ANSWER,
+            {"urn": urn, "expected_revision": expected_revision, "actor": actor, **said},
+            urn=urn,
+            verb_text="question reply",
+            flags=flags,
+        )
+
+
+def forward_answer(
     method: str, params: dict[str, Any], *, urn: str, verb_text: str, flags: GlobalFlags
 ) -> None:
-    """Send one question verb to the daemon and print its typed answer or refusal."""
+    """Send one native verb that answers in its own typed shape, and print it as an envelope.
+
+    Args:
+        method: The daemon verb.
+        params: The wire parameters, less ``repo_root``.
+        urn: The record the verb is about, which the envelope names.
+        verb_text: The command spelling an operator typed.
+        flags: The resolved global flags.
+    """
     from eawf.surfaces.cli._daemon_client import DaemonRpcError
     from eawf.surfaces.cli.commands.domain import _native_answer
     from eawf.surfaces.cli.verb_contract import answer_envelope, emit_envelope, refusal_envelope

@@ -241,11 +241,32 @@ class PrincipalDispositionRow(_FrozenModel):
     principal answers again, so a principal who answers more than once
     is represented by their latest disposition rather than a growing
     history only the ledger that files the action needs to keep.
+
+    A snooze is this principal's alone: it hides the action from their
+    own attention until ``snoozed_until`` and answers nothing, so a row
+    may carry a snooze and no answer. ``acted_at`` is when the principal
+    last did either; a row filed before it existed states none.
     """
 
     principal_id: PrincipalKey
-    outcome: AnswerOutcome
-    option_id: OptionId
+    outcome: AnswerOutcome | None = None
+    option_id: OptionId | None = None
+    snoozed_until: UtcDatetime | None = None
+    acted_at: UtcDatetime | None = None
+
+    @model_validator(mode="after")
+    def _states_an_answer_or_a_snooze(self) -> Self:
+        """Require an answer's outcome and option together, and at least one of the two facts.
+
+        Raises:
+            ValueError: An outcome is filed without its option or the reverse, or the row
+                states neither an answer nor a snooze, so it records nothing.
+        """
+        if (self.outcome is None) != (self.option_id is None):
+            raise ValueError("an answer's outcome and option are filed together")
+        if self.outcome is None and self.snoozed_until is None:
+            raise ValueError(f"{self.principal_id}'s row states neither an answer nor a snooze")
+        return self
 
 
 @dataclass(frozen=True, slots=True)
@@ -633,7 +654,7 @@ class PendingAction(_FrozenModel):
         if option_id not in self.option_ids:
             raise ValueError(f"{self.id} offers {', '.join(self.option_ids)}, not {option_id!r}")
         if self.status is PendingActionStatus.SEALED:
-            return self._answer_sealed(resolver=resolver, option_id=option_id)
+            return self._answer_sealed(resolver=resolver, option_id=option_id, at=at)
         if self.status is not PendingActionStatus.WAITING:
             raise ValueError(
                 f"{self.id} is {self.status.value}; only a "
@@ -646,7 +667,10 @@ class PendingAction(_FrozenModel):
             )
         sealed = self.seal(resolver=resolver, option_id=option_id, receipt_ref=receipt_ref, at=at)
         recorded = sealed.with_disposition(
-            principal_id=resolver.principal_id, outcome=AnswerOutcome.SEALED, option_id=option_id
+            principal_id=resolver.principal_id,
+            outcome=AnswerOutcome.SEALED,
+            option_id=option_id,
+            at=at,
         )
         assert recorded.receipt_ref is not None, "seal always sets the receipt"
         return AnswerResult(
@@ -657,7 +681,9 @@ class PendingAction(_FrozenModel):
             receipt_ref=recorded.receipt_ref,
         )
 
-    def _answer_sealed(self, *, resolver: HumanPrincipal, option_id: str) -> AnswerResult:
+    def _answer_sealed(
+        self, *, resolver: HumanPrincipal, option_id: str, at: UtcDatetime
+    ) -> AnswerResult:
         """Return the result of an answer that reaches an already-sealed action."""
         winner = self.resolution_actor
         choice = self.selected_option_id
@@ -677,6 +703,7 @@ class PendingAction(_FrozenModel):
             principal_id=resolver.principal_id,
             outcome=AnswerOutcome.SUPERSEDED,
             option_id=option_id,
+            at=at,
         )
         return AnswerResult(
             action=recorded,
@@ -687,7 +714,12 @@ class PendingAction(_FrozenModel):
         )
 
     def with_disposition(
-        self, *, principal_id: str, outcome: AnswerOutcome, option_id: str
+        self,
+        *,
+        principal_id: str,
+        outcome: AnswerOutcome,
+        option_id: str,
+        at: UtcDatetime | None = None,
     ) -> Self:
         """Return this record with *principal_id*'s disposition row set to this answer.
 
@@ -704,15 +736,77 @@ class PendingAction(_FrozenModel):
             principal_id: The principal whose disposition row is replaced.
             outcome: How that principal's answer landed.
             option_id: The option the principal chose.
+            at: When the principal answered; ``None`` where the caller has no instant.
 
         Returns:
             A validated copy carrying the replaced disposition row, at the
-            same ``revision``.
+            same ``revision``. An answer ends the principal's own snooze.
         """
         row = PrincipalDispositionRow(
-            principal_id=principal_id, outcome=outcome, option_id=option_id
+            principal_id=principal_id, outcome=outcome, option_id=option_id, acted_at=at
         )
-        kept = tuple(item for item in self.dispositions if item.principal_id != principal_id)
+        return self._with_row(row)
+
+    def with_snooze(self, *, principal_id: str, until: UtcDatetime, at: UtcDatetime) -> Self:
+        """Return this record with *principal_id*'s own snooze set, answering nothing.
+
+        A snooze hides the action from this one principal until *until*; every other
+        principal still sees it, and any answer this principal already gave is kept. Like
+        a disposition it is a per-principal side record, so ``revision`` does not move and
+        nobody's answer against the current revision goes stale.
+
+        Args:
+            principal_id: The principal snoozing it.
+            until: When the snooze lapses.
+            at: When the principal snoozed it.
+
+        Returns:
+            A validated copy carrying the principal's row with the snooze.
+
+        Raises:
+            ValueError: The action is sealed, so there is nothing left to hide, or the
+                snooze lapses before it was asked for.
+        """
+        if self.status is PendingActionStatus.SEALED:
+            raise ValueError(f"{self.id} is sealed; a resolved action needs no snooze")
+        if until <= at:
+            raise ValueError("a snooze lapses after it is asked for")
+        held = next((r for r in self.dispositions if r.principal_id == principal_id), None)
+        kept = held.model_dump() if held is not None else {"principal_id": principal_id}
+        row = {**kept, "snoozed_until": until, "acted_at": at}
+        return self._with_row(PrincipalDispositionRow.model_validate(row))
+
+    def assigned(self, *, assignee: str | None, at: UtcDatetime) -> Self:
+        """Return the question addressed to *assignee*, one revision on.
+
+        Assignment transfers no authority -- anyone eligible may still answer -- but it
+        moves whose attention count the question lands in, so it is a revision of the
+        record rather than a side row.
+
+        Args:
+            assignee: The principal it is addressed to; ``None`` addresses it to everyone.
+            at: When it was assigned.
+
+        Returns:
+            The re-addressed record.
+
+        Raises:
+            ValueError: The action is sealed, so there is nobody left to address it to.
+        """
+        if self.status is PendingActionStatus.SEALED:
+            raise ValueError(f"{self.id} is sealed; a resolved action is addressed to nobody")
+        return self.model_validate(
+            {
+                **self.model_dump(),
+                "assignee_ref": assignee,
+                "revision": self.revision + 1,
+                "updated_at": at,
+            }
+        )
+
+    def _with_row(self, row: PrincipalDispositionRow) -> Self:
+        """Return this record with *row* in place of its principal's current row."""
+        kept = tuple(item for item in self.dispositions if item.principal_id != row.principal_id)
         return self.model_validate({**self.model_dump(), "dispositions": (*kept, row)})
 
 

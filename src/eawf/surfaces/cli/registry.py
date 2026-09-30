@@ -171,10 +171,14 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # The campaign and question entity groups, beside the research reads.
     GroupRow("campaign", "eawf.surfaces.cli.commands.research", "campaign_app"),
     GroupRow("question", "eawf.surfaces.cli.commands.research", "question_app"),
+    # The action entity group: what the Attention register asks a principal about.
+    GroupRow("action", "eawf.surfaces.cli.commands.action", "action_app"),
     # Wave-attached verbs (fix-ci, review, policy) — imported for side
     # effect; each attaches its verb onto the already-mounted wave group.
     # The plain-text report of one Run, attached onto the mounted run group.
     SideEffectRow("eawf.surfaces.cli.commands.run_report"),
+    # The Run controls, attached onto the mounted run group.
+    SideEffectRow("eawf.surfaces.cli.commands.run_control"),
     # File-impact graph.
     CommandRow(
         "impact",

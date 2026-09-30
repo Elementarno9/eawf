@@ -35,13 +35,14 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Final
 
 from pydantic import ConfigDict
 
-from eawf.kernel.projection.compute import ProjectionRow
+from eawf.kernel.projection.compute import SNOOZED_FACT, ProjectionRow
 from eawf.kernel.projection.registers import (
     ATTENTION_ROUTE,
     BUDGET_UNSTATED_REASON,
@@ -293,6 +294,8 @@ class AttentionItem:
             that names classes rather than a principal; ``None`` when it names none.
         read_only: Whether the item is a notice: listed for its audience, but nothing
             answers it, so it is never counted, jumped to, toasted or offered a verb.
+        snoozed_by: The principals whose own snooze of the item still stands when the
+            register was read; it is out of their count and nobody else's.
     """
 
     key: str
@@ -304,6 +307,7 @@ class AttentionItem:
     notification_class: NotificationClass
     deciding_classes: frozenset[str] | None = None
     read_only: bool = False
+    snoozed_by: frozenset[str] = frozenset()
 
     def addressed_to(self, principal: str) -> bool:
         """Return whether ``principal`` is in this item's audience."""
@@ -351,8 +355,15 @@ class AttentionView:
     items: tuple[AttentionItem, ...]
 
     def open_for(self, principal: str) -> tuple[AttentionItem, ...]:
-        """Return the open items ``principal`` is in the audience of, notices left out."""
-        return tuple(i for i in self.blocking() if i.addressed_to(principal))
+        """Return the open items ``principal`` is in the audience of and has not snoozed.
+
+        Notices are left out; an item this principal snoozed is out of their count alone.
+        """
+        return tuple(
+            i
+            for i in self.blocking()
+            if i.addressed_to(principal) and principal not in i.snoozed_by
+        )
 
     def blocking(self) -> tuple[AttentionItem, ...]:
         """Return every open item, whoever it is addressed to, notices left out."""
@@ -390,7 +401,26 @@ class AttentionView:
         return tuple(out)
 
 
-def _item(row: ProjectionRow) -> AttentionItem | None:
+def _snoozed_by(row: ProjectionRow, read_at: datetime | None) -> frozenset[str]:
+    """Return the principals whose snooze of ``row`` still stands at ``read_at``.
+
+    A register that states no read instant cannot say a snooze lapsed, so every stated
+    snooze stands; a deadline that does not parse hides nothing.
+    """
+    held: set[str] = set()
+    for name, value in row.facts.items():
+        if not name.startswith(SNOOZED_FACT):
+            continue
+        try:
+            until = datetime.fromisoformat(value)
+        except ValueError:
+            continue
+        if read_at is None or until > read_at:
+            held.add(name.removeprefix(SNOOZED_FACT))
+    return frozenset(held)
+
+
+def _item(row: ProjectionRow, read_at: datetime | None) -> AttentionItem | None:
     """Return the open item one register row is, or ``None`` when it is closed or unplaced."""
     status = row.status.value if row.status.state is TruthState.KNOWN else None
     if status in _ASKED:
@@ -407,6 +437,7 @@ def _item(row: ProjectionRow) -> AttentionItem | None:
         need=need,
         assignee_ref=row.assignee_ref,
         notification_class=NotificationClass.NEEDS_ANSWER,
+        snoozed_by=_snoozed_by(row, read_at),
     )
 
 
@@ -493,7 +524,7 @@ def build_attention_view(register: RegisterView) -> AttentionView:
         if row.collection is Epoch2Collection.PERMISSION:
             item = _permission_item(row)
         elif row.collection is Epoch2Collection.PENDING_ACTION:
-            item = _item(row)
+            item = _item(row, register.generated_at)
         elif row.collection is Epoch2Collection.OPEN_QUESTION:
             item = _question_item(row)
         elif row.collection is Epoch2Collection.RUN:

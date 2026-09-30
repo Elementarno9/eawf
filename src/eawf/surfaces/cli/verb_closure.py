@@ -173,6 +173,37 @@ ROOT_ENTRY_EXCEPTIONS: Final[tuple[RootEntryException, ...]] = (
 
 ANCHOR_EXEMPTIONS: Final[tuple[AnchorExemption, ...]] = (
     _exempt(
+        "action decide-permission",
+        "revision_only",
+        "the permission route keeps no replay ledger; its revision guards a retry",
+    ),
+    _exempt(
+        "question reply",
+        "revision_only",
+        "the question route keeps no replay ledger; the question revision guards a retry",
+    ),
+    _exempt(
+        "action notice",
+        "revision_only",
+        "the notice ledger keeps no replay ledger; the notice revision guards a retry",
+    ),
+    *(
+        _exempt(
+            f"run {control}",
+            "create_keyed",
+            "mints a control request fact, which has no revision; its reference is the key",
+        )
+        for control in ("interrupt", "cancel", "reconcile")
+    ),
+    *(
+        _exempt(
+            f"run {verb}-dispatch",
+            "create_keyed",
+            "mints a dispatch control fact, which has no revision; its reference is the key",
+        )
+        for verb in ("pause", "drain", "resume")
+    ),
+    _exempt(
         "milestone open-approval",
         "derived_key",
         "a question already standing on the same bundle is returned, not filed twice",

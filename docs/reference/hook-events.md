@@ -43,6 +43,8 @@ Idempotence key: `(event_type, scope_id, occurred_at)`. The runner / CLI handler
 | `pre_tool_use` | The host is about to run a tool call (Claude `PreToolUse`, every tool) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_input": dict, "tool_use_id": str }` |
 | `post_tool_use` | The host ran a tool call (Claude `PostToolUse`, every tool) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_use_id": str, "tool_response": any }` |
 | `post_tool_use_failure` | A host tool call ran and failed (Claude `PostToolUseFailure`) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_use_id": str, "error": str }` |
+| `pre_compact` | The host is about to compact the session (Claude `PreCompact`) | `{ "session_id": str, "trigger": "manual" \| "auto" }` |
+| `user_prompt_submit` | The operator submits a prompt, a slashed skill included (Claude `UserPromptSubmit`) | `{ "session_id": str, "prompt": str }` |
 
 The shapes above are illustrative — at v1 the router merely forwards the incoming dict under the chosen key. Strict shape validation (per `payloads.<key>` Pydantic models) is reserved for a future schema bump.
 
@@ -61,10 +63,16 @@ Claude Code emits hook payloads with a stable `hook_event_name` field. The trans
 | `PreToolUse` (plugin wrapper, every tool) | `pre_tool_use`                  |
 | `PostToolUse` (plugin wrapper, every tool) | `post_tool_use`                |
 | `PostToolUseFailure`     | `post_tool_use_failure`                         |
+| `PreCompact`             | `pre_compact`                                   |
+| `UserPromptSubmit`       | `user_prompt_submit`                            |
 
 Two handlers share the tool-use events and each filters by `tool_name`: `runtime.host_tool` states every call on its Run's transcript, and `runtime.host_file_edit` brackets `Edit`, `Write` and `MultiEdit` so each edit lands as a file change carrying the trees on either side and its diff.
 
 Before any of them, `pre_tool_use` runs the data-loss guard (`runtime/sandbox/data_loss.py`) on Claude Code and Codex. It refuses exactly four patterns, fail-closed: a managed worktree removed, moved or reset by a non-Eawf route; a worktree created outside `.ea/worktrees` (host-native worktrees included); a `git commit` or `git push` naming no directory from a working directory that drifted out of the session's work tree; and a direct write to `.ea/state.json`, `.ea/store`, `.ea/ledger`, `.ea/telemetry.db` or `.ea/local/epoch2`. A refusal is printed as the host's `permissionDecision: deny` and filed through `runtime.host.tool.deny` as a sandbox decision; an unreachable daemon loses only the record. OpenCode's bridge has no pre-tool event and cannot enforce the guard.
+
+`runtime.host_context` snapshots the Run's contract anchors (authority capsule, compiled spec, criteria, scope and decision receipts) on `pre_compact`, and on the following `session_start` reads them back from the store, names any that moved as a contract mismatch and hands the model the restatement as session context.
+
+`skill.invocation` reads a slashed skill on `user_prompt_submit`, or a model's `Skill` call on `pre_tool_use`, against the skill's argument schema and blocks a refused invocation before its Run starts; a bundle at another epoch refuses every eawf skill with the migration guidance.
 
 Unrecognised payloads (missing `hook_event_name`, unknown event, non-Bash tools without a v1 mapping) → `route_claude_payload` returns `None` and emits a `logging.warning(...)`. The router never raises.
 

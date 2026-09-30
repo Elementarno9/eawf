@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -35,6 +36,7 @@ from eawf.surfaces.tui.console.action_menu import (
     VERB_COLUMN,
     ActionMenus,
     Availability,
+    Disabled,
     MenuVerb,
     Outcome,
     VerbWeight,
@@ -56,8 +58,15 @@ from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.keybar import ROUTE_KEYS, KeyKind, keybar
 from eawf.surfaces.tui.console.keymap import DRAWER_KEYS, DRAWER_PAIRS, OVERLAY_KEYS
+from eawf.surfaces.tui.console.mutation import Card, answer_card
 from eawf.surfaces.tui.console.navigation import Ctx
-from eawf.surfaces.tui.console.operations import UNBOUND_REASON
+from eawf.surfaces.tui.console.operations import (
+    ACTION_SNOOZE_METHOD,
+    ActionDisposition,
+    ConsoleOperation,
+    Operator,
+    address,
+)
 from eawf.surfaces.tui.console.overlays import render_overlay
 from eawf.surfaces.tui.console.palette import (
     CHROME_ROWS,
@@ -75,6 +84,7 @@ from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session
 from eawf.surfaces.tui.console.tokens import CARET
 from eawf.surfaces.tui.console.width import cell_len
+from tests.tui.surfaces.tui.console import test_enter_opened_cards as opened
 from tests.tui.surfaces.tui.console import test_native_route_bodies as bodies
 
 from .overlay_support import frame_of, press, prototype, session_on
@@ -679,6 +689,30 @@ def test_con037_every_refusal_reason_names_evidence_not_a_category() -> None:
         assert len(verb.reason.split()) >= 3, verb
 
 
+@pytest.mark.parametrize(("passed", "counted"), [(False, "incomplete, 0"), (True, "complete, 1")])
+def test_con037_a_live_refused_accept_names_how_many_acceptance_checks_passed(
+    passed: bool, counted: str
+) -> None:
+    milestone = {**opened.DOCUMENT["milestone"]["MLS-0030"], "status": "ACCEPTANCE_REVIEW"}
+    document = {**opened.DOCUMENT, "milestone": {"MLS-0030": milestone}}
+    model = opened._view("milestone", document=document, bundle=opened._bundle(passed=passed))
+    session = Session()
+    session.route, session.subj_id, session.overlay = "milestone", "MLS-0030", "actions"
+    view = View(
+        session=session,
+        fixture=Fixture.from_chrome(load_chrome()),
+        w=160,
+        h=40,
+        projection=model,
+        rows=opened._projection("milestone", document=document).rows,
+        linked=True,
+        principal="OP-0001",
+    )
+    accept = next(row for row in action_rows(view) if " accept " in row)
+    assert isinstance(accept, Disabled)
+    assert f"checks {counted} of 1 passed · " in accept
+
+
 def test_con037_pressing_a_refused_verb_records_its_refusal() -> None:
     """CON-037: activating a refused verb writes a refusal to the key log, never a no-op."""
     session = _on("run.detail", "RUN-538453eb")
@@ -754,13 +788,13 @@ def test_con_125_each_verb_states_its_fixed_consequence(key: str, copy: str) -> 
     assert copy in frame
 
 
-def test_con_125_the_live_menu_binds_the_row_verbs_and_refuses_assign_alone() -> None:
+def test_con_125_the_live_menu_binds_the_row_verbs_and_leaves_assign_to_the_register() -> None:
     fixture = Fixture.from_chrome(load_chrome())
     verbs = {verb.verb: verb for verb in fixture.menus.verbs("attention")}
     assert set(verbs) >= {"answer", "deny", "snooze", "resolve", "assign"}
-    # the packaged chrome's reason describes the prototype's principals; the live menu
-    # lists assign refused for want of a daemon verb until the register says otherwise
-    assert verbs["assign"].reason == UNBOUND_REASON
+    # snooze and assign are carried by daemon verbs; resolve is refused naming why
+    assert verbs["snooze"].available and verbs["assign"].available
+    assert verbs["resolve"].reason.startswith("a pending action closes only by its answer")
 
 
 def test_con_125_assign_is_not_refused_for_want_of_a_principal_once_there_are_two() -> None:
@@ -775,6 +809,39 @@ def test_con_125_assign_is_not_refused_for_want_of_a_principal_once_there_are_tw
     }
     lone = bodies._view("attention", document=single)
     assert "you are the only principal" in next(r for r in action_rows(lone) if " assign " in r)
+
+
+def _card(key: str, verb: str, *, document: dict[str, Any] | None = None) -> Card:
+    rows = bodies._projection("attention", document).rows
+    row = next(r for r in rows if r.key == key)
+    wall = datetime(2026, 9, 30, 12, 0, tzinfo=UTC)
+    return answer_card(row, verb, principal=bodies.ME, now=0.0, wall=wall, rows=rows)
+
+
+def test_con_125_snooze_on_a_live_action_sends_this_principals_snooze_with_the_fixed_copy() -> None:
+    (item,) = _card("ACT-0001", "z").items
+    assert isinstance(item.request, ActionDisposition)
+    assert item.request.verb == "snooze"
+    assert item.effects[0] == "hidden for you only — other principals still see it"
+    operation = address(item.request, urn="u", revision=3, operator=Operator(principal=bodies.ME))
+    assert isinstance(operation, ConsoleOperation)
+    assert operation.method == ACTION_SNOOZE_METHOD
+    assert operation.params["expected_revision"] == 3
+
+
+def test_con_125_assign_on_a_live_action_addresses_the_other_principal() -> None:
+    (item,) = _card("ACT-0001", "s").items
+    assert isinstance(item.request, ActionDisposition)
+    assert item.request.assignee == bodies.OTHER
+    (lone,) = _card("ACT-0001", "s", document=_only("ACT-0001")).items
+    assert lone.request is None
+    assert lone.why == "you are the only principal"
+
+
+def test_con_125_resolve_on_a_pending_action_is_refused_naming_what_closes_it() -> None:
+    (item,) = _card("ACT-0001", "v").items
+    assert item.request is None
+    assert "closes only by its answer" in item.why
 
 
 def test_con_125_the_selected_row_names_its_kind_and_eligibility_and_an_absent_deadline() -> None:

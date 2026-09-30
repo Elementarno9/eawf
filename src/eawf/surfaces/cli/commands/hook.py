@@ -801,14 +801,20 @@ _SILENT_TOOL_EVENTS: frozenset[str] = frozenset(
 
 
 def _emit_session_context(results: list[HookResult]) -> None:
-    """Print the staleness report as a session-start context document.
+    """Print the staleness report and the Run's anchors as a session-start context document.
 
     Args:
-        results: The session-start hook results; only the staleness
-            check's non-empty output is printed, and nothing at all when
-            there is none, so a current repository adds no context.
+        results: The session-start hook results; the staleness check's
+            non-empty output and the anchors a compaction boundary restated
+            are printed, and nothing at all when there are neither, so a
+            current repository with no Run on the session adds no context.
     """
+    from eawf.runtime.hooks.host_lane import host_context_restatement
+
     reports = [r.output for r in results if r.name == _STALENESS_HOOK_NAME and r.output]
+    restatement = host_context_restatement(results)
+    if restatement is not None:
+        reports.append(restatement)
     if not reports:
         return
     document = {
@@ -843,6 +849,133 @@ def _emit_permission_decision(results: list[HookResult]) -> None:
     typer.echo(orjson.dumps(document).decode("utf-8"))
 
 
+def _emit_skill_refusal(event: HookEvent, reason: str) -> None:
+    """Print the host's refusal of a skill invocation, so the skill never starts.
+
+    Claude reads ``decision: block`` from a prompt-submit hook and drops the
+    prompt before the model sees it; a skill-tool call is refused through the
+    pre-tool hook's deny.
+
+    Args:
+        event: The USER_PROMPT_SUBMIT or PRE_TOOL_USE event invoking the skill.
+        reason: Why the invocation is refused, shown to whoever invoked it.
+    """
+    from eawf.runtime.hooks.event import HookEventType
+
+    document: dict[str, Any] = (
+        {"decision": "block", "reason": reason}
+        if event.event_type == HookEventType.USER_PROMPT_SUBMIT
+        else {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": reason,
+            }
+        }
+    )
+    typer.echo(orjson.dumps(document).decode("utf-8"))
+
+
+def _emitted_skill_refusal(event: HookEvent, results: list[HookResult]) -> bool:
+    """Print the refusal a blocked skill invocation owes the host, if one was blocked.
+
+    Args:
+        event: The dispatched event.
+        results: What its hooks returned.
+
+    Returns:
+        Whether a refusal was printed.
+    """
+    from eawf.runtime.hooks.host_lane import HOST_SKILL_HOOK
+
+    refusal = next((r for r in results if r.name == HOST_SKILL_HOOK and r.block), None)
+    if refusal is None or event.runtime != "claude":
+        return False
+    _emit_skill_refusal(event, refusal.output)
+    return True
+
+
+def _refused_stale_bundle(
+    event_type: str, runtime: str, stdin_text: str, error: Exception, started_at: datetime
+) -> bool:
+    """Refuse an eawf skill a stale bundle invokes, with the migration guidance.
+
+    A bundle targeting another epoch stands its hooks down, but a skill it
+    ships would still run against records it does not understand, so the
+    invocation itself is refused.
+
+    Args:
+        event_type: The event argument as given.
+        runtime: The runtime label, lowercased.
+        stdin_text: The hook payload.
+        error: The epoch mismatch, whose message carries the guidance.
+        started_at: When the hook started.
+
+    Returns:
+        Whether a refusal was printed.
+    """
+    from eawf.runtime.hooks.event import HookEventType
+    from eawf.runtime.hooks.host_lane import host_skill_invocation
+    from eawf.workflow.skills.catalog import SKILL_CATALOG
+
+    skill_events = {HookEventType.USER_PROMPT_SUBMIT.value, HookEventType.PRE_TOOL_USE.value}
+    if runtime != "claude" or event_type not in skill_events:
+        return False
+    try:
+        event = _build_event(
+            event_type=HookEventType(event_type),
+            payload=_parse_payload(stdin_text),
+            scope="",
+            command="",
+            runtime="claude",
+            occurred_at=started_at,
+        )
+    except cli_errors.CliError, ValidationError:
+        return False
+    invocation = host_skill_invocation(event)
+    if invocation is None or SKILL_CATALOG.entry(invocation[0]) is None:
+        return False
+    _emit_skill_refusal(event, f"eawf: {error}")
+    return True
+
+
+def _stood_down_for_epoch(
+    target_epoch: int,
+    event_type: str,
+    runtime: str,
+    stdin_text: str,
+    flags: GlobalFlags,
+    started_at: datetime,
+) -> bool:
+    """Stand the hook down when its bundle targets another epoch than the repository.
+
+    A bundle built for another epoch reads records it does not understand; it
+    stands down with guidance rather than writing, and exits zero so the host
+    session it runs inside is not broken. A skill it would start is refused
+    outright.
+
+    Args:
+        target_epoch: The epoch the invoking bundle targets.
+        event_type: The event argument as given.
+        runtime: The runtime label, lowercased.
+        stdin_text: The hook payload.
+        flags: The global flags.
+        started_at: When the hook started.
+
+    Returns:
+        Whether the hook stood down and must stop here.
+    """
+    from eawf.workflow.skills.publication import BundleEpochMismatchError, require_bundle_epoch
+
+    try:
+        require_bundle_epoch(target_epoch, (flags.workspace or Path.cwd()).resolve())
+    except BundleEpochMismatchError as exc:
+        if not _refused_stale_bundle(event_type, runtime, stdin_text, exc, started_at):
+            typer.echo(f"eawf: {exc}", err=True)
+        return True
+    return False
+
+
 def _emitted_host_answer(event: HookEvent, results: list[HookResult]) -> bool:
     """Print the host-shaped answer an event owes instead of the envelope, if it owes one.
 
@@ -863,6 +996,11 @@ def _emitted_host_answer(event: HookEvent, results: list[HookResult]) -> bool:
         return True
     if event.event_type == HookEventType.PERMISSION_REQUEST and event.runtime == "claude":
         _emit_permission_decision(results)
+        return True
+    if _emitted_skill_refusal(event, results):
+        return True
+    if event.event_type == HookEventType.USER_PROMPT_SUBMIT and event.runtime == "claude":
+        # Claude adds a prompt hook's stdout to the prompt; an admitted one adds nothing.
         return True
     if event.event_type.value in _SILENT_TOOL_EVENTS and event.runtime == "claude":
         # Claude Code reads a tool hook's stdout as a decision about the call; an
@@ -969,7 +1107,6 @@ def run(
     """Dispatch a hook event read from stdin and emit the result envelope."""
     from eawf.runtime.hooks.event import HookEventType
     from eawf.runtime.hooks.runner import HookRunner, register_runtime_capture_hooks
-    from eawf.workflow.skills.publication import BundleEpochMismatchError, require_bundle_epoch
 
     flags: GlobalFlags = ctx.obj
     started_at = datetime.now(UTC)
@@ -978,15 +1115,10 @@ def run(
     stdin_text = "" if sys.stdin.isatty() else sys.stdin.read()
     if _guarded_pre_tool_use(event_type, runtime.lower(), stdin_text, flags, started_at):
         return
-    if target_epoch is not None:
-        # A bundle built for another epoch reads records it does not
-        # understand; it stands down with guidance rather than writing, and
-        # exits zero so the host session it runs inside is not broken.
-        try:
-            require_bundle_epoch(target_epoch, (flags.workspace or Path.cwd()).resolve())
-        except BundleEpochMismatchError as exc:
-            typer.echo(f"eawf: {exc}", err=True)
-            return
+    if target_epoch is not None and _stood_down_for_epoch(
+        target_epoch, event_type, runtime.lower(), stdin_text, flags, started_at
+    ):
+        return
 
     if runtime.lower() not in {"claude", "codex", "opencode", "generic"}:
         cli_errors.emit_error(

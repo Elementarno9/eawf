@@ -29,6 +29,12 @@ from eawf.kernel.runtime.control import ControlDisposition
 from eawf.kernel.runtime.provider import ControlKind
 from eawf.runtime.daemon.methods.delivery_approval import DELIVERY_SEAL_APPROVAL_METHOD
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
+from eawf.runtime.daemon.methods.pending_action_disposition import (
+    ACTION_ASSIGN_METHOD as DAEMON_ACTION_ASSIGN_METHOD,
+)
+from eawf.runtime.daemon.methods.pending_action_disposition import (
+    ACTION_SNOOZE_METHOD as DAEMON_ACTION_SNOOZE_METHOD,
+)
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_CONTROL_REQUEST_METHOD
 from eawf.surfaces.cli._daemon_client import DaemonRpcError
@@ -43,6 +49,8 @@ from eawf.surfaces.tui.console.fixture import Detail, Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
 from eawf.surfaces.tui.console.navigation import Ctx
 from eawf.surfaces.tui.console.operations import (
+    ACTION_ASSIGN_METHOD,
+    ACTION_SNOOZE_METHOD,
     CONTROL_METHOD,
     NOTICE_LIST_METHOD,
     QUESTION_OPTIONS,
@@ -242,8 +250,11 @@ def test_confirm_on_an_empty_register_sends_nothing() -> None:
 @pytest.mark.parametrize(
     ("key", "reason"),
     [
-        ("z", "no daemon verb snoozes a pending action · only a budget notice snoozes"),
-        ("v", "no daemon verb resolves a pending action · only a budget notice resolves"),
+        (
+            "v",
+            "a pending action closes only by its answer · a answer or x deny seals it for "
+            "every principal",
+        ),
     ],
 )
 def test_attention_verb_without_mutator_is_refused_with_reason(key: str, reason: str) -> None:
@@ -311,7 +322,9 @@ def test_verb_refused_offline_names_state_reason() -> None:
     [
         ("attention", "answer", True),
         ("attention", "deny", True),
-        ("attention", "snooze", False),
+        ("attention", "snooze", True),
+        ("attention", "assign", True),
+        ("attention", "resolve", False),
         ("run.detail", "interrupt", True),
         ("run", "reconcile", True),
         ("run.detail", "retry", False),
@@ -329,6 +342,8 @@ def test_binding_refusal_names_only_unbound_verbs(kind: str, verb: str, bound: b
 def test_method_spellings_match_the_daemon() -> None:
     assert SEAL_METHOD == DELIVERY_SEAL_APPROVAL_METHOD
     assert CONTROL_METHOD == RUN_CONTROL_REQUEST_METHOD
+    assert ACTION_SNOOZE_METHOD == DAEMON_ACTION_SNOOZE_METHOD
+    assert ACTION_ASSIGN_METHOD == DAEMON_ACTION_ASSIGN_METHOD
 
 
 def test_answer_request_refuses_an_option_not_offered() -> None:

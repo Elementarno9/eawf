@@ -23,6 +23,8 @@ from eawf.platform.rules.render import CARD_TARGET, plan_rule_projections
 from eawf.surfaces.render.agents_md import reference_file_path, render_agents_md
 from eawf.surfaces.render.manifest import Manifest
 
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
+
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 
 #: Profiles this repo enables in ``.ea/config.yaml``; the committed AGENTS.md

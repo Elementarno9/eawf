@@ -70,10 +70,12 @@ def test_claude_packager_emits_only_handler_backed_hooks(tmp_path: Path) -> None
         "session_end",
         "subagent_start",
         "subagent_stop",
+        "pre_compact",
         "permission_request",
         "pre_tool_use",
         "post_tool_use",
         "post_tool_use_failure",
+        "user_prompt_submit",
     }
 
 
@@ -105,12 +107,12 @@ def test_unbacked_hook_entry_reds_the_check() -> None:
     """Gate-fire proof: an event with no registered handler fails the shared check.
 
     Simulates the original defect directly -- a packager also emitting a
-    ``pre_compact.sh`` wrapper under the Claude runtime, where it has no
+    ``pre_commit.sh`` wrapper under the Claude runtime, where it has no
     live handler -- without mutating any production registry, proving the
     assertion helper the two tests above rely on actually has teeth.
     """
-    seeded = set(_CLAUDE_HANDLER_BACKED) | {"pre_compact"}
-    with pytest.raises(AssertionError, match="pre_compact"):
+    seeded = set(_CLAUDE_HANDLER_BACKED) | {"pre_commit"}
+    with pytest.raises(AssertionError, match="pre_commit"):
         _assert_emitted_are_handler_backed(seeded, _CLAUDE_HANDLER_BACKED)
 
 

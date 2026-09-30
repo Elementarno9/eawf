@@ -770,6 +770,8 @@ def _run_create_verb(
     actor: str,
     from_spec: Path,
     correlation_id: str | None,
+    dry_run: bool = False,
+    yes: bool = False,
 ) -> None:
     """Dispatch one native create verb and render its answer.
 
@@ -789,6 +791,8 @@ def _run_create_verb(
         actor: The principal the create is attributed to.
         from_spec: The create-document file.
         correlation_id: The caller's thread of related requests.
+        dry_run: Print the consequence only and send nothing.
+        yes: Send after printing the consequence, without asking.
     """
     flags: GlobalFlags = ctx.obj
     try:
@@ -801,7 +805,12 @@ def _run_create_verb(
             from_spec=from_spec,
             correlation_id=correlation_id,
         )
-        envelope = _create_document_refusal(request) or _call_domain_create(request, flags=flags)
+        refusal = _create_document_refusal(request)
+        if refusal is None and not preview(
+            method, urn, expected_revision, flags=flags, dry_run=dry_run, yes=yes
+        ):
+            return
+        envelope = refusal or _call_domain_create(request, flags=flags)
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)
         return  # pragma: no cover  emit_error raises Exit
@@ -912,6 +921,8 @@ def track_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Admit a new Track's create document into the addressed tree."""
     _run_create_verb(
@@ -923,6 +934,8 @@ def track_create_cmd(
         actor=actor,
         from_spec=from_spec,
         correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
     )
 
 
@@ -940,6 +953,8 @@ def repository_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Admit a repository row at the head its git history holds now."""
     _run_create_verb(
@@ -951,6 +966,8 @@ def repository_create_cmd(
         actor=actor,
         from_spec=from_spec,
         correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
     )
 
 
@@ -1105,6 +1122,8 @@ def milestone_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Admit a new Milestone's create document into the addressed tree."""
     _run_create_verb(
@@ -1116,6 +1135,8 @@ def milestone_create_cmd(
         actor=actor,
         from_spec=from_spec,
         correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
     )
 
 
@@ -1190,6 +1211,8 @@ def batch_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Admit a new delivery Batch's create document into the addressed tree."""
     _run_create_verb(
@@ -1201,6 +1224,8 @@ def batch_create_cmd(
         actor=actor,
         from_spec=from_spec,
         correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
     )
 
 
@@ -1302,6 +1327,8 @@ def task_create_cmd(
     correlation_id: Annotated[
         str | None, typer.Option("--correlation-id", help=_CORRELATION_HELP)
     ] = None,
+    dry_run: DryRun = False,
+    yes: Yes = False,
 ) -> None:
     """Admit a new Task's create document into the addressed tree."""
     _run_create_verb(
@@ -1313,6 +1340,8 @@ def task_create_cmd(
         actor=actor,
         from_spec=from_spec,
         correlation_id=correlation_id,
+        dry_run=dry_run,
+        yes=yes,
     )
 
 

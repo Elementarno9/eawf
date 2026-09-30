@@ -122,6 +122,10 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
     # default keeps the floor advisory); a layer can only tighten -- the
     # overlay ORs onto the profile block, never loosens it.
     "verify": {
+        # The ceilings a jury's calibration must clear before its verification-site
+        # verdicts block: a Brier score and a co-error rate, both lower-is-better.
+        "jury_max_brier": 0.25,
+        "jury_max_co_error": 0.10,
         "juror_wall_clock_seconds": 600.0,
         "odr_blocking": False,
         "require_iter_audit_accepted": False,

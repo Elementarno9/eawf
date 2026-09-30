@@ -8,6 +8,9 @@ so a stalled Run stays running until a principal's control ends it.
 
 The sweep reads the trees the daemon has attached, which is every tree a native request
 has reached since it started; a Run can only have been dispatched through such a request.
+
+The same pass opens the one budget notice a running Run earns by passing its estimate
+with no progress past the notice policy's grace period.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from datetime import UTC, datetime
 from typing import Final
 
 from eawf.runtime.daemon.methods import MethodContext
-from eawf.runtime.daemon.methods.run_liveness import detect_stalls
+from eawf.runtime.daemon.methods.run_liveness import detect_estimate_crossings, detect_stalls
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +32,7 @@ SWEEP_SECONDS: Final = 15.0
 
 
 def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
-    """Raise every due stall in every attached tree, once.
+    """Raise every due stall, and open every due estimate notice, in every attached tree, once.
 
     A tree that cannot be swept -- it left epoch 2, or its select is not whole -- is
     logged and passed over, so one broken tree never stops the others' stalls.
@@ -47,6 +50,11 @@ def sweep_once(ctx: MethodContext, *, now: datetime) -> tuple[str, ...]:
             raised.extend(detect_stalls(context, now=now))
         except Exception as exc:
             logger.warning(f"stall sweep skipped root={root_id} error={exc!r}")
+        # an estimate notice is its own observation, so a failed stall pass never withholds it
+        try:
+            detect_estimate_crossings(context, now=now)
+        except Exception as exc:
+            logger.warning(f"estimate sweep skipped root={root_id} error={exc!r}")
     return tuple(raised)
 
 

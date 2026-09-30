@@ -72,6 +72,7 @@ from eawf.surfaces.cli.output import emit_json_or_text
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
+    from eawf.platform.rules.chain_budget import RenderMode
     from eawf.surfaces.render.agents_md import RenderResult
     from eawf.surfaces.render.manifest import Manifest
 
@@ -215,7 +216,7 @@ def _seed_shadow(
 
 
 def _rule_projections(
-    target_dir: Path, *, write: bool, rules: bool
+    target_dir: Path, *, write: bool, rules: bool, mode: RenderMode
 ) -> tuple[list[str], list[str], list[str]]:
     """Render, or diff, the rule-graph projections of *target_dir*.
 
@@ -225,12 +226,15 @@ def _rule_projections(
             the planned projections against disk.
         rules: Whether the repository authors a rule source; ``False``
             renders nothing.
+        mode: ``certified`` refuses a chain the operator's global instruction
+            documents put over its ceiling; ``local`` warns and renders.
 
     Returns:
         The projection targets that changed (``write``) or would change,
         ``.gitignore`` among them when its managed block does; the
-        host-fact warnings the render recorded in its manifest: readers
-        held to a cap they have not certified, and stale facts; and the
+        warnings the render recorded in its manifest: readers held to a cap
+        they have not certified, stale facts, and chains the global
+        instruction documents put over a ceiling; and the
         shipped ignore patterns the managed block lacked (``write`` only).
 
     Raises:
@@ -250,10 +254,10 @@ def _rule_projections(
     if not rules:
         return [], [], []
     try:
-        plan = plan_rule_projections(target_dir)
-        warnings = list(plan.manifest.host_fact_warnings)
+        plan = plan_rule_projections(target_dir, mode=mode)
+        warnings = list(plan.manifest.render_warnings)
         for warning in warnings:
-            logger.warning(f"sync_cmd host_fact_warning detail={warning!r}")
+            logger.warning(f"sync_cmd render_warning detail={warning!r}")
         if not write:
             return list(projection_drift(target_dir, plan)), warnings, []
         written = write_rule_projections(target_dir, plan)
@@ -511,6 +515,16 @@ def sync_cmd(
             help="Exit 2 if any managed region would be added/updated.",
         ),
     ] = False,
+    certified: Annotated[
+        bool,
+        typer.Option(
+            "--certified",
+            help=(
+                "Render for release: refuse when the host's global instruction documents "
+                "put a loaded chain over its prompt-budget ceiling, instead of warning."
+            ),
+        ),
+    ] = False,
 ) -> None:
     """Re-render managed assets and report drift.
 
@@ -544,6 +558,7 @@ def sync_cmd(
     from eawf.platform.rules.render import rule_source_present
 
     rules = rule_source_present(target_dir)
+    render_mode: RenderMode = "certified" if certified else "local"
 
     if dry_run or check:
         # Shadow-tree path. Mirror existing files into a tempdir, run the
@@ -562,7 +577,7 @@ def sync_cmd(
                     rules=rules,
                 )
                 projections, host_fact_warnings, _added = _rule_projections(
-                    target_dir, write=False, rules=rules
+                    target_dir, write=False, rules=rules, mode=render_mode
                 )
             except cli_errors.CliError as exc:
                 cli_errors.emit_error(exc, flags=flags)
@@ -630,7 +645,7 @@ def sync_cmd(
             rules=rules,
         )
         projections, host_fact_warnings, gitignore_added = _rule_projections(
-            target_dir, write=True, rules=rules
+            target_dir, write=True, rules=rules, mode=render_mode
         )
     except cli_errors.CliError as exc:
         cli_errors.emit_error(exc, flags=flags)

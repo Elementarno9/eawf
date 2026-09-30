@@ -157,7 +157,7 @@ def test_plan_rule_projections_records_and_reports_uncertified_readers(repo: Pat
 def test_rule_projections_sync_reports_uncertified_readers_to_the_operator(
     repo: Path,
 ) -> None:
-    changed, warnings, _added = sync._rule_projections(repo, write=True, rules=True)
+    changed, warnings, _added = sync._rule_projections(repo, write=True, rules=True, mode="local")
     assert POLICY_TARGET in changed
     assert any("claude with no certified project-document cap" in w for w in warnings)
     written = render.ProjectionManifest.model_validate_json(
@@ -183,7 +183,7 @@ def test_rule_projections_sync_reports_uncertified_readers_to_the_operator(
 
 
 def test_rule_projections_without_a_rule_source_reports_nothing(repo: Path) -> None:
-    assert sync._rule_projections(repo, write=False, rules=False) == ([], [], [])
+    assert sync._rule_projections(repo, write=False, rules=False, mode="local") == ([], [], [])
 
 
 def test_plan_rule_projections_fully_certified_readers_warn_nothing(

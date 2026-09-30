@@ -20,7 +20,8 @@ import json
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
@@ -32,7 +33,7 @@ from eawf.surfaces.tui.console.chrome import (
     SettingsCatalog,
     States,
 )
-from eawf.surfaces.tui.console.operations import linked_refusal
+from eawf.surfaces.tui.console.operations import ATTENTION_ROUTE, linked_refusal
 from eawf.surfaces.tui.console.tokens import TRUTH
 
 # The files a fixture directory holds, one per register.
@@ -172,6 +173,17 @@ def menu_verb(columns: tuple[str, ...]) -> MenuVerb:
     )
 
 
+#: The verbs a linked console offers that the prototype registers never drew, by route: a
+#: budget notice's acknowledgement, which the notice ledger records for one principal.
+LINKED_ONLY_VERBS: Final[Mapping[str, tuple[MenuVerb, ...]]] = MappingProxyType(
+    {
+        ATTENTION_ROUTE: (
+            MenuVerb(key="n", verb="acknowledge", available=True, authority="answer"),
+        ),
+    }
+)
+
+
 def linked_verb(route: str, verb: MenuVerb) -> MenuVerb:
     """Return ``verb`` as a console holding no prototype rows lists it on ``route``.
 
@@ -192,7 +204,11 @@ def linked_verb(route: str, verb: MenuVerb) -> MenuVerb:
     if not verb.mutates and verb.verb.startswith(_COPY_VERB):
         return replace(verb, weight=VerbWeight.LIGHT, available=True, reason="")
     refusal = linked_refusal(route, verb.verb)
-    return replace(verb, available=False, reason=refusal) if refusal else verb
+    if refusal:
+        return replace(verb, available=False, reason=refusal)
+    # the chrome's attention reasons describe the prototype's principals; the live register
+    # decides a bound attention verb when it is pressed
+    return replace(verb, available=True, reason="") if route == ATTENTION_ROUTE else verb
 
 
 class Fixture:
@@ -250,8 +266,15 @@ class Fixture:
         self.menus = ActionMenus(
             {
                 route: [
-                    menu_verb(row) if prototype else linked_verb(route, menu_verb(row))
-                    for row in rows
+                    *(
+                        menu_verb(row) if prototype else linked_verb(route, menu_verb(row))
+                        for row in rows
+                    ),
+                    *(
+                        ()
+                        if prototype
+                        else (linked_verb(route, v) for v in LINKED_ONLY_VERBS.get(route, ()))
+                    ),
                 ]
                 for route, rows in proto.actions.items()
             }

@@ -253,10 +253,13 @@ class _ClaudeHost:
     def settings(self, document: dict[str, Any]) -> None:
         (self.project / ".claude" / "settings.json").write_text(json.dumps(document), "utf-8")
 
-    def run(self, prompt: str, stub: _Stub) -> subprocess.CompletedProcess[str]:
+    def run(
+        self, prompt: str, stub: _Stub, *, resume: bool = False
+    ) -> subprocess.CompletedProcess[str]:
+        argv = ["claude", "-p", prompt, "--max-turns", "6", "--permission-mode", "default"]
         with _serve(stub) as base_url:
             return subprocess.run(
-                ["claude", "-p", prompt, "--max-turns", "6", "--permission-mode", "default"],
+                [*argv, "--continue"] if resume else argv,
                 cwd=self.project,
                 env=self.env(base_url),
                 capture_output=True,
@@ -559,6 +562,54 @@ def test_surf_168_claude_permission_request_hook_fires(claude_host: _ClaudeHost)
     touch = _tool(1, "Bash", {"command": "touch probe-file", "description": "probe"})
     claude_host.run("PROBE", _claude_stub([touch]))
     assert _fired(sink) == ["PermissionRequest"]
+
+
+@needs_claude
+def test_surf_168_claude_compaction_hooks_fire(claude_host: _ClaudeHost) -> None:
+    """A compaction fires PreCompact first, then SessionStart naming the compaction."""
+    sink = claude_host.root / "events"
+    claude_host.settings({"hooks": _recording_hooks(["PreCompact", "SessionStart"], sink)})
+    stub = _claude_stub([])
+    claude_host.run("hello", stub)
+    claude_host.run("/compact", stub, resume=True)
+    fired = [json.loads(line) for line in sink.read_text("utf-8").splitlines() if line.strip()]
+    events = [(row["hook_event_name"], row.get("source") or row.get("trigger")) for row in fired]
+    assert ("PreCompact", "manual") in events
+    compacted = events.index(("PreCompact", "manual"))
+    assert ("SessionStart", "compact") in events[compacted:]
+
+
+def _probe_skill(claude_host: _ClaudeHost) -> None:
+    skill = claude_host.project / ".claude" / "skills" / "probe-skill"
+    skill.mkdir(parents=True)
+    body = "---\nname: probe-skill\ndescription: probe\n---\nSay PROBE_SKILL_BODY\n"
+    (skill / "SKILL.md").write_text(body, "utf-8")
+
+
+@needs_claude
+def test_surf_168_claude_prompt_hook_refuses_a_skill_before_the_model(
+    claude_host: _ClaudeHost,
+) -> None:
+    """A slashed skill reaches the prompt hook verbatim and its block starts no turn; a
+    model's skill call names the skill and its argument text to the pre-tool hook."""
+    sink = claude_host.root / "events"
+    _probe_skill(claude_host)
+    block = json.dumps({"decision": "block", "reason": "PROBE_REFUSED"})
+    record = f"tee -a '{sink}' | grep -q -- --bogus && echo '{block}'; echo >> '{sink}'"
+    hooks = _recording_hooks(["PreToolUse"], sink)
+    hooks["UserPromptSubmit"] = [{"hooks": [{"type": "command", "command": record}]}]
+    claude_host.settings({"hooks": hooks})
+    refused = _claude_stub([])
+    result = claude_host.run("/probe-skill --bogus x", refused)
+    assert "PROBE_REFUSED" in result.stdout
+    assert [e for e in refused.exchanges if e.role == "root"] == []
+    call = _tool(1, "Skill", {"skill": "probe-skill", "args": "--bogus x"})
+    claude_host.run("PROBE", _claude_stub([call]))
+    fired = [json.loads(line) for line in sink.read_text("utf-8").splitlines() if line.strip()]
+    prompts = [row["prompt"] for row in fired if row["hook_event_name"] == "UserPromptSubmit"]
+    assert prompts == ["/probe-skill --bogus x", "PROBE"]
+    (skill,) = (row for row in fired if row.get("tool_name") == "Skill")
+    assert skill["tool_input"] == {"skill": "probe-skill", "args": "--bogus x"}
 
 
 @needs_claude

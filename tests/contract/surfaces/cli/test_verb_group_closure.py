@@ -73,7 +73,7 @@ def _options(*path: str) -> dict[str, click.Parameter]:
     ("group", "verbs"),
     [
         ("campaign", {"new", "run", "cancel"}),
-        ("question", {"open-decision", "answer"}),
+        ("question", {"open-decision", "answer", "reply"}),
     ],
 )
 def test_surf_080_campaign_and_question_are_root_entity_groups(group: str, verbs: set[str]) -> None:
@@ -277,8 +277,6 @@ def test_surf_082_release_create_refuses_a_version_beside_the_spec(
     result = runner.invoke(app, ["release", "create", "0.7.0.dev9", "--from-spec", str(spec)])
     assert result.exit_code == exit_codes.USER_ERROR
     assert release_calls == []
-
-
 
 
 # ---- SURF-083 ---------------------------------------------------------------

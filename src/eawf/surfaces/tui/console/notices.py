@@ -2,16 +2,17 @@
 
 A budget notice is not a pending action. It blocks nothing and needs no answer, so it is
 listed under its own bucket after the actions, and the only verbs it takes are a snooze,
-which keeps it out of this principal's inbox for a while, and a resolve, which closes it
-for its whole audience. Either is previewed on the consequence card first and sent to the
+which keeps it out of this principal's inbox for a while, an acknowledgement, which this
+principal alone records and which resolves nothing, and a resolve, which closes it for its
+whole audience. Either is previewed on the consequence card first and sent to the
 notice ledger's disposition verb at the revision the operator was shown; neither stops,
 extends or restarts the work the notice describes.
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import TYPE_CHECKING, Final
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Final, Literal
 
 from eawf.kernel.projection.attention import AttentionBucket
 from eawf.kernel.projection.compute import ProjectionRow
@@ -27,7 +28,11 @@ if TYPE_CHECKING:
 NOTICE_BUCKET: Final = AttentionBucket.OVER_BUDGET.value.upper()
 
 #: The verbs a notice takes, by key, and the disposition each records.
-NOTICE_VERBS: Final = {"z": "snooze", "v": "resolve"}
+NOTICE_VERBS: Final[Mapping[str, Literal["snooze", "acknowledge", "resolve"]]] = {
+    "z": "snooze",
+    "v": "resolve",
+    "n": "acknowledge",
+}
 
 #: Why a notice refuses an answer or a denial: it asks nothing.
 NOTHING_TO_ANSWER: Final = "a notice has nothing to {verb} — snooze or resolve it"
@@ -121,7 +126,7 @@ def detail_view(
 
 
 def notice_verb(ctx: Ctx, key: str) -> bool:
-    """Preview a snooze or resolve of the notice the cursor is on; refuse an answer to it.
+    """Preview a disposition of the notice the cursor is on; refuse an answer to it.
 
     Args:
         ctx: The keystroke's context, carrying the notices the link holds.

@@ -116,6 +116,7 @@ COMMAND_PANELS: dict[str, str] = {
     "reflect": "estimation",
     "telemetry": "estimation",
     # planning: roadmap / wave / iter / phase nouns + research + memory.
+    "action": "planning",
     "batch": "planning",
     "campaign": "planning",
     "memory": "planning",

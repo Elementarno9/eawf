@@ -31,6 +31,7 @@ from eawf.kernel.migration.epoch2.canary import (
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.runtime.provider import ControlKind
+from eawf.runtime.daemon.methods.dispatch_queue import DISPATCH_QUEUE_READ_METHOD
 from eawf.runtime.daemon.methods.pause import PAUSE_READ_METHOD
 from eawf.runtime.daemon.methods.question import QUESTION_READ_METHOD
 from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
@@ -132,6 +133,13 @@ class _Daemon:
             return {"decisions": []}
         if method == RUN_STALLS_READ_METHOD:
             return {"stalls": [], "read_at": AT.isoformat()}
+        if method == DISPATCH_QUEUE_READ_METHOD:
+            return {
+                "runs": [],
+                "plan": {"slots": None, "in_use": 0},
+                "control": {},
+                "read_at": AT.isoformat(),
+            }
         if method == RUN_EVENTS_READ_METHOD:
             raise ConnectionError(f"{method} is not served")
         if method in (QUESTION_READ_METHOD, PAUSE_READ_METHOD):

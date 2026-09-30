@@ -64,6 +64,7 @@ def test_hook_event_v1_event_type_set_is_frozen() -> None:
         "pre_tool_use",
         "post_tool_use",
         "post_tool_use_failure",
+        "user_prompt_submit",
     }
     assert {member.value for member in HookEventType} == expected
 

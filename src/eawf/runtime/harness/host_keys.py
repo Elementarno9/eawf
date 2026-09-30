@@ -221,6 +221,20 @@ HOST_KEYS: Final[tuple[HostKeyRecord, ...]] = (
     ),
     HostKeyRecord(
         document="claude_settings",
+        path="hooks.PreCompact",
+        source="RUN-013",
+        effect="honoured",
+        evidence=_probe("test_surf_168_claude_compaction_hooks_fire"),
+    ),
+    HostKeyRecord(
+        document="claude_settings",
+        path="hooks.UserPromptSubmit",
+        source="SURF-112",
+        effect="honoured",
+        evidence=_probe("test_surf_168_claude_prompt_hook_refuses_a_skill_before_the_model"),
+    ),
+    HostKeyRecord(
+        document="claude_settings",
         path="hooks.PermissionRequest",
         source="RUN-051",
         effect="honoured",

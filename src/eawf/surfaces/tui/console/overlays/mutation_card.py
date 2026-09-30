@@ -2,9 +2,11 @@
 
 Before confirmation a single target draws ACTION, TARGET, EFFECTS, NOT, IF STALE and
 AUTHORITY in that order, every time, whatever the verb; a settings write of a whole list
-or mapping adds CHANGES, its per-member difference, before EFFECTS. A bulk card lists the selection
-by identifier above the six panes and adds the UNKNOWN pane below them, which names in
-advance the targets that may not confirm. A card refused before sending keeps its six
+or mapping adds CHANGES, its per-member difference, before EFFECTS, and a pending action
+several principals may answer adds ELIGIBLE after AUTHORITY: who may answer, their class,
+when they last acted and what each did, and that the first answer wins. A bulk card lists
+the selection by identifier above the six panes and adds the UNKNOWN pane below them,
+which names in advance the targets that may not confirm. A card refused before sending keeps its six
 panes: EFFECTS says nothing will change and why, and the keybar offers only the way back.
 
 After confirmation the card draws the results table -- one row in, one row out -- with the
@@ -47,6 +49,18 @@ def _pane(label: str, lines: Sequence[str], w: int) -> list[str]:
         wrapped = dv.wrap_pane(label if i == 0 else "", text, w)
         out.extend(wrapped)
     return out or dv.wrap_pane(label, "—", w)
+
+
+def _matrix(label: str, lines: Sequence[str], w: int) -> list[str]:
+    """Return one pane whose lines are columns: each kept whole to the frame, never rewrapped.
+
+    Rewrapping joins a row's runs of spaces, so a column would slide under its neighbour's
+    head and an empty cell would vanish; a matrix row is clipped at the frame instead.
+    """
+    return [
+        (" " + pad(label if i == 0 else "", 10) + pad(line, w - 12)).rstrip()
+        for i, line in enumerate(lines)
+    ]
 
 
 def _target(item: Item) -> list[str]:
@@ -147,6 +161,7 @@ def preview_frame(view: View, card: Card) -> list[str]:
             *_pane("IF STALE", [card.if_stale], w),
             thin(w),
             *_pane("AUTHORITY", [card.authority], w),
+            *([thin(w), *_matrix("ELIGIBLE", card.eligible, w)] if card.eligible else []),
         ]
         pairs = (
             (("Esc", "back — nothing happens"),)

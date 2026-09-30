@@ -48,6 +48,7 @@ VERB: Mapping[str, Verb] = MappingProxyType(
         "x": Verb("deny", "DECLINED"),
         "z": Verb("snooze", "SNOOZED"),
         "v": Verb("resolve", "SEALED"),
+        "s": Verb("assign", "ASSIGNED"),
     }
 )
 
@@ -355,13 +356,8 @@ def gated(
         principal_refusal: Why every bound write is refused because the daemon link
             acts as nobody; empty when it acts as someone or there is no link.
     """
-    if row is not None and key in VERB and key not in verbs_for(row):
-        session.log_key(
-            key,
-            "a notice has nothing to "
-            + ("answer" if key == "a" else "deny")
-            + " — snooze or resolve it",
-        )
+    if row is not None and is_notice(row) and key in VERB and key not in verbs_for(row):
+        session.log_key(key, f"a notice has nothing to {VERB[key].name} — snooze or resolve it")
         return True
     if row is not None and row.state != OPEN:
         session.log_key(

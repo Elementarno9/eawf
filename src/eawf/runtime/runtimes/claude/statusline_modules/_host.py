@@ -1,12 +1,16 @@
-"""The source every segment read off the Claude Code statusline payload names.
+"""The sources a segment read off the Claude Code host names.
 
 The host hands the statusline its own counters on stdin. Segments read them
 there and nowhere else: recovering a value from the transcript that the host
 already supplies would give two figures for one quantity, and they drift.
+
+Installed plugins are the other host fact: no record of the tree states them,
+so the host's own install record is their one producer.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Final
 
 from eawf.kernel.projection.truth import Precision, TruthKind
@@ -16,6 +20,12 @@ from eawf.surfaces.render.statusline import SegmentSource
 
 #: The producer every host-payload segment names.
 HOST_PRODUCER: Final = "claude-code.statusline-payload"
+
+#: The producer of the installed-plugin count: the host's own install record.
+HOST_PLUGIN_PRODUCER: Final = "claude-code.installed-plugins"
+
+#: Where the host records installed plugins, relative to the home directory.
+HOST_PLUGIN_RECORD: Final = Path(".claude") / "plugins" / "installed_plugins.json"
 
 
 def host_source(
@@ -47,4 +57,4 @@ def host_source(
     )
 
 
-__all__ = ["HOST_PRODUCER", "host_source"]
+__all__ = ["HOST_PLUGIN_PRODUCER", "HOST_PLUGIN_RECORD", "HOST_PRODUCER", "host_source"]

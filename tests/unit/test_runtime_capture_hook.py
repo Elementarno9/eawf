@@ -174,8 +174,8 @@ def test_codex_session_start_binds_provider_session() -> None:
         )
     )
 
-    assert len(results) == 1
-    assert results[0].name == "runtime.codex_lifecycle"
+    (lifecycle,) = (result for result in results if result.name == "runtime.codex_lifecycle")
+    assert lifecycle.output.startswith("runtime.codex_lifecycle")
     assert client.calls[0][0] == "runtime.codex_lifecycle"
     assert client.calls[0][1]["event_type"] == "session_start"
     assert client.calls[0][1]["provider_session_id"] == "provider-session-1"

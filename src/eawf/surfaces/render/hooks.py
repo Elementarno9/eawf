@@ -4,8 +4,8 @@
 for any :class:`~eawf.runtime.hooks.event.HookEventType`. Which events an
 installer actually writes to disk is the installer's decision — the Claude
 installer subscribes only handler-backed events (:attr:`HookSpec.has_handler`,
-today ``SESSION_START``, ``SESSION_END``, ``SUBAGENT_START``, ``SUBAGENT_STOP`` and
-``PERMISSION_REQUEST``), while
+today ``SESSION_START``, ``SESSION_END``, ``SUBAGENT_START``, ``SUBAGENT_STOP``,
+``PRE_COMPACT``, ``PERMISSION_REQUEST`` and the three tool events), while
 the Codex installer renders every event with ``runtime="codex"``.
 
 The output is a small POSIX-bash wrapper that:
@@ -82,7 +82,11 @@ class HookSpec:
             ``runtime.host_permission``, which records the held call as a
             provider permission, and the three tool events have
             ``runtime.host_tool``, which states each host tool call on its Run's
-            transcript. Every other
+            transcript, and :data:`HookEventType.PRE_COMPACT` has
+            ``runtime.host_context``, which snapshots the Run's contract anchors
+            before the host compacts, and
+            :data:`HookEventType.USER_PROMPT_SUBMIT` has ``skill.invocation``,
+            which refuses a skill invocation its argument schema refuses. Every other
             event's wrapper exits ``0`` with an empty result list (an idle
             contract), so the Claude installer subscribes
             only handler-backed events and never wires the operator's
@@ -208,7 +212,9 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
         claude_event_name="SubagentStop",
         has_handler=True,
     ),
-    HookSpec(event_type=HookEventType.PRE_COMPACT, claude_event_name="PreCompact"),
+    HookSpec(
+        event_type=HookEventType.PRE_COMPACT, claude_event_name="PreCompact", has_handler=True
+    ),
     HookSpec(
         event_type=HookEventType.PERMISSION_REQUEST,
         claude_event_name="PermissionRequest",
@@ -223,6 +229,11 @@ HOOK_REGISTRY: tuple[HookSpec, ...] = (
     HookSpec(
         event_type=HookEventType.POST_TOOL_USE_FAILURE,
         claude_event_name="PostToolUseFailure",
+        has_handler=True,
+    ),
+    HookSpec(
+        event_type=HookEventType.USER_PROMPT_SUBMIT,
+        claude_event_name="UserPromptSubmit",
         has_handler=True,
     ),
 )

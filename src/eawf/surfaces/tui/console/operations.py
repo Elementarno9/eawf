@@ -7,7 +7,7 @@ the write under, so sending the same operation twice is one write: that is what 
 reconnect reconcile an operation whose answer was lost by simply asking again under the
 same id, instead of guessing whether it landed.
 
-Six daemon mutators are bound. An answer to a pending action goes to the approval seal,
+Seven daemon mutators are bound. An answer to a pending action goes to the approval seal,
 which reports a later conflicting answer as superseded rather than refusing it; an answer
 to a provider permission goes to the permission's own decide verb, as the operator, and
 never to the seal, because the two records resolve apart; a Run
@@ -17,7 +17,8 @@ layer file under the daemon's lock; and a lifecycle move goes to the per-entity 
 names it, addressed at the revision its consequence card was built at and filed under the
 operation id the card minted, so confirming the same card twice is one write; and a budget
 notice's snooze or resolve goes to the notice ledger's disposition verb, at the revision the
-operator was shown. Every other
+operator was shown; and a pending action's snooze or assignment goes to the pending-action
+disposition verbs, at the revision the operator was shown. Every other
 writing verb stays listed and refused with its reason, because a verb that looked like it
 worked while the daemon never heard of it is the one thing a console must not draw.
 """
@@ -46,8 +47,19 @@ logger = logging.getLogger(__name__)
 #: console's process; a contract test pins the two spellings together.
 SEAL_METHOD: Final = "runtime.delivery.seal_acceptance_approval"
 
+#: The daemon verbs that record one principal's own snooze of a pending action, and that
+#: address a pending action to one principal or to everyone.
+ACTION_SNOOZE_METHOD: Final = "runtime.pending_action.snooze"
+ACTION_ASSIGN_METHOD: Final = "runtime.pending_action.assign"
+
 #: The daemon verb that records a principal's request for a Run control.
 CONTROL_METHOD: Final = "runtime.run.control.request"
+
+#: The daemon verb that records a pause, drain or resume of dispatch.
+DISPATCH_CONTROL_METHOD: Final = "runtime.dispatch.control.request"
+
+#: The key a dispatch request is filed under: the queue is the tree's one scheduler.
+DISPATCH_QUEUE_TARGET: Final = "dispatch queue"
 
 #: The daemon verb that approves or denies a provider permission.
 PERMISSION_DECIDE_METHOD: Final = "runtime.permission.decide"
@@ -107,12 +119,26 @@ RUN_CONTROLS: Final[Mapping[str, ControlKind]] = MappingProxyType(
     }
 )
 
+#: The attention verbs a pending action is disposed of through without being answered.
+ACTION_VERBS: Final[Mapping[str, str]] = MappingProxyType(
+    {"snooze": ACTION_SNOOZE_METHOD, "assign": ACTION_ASSIGN_METHOD}
+)
+
+#: The target kinds a dispatch request addresses: the queue's route and its own card.
+DISPATCH_KINDS: Final = frozenset({"unattended", "dispatch queue"})
+
+#: The dispatch control each queue verb requests, by verb name.
+DISPATCH_VERBS: Final[Mapping[str, Literal["pause", "drain", "resume"]]] = MappingProxyType(
+    {"request pause": "pause", "request drain": "drain", "request resume": "resume"}
+)
+
 #: Why a writing verb with no daemon mutator is refused; the reason the menu shows.
 UNBOUND_REASON: Final = "no daemon verb carries this yet"
 _UNBOUND_REASONS: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "snooze": "no daemon verb snoozes a pending action · only a budget notice snoozes",
-        "resolve": "no daemon verb resolves a pending action · only a budget notice resolves",
+        "resolve": "a pending action closes only by its answer · "
+        "a answer or x deny seals it for every principal",
+        "acknowledge": "only a notice is acknowledged · a pending action is answered",
     }
 )
 
@@ -168,9 +194,11 @@ def binding_refusal(kind: str, verb: str) -> str:
         An empty string when a daemon mutator carries the verb; otherwise the reason the
         verb is refused.
     """
-    if kind == ATTENTION_ROUTE and verb in ANSWER_OPTIONS:
+    if kind == ATTENTION_ROUTE and (verb in ANSWER_OPTIONS or verb in ACTION_VERBS):
         return ""
     if kind in RUN_KINDS and verb in RUN_CONTROLS:
+        return ""
+    if kind in DISPATCH_KINDS and verb in DISPATCH_VERBS:
         return ""
     return _UNBOUND_REASONS.get(verb, UNBOUND_REASON)
 
@@ -333,19 +361,20 @@ class LifecycleRequest:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NoticeRequest:
-    """An operator's snooze or resolve of one budget notice, at the revision they were shown.
+    """An operator's disposition of one budget notice, at the revision they were shown.
 
     Attributes:
         target: The notice's key.
         disposition: ``snooze`` keeps it out of this principal's inbox until
-            ``snooze_until``; ``resolve`` closes it for its whole audience.
+            ``snooze_until``; ``acknowledge`` records that this principal took it in and
+            resolves nothing; ``resolve`` closes it for its whole audience.
         revision: The revision the operator was shown; the ledger refuses a disposition
             of a revision the notice has escalated past.
         snooze_until: When a snooze lapses; ``None`` for a resolve.
     """
 
     target: str
-    disposition: Literal["snooze", "resolve"]
+    disposition: Literal["snooze", "acknowledge", "resolve"]
     revision: int
     snooze_until: datetime | None = None
 
@@ -362,14 +391,58 @@ class NoticeRequest:
             raise ValueError("a snooze names when it lapses, and only a snooze does")
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ActionDisposition:
+    """An operator's snooze or assignment of one pending action, before it is addressed.
+
+    Attributes:
+        target: The pending action's public key.
+        verb: ``snooze`` hides it from this operator alone until ``snooze_until``;
+            ``assign`` addresses it to ``assignee``.
+        snooze_until: When a snooze lapses; ``None`` for an assignment.
+        assignee: The principal an assignment addresses it to; ``None`` for a snooze.
+    """
+
+    target: str
+    verb: Literal["snooze", "assign"]
+    snooze_until: datetime | None = None
+    assignee: str | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a disposition the daemon would refuse.
+
+        Raises:
+            ValueError: A snooze names no deadline, or an assignment names nobody.
+        """
+        if (self.verb == "snooze") != (self.snooze_until is not None):
+            raise ValueError("a snooze names when it lapses, and only a snooze does")
+        if (self.verb == "assign") != (self.assignee is not None):
+            raise ValueError("an assignment names who it addresses, and only an assignment does")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DispatchRequest:
+    """An operator's pause, drain or resume of the dispatch scheduler.
+
+    Attributes:
+        verb: ``pause``, ``drain`` or ``resume``, as the daemon names it.
+        target: What the request is about: the tree's one dispatch queue.
+    """
+
+    verb: Literal["pause", "drain", "resume"]
+    target: str = DISPATCH_QUEUE_TARGET
+
+
 VerbRequest = (
     AnswerRequest
     | QuestionAnswer
+    | ActionDisposition
     | PermissionDecision
     | ControlRequest
     | SettingRequest
     | LifecycleRequest
     | NoticeRequest
+    | DispatchRequest
 )
 
 
@@ -517,6 +590,24 @@ def address_notice(request: NoticeRequest, *, operator: Operator) -> ConsoleOper
     )
 
 
+def address_dispatch(request: DispatchRequest, *, operator: Operator) -> ConsoleOperation:
+    """Return the dispatch control call ``request`` is sent as, under a fresh request id.
+
+    Args:
+        request: The confirmed pause, drain or resume.
+        operator: Who the console acts as; the daemon records the request as theirs.
+    """
+    ref = _minted("DSP")
+    return ConsoleOperation(
+        operation_id=ref,
+        method=DISPATCH_CONTROL_METHOD,
+        params=MappingProxyType(
+            {"verb": request.verb, "actor": operator.principal, "request_ref": ref}
+        ),
+        target=request.target,
+    )
+
+
 def address_setting(request: SettingRequest) -> ConsoleOperation:
     """Return the layered-config write ``request`` is sent as.
 
@@ -557,7 +648,11 @@ def address_setting(request: SettingRequest) -> ConsoleOperation:
 
 
 def address(
-    request: AnswerRequest | QuestionAnswer | PermissionDecision | ControlRequest,
+    request: AnswerRequest
+    | QuestionAnswer
+    | ActionDisposition
+    | PermissionDecision
+    | ControlRequest,
     *,
     urn: str,
     revision: int,
@@ -604,6 +699,24 @@ def address(
             ),
             target=request.target,
         )
+    if isinstance(request, ActionDisposition):
+        key = _minted("ACT")
+        params: dict[str, Any] = {
+            "urn": urn,
+            "expected_revision": revision,
+            "idempotency_key": key,
+            "actor": operator.principal,
+        }
+        if request.snooze_until is not None:
+            params["snooze_until"] = request.snooze_until.isoformat()
+        if request.assignee is not None:
+            params["assignee"] = request.assignee
+        return ConsoleOperation(
+            operation_id=key,
+            method=ACTION_VERBS[request.verb],
+            params=MappingProxyType(params),
+            target=request.target,
+        )
     if isinstance(request, PermissionDecision):
         return ConsoleOperation(
             operation_id=_minted("PRM"),
@@ -643,8 +756,10 @@ def address(
 def rereads(request: VerbRequest, result: OperationResult) -> bool:
     """Return whether the rows holding ``request``'s target are read again after ``result``.
 
-    A stale compare-and-swap is read again so the record is shown as it now stands, and an
-    answer to a question is, because a host's question lands on a ledger no patch carries.
+    A stale compare-and-swap is read again so the record is shown as it now stands; an
+    answer to a question is, because a host's question lands on a ledger no patch carries;
+    and so is a pending action's snooze or assignment, because a snooze moves no revision
+    and no patch would redraw it.
 
     Args:
         request: What the operator asked for.
@@ -652,7 +767,8 @@ def rereads(request: VerbRequest, result: OperationResult) -> bool:
     """
     if result.status is OperationStatus.REFUSED:
         return f"{STALE_REVISION_CODE}:" in result.detail
-    return isinstance(request, QuestionAnswer) and result.status is OperationStatus.APPLIED
+    applied = result.status is OperationStatus.APPLIED
+    return isinstance(request, QuestionAnswer | ActionDisposition) and applied
 
 
 def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> OperationResult:
@@ -697,7 +813,12 @@ def settled(operation: ConsoleOperation, answer: Mapping[str, Any]) -> Operation
     reason = answer.get("reason")
     if answer.get("outcome") == OperationStatus.SUPERSEDED.value:
         disposition = ControlDisposition.SUPERSEDED
-    elif operation.method in (SEAL_METHOD, PERMISSION_DECIDE_METHOD, QUESTION_ANSWER_METHOD):
+    elif operation.method in (
+        SEAL_METHOD,
+        PERMISSION_DECIDE_METHOD,
+        QUESTION_ANSWER_METHOD,
+        *ACTION_VERBS.values(),
+    ):
         disposition = ControlDisposition.CONFIRMED
     else:
         # an answer that names no disposition says nothing about the effect
@@ -961,8 +1082,15 @@ class OperationLedger:
 
 
 __all__ = [
+    "ACTION_ASSIGN_METHOD",
+    "ACTION_SNOOZE_METHOD",
+    "ACTION_VERBS",
     "ANSWER_OPTIONS",
     "CONTROL_METHOD",
+    "DISPATCH_CONTROL_METHOD",
+    "DISPATCH_KINDS",
+    "DISPATCH_QUEUE_TARGET",
+    "DISPATCH_VERBS",
     "NOTICE_DISPOSE_METHOD",
     "NOTICE_LIST_METHOD",
     "NO_PRINCIPAL_REASON",
@@ -982,9 +1110,11 @@ __all__ = [
     "SNOOZE_FOR",
     "STALE_REVISION_CODE",
     "UNBOUND_REASON",
+    "ActionDisposition",
     "AnswerRequest",
     "ConsoleOperation",
     "ControlRequest",
+    "DispatchRequest",
     "LifecycleRequest",
     "NoticeRequest",
     "OperationLedger",
@@ -996,6 +1126,7 @@ __all__ = [
     "SettingRequest",
     "VerbRequest",
     "address",
+    "address_dispatch",
     "address_lifecycle",
     "address_notice",
     "address_setting",

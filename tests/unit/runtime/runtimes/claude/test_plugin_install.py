@@ -231,17 +231,18 @@ def test_install_plugin_omits_handler_less_hooks(tmp_path: Path) -> None:
         "session_end.sh",
         "subagent_start.sh",
         "subagent_stop.sh",
+        "pre_compact.sh",
         "permission_request.sh",
         "pre_tool_use.sh",
         "post_tool_use.sh",
         "post_tool_use_failure.sh",
+        "user_prompt_submit.sh",
     }
     for event in (
         "pre_commit",
         "post_commit",
         "pre_push",
         "post_push",
-        "pre_compact",
         "agent_end",
     ):
         assert not (hooks_dir / f"{event}.sh").exists(), f"idle hook wired: {event}"

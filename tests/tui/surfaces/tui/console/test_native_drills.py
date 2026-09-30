@@ -25,6 +25,7 @@ from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import Receded, View
 from eawf.surfaces.tui.console.header import header_row
 from eawf.surfaces.tui.console.navigation import Ctx, remember
+from eawf.surfaces.tui.console.operations import DISPATCH_QUEUE_TARGET
 from eawf.surfaces.tui.console.overlays.drawn import draw_overlay
 from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
@@ -388,11 +389,11 @@ def test_the_prototype_replay_keeps_its_golden_keybar() -> None:
 
 def test_unattended_requests_address_no_prototype_queue_on_a_live_tree() -> None:
     view = _open("unattended", model=build_operations_view(bodies._projection("unattended")))
-    bar = _bar(view)
-    assert "request pause" not in bar and "request drain" not in bar
-    for key in ("a", "d"):
-        session = _press(view, key)
-        assert (session.overlay, session.c_target) == (None, None)
+    assert "request pause" in _bar(view)
+    session = _press(view, "a")
+    assert session.overlay == "consequence" and session.c_target is not None
+    assert session.c_target["id"] == DISPATCH_QUEUE_TARGET
+    assert session.c_target["id"] not in PROTOTYPE_IDS
 
 
 def test_the_back_stack_crumb_names_no_prototype_record_on_a_live_tree() -> None:

@@ -105,7 +105,7 @@ from eawf.surfaces.tui.console.registry import REGISTRY
 from eawf.surfaces.tui.console.renderers import render_route
 from eawf.surfaces.tui.console.session import SIZES, Session, SessionSetup, conn_label
 from eawf.surfaces.tui.console.token_map import SURFACES, TOKEN_MAP, render_css
-from eawf.surfaces.tui.console.tokens import Severity
+from eawf.surfaces.tui.console.tokens import CARET, Severity
 from eawf.surfaces.tui.console.width import cell_len, pad
 from eawf.workflow.projection.acceptance import ACCEPTANCE_ROUTES, build_acceptance_view
 
@@ -393,12 +393,18 @@ class ProjectionHeader(RowsWidget):
 
 
 class Body(RowsWidget):
-    """The rows between the header and the keybar."""
+    """The rows between the header and the keybar; a single left click on a row selects it."""
 
     DEFAULT_CSS = """
     Body { height: 1fr; }
     """
     DEFAULT_CLASSES = _classes("canvas", "text")
+
+    def on_click(self, event: Click) -> None:
+        """Select the row under the pointer, as the arrow keys would; any other click is none."""
+        if isinstance(self.app, ConsoleApp) and event.button == 1 and event.chain == 1:
+            # the header is the frame's first row, so body line ``y`` is frame row ``y + 1``
+            self.app.select_row_at(event.y + 1)
 
 
 class KeybarRow(RowsWidget):
@@ -1046,6 +1052,35 @@ class ConsoleApp(App[None]):
         still = self.frame_rows == before and focus_of(self.session) == focus
         if say_why(ctx, key, head=head, toasts=toasts, still=still):
             self.render_frame()
+
+    def select_row_at(self, y: int) -> None:
+        """Walk the row cursor to frame row ``y`` one arrow key at a time, as a row click does.
+
+        The walk presses the keys the keyboard would, so a click reaches exactly the rows the
+        keys reach and no verb the keys do not. It stops when the cursor stops moving, and a
+        press that carries the cursor past ``y`` -- a line that is no row, such as a heading
+        or the selected row's second line -- is taken back, so no row is selected by guess.
+
+        Args:
+            y: The frame row the pointer is on.
+        """
+
+        def caret() -> int | None:
+            rows = self.frame_rows
+            return next((i for i, row in enumerate(rows) if row.lstrip().startswith(CARET)), None)
+
+        for _ in range(len(self.frame_rows)):
+            before = caret()
+            if before is None or before == y:
+                return
+            down = y > before
+            self.press_key("ArrowDown" if down else "ArrowUp")
+            after = caret()
+            if after is None or after == before:
+                return
+            if (after > y) if down else (after < y):
+                self.press_key("ArrowUp" if down else "ArrowDown")
+                return
 
     def activate_crumb(self, step: CrumbRun) -> None:
         """Walk the breadcrumb to ``step`` and repaint."""

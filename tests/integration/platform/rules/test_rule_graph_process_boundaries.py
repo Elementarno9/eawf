@@ -12,9 +12,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 from eawf.platform.rules.render import PROJECTION_MANIFEST_PATH
+
+pytestmark = pytest.mark.usefixtures("isolated_host_homes")
 
 # The modules that turn configuration into a sealed spec and a capsule.
 _RUN_COMPILER_MODULES = (

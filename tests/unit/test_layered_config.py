@@ -468,6 +468,10 @@ _EXPECTED_CONSUMERS: dict[str, str] = {
     "vcs.squash_allowed": f"{_SHIP}.ShipSkill._gate_merge_method",
     "vcs.task_reference": "eawf.runtime.daemon.methods.delivery.integrate_delivery",
     "verify.juror_wall_clock_seconds": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
+    "verify.jury_max_brier": "eawf.runtime.daemon.verdict_observations.resolve_jury_thresholds",
+    "verify.jury_max_co_error": (
+        "eawf.runtime.daemon.verdict_observations.resolve_jury_thresholds"
+    ),
     "verify.odr_blocking": "eawf.workflow.verify.readiness._overlay_repo_verify_leaves",
     "verify.require_iter_audit_accepted": "eawf.workflow.lifecycle.iter_.close_iter",
     "verify.retyped_rule_threshold": (

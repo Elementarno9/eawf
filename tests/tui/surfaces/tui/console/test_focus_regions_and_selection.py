@@ -1141,11 +1141,11 @@ def _pointer_handlers(cls: type) -> set[str]:
     return {name for name in vars(cls) if _POINTER_HANDLERS.match(name)}
 
 
-def test_con_025_the_breadcrumb_click_is_the_only_pointer_handler_the_console_binds() -> None:
+def test_con_025_the_breadcrumb_and_the_row_click_are_the_only_pointer_handlers() -> None:
     assert _pointer_handlers(ConsoleApp) == set()
     assert _pointer_handlers(ProjectionHeader) == {"on_click"}
-    for widget in (Body, KeybarRow):
-        assert _pointer_handlers(widget) == set(), widget
+    assert _pointer_handlers(Body) == {"on_click"}
+    assert _pointer_handlers(KeybarRow) == set()
 
 
 def _driven(*gestures: tuple[str, tuple[int, int], int]) -> tuple[Any, Any, list[str], list[str]]:
@@ -1153,6 +1153,8 @@ def _driven(*gestures: tuple[str, tuple[int, int], int]) -> tuple[Any, Any, list
         app = ConsoleApp(_fixture(), FakeClock())
         async with app.run_test(size=(120, 30)) as pilot:
             app.reset(SessionSetup(route="activity"))
+            # the pointer acts on the frame on screen, so the reset route is drawn first
+            app.render_frame()
             await pilot.pause()
             before, frame = app.session.projection(), list(app.frame_rows)
             for gesture, offset, button in gestures:
@@ -1167,9 +1169,18 @@ def _driven(*gestures: tuple[str, tuple[int, int], int]) -> tuple[Any, Any, list
 
 
 def test_con_025_a_right_click_and_a_double_click_are_defined_no_ops() -> None:
-    before, after, frame, drawn = _driven(("click", (6, 4), 3), ("double", (6, 5), 1))
+    before, after, frame, drawn = _driven(("click", (6, 4), 3))
     assert after == before
     assert drawn == frame
+    # a double click begins with the single click that selects; its second click adds nothing
+    _, clicked, _, once = _driven(("click", (6, 5), 1))
+    _, doubled, _, twice = _driven(("double", (6, 5), 1))
+    assert (doubled["sel"], doubled["route"], doubled["overlay"]) == (
+        clicked["sel"],
+        clicked["route"],
+        clicked["overlay"],
+    )
+    assert twice == once
 
 
 def test_con_025_the_breadcrumb_click_walks_to_the_step_as_escape_would() -> None:
@@ -1188,11 +1199,9 @@ def test_con_025_the_breadcrumb_click_walks_to_the_step_as_escape_would() -> Non
     assert asyncio.run(body()) == ("run.detail", "activity")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no pointer adapter maps a body click to a row or a bucket: only the breadcrumb "
-    "click is wired, so a row click selects nothing and a bucket click applies nothing",
-)
-def test_con_025_a_click_on_a_row_selects_it() -> None:
-    before, after, _frame, _drawn = _driven(("click", (6, 5), 1))
+def test_con_025_a_click_on_a_row_selects_it_as_the_arrow_keys_would() -> None:
+    before, after, _frame, drawn = _driven(("click", (6, 5), 1))
     assert after["sel"] != before["sel"]
+    # the clicked line is the row the caret now sits on, and nothing else was opened
+    assert drawn[6].lstrip().startswith("▸")
+    assert (after["route"], after["overlay"]) == (before["route"], before["overlay"])

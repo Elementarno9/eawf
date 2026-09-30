@@ -1,50 +1,48 @@
 """The console's one link to the daemon projection, and the way back after a break.
 
-Everything the console draws arrives through this seam, and the seam owns no
-transport of its own: it holds a
-:class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding`
-and uses its socket push, its always-on poll backstop and its resume cursor. That is
-the point of binding it this way rather than opening a second connection -- a second
-socket would be a second thing to authorise, probe, throttle and reconnect, and the
-console would then have two answers to "am I live" that could disagree.
+Everything the console draws arrives through this seam, and the seam owns no transport of
+its own: it holds a :class:`~eawf.surfaces.tui.chassis.state_binding.StateBinding` and uses
+its socket push, its always-on poll backstop and its resume cursor. That is the point of
+binding it this way rather than opening a second connection -- a second socket would be a
+second thing to authorise, probe, throttle and reconnect, and the console would then have
+two answers to "am I live" that could disagree.
 
-Reconnect runs the seven steps the connection contract states. The seam persists the
-scope, the route, the selected id, the filters, the projection revision and the last
-acknowledged ordinal (1); it asks the daemon from that cursor and takes back a replay,
-a refusal, or nothing to do (2); it refuses any patch outside the exact range the
-daemon named (3); it applies the gap and lands on the daemon's cursor, or holds the
-refusal until an operator accepts the repair and a whole projection is fetched (4);
-and it restores the selection by stable id, reporting a selection that is gone rather
-than sliding onto a neighbour (5). It reconciles every operation it sent and never heard
-back about (6): a Run control whose line the replay carries is settled from that patch,
-because the daemon commits each control line at an ordinal of its own and names the
-request it belongs to, so nothing is asked twice; any other operation is sent again
-under its own operation id, which the daemon files the write under, so the second send
-answers with what the first one did rather than writing twice, and an operation whose
-answer is lost again stays outstanding in recovery, the operator's to decide.
-Step 7 -- a clean load and a replayed projection at one cursor digest alike -- holds
+Reconnect runs the seven steps the connection contract states. The seam persists the scope,
+the route, the selected id, the filters, the projection revision and the last acknowledged
+ordinal (1); it asks the daemon from that cursor and takes back a replay, a refusal, or
+nothing to do (2); it refuses any patch outside the exact range the daemon named (3); it
+applies the gap and lands on the daemon's cursor, or holds the refusal until an operator
+accepts the repair and a whole projection is fetched (4); and it restores the selection by
+stable id, reporting a selection that is gone rather than sliding onto a neighbour (5). It
+reconciles every operation it sent and never heard back about (6): a Run control whose line
+the replay carries is settled from that patch, because the daemon commits each control line
+at an ordinal of its own and names the request it belongs to, so nothing is asked twice; any
+other operation is sent again under its own operation id, which the daemon files the write
+under, so the second send answers with what the first one did rather than writing twice, and
+an operation whose answer is lost again stays outstanding in recovery, the operator's to
+decide. Step 7 -- a clean load and a replayed projection at one cursor digest alike -- holds
 because the replay rebuilds through the daemon's own projection builder rather than
 digesting rows here.
 
-The seam is also the one way a console verb reaches the daemon. A verb is addressed from
-the projection rows the seam holds, so a write names the revision the operator was shown,
-and is sent through the same binding every read uses. An answer cites the operator's
-evidence receipt, and a receipt records one answer: once it has been sent for one pending
-action, an answer to any other is refused unsent rather than filed under a receipt that
-already speaks for something else.
+The seam is also the one way a console verb reaches the daemon. A verb is addressed from the
+projection rows the seam holds, so a write names the revision the operator was shown, and is
+sent through the same binding every read uses. An answer cites the operator's evidence
+receipt, and a receipt records one answer: once it has been sent for one pending action, an
+answer to any other is refused unsent rather than filed under a receipt that already speaks
+for something else.
 
-A count is the other thing the seam answers, because only the seam knows what the link
-can vouch for: outside a live and complete projection a count is labelled rather than
-stated, and a count whose register could not be read at all renders as unavailable and
-never as a zero.
+A count is the other thing the seam answers, because only the seam knows what the link can
+vouch for: outside a live and complete projection a count is labelled rather than stated,
+and a count whose register could not be read at all renders as unavailable and never as a
+zero.
 
-The seam holds more than the route on screen. It keeps a bounded cache of route
-projections over its one binding: a route is read once, on the first navigation to it,
-and every held route is kept current by the keyed patches the one feed pushes, so going
-back to a route costs no read. Attention is pinned in the cache, because the header
-prints its count on every route. The cache is bounded because a large tree makes each
-projection large; the least recently shown unpinned route is evicted first, and is read
-again if the operator returns to it.
+The seam holds more than the route on screen. It keeps a bounded cache of route projections
+over its one binding: a route is read once, on the first navigation to it, and every held
+route is kept current by the keyed patches the one feed pushes, so going back to a route
+costs no read. Attention is pinned in the cache, because the header prints its count on
+every route. The cache is bounded because a large tree makes each projection large; the
+least recently shown unpinned route is evicted first, and is read again if the operator
+returns to it.
 """
 
 from __future__ import annotations
@@ -105,6 +103,7 @@ from eawf.surfaces.tui.console.operations import (
     NOTICE_LIST_METHOD,
     AnswerRequest,
     ConsoleOperation,
+    DispatchRequest,
     LifecycleRequest,
     NoticeRequest,
     OperationLedger,
@@ -114,6 +113,7 @@ from eawf.surfaces.tui.console.operations import (
     SettingRequest,
     VerbRequest,
     address,
+    address_dispatch,
     address_lifecycle,
     address_notice,
     address_setting,
@@ -875,10 +875,9 @@ class ProjectionSeam:
     async def request(self, request: VerbRequest) -> OperationResult:
         """Send one console verb to the daemon, addressed from the rows the seam holds.
 
-        The target is addressed by the URN and revision of the row the operator was
-        shown, so a write never names a revision the console did not draw. Nothing the
-        console holds changes here; the daemon's commit arrives as a patch like any
-        other.
+        The target is addressed by the URN and revision of the row the operator was shown,
+        so a write never names a revision the console did not draw. Nothing held changes here;
+        the daemon's commit arrives as a patch like any other.
 
         Args:
             request: What the operator asked for.
@@ -888,13 +887,12 @@ class ProjectionSeam:
             or outstanding when the answer never arrived. A request that cannot be
             addressed is refused without being sent.
         """
-        if isinstance(request, SettingRequest | NoticeRequest):
-            # neither is addressed from a projection row: a setting is a layer write and a
-            # notice lives in the notice ledger
+        if isinstance(request, SettingRequest | NoticeRequest | DispatchRequest):
+            # no row addresses these: a layer write, the notice ledger, the tree's one queue
             return await (
                 self._write_setting(request)
                 if isinstance(request, SettingRequest)
-                else self._dispose(request)
+                else self._unrowed(request)
             )
         if self._operator is None:
             return not_sent(request.target, f"{NO_PRINCIPAL_REASON} (and --receipt-ref to answer)")
@@ -926,15 +924,17 @@ class ProjectionSeam:
             await self._reload_holding(request.target)
         return result
 
-    async def _dispose(self, request: NoticeRequest) -> OperationResult:
-        """Send one notice disposition, then re-read the inbox it changed.
+    async def _unrowed(self, request: NoticeRequest | DispatchRequest) -> OperationResult:
+        """Send one dispatch request, or one notice disposition and re-read the inbox it changed.
 
-        A notice the console does not hold was never shown, so it is refused unsent. The
-        inbox is re-read whatever the answer: an applied disposition moved the notice out
-        of it, and a refused one may have been refused because it escalated.
+        An unheld notice was never shown, so it is refused unsent. The inbox is re-read whatever
+        the answer: an applied disposition moved the notice, a refused one may have escalated.
         """
         if self._operator is None:
             return not_sent(request.target, NO_PRINCIPAL_REASON)
+        if isinstance(request, DispatchRequest):
+            self._operations.open(sent := address_dispatch(request, operator=self._operator))
+            return await self._send(sent)
         if not any(notice.notice_key == request.target for notice in self.notices):
             return not_sent(request.target, f"{request.target} is in no inbox the console holds")
         operation = address_notice(request, operator=self._operator)
@@ -943,7 +943,7 @@ class ProjectionSeam:
         try:
             await self.load_notices()
         except (DaemonRpcError, OSError, ValueError) as exc:
-            logger.warning(f"_dispose reread_failed id={operation.operation_id} cause={exc!r}")
+            logger.warning(f"_unrowed reread_failed id={operation.operation_id} cause={exc!r}")
         return result
 
     async def _move(self, request: LifecycleRequest, *, urn: str) -> OperationResult:
@@ -1026,11 +1026,11 @@ class ProjectionSeam:
         return tuple(rows.values())
 
     async def _reload_holding(self, key: str) -> None:
-        """Re-read every held route that holds ``key`` after a stale compare-and-swap.
+        """Re-read every held route that holds ``key`` when a write says it must be.
 
-        The record moved past the revision the operator was shown, so the console reads
-        the record as it now stands rather than leaving the old revision on screen for a
-        second answer to be refused against.
+        After a stale compare-and-swap the console reads the record as it now stands
+        rather than leaving the old revision on screen for a second answer to be refused
+        against; after a snooze, which moves no revision, it reads the row's new facts.
         """
         for route in [r for r, held in self._held.items() if any(x.key == key for x in held.rows)]:
             await self.load(route)

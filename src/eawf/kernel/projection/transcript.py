@@ -75,6 +75,7 @@ from eawf.kernel.runtime.content import ResolvedContent
 from eawf.kernel.runtime.events import (
     ChildRunPayload,
     CommandPayload,
+    ContextBoundaryPayload,
     ErrorPayload,
     EventGapPayload,
     FileChangePayload,
@@ -352,7 +353,18 @@ def _gateway_text(payload: object) -> str | None:
         return f"{payload.subject_ref.entity_key} · {payload.phase}{chosen}"
     if isinstance(payload, ErrorPayload):
         return payload.message
+    if isinstance(payload, ContextBoundaryPayload):
+        return _boundary_text(payload)
     return None
+
+
+def _boundary_text(payload: ContextBoundaryPayload) -> str:
+    """Return what a compaction boundary says about the Run's anchors."""
+    if payload.boundary == "compacting":
+        return f"context compacting · {payload.anchors.receipt_count} receipts held"
+    if payload.drift:
+        return f"context resumed · contract mismatch: {', '.join(payload.drift)}"
+    return "context resumed · anchors unchanged"
 
 
 def _more_paths(count: int) -> str:
