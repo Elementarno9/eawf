@@ -1,0 +1,6 @@
+# Where each rule the operator re-typed more than verify.retyped_rule_threshold
+# times since the previous release tag went. The tag preflight reds while a
+# subject over the threshold has no row here. Subjects are rule ids or
+# typed:<digest> cluster ids; operator wording never lands in this file.
+schema_version: 1
+dispositions: []

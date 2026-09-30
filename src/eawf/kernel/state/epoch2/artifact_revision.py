@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Final, Literal, Self
 
-from pydantic import AfterValidator, ConfigDict, StringConstraints
+from pydantic import AfterValidator, ConfigDict, StringConstraints, model_validator
 
 from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
@@ -125,4 +125,52 @@ def verify_revision_content(revision: ArtifactRevision, content: bytes) -> None:
         )
 
 
-__all__ = ["ArtifactRevision", "MediaKind", "RevisionWriter", "verify_revision_content"]
+#: The payload kind an artifact-ledger line holding a revision is filed under.
+ARTIFACT_REVISION_PAYLOAD_KIND: Final = "artifact_revision"
+
+
+class StoredArtifactRevision(Epoch2Model):
+    """One artifact-ledger line: a revision and, unless it is binary, its text.
+
+    The text is kept beside the record so the revision it names can still be
+    drawn after the file it was taken from moves on. A binary revision keeps
+    no text: it is opened externally and never drawn inline.
+
+    Attributes:
+        payload_kind: What the line holds, among the artifact ledger's lines.
+        revision: The revision record.
+        text: The revision's content as UTF-8 text; ``None`` for a binary one.
+
+    Raises:
+        pydantic.ValidationError: A binary revision carrying text, a drawable
+            one carrying none, or text whose size or digest disagrees with
+            the record.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    payload_kind: Literal["artifact_revision"] = ARTIFACT_REVISION_PAYLOAD_KIND
+    revision: ArtifactRevision
+    text: str | None = None
+
+    @model_validator(mode="after")
+    def _text_is_the_recorded_content(self) -> Self:
+        """Refuse text the record does not describe."""
+        binary = self.revision.media_kind is MediaKind.BINARY
+        if binary != (self.text is None):
+            raise ValueError(
+                "a binary revision keeps no text and every other revision keeps its text"
+            )
+        if self.text is not None:
+            verify_revision_content(self.revision, self.text.encode("utf-8"))
+        return self
+
+
+__all__ = [
+    "ARTIFACT_REVISION_PAYLOAD_KIND",
+    "ArtifactRevision",
+    "MediaKind",
+    "RevisionWriter",
+    "StoredArtifactRevision",
+    "verify_revision_content",
+]

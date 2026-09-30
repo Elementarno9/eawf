@@ -898,9 +898,19 @@ def _grant(context: Epoch2RootContext, args: _ToolGrantParams) -> ToolGrantAnswe
 
 
 def append_run_event(
-    context: Epoch2RootContext, args: RunEventAppend, *, now: datetime
+    context: Epoch2RootContext, args: RunEventAppend, *, now: datetime, at_tail: bool = False
 ) -> RunEventAnswer:
     """Order one observed event into the Run's stream.
+
+    Args:
+        context: The fenced tree the Run lives in.
+        args: The proposed event line.
+        now: The daemon's recording clock.
+        at_tail: Take the stream's next sequence under the Run's lock instead of the
+            one ``args`` names, or the standing line's sequence when the event id is
+            already recorded. An observer that shares the stream with other writers,
+            such as the hooks recording a delegation on the delegating Run, cannot
+            know the tail without racing them.
 
     Raises:
         DaemonValidationError: The Run holds no record; the event kind
@@ -915,6 +925,14 @@ def append_run_event(
             status=run.status, facts=_control_facts(records, args.urn)
         ).status
         events = run_events_of(records, args.urn)
+        if at_tail:
+            standing = next((line for line in events if line.event_ref == args.event_ref), None)
+            sequence = (
+                standing.run_sequence
+                if standing is not None
+                else reduce_run_events(events).next_sequence
+            )
+            args = args.model_copy(update={"run_sequence": sequence})
         try:
             plan = plan_event_append(
                 request=args,

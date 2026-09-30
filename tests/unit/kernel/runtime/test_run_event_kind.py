@@ -144,6 +144,8 @@ def test_run_event_kind_carries_reasoning_started_and_command_started() -> None:
 
 def test_the_supported_kinds_are_the_ones_whose_payload_model_exists() -> None:
     assert sorted(kind.value for kind in SUPPORTED_EVENT_KINDS) == [
+        "approval_requested",
+        "approval_resolved",
         "budget_exhausted",
         "budget_warning",
         "child_run_requested",
@@ -152,10 +154,17 @@ def test_the_supported_kinds_are_the_ones_whose_payload_model_exists() -> None:
         "command_output",
         "command_result",
         "command_started",
+        "diff_summarized",
+        "error_observed",
         "event_gap",
+        "file_changed",
         "message_summarized",
+        "question_raised",
         "reasoning_started",
         "reasoning_summarized",
+        "tool_accepted",
+        "tool_requested",
+        "tool_result",
         "usage_observed",
     ]
     assert RunEventKind.HEARTBEAT not in SUPPORTED_EVENT_KINDS

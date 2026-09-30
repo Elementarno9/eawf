@@ -29,6 +29,7 @@ follow, the held clock, and colour on the kind cell alone.
 
 from __future__ import annotations
 
+import asyncio
 import re
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -71,6 +72,7 @@ from eawf.kernel.runtime.events import (
     RunEventRecord,
 )
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, ROUTE_RECONNECT_METHODS
+from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.clock import FakeClock
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
@@ -82,6 +84,7 @@ from eawf.surfaces.tui.console.renderers import render_route, transcript
 from eawf.surfaces.tui.console.renderers.read_model import native
 from eawf.surfaces.tui.console.seam import ProjectionSeam
 from eawf.surfaces.tui.console.session import Session
+from tests.tui.surfaces.tui.console import journey_support as js
 from tests.tui.surfaces.tui.console.test_console_verbs import _Host
 from tests.tui.surfaces.tui.console.test_coverage_grid_manifest import (
     coverage_defects,
@@ -229,11 +232,34 @@ def test_the_console_composes_the_transcript_read_model_from_the_seam() -> None:
     assert model.read_model is ROUTE_READ_MODELS[TRANSCRIPT_ROUTE]
 
 
-def test_the_console_carries_its_run_events_into_the_transcript_model() -> None:
-    """The event lines the console was given reach the blocks, and no other route's."""
-    model = _app(run_events=(_event(1), _summarized(2))).route_view()
+def test_run_062_the_console_reads_the_runs_lines_through_the_seam() -> None:
+    """RUN-062, UI-072: the lines the transcript draws are read from the daemon for the Run
+    the route is about, once its row names the URN they are filed under."""
+    daemon = js.DocumentDaemon(DOCUMENT)
+    daemon.run_events = {DOCUMENT["run"]["RUN-00000010"]["urn"]: (_event(1), _summarized(2))}
+    seam = ProjectionSeam(
+        route=TRANSCRIPT_ROUTE,
+        scope_id=SCOPE,
+        state_path=None,
+        clock=lambda: AT,
+        daemon_client_factory=daemon.client,
+    )
+    app = ConsoleApp(_fixture(), FakeClock(), seam=seam)
+    app.session.route = TRANSCRIPT_ROUTE
+    seam.retarget(TRANSCRIPT_ROUTE)
+    seam.about("RUN-00000010")
+    loaded = asyncio.run(seam.sync())
+    assert loaded.index(TRANSCRIPT_ROUTE) < loaded.index(RUN_EVENTS_READ_METHOD)
+    model = app.route_view()
     assert isinstance(model, TranscriptReadModel)
     assert [block.sequence for block in model.blocks] == [1, 2]
+
+
+def test_a_transcript_whose_lines_were_not_read_draws_no_block() -> None:
+    """No fixture stands in for a Run whose lines the seam has not read."""
+    model = _app().route_view()
+    assert isinstance(model, TranscriptReadModel)
+    assert model.blocks == ()
 
 
 def test_the_console_holds_no_transcript_model_for_another_route() -> None:

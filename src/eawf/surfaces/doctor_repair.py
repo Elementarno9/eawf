@@ -6,12 +6,35 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+from eawf.observability.doctor.daemon_strays import find_stray_daemons, stop_stray_daemon
 from eawf.observability.doctor.repair import (
+    DoctorRepairAction,
     DoctorRepairPlan,
     build_repair_plan,
     digest_repair_actions,
+    digest_strays,
 )
 from eawf.surfaces.cli._daemon_client import DaemonClient
+
+
+def _stop_strays(action: DoctorRepairAction) -> dict[str, Any]:
+    """Stop the stray daemons the confirmed plan listed.
+
+    Stopping runs here rather than in the daemon, which is itself one of the
+    processes the scan reads; each stray is re-read before it is signalled.
+
+    Raises:
+        ValueError: When the strays differ from the ones the plan previewed.
+    """
+    strays = find_stray_daemons() or []
+    if digest_strays(strays) != action.preview_digest:
+        raise ValueError("doctor repair plan changed; rebuild preview")
+    stopped = sum(stop_stray_daemon(stray) for stray in strays)
+    return {
+        **action.model_dump(mode="json"),
+        "status": "applied" if stopped else "noop",
+        "record_count": stopped,
+    }
 
 
 def apply_repair_plan(plan: DoctorRepairPlan) -> dict[str, Any]:
@@ -41,8 +64,14 @@ def apply_repair_plan(plan: DoctorRepairPlan) -> dict[str, Any]:
             for action in service_actions
         ]
 
+    process_results = [
+        _stop_strays(action) for action in plan.actions if action.mutation_class == "user_process"
+    ]
+
     action_ids = [
-        action.action_id for action in plan.actions if action.mutation_class != "user_service"
+        action.action_id
+        for action in plan.actions
+        if action.mutation_class not in {"user_service", "user_process"}
     ]
     daemon_result: dict[str, Any] = {"actions": [], "applied_count": 0}
     if action_ids:
@@ -63,7 +92,7 @@ def apply_repair_plan(plan: DoctorRepairPlan) -> dict[str, Any]:
                 },
                 idempotency_key=f"doctor-fix-{plan.preview_digest.removeprefix('sha256:')}",
             )
-    actions = [*daemon_result.get("actions", []), *service_results]
+    actions = [*daemon_result.get("actions", []), *service_results, *process_results]
     return {
         "status": "applied",
         "preview_digest": plan.preview_digest,

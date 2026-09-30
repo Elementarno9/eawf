@@ -746,15 +746,17 @@ def test_con_076_a_native_transcript_block_names_its_kind_in_full() -> None:
     frame = transcript_frame(transcript_view((transcript_event(1), transcript_summarized(2))))
     heads = [row for row in frame.split("\n") if _BLOCK_HEAD.match(row)]
     assert len(heads) == 2
+    words = []
     for row in heads:
         found = _BLOCK_HEAD.match(row)
         assert found is not None
-        kind = RunEventKind(found.group("kind"))
+        words.append(found.group("word"))
         # the kind cell is the lane's glyph and its whole word, never an abbreviation
-        assert found.group("word") == LANES[kind]
         assert found.group("glyph") == NATIVE_GLYPH[found.group("word")]
+    assert words == [
+        LANES[RunEventKind.REASONING_STARTED],
+        LANES[RunEventKind.REASONING_SUMMARIZED],
+    ]
 
 
-_BLOCK_HEAD = re.compile(
-    r"^[ ▸]\d\d:\d\d:\d\d  (?P<glyph>\S) (?P<word>[a-z]+)\s+(?P<kind>[a-z_.]+) · "
-)
+_BLOCK_HEAD = re.compile(r"^[ ▸]\d\d:\d\d:\d\d  (?P<glyph>\S) (?P<word>[a-z]+)\s+\S")

@@ -2,7 +2,7 @@
 
 *Turn an ordinary Git repository into an Eä-managed project in two commands.*
 
-This page assumes `eawf --version` already exits 0. If it does not, start at [Install](install.md). When the two commands below have run, continue with [First workflow](first-workflow.md).
+This page assumes `eawf --version` already exits 0. If it does not, start at [Install](install.md). When the two commands below have run, continue with [First workflow](first-workflow.md), which walks one task through a fresh repository of its own.
 
 ## The two commands
 
@@ -51,7 +51,7 @@ eawf doctor
 
 ## Next
 
-- [First workflow](first-workflow.md) — plan, execute, and close one unit of tracked work.
+- [First workflow](first-workflow.md) — plan, run, prove and complete one task.
 - [Concepts](../concepts.md) — the nouns the workflow uses.
 - [Profile picker](profile-picker.md) — choosing the profile set for a repository.
 - [Troubleshooting](troubleshooting.md) — recovering from a non-zero exit.

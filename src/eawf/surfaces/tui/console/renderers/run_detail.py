@@ -64,8 +64,8 @@ TL_PREFIX = 38
 #: The priority legend the timeline's glyph lane is read by.
 TIMELINE_LEGEND = "P0  P1  P2"
 
-#: What the timeline pane says while no producer records the Run's events for this frame.
-NO_EVENTS = "no events recorded yet · Enter opens the transcript"
+#: What the timeline pane says: the Run's events are drawn by its transcript, not here.
+NO_EVENTS = "events are drawn in the transcript · Enter opens it"
 
 
 def timeline_head(w: int) -> Titled:
@@ -268,7 +268,7 @@ def native_frame(view: View, spine: SpineView) -> list[str]:
     keys = detail_keys(view, spine)
     at = keys.index(KEY["up_event"]) + 1 if KEY["up_event"] in keys else 0
     enter = [KEY["transcript"]] if run is not None else []
-    # no producer states a Run's events yet, so the event keys have nothing to walk
+    # the frame draws no timeline -- the transcript does -- so the event keys walk nothing
     shown = [e for e in [*keys[:at], *enter, *keys[at:]] if e != KEY["up_event"]]
     return build(view, rows, route_keys_bar(view, shown))
 

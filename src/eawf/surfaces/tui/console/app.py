@@ -15,6 +15,7 @@ above it, which is the route's unknown frame only when the route itself is unhel
 from __future__ import annotations
 
 import asyncio
+import logging
 import shutil
 import subprocess
 import sys
@@ -58,7 +59,6 @@ from eawf.kernel.projection.verification import (
     build_verification_view,
 )
 from eawf.kernel.runtime.control import ControlDisposition
-from eawf.kernel.runtime.events import RunEventRecord
 from eawf.surfaces.tui.chassis.theme import (
     DEFAULT_THEME,
     EA_THEMES,
@@ -110,6 +110,8 @@ if TYPE_CHECKING:
     # console that is drawing the prototype registers has no business registering verbs
     from eawf.surfaces.tui.console.seam import ProjectionSeam
 
+logger = logging.getLogger(__name__)
+
 TICK_SECONDS = 0.25
 # The blank cells an operator's console keeps clear at each side of every row, so the
 # bands and rules stop short of the window edge the way the packet's canvas padding does.
@@ -119,6 +121,11 @@ GLYPH_ALLOCATIONS: tuple[str, ...] = ("unicode", "ascii")
 GO_DRAWER = "go"
 # The worker group the seam's route reads run in.
 SEAM_WORKERS = "seam"
+# The worker group the live reads' re-reads run in; one at a time, the latest wins.
+LIVE_WORKERS = "live"
+# How often the live reads of the route on screen are read again. What they return is
+# appended with no patch published, so the frame follows it by reading, not by being told.
+LIVE_REFRESH_SECONDS = 1.0
 # The worker group the console's writes run in, apart from the reads so neither waits.
 WRITE_WORKERS = "writes"
 # The key-log key a daemon answer to a sent verb is recorded under.
@@ -427,8 +434,6 @@ class ConsoleApp(App[None]):
             arrive beside the projection under the same rule as the health verdicts.
         integration_conflicts: The conflict frames the conflict card draws. A console
             given none draws no hunk and says the Batch is not blocked.
-        run_events: The Run event lines the transcript draws, in any order. A console
-            given none draws no block rather than a block that says nothing.
         proof_receipts: The receipts a receipt card may open, in record order. A console
             given none opens no card and says the receipt is not held.
         chrome: The static tables a console given no fixture draws; the packaged chrome
@@ -466,7 +471,6 @@ class ConsoleApp(App[None]):
         health_verdicts: Sequence[RuntimeTupleVerdict] = (),
         integration_generations: Sequence[IntegrationGeneration] = (),
         integration_conflicts: Sequence[IntegrationConflict] = (),
-        run_events: Sequence[RunEventRecord] = (),
         proof_receipts: Sequence[ProofReceipt] = (),
         gutter: int = 0,
         theme: str = DEFAULT_THEME,
@@ -499,7 +503,8 @@ class ConsoleApp(App[None]):
         self.health_verdicts = tuple(health_verdicts)
         self.integration_generations = tuple(integration_generations)
         self.integration_conflicts = tuple(integration_conflicts)
-        self.run_events = tuple(run_events)
+        # when the live reads of the route on screen were last read, on the console clock
+        self._live_read_at = 0.0
         self.proof_receipts = tuple(proof_receipts)
         self.session = Session()
         # the attention revisions already announced to this principal; ``None`` until the
@@ -744,7 +749,13 @@ class ConsoleApp(App[None]):
                 conflicts=self.integration_conflicts,
             )
         if route == TRANSCRIPT_ROUTE:
-            return build_transcript_view(projection, events=self.run_events)
+            # the live reads pull the daemon's method registry in, as the seam does
+            from eawf.surfaces.tui.console.live_reads import TRANSCRIPT_READ, HeldTranscript
+
+            lines = self.seam.live(TRANSCRIPT_READ) if self.seam is not None else None
+            if not isinstance(lines, HeldTranscript):
+                return build_transcript_view(projection)
+            return build_transcript_view(projection, events=lines.events, children=lines.children)
         if route in ACCEPTANCE_ROUTES:
             # the Milestone's bundle and approval are read for the subject on screen alone
             held = self.seam.acceptance_for(self.subject) if self.seam is not None else None
@@ -869,10 +880,37 @@ class ConsoleApp(App[None]):
         self.query_one("#keybar", KeybarRow).set_rows(rows[view.h - 1 :])
 
     def tick(self) -> None:
-        """Expire toasts and the go prefix on the live clock, repainting on a change."""
+        """Expire toasts and the go prefix on the live clock, repainting on a change.
+
+        The live reads of the route on screen are read again every
+        :data:`LIVE_REFRESH_SECONDS`, so what lands behind them -- a Run's appended
+        events -- appears while the operator watches.
+        """
         changed = bool(sweep_toasts(self.session, self.console_clock))
         if expire_prefix(self.session, self.console_clock) or changed:
             self.render_frame()
+        seam, now = self.seam, self.console_clock.now()
+        if seam is None or now - self._live_read_at < LIVE_REFRESH_SECONDS:
+            return
+        names = seam.live_on_screen()
+        if names:
+            self._live_read_at = now
+            self.run_worker(self._reload_live(names), group=LIVE_WORKERS, exclusive=True)
+
+    async def _reload_live(self, names: tuple[str, ...]) -> None:
+        """Read *names* again and repaint when any answer changed."""
+        seam = self.seam
+        assert seam is not None, "only started with a seam"
+        moved = False
+        for name in names:
+            before = seam.live(name)
+            try:
+                moved |= await seam.load_live(name) != before
+            except Exception as exc:
+                # the frame keeps what it holds; the next tick asks again
+                logger.warning(f"live re-read failed name={name} cause={exc!r}")
+        if moved and self.is_running:
+            self.arrive()
 
     def _ctx(self, pressed_at: float | None = None) -> Ctx:
         """Return the context one keystroke or pointer activation acts in."""

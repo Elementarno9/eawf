@@ -147,12 +147,14 @@ LEDGER_MERGE_ROW_LIMIT: Final = 20
 #: out of the document. Milestone, Batch and Run all leave the document on the
 #: commit that moves them to a terminal status; the Milestone and roadmap routes
 #: list the first two, and Activity lists Runs, whose recently finished bucket
-#: would otherwise never hold one. A collection joins here once a route that
-#: lists it needs the same read.
+#: would otherwise never hold one. A claim is filed straight into its ledger and
+#: never sits in the document, so the Evidence and Trust routes read it there. A
+#: collection joins here once a route that lists it needs the same read.
 LEDGER_MERGED_COLLECTIONS: Final = (
     Epoch2Collection.MILESTONE,
     Epoch2Collection.BATCH,
     Epoch2Collection.RUN,
+    Epoch2Collection.CLAIM,
 )
 
 

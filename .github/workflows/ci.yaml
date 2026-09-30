@@ -283,11 +283,6 @@ jobs:
       - name: Requirement trace check
         run: uv run python tools/requirement_trace.py check --require-owned
 
-      - name: Packet census lint
-        # The proposal packet is local and gitignored, so here the lint states
-        # that it is absent and passes; it scans wherever the packet exists.
-        run: uv run python tools/packet_census.py
-
   skill-eval:
     name: Skill envelope evals
     # The eval marker is excluded from the default pytest run, so without

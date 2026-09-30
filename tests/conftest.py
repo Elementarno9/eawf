@@ -290,6 +290,26 @@ def backup_home_isolation(runtime_dir_isolation: RuntimeDirIsolation) -> Iterato
         monkeypatch.undo()
 
 
+@pytest.fixture(scope="session", autouse=True)
+def host_session_isolation() -> Iterator[None]:
+    """Keep the suite's own host session off every Run a CLI test starts.
+
+    A suite run from inside an agent host inherits the host's session id,
+    which ``eawf run start`` presents on the Run; left in place, a local run
+    would bind test Runs to the operator's live transcript while CI binds
+    none. A test that sets the variable itself still wins for its duration.
+    """
+    from eawf.runtime.session.host_session import HOST_SESSION_VARIABLES
+
+    monkeypatch = pytest.MonkeyPatch()
+    for variable in HOST_SESSION_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+    try:
+        yield
+    finally:
+        monkeypatch.undo()
+
+
 @pytest.fixture(autouse=True)
 def epoch1_cli_surface(request: pytest.FixtureRequest) -> Iterator[None]:
     """Lift the flag-day CLI gate for a module that tests the retained epoch-1 surface.

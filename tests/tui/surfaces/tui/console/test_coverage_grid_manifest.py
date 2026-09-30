@@ -27,23 +27,30 @@ have, and native rendering is not a reason to start promising one.
 from __future__ import annotations
 
 import json
-import re
 from collections import Counter
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Any
 
 import pytest
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import ValidationError
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE
 from eawf.kernel.projection.operations import OPERATIONS_ROUTES
 from eawf.kernel.projection.read_models import READ_MODEL_BY_KIND, ReadModelKind
-from eawf.kernel.projection.settings import SETTINGS_ROUTES
 from eawf.kernel.projection.verification import VERIFICATION_ROUTES
 from eawf.runtime.daemon.methods import registered_methods
 from eawf.runtime.daemon.methods.projection import ROUTE_READ_METHODS, SETTINGS_READ_METHOD
 from eawf.surfaces.tui.console.clock import Clock, FakeClock
+from eawf.surfaces.tui.console.coverage_grid import (
+    COVERAGE_MANIFEST_PATH,
+    DECLARED_HOLES,
+    OFF_DOCUMENT_ROUTES,
+    UNPROJECTABLE_ROUTE,
+    CoverageManifest,
+    coverage_defects,
+    regenerate_grid,
+)
 from eawf.surfaces.tui.console.dispatch import dispatch
 from eawf.surfaces.tui.console.fixture import Fixture, load_fixture
 from eawf.surfaces.tui.console.frame import View
@@ -56,22 +63,10 @@ from eawf.surfaces.tui.console.session import Session
 
 #: Where the grid is recorded. One file, read by this suite alone, so a wave that binds a
 #: route moves its row here in the same commit.
-MANIFEST = Path(__file__).resolve().parents[4] / "fixtures/console/coverage-manifest.json"
+MANIFEST = Path(__file__).resolve().parents[5] / COVERAGE_MANIFEST_PATH
 
 #: The prototype registers the epoch-1 mode renders from.
 FIXTURE_ROOT = Path(__file__).resolve().parents[4] / "fixtures/console/golden/fixture"
-
-#: The wave id a declared hole names. Zero-padded and at least two digits wide, which is
-#: the symbol the commit lint and the roadmap both spell.
-WAVE_ID = re.compile(r"^P\d{2,}-I\d{2,}-W\d{2,}$")
-
-#: The one route that is not a hole and never will be bound.
-UNPROJECTABLE_ROUTE = "entry"
-
-#: The routes a read verb and a composing call site serve without a document collection.
-#: :meth:`~eawf.surfaces.tui.console.app.ConsoleApp.settings_view` gates on this very
-#: tuple, so the grid names what the composer accepts rather than a list of its own.
-OFF_DOCUMENT_ROUTES: frozenset[str] = frozenset(SETTINGS_ROUTES)
 
 #: A route id no registry holds, for the cases that exercise row validation alone and
 #: whose route is beside the point.
@@ -112,55 +107,6 @@ def _unserved_route() -> str:
 UNSERVED_ROUTE = _unserved_route()
 
 
-class CoverageRow(BaseModel):
-    """One route's row in the coverage grid.
-
-    Attributes:
-        route: The registry route id.
-        read_model: The read model the route renders.
-        binding: What serves the route -- a document collection, a read verb with no
-            collection behind it, a named later wave, or nothing that ever can.
-        bound_by: The wave that binds a hole; absent on every other binding.
-        reason: Why an unprojectable route carries no projection; absent otherwise.
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    route: Annotated[str, Field(min_length=1)]
-    read_model: ReadModelKind
-    binding: Literal["bound", "served_off_document", "hole", "unprojectable"]
-    bound_by: str | None = None
-    reason: Annotated[str, Field(min_length=1)] | None = None
-
-    @model_validator(mode="after")
-    def _binding_carries_its_declaration(self) -> Self:
-        """Refuse a row whose binding and declaration disagree.
-
-        Raises:
-            ValueError: A hole names no wave or names something that is not a wave id, a
-                bound row names one anyway, or an unprojectable row states no reason.
-        """
-        problems: list[str] = []
-        if self.binding == "hole" and (self.bound_by is None or not WAVE_ID.match(self.bound_by)):
-            problems.append(f"route {self.route!r} is an undeclared hole: it names no wave")
-        if self.binding != "hole" and self.bound_by is not None:
-            problems.append(f"route {self.route!r} is {self.binding} but names a binding wave")
-        if (self.binding == "unprojectable") != (self.reason is not None):
-            problems.append(f"route {self.route!r} states a reason only when unprojectable")
-        if problems:
-            raise ValueError("; ".join(problems))
-        return self
-
-
-class CoverageManifest(BaseModel):
-    """The whole grid, as it is recorded."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    schema_version: Literal["coverage-grid/1.0"]
-    routes: Annotated[tuple[CoverageRow, ...], Field(min_length=1)]
-
-
 def load_manifest(document: Any = None) -> CoverageManifest:
     """Return the validated grid, from ``document`` or from the recorded file.
 
@@ -170,102 +116,6 @@ def load_manifest(document: Any = None) -> CoverageManifest:
     if document is None:
         document = json.loads(MANIFEST.read_text(encoding="utf-8"))
     return CoverageManifest.model_validate(document)
-
-
-def coverage_defects(manifest: CoverageManifest) -> tuple[str, ...]:
-    """Return every way the grid disagrees with the console, sorted by route.
-
-    Args:
-        manifest: The validated grid.
-
-    Returns:
-        One message per disagreeing route: a registry route the grid does not list, a
-        grid row for no registry route, a row naming the wrong read model, and a row
-        whose binding is not what the projection tables say. Empty when they agree.
-    """
-    listed = {row.route: row for row in manifest.routes}
-    defects: list[str] = []
-    repeated = sorted(
-        {
-            row.route
-            for row in manifest.routes
-            if [r.route for r in manifest.routes].count(row.route) > 1
-        }
-    )
-    defects += [f"route {route!r} is listed twice" for route in repeated]
-    for route in sorted(set(listed) | set(REGISTRY.ids)):
-        row = listed.get(route)
-        if row is None:
-            defects.append(f"route {route!r} is unlisted: the grid is not total")
-            continue
-        spec = REGISTRY.by_id.get(route)
-        if spec is None:
-            defects.append(f"route {route!r} is listed but the registry does not hold it")
-            continue
-        declared = REGISTRY.read_models[route]
-        if row.read_model is not declared:
-            defects.append(f"route {route!r} lists {row.read_model} but renders {declared}")
-        served = spec.key in ROUTE_COLLECTIONS
-        off_document = spec.id in OFF_DOCUMENT_ROUTES
-        if served and row.binding != "bound":
-            defects.append(f"route {route!r} is served by a projection but listed {row.binding}")
-        elif off_document and row.binding != "served_off_document":
-            defects.append(f"route {route!r} is served off document but listed {row.binding}")
-        elif not served and row.binding == "bound":
-            defects.append(f"route {route!r} is listed bound but no projection serves it")
-        elif not off_document and row.binding == "served_off_document":
-            defects.append(f"route {route!r} is listed served off document but no verb serves it")
-    return tuple(defects)
-
-
-#: The routes the grid may list as holes, each owed by a named wave. Empty: every
-#: projectable route is served. A hole the regenerated grid carries that is not named
-#: here is an undeclared hole, and a name here the grid no longer carries is stale.
-DECLARED_HOLES: frozenset[str] = frozenset()
-
-
-def regenerate_grid(recorded: CoverageManifest) -> CoverageManifest:
-    """Return the grid the console's own tables produce, in route order.
-
-    Every binding is derived: ``bound`` from the collection table, ``served_off_document``
-    from the settings routes, ``unprojectable`` for the entry layer and ``hole`` for every
-    other route. Only what a table cannot know is carried over from ``recorded``: the
-    unprojectable route's reason and the wave a hole names. A recorded grid that differs
-    from its regeneration was patched by hand, or has drifted from the console.
-
-    Args:
-        recorded: The grid as it is recorded.
-
-    Returns:
-        The regenerated grid.
-
-    Raises:
-        pydantic.ValidationError: A hole the recorded grid does not declare, which
-            regenerates as a hole naming no wave.
-    """
-    carried = {row.route: row for row in recorded.routes}
-    rows: list[CoverageRow] = []
-    for spec in sorted(REGISTRY.routes, key=lambda spec: spec.id):
-        prior = carried.get(spec.id)
-        if spec.key in ROUTE_COLLECTIONS:
-            binding, extra = "bound", {}
-        elif spec.id in OFF_DOCUMENT_ROUTES:
-            binding, extra = "served_off_document", {}
-        elif spec.id == UNPROJECTABLE_ROUTE:
-            binding, extra = "unprojectable", {"reason": prior.reason if prior else None}
-        else:
-            binding, extra = "hole", {"bound_by": prior.bound_by if prior else None}
-        rows.append(
-            CoverageRow.model_validate(
-                {
-                    "route": spec.id,
-                    "read_model": REGISTRY.read_models[spec.id],
-                    "binding": binding,
-                    **extra,
-                }
-            )
-        )
-    return CoverageManifest(schema_version=recorded.schema_version, routes=tuple(rows))
 
 
 def _fixture() -> Fixture:

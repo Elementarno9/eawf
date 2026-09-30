@@ -36,6 +36,7 @@ def _quiet_host_checks(monkeypatch: pytest.MonkeyPatch) -> None:
         "eawf.observability.doctor.repair.check_launchd_agent",
         lambda: CheckResult(name="launchd_agent", status="ok"),
     )
+    monkeypatch.setattr("eawf.observability.doctor.repair.find_stray_daemons", lambda: [])
 
 
 def test_build_repair_plan_classifies_legacy_config(

@@ -23,7 +23,8 @@ import yaml
 
 from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.spec.release_config import ReleaseConfig, load_release_config
-from eawf.observability.reflect.retyped import RETYPED_TRIAGE_PATH
+from eawf.kernel.store.commit_policy import CommitPolicy, classify_path
+from eawf.observability.reflect.retyped import RETYPED_TRIAGE_PATH, load_retyped_triage
 from eawf.observability.telemetry.sources.session_history import claude_history_root
 from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
 from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
@@ -284,3 +285,20 @@ def test_surf_090_a_turn_in_both_the_history_and_a_run_counts_once(repo: Path) -
     _history(repo, [INSTRUCTION] * 3)
 
     assert _row(repo).status is ReleaseSignalStatus.UNAVAILABLE
+
+
+_REPO_ROOT: Final = Path(__file__).resolve().parents[4]
+
+
+def test_surf_090_the_repository_commits_its_triage_under_the_closed_schema() -> None:
+    """The tag preflight reads this repository's own triage, so it must exist and validate."""
+    assert (_REPO_ROOT / RETYPED_TRIAGE_PATH).is_file()
+
+    document = load_retyped_triage(_REPO_ROOT)
+
+    assert document.schema_version == 1
+
+
+def test_surf_090_the_triage_is_declared_committed_in_the_ea_census() -> None:
+    """A triage the commit census does not declare cannot be tracked, so no clone has it."""
+    assert classify_path(RETYPED_TRIAGE_PATH.as_posix()).policy is CommitPolicy.COMMITTED

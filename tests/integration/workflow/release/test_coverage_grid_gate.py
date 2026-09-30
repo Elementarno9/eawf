@@ -8,46 +8,42 @@ Requirement row proved here, by id:
   it; this module asserts only the checkpoint behaviour, and it reads the route registry
   the console declares rather than a copied list.
 
-The checkpoint's verdict is :func:`checkpoint_refusals`: empty when the recorded grid is
-its own regeneration and agrees with the registry, one line per refusal otherwise.
+The checkpoint's verdict is
+:func:`~eawf.surfaces.tui.console.coverage_grid.checkpoint_refusals`: empty when the
+recorded grid is its own regeneration and agrees with the registry, one line per refusal
+otherwise. The tag preflight reads the same verdict off the working copy, so a drifted grid
+reds the realization row of the release it would ship in.
 """
 
 from __future__ import annotations
 
+import copy
 import json
+from datetime import UTC, date, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
-from eawf.surfaces.tui.console.registry import REGISTRY
-from tests.tui.surfaces.tui.console.test_coverage_grid_manifest import (
-    DECLARED_HOLES,
-    MANIFEST,
+from eawf.kernel.spec.release_config import load_release_config
+from eawf.surfaces.tui.console import coverage_grid
+from eawf.surfaces.tui.console.coverage_grid import (
+    COVERAGE_MANIFEST_PATH,
     CoverageManifest,
-    coverage_defects,
-    load_manifest,
+    checkpoint_refusals,
     regenerate_grid,
 )
-
-
-def checkpoint_refusals(document: Any) -> tuple[str, ...]:
-    """Return why the checkpoint refuses the grid ``document``, or nothing when it passes.
-
-    Raises:
-        pydantic.ValidationError: The document is not a grid, or holds a cell that is
-            neither bound, served off document, unprojectable with a reason, nor a hole
-            naming its wave -- an unclassified cell.
-    """
-    recorded = load_manifest(document)
-    refusals = list(coverage_defects(recorded))
-    regenerated = regenerate_grid(recorded)
-    if regenerated != recorded:
-        refusals.append("the recorded grid is not its regeneration: it was patched by hand")
-    holes = {row.route for row in regenerated.routes if row.binding == "hole"}
-    if holes != DECLARED_HOLES:
-        refusals.append(f"holes {sorted(holes)} do not match the declared {sorted(DECLARED_HOLES)}")
-    return tuple(refusals)
+from eawf.surfaces.tui.console.registry import REGISTRY
+from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
+from eawf.workflow.verify.release_probes import TagPreflightInputs, build_tag_probes
+from eawf.workflow.verify.release_readiness import (
+    ReleaseSignalName,
+    ReleaseSignalStatus,
+    compute_readiness,
+)
+from tests.tui.surfaces.tui.console.test_coverage_grid_manifest import MANIFEST, load_manifest
 
 
 def _recorded() -> dict[str, Any]:
@@ -116,7 +112,7 @@ def test_rel_036_an_unclassified_cell_is_refused_at_load() -> None:
 
 def test_rel_036_the_declared_hole_set_mismatch_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
     """A named hole the grid no longer carries is a stale declaration, and is refused."""
-    monkeypatch.setattr(f"{__name__}.DECLARED_HOLES", frozenset({"track"}), raising=True)
+    monkeypatch.setattr(coverage_grid, "DECLARED_HOLES", frozenset({"track"}), raising=True)
     assert checkpoint_refusals(_recorded()) == ("holes [] do not match the declared ['track']",)
 
 
@@ -132,3 +128,92 @@ def test_rel_036_a_document_that_is_not_a_grid_is_refused(document: Any) -> None
 def test_rel_036_the_grid_validates_against_its_closed_model() -> None:
     """The checkpoint reads the grid through the closed model, never as a raw mapping."""
     assert isinstance(load_manifest(), CoverageManifest)
+
+
+# ---------- the tag preflight reads the same verdict off the working copy ----------
+
+
+_NOW = datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
+
+
+@pytest.fixture
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Return a working copy with no host history, no re-typed rules and a lint config."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    (root / "pyproject.toml").write_text('[tool.eawf.lint]\nenabled = ["EAWF010"]\n')
+    monkeypatch.setenv("EAWF_CLAUDE_PROJECTS_DIR", str(tmp_path / "projects"))
+    return root
+
+
+def _record(repo: Path, document: Any) -> None:
+    """Write *document* where the working copy records its grid."""
+    path = repo / COVERAGE_MANIFEST_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document), encoding="utf-8")
+
+
+def _realization_row(repo: Path) -> Any:
+    """Return the realization row the tag preflight computes for *repo*."""
+    inputs = TagPreflightInputs(
+        repo_root=repo,
+        version="0.7.0rc1",
+        tag="v0.7.0rc1",
+        package_version="0.7.0rc1",
+        remote="origin",
+        today=date(2027, 2, 1),
+    )
+    body: dict[str, Any] = copy.deepcopy(yaml.safe_load(DEV1_RELEASE_CONFIG_YAML))["release"]
+    readiness = compute_readiness(
+        load_release_config({"release": body}, train=V07_TRAIN),
+        probes={
+            ReleaseSignalName.PERFECT_REALIZATION: build_tag_probes(inputs)[
+                ReleaseSignalName.PERFECT_REALIZATION
+            ]
+        },
+        observed_revision="deadbee",
+        computed_at=_NOW,
+    )
+    return readiness.row(ReleaseSignalName.PERFECT_REALIZATION)
+
+
+def test_rel_036_the_tag_preflight_admits_the_recorded_grid(repo: Path) -> None:
+    """The committed grid reconciles, so the leg hands the row on unrefuted."""
+    _record(repo, _recorded())
+
+    row = _realization_row(repo)
+
+    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert "coverage_grid" not in row.remediation
+
+
+def test_rel_036_the_tag_preflight_reds_on_a_drifted_grid(repo: Path) -> None:
+    """Gate fire: a registry route missing from the recorded grid refuses the release."""
+    document = _recorded()
+    document["routes"] = [row for row in document["routes"] if row["route"] != "release"]
+    _record(repo, document)
+
+    row = _realization_row(repo)
+
+    assert row.status is ReleaseSignalStatus.FAIL
+    assert "route 'release' is unlisted: the grid is not total" in row.remediation
+    assert row.evidence_refs == (f"coverage_grid:{COVERAGE_MANIFEST_PATH}",)
+
+
+def test_rel_036_the_tag_preflight_blocks_on_an_unclassified_cell(repo: Path) -> None:
+    """A grid that does not load blocks the row rather than passing it."""
+    document = _recorded()
+    document["routes"].append(
+        {"route": "spike.hole", "read_model": "search_page", "binding": "hole"}
+    )
+    _record(repo, document)
+
+    assert _realization_row(repo).status is ReleaseSignalStatus.BLOCKED
+
+
+def test_rel_036_a_working_copy_without_a_grid_has_none_to_check(repo: Path) -> None:
+    """Another project's tree records no console grid, so the leg hands the row on."""
+    row = _realization_row(repo)
+
+    assert row.status is ReleaseSignalStatus.UNAVAILABLE
+    assert "coverage_grid" not in row.remediation

@@ -6,19 +6,24 @@ callers materialise the directory when they need it.
 
 Resolution rules:
 
-- Linux: ``$XDG_RUNTIME_DIR/eawfd/`` when ``XDG_RUNTIME_DIR`` is set;
-  otherwise ``~/.eawfd/``.
-- macOS / generic POSIX: ``~/.eawfd/``.
-- Windows: ``~/.eawfd/`` for log + PID + WAL storage; the listener itself
-  is a named pipe at ``\\\\.\\pipe\\eawfd-<user>`` (wired by W02).
+- ``EAWF_RUNTIME_DIR`` names the directory verbatim.
+- Otherwise the directory is ``<base>/trees/<key>/``, one per tree, where
+  ``<key>`` digests the ``state.json`` the daemon would bind to, so a daemon
+  answers only the clients of the tree it serves.
+- ``<base>`` is ``$XDG_RUNTIME_DIR/eawfd/`` on Linux when
+  ``XDG_RUNTIME_DIR`` is set, and ``~/.eawfd/`` everywhere else. On Windows
+  the listener itself is a named pipe at ``\\\\.\\pipe\\eawfd-<user>``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import sys
 from pathlib import Path
+
+from eawf.kernel.state.resolve import resolve_with_reason
 
 logger = logging.getLogger(__name__)
 
@@ -29,34 +34,71 @@ logger = logging.getLogger(__name__)
 # named-pipe transport gates access via DACL/SID instead.
 RUNTIME_DIR_MODE: int = 0o700
 
+#: Subdirectory of the base runtime dir that holds one directory per tree.
+TREES_DIRNAME: str = "trees"
+
+#: Hex digits of the tree key. Sixteen keep ``<base>/trees/<key>/eawfd.sock``
+#: well inside the 104-byte AF_UNIX path cap while making a collision between
+#: two trees of one user negligible.
+_TREE_KEY_CHARS: int = 16
+
+
+def runtime_base_dir() -> Path:
+    """Return the per-user directory that holds every tree's runtime dir.
+
+    The same directory was, before runtime dirs were keyed per tree, the one
+    runtime dir every daemon of the user bound to, so a daemon still bound
+    at ``<base>/eawfd.sock`` is one started under that layout.
+
+    Returns:
+        ``$XDG_RUNTIME_DIR/eawfd`` on Linux when ``XDG_RUNTIME_DIR`` is set,
+        else ``~/.eawfd``.
+    """
+    if sys.platform.startswith("linux"):
+        xdg = os.environ.get("XDG_RUNTIME_DIR")
+        if xdg:
+            return Path(xdg) / "eawfd"
+    return Path.home() / ".eawfd"
+
+
+def tree_key(state_path: Path) -> str:
+    """Return the runtime-dir key of the tree whose ledger is *state_path*.
+
+    Args:
+        state_path: The ``state.json`` a daemon binds to.
+
+    Returns:
+        A short hex digest of the resolved path.
+    """
+    digest = hashlib.sha256(str(state_path.resolve()).encode("utf-8")).hexdigest()
+    return digest[:_TREE_KEY_CHARS]
+
 
 def runtime_dir() -> Path:
     """Return the runtime directory the daemon should use.
 
     Resolution order:
 
-    1. ``EAWF_RUNTIME_DIR`` env var — explicit operator/test override.
-       The value is used verbatim; the caller is responsible for
-       choosing a path short enough for AF_UNIX (104-byte cap on
+    1. ``EAWF_RUNTIME_DIR`` env var — explicit operator/test override,
+       and the pin a spawned daemon inherits from the client that
+       spawned it. The value is used verbatim; the caller is responsible
+       for choosing a path short enough for AF_UNIX (104-byte cap on
        macOS) and for ensuring write access.
-    2. ``XDG_RUNTIME_DIR/eawfd`` on Linux when ``XDG_RUNTIME_DIR`` is
-       set.
-    3. ``~/.eawfd/`` everywhere else (macOS / generic POSIX /
-       Windows).
+    2. ``<base>/trees/<key>`` where *key* names the ``state.json`` the
+       daemon resolves (``EA_STATE``, else upward from the working
+       directory), so clients of two trees never reach one daemon.
 
     Returns:
-        Path to the per-user daemon runtime directory. Caller is
-        responsible for ensuring it exists with ``Path.mkdir`` when
-        a write is imminent.
+        Path to the daemon runtime directory. Caller is responsible for
+        ensuring it exists with ``Path.mkdir`` when a write is imminent.
     """
     override = os.environ.get("EAWF_RUNTIME_DIR")
     if override:
         return Path(override)
-    if sys.platform.startswith("linux"):
-        xdg = os.environ.get("XDG_RUNTIME_DIR")
-        if xdg:
-            return Path(xdg) / "eawfd"
-    return Path.home() / ".eawfd"
+    # The daemon resolves its tree with ``workspace=None`` too, so the key a
+    # client dials is the key of the tree the daemon it spawns will serve.
+    state_path, _reason = resolve_with_reason(workspace=None)
+    return runtime_base_dir() / TREES_DIRNAME / tree_key(state_path)
 
 
 def harden_runtime_dir(path: Path) -> None:
@@ -92,6 +134,12 @@ def ensure_runtime_dir() -> Path:
     rt_dir = runtime_dir()
     rt_dir.mkdir(parents=True, exist_ok=True)
     harden_runtime_dir(rt_dir)
+    trees = runtime_base_dir() / TREES_DIRNAME
+    if rt_dir.parent == trees:
+        # The base and ``trees`` list every tree's runtime dir, so they get
+        # the same owner-only mode.
+        harden_runtime_dir(trees)
+        harden_runtime_dir(trees.parent)
     logger.debug(f"ensure_runtime_dir path={str(rt_dir)!r} mode={RUNTIME_DIR_MODE:#o}")
     return rt_dir
 

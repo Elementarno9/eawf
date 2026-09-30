@@ -376,6 +376,7 @@ def register(name: str) -> Callable[[Handler], Handler]:
 _METHOD_MODULES: Final[tuple[str, ...]] = (
     "agent",
     "bulk",
+    "campaign",
     "daemon",
     "budget_notice",
     "candidate",
@@ -397,6 +398,7 @@ _METHOD_MODULES: Final[tuple[str, ...]] = (
     "domain_envelope",
     "event",
     "evidence",
+    "evidence_ladder",
     "fleet",
     "host_subagent",
     "integration",

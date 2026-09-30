@@ -25,6 +25,11 @@ from eawf.observability.doctor.checks import (
     check_launchd_agent,
     check_manifest_in_sync,
 )
+from eawf.observability.doctor.daemon_strays import (
+    StrayDaemon,
+    describe_stray,
+    find_stray_daemons,
+)
 from eawf.workflow.lifecycle._audit_acceptance import (
     ITER_CLOSE_AUDIT_CHECK_ORDER,
     assess_close_audit,
@@ -42,6 +47,7 @@ DoctorRepairMutationClass = Literal[
     "committed_store",
     "managed_rules",
     "user_service",
+    "user_process",
 ]
 DoctorRepairStatus = Literal[
     "planned",
@@ -408,6 +414,26 @@ def _service_action() -> DoctorRepairAction | None:
     )
 
 
+def digest_strays(strays: list[StrayDaemon]) -> str:
+    """Return the preview digest of a stray-daemon listing."""
+    return _digest_json([stray.model_dump(mode="json") for stray in strays])
+
+
+def _stray_action() -> DoctorRepairAction | None:
+    strays = find_stray_daemons()
+    if not strays:
+        return None
+    return DoctorRepairAction(
+        action_id="daemon.stop-strays",
+        scope="user",
+        preview_digest=digest_strays(strays),
+        mutation_class="user_process",
+        record_count=len(strays),
+        detail="stop eawfd processes no client can reach: "
+        + "; ".join(describe_stray(stray) for stray in strays),
+    )
+
+
 def build_repair_plan(workspace: Path) -> DoctorRepairPlan:
     """Build the shared read-only repair preview for one managed workspace."""
     root = workspace.resolve()
@@ -427,7 +453,7 @@ def build_repair_plan(workspace: Path) -> DoctorRepairPlan:
         ):
             if action is not None:
                 actions.append(action)
-    for action in (_sync_action(root), _service_action()):
+    for action in (_sync_action(root), _service_action(), _stray_action()):
         if action is not None:
             actions.append(action)
     digest = digest_repair_actions(actions)
@@ -478,5 +504,6 @@ __all__ = [
     "DoctorRepairStatus",
     "build_repair_plan",
     "digest_repair_actions",
+    "digest_strays",
     "render_repair_plan",
 ]

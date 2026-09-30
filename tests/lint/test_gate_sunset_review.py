@@ -6,7 +6,8 @@ review both outcomes look identical from the tree -- a kept gate and a
 forgotten one are the same line of YAML -- so this module is where each
 verdict is pinned.
 
-Two verdicts are pinned here.
+Four verdicts are recorded here; the three that leave something in the tree
+to check are pinned by a test.
 
 The telemetry-sync CI step is a KEEP. It guards a silent regression: an
 off-by-default projector leaves the suite green and every duration
@@ -20,6 +21,18 @@ exclusion rung nothing can reach only makes the cost ladder harder to
 read. The mechanism is gone from the producer; the record still
 publishes its two fields, which read false and zero, because persisted
 baseline artifacts carry those keys and the model forbids unknown ones.
+
+The packet-census lanes (``LINT-043``) are a RETIRE. The design packet the
+census scans stays machine-local and is never committed, so in CI and in the
+release preflight the lint could only report the packet absent and pass: it
+had never fired there and never could. The scanner stays as a local tool
+for the packet's author; only the lanes that cannot see its input go.
+
+The cite-from-packet completeness check (``AUTH-014``, with the
+archive-independence gate ``AUTH-037`` names) is a RETIRE before it was
+built, on the same ground: a check whose only input is a file no clone has
+passes vacuously everywhere a reviewer would run it. Nothing was built, so
+nothing is pinned.
 """
 
 from __future__ import annotations
@@ -35,6 +48,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CI = _REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 _SRC = _REPO_ROOT / "src" / "eawf"
 _TURN_COST = _SRC / "observability" / "telemetry" / "turn_cost.py"
+_WORKFLOWS = _REPO_ROOT / ".github" / "workflows"
 
 #: Name of the kept CI step, exactly as the workflow spells it.
 _TELEMETRY_STEP = "Telemetry sync (REL-009)"
@@ -42,6 +56,9 @@ _TELEMETRY_STEP = "Telemetry sync (REL-009)"
 #: The retired mechanism's symbol. Its reappearance anywhere in the
 #: producer means the empty escape hatch came back.
 _RETIRED_SYMBOL = "REASONING_UNSETTLED_RUNTIMES"
+
+#: The local packet census tool; no workflow lane may invoke it.
+_PACKET_CENSUS = "tools/packet_census.py"
 
 
 def _ci_document() -> dict:
@@ -103,3 +120,22 @@ def test_retired_filter_leaves_its_record_fields_readable() -> None:
 
     assert "reasoning_summand_unsettled: bool" in source
     assert "reasoning_summand_unsettled_run_count: int" in source
+
+
+def _workflow_runs() -> list[tuple[str, str]]:
+    """Return every workflow step's ``run`` script, named by file and step."""
+    runs: list[tuple[str, str]] = []
+    for path in sorted(_WORKFLOWS.glob("*.y*ml")):
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        for job in (document.get("jobs") or {}).values():
+            for step in job.get("steps") or []:
+                if "run" in step:
+                    runs.append((f"{path.name}: {step.get('name', '?')}", step["run"]))
+    return runs
+
+
+def test_lint_043_retired_packet_census_runs_in_no_workflow_lane() -> None:
+    """The RETIRE verdict is only real while no lane runs the census on an absent packet."""
+    carriers = [name for name, run in _workflow_runs() if _PACKET_CENSUS in run]
+
+    assert carriers == []

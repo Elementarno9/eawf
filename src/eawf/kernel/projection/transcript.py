@@ -26,6 +26,11 @@ for a provider with no start marker, the kind is
 :attr:`~eawf.kernel.projection.truth.TruthKind.DERIVED`, so a frame drawing it is drawing
 an inference the read model owns rather than a fact a provider reported.
 
+*A subagent is drawn from its own stream.* A delegation line names the child Run; what
+the child is doing now, what it has found and that it reports back into this Run are read
+off the child's own event lines, which the caller hands in beside the parent's. A child
+whose lines the caller could not read says so rather than drawing a blank.
+
 Nothing here reads a ledger or a lock. The inputs are one validated
 :class:`~eawf.kernel.projection.compute.RouteProjection` and the already-validated event
 records the caller holds.
@@ -61,11 +66,15 @@ from eawf.kernel.projection.truth import (
 from eawf.kernel.runtime.events import (
     ChildRunPayload,
     CommandPayload,
+    ErrorPayload,
     EventGapPayload,
+    FileChangePayload,
     MessageSummaryPayload,
+    QuestionActionPayload,
     ReasoningSummaryPayload,
     RunEventKind,
     RunEventRecord,
+    ToolPayload,
 )
 from eawf.kernel.state.enums import MeasurementQuality
 from eawf.runtime.daemon.run_events import reduce_run_events
@@ -145,6 +154,30 @@ class PurgedRange:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class SubagentLine:
+    """What a delegation block states about the child Run doing the work elsewhere.
+
+    Attributes:
+        child_key: The child Run's key.
+        reports_to: The key of the Run the child reports back into: the one whose
+            stream carries the delegation.
+        readable: Whether the child's own lines were read. An unreadable child states
+            neither what it does now nor what it found.
+        now: What the child's latest block says; ``None`` before it produced one.
+        found: What the child's latest assistant message says; ``None`` before one.
+        outcome: How the child ended, once its terminal line landed; ``None`` while it
+            still works.
+    """
+
+    child_key: str
+    reports_to: str
+    readable: bool
+    now: str | None = None
+    found: str | None = None
+    outcome: str | None = None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class TranscriptBlock:
     """One block of a Run's transcript, in stream order.
 
@@ -165,8 +198,16 @@ class TranscriptBlock:
             result yet, or a reasoning turn not yet summarized.
         background: Whether the block is a command detached into the background, which
             works elsewhere rather than holding the Run.
-        typical_seconds: How long this command family usually takes, derived from the
-            finished executions of it in the same stream; ``None`` when none finished.
+        typical_seconds: How long this kind of work usually takes -- a command family,
+            a reasoning turn, a delegation -- derived from the finished instances of it
+            in the same stream; ``None`` when none finished.
+        delegation: What a delegation block states about its child Run, read from the
+            child's own stream; ``None`` for every other block and for a delegation
+            that names no child yet.
+        body: The labelled lines the block folds away beyond its text, in order: what a
+            tool call returned, the diff a file change is held at, what a question waits
+            on, an error's code, retry class and trace. Every line is read off the
+            event's own payload; a stored artifact is named, never inlined here.
     """
 
     sequence: int
@@ -178,6 +219,8 @@ class TranscriptBlock:
     in_flight: bool = False
     background: bool = False
     typical_seconds: int | None = None
+    delegation: SubagentLine | None = None
+    body: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -267,7 +310,89 @@ def block_text(event: RunEventRecord) -> TruthField[str]:
         return _derived(payload.summary, urn=urn)
     if isinstance(payload, ChildRunPayload):
         return _derived(_child_text(payload), urn=urn)
+    text = _gateway_text(payload)
+    if text is not None:
+        return _derived(text, urn=urn)
     return unknown_field(urn=urn, revision=BLOCK_REVISION, reason=NO_TEXT_REASON)
+
+
+#: The words each retry class of an error is drawn with.
+RETRY_WORDS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "never": "never · retrying cannot succeed",
+        "after_input_change": "after the input changes",
+        "after_policy_change": "after the policy changes",
+        "transient_same_run": "transient · this Run may retry it",
+        "new_linked_run": "in a new linked Run",
+    }
+)
+
+
+def _gateway_text(payload: object) -> str | None:
+    """Return the first line of a tool, file, question or error block; ``None`` otherwise."""
+    if isinstance(payload, ToolPayload):
+        outcome = ""
+        if payload.phase == "result":
+            outcome = " · succeeded" if payload.error_code is None else " · failed"
+        return f"{payload.tool_id} · {payload.phase}{outcome}"
+    if isinstance(payload, FileChangePayload):
+        first, *rest = payload.changed_paths
+        return first + (f" and {_more_paths(len(rest))}" if rest else "")
+    if isinstance(payload, QuestionActionPayload):
+        chosen = f" · {payload.choice_key}" if payload.choice_key is not None else ""
+        return f"{payload.subject_ref.entity_key} · {payload.phase}{chosen}"
+    if isinstance(payload, ErrorPayload):
+        return payload.message
+    return None
+
+
+def _more_paths(count: int) -> str:
+    """Return ``1 more path`` or ``N more paths``."""
+    return f"{count} more path" + ("" if count == 1 else "s")
+
+
+def block_body(event: RunEventRecord) -> tuple[tuple[str, str], ...]:
+    """Return the labelled lines a block folds away beyond its first line.
+
+    A tool call states the receipt its output is held under or the gateway's error; a
+    file change its paths, the diff it is held at and the trees on either side; a
+    question what it waits on or how it was answered; an error its code, what a retry
+    would take and where its trace is kept. A stored artifact is named rather than read:
+    this module reads no store.
+
+    Args:
+        event: One live event line.
+
+    Returns:
+        The lines in order, each a label and its value; empty for every other kind.
+    """
+    payload = event.payload
+    if isinstance(payload, ToolPayload):
+        if payload.error_code is not None:
+            return (("ERROR", payload.error_code.value),)
+        if payload.result_ref is not None:
+            return (("OUTPUT", f"held under receipt {payload.result_ref}"),)
+        return ()
+    if isinstance(payload, FileChangePayload):
+        summary = " · a summary, not the full hunks" if payload.summary_only else ""
+        return (
+            ("PATHS", ", ".join(payload.changed_paths)),
+            ("DIFF", f"held at {payload.diff_ref}{summary}"),
+            ("BEFORE", payload.before_tree_digest),
+            ("AFTER", payload.after_tree_digest),
+        )
+    if isinstance(payload, QuestionActionPayload):
+        if payload.receipt_ref is None:
+            return (("WAITS ON", f"an answer to {payload.subject_ref.entity_key}"),)
+        return (("ANSWERED", f"under receipt {payload.receipt_ref}"),)
+    if isinstance(payload, ErrorPayload):
+        trace = payload.diagnostic_ref
+        return (
+            ("CODE", payload.code),
+            ("RETRY", RETRY_WORDS[payload.retry_class]),
+            ("TRACE", f"held at {trace}" if trace is not None else "no trace was kept"),
+        )
+    return ()
 
 
 def _child_text(payload: ChildRunPayload) -> str:
@@ -363,6 +488,7 @@ LANES: Final[Mapping[RunEventKind, str]] = MappingProxyType(
         RunEventKind.DIFF_SUMMARIZED: "file",
         RunEventKind.QUESTION_RAISED: "question",
         RunEventKind.APPROVAL_REQUESTED: "question",
+        RunEventKind.APPROVAL_RESOLVED: "question",
         RunEventKind.ERROR_OBSERVED: "error",
         RunEventKind.REASONING_STARTED: "thinking",
         RunEventKind.REASONING_SUMMARIZED: "thinking",
@@ -384,48 +510,137 @@ def _median(values: Sequence[int]) -> int:
     return ordered[(len(ordered) - 1) // 2]
 
 
+#: The duration key reasoning turns are compared under; command families use their own id.
+_THINKING_KEY: Final = "reasoning"
+
+#: The duration key delegations are compared under.
+_SUBAGENT_KEY: Final = "delegation"
+
+#: The duration key questions are compared under, from raised to answered.
+_QUESTION_KEY: Final = "question"
+
+
+def _elapsed(begun: RunEventRecord, ended: RunEventRecord) -> int:
+    return max(0, int((ended.recorded_at - begun.recorded_at).total_seconds()))
+
+
+def _span(payload: object) -> tuple[str, str, bool] | None:
+    """Return how one line opens or closes a span of work, or ``None`` for neither.
+
+    The answer is the span's own key, the key its kind of work is timed under, and
+    whether the line opens it: a command by its execution, a delegation by its request,
+    and the one reasoning turn a stream can hold open at a time.
+    """
+    if isinstance(payload, ReasoningSummaryPayload):
+        return _THINKING_KEY, _THINKING_KEY, payload.phase == "started"
+    if isinstance(payload, ChildRunPayload) and payload.phase != "requested":
+        return payload.delegation_request_ref, _SUBAGENT_KEY, payload.phase == "started"
+    if isinstance(payload, CommandPayload) and payload.phase != "output":
+        return payload.command_ref, payload.command_family_ref, payload.phase == "started"
+    if isinstance(payload, ToolPayload) and payload.phase != "requested":
+        return payload.call_ref, payload.tool_id, payload.phase == "accepted"
+    if isinstance(payload, QuestionActionPayload):
+        return str(payload.subject_ref), _QUESTION_KEY, payload.phase != "resolved"
+    return None
+
+
 def _in_flight(events: tuple[RunEventRecord, ...]) -> tuple[set[str], dict[str, int]]:
-    """Return the events whose work is still going, and each command family's typical time.
+    """Return the events whose work is still going, and each kind of work's typical time.
 
     A command is in flight from its start until a result names the same execution, a
     child Run from its start until its terminal line names the same delegation, and a
-    reasoning turn until it is summarized. The typical time of a family is the median of
-    its finished executions in the stream.
+    reasoning turn until it is summarized. The typical time of a kind of work is the
+    median of its finished instances in the stream: per command family, and one each for
+    reasoning turns and delegations.
     """
-    started: dict[str, RunEventRecord] = {}
-    children: dict[str, RunEventRecord] = {}
+    opened: dict[str, RunEventRecord] = {}
     durations: dict[str, list[int]] = {}
     for event in events:
-        payload = event.payload
-        if isinstance(payload, ChildRunPayload):
-            if payload.phase == "started":
-                children[payload.delegation_request_ref] = event
-            elif payload.phase == "terminal":
-                children.pop(payload.delegation_request_ref, None)
+        span = _span(event.payload)
+        if span is None:
             continue
-        if not isinstance(payload, CommandPayload):
-            continue
-        if payload.phase == "started":
-            started[payload.command_ref] = event
-        elif payload.phase == "result" and payload.command_ref in started:
-            begun = started.pop(payload.command_ref)
-            seconds = int((event.recorded_at - begun.recorded_at).total_seconds())
-            durations.setdefault(payload.command_family_ref, []).append(max(0, seconds))
-    going = {event.event_ref for event in (*started.values(), *children.values())}
-    turn = open_reasoning_turn(events)
-    if turn is not None:
-        going.add(turn.event_ref)
-    typical = {family: _median(times) for family, times in durations.items()}
+        key, kind, opens = span
+        if opens:
+            opened[key] = event
+        elif key in opened:
+            durations.setdefault(kind, []).append(_elapsed(opened.pop(key), event))
+    going = {event.event_ref for event in opened.values()}
+    typical = {kind: _median(times) for kind, times in durations.items()}
     return going, typical
+
+
+def _typical_key(payload: object) -> str | None:
+    """Return the key a block's kind of work is compared under, or ``None`` for none."""
+    if isinstance(payload, CommandPayload):
+        return payload.command_family_ref
+    if isinstance(payload, ReasoningSummaryPayload):
+        return _THINKING_KEY
+    if isinstance(payload, ChildRunPayload):
+        return _SUBAGENT_KEY
+    if isinstance(payload, ToolPayload):
+        return payload.tool_id
+    if isinstance(payload, QuestionActionPayload):
+        return _QUESTION_KEY
+    return None
+
+
+def _latest_found(events: tuple[RunEventRecord, ...]) -> str | None:
+    """Return what the child's latest assistant message says, or ``None`` before one."""
+    for event in reversed(events):
+        payload = event.payload
+        if isinstance(payload, MessageSummaryPayload) and payload.message_role == "assistant":
+            return payload.summary
+    return None
+
+
+def _delegation(
+    payload: ChildRunPayload,
+    *,
+    reports_to: str,
+    outcomes: Mapping[str, str],
+    children: Mapping[str, Sequence[RunEventRecord]],
+) -> SubagentLine | None:
+    """Return what a delegation block states about its child, read off the child's lines.
+
+    Args:
+        payload: The delegation line's payload.
+        reports_to: The key of the Run whose stream carries the delegation.
+        outcomes: How each ended delegation's child ended, by delegation.
+        children: The child Runs' own event lines, by child URN, as the caller read them.
+
+    Returns:
+        The line, or ``None`` for a delegation that names no child yet.
+    """
+    if payload.child_run_ref is None:
+        return None
+    child = str(payload.child_run_ref)
+    key = payload.child_run_ref.entity_key
+    outcome = outcomes.get(payload.delegation_request_ref)
+    held = children.get(child)
+    if held is None:
+        return SubagentLine(child_key=key, reports_to=reports_to, readable=False, outcome=outcome)
+    lines = tuple(e for e in _ordered(held) if not isinstance(e.payload, EventGapPayload))
+    return SubagentLine(
+        child_key=key,
+        reports_to=reports_to,
+        readable=True,
+        now=block_text(lines[-1]).value if lines else None,
+        found=_latest_found(lines),
+        outcome=outcome,
+    )
 
 
 def build_transcript_blocks(
     events: Sequence[RunEventRecord],
+    *,
+    children: Mapping[str, Sequence[RunEventRecord]] = MappingProxyType({}),
 ) -> tuple[tuple[TranscriptBlock, ...], tuple[PurgedRange, ...]]:
     """Return the Run's blocks in stream order and the ranges the console does not hold.
 
     Args:
         events: The Run's event lines, in any order. Quarantined lines are dropped.
+        children: The event lines of the child Runs this Run delegated to, by child URN.
+            A delegation whose child is absent here is drawn as unreadable.
 
     Returns:
         One block per live line, a recorded gap becoming a purged block in its own
@@ -435,6 +650,12 @@ def build_transcript_blocks(
     purged: list[PurgedRange] = []
     ordered = _ordered(events)
     going, typical = _in_flight(ordered)
+    reports_to = ordered[0].run_ref.entity_key if ordered else ""
+    outcomes = {
+        e.payload.delegation_request_ref: e.payload.terminal_status.value.lower()
+        for e in ordered
+        if isinstance(e.payload, ChildRunPayload) and e.payload.terminal_status is not None
+    }
     for event in ordered:
         payload = event.payload
         if isinstance(payload, EventGapPayload):
@@ -461,11 +682,15 @@ def build_transcript_blocks(
                 in_flight=event.event_ref in going,
                 background=isinstance(payload, CommandPayload)
                 and payload.execution == "background",
-                typical_seconds=(
-                    typical.get(payload.command_family_ref)
-                    if isinstance(payload, CommandPayload)
+                typical_seconds=typical.get(_typical_key(payload) or ""),
+                delegation=(
+                    _delegation(
+                        payload, reports_to=reports_to, outcomes=outcomes, children=children
+                    )
+                    if isinstance(payload, ChildRunPayload)
                     else None
                 ),
+                body=block_body(event),
             )
         )
     logger.debug(f"build_transcript_blocks blocks={len(blocks)} purged={len(purged)}")
@@ -476,6 +701,7 @@ def build_transcript_view(
     projection: RouteProjection,
     *,
     events: Sequence[RunEventRecord] = (),
+    children: Mapping[str, Sequence[RunEventRecord]] = MappingProxyType({}),
 ) -> TranscriptReadModel:
     """Return the read model the transcript route draws from one served projection.
 
@@ -483,6 +709,7 @@ def build_transcript_view(
         projection: The route projection the daemon answered, already validated.
         events: The Run's event lines, in any order; empty for a Run that has produced
             nothing, which draws no block rather than a block saying nothing.
+        children: The event lines of the Runs this Run delegated to, by child URN.
 
     Returns:
         The route's rows, the Run's blocks, the ranges the console does not hold, and
@@ -496,7 +723,7 @@ def build_transcript_view(
     """
     model = build_route_read_model(projection, family=FAMILY, fields=TRANSCRIPT_FIELDS)
     state = reduce_run_events(events)
-    blocks, purged = build_transcript_blocks(events)
+    blocks, purged = build_transcript_blocks(events, children=children)
     return TranscriptReadModel(
         route=model.route,
         read_model=model.read_model,
@@ -525,14 +752,17 @@ __all__ = [
     "NO_TEXT_REASON",
     "OPEN_TURN_TEXT",
     "PURGED_REASON",
+    "RETRY_WORDS",
     "RUN_OUTCOME_PRODUCER",
     "THINKING",
     "TRANSCRIPT_FIELDS",
     "TRANSCRIPT_ROUTE",
     "TRANSCRIPT_ROUTES",
     "PurgedRange",
+    "SubagentLine",
     "TranscriptBlock",
     "TranscriptReadModel",
+    "block_body",
     "block_text",
     "build_transcript_blocks",
     "build_transcript_view",

@@ -38,7 +38,7 @@ from eawf.kernel.projection.connection import (
 from eawf.kernel.projection.registers import ATTENTION_ROUTE, build_register_view
 from eawf.kernel.projection.transcript import TRANSCRIPT_ROUTE
 from eawf.kernel.runtime.control import ControlDisposition
-from eawf.kernel.runtime.events import ChildRunPayload, RunEventKind
+from eawf.kernel.runtime.events import ChildRunPayload, MessageSummaryPayload, RunEventKind
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import TOAST_DWELL, FakeClock
@@ -957,21 +957,35 @@ def _transcript_events() -> tuple[Any, ...]:
     return tuple(line.model_copy(update={"recorded_at": tb._at(at)}) for line, at in lines)
 
 
-def _transcript_frames(events: tuple[Any, ...]) -> list[str]:
+def _transcript_frames(
+    events: tuple[Any, ...],
+    *,
+    children: dict[str, tuple[Any, ...]] | None = None,
+    keys: Sequence[str] = (),
+) -> list[str]:
+    """Return the transcript of RUN-00000010 at every width, after ``keys``.
+
+    The lines reach the console the way a live one reads them: the seam asks the daemon
+    for the Run's stream and for each child's it names.
+    """
+    daemon = js.DocumentDaemon(tb.DOCUMENT)
+    daemon.run_events = {tb.DOCUMENT["run"]["RUN-00000010"]["urn"]: events, **(children or {})}
+
     async def body() -> list[str]:
         seam = ProjectionSeam(
             route=TRANSCRIPT_ROUTE,
             scope_id=tb.SCOPE,
             state_path=None,
             clock=lambda: tb.AT,
-            daemon_client_factory=js.DocumentDaemon(tb.DOCUMENT).client,
+            daemon_client_factory=daemon.client,
             operator=Operator(principal=bodies.ME),
         )
-        app = ConsoleApp(chrome=load_chrome(), clock=FakeClock(), seam=seam, run_events=events)
+        app = ConsoleApp(chrome=load_chrome(), clock=FakeClock(), seam=seam)
         async with js.driven(app) as harness:
             setup = {"route": TRANSCRIPT_ROUTE, "subjId": "RUN-00000010"}
             return [
-                (await js.walk(harness, {**setup, "size": n}, []))[0] for n in range(len(SIZES))
+                (await js.walk(harness, {**setup, "size": n}, list(keys)))[-1]
+                for n in range(len(SIZES))
             ]
 
     return asyncio.run(body())
@@ -1007,23 +1021,45 @@ def _with_a_subagent() -> tuple[Any, ...]:
     return (*_transcript_events(), child)
 
 
+def _child_said(sequence: int, summary: str) -> Any:
+    """Return one assistant message on the child Run's own stream."""
+    return tb._event(
+        sequence,
+        run_ref=_CHILD_URN,
+        event_kind=RunEventKind.MESSAGE_SUMMARIZED,
+        payload=MessageSummaryPayload(message_role="assistant", summary=summary),
+    )
+
+
 def test_prx_065_a_subagent_child_run_is_stated_by_a_typed_event() -> None:
     for shot in _transcript_frames(_with_a_subagent()):
         context = shot.split("\n")[1]
         assert "» subagent" in shot
-        assert "child_run_started · RUN-00000011 · started" in shot
+        assert "RUN-00000011 · started · working elsewhere" in shot
         # the child works elsewhere, so it counts with the background command
         assert "· 2 running in the background ·" in context
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="ChildRunPayload carries no now, found or reports-to fields, and no producer "
-    "emits child_run_started: the host transcript bridge emits the requested phase only",
-)
 def test_prx_065_the_subagent_block_carries_its_now_found_and_reports_to_line() -> None:
-    for shot in _transcript_frames(_with_a_subagent()):
-        assert "reports to" in shot
+    """PRX-065, CON-171, UI-072: the delegation opens on what the child does now, what it
+    found and that it reports back, each read from the child Run's own stream."""
+    children = {
+        _CHILD_URN: (
+            _child_said(1, "I will list the package first."),
+            _child_said(2, "There are forty-two modules."),
+        )
+    }
+    for shot in _transcript_frames(_with_a_subagent(), children=children, keys=["Enter"]):
+        assert re.search(r"NOW +There are forty-two modules\.", shot)
+        assert re.search(r"FOUND +There are forty-two modules\.", shot)
+        assert re.search(r"REPORTS +reports back into RUN-00000010 when it ends", shot)
+
+
+def test_prx_065_an_unreadable_child_transcript_says_so_rather_than_nothing() -> None:
+    """CON-169, UI-072: a child whose stream cannot be read renders ``∅ unavailable``."""
+    for shot in _transcript_frames(_with_a_subagent(), keys=["Enter"]):
+        assert re.search(r"NOW +∅ unavailable · the child's", shot)
+        assert "FOUND" not in shot
 
 
 def test_prx_065_a_typed_reasoning_start_is_not_labelled_derived() -> None:

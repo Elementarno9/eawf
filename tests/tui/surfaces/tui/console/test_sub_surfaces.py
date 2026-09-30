@@ -375,15 +375,11 @@ def test_ui_056_escape_returns_to_the_campaign_row_it_was_opened_from(fixture: F
         assert session.route == "campaign"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no producer states a Campaign's plan: the native Campaign frame says so, and "
-    "no read model carries steps[] or artifacts[] for the sub-surfaces to open over",
-)
 def test_ui_056_the_campaign_view_carries_its_steps_and_artifacts() -> None:
-    from eawf.kernel.projection import read_models
+    from eawf.kernel.projection.campaign import CampaignStepView, CampaignView
 
-    assert hasattr(read_models, "CampaignView")
+    assert {"steps", "artifacts"} <= set(CampaignView.model_fields)
+    assert {"state", "waits_on", "runner_ref"} <= set(CampaignStepView.model_fields)
 
 
 # ---------- UI-070: the artifact card's read model and its render form ----------
@@ -400,15 +396,21 @@ def test_ui_070_the_card_states_source_and_record_and_counts_its_hidden_lines(
     assert "the console renders it, it does not rewrite it" in text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="no ArtifactCardView read model exists: the artifact card renders the prototype "
-    "register, and no daemon projection types the artifact revision record it would read",
-)
 def test_ui_070_the_artifact_card_view_is_a_typed_read_model() -> None:
-    from eawf.kernel.projection import read_models
+    from eawf.kernel.projection.campaign import ArtifactCardView
 
-    assert hasattr(read_models, "ArtifactCardView")
+    assert set(ArtifactCardView.model_fields) == {
+        "artifact_ref",
+        "file_name",
+        "media_kind",
+        "size_bytes",
+        "written_at",
+        "written_by",
+        "digest",
+        "kept_with",
+        "ordinal_of_total",
+        "lines",
+    }
 
 
 # ---------- UI-071: a notice row opens its detail, never a consequence card ----------

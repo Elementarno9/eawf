@@ -34,6 +34,7 @@ from eawf.kernel.state.epoch2.base import (
     Epoch2Model,
     Sha256DigestStr,
     StrictNonNegativeInt,
+    StrictPositiveInt,
 )
 from eawf.kernel.state.epoch2.urns import ClaimUrn, EvidenceUrn, RunUrn, render_qualified_urn
 from eawf.kernel.state.types import UtcDatetime
@@ -210,6 +211,97 @@ class EvidenceRungRecord(Epoch2Model):
         return render_qualified_urn(dataclasses.replace(self.claim_ref, rung=self.rung))
 
 
+#: The lifecycle a filed claim stands at: open until a promotion clears it.
+ClaimStatus = Literal["OPEN", "SUPPORTED"]
+
+#: A claim's prose field, bounded so the Evidence route can render it on a line or two.
+ClaimProse = Annotated[
+    str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=300)
+]
+
+
+class ClaimFiling(Epoch2Model):
+    """One claim as its writer filed it into the claim ledger.
+
+    The row carries its own key, address, revision and status, so a route that lists
+    claims renders it like any other record, and the rung records scoring it are kept
+    beside it in the same ledger.
+
+    Attributes:
+        key: The claim's ``CLM-####`` key; the entity key of ``urn``.
+        urn: The claim's canonical address.
+        revision: The filing's revision; a claim is filed once.
+        status: The lifecycle it was filed at.
+        title: The claim in one line.
+        description: The claim restated plainly, which the frames print as ``IN WORDS``.
+        implication: What the claim buys if it stands, printed as ``IT PROVES``.
+        falsifier: What observation would take it away, printed as ``BREAKS IF``.
+        evidence_refs: The evidence records the claim cites.
+        recorded_at: When it was filed.
+
+    Raises:
+        pydantic.ValidationError: The key is not the address's entity key, the address
+            names a rung, or a prose field is over its bound.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    key: Annotated[str, StringConstraints(pattern=r"^CLM-\d{4,}$")]
+    urn: ClaimUrn
+    revision: StrictPositiveInt = 1
+    status: ClaimStatus
+    title: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=72)]
+    description: Annotated[str, StringConstraints(max_length=500)] | None = None
+    implication: ClaimProse | None = None
+    falsifier: ClaimProse | None = None
+    evidence_refs: tuple[EvidenceUrn, ...] = ()
+    recorded_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def _key_is_the_address(self) -> Self:
+        """Refuse a filing whose key and address disagree.
+
+        Raises:
+            ValueError: The address names a rung, or keys another claim.
+        """
+        if self.urn.rung is not None:
+            raise ValueError("a claim is filed under its own address, not one of its rungs")
+        if self.urn.entity_key != self.key:
+            raise ValueError(f"{self.key} is filed under {self.urn.entity_key}'s address")
+        return self
+
+
+class ClaimLadder(Epoch2Model):
+    """One claim with the latest record of each rung that scored it, as a surface reads it.
+
+    Attributes:
+        claim: The claim as filed.
+        rungs: The latest revision of each rung's record, lowest rung first; empty
+            while nothing has scored the claim.
+        read_at: When the ladder was read.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    claim: ClaimFiling
+    rungs: tuple[EvidenceRungRecord, ...] = ()
+    read_at: UtcDatetime
+
+
+def latest_rungs(records: Iterable[EvidenceRungRecord]) -> tuple[EvidenceRungRecord, ...]:
+    """Return each rung's latest revision among *records*, lowest rung first.
+
+    A re-evaluation is a new record and the prior stays addressable, so the record a
+    surface draws for a rung is the highest revision written for it.
+    """
+    latest: dict[int, EvidenceRungRecord] = {}
+    for record in records:
+        held = latest.get(record.rung)
+        if held is None or record.revision > held.revision:
+            latest[record.rung] = record
+    return tuple(latest[rung] for rung in sorted(latest))
+
+
 def promotion_blockers(records: Iterable[EvidenceRungRecord]) -> tuple[str, ...]:
     """Return why the claim the *records* score cannot promote; empty when it can.
 
@@ -227,13 +319,9 @@ def promotion_blockers(records: Iterable[EvidenceRungRecord]) -> tuple[str, ...]
     Raises:
         ValueError: The records score more than one claim.
     """
-    latest: dict[int, EvidenceRungRecord] = {}
-    claims: set[str] = set()
-    for record in records:
-        claims.add(render_qualified_urn(record.claim_ref))
-        held = latest.get(record.rung)
-        if held is None or record.revision > held.revision:
-            latest[record.rung] = record
+    held = tuple(records)
+    claims = {render_qualified_urn(record.claim_ref) for record in held}
+    latest = {record.rung: record for record in latest_rungs(held)}
     if len(claims) > 1:
         raise ValueError(f"promotion is judged per claim, got {len(claims)} claims")
     reasons: list[str] = []
@@ -258,9 +346,14 @@ __all__ = [
     "RUNG_NAMES",
     "RUNG_QUESTIONS",
     "UNKNOWN_FINDING",
+    "ClaimFiling",
+    "ClaimLadder",
+    "ClaimProse",
+    "ClaimStatus",
     "EvidenceInput",
     "EvidenceRungRecord",
     "RungBasis",
     "RungOutcome",
+    "latest_rungs",
     "promotion_blockers",
 ]

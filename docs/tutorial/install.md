@@ -2,7 +2,7 @@
 
 *Get the `eawf` command onto a machine, pick the right extras, and confirm it runs.*
 
-This is the first page of the front door. It ends with a working `eawf --version`; [Quickstart](quickstart.md) turns that into an initialized repository, and [First workflow](first-workflow.md) carries the repository through a complete unit of tracked work.
+This is the first page of the front door. It ends with a working `eawf --version`; [Quickstart](quickstart.md) turns that into an initialized repository, and [First workflow](first-workflow.md) carries the repository through one tracked task, from plan to proof.
 
 ## Requirements
 
@@ -76,6 +76,6 @@ eawf doctor
 ## Next
 
 - [Quickstart](quickstart.md) — bootstrap a repository in three commands.
-- [First workflow](first-workflow.md) — take that repository through one complete unit of tracked work.
+- [First workflow](first-workflow.md) — take that repository through one tracked task, from plan to proof.
 - [Troubleshooting](troubleshooting.md) — what to do when a command exits non-zero.
 - [Installation architecture](../architecture/installation.md) — project, workspace, and global install layers in detail.

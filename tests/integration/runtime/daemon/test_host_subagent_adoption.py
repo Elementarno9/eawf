@@ -352,6 +352,59 @@ def test_surf_054_spawning_session_run_becomes_the_parent(
     assert run.parent_run_ref.entity_key == DAEMON_RUN_KEY
 
 
+def _seed_parent(canary: CanaryProvision) -> dict[str, Any]:
+    """Seed the daemon Run as the live Run whose vendor session spawns the subagent."""
+    parent = seed_row("run", "RUNNING")
+    parent["vendor_session"] = {
+        "harness": "claude-code",
+        "session_digest": hash_vendor_session_id(HOST_SESSION),
+    }
+    seed(canary, {Epoch2Collection.RUN.value: {DAEMON_RUN_KEY: parent}})
+    return parent
+
+
+def test_prx_065_start_states_child_run_started_on_the_parent_stream(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    """PRX-065, RUN-062: a subagent start is a typed ``child_run_started`` on its parent."""
+    _seed_parent(canary)
+    answer = start(canary, tmp_path, host_session_id=HOST_SESSION)
+    start(canary, tmp_path, host_session_id=HOST_SESSION)
+
+    (line,) = events(canary, run_record(canary, DAEMON_RUN_KEY))
+    assert line.event_kind is RunEventKind.CHILD_RUN_STARTED
+    assert line.run_sequence == 1
+    assert str(line.payload.child_run_ref) == answer["run_ref"]
+    assert line.payload.delegation_request_ref.startswith("delegation://claude-code/")
+
+
+def test_prx_065_stop_states_child_run_terminal_after_the_start_and_bridges_at_the_tail(
+    canary: CanaryProvision, tmp_path: Path
+) -> None:
+    """PRX-065: the stop ends the delegation on the parent, and a redelivery adds nothing."""
+    _seed_parent(canary)
+    transcript = claude_transcript(tmp_path / "agent.jsonl", SUBAGENT_LINES)
+    start(canary, tmp_path, host_session_id=HOST_SESSION)
+    stop(canary, tmp_path, host_session_id=HOST_SESSION, transcript_path=str(transcript))
+    stop(canary, tmp_path, host_session_id=HOST_SESSION, transcript_path=str(transcript))
+
+    lines = events(canary, run_record(canary, DAEMON_RUN_KEY))
+    assert [line.event_kind for line in lines] == [
+        RunEventKind.CHILD_RUN_STARTED,
+        RunEventKind.CHILD_RUN_TERMINAL,
+    ]
+    assert [line.run_sequence for line in lines] == [1, 2]
+    assert lines[1].payload.terminal_status is RunStatus.COMPLETED
+    assert len(events(canary, run_record(canary, "RUN-00000011"))) == 4
+
+
+def test_prx_065_no_parent_states_no_delegation(canary: CanaryProvision, tmp_path: Path) -> None:
+    """A subagent with no resolved parent writes nothing on any other Run's stream."""
+    start(canary, tmp_path, host_session_id="interactive-session")
+
+    assert events(canary, run_record(canary, DAEMON_RUN_KEY)) == ()
+
+
 def test_surf_054_unknown_spawning_session_records_no_parent(
     canary: CanaryProvision, tmp_path: Path
 ) -> None:

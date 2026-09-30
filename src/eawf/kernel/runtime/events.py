@@ -46,14 +46,19 @@ from pydantic import Field, StrictBool, StrictInt, StringConstraints, model_vali
 from eawf.kernel.runtime.compiled import BoundedText
 from eawf.kernel.runtime.provider import (
     ArtifactUrn,
+    BoundedIdentifier,
     CommandFamilyId,
     DelegationRequestUrn,
+    Digest,
     RuntimeRecord,
+    ToolCapabilityId,
 )
+from eawf.kernel.runtime.semantic import CallId, ReceiptId, RepoRelativePath, SemanticToolErrorCode
 from eawf.kernel.runtime.usage import BudgetPayload, UsagePayload
 from eawf.kernel.state.epoch2.base import PrincipalKey, StrictPositiveInt
+from eawf.kernel.state.epoch2.question import OptionKey
 from eawf.kernel.state.epoch2.run import RunStatus
-from eawf.kernel.state.epoch2.urns import RunUrn
+from eawf.kernel.state.epoch2.urns import PendingActionUrn, QuestionUrn, RepositoryUrn, RunUrn
 from eawf.kernel.state.types import UtcDatetime
 
 
@@ -471,6 +476,117 @@ class CommandPayload(RuntimeRecord):
         return self
 
 
+class ToolPayload(RuntimeRecord):
+    """One semantic tool call the gateway handled, at one phase of it.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        call_ref: The gateway call this event reports on; all phases of one call share it.
+        tool_id: The catalog tool the call names.
+        phase: ``requested``, ``accepted`` or ``result``.
+        result_ref: The receipt the gateway returned, at a successful ``result``.
+        error_code: Why the gateway refused or failed the call, at a failed ``result``.
+    """
+
+    payload_kind: Literal["tool"] = "tool"
+    call_ref: CallId
+    tool_id: ToolCapabilityId
+    phase: Literal["requested", "accepted", "result"]
+    result_ref: ReceiptId | None = None
+    error_code: SemanticToolErrorCode | None = None
+
+    @model_validator(mode="after")
+    def _outcome_belongs_to_the_result_phase(self) -> Self:
+        """Require exactly one of a receipt and an error at the result, and neither before.
+
+        Raises:
+            ValueError: A result names both or neither, or an earlier phase names either.
+        """
+        named = (self.result_ref is not None) + (self.error_code is not None)
+        if self.phase == "result" and named != 1:
+            raise ValueError("a tool result names exactly one of its receipt and its error")
+        if self.phase != "result" and named:
+            raise ValueError(f"a {self.phase} tool event has no receipt or error yet")
+        return self
+
+
+class FileChangePayload(RuntimeRecord):
+    """A change to the repository's files, bound to the trees on either side of it.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        repository_ref: The repository the files belong to.
+        changed_paths: The repository-relative paths the change touched; at least one.
+        before_tree_digest: The tree digest before the change.
+        after_tree_digest: The tree digest after it.
+        diff_ref: The stored diff, which a transcript resolves its lines from.
+        summary_only: Whether the stored diff is a summary rather than the full hunks.
+    """
+
+    payload_kind: Literal["file_change"] = "file_change"
+    repository_ref: RepositoryUrn
+    changed_paths: Annotated[tuple[RepoRelativePath, ...], Field(min_length=1)]
+    before_tree_digest: Digest
+    after_tree_digest: Digest
+    diff_ref: ArtifactUrn
+    summary_only: StrictBool = False
+
+
+class QuestionActionPayload(RuntimeRecord):
+    """A question the Run raised, or an action it asked approval for, at one phase.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        subject_ref: The open question or pending action the event is about.
+        phase: ``raised``, ``requested`` or ``resolved``.
+        choice_key: The option the answer chose, when one was chosen.
+        receipt_ref: The receipt the resolution was recorded under, at ``resolved`` only.
+    """
+
+    payload_kind: Literal["question_action"] = "question_action"
+    subject_ref: QuestionUrn | PendingActionUrn
+    phase: Literal["raised", "requested", "resolved"]
+    choice_key: OptionKey | None = None
+    receipt_ref: ReceiptId | None = None
+
+    @model_validator(mode="after")
+    def _receipt_belongs_to_the_resolution(self) -> Self:
+        """Require the receipt exactly where the phase makes it a fact.
+
+        Raises:
+            ValueError: A resolution names no receipt, or an earlier phase names one.
+        """
+        if self.phase == "resolved" and self.receipt_ref is None:
+            raise ValueError("a resolved question names the receipt it was answered under")
+        if self.phase != "resolved" and self.receipt_ref is not None:
+            raise ValueError(f"a {self.phase} question has no receipt yet")
+        return self
+
+
+class ErrorPayload(RuntimeRecord):
+    """An error the Run met, with what retrying it would take.
+
+    Attributes:
+        payload_kind: The payload discriminator.
+        code: The error's own code.
+        retry_class: What must change before a retry could succeed.
+        message: What the error says, bounded.
+        diagnostic_ref: The stored trace, when one was kept.
+    """
+
+    payload_kind: Literal["error"] = "error"
+    code: BoundedIdentifier
+    retry_class: Literal[
+        "never",
+        "after_input_change",
+        "after_policy_change",
+        "transient_same_run",
+        "new_linked_run",
+    ]
+    message: BoundedText
+    diagnostic_ref: ArtifactUrn | None = None
+
+
 class EventGapPayload(RuntimeRecord):
     """A range of sequences the daemon never received.
 
@@ -514,6 +630,10 @@ RunEventPayload = Annotated[
     | MessageSummaryPayload
     | ChildRunPayload
     | CommandPayload
+    | ToolPayload
+    | FileChangePayload
+    | QuestionActionPayload
+    | ErrorPayload
     | EventGapPayload
     | UsagePayload
     | BudgetPayload,
@@ -527,6 +647,10 @@ _IMPLEMENTED_PAYLOAD_KINDS: Final[frozenset[EventPayloadKind]] = frozenset(
         EventPayloadKind.MESSAGE_SUMMARY,
         EventPayloadKind.CHILD_RUN,
         EventPayloadKind.COMMAND,
+        EventPayloadKind.TOOL,
+        EventPayloadKind.FILE_CHANGE,
+        EventPayloadKind.QUESTION_ACTION,
+        EventPayloadKind.ERROR,
         EventPayloadKind.EVENT_GAP,
         EventPayloadKind.USAGE,
         EventPayloadKind.BUDGET,
@@ -611,17 +735,21 @@ __all__ = [
     "ChildRunPayload",
     "CommandExecutionId",
     "CommandPayload",
+    "ErrorPayload",
     "EventContract",
     "EventGapId",
     "EventGapPayload",
     "EventPayloadKind",
     "EventProvenance",
+    "FileChangePayload",
     "MessageSummaryPayload",
     "QuarantineReason",
+    "QuestionActionPayload",
     "ReasoningSummaryPayload",
     "RunEventId",
     "RunEventKind",
     "RunEventPayload",
     "RunEventRecord",
+    "ToolPayload",
     "compile_event_contracts",
 ]

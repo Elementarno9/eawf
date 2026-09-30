@@ -32,6 +32,7 @@ def _finding(**overrides: Any) -> dict[str, Any]:
         "uid": "3b4e28ba-2fa1-11d2-883f-0016d3cca427",
         "key": "CFN-0001",
         "urn": FINDING_URN,
+        "campaign_ref": f"{SLOT}/campaign/CAM-0001",
         "origin": {"kind": "native", "mapping_basis": "native", "confidence": "exact"},
         "revision": 1,
         "created_at": "2026-09-08T00:00:00Z",

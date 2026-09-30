@@ -330,6 +330,14 @@ def _stub_supervised_agent_none(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _stub_no_stray_daemons(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Report no stray daemons, so ``run_all`` never reads the host process table."""
+    monkeypatch.setattr(
+        "eawf.observability.doctor.daemon_strays.find_stray_daemons",
+        lambda: [],
+    )
+
+
 def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``run_all`` returns the canonical install-readiness check set."""
     from eawf.platform.install.instrument_probe import ProbeResult
@@ -339,6 +347,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         [ProbeResult(name="git", kind="hard", status="ok", path="/x/git")],
     )
     _stub_supervised_agent_none(monkeypatch)
+    _stub_no_stray_daemons(monkeypatch)
     monkeypatch.setattr(
         "eawf.observability.doctor.checks._probe_running_daemon_version",
         lambda: None,
@@ -346,7 +355,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
     results = checks.run_all(workspace=tmp_path)
-    assert len(results) == 22
+    assert len(results) == 23
     assert {r.name for r in results} == {
         "branch_currency",
         "tools_available",
@@ -366,6 +375,7 @@ def test_run_all_returns_full_check_set(tmp_path: Path, monkeypatch: pytest.Monk
         "cli_daemon_version",
         "parallel_cap_enforcement",
         "launchd_agent",
+        "stray_daemons",
         "runtime_dir_size",
         "render_output_roundtrip",
         "agents_md_byte_cap",
@@ -495,6 +505,7 @@ def test_run_all_detects_sanitized_workflow_failure_shape(
         [ProbeResult(name="git", kind="hard", status="ok", path="/x/git")],
     )
     _stub_supervised_agent_none(monkeypatch)
+    _stub_no_stray_daemons(monkeypatch)
     monkeypatch.setenv("EAWF_RUNTIME_DIR", str(tmp_path / "eawfd"))
     monkeypatch.chdir(tmp_path)
 
@@ -754,6 +765,7 @@ def test_run_all_does_not_write_probe_into_anchor_dot_ea(
 
     monkeypatch.delenv("EA_INSTRUMENT_PROBE", raising=False)
     _stub_supervised_agent_none(monkeypatch)
+    _stub_no_stray_daemons(monkeypatch)
     # Every tool resolves so the real probe writes a green cache without a
     # version shell-out reaching the host. Force the cheap ``which`` probe so
     # no ``--version`` subprocess runs.

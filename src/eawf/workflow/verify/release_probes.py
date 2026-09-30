@@ -8,7 +8,8 @@ working copy can answer at tag time -- version consistency, the
 changelog section, the migration note, ancestry against the publishing
 remote, and tree cleanliness -- plus one fact it can only *refute*: a
 lint rule with no governing disposition, a rule the operator re-typed
-past the configured threshold with no triage, or a module-length
+past the configured threshold with no triage, a console coverage grid
+that does not reconcile with the route registry, or a module-length
 exemption that has outlived its grant, reds the realization row, but a
 clean check leaves that row unproven rather than green.
 
@@ -32,6 +33,7 @@ reporting ``unavailable`` -- an unproven signal, not a passing one.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import subprocess
@@ -55,6 +57,10 @@ from eawf.platform.lint.exclusion_expiry import (
     decision_ids_from_state,
     expired_exclusions,
     validate_renewals,
+)
+from eawf.surfaces.tui.console.coverage_grid import (
+    COVERAGE_MANIFEST_PATH,
+    checkpoint_refusals,
 )
 from eawf.workflow.evidence.migration_rehearsal import (
     REHEARSED_CORPORA,
@@ -635,7 +641,7 @@ def _probe_retyped_triage(
 
     Returns:
         A failing outcome listing every subject over the threshold, else the
-        module-length exclusion check's outcome.
+        coverage grid check's outcome.
 
     Raises:
         RuleSourceError: The rule source fails to load, which the sweep converts into
@@ -646,7 +652,7 @@ def _probe_retyped_triage(
     since = _release_window_start(inputs)
     triage = triage_retyped_rules(inputs.repo_root, since=since)
     if not triage.untriaged:
-        return _probe_module_length_exclusion(inputs, context)
+        return _probe_coverage_grid(inputs, context)
     stored = store_retyped_rows(inputs.repo_root / ".ea", triage.over, today=inputs.today)
     logger.warning(
         f"_probe_retyped_triage signal={context.signal.value!r} "
@@ -659,6 +665,45 @@ def _probe_retyped_triage(
         f"{_retyped_listing(triage)}; record one per subject in {RETYPED_TRIAGE_PATH} "
         f"(exemplars in {stored.relative_to(inputs.repo_root)}) before tagging {inputs.tag}",
         *(f"retyped_rule_triage:{row.subject}:{row.count}" for row in triage.untriaged),
+    )
+
+
+def _probe_coverage_grid(
+    inputs: TagPreflightInputs, context: ReleaseSignalContext
+) -> ReleaseSignalOutcome:
+    """Red the realization row on a console coverage grid the route registry disowns.
+
+    The grid is total over the console's route registry only while the recorded file is
+    its own regeneration. A release cut from a tree whose grid drifted ships a console
+    that claims routes it does not serve, or serves routes nobody listed. A working copy
+    that records no grid is not the console's own source tree, so it has none to check.
+
+    Args:
+        inputs: The chokepoint's inputs, naming the working copy.
+        context: The sweep's context for this signal.
+
+    Returns:
+        A failing outcome naming every refusal, else the module-length exclusion
+        check's outcome.
+
+    Raises:
+        pydantic.ValidationError: The recorded grid holds an unclassified cell, which the
+            sweep converts into a blocked row.
+    """
+    manifest = inputs.repo_root / COVERAGE_MANIFEST_PATH
+    if not manifest.is_file():
+        return _probe_module_length_exclusion(inputs, context)
+    refusals = checkpoint_refusals(json.loads(manifest.read_text(encoding="utf-8")))
+    if not refusals:
+        return _probe_module_length_exclusion(inputs, context)
+    logger.warning(
+        f"_probe_coverage_grid signal={context.signal.value!r} "
+        f"refusals={len(refusals)} version={inputs.version!r}"
+    )
+    return _failing(
+        f"coverage_grid: {COVERAGE_MANIFEST_PATH} does not reconcile with the route "
+        f"registry: {'; '.join(refusals)}; regenerate the grid before tagging {inputs.tag}",
+        f"coverage_grid:{COVERAGE_MANIFEST_PATH}",
     )
 
 

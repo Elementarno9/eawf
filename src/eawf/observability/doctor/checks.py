@@ -1313,6 +1313,7 @@ def run_all(
     location (:func:`_resolve_probe_cache_path`) so probing never litters an
     ``instrument-probe.json`` into an arbitrary anchor directory.
     """
+    from eawf.observability.doctor.daemon_strays import check_stray_daemons
     from eawf.observability.doctor.runtime_health import run_runtime_tuple_health_checks
     from eawf.observability.doctor.workflow_health import run_workflow_health_checks
 
@@ -1342,6 +1343,7 @@ def run_all(
         check_incident_fold_parity(workspace=anchor),
         check_backlog_fold_parity(workspace=anchor),
         check_launchd_agent(),
+        check_stray_daemons(),
         check_runtime_dir_size(workspace=anchor),
         check_render_output_roundtrip(),
         check_agents_md_byte_cap(workspace=anchor),

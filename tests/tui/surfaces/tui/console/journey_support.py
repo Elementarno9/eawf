@@ -28,6 +28,8 @@ from pydantic import BaseModel, ConfigDict
 
 from eawf.kernel.projection.compute import ROUTE_COLLECTIONS, build_route_projection
 from eawf.kernel.projection.connection import READ_METHOD_TEMPLATE, RECONNECT_METHOD_TEMPLATE
+from eawf.kernel.runtime.events import RunEventRecord
+from eawf.runtime.daemon.methods.run import RUN_EVENTS_READ_METHOD
 from eawf.surfaces.tui.console.app import ConsoleApp
 from eawf.surfaces.tui.console.chrome import load_chrome
 from eawf.surfaces.tui.console.clock import FakeClock
@@ -119,6 +121,8 @@ class DocumentDaemon:
         lost: Targets whose write answers are lost on the way back.
         control_disposition: The disposition a Run control is answered with.
         reconnect_answer: What a reconnect is answered with; ``None`` serves none.
+        run_events: Each Run's event lines, by Run URN, which a run-events read answers
+            with; a Run not listed is unreadable.
         writes: Every write method and its parameters, in order.
     """
 
@@ -127,12 +131,36 @@ class DocumentDaemon:
         self.lost = set(lost)
         self.control_disposition = "requesting"
         self.reconnect_answer: dict[str, Any] | None = None
+        self.run_events: dict[str, tuple[RunEventRecord, ...]] = {}
         self.writes: list[tuple[str, dict[str, Any]]] = []
         self._routes = {
             READ_METHOD_TEMPLATE.format(route=route): route for route in ROUTE_COLLECTIONS
         }
         self._reconnects = {
             RECONNECT_METHOD_TEMPLATE.format(route=route) for route in ROUTE_COLLECTIONS
+        }
+
+    def _run_events(self, urn: str) -> dict[str, Any]:
+        """Answer a run-events read as the daemon does, or fail for an unreadable Run."""
+        if urn not in self.run_events:
+            raise ConnectionError(f"the events of {urn} cannot be read")
+        events = sorted(self.run_events[urn], key=lambda line: line.run_sequence)
+        last = events[-1].run_sequence if events else 0
+        return {
+            "events": [line.model_dump(mode="json") for line in events],
+            "quarantined": [],
+            "gaps": [],
+            "last_contiguous_sequence": last,
+            "next_sequence": last + 1,
+            "derivation_stopped": False,
+            "run_status": "RUNNING",
+            "stall": {
+                "verdict": "live",
+                "elapsed_seconds": 0.0,
+                "interval_seconds": 300,
+                "resume_method": "runtime.run.control.request",
+                "resume_control": "resume",
+            },
         }
 
     def client(self) -> _Client:
@@ -156,6 +184,8 @@ class DocumentDaemon:
             ).model_dump(mode="json")
         if method in self._reconnects and self.reconnect_answer is not None:
             return self.reconnect_answer
+        if method == RUN_EVENTS_READ_METHOD:
+            return self._run_events(str(params["urn"]))
         if method.startswith("projection."):
             raise ConnectionError(f"{method} is not served")
         self.writes.append((method, dict(params)))

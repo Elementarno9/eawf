@@ -25,8 +25,10 @@ a definition nor a fragment, and an id there needs no backticks. Dated amendment
 history, so a count inside one is never compared. A gap below a family's highest number is
 recorded in the census and never reported as a defect.
 
-The packet is local and gitignored, so where it is absent -- CI included -- the lint says
-so and passes. Its output carries the revision it was read at.
+The packet is local and gitignored and stays so, which is why no CI or release lane runs
+this: a clone has no packet, so a lane there could only ever report it absent and pass.
+It is a local tool the packet's author runs; where the packet is absent it says so and
+exits zero. Its output carries the revision it was read at.
 
 Usage::
 

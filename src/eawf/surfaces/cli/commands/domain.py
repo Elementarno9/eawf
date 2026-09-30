@@ -53,6 +53,7 @@ before printing it.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Final
@@ -61,6 +62,7 @@ import typer
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic import ValidationError as PydanticValidationError
 
+from eawf.runtime.session.host_session import with_host_session
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli._daemon_client import (
@@ -368,13 +370,19 @@ def _build_request(
             kind="InvalidInput",
         )
     _check_idempotency_key(idempotency_key)
+    spec = _load_spec(from_spec)
+    if method == RUN_START:
+        # The host session this command runs inside is the one that counts
+        # the Run's work, so a root Run is started bound to it.
+        updates = with_host_session(spec.updates, os.environ)
+        spec = spec.model_copy(update={"updates": updates})
     return DomainVerbRequest(
         method=method,
         urn=urn,
         expected_revision=expected_revision,
         idempotency_key=idempotency_key,
         actor=actor,
-        spec=_load_spec(from_spec),
+        spec=spec,
         approval_receipt_ref=approval_receipt_ref,
         extra_params=dict(extra_params or {}),
     )

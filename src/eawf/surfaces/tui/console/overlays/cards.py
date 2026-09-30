@@ -280,7 +280,8 @@ def rung_title(r: RungRecord) -> str:
 def render_rung(view: View, c: ClaimRecord, r: RungRecord) -> list[str]:
     """Return the rung record card over rung ``r`` of claim ``c``."""
     pending = r.outcome in (RungOutcome.UNKNOWN, RungOutcome.NOT_RUN)
-    over = [f"{i.ref} · {i.digest}" for i in r.inputs] or [f"{NONE} no input recorded"]
+    # a full digest outgrows the line beside its reference, so it takes the line below
+    over = [x for i in r.inputs for x in (i.ref, f"  {i.digest}")] or [f"{NONE} no input recorded"]
     found = [r.finding or "No outcome yet — unknown, not failed.", *r.counts]
     when = (
         "open" if r.outcome is RungOutcome.UNKNOWN else NO_VALUE if pending else short_time(r.as_of)

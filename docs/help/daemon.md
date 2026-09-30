@@ -29,6 +29,8 @@ uses a named pipe via the pywin32 bridge. Frames are newline-delimited
 JSON-RPC 2.0 objects. Peer credentials are OS-enforced (UDS SO_PEERCRED /
 named-pipe DACL) so only the owning user's processes can connect.
 
+Each tree gets its own daemon. The runtime dir is `~/.eawfd/trees/<key>/` (under `$XDG_RUNTIME_DIR/eawfd/` on Linux when that is set), where `<key>` names the tree's `.ea/state.json`, so a command run in one tree never reaches the daemon of another. `EAWF_RUNTIME_DIR` pins one directory instead. A daemon nothing can reach any more, such as one still on the old per-user `~/.eawfd/eawfd.sock` or one whose runtime dir was removed, is listed by `eawf doctor` and stopped by `eawf doctor --fix`.
+
 ## Daemonless escape hatch
 
 Read-only verbs can bypass the daemon with `--daemonless`, or automatically

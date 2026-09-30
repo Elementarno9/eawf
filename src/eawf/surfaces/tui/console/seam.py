@@ -81,6 +81,7 @@ from eawf.kernel.projection.connection import (
 )
 from eawf.kernel.projection.registers import ATTENTION_ROUTE
 from eawf.kernel.projection.settings import SETTINGS_ROUTE, SETTINGS_ROUTES, EffectiveSettingsView
+from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder
 from eawf.kernel.state.epoch2.pending_action import PendingAction
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.runtime.budget.notices import BudgetThresholdNotice
@@ -98,7 +99,8 @@ from eawf.surfaces.tui.console.bulk import (
     refused_bulk,
     unanswered_bulk,
 )
-from eawf.surfaces.tui.console.decisions import DecisionRecords, QuestionRecord
+from eawf.surfaces.tui.console.decisions import ClaimRecord, DecisionRecords, QuestionRecord
+from eawf.surfaces.tui.console.live_reads import LIVE_READS
 from eawf.surfaces.tui.console.operations import (
     NO_PRINCIPAL_REASON,
     NOTICE_LIST_METHOD,
@@ -123,6 +125,7 @@ from eawf.surfaces.tui.console.operations import (
     unanswered,
 )
 from eawf.workflow.decision_question import QUESTION_DECISIONS_METHOD
+from eawf.workflow.evidence.claim_ladder import EVIDENCE_LADDER_METHOD
 from eawf.workflow.projection.acceptance import (
     MILESTONE_ACCEPTANCE_METHOD,
     MILESTONE_ROUTE,
@@ -156,6 +159,9 @@ DEFAULT_ROUTE_CAPACITY = 8
 _ACCEPTANCE_COLLECTIONS: frozenset[Epoch2Collection] = frozenset(
     {Epoch2Collection.MILESTONE, Epoch2Collection.PENDING_ACTION}
 )
+
+#: The Evidence route and its rung card, which draw one claim's ladder; the route first.
+EVIDENCE_ROUTES: tuple[str, ...] = ("evidence", "evidence.digest")
 
 #: Called with the routes one pushed patch changed, so the app can repaint when the
 #: route on screen is among them.
@@ -277,8 +283,11 @@ class ProjectionSeam:
         self._reading: set[str] = set()
         self._settings: EffectiveSettingsView | None = None
         self._acceptance: dict[str, MilestoneAcceptanceRecord] = {}
+        # each live read's answer, beside the address it was read for
+        self._live: dict[str, tuple[str, Any]] = {}
         self._notices: tuple[BudgetThresholdNotice, ...] | None = None
         self._decisions: tuple[PendingAction, ...] | None = None
+        self._ladders: dict[str, ClaimLadder] = {}
         self._subject: str | None = None
         self._selected_id: str | None = None
         self._filters: dict[str, str] = {}
@@ -381,12 +390,21 @@ class ProjectionSeam:
         subject = self._subject
         if self._route == MILESTONE_ROUTE and subject and subject not in self._acceptance:
             owed.append(MILESTONE_ACCEPTANCE_METHOD)
+        # a live read is owed once it can be addressed, and again when its address moves
+        for name, read in LIVE_READS.items():
+            address = read.address(self) if read.route == self._route else None
+            if address is not None and self._live.get(name, ("", None))[0] != address:
+                owed.append(name)
         # a budget notice is addressed to a principal, so a console acting as nobody has none
         if self._route == ATTENTION_ROUTE and self._operator is not None and self._notices is None:
             owed.append(NOTICE_LIST_METHOD)
         # a decision is answered from its Attention row, so its options are read there
         if self._route == ATTENTION_ROUTE and self._decisions is None:
             owed.append(QUESTION_DECISIONS_METHOD)
+        # a claim's rung rows and its rung card are drawn from the one ladder read
+        claim = self._claim_subject()
+        if claim is not None and claim not in self._ladders:
+            owed.append(EVIDENCE_LADDER_METHOD)
         return tuple(route for route in owed if route not in self._reading)
 
     def retarget(self, route: str) -> None:
@@ -414,6 +432,23 @@ class ProjectionSeam:
         """Return the acceptance read held for Milestone *key*; ``None`` before its read."""
         return None if key is None else self._acceptance.get(key)
 
+    @property
+    def subject(self) -> str | None:
+        """Return the key of the record the visible route is about; ``None`` when none."""
+        return self._subject
+
+    def live(self, name: str) -> Any | None:
+        """Return live read *name*'s answer for what the route is about now; ``None`` before it."""
+        held = self._live.get(name)
+        read = LIVE_READS[name]
+        if held is None or read.route != self._route or held[0] != read.address(self):
+            return None
+        return held[1]
+
+    def live_on_screen(self) -> tuple[str, ...]:
+        """Return the live reads the visible route holds an answer for, which it re-reads."""
+        return tuple(name for name in LIVE_READS if self.live(name) is not None)
+
     def watch(self, listener: PatchListener) -> None:
         """Call *listener* with the routes every applied patch changed."""
         self._listeners.append(listener)
@@ -430,7 +465,17 @@ class ProjectionSeam:
             The routes this call read, in the order they were read.
         """
         loaded: list[str] = []
-        owed = self.owed()
+        attempted: set[str] = set()
+        # a read can make another owed -- a Run's lines once its route's rows arrive -- so
+        # the owed set is taken again until it holds nothing this call has not tried
+        while owed := tuple(route for route in self.owed() if route not in attempted):
+            attempted.update(owed)
+            loaded.extend(await self._read_owed(owed))
+        return tuple(loaded)
+
+    async def _read_owed(self, owed: tuple[str, ...]) -> list[str]:
+        """Read each of *owed* once, holding what arrives; return the ones that arrived."""
+        loaded: list[str] = []
         self._reading.update(owed)
         for route in owed:
             try:
@@ -438,10 +483,14 @@ class ProjectionSeam:
                     await self.load_settings()
                 elif route == MILESTONE_ACCEPTANCE_METHOD:
                     await self.load_acceptance()
+                elif route in LIVE_READS:
+                    await self.load_live(route)
                 elif route == NOTICE_LIST_METHOD:
                     await self.load_notices()
                 elif route == QUESTION_DECISIONS_METHOD:
                     await self.load_decisions()
+                elif route == EVIDENCE_LADDER_METHOD:
+                    await self.load_ladder()
                 else:
                     await self.load(route)
             except Exception as exc:
@@ -450,7 +499,7 @@ class ProjectionSeam:
                 loaded.append(route)
             finally:
                 self._reading.discard(route)
-        return tuple(loaded)
+        return loaded
 
     @property
     def settings(self) -> EffectiveSettingsView | None:
@@ -584,6 +633,32 @@ class ProjectionSeam:
         logger.debug(f"load_acceptance milestone={key} bundle={record.bundle is not None}")
         return record
 
+    async def call(self, method: str, params: Mapping[str, Any]) -> dict[str, Any]:
+        """Send one read to the daemon for this seam's tree and return its answer."""
+        return await self._binding.call(method, {**self._params(), **params})
+
+    async def load_live(self, name: str) -> Any:
+        """Read live read *name* for what the visible route is about now, and hold it.
+
+        Args:
+            name: The read's name in :data:`LIVE_READS`.
+
+        Returns:
+            The answer the read's own fetch returned.
+
+        Raises:
+            ValueError: The read cannot be addressed: its route is not on screen, or the
+                record it is about is not held yet.
+        """
+        read = LIVE_READS[name]
+        address = read.address(self) if read.route == self._route else None
+        if address is None:
+            raise ValueError(f"live read {name} is about nothing the console holds")
+        value = await read.fetch(self, address)
+        self._live[name] = (address, value)
+        logger.debug(f"load_live name={name}")
+        return value
+
     @property
     def notices(self) -> tuple[BudgetThresholdNotice, ...]:
         """Return the open budget notices in this principal's inbox; empty before their read."""
@@ -621,13 +696,53 @@ class ProjectionSeam:
         operator opens from its Attention row draws the filed options, the one
         recommendation and any default with its window, and never a prototype question.
         """
-        if self._decisions is None:
+        if self._decisions is None and not self._ladders:
             return None
         operator = self._operator
         return DecisionRecords(
             principal=operator.principal if operator is not None else None,
-            questions=tuple(QuestionRecord.of_decision(item) for item in self._decisions),
+            questions=tuple(QuestionRecord.of_decision(item) for item in self._decisions or ()),
+            claims=tuple(ClaimRecord.of_ladder(ladder) for ladder in self._ladders.values()),
         )
+
+    def _claim_subject(self) -> str | None:
+        """Return the claim the visible Evidence surface is about, or ``None`` off it.
+
+        The subject names it; a route opened on no subject is about the first claim its
+        projection lists, which is the claim the frame draws.
+        """
+        if self._route not in EVIDENCE_ROUTES:
+            return None
+        if self._subject:
+            return self._subject
+        held = self._held.get(EVIDENCE_ROUTES[0])
+        claims = (
+            [r.key for r in held.rows if r.collection is Epoch2Collection.CLAIM] if held else []
+        )
+        return claims[0] if claims else None
+
+    async def load_ladder(self, key: str | None = None) -> ClaimLadder:
+        """Read one claim with the latest record of each rung, and hold it.
+
+        Args:
+            key: The claim to read; the visible Evidence surface's claim when omitted.
+
+        Returns:
+            The claim and its ladder.
+
+        Raises:
+            ValueError: No claim was named and the visible surface is about none.
+        """
+        key = key or self._claim_subject()
+        if not key:
+            raise ValueError("a ladder read names the claim it is about")
+        answer = await self._binding.call(
+            EVIDENCE_LADDER_METHOD, {**self._params(), "claim_key": key}
+        )
+        ladder = ClaimLadder.model_validate(answer)
+        self._ladders[key] = ladder
+        logger.debug(f"load_ladder claim={key} rungs={len(ladder.rungs)}")
+        return ladder
 
     async def load_decisions(self) -> tuple[PendingAction, ...]:
         """Read every waiting operator decision in full, and hold them.
@@ -1115,6 +1230,7 @@ class ProjectionSeam:
         for route in [route for route in self._held if route != self._route]:
             del self._held[route]
         self._acceptance.clear()
+        self._live.clear()
 
     def _evict(self) -> None:
         """Drop the least recently shown unpinned routes until the cache fits.

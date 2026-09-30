@@ -176,6 +176,11 @@ EA_PATH_CLASSES: Final[tuple[PathClass, ...]] = (
     _row(".ea/profiles/*.yaml", _YES, "per-topic profile overlays, authored by hand"),
     _row(".ea/bench/*.yaml", _YES, "benchmark thresholds a run is scored against"),
     _row(
+        ".ea/retyped-triage.yaml",
+        _YES,
+        "where each re-typed rule over the threshold went; the tag preflight reads it",
+    ),
+    _row(
         ".ea/requirements.json",
         _YES,
         "the requirement catalog and its generated trace; CI rechecks it by value",

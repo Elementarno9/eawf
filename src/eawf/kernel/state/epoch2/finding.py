@@ -23,7 +23,7 @@ from typing import Annotated, Self
 
 from pydantic import StringConstraints, model_validator
 
-from eawf.kernel.state.epoch2.urns import CampaignFindingUrn, MilestoneUrn
+from eawf.kernel.state.epoch2.urns import CampaignFindingUrn, CampaignUrn, MilestoneUrn
 from eawf.kernel.state.epoch2.values import Epoch2Record
 from eawf.kernel.state.types import UtcDatetime
 
@@ -50,6 +50,7 @@ class CampaignFinding(Epoch2Record):
 
     Attributes:
         urn: The finding's own address; any other kind is refused.
+        campaign_ref: The Campaign that learned it.
         statement: What was learned, in one line.
         disposition: ``held`` until a Milestone consumes it, then ``consumed``.
         consumed_by_milestone_ref: The Milestone that consumed it.
@@ -61,6 +62,7 @@ class CampaignFinding(Epoch2Record):
     """
 
     urn: CampaignFindingUrn
+    campaign_ref: CampaignUrn
     statement: FindingStatement
     disposition: FindingDisposition = FindingDisposition.HELD
     consumed_by_milestone_ref: MilestoneUrn | None = None

@@ -7,8 +7,8 @@ Internalized v0.1 spec — design intent for the `eawf` framework, distilled int
 The front door is three pages, read in order. It runs from an empty machine to one closed unit of tracked work, and every command on it is executed by a test.
 
 1. **[Install](tutorial/install.md)** — requirements, supported platforms, extras, and the check that the command runs.
-2. **[Quickstart](tutorial/quickstart.md)** — three commands that turn a Git repository into an Eä-managed project.
-3. **[First workflow](tutorial/first-workflow.md)** — plan, dispatch, execute, and close one wave, then audit and ship.
+2. **[Quickstart](tutorial/quickstart.md)** — two commands that turn a Git repository into an Eä-managed project.
+3. **[First workflow](tutorial/first-workflow.md)** — plan a milestone, batch and task, record a run and its evidence, then prove and complete the task.
 
 Side paths from there: **[Profile picker](tutorial/profile-picker.md)**, **[Research campaigns](tutorial/research-campaigns.md)**, **[TUI tour](tutorial/tui-tour.md)**, **[Troubleshooting](tutorial/troubleshooting.md)**, and **[Concepts](concepts.md)** for the vocabulary.
 

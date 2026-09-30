@@ -243,7 +243,7 @@ async def apply_repair(ctx: MethodContext, params: dict[str, Any]) -> dict[str, 
     for action in current.actions:
         if action.action_id not in selected:
             continue
-        if action.mutation_class == "user_service":
+        if action.mutation_class in {"user_service", "user_process"}:
             continue
         status, records = _apply_action(workspace, state_path, action)
         results.append(

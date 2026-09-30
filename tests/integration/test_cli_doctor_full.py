@@ -54,6 +54,10 @@ def _sandbox_host_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
         "eawf.observability.doctor.checks._probe_running_daemon_version",
         lambda: None,
     )
+    monkeypatch.setattr(
+        "eawf.observability.doctor.daemon_strays.find_stray_daemons",
+        lambda: [],
+    )
 
 
 def _green_probe(*_args: object, **_kwargs: object) -> ProbeReport:
@@ -115,6 +119,7 @@ def test_cli_doctor_full_green_after_init(tmp_path: Path, monkeypatch: pytest.Mo
         "cli_daemon_version",
         "parallel_cap_enforcement",
         "launchd_agent",
+        "stray_daemons",
         "runtime_dir_size",
         "render_output_roundtrip",
         "agents_md_byte_cap",

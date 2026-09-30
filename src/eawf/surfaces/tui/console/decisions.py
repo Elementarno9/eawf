@@ -21,7 +21,10 @@ from typing import Annotated, Final, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from eawf.kernel.state.epoch2.evidence_rung import ClaimLadder, EvidenceRungRecord, RungBasis
+from eawf.kernel.state.epoch2.evidence_rung import RungOutcome as LadderOutcome
 from eawf.kernel.state.epoch2.pending_action import AgentPrincipal, PendingAction
+from eawf.kernel.state.epoch2.urns import render_qualified_urn
 
 #: An open question's ``QST-####`` key, or the ``ACT-####`` key of an operator decision,
 #: which the question detail draws the same way: a question with offered answers.
@@ -35,6 +38,8 @@ Text = Annotated[str, StringConstraints(min_length=1)]
 
 #: The most answers a question may offer as options; zero is a reply question.
 MAX_OPTIONS: Final = 4
+#: What an input's digest reads as when the rung could not fetch it.
+UNFETCHED_DIGEST: Final = "∅ unavailable · the digest could not be fetched"
 #: The rungs of a claim's ladder, in order, by name.
 RUNG_NAMES: Final[tuple[str, ...]] = ("resolve", "anchor", "screen", "entail")
 
@@ -388,6 +393,39 @@ class RungRecord(_Record):
         """Return the rung's name."""
         return RUNG_NAMES[self.rung - 1]
 
+    @classmethod
+    def of_record(cls, record: EvidenceRungRecord) -> Self:
+        """Return the rung as the frames draw it, from the record the evidence scorer wrote.
+
+        A passed rung 4 with a sign-off behind it attests; an input whose digest could not
+        be fetched is drawn unavailable and, on rung 1, leaves the reference unresolved.
+        """
+        outcome = {
+            LadderOutcome.PASSED: RungOutcome.PASS,
+            LadderOutcome.FAILED: RungOutcome.FAIL,
+            LadderOutcome.UNKNOWN: RungOutcome.UNKNOWN,
+            LadderOutcome.NOT_RUN: RungOutcome.NOT_RUN,
+        }[record.outcome]
+        if outcome is RungOutcome.PASS and record.basis is RungBasis.ATTESTED:
+            outcome = RungOutcome.ATTESTED
+        unfetched = any(item.digest is None for item in record.input_refs)
+        return cls(
+            rung=record.rung,
+            outcome=outcome,
+            check=record.question,
+            inputs=tuple(
+                RungInput(ref=str(item.ref), digest=item.digest or UNFETCHED_DIGEST)
+                for item in record.input_refs
+            ),
+            finding=record.finding,
+            counts=tuple(f"{name} {count}" for name, count in record.counts.items()),
+            as_of=record.evaluated_at,
+            evaluator=record.evaluator,
+            sequence=record.written_at_sequence,
+            evidence=record.evidence_ref.entity_key if record.evidence_ref else None,
+            digest_unavailable=record.rung == 1 and unfetched,
+        )
+
 
 class ClaimEdge(_Record):
     """One support or contradiction edge of a claim.
@@ -451,6 +489,28 @@ class ClaimRecord(_Record):
     def rung(self, n: int) -> RungRecord | None:
         """Return rung ``n``, or ``None`` past the ladder."""
         return self.rungs[n - 1] if 1 <= n <= len(self.rungs) else None
+
+    @classmethod
+    def of_ladder(cls, ladder: ClaimLadder) -> Self:
+        """Return the claim as the evidence viewer and the rung card draw it.
+
+        Args:
+            ladder: The claim and the latest record of each of its rungs, as read.
+
+        Returns:
+            The record, its prose rows present only where the claim states them.
+        """
+        claim = ladder.claim
+        return cls(
+            id=claim.key,
+            urn=render_qualified_urn(claim.urn),
+            title=claim.title,
+            in_words=claim.description,
+            proves=claim.implication,
+            breaks_if=claim.falsifier,
+            rungs=tuple(RungRecord.of_record(record) for record in ladder.rungs),
+            as_of=ladder.read_at,
+        )
 
 
 # ---------- the draft, the marker, the artifact and the step ----------

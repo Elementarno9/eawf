@@ -64,8 +64,8 @@ RUN_DETAIL = "run.detail"
 NOTHING_SELECTED = "nothing is selected · nothing to drill"
 #: What Tab says on scope home when the attention list holds nothing to focus.
 NOTHING_WAITING = "nothing is waiting — no list to focus"
-#: What the Run frame's event keys say while no producer states the Run's events.
-NO_EVENTS = "no event is recorded for this Run yet · Enter opens the transcript"
+#: What the Run frame's event keys say: the frame draws no timeline, the transcript does.
+NO_EVENTS = "this frame walks no event · the transcript draws them · Enter opens it"
 #: What Tab and Shift-Tab say on a frame with nothing for either to cycle.
 NOTHING_CYCLES = "nothing here cycles · Shift-Tab steps back where Tab moves on"
 #: How a toast answering a key names it in its title: as the keybar spells it.

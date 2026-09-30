@@ -17,9 +17,11 @@ from eawf.kernel.state.epoch2.evidence_rung import (
     RUNG_NAMES,
     RUNG_QUESTIONS,
     UNKNOWN_FINDING,
+    ClaimFiling,
     EvidenceRungRecord,
     RungBasis,
     RungOutcome,
+    latest_rungs,
 )
 
 pytestmark = pytest.mark.unit
@@ -173,3 +175,47 @@ def test_plan_048_finding_at_its_bound_validates() -> None:
 def test_plan_048_a_record_is_immutable() -> None:
     with pytest.raises(ValidationError):
         record(1).outcome = RungOutcome.FAILED
+
+
+# ---- the claim a ladder scores --------------------------------------------------
+
+
+def filing(**overrides: Any) -> ClaimFiling:
+    """Return a valid claim filing, overridden field by field."""
+    fields: dict[str, Any] = {
+        "key": "CLM-0004",
+        "urn": CLAIM,
+        "status": "OPEN",
+        "title": "Replay keeps order",
+        "evidence_refs": [EVIDENCE],
+        "recorded_at": AT,
+    }
+    fields.update(overrides)
+    return ClaimFiling.model_validate(fields)
+
+
+def test_plan_044_absent_prose_is_absent_and_300_characters_fit() -> None:
+    assert filing().implication is None
+    assert filing(falsifier="x" * 300).falsifier == "x" * 300
+
+
+def test_plan_044_prose_over_its_bound_fails() -> None:
+    with pytest.raises(ValidationError):
+        filing(implication="x" * 301)
+
+
+@pytest.mark.parametrize("urn", [OTHER_CLAIM, f"{CLAIM}#rung-2"])
+def test_plan_048_a_claim_filed_under_another_address_fails(urn: str) -> None:
+    with pytest.raises(ValidationError):
+        filing(urn=urn)
+
+
+def test_plan_048_the_latest_revision_of_each_rung_is_the_one_drawn() -> None:
+    old = record(2, "unknown", revision=0)
+    new = record(2, "passed", revision=1)
+    assert latest_rungs([new, record(1), old]) == (record(1), new)
+
+
+def test_plan_048_no_records_is_no_ladder() -> None:
+    """Boundary: a claim nothing has scored has no rungs, never four invented ones."""
+    assert latest_rungs([]) == ()

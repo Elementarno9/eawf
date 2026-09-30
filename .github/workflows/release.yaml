@@ -250,10 +250,6 @@ jobs:
         # row, or a scrubbed_extract title, into the release.
         run: uv run eawf hook eawf027-citation-scope
 
-      - name: Packet census lint
-        # Local-only packet: absent here, so the lint says so and passes.
-        run: uv run python tools/packet_census.py
-
       - name: eawf release preflight for the pushed tag
         env:
           TAG: ${{ github.ref_name }}

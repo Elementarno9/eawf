@@ -23,6 +23,7 @@ from typing import Any
 
 from eawf.kernel.projection.transcript import (
     PurgedRange,
+    SubagentLine,
     TranscriptBlock,
     TranscriptReadModel,
 )
@@ -317,6 +318,12 @@ NO_BLOCK = "∅ this Run has produced no event · nothing has been observed of i
 #: What a purged block shows in its fold slot: the store holds none of it.
 PURGED_MARK = "✗ purged"
 
+#: What a delegation whose child's lines were not read shows in its fold slot.
+UNAVAILABLE_MARK = "∅ unavailable"
+
+# The cells a block body's label column takes: ``WAITS ON`` and its gap.
+_LABEL_W = 10
+
 # The kind column's width: the longest kind word and its gap.
 _KIND_W = 11
 
@@ -342,10 +349,47 @@ def native_word(block: TranscriptBlock) -> str:
 
 
 def _block_text(block: TranscriptBlock) -> str:
-    """Return what a block says: its purged range, or its text with its kind named."""
+    """Return what a block says: its purged range, or its own words.
+
+    The kind column already names the kind as glyph and word, so the text is the block's
+    first line alone.
+    """
     if block.purged is not None:
         return _purged_text(block.purged)
-    return f"{block.kind.value} · {value_cell(block.text).full}"
+    return value_cell(block.text).full
+
+
+def _delegation_body(line: SubagentLine) -> list[tuple[str, str]]:
+    """Return a delegation block's labelled lines: what the child does now or how it
+    ended, what it found, and that it reports back into this Run.
+
+    A child whose own lines were not read states that instead of its now and found, so
+    an unreadable transcript is never drawn as a child that said nothing.
+    """
+    ended = line.outcome is not None
+    first = ("ENDED", str(line.outcome)) if ended else ("NOW", line.now or "nothing yet")
+    rows = (
+        [first, ("FOUND", line.found or "nothing reported yet")]
+        if line.readable
+        else [("NOW", f"{UNAVAILABLE_MARK} · the child's transcript could not be read")]
+    )
+    verb = "reported back into" if ended else "reports back into"
+    rows.append(("REPORTS", f"{verb} {line.reports_to}" + ("" if ended else " when it ends")))
+    return rows
+
+
+def _body_lines(block: TranscriptBlock, room: int) -> list[str]:
+    """Return a block's body under its text, each labelled line wrapped as prose.
+
+    A delegation's body is read from its child; every other kind's comes with the block.
+    """
+    rows = list(block.body) if block.delegation is None else _delegation_body(block.delegation)
+    lines: list[str] = []
+    for label, text in rows:
+        wrapped = _wrap_to(text, max(4, room - _LABEL_W)) or [""]
+        lines.append(pad(label, _LABEL_W) + wrapped[0])
+        lines.extend(" " * _LABEL_W + rest for rest in wrapped[1:])
+    return lines
 
 
 def reference(view: View, model: TranscriptReadModel) -> datetime | None:
@@ -375,12 +419,17 @@ def _note(
         return PURGED_MARK
     if block.in_flight:
         text = fmt_dur(_seconds(block, to))
+        if block.lane == "question":
+            text = f"waiting {text}"
         if block.typical_seconds is not None and breadth >= Breadth.WIDE:
             typical = f"~{fmt_dur(block.typical_seconds)}"
             text += f" · {typical}" + (" typical" if breadth is Breadth.XWIDE else "")
-        return text
+        # work in flight that folds lines away still says so, before its elapsed
+        return (("▾ " if is_open else "▸ ") if hidden else "") + text
+    if block.delegation is not None and not block.delegation.readable and not is_open:
+        return UNAVAILABLE_MARK
     if hidden:
-        return f"▾ {hidden} lines" if is_open else f"▸ {hidden} lines"
+        return f"▾ {plural(hidden, 'line')}" if is_open else f"▸ {plural(hidden, 'line')}"
     return ""
 
 
@@ -397,11 +446,28 @@ def _wrap_two(text: str, first: int, rest: int) -> list[str]:
     return [wrapped[0], *_wrap_to(" ".join(words), rest)]
 
 
-def _layout(view: View, model: TranscriptReadModel, index: int) -> tuple[str, list[str], str]:
-    """Return one block's head cells, its wrapped text and its note, at the frame's width.
+@dataclass(frozen=True, slots=True)
+class _Laid:
+    """One block laid out at the frame's width: its head, wrapped text, body and note."""
 
-    The first line leaves room for the note; a block whose note is a fold reserves the
-    widest fold note, so the count it states is the count of lines it really hides.
+    head: str
+    wrapped: list[str]
+    body: list[str]
+    note: str
+
+    @property
+    def hidden(self) -> int:
+        """Return how many lines the closed fold hides: text past the preview, and the body."""
+        return max(0, len(self.wrapped) - PREVIEW) + len(self.body)
+
+
+def _layout(view: View, model: TranscriptReadModel, index: int) -> _Laid:
+    """Return one block laid out at the frame's width.
+
+    The preview shows the first two lines of the text and the fold opens the rest and
+    the body. The first line leaves room for the note; a block whose note is a fold
+    reserves the widest fold note, and work in flight its fold mark beside its elapsed,
+    so the count it states is the count of lines it really hides.
     """
     block, w = model.blocks[index], view.w
     word = native_word(block)
@@ -409,11 +475,13 @@ def _layout(view: View, model: TranscriptReadModel, index: int) -> tuple[str, li
     room = max(8, (w - 2) - cell_len(head) - 1)
     to = reference(view, model)
     fixed = _note(block, hidden=0, is_open=False, to=to, breadth=view.breadth)
-    reserve = cell_len(fixed) + 2 if fixed else _FOLD_NOTE_W
+    reserve = cell_len(fixed) + 2 + (2 if block.in_flight else 0) if fixed else _FOLD_NOTE_W
     wrapped = _wrap_two(_block_text(block), max(4, room - reserve), room)
-    hidden = max(0, len(wrapped) - PREVIEW)
+    body = _body_lines(block, room)
+    hidden = max(0, len(wrapped) - PREVIEW) + len(body)
     is_open = bool(folds(view.session).get(index))
-    return head, wrapped, _note(block, hidden=hidden, is_open=is_open, to=to, breadth=view.breadth)
+    note = _note(block, hidden=hidden, is_open=is_open, to=to, breadth=view.breadth)
+    return _Laid(head=head, wrapped=wrapped, body=body, note=note)
 
 
 def _native_block_lines(view: View, model: TranscriptReadModel, index: int) -> list[str]:
@@ -422,28 +490,29 @@ def _native_block_lines(view: View, model: TranscriptReadModel, index: int) -> l
     Blocks are prose: they wrap inside the region and fold beyond the preview, and are
     never cut with an ellipsis.
     """
-    head, wrapped, note = _layout(view, model, index)
-    room = max(8, (view.w - 2) - cell_len(head) - 1)
+    laid = _layout(view, model, index)
+    room = max(8, (view.w - 2) - cell_len(laid.head) - 1)
     is_open = bool(folds(view.session).get(index))
-    shown = wrapped if is_open else wrapped[:PREVIEW]
+    shown = [*laid.wrapped, *laid.body] if is_open else laid.wrapped[:PREVIEW]
+    note = laid.note
     first = room - (cell_len(note) + 2 if note else 0)
-    lines = [head + pad(shown[0], first) + (f"  {note}" if note else "")]
-    lines.extend(pad("", cell_len(head)) + line for line in shown[1:])
+    lines = [laid.head + pad(shown[0], first) + (f"  {note}" if note else "")]
+    lines.extend(pad("", cell_len(laid.head)) + line for line in shown[1:])
     return lines
 
 
 def native_hidden(view: View, model: TranscriptReadModel, index: int) -> int:
     """Return how many lines block ``index`` folds away at the frame's width."""
-    _head, wrapped, _note_text = _layout(view, model, index)
-    return max(0, len(wrapped) - PREVIEW)
+    return _layout(view, model, index).hidden
 
 
 def native_context(view: View, model: TranscriptReadModel) -> str:
     """Return the line under the header: what is true of the Run right now.
 
-    It names the Run, whether it is thinking or held by work and for how long, how many
-    pieces of work run in the background, whether the view follows the tail, and the
-    block count -- every one derived from the blocks rather than stored beside them.
+    It names the Run, whether it is thinking, held by work or waiting on a question and
+    for how long, how many pieces of work run in the background, whether the view follows
+    the tail, and, where width allows, the block count -- every one derived from the
+    blocks rather than stored beside them.
     """
     s = view.session
     run = s.subj_id or (model.rows[0].key if model.rows else "no run")
@@ -451,22 +520,29 @@ def native_context(view: View, model: TranscriptReadModel) -> str:
     going = [b for b in model.blocks if b.in_flight]
     thinking = next((b for b in reversed(going) if b.lane == "thinking"), None)
     held = next((b for b in reversed(going) if b.lane == "tool" and not b.background), None)
+    asked = next((b for b in reversed(going) if b.lane == "question"), None)
+    state = ""
     if thinking is not None:
         state = f"THINKING for {fmt_dur(_seconds(thinking, to))}"
     elif held is not None:
         state = f"RUNNING for {fmt_dur(_seconds(held, to))}"
-    else:
-        # nothing in flight says nothing about the Run itself, so its register status is
-        # stated beside it rather than a claim that nothing runs
+    elif asked is not None:
+        state = f"WAITING for {fmt_dur(_seconds(asked, to))}"
+    background = sum(1 for b in going if b.background or b.lane == "subagent")
+    if not state:
+        # nothing holding the Run says nothing about the Run itself, so its register
+        # status is stated beside it rather than a claim that nothing runs; with work in
+        # the background the count below says what is in flight
         found = model.index_of(run)
         stored = value_cell(model.rows[found].field("status")).slot if found is not None else None
         quiet = "nothing in flight" if model.blocks else "no event recorded yet"
-        state = f"{stored} · {quiet}" if stored else quiet
-    background = sum(1 for b in going if b.background or b.lane == "subagent")
+        state = " · ".join(part for part in (stored, "" if background else quiet) if part)
     parts = [f"Run {run}", state]
     if background:
         parts.append(f"{background} running in the background")
-    parts += ["following" if s.follow else "held", plural(len(model.blocks), "block")]
+    parts.append("following" if s.follow else "held")
+    if view.wide:
+        parts.append(plural(len(model.blocks), "block"))
     return " · ".join(parts)
 
 

@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from eawf.kernel.state.epoch2.artifact_revision import (
     ArtifactRevision,
     MediaKind,
+    StoredArtifactRevision,
     verify_revision_content,
 )
 
@@ -104,3 +105,22 @@ def test_plan_050_size_mismatch_fails_the_card() -> None:
 
 def test_plan_050_empty_content_verifies_against_an_empty_record() -> None:
     verify_revision_content(revision(b""), b"")
+
+
+# ---- the stored ledger line keeps the revision's own text ----------------------
+
+
+def test_plan_050_a_stored_revision_keeps_the_text_its_record_digests() -> None:
+    stored = StoredArtifactRevision(revision=revision(), text=CONTENT.decode())
+    assert stored.payload_kind == "artifact_revision"
+    with pytest.raises(ValidationError, match="digests to"):
+        StoredArtifactRevision(revision=revision(), text=CONTENT.decode().replace("0", "1"))
+
+
+def test_plan_050_a_binary_revision_keeps_no_text_and_a_drawable_one_keeps_its_text() -> None:
+    binary = revision(media_kind="binary")
+    assert StoredArtifactRevision(revision=binary).text is None
+    with pytest.raises(ValidationError, match="keeps no text"):
+        StoredArtifactRevision(revision=binary, text=CONTENT.decode())
+    with pytest.raises(ValidationError, match="keeps no text"):
+        StoredArtifactRevision(revision=revision())

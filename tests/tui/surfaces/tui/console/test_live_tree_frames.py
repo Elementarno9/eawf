@@ -242,7 +242,7 @@ def test_health_tuples_sits_in_the_checks_gutter() -> None:
 
 
 def test_the_event_toast_points_at_enter_on_this_frame() -> None:
-    assert NO_EVENTS == "no event is recorded for this Run yet · Enter opens the transcript"
+    assert NO_EVENTS == "this frame walks no event · the transcript draws them · Enter opens it"
     assert "Activity" not in NO_EVENTS
 
 

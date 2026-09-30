@@ -16,6 +16,12 @@ so one that takes its subtree past a ``child_runs`` ceiling is admitted and the 
 is filed on the run ledger rather than refused: refusing the record would hide the
 subagent, not stop it.
 
+When a parent is recorded, the delegation is also stated on the parent's own stream:
+``start`` appends ``child_run_started`` and ``stop`` appends ``child_run_terminal``, both
+naming the child Run, so the parent's transcript draws the subagent as work happening
+elsewhere with a typed event behind it rather than an inference. The parent's stream has
+other writers, so these lines take its tail under the Run's lock.
+
 ``stop`` bridges the subagent's transcript into the Run's own stream, then completes
 the Run. The stop hook is the harness saying the subagent has returned its final
 message, and that message is on the bridged stream, so the completion presents the
@@ -36,14 +42,14 @@ import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, StringConstraints
 
 from eawf.kernel.identity import EntityKind, QualifiedUrn, format_entity_key, parse_qualified_urn
 from eawf.kernel.migration.epoch2.generation import GENERATION_DOCUMENT
 from eawf.kernel.runtime.control import TERMINAL_RUN_STATUSES
-from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
+from eawf.kernel.runtime.events import ChildRunPayload, MessageSummaryPayload, RunEventKind
 from eawf.kernel.state.epoch2.authority import RootAuthority
 from eawf.kernel.state.epoch2.base import StrictNonNegativeInt
 from eawf.kernel.state.epoch2.measurement import VendorSessionRef
@@ -176,8 +182,14 @@ class _Adoption:
     def key(self, step: str) -> str:
         return f"host-subagent-{self.body}-{step}"
 
-    def event_ref(self, index: int) -> str:
+    def event_ref(self, index: int | str) -> str:
         return f"EVT-{hashlib.sha256(f'{self.body}:{index}'.encode()).hexdigest()[:32]}"
+
+    @property
+    def delegation_ref(self) -> str:
+        """Return the delegation this subagent answers, named from the subagent itself."""
+        digest = hashlib.sha256(self.params.agent_id.encode()).hexdigest()[:32]
+        return f"delegation://{self.params.harness}/{digest}"
 
 
 def _document_path(authority: RootAuthority) -> Path:
@@ -345,6 +357,7 @@ def _adopt(
         context, authority, adoption, now=now, envelopes=envelopes
     )
     run = _read_run(context, urn)
+    _state_delegation(context, run, adoption, phase="started")
     if run.status is RunStatus.QUEUED:
         _move(
             context,
@@ -362,12 +375,57 @@ def _adopt(
     return run
 
 
+def _state_delegation(
+    context: Epoch2RootContext,
+    run: Run,
+    adoption: _Adoption,
+    *,
+    phase: Literal["started", "terminal"],
+) -> None:
+    """State one phase of the delegation on the parent Run's stream, when there is a parent.
+
+    The line takes the parent stream's tail, and a re-delivered hook repeats the same
+    event id, which the append answers with the line already standing. A parent that has
+    already ended keeps the line as a quarantined diagnostic, as any late event is kept.
+    """
+    parent = run.parent_run_ref
+    if parent is None:
+        return
+    terminal = phase == "terminal"
+    payload = ChildRunPayload(
+        child_run_ref=run.urn,
+        delegation_request_ref=adoption.delegation_ref,
+        phase=phase,
+        terminal_status=run.status if terminal else None,
+    )
+    answer = append_run_event(
+        context,
+        RunEventAppend(
+            urn=parent,
+            event_ref=adoption.event_ref(f"delegation:{phase}"),
+            run_sequence=1,
+            event_kind=(
+                RunEventKind.CHILD_RUN_TERMINAL if terminal else RunEventKind.CHILD_RUN_STARTED
+            ),
+            provenance="provider_native",
+            payload=payload,
+            actor=adoption.actor,
+        ),
+        now=datetime.now(UTC),
+        at_tail=True,
+    )
+    logger.info(
+        f"host subagent delegation phase={phase} child={run.key} parent={parent.entity_key} "
+        f"disposition={answer.disposition}"
+    )
+
+
 def _bridge(context: Epoch2RootContext, run: Run, adoption: _Adoption, path: Path) -> int:
     """Append the subagent's transcript to its Run's stream, one event per payload.
 
-    The adopted Run's stream is written by nothing else, so the bridged payloads
-    take sequences one onward and a re-delivered stop repeats the same event ids,
-    which the append recognises as duplicates rather than new lines.
+    The payloads take the stream's tail, because a subagent that delegated in turn
+    already has its children's lines on it. A re-delivered stop repeats the same event
+    ids, which the append recognises as duplicates rather than new lines.
     """
     payloads = read_host_transcript(path, harness=adoption.params.harness)
     for index, payload in enumerate(payloads):
@@ -387,6 +445,7 @@ def _bridge(context: Epoch2RootContext, run: Run, adoption: _Adoption, path: Pat
                 actor=adoption.actor,
             ),
             now=datetime.now(UTC),
+            at_tail=True,
         )
     return len(payloads)
 
@@ -442,6 +501,7 @@ def _stop(
         envelopes=envelopes,
     )
     run = _read_run(context, run.urn)
+    _state_delegation(context, run, adoption, phase="terminal")
     return _answer(run, bridged=bridged, reason=f"{run.key} completed with {bridged} bridged")
 
 

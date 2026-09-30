@@ -31,7 +31,7 @@ from eawf.kernel.projection.registers import build_register_view
 from eawf.kernel.runtime.capsule import AuthorityCapsule
 from eawf.kernel.runtime.control import RunBinding
 from eawf.kernel.runtime.delegation import ChildCeilingBreach
-from eawf.kernel.runtime.events import MessageSummaryPayload
+from eawf.kernel.runtime.events import MessageSummaryPayload, RunEventKind
 from eawf.kernel.state.epoch2.measurement import CounterName
 from eawf.kernel.store.compaction import document_rows, read_document
 from eawf.kernel.store.ledger import LedgerRecord, append_ledger_record, read_ledger_records
@@ -417,7 +417,12 @@ def test_run_023_adopted_child_stream_carries_only_its_own_transcript(tmp_path: 
         if isinstance(event.payload, MessageSummaryPayload)
     ] == ["child words"]
     assert len(child_events) == 1
-    assert parent_events == ()
+    # the parent states the delegation, never the child's words (PRX-065)
+    assert [event.event_kind for event in parent_events] == [
+        RunEventKind.CHILD_RUN_STARTED,
+        RunEventKind.CHILD_RUN_TERMINAL,
+    ]
+    assert not any(isinstance(event.payload, MessageSummaryPayload) for event in parent_events)
 
 
 # ---- SURF-097: a finished Run stays in the Activity view -----------------------------

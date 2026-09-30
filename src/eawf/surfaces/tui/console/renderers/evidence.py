@@ -16,10 +16,12 @@ from __future__ import annotations
 from eawf.kernel.projection.route_view import RouteReadModel, RouteRecord
 from eawf.kernel.store.tiers import Epoch2Collection
 from eawf.surfaces.tui.console import derive as dv
-from eawf.surfaces.tui.console.cells import value_cell
+from eawf.surfaces.tui.console.cells import NO_VALUE, value_cell
+from eawf.surfaces.tui.console.decisions import ClaimRecord, RungOutcome, RungRecord, short_time
 from eawf.surfaces.tui.console.frame import Grid, View, chip, g_frame, lab, prose, thin
 from eawf.surfaces.tui.console.keybar import route_pairs
 from eawf.surfaces.tui.console.navigation import Ctx, busy, go
+from eawf.surfaces.tui.console.overlays.situations import claim_standing, rung_outcome
 from eawf.surfaces.tui.console.renderers.read_model import (
     UNAVAILABLE,
     UNKNOWN_WORD,
@@ -118,6 +120,42 @@ def _claim(view: View, model: RouteReadModel) -> RouteRecord | None:
     return next((row for row in claims if row.key == subject), claims[0] if claims else None)
 
 
+def _as_of(r: RungRecord) -> str:
+    """Return when rung ``r`` returned: ``open`` while unknown, the dash when not run."""
+    if r.outcome is RungOutcome.UNKNOWN:
+        return "open"
+    return NO_VALUE if r.outcome is RungOutcome.NOT_RUN else short_time(r.as_of)
+
+
+def _ran_over(r: RungRecord) -> str:
+    """Return what rung ``r`` ran over by reference; the digests stay with the record."""
+    refs = [i.ref.rsplit("/", 1)[-1] for i in r.inputs]
+    return " · ".join(refs) if refs else NO_VALUE
+
+
+def _record_rows(view: View, c: ClaimRecord) -> list[str]:
+    """Return the ladder drawn from the claim's own rung records, one row per rung."""
+    s, w, wide, x = view.session, view.w, view.wide, view.xwide
+    heads = ["RUNG", "OUTCOME", "WHAT IT CHECKED"]
+    widths = [13, 30]
+    if x:
+        heads.append("IT RAN OVER")
+    if wide:
+        heads.append("AS OF")
+    checked_w = w - 3 - sum(widths) - (24 if x else 0) - (14 if wide else 0)
+    grid = Grid([*widths, checked_w, *([24] if x else []), *([14] if wide else []), 0])
+    rows = [grid.head(heads)]
+    dv.sel_in(s, len(c.rungs))
+    for i, r in enumerate(c.rungs):
+        cells = [f"{r.rung} {r.name}", rung_outcome(c, r), r.check]
+        if x:
+            cells.append(_ran_over(r))
+        if wide:
+            cells.append(_as_of(r))
+        rows.append(grid.row(cells[: len(heads)], i == s.sel, w))
+    return rows
+
+
 def _rung_rows(view: View, *, held: bool) -> list[str]:
     """Return the ladder: one row per rung, wider frames adding when and what it ran over.
 
@@ -162,27 +200,49 @@ def native_frame(view: View, model: RouteReadModel) -> list[str]:
     claim = _claim(view, model)
     key = claim.key if claim is not None else "no claim"
     subject = f"Claim {key}" if claim is not None else "No Claim held"
+    # the rung rows and the rung card are drawn from the one ladder read for this claim
+    record = view.decisions.claim(key) if view.decisions is not None else None
+    standing = claim_standing(record).name if record is not None else UNCERTIFIED
     top = native_head(
         view,
         model,
         crumb_text=route_crumb(view, model, "Evidence", *([claim.key] if claim else [])),
-        summary=f"{subject} · {len(RUNGS)} rungs · {UNCERTIFIED} · {counts(model)}",
+        summary=f"{subject} · {len(RUNGS)} rungs · {standing} · {counts(model)}",
     )
     if claim is None:
         body = [label("CLAIM", f"{UNAVAILABLE} · this scope holds no Claim the ladder is about")]
     else:
         title = claim.title or f"{UNAVAILABLE} · the claim states no title"
         body = [label("CLAIM", f"{claim.key} · {title}")]
-    body += [thin(w), *_rung_rows(view, held=claim is not None), thin(w)]
+    if record is not None:
+        # prose is not a measurement, so an absent field draws no row rather than a glyph
+        prose = (
+            ("IN WORDS", record.in_words),
+            ("IT PROVES", record.proves),
+            ("BREAKS IF", record.breaks_if),
+        )
+        body += [label(name, text) for name, text in prose if text]
+        body += [thin(w), *_record_rows(view, record), thin(w)]
+    else:
+        body += [thin(w), *_rung_rows(view, held=claim is not None), thin(w)]
     body += [
         label("LADDER", "Each rung is a harder test than the one below it."),
         more("Only the entailing rung certifies; a screen negative is advisory."),
-        label("STANDING", f"{UNCERTIFIED} · no rung has an outcome, so nothing certifies it"),
     ]
+    if record is not None:
+        body.append(label("STANDING", f"{standing} · derived from the four rung records"))
+    else:
+        body.append(
+            label("STANDING", f"{UNCERTIFIED} · no rung has an outcome, so nothing certifies it")
+        )
     if claim is not None:
         body.append(more(f"lifecycle {value_cell(claim.field('status')).full}"))
     body.append(label("SUPPORTS", f"{UNAVAILABLE} · no finding cites this claim yet"))
-    if view.wide:
+    if view.wide and record is not None:
+        # the cites edge is the claim's own: the evidence its rung 1 resolved over
+        cited = _ran_over(record.rungs[0])
+        body += [thin(w), label("GRAPH", f"{key} cites {cited} · other typed edges {UNKNOWN_WORD}")]
+    elif view.wide:
         evidence = [row.key for row in model.rows if row.collection is Epoch2Collection.EVIDENCE]
         held = " · ".join(evidence) if evidence else "no evidence record is held"
         body += [thin(w), label("GRAPH", f"{key} ← {held} · typed edges {UNKNOWN_WORD}")]
@@ -249,5 +309,6 @@ def seam(ctx: Ctx, key: str, shift: bool) -> bool:
     if s.route != "evidence" or key != "Enter" or busy(s):
         return False
     s.rung = s.sel
-    go(ctx, "evidence.digest", f"rung {s.rung + 1} · its input digest and what it found")
+    # the card is about the same claim, so its subject travels with it
+    go(ctx, "evidence.digest", f"rung {s.rung + 1} · its input digest and what it found", s.subj_id)
     return True

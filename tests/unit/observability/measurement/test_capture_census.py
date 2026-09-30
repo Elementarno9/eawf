@@ -126,3 +126,15 @@ def test_meas_046_census_follows_a_function_handed_to_a_thread_runner(tmp_path: 
     )
 
     assert _reaches_daemon_method("capture_run_start", _callers(root))
+
+
+def test_meas_046_a_root_run_start_presents_a_vendor_session(
+    callers: dict[str, set[tuple[str, str]]],
+) -> None:
+    """The capture halves are fed: the Run start command produces the session."""
+    presenters = callers["with_host_session"]
+
+    assert ("surfaces/cli/commands/domain.py", "_build_request") in presenters
+    assert ("runtime/session/host_session.py", "with_host_session") in callers[
+        "host_vendor_session"
+    ]
