@@ -54,9 +54,6 @@ def normalize_to_project_code(name: str) -> str:
     return candidate
 
 
-_MAX_SUFFIX = 99
-
-
 def natural_key(id_str: str) -> tuple[object, ...]:
     """Return a sort key that orders ids numerically by trailing digits.
 
@@ -133,57 +130,3 @@ def parents_of(lifecycle_id: str) -> tuple[str, ...]:
         iter_id = f"{parts[0]}-{parts[1]}"
         return (phase_id, iter_id)
     raise ValueError(f"not a recognised lifecycle id: {lifecycle_id!r}")
-
-
-def _smallest_free_suffix(used: set[int]) -> int:
-    for n in range(1, _MAX_SUFFIX + 1):
-        if n not in used:
-            return n
-    raise ValueError("all 99 suffixes are in use; allocation saturated")
-
-
-def allocate_next_phase_id(existing: set[str]) -> str:
-    """Return the smallest free phase ID not present in ``existing``.
-
-    Raises:
-        ValueError: When all 99 suffixes are taken.
-    """
-    used: set[int] = set()
-    for pid in existing:
-        if RE_PHASE.fullmatch(pid):
-            used.add(int(pid[1:]))
-    return f"P{_smallest_free_suffix(used):02d}"
-
-
-def allocate_next_iter_id(phase_id: str, existing: set[str]) -> str:
-    """Return the smallest free iter ID under ``phase_id`` not in ``existing``.
-
-    Raises:
-        ValueError: When ``phase_id`` is not a valid phase ID, or when
-            all 99 iter suffixes are taken.
-    """
-    if not is_phase_id(phase_id):
-        raise ValueError(f"invalid phase id: {phase_id!r}")
-    used: set[int] = set()
-    prefix = f"{phase_id}-I"
-    for iid in existing:
-        if iid.startswith(prefix) and is_iter_id(iid):
-            used.add(int(iid[len(prefix) :]))
-    return f"{phase_id}-I{_smallest_free_suffix(used):02d}"
-
-
-def allocate_next_wave_id(iter_id: str, existing: set[str]) -> str:
-    """Return the smallest free wave ID under ``iter_id`` not in ``existing``.
-
-    Raises:
-        ValueError: When ``iter_id`` is not a valid iter ID, or when
-            all 99 wave suffixes are taken.
-    """
-    if not is_iter_id(iter_id):
-        raise ValueError(f"invalid iter id: {iter_id!r}")
-    used: set[int] = set()
-    prefix = f"{iter_id}-W"
-    for wid in existing:
-        if wid.startswith(prefix) and is_wave_id(wid):
-            used.add(int(wid[len(prefix) :]))
-    return f"{iter_id}-W{_smallest_free_suffix(used):02d}"

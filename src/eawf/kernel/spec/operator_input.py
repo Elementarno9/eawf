@@ -29,7 +29,7 @@ balanced-autonomy control plane that ride on top of that campaign:
 Both halves are pure: they perform no I/O, mutate nothing, and never
 raise on the read path (a paused input, a locked override, a blocked
 state are all *data* on the returned value, not exceptions). The round
-loop / orchestrator / ``eawf research status`` surface consumes the
+loop / orchestrator / the retired ``research status`` verb surface consumes the
 reduced values; this module never spawns, opens a session, or writes
 state.
 
@@ -472,7 +472,7 @@ class DomainProgress(BaseModel):
     One row per research domain in the campaign. The projection reduces
     the per-domain table into the campaign-wide
     :class:`CampaignProgressKind`; this row is the per-domain detail the
-    ``eawf research status`` surface renders under the campaign state.
+    the retired ``research status`` verb surface renders under the campaign state.
 
     Attributes:
         domain: The research-domain name (matches the
@@ -502,7 +502,7 @@ class CampaignProgressState:
     :class:`~eawf.kernel.spec.saturation.SaturationReport`: a pure
     projection (no I/O, no mutation, no raise on the read path) that folds
     the inputs into a single closed state plus the explaining detail. The
-    ``eawf research status`` feed and the cockpit right-pane bands consume
+    the retired ``research status`` verb feed and the cockpit right-pane bands consume
     the reduced value.
 
     Attributes:

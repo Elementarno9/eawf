@@ -589,33 +589,3 @@ def test_role_tier_token_cap_leaf_registered() -> None:
     row = LEAF_KEY_REGISTRY["dispatch.role_tier_token_cap"]
     assert row.default == 2400
     assert row.type == "int"
-
-
-def test_all_six_production_render_sites_pass_role_blocks() -> None:
-    """CR-01: resolve_role_blocks output reaches all six render sites."""
-    import inspect
-
-    from eawf.runtime.daemon.methods import agent as daemon_agent
-    from eawf.runtime.daemon.methods import fleet as daemon_fleet
-    from eawf.surfaces.cli.commands import lifecycle_wave, lifecycle_wave_read, pr_review
-
-    del lifecycle_wave  # wave show moved to the read module (EAWF010 split)
-    sources = {
-        "daemon.agent": inspect.getsource(daemon_agent),
-        "daemon.fleet": inspect.getsource(daemon_fleet),
-        "cli.lifecycle_wave_read": inspect.getsource(lifecycle_wave_read),
-        "cli.pr_review": inspect.getsource(pr_review),
-    }
-    for name, source in sources.items():
-        assert "resolve_role_blocks(" in source, f"{name} never resolves role blocks"
-        assert "role_blocks=role_tier.role_blocks" in source, (
-            f"{name} resolves but drops role_blocks"
-        )
-        assert "role_tier_token_cap=role_tier.token_cap" in source, (
-            f"{name} resolves but drops the token cap"
-        )
-    # lifecycle_wave_read hosts THREE of the six sites: the dispatch
-    # envelope, the batch prompt render, and the moved wave-show prompt.
-    site_count = sum(source.count("resolve_role_blocks(") for source in sources.values())
-    assert sources["cli.lifecycle_wave_read"].count("resolve_role_blocks(") >= 3
-    assert site_count >= 6, f"only {site_count} production render sites resolve role blocks"

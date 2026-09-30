@@ -61,9 +61,6 @@ from tests._criteria_helpers import legacy_criteria
 from tests._session_helpers import (
     claim_wave_with_session as claim_wave,
 )
-from tests._session_helpers import (
-    seed_active_session_on_disk,
-)
 from tests.conftest import make_claim_criterion, make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
@@ -1328,83 +1325,6 @@ def test_legacy_path_unchanged_under_w08(tmp_path: Path) -> None:
     assert all(view.source == "legacy" for view in result.criteria)
     assert len(result.warnings) == 2
     assert all("not gated" in w for w in result.warnings)
-
-
-def test_seams_dont_block_on_failing_deterministic_gate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """SC #5: the 3 close seams stay non-blocking under W08's deterministic floor.
-
-    Uses :class:`typer.testing.CliRunner` to drive ``eawf wave close``
-    end-to-end with a deterministic gate whose live argv exit-codes
-    non-zero. The W06 advisory contract (the close seams attach
-    readiness as **advisory**, never blocking) must survive the W08
-    integration — ``ready=False`` from the readiness compute does
-    not raise out of ``_close_and_pin``.
-    """
-    from typer.testing import CliRunner
-
-    from eawf.surfaces.cli.app import app
-
-    _init_test_repo(tmp_path)
-    state_path = tmp_path / ".ea" / "state.json"
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    runner = CliRunner()
-    assert (
-        runner.invoke(
-            app,
-            ["project", "init", "VFY", "--title", "V", "--domains", "x"],
-        ).exit_code
-        == 0
-    )
-    assert runner.invoke(app, ["phase", "open", "--auto", "--title", "x"]).exit_code == 0
-    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I"]).exit_code == 0
-    assert (
-        runner.invoke(
-            app,
-            [
-                "wave",
-                "plan",
-                "P01-I01",
-                "--id",
-                WAVE_ID,
-                "--title",
-                "wave",
-                "--files",
-                "src/",
-                "--success",
-                "legacy criterion fixture text",
-                "--criteria-floor-waiver",
-                "test fixture models a migration-era legacy wave",
-                "--effort-bucket",
-                "M",
-            ],
-        ).exit_code
-        == 0
-    )
-    seed_active_session_on_disk(state_path, session_id="SES-w08")
-    assert runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", "SES-w08"]).exit_code == 0
-
-    # Inject a deterministic criterion + failing gate at the live
-    # close seam by monkeypatching the loaders on the readiness
-    # module the seam imports.
-    criterion = _make_deterministic_criterion("CRIT-seam-fail", gate_ids=["GATE-seam-fail"])
-    gate = _make_command_gate(
-        "GATE-seam-fail",
-        criterion_id="CRIT-seam-fail",
-        argv=["git", "show", "no-such-ref-w08-seam"],
-    )
-    monkeypatch.setattr(
-        readiness_mod,
-        "_load_criterion_specs",
-        lambda scope_id, state_arg: [criterion],
-    )
-    monkeypatch.setattr(readiness_mod, "_load_gate_specs", lambda scope_id, state_arg: [gate])
-
-    # Close path must succeed even though readiness will report
-    # ready=False because the deterministic gate fails live.
-    result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])
-    assert result.exit_code == 0, result.stdout
 
 
 # ---- resolve_wave_verify_block: verdict-always band narrowing ----------

@@ -49,7 +49,15 @@ from eawf.workflow.release.train_store import (
     record_checkpoint_receipt,
     train_advances_path,
 )
+from tests._epoch2_helpers import lay_epoch2_tree
 from tests._release_helpers import dev1_adoption, dev1_config, dev1_draft
+
+
+@pytest.fixture(autouse=True)
+def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every CLI verb here from an epoch-2 tree, as the flag day requires."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "epoch2")))
+
 
 pytestmark = pytest.mark.integration
 

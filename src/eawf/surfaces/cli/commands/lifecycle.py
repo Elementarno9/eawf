@@ -66,36 +66,23 @@ target) exit 3, and anything that is genuinely a missing scope/state exits 2.
 from __future__ import annotations
 
 import logging
-import os
-import secrets
-import subprocess
 import uuid
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import orjson
 import typer
 
-from eawf.kernel.migrations import current_target_version
 from eawf.kernel.state.enums import (
     CloseFailureKind,
-    ScopeKind,
-)
-from eawf.kernel.state.ids import (
-    is_iter_id,
 )
 from eawf.kernel.state.io import (
-    StateValidationError,
     append_event,
     build_event_envelope,
     commit_mutation,
     fallback_wal_dir,
     state_version,
-    write_state_unlocked,
 )
-from eawf.kernel.state.urn import build as build_urn
-from eawf.runtime.lock import portalock
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -103,7 +90,6 @@ from eawf.surfaces.cli.scope import resolve_state_path
 
 if TYPE_CHECKING:
     from eawf.kernel.state.models import State
-    from eawf.kernel.state.mutations import MutationKind
 
 logger = logging.getLogger(__name__)
 
@@ -209,13 +195,6 @@ def _validate_or_raise(payload: dict[str, Any]) -> State:
     return report.state
 
 
-# State-write primitives moved to :mod:`eawf.kernel.state.io` (the library) so the
-# CLI layer stays thin dispatch per the "CLI is dispatch; library implements"
-# rule. Re-exported here under their historical private names so the sibling
-# command modules (``lifecycle_iter`` / ``lifecycle_phase`` /
-# ``lifecycle_wave_read``) and ``tests/property/test_wave_claim_property``
-# keep importing them from this module unchanged.
-_write_state_unlocked = write_state_unlocked
 _state_version = state_version
 _build_event_envelope = build_event_envelope
 _append_event = append_event
@@ -223,144 +202,9 @@ _fallback_wal_dir = fallback_wal_dir
 _commit_mutation = commit_mutation
 
 
-def _empty_state_dict(*, project_code: str, project_payload: dict[str, Any]) -> dict[str, Any]:
-    """Build a minimal-but-valid state.json payload for ``project init``."""
-    return {
-        "schema_version": current_target_version(),
-        "scope_kind": ScopeKind.REPO.value,
-        "urn": build_urn("state", owner=project_code),
-        "updated_at": datetime.now(UTC).isoformat(),
-        "project": project_payload,
-        "current": {
-            "project_code": project_code,
-            "track_id": None,
-            "phase_id": None,
-            "iter_id": None,
-            "active_wave_ids": [],
-            "active_session_ids": [],
-        },
-        "workspace": None,
-        "phases": {},
-        "iters": {},
-        "waves": {},
-        "artifacts": {},
-        "agent_sessions": {},
-        "plugins": {},
-        "indexes": {},
-    }
-
-
-def _atomic_write_text(path: Path, content: str) -> None:
-    """Write *content* to *path* atomically.
-
-    Uses ``tempfile``-style suffix + :func:`os.replace` so partial writes
-    are never visible to a peer reader. The parent directory is created
-    if it is missing.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    suffix = secrets.token_hex(4)
-    tmp = path.with_name(f"{path.name}.tmp.{suffix}")
-    try:
-        with tmp.open("w", encoding="utf-8") as fh:
-            fh.write(content)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, path)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
 # ---- Wave git / commit-ref helpers ------------------------------------------
 
 _GIT_REV_PARSE_TIMEOUT_SECONDS: float = 5.0
-
-
-def _resolve_repo_root_for_drift(workspace: Path | None) -> Path | None:
-    """Return the repo root for the criterion-drift advisory, or ``None``.
-
-    The drift check needs a path on disk to glob against. Two cases:
-
-    1. Canonical layout — ``.ea/state.json`` sits at ``<repo>/.ea/state.json``;
-       ``state_path.parent.parent`` is the repo root and contains ``.git``.
-    2. ``EA_STATE`` override — state file lives outside any repo (test
-       fixture, scratch dir, etc.); ``parent.parent`` is not the repo root.
-       Falls back to ``git rev-parse --show-toplevel``; returns ``None`` when
-       that also fails (no git context at all).
-    """
-    try:
-        state_path = resolve_state_path(workspace)
-    except OSError, ValueError:
-        return None
-    candidate = state_path.parent.parent
-    if (candidate / ".git").exists():
-        return candidate
-    try:
-        out = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            timeout=_GIT_REV_PARSE_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired, OSError:
-        return None
-    if out.returncode != 0:
-        return None
-    top = out.stdout.strip()
-    if not top:
-        return None
-    return Path(top)
-
-
-def _resolve_commit_sha(ref: str) -> str:
-    """Resolve *ref* to a canonical 40-char hex commit SHA via ``git rev-parse``.
-
-    Accepts any ref ``git rev-parse`` understands: full SHA, short SHA,
-    branch tip, tag, ``HEAD``-relative ref. The ``^{commit}`` suffix
-    forces resolution to a commit object rather than a tag or tree.
-
-    Args:
-        ref: User-supplied ref to normalise.
-
-    Returns:
-        The 40-char lowercase hex commit SHA.
-
-    Raises:
-        cli_errors.UserError: If git is not on ``PATH``, the
-            subprocess times out, or the ref does not resolve to a
-            commit on any branch (``kind="InvalidInput"``).
-    """
-    cmd = ["git", "rev-parse", f"{ref}^{{commit}}"]
-    try:
-        out = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=_GIT_REV_PARSE_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        logger.debug(f"resolve_commit_sha ref={ref!r} status=timeout")
-        raise cli_errors.UserError(
-            f"cannot resolve commit ref: {ref!r} (git rev-parse timed out)", kind="InvalidInput"
-        ) from exc
-    except (FileNotFoundError, OSError) as exc:
-        logger.debug(f"resolve_commit_sha ref={ref!r} status=os-error err={exc!s}")
-        raise cli_errors.UserError(
-            f"cannot resolve commit ref: {ref!r} (git unavailable: {exc!s})", kind="InvalidInput"
-        ) from exc
-    if out.returncode != 0:
-        logger.debug(f"resolve_commit_sha ref={ref!r} status=non-zero rc={out.returncode}")
-        raise cli_errors.UserError(f"cannot resolve commit ref: {ref!r}", kind="InvalidInput")
-    sha = out.stdout.strip()
-    if len(sha) != 40 or not all(c in "0123456789abcdef" for c in sha):
-        logger.debug(f"resolve_commit_sha ref={ref!r} status=non-canonical sha={sha!r}")
-        raise cli_errors.UserError(
-            f"cannot resolve commit ref: {ref!r} (got non-canonical sha: {sha!r})",
-            kind="InvalidInput",
-        )
-    logger.info(f"resolve_commit_sha ref={ref!r} sha={sha}")
-    return sha
 
 
 def _close_failure_kind(exc: BaseException) -> CloseFailureKind:
@@ -467,7 +311,7 @@ def _wave_close_via_daemon(
         cli_errors.emit_error(
             cli_errors.DaemonMutationIndeterminate(
                 f"close RPC timed out: the close of wave {wave_id!r} may still be "
-                "running in the daemon; re-check with 'eawf wave show' before retrying"
+                "running in the daemon; re-check with 'eawf status' before retrying"
             ),
             flags=flags,
             data={
@@ -498,60 +342,6 @@ def _wave_close_via_daemon(
     return True
 
 
-def _wave_close_async_via_daemon(
-    *,
-    flags: GlobalFlags,
-    wave_id: str,
-    outcome: str,
-    resolved_sha: str | None,
-    commit_identity_digest: str | None,
-    tokens_consumed: int | None,
-    no_runtime_waiver: bool,
-    wait: bool,
-) -> bool:
-    """Submit durable close work and optionally wait for its terminal state."""
-    from eawf.surfaces.cli.commands.close import (
-        call_close_rpc,
-        render_close_status,
-        wait_for_close,
-    )
-
-    try:
-        result = call_close_rpc(
-            method="close.submit",
-            params={
-                "wave_id": wave_id,
-                "outcome": outcome,
-                "commit": resolved_sha,
-                "commit_identity_digest": commit_identity_digest,
-                "tokens_consumed": tokens_consumed,
-                "no_runtime_waiver": no_runtime_waiver,
-            },
-            flags=flags,
-        )
-        if wait:
-            result = wait_for_close(
-                ref=result["attempt"]["id"],
-                flags=flags,
-            )
-    except cli_errors.CliError as exc:
-        cli_errors.emit_error(
-            exc,
-            flags=flags,
-            data={
-                "wave": wave_id,
-                "failure_kind": _close_failure_kind(exc).value,
-            },
-        )
-        return True
-
-    emit_json_or_text(result, render_close_status(result), flags=flags)
-    status = result["attempt"]["status"]
-    if wait and status != "closed":
-        raise typer.Exit(code=3)
-    return True
-
-
 # ---- Read-only state loaders ------------------------------------------------
 
 
@@ -577,7 +367,7 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
     if not state_path.exists():
         cli_errors.emit_error(
             cli_errors.UserError(
-                f"state file not found: {state_path}; run `eawf project init`", kind="NotFound"
+                f"state file not found: {state_path}; run `eawf repository create`", kind="NotFound"
             ),
             flags=flags,
         )
@@ -596,261 +386,7 @@ def _load_state_readonly(ctx: typer.Context) -> tuple[State, GlobalFlags] | None
     return state, flags
 
 
-def _resolve_iter_for_query(
-    state: State,
-    flags: GlobalFlags,
-    *,
-    iter_flag: str | None,
-) -> str | None:
-    """Pick the target iter for a read-only DAG verb.
-
-    Precedence: explicit ``--iter`` > ``state.current.iter_id``. Returns
-    ``None`` after emitting the canonical envelope when neither is set
-    (the caller treats ``None`` as "exit raised").
-    """
-    if iter_flag is not None:
-        if not is_iter_id(iter_flag):
-            cli_errors.emit_error(
-                cli_errors.UserError(f"invalid iter id: {iter_flag!r}", kind="InvalidInput"),
-                flags=flags,
-            )
-            return None
-        if iter_flag not in state.iters:
-            cli_errors.emit_error(
-                cli_errors.UserError(f"unknown iter {iter_flag!r}", kind="InvalidInput"),
-                flags=flags,
-            )
-            return None
-        return iter_flag
-    if state.current.iter_id is not None:
-        return state.current.iter_id
-    cli_errors.emit_error(
-        cli_errors.UserError(
-            "no --iter given and state.current.iter_id is unset; specify --iter",
-            kind="InvalidInput",
-        ),
-        flags=flags,
-    )
-    return None
-
-
 # ---- Mutation runner --------------------------------------------------------
-
-
-def _wrap_no_return(_value: object) -> None:
-    """Adapter so transition helpers can be passed directly to ``mutate=``."""
-    return None
-
-
-def _run_mutation(
-    ctx: typer.Context,
-    *,
-    command: str,
-    args: dict[str, Any],
-    mutate: Any,
-    scope_id: str | None = None,
-    scope_id_factory: Any = None,
-    text: str | None = None,
-    text_factory: Any = None,
-    envelope: Any = None,
-    envelope_factory: Any = None,
-    extras_factory: Any = None,
-    result_callback: Any = None,
-    lock_free_preflight: Any = None,
-    preflight_guard_factory: Any = None,
-    closure_kind: bool = False,
-    mutation_kind: MutationKind | None = None,
-    params: dict[str, Any] | None = None,
-) -> None:
-    """Shared transactional path for every mutating handler in this module.
-
-    Per rule 4 + D-SUP-01 the daemon is the canonical writer. When
-    *mutation_kind* is supplied the call routes through the generic
-    :func:`eawf.surfaces.cli._dispatch._mutate_via_daemon` shim — escalate to the
-    daemon, marshal one typed :class:`~eawf.kernel.state.mutations.Mutation`, and
-    fall back to the in-process WAL-backed write only when the daemon is
-    unavailable or predates the kind (the V1 CI/recovery carve-out). Verbs
-    whose transition has no :class:`~eawf.kernel.state.mutations.MutationKind`
-    yet (``wave update`` / ``iter activate`` / ``phase reopen`` /
-    ``wave budget set``·``consume``) omit *mutation_kind* and run the
-    in-process WAL-backed path directly.
-
-    Either *text* + *envelope* (static) or *text_factory* + *envelope_factory*
-    (deferred until after the mutation has resolved auto-allocated ids) must
-    be provided. Likewise either *scope_id* (eager) or *scope_id_factory*
-    (deferred — resolved after ``mutate`` runs so handlers can capture the
-    allocator-returned id rather than a placeholder).
-
-    Args:
-        mutation_kind: When set, the discriminator routed across
-            ``state.mutate``; the daemon owns the transaction and the
-            in-process body becomes the fallback. Verbs that pass this
-            MUST use eager *scope_id* (the fallback resolves the id the
-            same way the daemon's params do).
-        params: Kind-specific param dict carried in :attr:`Mutation.params`
-            on the daemon path. Required when *mutation_kind* is set;
-            ignored otherwise.
-        extras_factory: Optional zero-arg callable evaluated AFTER ``mutate``
-            runs (so it can read holders the mutator populated) returning the
-            advisory extras dict to stamp on the in-process fallback close
-            event -- the channel the daemonless wave-close path uses to thread
-            ``close_mechanism`` onto its event so both close paths agree.
-            ``None`` keeps the historical empty-extras shape.
-        result_callback: Optional callable receiving the committed daemon or
-            fallback result before the command payload renders. Used by
-            commands that surface additive mutation advisories.
-        lock_free_preflight: Optional callable receiving a validated state
-            snapshot before the fallback acquires ``state.json``. Close uses
-            this seam for subprocess-bearing verification.
-        preflight_guard_factory: Optional callable projecting the payload row
-            whose identity binds the lock-free preflight. When state advances,
-            the fallback accepts unrelated changes but rejects a changed
-            projection and asks the caller to retry.
-    """
-    from pydantic import ValidationError as PydValidationError
-
-    from eawf.kernel.state.models import State
-    from eawf.workflow.lifecycle.transitions import LifecycleError
-
-    if (scope_id is None) == (scope_id_factory is None):
-        raise ValueError("exactly one of scope_id or scope_id_factory must be provided")
-    if mutation_kind is not None and scope_id is None:
-        raise ValueError("mutation_kind requires an eager scope_id")
-    if mutation_kind is not None and params is None:
-        raise ValueError("mutation_kind requires params")
-    flags: GlobalFlags = ctx.obj
-    try:
-        state_path = resolve_state_path(flags.workspace)
-    except FileNotFoundError as exc:
-        cli_errors.emit_error(cli_errors.UserError(str(exc), kind="NotFound"), flags=flags)
-        return
-    if not state_path.exists():
-        cli_errors.emit_error(
-            cli_errors.UserError(
-                f"state file not found: {state_path}; run `eawf project init`", kind="NotFound"
-            ),
-            flags=flags,
-        )
-        return
-
-    def _in_process() -> dict[str, Any]:
-        """In-process WAL-backed transaction — the daemon-down fallback."""
-        preflight_version: str | None = None
-        preflight_guard: Any = None
-        if lock_free_preflight is not None:
-            preflight_payload = _read_state_payload(state_path)
-            preflight_version = state_version(preflight_payload)
-            try:
-                preflight_state = State.model_validate(preflight_payload)
-            except PydValidationError as exc:
-                raise cli_errors.StateConflict(
-                    f"state at {state_path} fails schema validation: {exc}",
-                    kind="IntegrityViolation",
-                ) from exc
-            try:
-                lock_free_preflight(preflight_state)
-            except LifecycleError as exc:
-                if closure_kind:
-                    raise cli_errors.ValidationError(str(exc)) from exc
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            except (PydValidationError, ValueError) as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            if preflight_guard_factory is not None:
-                preflight_guard = preflight_guard_factory(preflight_payload)
-
-        with portalock.acquire(state_path, timeout=5.0):
-            payload = _read_state_payload(state_path)
-            before_version = state_version(payload)
-            if preflight_version is not None and before_version != preflight_version:
-                current_guard = (
-                    preflight_guard_factory(payload)
-                    if preflight_guard_factory is not None
-                    else None
-                )
-                if preflight_guard_factory is None or current_guard != preflight_guard:
-                    raise cli_errors.StateConflict(
-                        "close_preflight_stale: target state changed during "
-                        "lock-free preflight; retry the close",
-                        kind="LockConflict",
-                    )
-            try:
-                state = State.model_validate(payload)
-            except PydValidationError as exc:
-                raise cli_errors.StateConflict(
-                    f"state at {state_path} fails schema validation: {exc}",
-                    kind="IntegrityViolation",
-                ) from exc
-            try:
-                mutate(state)
-            except LifecycleError as exc:
-                if closure_kind:
-                    raise cli_errors.ValidationError(str(exc)) from exc
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            except (PydValidationError, ValueError) as exc:
-                raise cli_errors.UserError(str(exc), kind="InvalidInput") from exc
-            state.updated_at = datetime.now(UTC)
-            resolved_scope_id = scope_id if scope_id is not None else scope_id_factory()
-            # ``extras_factory`` runs after ``mutate`` so the close handler's
-            # daemonless-waiver mechanism (resolved inside the mutator) lands on
-            # the event row; ``None`` keeps the empty-extras shape.
-            commit_extras = extras_factory() if extras_factory is not None else None
-            # The library writer raises ``StateValidationError`` for a
-            # post-apply invariant rejection; map it onto the CLI
-            # ``ValidationError`` bucket (exit 2) so the surrounding
-            # ``except cli_errors.CliError`` clause below surfaces it.
-            try:
-                return commit_mutation(
-                    state_path,
-                    candidate=state,
-                    before_version=before_version,
-                    command=command,
-                    args=args,
-                    scope_id=resolved_scope_id,
-                    summary=command,
-                    extras=commit_extras,
-                )
-            except StateValidationError as exc:
-                raise cli_errors.ValidationError(str(exc)) from exc
-
-    # Route through the daemon only when proxying is enabled in the merged
-    # config (the post-P24-W10 default). The V1 carve-out
-    # (``daemon.proxy_enabled=false`` or ``EAWF_DAEMONLESS=1``) runs the
-    # in-process WAL-backed path directly — mirroring ``wave_close_cmd`` so
-    # the ``EAWF_DAEMONLESS`` env hatch routes to the fallback rather than
-    # hitting the mutating-verb hard-reject inside ``escalate_mutation``.
-    from eawf.surfaces.cli._mutation import _proxy_enabled
-
-    proxy = mutation_kind is not None and _proxy_enabled(flags.workspace)
-    try:
-        if proxy:
-            assert mutation_kind is not None  # narrowed by ``proxy``
-            assert scope_id is not None  # guarded above
-            assert params is not None  # guarded above
-            from eawf.surfaces.cli._dispatch import _mutate_via_daemon
-
-            mutation_result = _mutate_via_daemon(
-                mutation_kind,
-                params,
-                flags,
-                scope_id=scope_id,
-                verb=command,
-                fallback=_in_process,
-            )
-        else:
-            mutation_result = _in_process()
-    except portalock.LockTimeout as exc:
-        cli_errors.emit_error(cli_errors.StateConflict(str(exc), kind="LockConflict"), flags=flags)
-        return
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-        return
-
-    if result_callback is not None:
-        result_callback(mutation_result)
-
-    final_text = text if text is not None else text_factory()
-    final_payload = envelope() if envelope is not None else envelope_factory()
-    emit_json_or_text(final_payload, final_text, flags=flags)
 
 
 # ---- Command registration ---------------------------------------------------
@@ -864,24 +400,7 @@ from eawf.surfaces.cli.commands import (  # noqa: E402
     domain_integration as _domain_integration,  # noqa: F401
 )
 from eawf.surfaces.cli.commands import domain_legacy as _domain_legacy  # noqa: E402, F401
-from eawf.surfaces.cli.commands import lifecycle_iter as _lifecycle_iter  # noqa: E402
-from eawf.surfaces.cli.commands import lifecycle_phase as _lifecycle_phase  # noqa: E402
-from eawf.surfaces.cli.commands import lifecycle_wave as _lifecycle_wave  # noqa: E402, F401
-from eawf.surfaces.cli.commands import (  # noqa: E402
-    lifecycle_wave_prune as _lifecycle_wave_prune,  # noqa: F401
-)
-from eawf.surfaces.cli.commands import (  # noqa: E402
-    lifecycle_wave_read as _lifecycle_wave_read,  # noqa: F401
-)
 from eawf.surfaces.cli.commands import track as _track  # noqa: E402, F401
-
-# Re-export sibling-owned helpers so existing import sites keep resolving
-# them from this module (``tests/unit/test_iter_bump_hint.py`` imports
-# ``_compute_iter_bump_hints``; ``tests/unit/test_lifecycle_phase_prepare_close.py``
-# imports ``_phase_prepare_close_checklist``).
-_compute_iter_bump_hints = _lifecycle_iter._compute_iter_bump_hints
-_phase_prepare_close_checklist = _lifecycle_phase._phase_prepare_close_checklist
-
 
 # ---- Re-exports -------------------------------------------------------------
 

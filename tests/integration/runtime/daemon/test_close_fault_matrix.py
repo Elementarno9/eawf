@@ -1159,34 +1159,6 @@ def test_typed_worker_fault_persists_its_exact_failure_kind(
     assert final.waves[_WAVE].status is WaveStatus.CLAIMED
 
 
-def test_operator_cancel_persists_operator_cancelled(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The cancel RPC is the only producer of ``operator_cancelled``."""
-    repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(close_module, "schedule_attempt", lambda *_args, **_kwargs: False)
-    close_module._SHUTTING_DOWN = False
-    attempt_id = _submit_unscheduled(ctx, repo=repo, state_path=state_path, retry_budget=1)
-
-    async def _cancel() -> dict[str, Any]:
-        return await close_module.cancel(
-            ctx,
-            {
-                "ref": attempt_id,
-                "repo_root": str(repo),
-                "reason": "operator aborted the close",
-            },
-        )
-
-    result = asyncio.run(_cancel())
-
-    assert result["attempt"]["status"] == CloseAttemptStatus.CANCELLED.value
-    row = _persisted_attempt_row(state_path, attempt_id)
-    assert row["failure_kind"] == CloseFailureKind.OPERATOR_CANCELLED.value
-    assert row["terminal_at"] is not None
-
-
 def test_harness_fault_still_spends_the_infrastructure_retry_budget(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

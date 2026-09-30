@@ -1,16 +1,18 @@
 """REL-021: every epoch-1 verb has a flag-day disposition, read from the live CLI tree.
 
-The census walks the mounted command tree rather than a hand-kept list, so a
-verb added to an epoch-1 command module without a disposition fails here: it
-either names the epoch-2 verb that replaces it (or that it retired), or it is
-a read that keeps working after the flag day.
+After the flag day the only epoch-1 verbs left on the tree are the
+migration-support verbs a tree needs to reach the cutover, each naming its
+epoch-2 replacement in :data:`EPOCH1_REPLACEMENTS`. Every other epoch-1 verb
+was removed and sits in :data:`RETIRED_VERBS`, where the root group answers it
+with the verb that replaces it or with ``eawf migrate epoch2 --plan``. The
+census walks the mounted command tree rather than a hand-kept list, so a verb
+added to an epoch-1 command module without a disposition fails here.
 """
 
 from __future__ import annotations
 
 import inspect
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Final
 
 import click
@@ -20,86 +22,21 @@ from pydantic import ValidationError
 
 from eawf.surfaces.cli import flag_day_gate
 from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.flag_day import EPOCH1_REPLACEMENTS, replacement_guidance
+from eawf.surfaces.cli.flag_day import (
+    EPOCH1_REPLACEMENTS,
+    RETIRED_VERBS,
+    replacement_guidance,
+    retired_verb,
+)
 from eawf.surfaces.cli.verb_catalog import CLI_VERB_EFFECTS
 
 pytestmark = pytest.mark.contract
 
 _COMMANDS: Final = "eawf.surfaces.cli.commands."
 
-#: The handler modules whose verbs act on epoch-1 state.
+#: The handler modules that still carry epoch-1 verbs.
 EPOCH1_MODULES: Final = frozenset(
-    f"{_COMMANDS}{name}"
-    for name in (
-        "agent_report",
-        "backfill",
-        "close",
-        "dispatch",
-        "draft",
-        "estimation",
-        "evidence",
-        "evidence_artifact",
-        "evidence_backlog",
-        "evidence_hypothesis",
-        "evidence_incident",
-        "flow",
-        "lifecycle_iter",
-        "lifecycle_phase",
-        "lifecycle_wave",
-        "lifecycle_wave_prune",
-        "lifecycle_wave_read",
-        "pr_review",
-        "research",
-        "roadmap",
-        "session",
-        "spec",
-        "state",
-        "wave_ci",
-        "wave_policy",
-        "worktree",
-    )
-)
-
-#: Epoch-1 verbs that write nothing epoch-1, so they keep working after the flag day.
-EPOCH1_READS: Final = frozenset(
-    {
-        "agent-report list",
-        "agent-report show",
-        "artifact show",
-        "artifact validate",
-        "artifact verify",
-        "audit list",
-        "audit show",
-        "close follow",
-        "close status",
-        "decision graph",
-        "decision list",
-        "draft new",
-        "draft validate",
-        "flow status",
-        "hypothesis list",
-        "incident view",
-        "operator rollup",
-        "phase retro",
-        "question list",
-        "research show",
-        "research status",
-        "roadmap show",
-        "spec show",
-        "spec validate",
-        "state resolve",
-        "state show",
-        "wave archive-refs",
-        "wave budget show",
-        "wave graph",
-        "wave integration show",
-        "wave next-ready",
-        "wave policy show",
-        "wave prune-branches",
-        "wave show",
-        "wave waivers",
-        "worktree list",
-    }
+    f"{_COMMANDS}{name}" for name in ("research", "session", "worktree")
 )
 
 #: Research campaign verbs write their own append-only store, which the
@@ -135,39 +72,45 @@ def test_rel_021_every_epoch1_verb_has_exactly_one_disposition(
     leaves: dict[str, click.Command],
 ) -> None:
     epoch1 = {path for path, cmd in leaves.items() if _handler_module(cmd) in EPOCH1_MODULES}
-    dispositions = (set(EPOCH1_REPLACEMENTS), EPOCH1_READS, EPOCH1_CARRIED)
+    dispositions = (set(EPOCH1_REPLACEMENTS), EPOCH1_CARRIED)
     unclassified = sorted(p for p in epoch1 if not any(p in d for d in dispositions))
-    doubled = sorted(p for p in epoch1 if sum(p in d for d in dispositions) > 1)
     assert unclassified == [], "epoch-1 verbs with no flag-day disposition"
-    assert doubled == []
+    assert set(EPOCH1_REPLACEMENTS) <= flag_day_gate.exempt_verbs()
 
 
-def test_rel_021_every_census_row_names_a_live_epoch1_verb(
+def test_rel_021_every_live_row_names_a_live_epoch1_verb(
     leaves: dict[str, click.Command],
 ) -> None:
-    rows = set(EPOCH1_REPLACEMENTS) | EPOCH1_READS | EPOCH1_CARRIED
+    rows = set(EPOCH1_REPLACEMENTS) | EPOCH1_CARRIED
     assert sorted(rows - set(leaves)) == []
     assert sorted(p for p in rows if _handler_module(leaves[p]) not in EPOCH1_MODULES) == []
 
 
-def test_rel_021_every_replacement_is_a_live_epoch2_verb(
-    leaves: dict[str, click.Command],
-) -> None:
-    replacements = {r for r in EPOCH1_REPLACEMENTS.values() if r is not None}
+def test_rel_021_no_retired_verb_is_on_the_tree(leaves: dict[str, click.Command]) -> None:
+    assert sorted(set(RETIRED_VERBS) & set(leaves)) == []
+    assert sorted(set(RETIRED_VERBS) & set(EPOCH1_REPLACEMENTS)) == []
+    assert sorted(set(RETIRED_VERBS) & set(CLI_VERB_EFFECTS)) == []
+
+
+def test_rel_021_every_replacement_is_a_live_verb(leaves: dict[str, click.Command]) -> None:
+    replacements = {
+        r for table in (EPOCH1_REPLACEMENTS, RETIRED_VERBS) for r in table.values() if r is not None
+    }
     assert sorted(replacements - set(leaves)) == []
     assert sorted(r for r in replacements if _handler_module(leaves[r]) in EPOCH1_MODULES) == []
 
 
 def test_rel_021_guidance_names_the_replacement_verb() -> None:
     assert replacement_guidance("wave claim") == (
-        "run `eawf task claim` instead, the epoch-2 verb that replaces `eawf wave claim`"
+        "run `eawf task claim` instead, the verb that replaces `eawf wave claim`"
     )
 
 
-def test_rel_021_guidance_says_a_retired_verb_has_no_replacement() -> None:
-    assert EPOCH1_REPLACEMENTS["wave release"] is None
+def test_rel_021_guidance_points_a_verb_with_no_replacement_at_the_migration_plan() -> None:
+    assert RETIRED_VERBS["wave release"] is None
     assert replacement_guidance("wave release") == (
-        "`eawf wave release` retired at the flag day and no epoch-2 verb replaces it"
+        "no epoch-2 verb replaces `eawf wave release`; inspect or migrate an epoch-1 tree "
+        "with `eawf migrate epoch2 --plan`"
     )
 
 
@@ -178,6 +121,22 @@ def test_rel_021_guidance_for_a_path_outside_the_census_points_at_the_native_nou
     assert replacement_guidance(path) == (
         "use the epoch-2 verbs instead (eawf milestone|batch|task|run --help)"
     )
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (("wave", "budget", "show", "P01"), "wave budget show"),
+        (("wave", "claim", "P01-I01-W01"), "wave claim"),
+        (("state", "show"), "state show"),
+        (("task", "claim"), None),
+        ((), None),
+    ],
+)
+def test_rel_021_retired_verb_matches_the_longest_retired_path(
+    args: tuple[str, ...], expected: str | None
+) -> None:
+    assert retired_verb(args) == expected
 
 
 # ---- REL-021: the plain-epoch-1-tree gate ------------------------------------
@@ -271,16 +230,3 @@ def test_auth_049_the_workspace_pointer_verbs_are_gone(leaves: dict[str, click.C
     }
     assert sorted(retired & set(leaves)) == []
     assert sorted(retired & set(CLI_VERB_EFFECTS)) == []
-
-
-#: How many modules may lift the gate today; the number only goes down.
-EPOCH1_CLI_SURFACE_CEILING: Final = 91
-
-
-def test_rel_021_the_epoch1_cli_surface_list_only_shrinks() -> None:
-    from tests._epoch1_cli_surface import EPOCH1_CLI_SURFACE_MODULES
-
-    root = Path(__file__).resolve().parents[4]
-    assert len(EPOCH1_CLI_SURFACE_MODULES) <= EPOCH1_CLI_SURFACE_CEILING
-    assert sorted(m for m in EPOCH1_CLI_SURFACE_MODULES if not (root / m).is_file()) == []
-    assert not any("rel_021" in m for m in EPOCH1_CLI_SURFACE_MODULES)

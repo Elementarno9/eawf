@@ -34,11 +34,11 @@ Idempotence key: `(event_type, scope_id, occurred_at)`. The runner / CLI handler
 | `session_start`  | New agent session opens (Claude `SessionStart`)               | `{ "session_id": str, "cwd": str }`                                                                      |
 | `session_end`    | Agent session closes (Claude `Stop` / `SessionEnd`)           | `{ "session_id": str, "duration_s": float }`                                                             |
 | `wave_open`      | `eawf wave open <wave>` succeeds                              | `{ "wave_id": str, "iter_id": str }`                                                                     |
-| `wave_close`     | `eawf wave close <wave>` succeeds                             | `{ "wave_id": str, "result": str }`                                                                      |
-| `iter_open`      | `eawf iter open <iter>` succeeds                              | `{ "iter_id": str, "phase_id": str }`                                                                    |
-| `iter_close`     | `eawf iter close <iter>` succeeds                             | `{ "iter_id": str, "verdict": str }`                                                                     |
-| `phase_open`     | `eawf phase open <phase>` succeeds                            | `{ "phase_id": str }`                                                                                    |
-| `phase_close`    | `eawf phase close <phase>` succeeds                           | `{ "phase_id": str, "outcome": str }`                                                                    |
+| `wave_close`     | `eawf task complete` succeeds                             | `{ "wave_id": str, "result": str }`                                                                      |
+| `iter_open`      | `eawf batch create` succeeds                              | `{ "iter_id": str, "phase_id": str }`                                                                    |
+| `iter_close`     | `eawf batch complete` succeeds                             | `{ "iter_id": str, "verdict": str }`                                                                     |
+| `phase_open`     | `eawf milestone create` succeeds                            | `{ "phase_id": str }`                                                                                    |
+| `phase_close`    | `eawf milestone accept` succeeds                           | `{ "phase_id": str, "outcome": str }`                                                                    |
 | `permission_request` | The host holds a tool call for its operator (Claude `PermissionRequest`) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_input": dict }` |
 | `pre_tool_use` | The host is about to run a tool call (Claude `PreToolUse`, every tool) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_input": dict, "tool_use_id": str }` |
 | `post_tool_use` | The host ran a tool call (Claude `PostToolUse`, every tool) | `{ "session_id": str, "agent_id": str?, "tool_name": str, "tool_use_id": str, "tool_response": any }` |

@@ -72,19 +72,3 @@ def link_inline_citations(prose: str) -> str:
         *prose* with each bare inline ``[N]`` marker linked to its row anchor.
     """
     return linkify_citations(prose)
-
-
-def render_provenance(*, kind: str, record_id: str, scope_id: str | None) -> list[str]:
-    """Render provenance block for a store-backed artifact."""
-    return [
-        "## Provenance",
-        "",
-        f"- kind: {kind}",
-        f"- record_id: {record_id}",
-        f"- scope_id: {scope_id or '-'}",
-    ]
-
-
-def render_scrub_status(*, status: str = "clean") -> list[str]:
-    """Render scrub block."""
-    return ["## Scrub", "", f"- status: {status}"]

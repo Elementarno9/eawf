@@ -10,34 +10,23 @@ Drop these files from Eä defaults:
 - `DECISIONS.md`
 - `BACKLOG.md`
 
-Everything operational is available from `eawf` reading the active Eä
-state: workspace-level by default, repo sub-state when enabled.
+Everything operational is available from `eawf` reading the active Eä state: workspace-level by default, repo sub-state when enabled.
 
 ## Replacements
 
 ```bash
 eawf status                  # Shows current project / subproject / phase / iter / waves, blockers, next actions.
 eawf plan show               # Shows active generated plan / spec from state-backed records (incl. backlog).
-eawf decision list           # Lists decisions stored in state.
-eawf hypothesis list         # Lists hypothesis status from state.
-eawf audit list              # Lists audit reports and verdicts from state.
 
 # Backlog items live in state; query directly when no dedicated CLI verb fits:
 jq '.backlog' .ea/state.json
 ```
 
-Generated markdown specs / reports may still exist as **artifacts**
-when useful, but they are not source of truth for status. State points
-to them via artifact IDs.
+Generated markdown specs / reports may still exist as **artifacts** when useful, but they are not source of truth for status. State points to them via artifact IDs.
 
 ## Why
 
-State-first lets agents and humans both read the same source. A
-`PLAN.md` written by one session and edited by another session creates
-two competing truths; reconciling them after the fact is pure
-overhead. Eä keeps the decision history in `decision.jsonl`, the
-backlog in `backlog` state entries, and the current plan rendered on
-demand from active iter / wave records.
+State-first lets agents and humans both read the same source. A `PLAN.md` written by one session and edited by another session creates two competing truths; reconciling them after the fact is pure overhead. Eä keeps the decision history in `decision.jsonl`, the backlog in `backlog` state entries, and the current plan rendered on demand from active iter / wave records.
 
 ## Storage model
 
@@ -66,38 +55,20 @@ demand from active iter / wave records.
 
 Rules:
 
-- `state.json` stores IDs, status, summaries, pointers, current fields,
-  metrics, evidence refs.
-- Estimate / actual state entries store current summaries only; complete
-  estimate versions live in `.ea/store/estimate.jsonl` and actual
-  segments in `.ea/store/actual.jsonl`.
-- JSONL stores append-friendly large records. Each line is one
-  validated object with `id`, `kind`, `schema_version`, timestamps,
-  scope, summary, payload or blob refs.
-- Large command outputs or transcripts go to content-addressed blobs;
-  JSONL stores reference hash / path / summary.
-- Markdown is generated from state / JSONL for review, PR bodies,
-  reports, or docs; it is not source of truth unless explicitly curated
-  as an artifact.
-- CLI / TUI provides human views: `eawf memory view`,
-  `eawf incident view`, `eawf audit show`, `eawf research show`.
-- Compaction is explicit: `eawf store compact --kind memory`; never
-  silently drops history.
+- `state.json` stores IDs, status, summaries, pointers, current fields, metrics, evidence refs.
+- Estimate / actual state entries store current summaries only; complete estimate versions live in `.ea/store/estimate.jsonl` and actual segments in `.ea/store/actual.jsonl`.
+- JSONL stores append-friendly large records. Each line is one validated object with `id`, `kind`, `schema_version`, timestamps, scope, summary, payload or blob refs.
+- Large command outputs or transcripts go to content-addressed blobs; JSONL stores reference hash / path / summary.
+- Markdown is generated from state / JSONL for review, PR bodies, reports, or docs; it is not source of truth unless explicitly curated as an artifact.
+- CLI / TUI provides human views: `eawf memory view`, the retired `incident view` verb, the retired `audit show` verb, the retired `research show` verb.
+- Compaction is explicit: `eawf store compact --kind memory`; never silently drops history.
 
-JSONL is acceptable for memories / incidents / research / audits /
-estimates because human readability is provided by CLI views, not raw
-files.
+JSONL is acceptable for memories / incidents / research / audits / estimates because human readability is provided by CLI views, not raw files.
 
-Default policy: commit all nonlocal stores (`research.jsonl`,
-`audit.jsonl`, `incident.jsonl`, `estimate.jsonl`, `actual.jsonl`,
-`memory.jsonl`, `decision.jsonl`, `event.jsonl`, `flow.jsonl`) when
-project policy allows; local / session scratch and large blobs stay
-under `.ea/local/` or gitignored blob storage. `event.jsonl` is an
-append-only audit log only, not a replay source of truth.
+Default policy: commit all nonlocal stores (`research.jsonl`, `audit.jsonl`, `incident.jsonl`, `estimate.jsonl`, `actual.jsonl`, `memory.jsonl`, `decision.jsonl`, `event.jsonl`, `flow.jsonl`) when project policy allows; local / session scratch and large blobs stay under `.ea/local/` or gitignored blob storage. `event.jsonl` is an append-only audit log only, not a replay source of truth.
 
 ## Cross-references
 
 - State entities — `docs/architecture/state-model.md`.
-- JSONL store record envelope and event payload —
-  `docs/architecture/envelope.md`.
+- JSONL store record envelope and event payload — `docs/architecture/envelope.md`.
 - AGENTS.md / CLAUDE.md generation — `docs/policy/agents-claude-md.md`.

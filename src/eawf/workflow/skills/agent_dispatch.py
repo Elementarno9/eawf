@@ -5,7 +5,7 @@ a runtime per the V8 hybrid session-reuse contract. The
 canonical mutator is the daemon's ``agent.dispatch`` RPC; the skill does
 not perform the dispatch itself. It resolves the runtime ladder for the
 target wave and folds the resolution into a dict envelope body, routing
-the operator to the canonical ``eawf wave dispatch`` writer via
+the operator to the canonical ``eawf run create`` writer via
 ``next_valid_actions``.
 
 Runtime resolution reads the ``Wave.runtime_preference`` ladder — an
@@ -94,7 +94,7 @@ class AgentDispatchSkill(Skill):
                     "resolved_runtime": None,
                     "reason": "wave_id is required to dispatch a wave",
                 },
-                next_valid_actions=["eawf wave dispatch <wave-id>"],
+                next_valid_actions=["eawf run create"],
             )
 
         resolved_runtime = explicit_runtime or (ladder[0] if ladder else None)
@@ -114,15 +114,15 @@ class AgentDispatchSkill(Skill):
         )
 
         # ``--headless`` routes the next action to the daemon's live spawn
-        # (``eawf dispatch wave`` -> agent.dispatch spawn=True) instead of
+        # (``eawf run create`` -> agent.dispatch spawn=True) instead of
         # the interactive prompt render; a ``--model`` override only exists
         # on that spawn path, so its presence implies the headless command.
         if headless or model is not None:
-            action = f"eawf dispatch wave {wave_id}"
+            action = "eawf run create"
             if model is not None:
                 action += f" --model {model}"
         else:
-            action = f"eawf wave dispatch {wave_id}"
+            action = "eawf run create"
 
         # No resolvable runtime is a soft outcome: the dispatch can still
         # proceed against the daemon's default, but we flag it so the

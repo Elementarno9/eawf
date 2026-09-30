@@ -170,7 +170,7 @@ def test_agent_dispatch_headless_routes_to_daemon_spawn(state_dir: Path) -> None
     ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"], "headless": True}
     env = run_skill(AgentDispatchSkill(), ctx)
     assert env.header.status == "ok"
-    assert env.footer.next_valid_actions == ["eawf dispatch wave P26-I01-W11"]
+    assert env.footer.next_valid_actions == ["eawf run create"]
     assert cast(dict, env.body)["headless"] is True
 
 
@@ -179,7 +179,7 @@ def test_agent_dispatch_model_threads_into_spawn_command(state_dir: Path) -> Non
     ctx = _ctx()
     ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"], "model": "gpt-5.5"}
     env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.footer.next_valid_actions == ["eawf dispatch wave P26-I01-W11 --model gpt-5.5"]
+    assert env.footer.next_valid_actions == ["eawf run create --model gpt-5.5"]
     assert cast(dict, env.body)["model"] == "gpt-5.5"
 
 
@@ -187,7 +187,7 @@ def test_agent_dispatch_interactive_default_unchanged(state_dir: Path) -> None:
     ctx = _ctx()
     ctx.args = {"wave_id": "P26-I01-W11", "runtime_preference": ["codex"]}
     env = run_skill(AgentDispatchSkill(), ctx)
-    assert env.footer.next_valid_actions == ["eawf wave dispatch P26-I01-W11"]
+    assert env.footer.next_valid_actions == ["eawf run create"]
     assert cast(dict, env.body)["headless"] is False
 
 
@@ -230,7 +230,7 @@ def test_wave_spec_validate_happy_path(state_dir: Path) -> None:
     body = cast(dict, env.body)
     assert body["verb"] == "validate"
     assert body["wave_id"] == "P26-I01-W11"
-    assert env.footer.next_valid_actions == ["eawf spec validate P26-I01-W11"]
+    assert env.footer.next_valid_actions == ["eawf migrate epoch2 --plan P26-I01-W11"]
 
 
 def test_security_review_missing_spec_needs_user(state_dir: Path) -> None:

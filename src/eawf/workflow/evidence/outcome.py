@@ -1,4 +1,4 @@
-"""``eawf outcome define`` and ``eawf outcome set`` mutators.
+"""the retired ``outcome define`` verb and the retired ``outcome set`` verb mutators.
 
 Mutators take a typed :class:`State` and mutate it in place; the CLI handler
 runs them inside :func:`eawf.surfaces.cli._mutation.state_transaction` to serialise
@@ -13,10 +13,6 @@ from enum import StrEnum
 
 from eawf.kernel.state.enums import OutcomeDirection, OutcomeStatus
 from eawf.kernel.state.models import Goal, Outcome, State, Track
-from eawf.kernel.store.envelope import Envelope
-from eawf.surfaces.cli.errors import UserError
-from eawf.workflow.evidence import _io
-from eawf.workflow.evidence.guards import require_complete_audit
 
 logger = logging.getLogger(__name__)
 
@@ -100,161 +96,6 @@ def compute_outcome_status(
     if worse_than_best:
         return OutcomeVerdict.REGRESSED
     return OutcomeVerdict.UNMET
-
-
-def define_outcome(
-    state: State,
-    *,
-    outcome_id: str,
-    scope_id: str,
-    metric: str,
-    threshold: float,
-    direction: OutcomeDirection,
-) -> Envelope:
-    """Create a pending :class:`Outcome` in place and return the event envelope."""
-    outcomes: dict[str, Outcome] = dict(state.outcomes or {})
-    if outcome_id in outcomes:
-        raise UserError(f"outcome {outcome_id!r} already exists", kind="InvalidInput")
-
-    now = datetime.now(UTC)
-    outcome = Outcome(
-        id=outcome_id,
-        scope_id=scope_id,
-        metric=metric,
-        threshold=threshold,
-        direction=direction,
-        value=None,
-        status=OutcomeStatus.PENDING,
-        audit_id=None,
-        updated_at=now,
-    )
-    outcomes[outcome_id] = outcome
-    state.outcomes = outcomes
-    state.updated_at = now
-
-    return _io.event_envelope(
-        event_id=f"EVT-outcome-define-{outcome_id}-{int(now.timestamp() * 1000)}",
-        scope_id=scope_id,
-        event_type="outcome.define",
-        actor="cli",
-        command="outcome define",
-        args={
-            "outcome_id": outcome_id,
-            "metric": metric,
-            "threshold": threshold,
-            "direction": direction.value,
-        },
-        summary=f"outcome {outcome_id} defined ({metric} {direction.value} {threshold})",
-    )
-
-
-def _better(direction: OutcomeDirection, sample: float, prior_best: float | None) -> float:
-    """Return the better of *sample* and *prior_best* under *direction*.
-
-    Higher is better under ``MAX``, lower under ``MIN``. ``prior_best`` of
-    ``None`` makes *sample* the best by default.
-    """
-    if prior_best is None:
-        return sample
-    if direction is OutcomeDirection.MAX:
-        return max(sample, prior_best)
-    return min(sample, prior_best)
-
-
-def set_outcome(
-    state: State,
-    *,
-    outcome_id: str,
-    sample: float,
-    audit_id: str,
-    evidence_refs: list[str],
-) -> Envelope:
-    """Record an outcome measurement in place, deriving the status.
-
-    The status is *derived* by :func:`compute_outcome_status` from the
-    outcome's threshold, the observed *sample*, and the outcome's favorable
-    direction -- it is never hand-set, so a caller cannot claim ``met`` on a
-    sample that misses. The running :attr:`Outcome.best_value` is advanced when
-    the sample improves on it, which lets the comparator flag a regression off
-    a previously-achieved best.
-
-    Calls :func:`require_complete_audit` *before* mutating so the verdict-
-    bearing rule fails fast with ``VALIDATION_FAILED`` even when the current
-    outcome would otherwise be untouched. The measured outcome's status claim
-    must cite at least one *evidence_ref*; the empty case is rejected before the
-    mutation lands.
-
-    Args:
-        state: The candidate state holding the outcome and its audit.
-        outcome_id: Id of the outcome to measure.
-        sample: The observed value of the outcome metric.
-        audit_id: A complete audit that ratifies the measurement.
-        evidence_refs: Repo-relative paths / Eawf URNs / external URLs that
-            resolve the status claim. Must be non-empty.
-
-    Returns:
-        The ``outcome.set`` event envelope.
-
-    Raises:
-        UserError: When *outcome_id* is unknown, or *evidence_refs* is empty.
-        ValidationError: When *audit_id* is not a complete audit.
-    """
-    outcomes: dict[str, Outcome] = dict(state.outcomes or {})
-    if outcome_id not in outcomes:
-        raise UserError(f"outcome {outcome_id!r} not found", kind="NotFound")
-    if not evidence_refs:
-        raise UserError(
-            f"outcome {outcome_id!r} measurement cites no evidence ref",
-            kind="InvalidInput",
-        )
-
-    require_complete_audit(state, audit_id)
-
-    now = datetime.now(UTC)
-    prior = outcomes[outcome_id]
-    verdict = compute_outcome_status(
-        threshold=prior.threshold,
-        sample=sample,
-        direction=prior.direction,
-        best_value=prior.best_value,
-    )
-    status = _VERDICT_STATUS[verdict]
-    best_value = _better(prior.direction, sample, prior.best_value)
-    updated = prior.model_copy(
-        update={
-            "value": sample,
-            "sample": sample,
-            "best_value": best_value,
-            "status": status,
-            "audit_id": audit_id,
-            "evidence_refs": list(evidence_refs),
-            "updated_at": now,
-        }
-    )
-    outcomes[outcome_id] = updated
-    state.outcomes = outcomes
-    state.updated_at = now
-
-    return _io.event_envelope(
-        event_id=f"EVT-outcome-set-{outcome_id}-{int(now.timestamp() * 1000)}",
-        scope_id=updated.scope_id,
-        event_type="outcome.set",
-        actor="cli",
-        command="outcome set",
-        args={
-            "outcome_id": outcome_id,
-            "sample": sample,
-            "verdict": verdict.value,
-            "status": status.value,
-            "best_value": best_value,
-            "audit_id": audit_id,
-            "evidence_refs": list(evidence_refs),
-        },
-        summary=(
-            f"outcome {outcome_id} set sample={sample} "
-            f"verdict={verdict.value} status={status.value}"
-        ),
-    )
 
 
 def _track_outcome_ids(state: State, track: Track) -> list[str]:

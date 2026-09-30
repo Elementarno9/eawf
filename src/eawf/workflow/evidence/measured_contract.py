@@ -500,16 +500,13 @@ class ContractMetadataRefresh:
     artifact_event: Envelope
 
 
-def _promotion_command(contract_id: str) -> str:
-    """Return the CLI command that promotes *contract_id*.
-
-    Args:
-        contract_id: Measured-contract id to promote.
-
-    Returns:
-        The exact command an operator runs to promote the contract.
-    """
-    return f"eawf artifact promote-contract {contract_id}"
+#: What a refusal says about promoting a contract. The flag day retired
+#: ``artifact promote-contract`` and no epoch-2 verb promotes a measured
+#: contract yet, so the refusal names that gap rather than a command.
+PROMOTION_GAP: Final = (
+    "no epoch-2 verb promotes a measured contract since the flag day retired "
+    "`artifact promote-contract`"
+)
 
 
 def _normalise_citation(citation: str) -> str:
@@ -547,27 +544,6 @@ def _is_local_spike_citation(citation: str) -> bool:
         :data:`LOCAL_SPIKE_ROOT`.
     """
     return _normalise_citation(citation).startswith(LOCAL_SPIKE_ROOT)
-
-
-def _contract_id_for_observation_ref(citation: str) -> str | None:
-    """Return the contract id whose raw observations *citation* points at.
-
-    Lets the ``plan_reference_missing`` error name the exact promotion
-    command for a known spike output rather than a generic placeholder.
-
-    Args:
-        citation: A repo-relative (or ``repo:``-prefixed) path.
-
-    Returns:
-        The matching contract id, or ``None`` when no registered contract
-        was extracted from that path's spike directory.
-    """
-    stripped = _normalise_citation(citation)
-    for contract_id, contract in PREFLIGHT_CONTRACTS.items():
-        spike_dir = contract.observed_at_ref.rsplit("/", 1)[0]
-        if stripped == contract.observed_at_ref or stripped.startswith(f"{spike_dir}/"):
-            return contract_id
-    return None
 
 
 def _contract_metadata(contract: MeasuredContract) -> dict[str, object]:
@@ -878,7 +854,7 @@ def refresh_contract_metadata(
     if registered is None:
         raise UserError(
             f"contract {contract.contract_id} has no registered artifact row to refresh; "
-            f"promote it first: {_promotion_command(contract.contract_id)}",
+            f"it must be promoted first, but {PROMOTION_GAP}",
             kind="NotFound",
         )
 
@@ -1029,12 +1005,10 @@ def resolve_contract_citation(
             through other providers.
     """
     if _is_local_spike_citation(citation):
-        contract_id = _contract_id_for_observation_ref(citation)
-        command = _promotion_command(contract_id) if contract_id else _promotion_command("<id>")
         logger.warning(f"resolve_contract_citation unpromoted citation={citation!r}")
         raise UserError(
             f"citation {citation!r} resolves only under {LOCAL_SPIKE_ROOT} and was never "
-            f"promoted, so it has no artifact URN to cite; promote it first: {command}",
+            f"promoted, so it has no artifact URN to cite; {PROMOTION_GAP}",
             kind="plan_reference_missing",
         )
     if citation.startswith(ARTIFACT_URN_PREFIX):
@@ -1059,6 +1033,7 @@ __all__ = [
     "LOCAL_SPIKE_ROOT",
     "PREFLIGHT_CHECKPOINT_BANDS",
     "PREFLIGHT_CONTRACTS",
+    "PROMOTION_GAP",
     "ContractMetadataRefresh",
     "ContractPromotion",
     "promote_measured_contract",

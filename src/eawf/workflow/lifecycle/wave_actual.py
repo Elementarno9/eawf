@@ -31,7 +31,7 @@ def append_wave_close_actual(state: State, *, wave_id: str, state_path: Path) ->
     :class:`~eawf.kernel.state.models.ActualSummary` itself, naming a store
     record it never wrote. Writing that record through
     :func:`eawf.kernel.store.append.append_envelope` makes the close-time
-    measurement readable from the actual store the way ``eawf actual stop``
+    measurement readable from the actual store the way the retired ``actual stop`` verb
     records are, so a consumer of the store sees every closed wave's effort.
     The close records no segments because it tracked none: the figures are the
     measured runtime totals.

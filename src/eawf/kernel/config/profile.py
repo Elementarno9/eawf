@@ -107,7 +107,7 @@ def _materialise_state_keys(state_path: Path, fields: list[str]) -> list[str]:
     Returns the list of keys actually added (so the caller can include them in
     the response envelope). Idempotent: keys already present are left alone.
     Skips materialisation entirely if ``state_path`` does not exist (the
-    profile is being enabled before ``eawf project init``).
+    profile is being enabled before ``eawf repository create``).
 
     The read+mutate+write of ``state.json`` is serialised under
     ``portalock(state_path)`` so a concurrent writer (e.g. an
@@ -187,8 +187,9 @@ def enable_profile(
         layer_file_path: Resolved on-disk path to the layer's ``config.yaml``.
         state_path: Optional state-file path. When given, missing
             ``fields_required`` for the profile are materialised as ``{}``.
-            When ``None``, materialisation is skipped (the next
-            ``eawf init/sync`` performs it).
+            When ``None``, materialisation is skipped: the next
+            ``eawf init/sync`` performs it, and an epoch-2 tree, whose
+            epoch-1 document is frozen, never takes it.
         repo: Optional repository root. When given, its ``.ea/profiles/``
             overlay is consulted first when resolving *profile_id*.
         workspace: Optional workspace root. When given, its
@@ -198,7 +199,9 @@ def enable_profile(
 
     Returns:
         Response envelope (dict) with keys ``profile``, ``layer``,
-        ``layer_path``, ``already_enabled``, ``state_keys_materialised``.
+        ``layer_path``, ``already_enabled``, ``state_keys_required`` (the
+        profile's ``fields_required``, whether or not they were written) and
+        ``state_keys_materialised`` (the ones this call wrote).
 
     Raises:
         UserError: ``profile_id`` unknown or ``layer`` not writable
@@ -256,5 +259,6 @@ def enable_profile(
         "layer": layer,
         "layer_path": str(layer_file_path),
         "already_enabled": already_enabled,
+        "state_keys_required": required_fields,
         "state_keys_materialised": materialised,
     }

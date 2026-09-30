@@ -21,6 +21,14 @@ from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain
 from eawf.surfaces.cli.commands.question_decision import QUESTION_OPEN_DECISION
+from tests._epoch2_helpers import lay_epoch2_tree
+
+
+@pytest.fixture(autouse=True)
+def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every CLI verb here from an epoch-2 tree, as the flag day requires."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "epoch2")))
+
 
 SUBJECT: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/milestone/MLS-0030"
 ACTION: Final = "eawf://WSP-MAIN/PRJ-EAWF/REP-EAWF/pending-action/ACT-0001"

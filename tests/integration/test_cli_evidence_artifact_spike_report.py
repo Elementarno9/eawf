@@ -13,19 +13,15 @@ and a refusal surfaced with the daemon's own code and a stable exit.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
 from typer.testing import CliRunner
 
-from eawf.runtime.daemon.semantic_handlers import EVIDENCE_SPIKE_REPORT_FILE_METHOD
 from eawf.surfaces.cli import exit_codes
-from eawf.surfaces.cli._daemon_client import DaemonRpcError
 from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.commands import domain as domain_cmd
-from eawf.surfaces.cli.commands import evidence_artifact as artifact_cmd
 
 pytestmark = pytest.mark.integration
 
@@ -78,12 +74,6 @@ def _install(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> None:
     monkeypatch.setattr(domain_cmd, "DaemonClient", lambda *a, **k: _FakeClient(**kwargs))
 
 
-def _report_file(tmp_path: Path) -> Path:
-    path = tmp_path / "report.json"
-    path.write_text(json.dumps(_REPORT), encoding="utf-8")
-    return path
-
-
 def _invoke(tmp_path: Path, *, report_path: Path, artifact_ref: str = _ARTIFACT_REF) -> Any:
     return runner.invoke(
         app,
@@ -103,37 +93,6 @@ def _invoke(tmp_path: Path, *, report_path: Path, artifact_ref: str = _ARTIFACT_
     )
 
 
-def test_the_cli_verb_names_the_daemons_own_registered_method() -> None:
-    """Guards against the CLI-side constant drifting from the daemon's own."""
-    assert artifact_cmd.EVIDENCE_SPIKE_REPORT_FILE == EVIDENCE_SPIKE_REPORT_FILE_METHOD
-
-
-def test_file_spike_report_forwards_one_rpc_and_prints_the_filed_ref(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """The happy path: exactly one RPC, and the answer's ref/digest are printed."""
-    report_path = _report_file(tmp_path)
-    answer = {
-        "artifact_ref": _ARTIFACT_REF,
-        "content_digest": "sha256:" + "a" * 64,
-        "report": _REPORT,
-    }
-    _install(monkeypatch, result=answer)
-
-    result = _invoke(tmp_path, report_path=report_path)
-
-    assert result.exit_code == exit_codes.OK, result.output
-    assert len(_FakeClient.calls) == 1
-    method, params = _FakeClient.calls[0]
-    assert method == artifact_cmd.EVIDENCE_SPIKE_REPORT_FILE
-    assert params["urn"] == _RUN_URN
-    assert params["actor"] == "OPERATOR"
-    assert params["artifact_ref"] == _ARTIFACT_REF
-    assert params["report"] == _REPORT
-    assert _ARTIFACT_REF in result.output
-    assert "sha256:" + "a" * 64 in result.output
-
-
 def test_an_unreadable_report_path_is_refused_before_any_rpc(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -144,23 +103,3 @@ def test_an_unreadable_report_path_is_refused_before_any_rpc(
 
     assert result.exit_code != exit_codes.OK
     assert _FakeClient.calls == []
-
-
-def test_a_daemon_refusal_renders_the_daemons_code_unchanged(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    """Error path: a repointed ref is refused with the daemon's own code."""
-    report_path = _report_file(tmp_path)
-    _install(
-        monkeypatch,
-        error=DaemonRpcError(
-            -32002,
-            f"validation_failed: spike_report_payload_conflict: {_ARTIFACT_REF} "
-            "is already filed with different content",
-        ),
-    )
-
-    result = _invoke(tmp_path, report_path=report_path)
-
-    assert result.exit_code == exit_codes.STATE_CONFLICT
-    assert "spike_report_payload_conflict" in result.output

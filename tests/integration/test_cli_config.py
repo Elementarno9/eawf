@@ -351,6 +351,7 @@ def test_profile_enable_json_envelope(repo_root: Path) -> None:
         "layer",
         "layer_path",
         "already_enabled",
+        "state_keys_required",
         "state_keys_materialised",
         "projections_changed",
     }

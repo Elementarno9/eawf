@@ -41,10 +41,10 @@ def test_module_getattr_rejects_unknown_attribute() -> None:
 
 def test_panel_for_known_command_returns_panel() -> None:
     """Boundary: a registered command name resolves to its panel."""
-    # ``audit`` (the command) lives in the ``audit`` panel.
-    assert help_panels.panel_for("audit") == "audit"
-    # ``wave`` lives in ``planning``.
-    assert help_panels.panel_for("wave") == "planning"
+    # ``doctor`` lives in the ``audit`` panel.
+    assert help_panels.panel_for("doctor") == "audit"
+    # ``task`` lives in ``planning``.
+    assert help_panels.panel_for("task") == "planning"
     # ``ui`` lives in ``ui``.
     assert help_panels.panel_for("ui") == "ui"
 
@@ -87,11 +87,11 @@ def test_registry_ordered_group_sorts_commands_by_panel_then_name() -> None:
     app = typer.Typer(cls=help_panels.RegistryOrderedTyperGroup)
 
     # Register out of order to confirm the override re-sorts.
-    @app.command(name="wave", rich_help_panel="planning")
-    def _wave() -> None: ...
+    @app.command(name="task", rich_help_panel="planning")
+    def _task() -> None: ...
 
-    @app.command(name="audit", rich_help_panel="audit")
-    def _audit() -> None: ...
+    @app.command(name="backup", rich_help_panel="audit")
+    def _backup() -> None: ...
 
     @app.command(name="doctor", rich_help_panel="audit")
     def _doctor() -> None: ...
@@ -106,7 +106,7 @@ def test_registry_ordered_group_sorts_commands_by_panel_then_name() -> None:
     names = click_group.list_commands(ctx)
     # Panel ``audit`` precedes panel ``planning`` alphabetically, and within
     # ``audit`` commands sort alphabetically (``audit`` before ``doctor``).
-    assert names == ["audit", "doctor", "wave"]
+    assert names == ["backup", "doctor", "task"]
 
 
 def test_registry_ordered_group_pushes_unmapped_commands_last() -> None:

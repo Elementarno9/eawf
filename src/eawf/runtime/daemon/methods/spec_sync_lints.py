@@ -5,28 +5,12 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
 from typing import Final
 
 import click
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec, ObserveVerb
-from eawf.kernel.spec.heuristics import is_ui_scope
-from eawf.kernel.spec.intent import IntentBrief
+from eawf.kernel.spec.common import CriterionSpec, GateSpec
 from eawf.kernel.spec.promotion import ARGV_BEARING_GATE_KINDS
-from eawf.platform.lint.eawf021_measurable_criterion import (
-    MeasurabilityViolation,
-    check_criterion_spec,
-)
-from eawf.platform.lint.eawf022_propose_coverage import (
-    CoverageGapViolation,
-    missing_intent_finding,
-    missing_planned_steps_finding,
-)
-from eawf.runtime.daemon.methods import DaemonValidationError
-from eawf.workflow.propose.coverage import coverage_gaps, source_brief_coverage_gaps
-
-_TRANSITION_COVERAGE_KIND: Final[str] = "transition_coverage"
 
 #: Console-script head of the project's own CLI.
 _EAWF_HEAD: Final[str] = "eawf"
@@ -38,69 +22,6 @@ _UV_RUN_EAWF: Final[tuple[str, str, str]] = ("uv", "run", _EAWF_HEAD)
 #: Punctuation prose wraps a command in. Stripped from both ends of a
 #: signal token so a backticked or sentence-final verb still matches.
 _PROSE_TRIM: Final[str] = "`'\"(),;:.[]{}<>!?"
-
-
-def measure_criteria(criteria: list[CriterionSpec]) -> list[MeasurabilityViolation]:
-    """Return every EAWF021 measurability finding across *criteria*."""
-    findings: list[MeasurabilityViolation] = []
-    for criterion in criteria:
-        findings.extend(check_criterion_spec(criterion))
-    return findings
-
-
-def find_coverage_gaps(
-    criteria: list[CriterionSpec],
-    *,
-    wave_id: str,
-    intent: IntentBrief | None,
-    repo_root: Path,
-) -> list[CoverageGapViolation]:
-    """Return every EAWF022 coverage gap of a wave's brief detail by *criteria*."""
-    if intent is None:
-        return [missing_intent_finding(wave_id)]
-    findings: list[CoverageGapViolation] = []
-    if intent.is_required_intent and not intent.planned_steps:
-        findings.append(missing_planned_steps_finding(wave_id))
-    findings += coverage_gaps(criteria, planned_steps=list(intent.planned_steps))
-    findings += source_brief_coverage_gaps(criteria, intent=intent, repo_root=repo_root)
-    return findings
-
-
-def render_lint_findings(
-    measurability: list[MeasurabilityViolation],
-    coverage: list[CoverageGapViolation],
-) -> str:
-    """Render a combined ``validation_failed`` message for lint findings."""
-    bodies = [v.render() for v in measurability] + [v.render() for v in coverage]
-    return "validation_failed: spec sync lint findings: " + "; ".join(bodies)
-
-
-def require_transition_coverage_for_ui_transitions(
-    *,
-    wave_id: str,
-    file_scopes: list[str],
-    criteria: list[CriterionSpec],
-    gates: list[GateSpec],
-) -> None:
-    """Reject a UI-scope transition criterion whose gates omit transition_coverage."""
-    if not is_ui_scope(file_scopes):
-        return
-    gate_by_id = {gate.id: gate for gate in gates}
-    for criterion in criteria:
-        if (
-            criterion.response is None
-            or criterion.response.observe is not ObserveVerb.TRANSITIONS_TO
-        ):
-            continue
-        if any(
-            gate_by_id[gate_id].kind == _TRANSITION_COVERAGE_KIND for gate_id in criterion.gate_ids
-        ):
-            continue
-        raise DaemonValidationError(
-            f"validation_failed: ui-scope wave {wave_id!r} criterion "
-            f"{criterion.id!r} has a transitions_to response and requires a "
-            f"{_TRANSITION_COVERAGE_KIND} gate; none found in criterion gates"
-        )
 
 
 @dataclass(frozen=True)
@@ -312,30 +233,3 @@ def find_unknown_eawf_verbs(
                     )
                 )
     return findings
-
-
-def require_resolvable_eawf_verbs(
-    *,
-    wave_id: str,
-    criteria: list[CriterionSpec],
-    gates: list[GateSpec],
-) -> None:
-    """Reject a sync whose gate argv or signal names a verb the CLI lacks.
-
-    Args:
-        wave_id: The wave being synced, named in the reject message.
-        criteria: The parsed criterion rows of that wave.
-        gates: The parsed gate rows of that wave.
-
-    Raises:
-        DaemonValidationError: When any named eawf verb path does not
-            resolve against the command tree.
-    """
-    findings = find_unknown_eawf_verbs(criteria, gates)
-    if not findings:
-        return
-    bodies = "; ".join(finding.render() for finding in findings)
-    raise DaemonValidationError(
-        f"validation_failed: wave {wave_id!r} names eawf verbs that do not "
-        f"resolve against the command tree: {bodies}"
-    )

@@ -202,48 +202,6 @@ class WaveCloseRuntime:
     elapsed_eu: float | None
 
 
-def measure_wave_close_runtime(
-    state: State,
-    mutation: Mutation,
-    *,
-    state_path: Path,
-    repo_root: Path,
-) -> WaveCloseRuntime:
-    """Measure the closing wave's runtime the way the daemon close does.
-
-    The in-process close reads the EU basis and minutes through the same
-    config loader as the daemon, so both paths record the same figure for the
-    same snapshots. A zero delta does not suppress the telemetry rollup: a
-    zero means the snapshots yielded nothing, which is an absence of evidence
-    the rollup may still answer.
-
-    Args:
-        state: Loaded state carrying the closing wave's runtime snapshots.
-        mutation: The wave-close mutation; its ``wave_id`` param names the wave.
-        state_path: Path to ``state.json``; the telemetry DB resolves beside it.
-        repo_root: Anchor for the layered estimation and telemetry config.
-
-    Returns:
-        The :class:`WaveCloseRuntime` for the close.
-
-    Raises:
-        LifecycleError: When the configured ``estimation.eu_basis`` is unknown.
-    """
-    _db_kind, eu_minutes, eu_basis = wave_close_rollup_config(repo_root)
-    delta = wave_runtime_delta(state, mutation, eu_minutes=eu_minutes, eu_basis=eu_basis)
-    rollup = load_wave_session_rollup(
-        state,
-        mutation,
-        state_path=state_path,
-        repo_root=repo_root,
-    )
-    measured_eu = delta.elapsed_eu if delta is not None else None
-    elapsed_eu = (
-        measured_eu if measured_eu else wave_close_elapsed_eu(rollup, eu_minutes=eu_minutes)
-    )
-    return WaveCloseRuntime(delta=delta, rollup=rollup, elapsed_eu=elapsed_eu)
-
-
 def compute_wave_close_readiness(
     state: State,
     mutation: Mutation,

@@ -22,33 +22,16 @@ Each row is a CLI verb / group. Mutates → writes state.json, JSONL store, or r
 | `eawf global install` | alias / statusline / plugin / MCP choices | user config + Claude user assets | yes | alias collision, settings conflict | `install/global_install.py` |
 | `eawf repo init` | project fields, profiles | repo `.ea` files | yes | existing conflict | `cli/commands/repo.py` |
 | `eawf clone-repo` | git URL, code, workspace, path | cloned + initialized repo | yes | clone / auth / path exists | `cli/commands/clone_repo.py` |
-| `eawf state resolve` | cwd, `-w`, env | active state path / reason | no | ambiguous / missing state | `cli/commands/state.py` |
 | `eawf validate` | `--strict`, `--workspace` | schema / ref / invariant report | no | schema / ref errors | `cli/commands/validate.py` |
 | `eawf sync` | `--check`, `--dry-run`, `--fix` | drift / update report | yes if fix | hash conflict / unmanaged overwrite | `cli/commands/sync.py` |
 | `eawf config get` / `set` / `validate` | key / value / scope | layered config | yes for `set` | invalid schema / secret value | `cli/commands/config.py` |
 | `eawf coauthor resolve` | runtime / message file | configured `Co-Authored-By` trailer | no | disabled policy / invalid registry | `cli/commands/coauthor.py` |
-| `eawf project init` | code / title / domains | project record | yes | duplicate project | `cli/commands/lifecycle.py` |
 | `eawf subproject add` / `switch` | code / kind / title | subproject record / pointer | yes | duplicate / unknown code | `cli/commands/lifecycle.py` |
-| `eawf goal define` | id / title / scope / outcomes | goal record | yes | duplicate / invalid scope | `cli/commands/evidence.py` |
-| `eawf outcome define` / `set` | id / scope / metric / threshold | outcome record / measurement | yes | invalid metric / missing audit | `cli/commands/evidence.py` |
-| `eawf phase open` / `close` | id, title, scope, audit, checkpoint | phase record | yes | duplicate / no audit / open children / single-wave close without scope-collapse decision | `cli/commands/lifecycle.py` |
-| `eawf iter open` / `close` | phase or id, audit | iter record | yes | invalid parent / open waves | `cli/commands/lifecycle.py` |
-| `eawf wave plan` / `claim` / `close` / `fail` | wave fields, commit, outcome, reason | wave records | yes | overlap, dirty state, no evidence | `cli/commands/lifecycle.py` |
 | `eawf estimate` / `estimate update` | scope, source, confidence | estimate record / version | yes if create | invalid rollup | `cli/commands/estimation.py` |
-| `eawf actual start` / `stop` / `recover` | scope, session, status | actual segment | yes | active segment exists / none | `cli/commands/estimation.py` |
-| `eawf hypothesis define` / `verdict` / `list` | id / scope / metric / verdict / audit | hypothesis records | yes | vague thresholds / no audit | `cli/commands/evidence.py` |
-| `eawf audit add` / `run` / `integrity` / `show` / `list` | id / scope / kind / report | audit records / artifacts | yes | report missing / check failure | `cli/commands/evidence.py` |
-| `eawf research show` | id | research brief + peer review | no | unknown brief | `cli/commands/evidence.py` |
-| `eawf incident open` / `close` / `view` | id / severity / title / root cause | incident record | yes | duplicate / no evidence | `cli/commands/evidence.py` |
-| `eawf artifact add` / `show` | id / kind / uri / hash | artifact index | yes | missing file / hash mismatch | `cli/commands/evidence.py` |
-| `eawf decision add` / `list` | id / scope / summary / rationale | decision record | yes | duplicate / missing rationale | `cli/commands/evidence.py` |
-| `eawf backlog add` / `close` | id / title / priority / commit | backlog record | yes | duplicate / no evidence | `cli/commands/evidence.py` |
 | `eawf memory add` / `promote` / `list` / `compact` / `render-context` / `view` / `stale` | scope / title / body / budget | memory entries | yes for mutators | over limit, no scope | `cli/commands/memory.py` |
 | `eawf store compact` | kind / scope / budget | compacted JSONL store | yes | conflict | `cli/commands/store.py` |
 | `eawf render-output` | `--format markdown` \| `json` (stdin JSON) | rendered envelope | no | invalid envelope | `cli/commands/render_output.py` |
 | `eawf config profile enable` | profile id | enabled profile + materialized state keys | yes | unknown profile / conflict | `cli/commands/config.py` |
-| `eawf session start` / `checkpoint` / `close` / `recover` | role / scope / runtime / status | session records | yes | invalid scope / open claims | `cli/commands/session.py` |
-| `eawf worktree create` / `list` / `merge-back` / `cleanup` | wave / branch / path | worktree records | yes | dirty root / branch exists / conflict | `cli/commands/worktree.py` |
 | `eawf mcp add` / `install` / `update` / `remove` | id / command / risk / env refs | Eä-owned MCP config | yes | non-env secret / unmanaged entry | `cli/commands/mcp.py` |
 | `eawf plugin install claude` / `update claude` / `doctor claude` | target choices | Claude assets / settings | yes for install / update | settings conflict / hash conflict | `cli/commands/plugin.py` |
 | `eawf plugin package claude` | `--target`, `--include-marketplace`, `--include-readme`, `--force`, `--dry-run` | standalone CC plugin tree (`.claude-plugin/` + `skills/` + `agents/` [+ `marketplace.json`] [+ `README.md`]) | no on `--dry-run`, otherwise yes (filesystem only; no state mutation) | non-empty foreign target → exit 8; unknown runtime → exit 3 | `cli/commands/plugin.py` |
@@ -85,7 +68,7 @@ The short workspace flag is `-w`. `-W` is reserved for future use; in v0.1 it is
 
 The v0.1 stack is `typer + rich` for the CLI surface and `questionary + rich` for TTY-interactive prompts (install wizard, configuration flows). Roles:
 
-- **typer**: parses `eawf phase open --title X`, generates `--help`, shell completion.
+- **typer**: parses `eawf milestone create --from-spec X`, generates `--help`, shell completion.
 - **rich**: non-TTY rendering for `eawf status --json`, `--plain`, piped output, tables in scripts.
 - **questionary**: portable single-prompt TTY interaction backed by `prompt_toolkit`. Used for the `eawf init` wizard and short per-command prompts; falls back to `--no-input` for non-interactive callers.
 

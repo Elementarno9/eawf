@@ -1,16 +1,16 @@
-"""The epoch-2 verb that replaces each epoch-1 mutating verb after the flag day.
+"""What an operator runs instead of an epoch-1 verb, after the flag day.
 
-A tree that carries the epoch marker refuses every epoch-1 write with
-``legacy_operation_removed``, whichever verb attempted it: the refusal
-sits at the ``state.json`` write chokepoint, so a verb added later cannot
-slip past it. What the chokepoint cannot know is which verb the operator
-typed, so it cannot say what to run instead. This table says it, keyed by
-the command path the operator typed (``wave claim``), and the error
-envelope appends the answer to the refusal.
+Two tables answer that. :data:`EPOCH1_REPLACEMENTS` covers the epoch-1 verbs
+still on the command tree -- the migration-support verbs a tree needs to
+reach the cutover. A tree that carries the epoch marker refuses their writes
+with ``legacy_operation_removed`` at the ``state.json`` write chokepoint,
+which cannot know which verb the operator typed; the table says what to run
+instead, keyed by the typed command path, and the error envelope appends it.
 
-A path mapped to ``None`` names a verb the flag day retired with no
-epoch-2 counterpart; saying so is guidance too, because it stops the
-operator hunting for a replacement that does not exist.
+:data:`RETIRED_VERBS` covers the verbs the flag day removed from the tree.
+The root group answers them before click would report an unknown command,
+naming the verb that replaces each, or -- where nothing does -- pointing at
+``eawf migrate epoch2 --plan``, the way to inspect an epoch-1 tree.
 """
 
 from __future__ import annotations
@@ -18,23 +18,43 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Final
 
-#: Every epoch-1 verb that writes epoch-1 state, mapped to the path of the
-#: epoch-2 verb that replaces it, or ``None`` when the verb retired.
+#: The command a retired verb with no replacement points at.
+MIGRATION_PLAN_VERB: Final = "migrate epoch2 --plan"
+
+#: The epoch-1 verbs still on the tree, mapped to the epoch-2 verb that
+#: replaces each, or ``None`` when none does.
 EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
+    "session close": "run finish",
+    "session recover": None,
+    "worktree cleanup": None,
+    "worktree merge-back": "batch integrate",
+    "worktree reconcile": None,
+}
+
+#: Verbs the flag day removed from the command tree, mapped to the verb that
+#: replaces each, or ``None`` when none does.
+RETIRED_VERBS: Final[Mapping[str, str | None]] = {
     "actual recover": None,
     "actual start": None,
     "actual stop": None,
     "agent-report add": "run finish",
+    "agent-report list": None,
+    "agent-report show": None,
     "artifact add": "record append",
     "artifact file-spike-report": "record append",
     "artifact promote-contract": None,
+    "artifact show": None,
     "artifact submit-evidence": "record evidence",
     "artifact update": "record append",
+    "artifact validate": None,
+    "artifact verify": None,
     "audit add": "record append",
     "audit integrity": "record append",
+    "audit list": None,
     "audit promote": "record append",
     "audit run": "record append",
     "audit set-verdict": "record append",
+    "audit show": None,
     "backfill titles": None,
     "backfill wave-intents": None,
     "backlog add": "task create",
@@ -44,32 +64,42 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
     "backlog edit": None,
     "backlog set-priority": None,
     "close cancel": None,
+    "close follow": None,
     "close rereceipt": "task prove",
     "close resume": None,
+    "close status": None,
     "close submit": "task complete",
     "decision add": "record append",
+    "decision graph": None,
+    "decision list": None,
     "decision promote": "record append",
     "decision supersede": "record append",
     "dispatch pause": None,
     "dispatch resume": None,
     "dispatch wave": "run create",
+    "draft new": None,
+    "draft validate": None,
     "estimate set": None,
     "estimate update": None,
     "evidence attest": "record evidence",
     "flow abort": None,
     "flow run": None,
+    "flow status": None,
     "goal define": None,
     "hypothesis define": None,
+    "hypothesis list": None,
     "hypothesis promote": "record append",
     "hypothesis verdict": None,
     "incident close": None,
     "incident open": None,
     "incident promote": "record append",
+    "incident view": None,
     "iter activate": "batch activate",
     "iter candidate-tag": "release candidate",
     "iter close": "batch complete",
     "iter open": "batch create",
     "iter plan": "plan submit",
+    "operator rollup": None,
     "outcome define": None,
     "outcome set": None,
     "phase activate": "milestone activate",
@@ -77,18 +107,23 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
     "phase open": "milestone create",
     "phase prepare-close": "milestone open-review",
     "phase reopen": None,
+    "phase retro": None,
     "plan promote": "plan submit",
     "project init": "repository create",
-    "research promote": "record append",
     "question add": None,
+    "question list": None,
     "question resolve": None,
+    "repo link": "workspace member add",
+    "repo link-workspace": "workspace member add",
+    "research promote": "record append",
+    "research show": None,
+    "research status": None,
     "roadmap apply": "plan apply",
     "roadmap drop": None,
     "roadmap propose": "plan submit",
     "roadmap revise": "plan submit",
+    "roadmap show": None,
     "session checkpoint": None,
-    "session close": "run finish",
-    "session recover": None,
     "session start": "run start",
     "spec archive": None,
     "spec convert-legacy": None,
@@ -97,15 +132,21 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
     "spec repoint-gates": None,
     "spec repoint-scopes": None,
     "spec rewrite-gate-kind": None,
+    "spec show": None,
     "spec sync": None,
+    "spec validate": None,
+    "state resolve": None,
     "state rpc": None,
+    "state show": "status",
     "track add": "track create",
     "track switch": None,
     "wave ack-drift": None,
+    "wave archive-refs": None,
     "wave autoland": "batch integrate",
     "wave blocks-rebuild": None,
     "wave budget consume": None,
     "wave budget set": None,
+    "wave budget show": None,
     "wave claim": "task claim",
     "wave close": "task complete",
     "wave dispatch": "run create",
@@ -113,36 +154,34 @@ EPOCH1_REPLACEMENTS: Final[Mapping[str, str | None]] = {
     "wave fail": "run fail",
     "wave fix-ci": None,
     "wave fix-ci-loop": None,
+    "wave graph": None,
     "wave integration adopt": "batch adopt-landed",
+    "wave integration show": None,
     "wave land": "batch integrate",
     "wave land-batch": "batch integrate",
+    "wave next-ready": None,
     "wave plan": "task create",
     "wave policy set": None,
+    "wave policy show": None,
+    "wave prune-branches": None,
     "wave release": None,
     "wave review": None,
+    "wave show": None,
     "wave update": None,
     "wave verify-commits": None,
-    "worktree cleanup": None,
-    "worktree create": None,
-    "worktree merge-back": "batch integrate",
-    "worktree path-fix": None,
-    "worktree reconcile": None,
-}
-
-
-#: Verbs the flag day removed from the command tree, mapped to the verb that
-#: replaces each. Unlike :data:`EPOCH1_REPLACEMENTS` these are no longer on
-#: the tree, so the root group answers them before click reports an unknown
-#: command.
-RETIRED_VERBS: Final[Mapping[str, str]] = {
-    "repo link": "workspace member add",
-    "repo link-workspace": "workspace member add",
+    "wave waivers": None,
     "workspace add-repo": "workspace member add",
     "workspace init": "workspace add",
     "workspace remove-repo": "workspace member remove",
     "workspace status": "workspace show",
     "workspace validate": "workspace show",
+    "worktree create": None,
+    "worktree list": None,
+    "worktree path-fix": None,
 }
+
+#: The longest retired command path, in words.
+_LONGEST_RETIRED: Final = max(len(path.split()) for path in RETIRED_VERBS)
 
 
 def retired_verb(args: Sequence[str]) -> str | None:
@@ -154,7 +193,7 @@ def retired_verb(args: Sequence[str]) -> str | None:
     Returns:
         The retired command path, or ``None`` when ``args`` names none.
     """
-    for length in (2, 1):
+    for length in range(_LONGEST_RETIRED, 0, -1):
         path = " ".join(args[:length])
         if path in RETIRED_VERBS:
             return path
@@ -162,28 +201,33 @@ def retired_verb(args: Sequence[str]) -> str | None:
 
 
 def replacement_guidance(command_path: str) -> str:
-    """Return what to run instead of the refused epoch-1 verb at ``command_path``.
+    """Return what to run instead of the epoch-1 verb at ``command_path``.
 
     Args:
         command_path: The verb path after ``eawf``, words separated by one
             space (``wave claim``); empty when no command was running.
 
     Returns:
-        One clause naming the epoch-2 replacement, stating that the verb
-        retired without one, or -- for a path the table does not carry --
-        pointing at the four epoch-2 lifecycle nouns.
+        One clause naming the replacement, or -- for a verb nothing replaces
+        -- pointing at ``eawf migrate epoch2 --plan``; for a path neither
+        table carries, pointing at the four epoch-2 lifecycle nouns.
     """
-    if command_path in RETIRED_VERBS:
-        return (
-            f"run `eawf {RETIRED_VERBS[command_path]}` instead, the verb that replaces "
-            f"`eawf {command_path}`"
-        )
-    if command_path not in EPOCH1_REPLACEMENTS:
+    table = RETIRED_VERBS if command_path in RETIRED_VERBS else EPOCH1_REPLACEMENTS
+    if command_path not in table:
         return "use the epoch-2 verbs instead (eawf milestone|batch|task|run --help)"
-    replacement = EPOCH1_REPLACEMENTS[command_path]
+    replacement = table[command_path]
     if replacement is None:
-        return f"`eawf {command_path}` retired at the flag day and no epoch-2 verb replaces it"
-    return f"run `eawf {replacement}` instead, the epoch-2 verb that replaces `eawf {command_path}`"
+        return (
+            f"no epoch-2 verb replaces `eawf {command_path}`; inspect or migrate an epoch-1 "
+            f"tree with `eawf {MIGRATION_PLAN_VERB}`"
+        )
+    return f"run `eawf {replacement}` instead, the verb that replaces `eawf {command_path}`"
 
 
-__all__ = ["EPOCH1_REPLACEMENTS", "RETIRED_VERBS", "replacement_guidance", "retired_verb"]
+__all__ = [
+    "EPOCH1_REPLACEMENTS",
+    "MIGRATION_PLAN_VERB",
+    "RETIRED_VERBS",
+    "replacement_guidance",
+    "retired_verb",
+]

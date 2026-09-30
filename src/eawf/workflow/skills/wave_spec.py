@@ -55,8 +55,8 @@ _VALID_VERBS: frozenset[str] = frozenset({"init", "validate"})
 _DEFAULT_VERB = "init"
 
 _VERB_TO_CLI: dict[str, str] = {
-    "init": "eawf spec init",
-    "validate": "eawf spec validate",
+    "init": "eawf migrate epoch2 --plan",
+    "validate": "eawf migrate epoch2 --plan",
 }
 
 

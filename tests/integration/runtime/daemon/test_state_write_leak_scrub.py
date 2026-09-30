@@ -30,7 +30,7 @@ import orjson
 import pytest
 
 from eawf import __version__
-from eawf.kernel.state.enums import BacklogPriority, ProjectStatus, StoreKind
+from eawf.kernel.state.enums import ProjectStatus, StoreKind
 from eawf.kernel.state.models import State, WorkspaceIndex, WorkspaceRepoRef
 from eawf.kernel.state.mutations import Mutation, MutationKind
 from eawf.kernel.store.paths import store_path
@@ -41,7 +41,6 @@ from eawf.runtime.daemon.methods import state as daemon_state
 from eawf.runtime.daemon.methods.state import mutate
 from eawf.surfaces.cli import _mutation
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.workflow.evidence.backlog import add_backlog
 from eawf.workflow.lifecycle.wave import fail_wave
 from eawf.workflow.verify.preflight import ClosePreflight
 
@@ -248,29 +247,6 @@ def test_mutate_wave_close_refuses_leaking_outcome(
     _assert_nothing_written(state_path, before, tmp_path / "wal")
 
 
-def test_state_transaction_refuses_leaking_backlog_title(tmp_path: Path) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    before = _write_state(state_path)
-    _mutation.set_daemonless_flag(False)
-
-    with (
-        pytest.raises(cli_errors.ValidationError) as excinfo,
-        _mutation.state_transaction(state_path) as state,
-    ):
-        add_backlog(
-            state,
-            item_id="B900",
-            title=f"triage {MACOS_HOME}/notes",
-            priority=BacklogPriority.P2,
-            scope_id="ABC",
-        )
-
-    message = str(excinfo.value)
-    assert message.startswith("validation_failed: state_leak_refused: ")
-    assert "backlog.B900.title (home_path)" in message
-    assert state_path.read_bytes() == before
-
-
 def test_state_transaction_refuses_leaking_wave_outcome(tmp_path: Path) -> None:
     state_path = tmp_path / ".ea" / "state.json"
     before = _write_state(state_path)
@@ -327,28 +303,6 @@ def test_mutate_wave_close_clean_write_is_byte_identical(
     assert state_path.read_bytes() == seen[0]
     closed = orjson.loads(seen[0])["waves"][_WAVE]
     assert (closed["status"], closed["outcome"]) == ("closed", "shipped cleanly")
-
-
-def test_state_transaction_clean_write_is_byte_identical(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = tmp_path / ".ea" / "state.json"
-    _write_state(state_path)
-    _mutation.set_daemonless_flag(False)
-    seen = _record_scrubbed_bytes(_mutation, monkeypatch)
-
-    with _mutation.state_transaction(state_path) as state:
-        add_backlog(
-            state,
-            item_id="B901",
-            title="triage the flaky heartbeat test",
-            priority=BacklogPriority.P2,
-            scope_id="ABC",
-        )
-
-    assert len(seen) == 1
-    assert state_path.read_bytes() == seen[0]
-    assert orjson.loads(seen[0])["backlog"]["B901"]["title"] == "triage the flaky heartbeat test"
 
 
 def _workspace_state(*, code: str, title: str) -> dict[str, object]:

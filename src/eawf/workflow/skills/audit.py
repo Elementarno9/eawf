@@ -369,7 +369,11 @@ class AuditSkill(Skill):
 
         persisted_records: list[str] = []
         state_mutations: list[str] = []
-        next_actions: list[str] = ["eawf phase prepare-close", "eawf ship", "eawf audit show"]
+        next_actions: list[str] = [
+            "eawf milestone open-review",
+            "eawf ship",
+            "eawf migrate epoch2 --plan",
+        ]
         evidence_refs: list[str] = []
 
         # Step 1 — probe ran. Step 2: resolve scope.
@@ -527,7 +531,7 @@ class AuditSkill(Skill):
         evidence_refs.append(audit_artifact_urn)
 
         # Step 11 — update outcomes/hypotheses only from audit evidence
-        # (verdict-bearing state path runs through ``eawf audit run``).
+        # (verdict-bearing state path runs through ``eawf record append``).
 
         body = AuditBody(
             scope_id=scope_id,

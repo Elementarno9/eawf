@@ -19,7 +19,7 @@ Layout mirrors :class:`~eawf.kernel.state.models.McpGrant`:
 from __future__ import annotations
 
 import logging
-from typing import Literal, get_args
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 
 SandboxPolicyScopeKind = Literal["wave", "profile", "global"]
-SANDBOX_SCOPE_KINDS: tuple[SandboxPolicyScopeKind, ...] = get_args(SandboxPolicyScopeKind)
 
 
 class SandboxPolicy(BaseModel):
@@ -101,21 +100,6 @@ def invert_deny_to_allow(denied: set[str] | frozenset[str] | list[str]) -> list[
     return sorted(TOOL_UNIVERSE - set(denied))
 
 
-def allocate_policy_id(existing: dict[str, SandboxPolicy] | None) -> str:
-    """Return the smallest free ``POL-<n>`` id given the existing pool."""
-    pool = existing or {}
-    next_n = 1
-    for existing_id in pool:
-        if not existing_id.startswith(_POLICY_ID_PREFIX):
-            continue
-        try:
-            n = int(existing_id.removeprefix(_POLICY_ID_PREFIX))
-        except ValueError:
-            continue
-        next_n = max(next_n, n + 1)
-    return f"{_POLICY_ID_PREFIX}{next_n}"
-
-
 def resolve_denied_tools(
     policies: dict[str, SandboxPolicy] | None,
     *,
@@ -155,11 +139,9 @@ def resolve_denied_tools(
 
 
 __all__ = [
-    "SANDBOX_SCOPE_KINDS",
     "TOOL_UNIVERSE",
     "SandboxPolicy",
     "SandboxPolicyScopeKind",
-    "allocate_policy_id",
     "invert_deny_to_allow",
     "resolve_denied_tools",
 ]

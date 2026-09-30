@@ -504,7 +504,7 @@ def _run_project_record_check(workspace: Path | None) -> _ProjectRecordCheck:
         return _ProjectRecordCheck(
             name=name,
             status="warn",
-            detail="repo state has no project record; run `eawf project init --upgrade`",
+            detail="repo state has no project record; run `eawf repository create`",
         )
     return _ProjectRecordCheck(
         name=name,

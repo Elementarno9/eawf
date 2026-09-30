@@ -13,9 +13,9 @@ Propose, supersede or show a Decision.
 ## 1. Authority
 
 - An operator or an authorized agent may initiate this skill. Agent invocation never widens authority: it needs an enclosing Run, Task or Campaign scope whose compiled capsule already grants every read, write, RPC, budget and external effect below.
-- Operates on: Decision, through `eawf decision add`, `eawf decision supersede`, `eawf decision list`, `eawf decision graph`.
+- Operates on: Decision, through `eawf question open-decision`, `eawf question answer`.
 - Operator-only actions: `supersede`. An agent that reaches one files it with `eawf question open-decision` (`runtime.question.open_decision`), shows the bound question the answer carries, and stops; it never chooses the recommended option itself. In Codex the bound question is the answer's `numbered_prompt`, printed verbatim, and the operator's reply is relayed with `eawf question answer` (`runtime.question.answer_numbered`); the console answers the same record, and the first answer wins.
-- Effects: The decision add, supersede, list and graph verbs.
+- Effects: The question open-decision and answer verbs.
 - Allowed RPCs: `runtime.question.answer_numbered`, `runtime.question.open_decision`. Any other RPC is denied before it reaches a handler.
 - Canonical state changes only through those RPCs, and every mutating call carries `--expected-revision` and `--idempotency-key`.
 - Local write root: none.

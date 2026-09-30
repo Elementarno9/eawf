@@ -16,6 +16,7 @@ is stubbed out, so no socket is bound) against a tmp repository.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import sys
 import time
 from datetime import UTC, datetime, timedelta
@@ -36,7 +37,6 @@ from eawf.runtime.daemon.churn import (
     ChurnRecord,
     lineage_born_at,
 )
-from eawf.surfaces.cli.app import app
 from tests._session_helpers import seed_active_session
 
 pytestmark = [
@@ -46,19 +46,27 @@ pytestmark = [
 
 runner = CliRunner()
 
+#: A committed epoch-1 state holding one project and no sessions.
+EMPTY_REPO_STATE: Final = (
+    Path(__file__).resolve().parents[3] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
+)
+
 #: When the pre-existing lineage in the restart tests first booted.
 LINEAGE_BIRTH: Final = datetime.now(UTC) - timedelta(hours=2)
 
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An epoch-1 repository with no sessions yet."""
+    """An epoch-1 repository with no sessions yet, laid down from a committed state.
+
+    The flag day retired ``project init``, so the tree is copied into place
+    rather than built through the CLI.
+    """
     root = tmp_path / "repo"
-    root.mkdir()
+    (root / ".ea").mkdir(parents=True)
+    shutil.copyfile(EMPTY_REPO_STATE, root / ".ea" / "state.json")
     monkeypatch.setenv("EA_STATE", str(root / ".ea" / "state.json"))
     monkeypatch.setenv("EAWF_REGISTRY_PATH", str(tmp_path / "registry.json"))
-    result = runner.invoke(app, ["project", "init", "QR", "--title", "Q", "--domains", "x"])
-    assert result.exit_code == 0, result.output
     return root
 
 

@@ -23,28 +23,23 @@ close then lands, so the refusal assertions are what the fix changed.
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import orjson
 import pytest
 from typer.testing import CliRunner
 
 from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
-from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus
 from eawf.kernel.state.models import AgentSession, State
 from eawf.kernel.state.mutations import Mutation, MutationKind
-from eawf.kernel.store.paths import store_path
 from eawf.platform.profiles.models import VerifyBlock
 from eawf.runtime.daemon.methods.state_close import compute_wave_close_readiness
-from eawf.surfaces.cli._mutation import DAEMONLESS_WAIVER_EVENT_TYPE
-from eawf.surfaces.cli.app import app
-from eawf.surfaces.cli.commands import lifecycle_wave
-from eawf.workflow.lifecycle.transitions import LifecycleError
+from eawf.workflow.lifecycle.transitions import LifecycleError, claim_wave
 from eawf.workflow.verify import readiness as readiness_mod
-from eawf.workflow.verify.models import CloseReadiness
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
 
@@ -86,6 +81,16 @@ def _load(workspace: Path) -> State:
     return State.model_validate(orjson.loads(_state_path(workspace).read_bytes()))
 
 
+#: A committed epoch-1 state holding one phase, one iter and one wave.
+_WAVE_STATE: Final = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
+    / "states"
+    / "valid"
+    / "03-phase-iter-wave-active.json"
+)
+
+
 def _save(workspace: Path, state: State) -> None:
     _state_path(workspace).write_text(state.model_dump_json(), encoding="utf-8")
 
@@ -98,32 +103,23 @@ def _bootstrap(workspace: Path, *, argv: list[str], uiux_bands: list[str]) -> No
         argv: The ``command_exit_zero`` gate argv.
         uiux_bands: Band tokens for the enforcing profile; empty is whole-fleet.
     """
-    for args in (
-        ["project", "init", "QR", "--title", "Quant", "--domains", "quant"],
-        ["phase", "open", "--auto", "--title", "P1"],
-        ["iter", "open", "--phase", "P01", "--title", "I1"],
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            _WAVE_ID,
-            "--title",
-            "close gate fixture",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "S",
-        ],
-    ):
-        result = runner.invoke(app, args)
-        assert result.exit_code == 0, result.stdout
+    # The flag day retired the epoch-1 verbs that used to build this tree,
+    # so it is laid down from a committed state and claimed through the
+    # library the claim verb called.
+    payload = orjson.loads(_WAVE_STATE.read_bytes())
+    wave_row = payload["waves"].pop("P01-I01-W01")
+    wave_row.update(id=_WAVE_ID, status="pending", effort_bucket="S", title="close gate fixture")
+    payload["waves"][_WAVE_ID] = wave_row
+    payload["current"]["active_wave_ids"] = []
+    _state_path(workspace).parent.mkdir(parents=True, exist_ok=True)
+    _state_path(workspace).write_bytes(orjson.dumps(payload))
     state = _load(workspace)
     state.waves[_WAVE_ID].success_criteria = [make_claim_criterion()]
     _save(workspace, state)
     seed_active_session_on_disk(_state_path(workspace), session_id="S-1")
-    result = runner.invoke(app, ["wave", "claim", _WAVE_ID, "--session", "S-1"])
-    assert result.exit_code == 0, result.stdout
+    state = _load(workspace)
+    claim_wave(state, wave_id=_WAVE_ID, session_id="S-1")
+    _save(workspace, state)
 
     state = _load(workspace)
     wave = state.waves[_WAVE_ID]
@@ -175,27 +171,6 @@ def _bootstrap(workspace: Path, *, argv: list[str], uiux_bands: list[str]) -> No
     )
 
 
-def _assert_shape_narrows_as_declared(workspace: Path, *, uiux_bands: list[str]) -> None:
-    """Guard: the band-scoped shape really narrows the fixture wave, the other does not."""
-    state = _load(workspace)
-    merged = readiness_mod.load_active_verify_block(
-        _WAVE_ID, state, repo_root=workspace, config_root=workspace
-    )
-    assert merged is not None and merged.enforce
-    narrowed = readiness_mod.resolve_wave_verify_block(merged, state.waves[_WAVE_ID])
-    assert narrowed is not None
-    assert narrowed.enforce is not bool(uiux_bands)
-
-
-def _events(workspace: Path, event_type: str) -> list[dict[str, Any]]:
-    path = store_path(_state_path(workspace), StoreKind.EVENT)
-    if not path.exists():
-        return []
-    lines = path.read_text(encoding="utf-8").splitlines()
-    rows = [orjson.loads(line) for line in lines if line.strip()]
-    return [row for row in rows if row["payload"]["event_type"] == event_type]
-
-
 def _seed_narrowed_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     """Seed the pre-fix branch: the close doors see the band-narrowed block."""
     real = readiness_mod.load_active_verify_block
@@ -209,118 +184,6 @@ def _seed_narrowed_loader(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --- the CLI fallback close ---------------------------------------------------
-
-
-@PROFILE_SHAPES
-@pytest.mark.parametrize("waiver", [[], ["--no-runtime"]], ids=["no-waiver", "no-runtime"])
-def test_wave_close_cmd_refuses_failing_gate_under_both_profile_shapes(
-    workspace: Path, uiux_bands: list[str], waiver: list[str]
-) -> None:
-    """A mechanical wave's failing gate refuses the daemonless close, waiver or not."""
-    _bootstrap(workspace, argv=_FAILING_ARGV, uiux_bands=uiux_bands)
-    _assert_shape_narrows_as_declared(workspace, uiux_bands=uiux_bands)
-
-    result = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done", *waiver])
-
-    assert result.exit_code != 0, result.stdout
-    assert "readiness enforcement failed" in result.stdout
-    assert "CR-01:fail" in result.stdout
-    assert _load(workspace).waves[_WAVE_ID].status.value == "claimed"
-    assert _events(workspace, "wave close") == []
-    assert _events(workspace, DAEMONLESS_WAIVER_EVENT_TYPE) == []
-
-
-@PROFILE_SHAPES
-def test_wave_close_cmd_closes_passing_gate_under_both_profile_shapes(
-    workspace: Path, uiux_bands: list[str]
-) -> None:
-    """Boundary: a passing gate closes, and ``--no-runtime`` still waives the runtime."""
-    _bootstrap(workspace, argv=_PASSING_ARGV, uiux_bands=uiux_bands)
-
-    result = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done", "--no-runtime"])
-
-    assert result.exit_code == 0, result.stdout
-    assert _load(workspace).waves[_WAVE_ID].status.value == "closed"
-    closes = _events(workspace, "wave close")
-    assert [row["payload"]["extras"]["close_mechanism"] for row in closes] == ["daemonless-waiver"]
-
-
-@PROFILE_SHAPES
-def test_wave_close_cmd_closes_failing_gate_under_explicit_gate_waiver(
-    workspace: Path, uiux_bands: list[str]
-) -> None:
-    """The per-gate ``--waive`` is the override for a failing gate."""
-    _bootstrap(workspace, argv=_FAILING_ARGV, uiux_bands=uiux_bands)
-    # Waivers bind to the wave's commit; with none, every waiver reads as stale.
-    subprocess.run(
-        [
-            "git",
-            "-C",
-            str(workspace),
-            "commit",
-            "-q",
-            "--allow-empty",
-            "-m",
-            f"fix: land the wave\n\nEawf-Wave: {_WAVE_ID}",
-        ],
-        check=True,
-    )
-
-    result = runner.invoke(
-        app,
-        [
-            "wave",
-            "close",
-            _WAVE_ID,
-            "--outcome",
-            "done",
-            "--waive",
-            "GATE-01",
-            "--reason",
-            "ref is pruned upstream; verified by hand",
-            "--no-runtime",
-        ],
-    )
-
-    assert result.exit_code == 0, result.stdout
-    assert _load(workspace).waves[_WAVE_ID].status.value == "closed"
-
-
-def test_wave_close_cmd_pre_fix_narrowed_branch_lets_failing_gate_close(
-    workspace: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Seeding the narrowed branch back in closes the band-scoped failing gate."""
-    _bootstrap(workspace, argv=_FAILING_ARGV, uiux_bands=["tui"])
-    _seed_narrowed_loader(monkeypatch)
-
-    result = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done", "--no-runtime"])
-
-    assert result.exit_code == 0, result.stdout
-    assert _load(workspace).waves[_WAVE_ID].status.value == "closed"
-
-
-@PROFILE_SHAPES
-def test_wave_close_cmd_pre_fix_runtime_waiver_lets_failing_gate_close(
-    workspace: Path, monkeypatch: pytest.MonkeyPatch, uiux_bands: list[str]
-) -> None:
-    """Seeding the old ``--no-runtime`` swallow back in closes the failing gate."""
-    _bootstrap(workspace, argv=_FAILING_ARGV, uiux_bands=uiux_bands)
-    real: Callable[..., CloseReadiness | None] = lifecycle_wave._run_daemonless_close_preflight
-
-    def _swallow_when_waived(state: State, *, waived: bool, **kwargs: Any) -> CloseReadiness | None:
-        try:
-            return real(state, waived=waived, **kwargs)
-        except LifecycleError:
-            if not waived:
-                raise
-            return None
-
-    monkeypatch.setattr(lifecycle_wave, "_run_daemonless_close_preflight", _swallow_when_waived)
-
-    result = runner.invoke(app, ["wave", "close", _WAVE_ID, "--outcome", "done", "--no-runtime"])
-
-    assert result.exit_code == 0, result.stdout
-    assert _load(workspace).waves[_WAVE_ID].status.value == "closed"
 
 
 # --- the lock-free readiness pre-flight ----------------------------------------

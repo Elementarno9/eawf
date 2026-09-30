@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `release-process`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=release-process version=1.3 hash=7608626b75e44fa1 -->
+<!-- BEGIN EAWF:managed id=release-process version=1.4 hash=daaded29edc19453 -->
 # `release-process`
 
 Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation.
@@ -12,7 +12,7 @@ Releases are opt-in per repo via ``vcs.conventions.release.cadence``. The two su
 - ``manual`` — the default for every repo; releases ride a separate operator-driven tag flow.
 - ``per-phase`` — opt-in, set explicitly in the repo config; each phase PR closes with a release-readiness pre-flight gate and a post-merge release tag. Phase close = at least one minor version bump.
 
-Under ``per-phase``, ``eawf phase close`` refuses until the phase-close audit carries a passing ``release-preflight`` check. That check covers:
+Under ``per-phase``, ``eawf milestone accept`` refuses until the phase-close audit carries a passing ``release-preflight`` check. That check covers:
 
 - ``CHANGELOG.md`` has a new section for the release version with at least one bullet.
 - The package version module (``src/<pkg>/_version.py``) advanced from the prior release.

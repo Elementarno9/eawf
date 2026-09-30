@@ -81,7 +81,7 @@ class SecurityReviewSkill(Skill):
                     "findings": [],
                     "reason": "spec_path is required and must point at a readable audit spec",
                 },
-                next_valid_actions=["eawf audit run --spec <path>"],
+                next_valid_actions=["eawf record append"],
             )
 
         # Imported here so loading the skill registry stays free of the
@@ -121,7 +121,7 @@ class SecurityReviewSkill(Skill):
             },
             persisted_store_records=[evt_id],
             repair_commands=repair,
-            next_valid_actions=[f"eawf audit run --spec {spec_path}"],
+            next_valid_actions=["eawf record append"],
         )
 
 

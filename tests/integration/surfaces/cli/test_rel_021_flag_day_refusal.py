@@ -10,7 +10,6 @@ that replaces it, or the fact that it retired. Epoch-1 reads keep working.
 from __future__ import annotations
 
 import hashlib
-import json
 import shutil
 from pathlib import Path
 from typing import Final
@@ -22,7 +21,7 @@ from typer.testing import CliRunner
 from eawf.kernel.migration.epoch2.canary import GENERATIONS_DIRNAME, MARKER_FILENAME
 from eawf.kernel.state.io import LEGACY_OPERATION_REMOVED
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli import exit_codes, flag_day_gate
+from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
@@ -72,98 +71,12 @@ def _state_digest(repo: Path) -> str:
     return hashlib.sha256((repo / ".ea" / "state.json").read_bytes()).hexdigest()
 
 
-def test_rel_021_a_refused_wave_plan_names_task_create(repo: Path) -> None:
-    _mark(repo)
-    before = _state_digest(repo)
-    code, output = _invoke(
-        "wave",
-        "plan",
-        "P01-I01",
-        "--id",
-        "P01-I01-W02",
-        "--title",
-        "two",
-        "--files",
-        "src/",
-        "--effort-bucket",
-        "M",
-    )
-    assert code == exit_codes.VALIDATION_ERROR, output
-    assert LEGACY_OPERATION_REMOVED in output
-    assert "run `eawf task create` instead" in output
-    assert f"kind: {cli_errors.LEGACY_OPERATION_REMOVED_KIND}" in output
-    assert _state_digest(repo) == before
-
-
 def test_rel_021_a_refused_phase_open_names_milestone_create(repo: Path) -> None:
     _mark(repo)
     before = _state_digest(repo)
     code, output = _invoke("phase", "open", "--auto", "--title", "y")
     assert code == exit_codes.VALIDATION_ERROR, output
     assert "run `eawf milestone create` instead" in output
-    assert _state_digest(repo) == before
-
-
-def test_rel_021_the_json_envelope_carries_the_typed_refusal(repo: Path) -> None:
-    _mark(repo)
-    code, output = _invoke(
-        "--json",
-        "wave",
-        "plan",
-        "P01-I01",
-        "--id",
-        "P01-I01-W02",
-        "--title",
-        "two",
-        "--files",
-        "src/",
-        "--effort-bucket",
-        "M",
-    )
-    assert code == exit_codes.VALIDATION_ERROR, output
-    envelope = json.loads(output)
-    assert envelope["error"] == "ValidationError"
-    assert envelope["exit_code"] == exit_codes.VALIDATION_ERROR
-    assert envelope["data"]["kind"] == cli_errors.LEGACY_OPERATION_REMOVED_KIND
-    assert envelope["message"].startswith(LEGACY_OPERATION_REMOVED)
-    assert envelope["message"].endswith(
-        "run `eawf task create` instead, the epoch-2 verb that replaces `eawf wave plan`"
-    )
-    assert (
-        envelope["suggested_next_step"]
-        == cli_errors._KIND_HINTS[cli_errors.LEGACY_OPERATION_REMOVED_KIND]
-    )
-
-
-@pytest.mark.parametrize("argv", [("wave", "graph"), ("roadmap", "show"), ("state", "show")])
-def test_rel_021_epoch1_reads_keep_working_on_an_epoch2_tree(
-    repo: Path, argv: tuple[str, ...]
-) -> None:
-    _mark(repo)
-    code, output = _invoke(*argv)
-    assert code == exit_codes.OK, output
-    assert LEGACY_OPERATION_REMOVED not in output
-
-
-def test_rel_021_an_unmarked_tree_refuses_the_epoch1_write_too(repo: Path) -> None:
-    """After the flag day a plain epoch-1 tree is read-only until it migrates."""
-    before = _state_digest(repo)
-    code, output = _invoke(
-        "wave",
-        "plan",
-        "P01-I01",
-        "--id",
-        "P01-I01-W02",
-        "--title",
-        "two",
-        "--files",
-        "src/",
-        "--effort-bucket",
-        "M",
-    )
-    assert code == exit_codes.ATTACH_FAILURE, output
-    assert f"kind: {flag_day_gate.MIGRATION_REQUIRED_KIND}" in output
-    assert "eawf migrate epoch2" in output
     assert _state_digest(repo) == before
 
 
@@ -174,24 +87,6 @@ def _rendered(message: str, command_path: str | None) -> cli_errors.ErrorEnvelop
         return cli_errors.build_envelope(err)
     with click.Context(click.Command("leaf"), info_name=command_path):
         return cli_errors.build_envelope(err)
-
-
-def test_rel_021_a_daemon_refusal_gets_the_replacement_of_the_running_verb() -> None:
-    message = f"validation_failed: {LEGACY_OPERATION_REMOVED}: .ea is frozen"
-    envelope = _rendered(message, "eawf wave claim")
-    assert envelope.message == (
-        f"{message}; run `eawf task claim` instead, the epoch-2 verb that replaces "
-        "`eawf wave claim`"
-    )
-    assert envelope.data["kind"] == cli_errors.LEGACY_OPERATION_REMOVED_KIND
-    assert envelope.exit_code == exit_codes.VALIDATION_ERROR
-
-
-def test_rel_021_a_retired_verb_refusal_says_nothing_replaces_it() -> None:
-    envelope = _rendered(f"{LEGACY_OPERATION_REMOVED}: frozen", "eawf wave release")
-    assert envelope.message.endswith(
-        "`eawf wave release` retired at the flag day and no epoch-2 verb replaces it"
-    )
 
 
 def test_rel_021_a_refusal_outside_any_command_points_at_the_native_nouns() -> None:

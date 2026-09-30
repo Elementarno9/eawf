@@ -555,7 +555,7 @@ def check_wave_blocks_invariant(state: State) -> Iterable[Violation]:
     vice versa). When a referenced peer is absent from ``state.waves`` the
     pair is silently skipped — that failure is reported by
     :func:`check_parent_ids` already. Repair drift with
-    ``eawf wave blocks-rebuild``.
+    the retired ``wave blocks-rebuild`` verb.
     """
     waves = state.waves
     for wid, w in waves.items():

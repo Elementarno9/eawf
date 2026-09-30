@@ -81,11 +81,6 @@ def test_relocated_research_brief_resolves_under_canonical_subdir() -> None:
 @pytest.mark.parametrize(
     ("citing_file", "new_ref"),
     [
-        # criterion_drift.py docstring cites the P23 ship-gate audit by its new path.
-        (
-            "src/eawf/workflow/lifecycle/criterion_drift.py",
-            ".ea/artifacts/audits/A29-P23-ship-gate.md",
-        ),
         # The A48 flow audit cites the relocated TUI-chassis brief by its new path.
         (
             ".ea/artifacts/audits/2026-06-03-A48-P29-i05-flow-audit.md",

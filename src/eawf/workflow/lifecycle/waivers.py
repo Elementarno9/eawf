@@ -85,10 +85,6 @@ WAIVER_NO_REASON_SUMMARY: str = "(no reason)"
 #: and lets the CLI proxy through the daemon RPC.
 EVIDENCE_DIRECT_WRITE_ENV: str = "EAWF_EVIDENCE_DIRECT_WRITE"
 
-#: The metering-specific override intentionally remains available when gate
-#: waivers are disabled. v0.7 owns strict runtime-usage provenance.
-RUNTIME_ZERO_WAIVER_REF: str = "runtime-zero"
-
 
 class WaiverInput(_StrictModel):
     """One operator-supplied waiver request for a single gate.
@@ -415,7 +411,6 @@ def apply_waiver(
 __all__ = [
     "DEFAULT_WAIVER_MODE",
     "EVIDENCE_DIRECT_WRITE_ENV",
-    "RUNTIME_ZERO_WAIVER_REF",
     "WAIVER_NO_REASON_SUMMARY",
     "WaiverInput",
     "WaiverMode",

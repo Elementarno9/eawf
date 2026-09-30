@@ -33,7 +33,6 @@ from eawf.workflow.lifecycle.wave_sha import (
     _parse_index,
     _reachable_wave_keys,
     build_wave_sha_index,
-    commit_matches_wave,
     derive_wave_sha,
 )
 
@@ -181,13 +180,6 @@ def test_first_parent_wave_candidates_blank_line_trailer_resolves_wave(repo: Pat
     assert _reachable_wave_keys(repo) == {sha: {"P32-I01-W02"}}
 
 
-def test_commit_matches_wave_blank_line_trailer_matches(repo: Path) -> None:
-    sha = _commit(repo, name="a.txt", message=_BLANK_LINE_MESSAGE)
-
-    assert commit_matches_wave(sha, "P32-I01-W02", repo_root=repo) is True
-    assert commit_matches_wave(sha, "P32-I01-W03", repo_root=repo) is False
-
-
 def test_first_parent_wave_candidates_squash_indexes_every_wave(repo: Path) -> None:
     """A squash commit naming several waves is a candidate for each of them."""
     sha = _commit(repo, name="a.txt", message=_SQUASH_MESSAGE)
@@ -225,16 +217,6 @@ def test_build_wave_sha_index_mid_sentence_mention_resolves_nothing(repo: Path) 
     assert derive_wave_sha("P32-I01-W03", index=build_wave_sha_index(repo)) is None
     assert _first_parent_wave_candidates(repo) == {}
     assert _reachable_wave_keys(repo) == {sha: set()}
-
-
-def test_commit_matches_wave_mid_sentence_and_longer_id_do_not_match(repo: Path) -> None:
-    """Neither prose nor a wave id that merely starts with the target counts."""
-    prose = _commit(repo, name="a.txt", message=_MID_SENTENCE_MESSAGE)
-    longer = _commit(repo, name="b.txt", message="feat: x\n\nEawf-Wave: P32-I01-W030\n")
-
-    assert commit_matches_wave(prose, "P32-I01-W03", repo_root=repo) is False
-    assert commit_matches_wave(longer, "P32-I01-W03", repo_root=repo) is False
-    assert commit_matches_wave(longer, "P32-I01-W030", repo_root=repo) is True
 
 
 # ---- parity with the commit lint --------------------------------------------

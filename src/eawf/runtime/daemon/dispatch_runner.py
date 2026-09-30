@@ -1164,7 +1164,7 @@ def accrue_tokens_consumed(
 
     Called once per ``dispatch_cost`` event so the live burn gauge on the
     TUI advances **during** execution rather than only on the manual
-    ``eawf wave budget consume`` CLI. The increment runs under the same
+    the retired ``wave budget consume`` verb CLI. The increment runs under the same
     defense-in-depth ``portalock(state.json)`` + locked-atomic-write the
     daemon's ``state.mutate`` path uses (per the daemon-as-sole-mutator
     rule), and delegates to :func:`eawf.runtime.budget.service.record_consumption`

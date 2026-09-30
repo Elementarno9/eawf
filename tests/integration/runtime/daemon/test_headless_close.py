@@ -24,7 +24,6 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,20 +32,17 @@ import pytest
 from pydantic import ValidationError
 
 from eawf.kernel.state.enums import (
-    AgentSessionRole,
-    AgentSessionStatus,
     CloseAttemptStatus,
     StoreKind,
     WaveStatus,
 )
-from eawf.kernel.state.models import AgentSession, State
+from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_dir, store_path
 from eawf.runtime.daemon import gate_execution
 from eawf.runtime.daemon.methods import close as close_module
 from eawf.runtime.daemon.methods.close import status, submit
 from eawf.runtime.daemon.methods.close_hosted import host
 from eawf.runtime.daemon.methods.daemon import ping
-from eawf.surfaces.cli import errors as cli_errors
 from eawf.workflow.audit_dsl.models import CheckResult, CheckSpec
 from eawf.workflow.verify.hosted_close import count_scope_waivers, resolve_hosted_close
 from tests.integration.runtime.daemon.test_close_fault_matrix import (
@@ -333,70 +329,6 @@ def test_close_host_takes_no_waiver_when_the_daemon_is_available(
     assert decision.waiver_required is False
 
 
-def test_daemonless_waiver_records_and_counts_when_the_daemon_is_unavailable(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Without a daemon the bypass lane still records its waiver and counts it."""
-    from eawf.surfaces.cli._mutation import (
-        DAEMONLESS_WAIVER_EVENT_TYPE,
-        enforce_daemonless_close_waiver,
-    )
-    from eawf.workflow.lifecycle.waivers import WaiverInput, apply_waiver
-
-    _pin_runtime_dir(tmp_path, monkeypatch)
-    repo, state_path, _ctx = _repo_with_state(tmp_path)
-    _configure_real_fault_matrix(repo=repo, state_path=state_path, monkeypatch=monkeypatch)
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    monkeypatch.setenv("EAWF_EVIDENCE_DIRECT_WRITE", "1")
-    state = State.model_validate_json(state_path.read_bytes())
-    state.agent_sessions["AS-OPERATOR"] = AgentSession(
-        id="AS-OPERATOR",
-        role=AgentSessionRole.OPERATOR,
-        runtime="cli",
-        scope_id=_WAVE,
-        status=AgentSessionStatus.ACTIVE,
-        started_at=datetime.now(UTC),
-    )
-    wave = state.waves[_WAVE]
-
-    decision = resolve_hosted_close(mode="hosted", daemon_available=False, gate_bearing=True)
-    assert decision.hosted is False
-    assert decision.waiver_required is True
-
-    with pytest.raises(cli_errors.UserError, match="gate-bearing"):
-        enforce_daemonless_close_waiver(wave, state_path=state_path, waived=False)
-
-    mechanism = enforce_daemonless_close_waiver(
-        wave,
-        state_path=state_path,
-        waived=True,
-        reason="runtime capture unavailable; operator supplied --no-runtime",
-    )
-    apply_waiver(
-        state,
-        wave_id=_WAVE,
-        waiver=WaiverInput(gate_id="runtime-zero", reason="runtime capture unavailable"),
-        operator_identity="AS-OPERATOR",
-        mode="B",
-        state_path=state_path,
-        repo_root=repo,
-    )
-
-    assert mechanism == "daemonless-waiver"
-    events = [
-        orjson.loads(line)
-        for line in store_path(state_path, StoreKind.EVENT).read_bytes().splitlines()
-        if line.strip()
-    ]
-    waiver_events = [
-        row for row in events if row["payload"]["event_type"] == DAEMONLESS_WAIVER_EVENT_TYPE
-    ]
-    assert len(waiver_events) == 1
-    assert waiver_events[0]["payload"]["extras"]["wave"] == _WAVE
-    assert count_scope_waivers(store_dir(state_path), scope_id=_WAVE) == 1
-
-
 def test_resolve_hosted_close_gateless_daemonless_needs_no_waiver() -> None:
     """A wave with no gates has nothing to falsify, so the bypass costs nothing."""
     decision = resolve_hosted_close(
@@ -444,24 +376,3 @@ def test_close_host_rejects_an_unknown_wave(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="unknown wave"):
         asyncio.run(host(ctx, {**_params(repo), "wave_id": "P30-I23-W77"}))
-
-
-def test_submit_hosted_close_names_the_bypass_when_the_daemon_is_down(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An unreachable daemon refuses the hosted close and quotes the lane."""
-    from eawf.surfaces.cli.commands import close as close_cli
-    from eawf.surfaces.cli.flags import GlobalFlags
-
-    def _unreachable(*, method: str, params: dict[str, Any], flags: GlobalFlags) -> dict[str, Any]:
-        del params, flags
-        raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}")
-
-    monkeypatch.setattr(close_cli, "call_close_rpc", _unreachable)
-
-    with pytest.raises(cli_errors.DaemonUnreachable, match="daemonless bypass lane"):
-        close_cli.submit_hosted_close(
-            wave_id=_WAVE,
-            params=dict(_CLOSE_PARAMS),
-            flags=GlobalFlags(),
-        )

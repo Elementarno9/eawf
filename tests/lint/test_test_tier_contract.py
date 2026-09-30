@@ -195,9 +195,9 @@ def test_repo_ea_guard_is_wired_into_a_remote_resolver_alias() -> None:
     the bare resolver has none, so this distinguishes the rebound alias
     from the original without calling either.
     """
-    from eawf.surfaces.cli.commands import roadmap
+    from eawf.surfaces.cli.commands import session
 
-    assert getattr(roadmap.resolve_state_path, "__wrapped__", None) is not None
+    assert getattr(session.resolve_state_path, "__wrapped__", None) is not None
 
 
 def test_repo_ea_guard_reds_on_a_resolver_falling_through_to_the_repo(
@@ -209,29 +209,29 @@ def test_repo_ea_guard_reds_on_a_resolver_falling_through_to_the_repo(
     repository's own state on the first hop -- the accident that let tests
     read and write live project state.
     """
-    from eawf.surfaces.cli.commands import roadmap
+    from eawf.surfaces.cli.commands import session
 
     monkeypatch.delenv("EA_STATE", raising=False)
     monkeypatch.chdir(REPO_ROOT)
     with pytest.raises(RepoStateAccessError):
-        roadmap.resolve_state_path(None)
+        session.resolve_state_path(None)
 
 
 def test_repo_ea_guard_allows_a_deliberately_targeted_repo_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An explicit ``EA_STATE`` is a choice, so the repo-census family still reads."""
-    from eawf.surfaces.cli.commands import roadmap
+    from eawf.surfaces.cli.commands import session
 
     target = REPO_EA_DIR / "state.json"
     monkeypatch.setenv("EA_STATE", str(target))
-    assert roadmap.resolve_state_path(None) == target
+    assert session.resolve_state_path(None) == target
 
 
 def test_repo_ea_guard_allows_an_explicit_workspace(tmp_path: Path) -> None:
-    from eawf.surfaces.cli.commands import roadmap
+    from eawf.surfaces.cli.commands import session
 
-    assert roadmap.resolve_state_path(tmp_path) == tmp_path / ".ea" / "state.json"
+    assert session.resolve_state_path(tmp_path) == tmp_path / ".ea" / "state.json"
 
 
 def test_every_test_runs_under_its_own_runtime_dir() -> None:

@@ -69,7 +69,7 @@ class PrepBody(BaseModel):
     Claude-runtime ``EnterPlanMode`` (or a Codex text-prompt) renders to
     the operator — sourced from the canonical
     :func:`eawf.surfaces.render.plan_view.render_markdown` so the
-    plan-mode body, ``eawf roadmap show --md``, and the TUI roadmap
+    plan-mode body, the retired ``roadmap show`` verb, and the TUI roadmap
     tree all draw from the same projection.
 
     The ``no_op`` and ``blocked`` flags mark the two lifecycle stub paths

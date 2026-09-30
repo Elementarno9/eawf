@@ -28,12 +28,8 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec
-from eawf.kernel.spec.writer import scaffold_body
-from eawf.runtime.daemon.methods.spec import (
-    _extract_criterion_specs,
-    _extract_gate_specs,
-)
+from eawf.kernel.spec.common import GateSpec
+from eawf.runtime.daemon.methods.spec import _extract_gate_specs
 
 # A measurable_signal one char under the 20-char CriterionSpec floor.
 _SIGNAL_19 = "x" * 19
@@ -93,76 +89,6 @@ def test_extract_gate_specs_yields_typed_gate_rows() -> None:
     assert gate.kind == "schema_validate"
 
 
-def test_extract_criterion_specs_yields_typed_criterion_rows() -> None:
-    """The criteria extractor returns CriterionSpec rows with evidence_kind + gate_ids."""
-    body = _wrap_body(_FULL_YAML)
-    criteria = _extract_criterion_specs(body)
-    assert len(criteria) == 1
-    criterion = criteria[0]
-    assert isinstance(criterion, CriterionSpec)
-    assert criterion.id == "CR-01"
-    assert criterion.evidence_kind == "deterministic"
-    assert criterion.gate_ids == ["G-01"]
-
-
-def test_extract_accepts_bytes_and_str_identically() -> None:
-    """Bytes and str bodies parse to identical rows (the promote handler feeds bytes)."""
-    body = _wrap_body(_FULL_YAML)
-    assert _extract_gate_specs(body.encode("utf-8")) == _extract_gate_specs(body)
-    assert _extract_criterion_specs(body.encode("utf-8")) == _extract_criterion_specs(body)
-
-
-# --------------------------------------------------------------------------- #
-# Boundary — no fence, empty fence.
-# --------------------------------------------------------------------------- #
-def test_extract_no_fence_returns_empty() -> None:
-    """A body with no eawf-wave-body fence yields empty lists (back-compat)."""
-    body = "# Wave\n\nFree-form prose with no structured block.\n"
-    assert _extract_gate_specs(body) == []
-    assert _extract_criterion_specs(body) == []
-
-
-def test_extract_legacy_scaffold_returns_empty() -> None:
-    """The scaffold body the daemon writes on spec.init carries no fence."""
-    body = scaffold_body(
-        scope_id="P29-I12-W04",
-        title="Wave deliverable",
-        spec_urn="urn:eawf:v1:spec:EAWF/P29-I12-W04",
-    )
-    assert _extract_gate_specs(body) == []
-    assert _extract_criterion_specs(body) == []
-
-
-def test_extract_empty_fenced_block_returns_empty() -> None:
-    """An empty fenced block is a valid (if uninteresting) document."""
-    body = _wrap_body("")
-    assert _extract_gate_specs(body) == []
-    assert _extract_criterion_specs(body) == []
-
-
-def test_extract_criteria_without_gates() -> None:
-    """An attested criterion with no gate ref yields criteria but no gates."""
-    yaml_block = textwrap.dedent(
-        """\
-        criteria:
-          - id: CR-01
-            text: operator signs off the rendered cockpit screen
-            kind: behavioral
-            acceptance_style: binary
-            evidence_kind: attested
-            quality_dimension: interaction_capability
-            measurable_signal: the operator attests the cockpit screen renders
-        gates: []
-        """
-    )
-    body = _wrap_body(yaml_block)
-    criteria = _extract_criterion_specs(body)
-    assert len(criteria) == 1
-    assert criteria[0].evidence_kind == "attested"
-    assert criteria[0].gate_ids == []
-    assert _extract_gate_specs(body) == []
-
-
 # --------------------------------------------------------------------------- #
 # Error path — malformed YAML / non-mapping payload.
 # --------------------------------------------------------------------------- #
@@ -178,71 +104,6 @@ def test_extract_non_mapping_payload_raises() -> None:
     body = _wrap_body("- just\n- a\n- list\n")
     with pytest.raises(ValueError, match="must deserialise to a mapping"):
         _extract_gate_specs(body)
-
-
-# --------------------------------------------------------------------------- #
-# Error path — strict-model violations propagate as ValidationError.
-# --------------------------------------------------------------------------- #
-def test_extract_unknown_field_raises() -> None:
-    """An unknown field on a criterion row fails extra='forbid'."""
-    yaml_block = textwrap.dedent(
-        """\
-        criteria:
-          - id: CR-01
-            text: render the header
-            kind: behavioral
-            acceptance_style: binary
-            evidence_kind: deterministic
-            quality_dimension: interaction_capability
-            measurable_signal: the snapshot test for the header passes ok
-            surprise: nope
-        gates: []
-        """
-    )
-    body = _wrap_body(yaml_block)
-    with pytest.raises(ValidationError):
-        _extract_criterion_specs(body)
-
-
-def test_extract_short_measurable_signal_raises() -> None:
-    """A measurable_signal under the 20-char floor fails the inherited bound."""
-    yaml_block = textwrap.dedent(
-        f"""\
-        criteria:
-          - id: CR-01
-            text: render the header
-            kind: behavioral
-            acceptance_style: binary
-            evidence_kind: deterministic
-            quality_dimension: interaction_capability
-            measurable_signal: {_SIGNAL_19}
-        gates: []
-        """
-    )
-    body = _wrap_body(yaml_block)
-    with pytest.raises(ValidationError) as exc:
-        _extract_criterion_specs(body)
-    assert "measurable_signal" in str(exc.value)
-
-
-def test_extract_missing_measurable_signal_raises() -> None:
-    """A criterion with no measurable_signal fails the required-field check."""
-    yaml_block = textwrap.dedent(
-        """\
-        criteria:
-          - id: CR-01
-            text: render the header
-            kind: behavioral
-            acceptance_style: binary
-            evidence_kind: deterministic
-            quality_dimension: interaction_capability
-        gates: []
-        """
-    )
-    body = _wrap_body(yaml_block)
-    with pytest.raises(ValidationError) as exc:
-        _extract_criterion_specs(body)
-    assert "measurable_signal" in str(exc.value)
 
 
 def test_extract_dangling_gate_reference_raises() -> None:

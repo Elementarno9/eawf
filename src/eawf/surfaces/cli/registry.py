@@ -91,11 +91,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # Strict state / envelope validator.
     CommandRow("validate", "eawf.surfaces.cli.commands.validate", "validate", None),
     # Lifecycle nouns (project / track / phase / iter / wave).
-    GroupRow("project", "eawf.surfaces.cli.commands.lifecycle", "project_app"),
     GroupRow("track", "eawf.surfaces.cli.commands.lifecycle", "track_app"),
-    GroupRow("phase", "eawf.surfaces.cli.commands.lifecycle", "phase_app"),
-    GroupRow("iter", "eawf.surfaces.cli.commands.lifecycle", "iter_app"),
-    GroupRow("wave", "eawf.surfaces.cli.commands.lifecycle", "wave_app"),
     # Native epoch-2 lifecycle nouns (milestone / batch / task / run). Their
     # verbs are attached by the ``domain`` sibling that
     # ``commands.lifecycle`` imports, so mounting the apps is enough.
@@ -104,22 +100,10 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("task", "eawf.surfaces.cli.commands.lifecycle", "task_app"),
     GroupRow("run", "eawf.surfaces.cli.commands.lifecycle", "run_app"),
     GroupRow("repository", "eawf.surfaces.cli.commands.lifecycle", "repository_app"),
-    GroupRow("close", "eawf.surfaces.cli.commands.close", "close_app"),
     # Evidence nouns.
-    GroupRow("goal", "eawf.surfaces.cli.commands.evidence", "goal_app"),
-    GroupRow("outcome", "eawf.surfaces.cli.commands.evidence", "outcome_app"),
-    GroupRow("hypothesis", "eawf.surfaces.cli.commands.evidence", "hypothesis_app"),
-    GroupRow("audit", "eawf.surfaces.cli.commands.evidence", "audit_app"),
-    GroupRow("incident", "eawf.surfaces.cli.commands.evidence", "incident_app"),
-    GroupRow("decision", "eawf.surfaces.cli.commands.evidence", "decision_app"),
-    GroupRow("artifact", "eawf.surfaces.cli.commands.evidence", "artifact_app"),
-    GroupRow("backlog", "eawf.surfaces.cli.commands.evidence", "backlog_app"),
     # Post-cutover ledger records (audit / decision / artifact).
     GroupRow("record", "eawf.surfaces.cli.commands.domain_legacy", "record_app"),
-    GroupRow("evidence", "eawf.surfaces.cli.commands.evidence", "evidence_app"),
     # Estimation nouns.
-    GroupRow("estimate", "eawf.surfaces.cli.commands.estimation", "estimate_app"),
-    GroupRow("actual", "eawf.surfaces.cli.commands.estimation", "actual_app"),
     # Memory + session.
     GroupRow("memory", "eawf.surfaces.cli.commands.memory", "memory_app"),
     GroupRow("session", "eawf.surfaces.cli.commands.session", "session_app"),
@@ -130,7 +114,6 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
         "status",
         "Show active pointers, blockers, and git head.",
     ),
-    GroupRow("state", "eawf.surfaces.cli.commands.state", "state_app"),
     GroupRow("store", "eawf.surfaces.cli.commands.store", "store_app"),
     # Read-only daemon WAL inspection.
     GroupRow("wal", "eawf.surfaces.cli.commands.wal", "wal_app"),
@@ -139,10 +122,7 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     # Co-author trailers.
     GroupRow("coauthor", "eawf.surfaces.cli.commands.coauthor", "coauthor_app"),
     # Typed agent reports + operator surface.
-    GroupRow("agent-report", "eawf.surfaces.cli.commands.agent_report", "agent_report_app"),
-    GroupRow("operator", "eawf.surfaces.cli.commands.agent_report", "operator_app"),
     # Roadmap planner.
-    GroupRow("roadmap", "eawf.surfaces.cli.commands.roadmap", "roadmap_app"),
     # Doctor diagnostics + doc-drift linter.
     GroupRow("doctor", "eawf.surfaces.cli.commands.doctor", "doctor_app"),
     GroupRow("doc", "eawf.surfaces.cli.commands.doc", "doc_app"),
@@ -185,21 +165,14 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("skill", "eawf.surfaces.cli.commands.skill", "skill_app"),
     # Worktree dispatch + flow loop + headless dispatch pause/resume.
     GroupRow("worktree", "eawf.surfaces.cli.commands.worktree", "worktree_app"),
-    GroupRow("flow", "eawf.surfaces.cli.commands.flow", "flow_app"),
-    GroupRow("dispatch", "eawf.surfaces.cli.commands.dispatch", "dispatch_app"),
     # MCP servers, plan render, research, draft.
     GroupRow("mcp", "eawf.surfaces.cli.commands.mcp", "mcp_app"),
     GroupRow("plan", "eawf.surfaces.cli.commands.plan", "plan_app"),
-    GroupRow("research", "eawf.surfaces.cli.commands.research", "research_app"),
     # The campaign and question entity groups, beside the research reads.
     GroupRow("campaign", "eawf.surfaces.cli.commands.research", "campaign_app"),
     GroupRow("question", "eawf.surfaces.cli.commands.research", "question_app"),
-    GroupRow("draft", "eawf.surfaces.cli.commands.draft", "draft_app"),
     # Wave-attached verbs (fix-ci, review, policy) — imported for side
     # effect; each attaches its verb onto the already-mounted wave group.
-    SideEffectRow("eawf.surfaces.cli.commands.wave_ci"),
-    SideEffectRow("eawf.surfaces.cli.commands.pr_review"),
-    SideEffectRow("eawf.surfaces.cli.commands.wave_policy"),
     # The plain-text report of one Run, attached onto the mounted run group.
     SideEffectRow("eawf.surfaces.cli.commands.run_report"),
     # File-impact graph.
@@ -237,7 +210,6 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("daemon", "eawf.surfaces.cli.commands.daemon", "daemon_app"),
     # Streams any submitted operation, whichever entity verb submitted it.
     CommandRow("follow", "eawf.surfaces.cli.commands.operation", "follow_cmd", None),
-    GroupRow("spec", "eawf.surfaces.cli.commands.spec", "spec_app"),
     GroupRow("jury", "eawf.surfaces.cli.commands.jury", "jury_app"),
     GroupRow("bench", "eawf.surfaces.cli.commands.bench", "bench_app"),
     GroupRow("telemetry", "eawf.surfaces.cli.commands.telemetry", "telemetry_app"),
@@ -246,7 +218,6 @@ COMMAND_REGISTRY: tuple[GroupRow | CommandRow | SideEffectRow, ...] = (
     GroupRow("vfl", "eawf.surfaces.cli.commands.vfl", "vfl_app"),
     GroupRow("migrate", "eawf.surfaces.cli.commands.migrate", "migrate_app"),
     # Generalized entity-title backfill (all five lifecycle / decision kinds).
-    GroupRow("backfill", "eawf.surfaces.cli.commands.backfill", "backfill_app"),
     GroupRow("backup", "eawf.surfaces.cli.commands.backup", "backup_app"),
     # Completion + prose help topics.
     GroupRow("completion", "eawf.surfaces.cli.commands.completion", "completion_app"),

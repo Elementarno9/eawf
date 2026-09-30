@@ -17,6 +17,7 @@ from typer.testing import CliRunner
 
 from eawf.platform.profiles import discovery
 from eawf.surfaces.cli.app import app
+from tests._epoch2_helpers import lay_epoch2_tree
 
 runner = CliRunner()
 
@@ -39,8 +40,9 @@ def roots(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
     workspace = tmp_path / "ws"
     (repo / ".ea").mkdir(parents=True)
     workspace.mkdir()
-    # A bare state lets enable report the state keys it materialised.
-    (repo / ".ea" / "state.json").write_text('{"schema_version": "1.0"}', encoding="utf-8")
+    # Born at epoch 2, as ``eawf init`` leaves a tree after the flag day; the
+    # enable reports the probe's required state keys instead of writing them.
+    lay_epoch2_tree(repo, state={"schema_version": "1.0"})
     monkeypatch.chdir(repo)
     return repo, workspace
 
@@ -112,7 +114,8 @@ def test_surf_070_enable_and_render_resolve_the_same_layer(
     enabled = _enable(flag)
     agents_md = _render(repo, flag)
 
-    assert enabled["state_keys_materialised"] == [f"probe_{expected}"]
+    assert enabled["state_keys_required"] == [f"probe_{expected}"]
+    assert enabled["state_keys_materialised"] == []
     assert _rendered_layers(agents_md) == [expected]
 
 
@@ -125,7 +128,7 @@ def test_surf_070_repository_layer_resolves_for_both_without_a_workspace(
     enabled = _enable([])
     agents_md = _render(repo, [])
 
-    assert enabled["state_keys_materialised"] == ["probe_repo"]
+    assert enabled["state_keys_required"] == ["probe_repo"]
     assert _rendered_layers(agents_md) == ["repo"]
 
 

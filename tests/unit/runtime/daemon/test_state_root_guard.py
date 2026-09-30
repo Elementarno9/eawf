@@ -30,7 +30,6 @@ from eawf.runtime.daemon.methods import (
     MethodContext,
     note_cross_root_serve,
 )
-from eawf.runtime.daemon.methods.agent import resume as agent_resume
 from eawf.runtime.daemon.methods.state import mutate
 
 pytestmark = pytest.mark.unit
@@ -171,35 +170,3 @@ def test_mutation_rpc_cross_root_served_against_target(tmp_path: Path) -> None:
 
 
 # ---- CR-02 flipped: the EP3 reproduction now routes to the real repo ---------
-
-
-def test_dispatch_resume_cross_root_served(tmp_path: Path) -> None:
-    fixture_repo = tmp_path / "fixture-repo"
-    fixture = fixture_repo / ".ea" / "state.json"
-    fixture.parent.mkdir(parents=True)
-    fixture.write_text("{}", encoding="utf-8")
-    real_repo = tmp_path / "real-repo"
-    _write_valid_state(real_repo)
-    ctx = _ctx(fixture, tmp_path)
-    before = fixture.read_bytes()
-
-    async def body() -> None:
-        result = await agent_resume(ctx, {"repo_root": str(real_repo)})
-        assert result["paused"] is False
-
-    _run(body)
-    # The fixture state the daemon is bound to was never touched.
-    assert fixture.read_bytes() == before
-
-
-def test_dispatch_resume_matching_root_proceeds(tmp_path: Path) -> None:
-    """The happy path: a matching root toggles the flag as before."""
-    bound_repo = tmp_path / "bound-repo"
-    bound = _write_valid_state(bound_repo)
-    ctx = _ctx(bound, tmp_path)
-
-    async def body() -> None:
-        result = await agent_resume(ctx, {"repo_root": str(bound_repo)})
-        assert result["paused"] is False
-
-    _run(body)

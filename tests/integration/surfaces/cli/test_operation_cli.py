@@ -292,26 +292,6 @@ def test_surf_086_daemon_ping_still_starts_a_daemon(monkeypatch: pytest.MonkeyPa
     assert len(spawned) == 1
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["release", "show", "0.7.0"],
-        ["close", "status", "P01-I01-W01"],
-        ["task", "assess", _TASK, "--actor", "OPERATOR"],
-    ],
-    ids=["release-show", "close-status", "task-assess"],
-)
-def test_surf_086_read_verbs_open_a_non_spawning_client(
-    tmp_path: Path, argv: list[str], _client: list[str]
-) -> None:
-    _Client.answers = [DaemonNotRunningError("no eawfd daemon is running")] * 2
-    result = _invoke(tmp_path, *argv)
-    assert result.exit_code != exit_codes.OK
-    assert _Client.opened, result.output
-    assert all(opened.get("spawn") is False for opened in _Client.opened)
-    assert _client == []
-
-
 def test_surf_086_release_readiness_opens_a_non_spawning_client(tmp_path: Path) -> None:
     record = tmp_path / "release.json"
     record.write_bytes(orjson.dumps({"key": "REL-0.7.0", "revision": 1, "status": "draft"}))

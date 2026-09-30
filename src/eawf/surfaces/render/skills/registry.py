@@ -43,8 +43,7 @@ _RESEARCH_BODY = """# /research
 3. Compare alternatives — bullet list of options with pros/cons.
 4. Verdict: recommend one path, or recommend "stay open" with the next
    discriminating experiment.
-5. If `--final`: persist a research brief with `references` and render
-   it through `eawf research show --md`.
+5. If `--final`: persist a research brief with `references`.
 
 ## Output contract: `IntentBrief` + dispatch-plan
 
@@ -63,8 +62,7 @@ the brief into the next wave's References block automatically.
   reads, external fetches, cross-wave grep sweeps); read from
   `ctx.args["depth"]`, then the `research.default_depth` layered-config
   leaf (reuses `StageProfile`, no new key). Default `medium`.
-- `--final` — persist a research brief with `references` and render it
-  through `eawf research show --md`. Default off.
+- `--final` — persist a research brief with `references`. Default off.
 - `--rounds <n>` — bound the fan-out iteration count (today the
   fan-out is depth-derived only). Default `1`.
 - `--agents <n>` — fan-out width; resolves through the

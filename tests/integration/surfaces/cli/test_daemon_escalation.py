@@ -37,7 +37,6 @@ from typer.testing import CliRunner
 
 from eawf.surfaces.cli import _dispatch, _mutation, exit_codes
 from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli.app import app
 from eawf.surfaces.cli.flags import GlobalFlags
 
 pytestmark = pytest.mark.integration
@@ -201,42 +200,6 @@ def test_ensure_daemon_maps_spawn_timeout_to_daemon_unreachable(
 # ---- (b) read-only verb works daemonless (no spawn) ------------------------
 
 
-def test_state_show_daemonless_reads_directly_without_spawn(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``state show --daemonless`` reads state.json directly; never spawns."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    monkeypatch.setenv("EA_STATE", str(state_path))
-
-    def _fail_spawn(_runtime_dir: Path) -> int:
-        pytest.fail("read-only verb must not spawn the daemon")
-
-    monkeypatch.setattr("eawf.runtime.daemon.spawn.auto_spawn_daemon", _fail_spawn)
-
-    result = runner.invoke(app, ["--daemonless", "--json", "state", "show"])
-    assert result.exit_code == 0
-    payload = orjson.loads(result.stdout)
-    assert payload["project_code"] == "ABC"
-    assert payload["wave_count"] == 1
-
-
-def test_state_show_missing_state_file_user_error(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``state show`` on a missing file → NotFound (USER_ERROR, exit 1)."""
-    missing = tmp_path / ".ea" / "state.json"
-    monkeypatch.setenv("EA_STATE", str(missing))
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
-        lambda _r: pytest.fail("must not spawn on a read"),
-    )
-    result = runner.invoke(app, ["--daemonless", "state", "show"])
-    assert result.exit_code == exit_codes.USER_ERROR
-
-
 # ---- (c) mutating verb rejects --daemonless -------------------------------
 
 
@@ -349,160 +312,7 @@ def test_state_transaction_rejects_before_touching_missing_file(
         pytest.fail("must reject on the flag before the file-exists check")
 
 
-def test_cli_mutating_verb_rejects_daemonless_flag(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """`roadmap revise --daemonless` (mutating) exits 1 with kind=InvalidInput."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
-        lambda _r: pytest.fail("mutating verb must reject before any spawn"),
-    )
-    result = runner.invoke(
-        app,
-        ["--daemonless", "--json", "roadmap", "revise", "P26", "--retitle", "X"],
-    )
-    assert result.exit_code == exit_codes.USER_ERROR, result.output
-    payload = orjson.loads(result.stdout)
-    assert payload["data"]["kind"] == "InvalidInput"
-    assert "--daemonless rejected" in payload["message"]
-
-
-def test_cli_read_verb_honours_daemonless_flag(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """`roadmap show --daemonless` (read-only) still works under the carve-out."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
-        lambda _r: pytest.fail("read-only verb must not spawn the daemon"),
-    )
-    result = runner.invoke(app, ["--daemonless", "--json", "roadmap", "show"])
-    assert result.exit_code == exit_codes.OK, result.output
-
-
-@pytest.mark.parametrize(
-    "argv",
-    (
-        ["--json", "status"],
-        ["--json", "roadmap", "show"],
-    ),
-)
-def test_cli_read_surfaces_do_not_write_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    argv: list[str],
-) -> None:
-    """``eawf status`` and ``roadmap show`` are read-only state consumers."""
-    state_path = tmp_path / ".ea" / "state.json"
-    _build_state(state_path)
-    before = state_path.read_bytes()
-    write_calls: list[Path] = []
-
-    def fail_state_write(path: Path, _payload: dict[str, Any]) -> None:
-        write_calls.append(path)
-        pytest.fail(f"read-only command wrote state: {path}")
-
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setattr(_mutation, "atomic_write_json_locked", fail_state_write)
-    result = runner.invoke(app, argv)
-    assert result.exit_code == exit_codes.OK, result.output
-    assert write_calls == []
-    assert state_path.read_bytes() == before
-
-
 # ---- dev-mode gate on the raw RPC passthrough verb -------------------------
-
-
-def test_state_rpc_hidden_without_dev_mode(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Without --debug the raw RPC verb refuses with a UserError (exit 1)."""
-    monkeypatch.delenv("EAWF_DEBUG", raising=False)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
-        lambda _r: pytest.fail("gated verb must not spawn"),
-    )
-    result = runner.invoke(app, ["state", "rpc", "daemon.ping"])
-    assert result.exit_code == exit_codes.USER_ERROR
-    assert "dev-mode" in (result.stdout + (result.stderr or ""))
-
-
-def test_state_rpc_dev_mode_read_method_calls_daemon(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """With --debug a read method auto-spawns + issues the raw call."""
-    spawned: dict[str, int] = {"calls": 0}
-
-    def _fake_spawn(_runtime_dir: Path) -> int:
-        spawned["calls"] += 1
-        return 99
-
-    monkeypatch.setattr("eawf.runtime.daemon.spawn.auto_spawn_daemon", _fake_spawn)
-    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
-
-    class _FakeClient:
-        def __init__(self, *_a: Any, **_k: Any) -> None:
-            pass
-
-        def __enter__(self) -> _FakeClient:
-            return self
-
-        def __exit__(self, *_a: Any) -> None:
-            return None
-
-        def call(self, method: str, params: dict[str, Any]) -> dict[str, Any]:
-            return {"echo_method": method, "echo_params": params}
-
-    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", _FakeClient)
-
-    result = runner.invoke(
-        app,
-        ["--debug", "--json", "state", "rpc", "daemon.ping", "--params", '{"x": 1}'],
-    )
-    assert result.exit_code == 0
-    payload = orjson.loads(result.stdout)
-    assert payload["method"] == "daemon.ping"
-    assert payload["result"]["echo_params"] == {"x": 1}
-    assert spawned["calls"] == 1
-
-
-def test_state_rpc_dev_mode_mutating_method_rejects_daemonless(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A mutating raw method + --daemonless is rejected even in dev-mode."""
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
-        lambda _r: pytest.fail("must reject before spawning"),
-    )
-    result = runner.invoke(
-        app,
-        ["--debug", "--daemonless", "state", "rpc", "state.mutate"],
-    )
-    assert result.exit_code == exit_codes.USER_ERROR
-    combined = result.stdout + (result.stderr or "")
-    assert "mutating verb" in combined
-
-
-def test_state_rpc_dev_mode_bad_params_user_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Non-JSON --params surfaces a USER_ERROR before any spawn."""
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.spawn.auto_spawn_daemon",
-        lambda _r: pytest.fail("must reject before spawning"),
-    )
-    result = runner.invoke(
-        app,
-        ["--debug", "state", "rpc", "daemon.ping", "--params", "not-json"],
-    )
-    assert result.exit_code == exit_codes.USER_ERROR
 
 
 # ---- emit_error is NoReturn (control-flow contract) -----------------------

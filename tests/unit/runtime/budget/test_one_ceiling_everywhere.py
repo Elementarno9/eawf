@@ -15,11 +15,9 @@ import asyncio
 import tempfile
 import uuid
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-import typer
 
 from eawf.kernel.identity import EntityKind, parse_qualified_urn
 from eawf.kernel.state.models import State
@@ -29,13 +27,10 @@ from eawf.runtime.budget.notices import load_notice_ledger, notices_path
 from eawf.runtime.budget.policy import BudgetAction, BudgetConfig
 from eawf.runtime.budget.service import TerminationResult, consume_against_ceiling
 from eawf.runtime.daemon.budget_interlock import InFlightBudgetOutcome, guard_in_flight_budget
-from eawf.runtime.daemon.dispatch_runner import accrue_tokens_consumed
 from eawf.runtime.daemon.methods import DaemonValidationError, run_budget
 from eawf.runtime.daemon.methods.run_budget import InFlightRunMeter
 from eawf.runtime.daemon.methods.state import mutate
 from eawf.runtime.runtimes.metering import UsageSample
-from eawf.surfaces.cli.commands.lifecycle_wave_read import wave_budget_consume_cmd
-from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.workflow.lifecycle._claim_guards import (
     CLAIM_BUDGET_CEILING_REACHED,
     validate_claim_budget,
@@ -49,15 +44,12 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 )
 from tests.integration.runtime.daemon.test_dispatch_cost_accrual import (
     _WAVE_ID,
-    _ctx,
     _state_payload,
 )
 from tests.unit.runtime.budget.test_prompt_budget_ceiling import (
     RUN_KEY,
     RUN_URN,
     stored_run_status,
-    tokens,
-    write_repo,
 )
 from tests.unit.runtime.daemon.test_state_methods import (
     _build_ctx,
@@ -224,56 +216,6 @@ def test_consume_against_ceiling_unknown_wave_raises() -> None:
 
 
 # ---------- the consume verb notices, and one crossing is one row ----------
-
-
-def consume(state_path: Path, delta: int, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run the ``wave budget consume`` handler against *state_path*."""
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    ctx = cast("typer.Context", SimpleNamespace(obj=GlobalFlags(json_output=True)))
-    wave_budget_consume_cmd(ctx, _WAVE_ID, delta)
-
-
-def test_wave_budget_consume_below_the_ceiling_writes_no_notice(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = write_repo(tmp_path, budget=1000)
-    consume(state_path, 1000, monkeypatch)
-    assert (
-        State.model_validate_json(state_path.read_bytes()).waves[_WAVE_ID].tokens_consumed == 1000
-    )
-    assert ledger_rows(state_path) == []
-
-
-def test_wave_budget_consume_crossing_is_one_row_across_producers(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = write_repo(tmp_path, budget=1000)
-    consume(state_path, 1500, monkeypatch)
-    [notice] = ledger_rows(state_path)
-    assert (notice.scope_id, notice.basis, notice.highest_band) == (
-        _WAVE_ID,
-        "estimate",
-        "limit_reached",
-    )
-    assert (notice.observed_value, notice.budget_value, notice.revision) == (1500, 1500, 1)
-
-    consume(state_path, 10, monkeypatch)
-    accrue_tokens_consumed(
-        _ctx(state_path), wave_id=_WAVE_ID, tokens=tokens(10), pgid=None, budget=BudgetConfig()
-    )
-    [again] = ledger_rows(state_path)
-    assert again == notice
-
-
-def test_wave_budget_consume_hard_ceiling_rolls_back_without_a_notice(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    state_path = write_repo(tmp_path, budget=1000, config=HARD_EXACT)
-    with pytest.raises(typer.Exit) as exited:
-        consume(state_path, 1000, monkeypatch)
-    assert exited.value.exit_code == 2
-    assert State.model_validate_json(state_path.read_bytes()).waves[_WAVE_ID].tokens_consumed == 0
-    assert ledger_rows(state_path) == []
 
 
 # ---------- a Run's budget termination is the same one row ----------

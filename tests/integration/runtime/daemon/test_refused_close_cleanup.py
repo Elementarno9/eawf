@@ -25,13 +25,7 @@ from eawf.kernel.state.models import State
 from eawf.runtime.daemon import close_workspace
 from eawf.runtime.daemon.close_workspace import CloseWorkspaceError, workspace_path
 from eawf.runtime.daemon.methods import close as close_module
-from eawf.runtime.daemon.methods.close import (
-    _CLOSE_TASKS,
-    _close_task_key,
-    _run_attempt,
-    cancel,
-    submit,
-)
+from eawf.runtime.daemon.methods.close import _run_attempt, submit
 from tests.integration.runtime.daemon.test_close_lock_split import _WAVE
 from tests.integration.runtime.daemon.test_durable_close import _repo_with_state
 
@@ -320,87 +314,6 @@ def test_run_attempt_cancelled_at_terminal_commit_leaves_no_workspace(
 
     assert seen == [("close.failed", False)]
     assert _attempt_row(state_path, attempt_id).status is CloseAttemptStatus.BLOCKED
-    assert not workspace_path(repo, attempt_id).exists()
-
-
-def test_run_attempt_operator_cancel_mid_retry_schedules_no_retry_worker(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An auto-retryable fault cancelled mid-removal ends CANCELLED with no second worker."""
-    repo, state_path, ctx = _repo_with_state(tmp_path)
-    scheduled: list[str] = []
-    real_schedule = close_module.schedule_attempt
-
-    def _counting_schedule(ctx: Any, *, repo_root: Path, attempt_id: str) -> bool:
-        scheduled.append(attempt_id)
-        return real_schedule(ctx, repo_root=repo_root, attempt_id=attempt_id)
-
-    monkeypatch.setattr(close_module, "schedule_attempt", _counting_schedule)
-
-    async def _harness_fault(_ctx: Any, _params: dict[str, Any]) -> dict[str, Any]:
-        raise RuntimeError("gate runner lost its child process")
-
-    _record_workspace_during_mutate(monkeypatch, replacement=_harness_fault)
-    started, release = _gated_cleanup(monkeypatch)
-    seen = _probe_terminal_commits(monkeypatch)
-
-    async def body() -> tuple[str, dict[str, Any]]:
-        attempt_id = await _submit(ctx, repo)
-        await _wait_for(started)
-
-        async def _cancel() -> dict[str, Any]:
-            return await cancel(ctx, {"ref": attempt_id, "repo_root": str(repo)})
-
-        canceller = asyncio.create_task(_cancel())
-        await asyncio.sleep(0.05)
-        release.set()
-        result = await canceller
-        await asyncio.sleep(0.05)
-        live = _CLOSE_TASKS.get(_close_task_key(repo, attempt_id))
-        assert live is None or live.done()
-        return attempt_id, result
-
-    attempt_id, result = asyncio.run(body())
-
-    assert scheduled == [attempt_id]
-    assert seen == [("close.failed", False)]
-    assert result["attempt"]["status"] == CloseAttemptStatus.CANCELLED.value
-    row = _attempt_row(state_path, attempt_id)
-    assert row.status is CloseAttemptStatus.CANCELLED
-    assert not workspace_path(repo, attempt_id).exists()
-
-
-def test_run_attempt_cancelled_path_removes_workspace_before_cancelled_row(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Cancelling a worker mid-gate removes the workspace before its cancelled row."""
-    repo, state_path, ctx = _repo_with_state(tmp_path)
-    in_gate = asyncio.Event()
-
-    async def _hang(_ctx: Any, _params: dict[str, Any]) -> dict[str, Any]:
-        in_gate.set()
-        await asyncio.Future()
-        raise AssertionError("unreachable")
-
-    during_mutate = _record_workspace_during_mutate(monkeypatch, replacement=_hang)
-    seen = _probe_terminal_commits(monkeypatch)
-
-    async def body() -> str:
-        attempt_id = await _submit(ctx, repo)
-        await asyncio.wait_for(in_gate.wait(), timeout=30.0)
-        cancelled = await cancel(ctx, {"ref": attempt_id, "repo_root": str(repo)})
-        assert cancelled["attempt"]["status"] == CloseAttemptStatus.CANCELLED.value
-        return attempt_id
-
-    attempt_id = asyncio.run(body())
-
-    assert during_mutate == [True]
-    assert seen == [("close.cancelled", False)]
-    row = _attempt_row(state_path, attempt_id)
-    assert row.status is CloseAttemptStatus.CANCELLED
-    assert row.failure_kind is CloseFailureKind.OPERATOR_CANCELLED
     assert not workspace_path(repo, attempt_id).exists()
 
 

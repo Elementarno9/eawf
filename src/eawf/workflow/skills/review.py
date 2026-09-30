@@ -137,7 +137,7 @@ class ReviewSkill(Skill):
         # is the model's job; surface the source command so the reviewer reads
         # the criteria the diff must satisfy.
         if criteria_wave is not None:
-            next_actions.insert(0, f"eawf wave show --dispatch-prompt {criteria_wave}")
+            next_actions.insert(0, "eawf migrate epoch2 --plan")
 
         # Step 1 — probe ran. Step 2: resolve PR.
         evt_id = emit_event(

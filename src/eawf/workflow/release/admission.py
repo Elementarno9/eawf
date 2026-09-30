@@ -51,6 +51,7 @@ from eawf.kernel.spec.release import (
 from eawf.kernel.state.epoch2.milestone import MilestoneStatus
 from eawf.kernel.state.models import Artifact, State
 from eawf.surfaces.cli.errors import UserError
+from eawf.workflow.evidence.measured_contract import PROMOTION_GAP as PROMOTION_GAP_TEXT
 from eawf.workflow.evidence.measured_contract import resolve_contract_citation
 from eawf.workflow.evidence.provider_certification import (
     CanaryEvidence,
@@ -96,10 +97,10 @@ CONTRACT_LABELS: Final[Mapping[str, str]] = {
     "MCT-26091101": "importer over the production corpus",
 }
 
-#: The CLI verb that promotes a measured contract. Quoted verbatim in
-#: every refusal so the operator's next action is a command rather than
-#: a description of one.
-PROMOTION_COMMAND: Final[str] = "eawf artifact promote-contract"
+#: What a refusal says about promotion: the flag day retired
+#: ``artifact promote-contract`` and no epoch-2 verb promotes a measured
+#: contract yet, so the refusal names that gap instead of a command.
+PROMOTION_GAP: Final[str] = PROMOTION_GAP_TEXT
 
 
 def required_contract_ids(version: str) -> tuple[str, ...]:
@@ -122,11 +123,10 @@ def _missing_clause(contract_id: str) -> str:
         contract_id: The contract that did not resolve.
 
     Returns:
-        The id, its checkpoint-facing label, and the exact command that
-        promotes it.
+        The id, its checkpoint-facing label, and the promotion gap.
     """
     label = CONTRACT_LABELS.get(contract_id, contract_id)
-    return f"{contract_id} ({label}), promote with: {PROMOTION_COMMAND} {contract_id}"
+    return f"{contract_id} ({label}), unpromoted: {PROMOTION_GAP}"
 
 
 def assert_measured_contracts(state: State, version: str) -> tuple[Artifact, ...]:
@@ -370,7 +370,7 @@ def create_checkpoint_release(
 __all__ = [
     "CHECKPOINT_MEASURED_CONTRACTS",
     "CONTRACT_LABELS",
-    "PROMOTION_COMMAND",
+    "PROMOTION_GAP",
     "assert_measured_contracts",
     "assert_membership_resolves",
     "checkpoint_release_config",

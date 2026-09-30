@@ -203,7 +203,7 @@ def _conflict_detail(wave_id: str, merge_result: MergeBackResult) -> str:
         f"files={files} conflict_commit={merge_result.conflict_commit}; "
         f"resolve in the parent worktree then run "
         f"`eawf worktree merge-back --wave {wave_id} --continue` "
-        f"and re-run `eawf wave autoland`"
+        f"and re-run `eawf batch integrate`"
     )
 
 

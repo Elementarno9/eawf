@@ -313,7 +313,7 @@ def check_criteria_floor(
     convenience at the price of a close-time deadlock.
 
     An empty criteria list passes: the authoring flow lands the wave first
-    and materialises typed criteria via ``eawf spec sync`` before claim.
+    and materialises typed criteria via the retired ``spec sync`` verb before claim.
 
     Args:
         criteria: The success-criterion rows under the floor.

@@ -34,7 +34,7 @@ _RULE_PAGE_IDS: tuple[str, ...] = ("commit-granularity", "commit-prefix", "lean-
 
 #: The commit-rule rewrite must not move the lean-wave-verification rule: the local
 #: full-tree gauntlet a phase ship still runs is defined there.
-_LEAN_WAVE_VERIFICATION_VERSION = "1.2"
+_LEAN_WAVE_VERIFICATION_VERSION = "1.3"
 
 
 def _core_block(block_id: str) -> RenderBlock:
@@ -45,20 +45,6 @@ def _rendered_repo_root(tmp_path: Path) -> Path:
     composed = compose([load_profile(p) for p in _REPO_PROFILE_IDS])
     render_agents_md(composed, tmp_path / "AGENTS.md", Manifest(version=1, generated={}))
     return tmp_path
-
-
-def test_commit_granularity_allows_state_tail_squash_before_push() -> None:
-    """commit-granularity lets the state tail collapse into one commit before a push."""
-    block = _core_block("commit-granularity")
-
-    assert block.mechanism is not None
-    assert "**Squash the state tail before a push.**" in block.mechanism
-    assert "trailing run of ``state:`` commits not yet pushed may be squashed into one" in (
-        block.mechanism
-    )
-    assert "eawf wave verify-commits --repair" in block.mechanism
-    assert "An add or claim of the wave may ride its commit" in block.mechanism
-    assert "golden-only ``test:`` commit" in block.mechanism
 
 
 def test_commit_prefix_out_of_phase_requires_no_planned_or_active_phase() -> None:

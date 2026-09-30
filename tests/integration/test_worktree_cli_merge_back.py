@@ -18,7 +18,8 @@ import pytest
 from typer.testing import CliRunner
 
 from eawf.surfaces.cli.app import app
-from tests.integration.test_worktree_cli_create import _seed_repo_with_state
+from tests._worktree_helpers import create_wave_worktree
+from tests._worktree_helpers import seed_repo_with_state as _seed_repo_with_state
 
 runner = CliRunner()
 
@@ -40,22 +41,7 @@ def _create_worktree_and_commit(
 
     Returns ``(worktree_path, sha)``.
     """
-    res = runner.invoke(
-        app,
-        [
-            "--json",
-            "-w",
-            str(repo),
-            "worktree",
-            "create",
-            "--wave",
-            "P05-I01-W01",
-        ],
-        env={**os.environ, "EA_STATE": str(state_path)},
-    )
-    assert res.exit_code == 0, res.stdout
-    envelope = json.loads(res.stdout)
-    wt_path = repo / envelope["path"]
+    wt_path = create_wave_worktree(repo, state_path, "P05-I01-W01")
     (wt_path / file_name).write_text(content, encoding="utf-8")
     subprocess.run(["git", "-C", str(wt_path), "add", "."], check=True)
     subprocess.run(["git", "-C", str(wt_path), "commit", "-q", "-m", msg], check=True)

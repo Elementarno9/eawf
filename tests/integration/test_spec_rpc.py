@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
 
 from eawf import __version__
 from eawf.kernel.state.enums import StoreKind
@@ -35,7 +34,6 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.spec import archive, init, promote, validate
-from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
 
@@ -683,97 +681,3 @@ def test_archive_refuses_when_not_implemented(
 
 
 # ---- spec show --from-git (criterion 3) ----------------------------------
-
-
-def test_cli_spec_show_from_git_recovers_archived_body(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`eawf spec show <urn> --from-git` recovers a body archived via the daemon."""
-    ctx, repo_root, _ = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
-
-    async def setup() -> None:
-        await init(
-            ctx,
-            {
-                "scope_id": "P25",
-                "title": "Phase",
-                "repo_code": "EAWF",
-                "repo_root": str(repo_root),
-            },
-        )
-        # Hand-fill the body so we have a distinctive payload to recover.
-        spec_path = repo_root / ".ea" / "specs" / "P25" / "spec.md"
-        spec_path.write_text("# Recovered body\n", encoding="utf-8")
-        # Validate to refresh the cache file_sha.
-        await validate(
-            ctx,
-            {
-                "scope_id": "P25",
-                "repo_code": "EAWF",
-                "repo_root": str(repo_root),
-            },
-        )
-        # Commit so ``git rm`` has a tracked file to remove.
-        subprocess.run(
-            ["git", "add", ".ea/specs/P25/spec.md"],
-            cwd=repo_root,
-            check=True,
-        )
-        subprocess.run(
-            ["git", "commit", "--quiet", "-m", "seed"],
-            cwd=repo_root,
-            check=True,
-        )
-        # Promote then archive.
-        await promote(
-            ctx,
-            {
-                "scope_id": "P25",
-                "repo_code": "EAWF",
-                "target_status": "READY",
-                "repo_root": str(repo_root),
-            },
-        )
-        await promote(
-            ctx,
-            {
-                "scope_id": "P25",
-                "repo_code": "EAWF",
-                "target_status": "IMPLEMENTED",
-                "repo_root": str(repo_root),
-            },
-        )
-        await archive(
-            ctx,
-            {
-                "scope_id": "P25",
-                "repo_code": "EAWF",
-                "repo_root": str(repo_root),
-            },
-        )
-        # Stage + commit the archive so the file is gone from HEAD.
-        subprocess.run(
-            ["git", "commit", "--quiet", "-m", "archive"],
-            cwd=repo_root,
-            check=True,
-        )
-
-    _run(setup)
-
-    # ``eawf spec show`` reads via the CLI surface; force daemonless mode so
-    # the CLI uses the in-process cache reader.
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    runner = CliRunner()
-    result = runner.invoke(
-        app,
-        [
-            "--workspace",
-            str(repo_root),
-            "spec",
-            "show",
-            "urn:eawf:v1:spec:EAWF/P25",
-            "--from-git",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert "Recovered body" in result.output

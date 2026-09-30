@@ -22,8 +22,6 @@ from eawf.kernel.spec.round_loop import RoundOutcome, run_round_loop
 from eawf.kernel.spec.saturation import SaturationReport
 from eawf.kernel.state.enums import ClaimStatus, OpenQuestionStatus
 from eawf.kernel.state.models import Claim, OpenQuestion
-from eawf.platform.artifacts.validation import validate_markdown_artifact
-from eawf.surfaces.cli.commands.draft import synthesize_campaign_brief
 
 pytestmark = pytest.mark.unit
 
@@ -71,47 +69,6 @@ def _artifact_body() -> str:
 # --------------------------------------------------------------------------
 # synthesize_campaign_brief -- the EviBound feed
 # --------------------------------------------------------------------------
-
-
-def test_synthesis_aggregates_surviving_claim_evidence(tmp_path: Path) -> None:
-    """The brief aggregates only the live claims' evidence refs (deduped)."""
-    claims = [
-        _claim("CL-1", status=ClaimStatus.SUPPORTED, evidence=["docs/a.md", "docs/b.md"]),
-        _claim("CL-2", status=ClaimStatus.OPEN, evidence=["docs/b.md"]),  # dup b
-        _claim("CL-3", status=ClaimStatus.REFUTED, evidence=["docs/dead.md"]),  # pruned
-    ]
-    brief = synthesize_campaign_brief("options-pricing", claims)
-    # Only the two live claims contribute evidence, deduped + order-preserved.
-    assert brief.evidence_refs == ["docs/a.md", "docs/b.md"]
-    assert "docs/dead.md" not in brief.evidence_refs
-    assert brief.planned_steps == ["claim CL-1", "claim CL-2"]
-
-
-def test_synthesis_promotes_when_evidence_resolves(tmp_path: Path) -> None:
-    """A synthesis whose refs all resolve passes the EviBound gate."""
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "a.md").write_text("hi", encoding="utf-8")
-    claims = [_claim("CL-1", status=ClaimStatus.SUPPORTED, evidence=["docs/a.md"])]
-    brief = synthesize_campaign_brief("topic", claims)
-    report = validate_markdown_artifact(_artifact_body(), intent=brief, project_root=tmp_path)
-    assert report.ok, report.errors
-
-
-def test_synthesis_rejected_when_evidence_does_not_resolve(tmp_path: Path) -> None:
-    """A synthesis whose ref does not resolve is rejected by the EviBound gate."""
-    claims = [_claim("CL-1", status=ClaimStatus.SUPPORTED, evidence=["docs/missing.md"])]
-    brief = synthesize_campaign_brief("topic", claims)
-    report = validate_markdown_artifact(_artifact_body(), intent=brief, project_root=tmp_path)
-    assert not report.ok
-    assert any("docs/missing.md" in err and "rung-1" in err for err in report.errors)
-
-
-def test_synthesis_empty_survivor_set_yields_evidence_less_brief(tmp_path: Path) -> None:
-    """A campaign with only dead claims synthesises an evidence-less brief."""
-    claims = [_claim("CL-1", status=ClaimStatus.SUPERSEDED, evidence=["docs/old.md"])]
-    brief = synthesize_campaign_brief("topic", claims)
-    assert brief.evidence_refs == []
-    assert brief.planned_steps == []
 
 
 # --------------------------------------------------------------------------

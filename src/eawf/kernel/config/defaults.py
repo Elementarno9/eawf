@@ -140,7 +140,7 @@ _BUILT_IN_DEFAULTS: dict[str, Any] = {
         "default_level": "standard",
     },
     # ``/prep`` runtime knobs. ``auto_resume`` leads /prep's emitted claim
-    # actions with an ``eawf dispatch resume`` so a leaked ``dispatch_paused``
+    # actions with the dispatch-resume action so a leaked ``dispatch_paused``
     # flag does not silently reject the claim batch.
     "prep": {
         "auto_resume": True,

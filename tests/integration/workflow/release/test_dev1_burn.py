@@ -110,6 +110,7 @@ from eawf.workflow.release.settlement import observe_target
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.release.train import V07_TRAIN
 from eawf.workflow.verify.release_readiness import ReleaseReadiness, compute_readiness
+from tests._epoch2_helpers import lay_epoch2_tree
 from tests._release_helpers import (
     MANIFEST_DIGEST,
     NOW,
@@ -120,6 +121,13 @@ from tests._release_helpers import (
     frozen_manifest,
     recorded_response,
 )
+
+
+@pytest.fixture(autouse=True)
+def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every CLI verb here from an epoch-2 tree, as the flag day requires."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "epoch2")))
+
 
 pytestmark = pytest.mark.integration
 

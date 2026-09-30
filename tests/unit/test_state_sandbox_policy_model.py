@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from eawf.runtime.sandbox.policy import (
     TOOL_UNIVERSE,
     SandboxPolicy,
-    allocate_policy_id,
     invert_deny_to_allow,
     resolve_denied_tools,
 )
@@ -66,19 +65,6 @@ def test_sandbox_policy_unknown_keys_rejected() -> None:
                 "unknown": "field",
             }
         )
-
-
-def test_allocate_policy_id_empty_pool_yields_pol_1() -> None:
-    assert allocate_policy_id(None) == "POL-1"
-    assert allocate_policy_id({}) == "POL-1"
-
-
-def test_allocate_policy_id_picks_max_plus_one() -> None:
-    pool = {
-        "POL-1": _stub_policy("POL-1"),
-        "POL-3": _stub_policy("POL-3"),
-    }
-    assert allocate_policy_id(pool) == "POL-4"
 
 
 def _stub_policy(pid: str) -> SandboxPolicy:

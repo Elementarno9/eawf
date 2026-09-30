@@ -40,7 +40,6 @@ from eawf.runtime.daemon.methods import (
     StateRegressedError,
 )
 from eawf.runtime.daemon.methods import state as daemon_state
-from eawf.runtime.daemon.methods.agent import pause, resume
 from eawf.runtime.daemon.methods.state import mutate
 from eawf.runtime.daemon.methods.state_worktree import commit_worktree_state
 from eawf.surfaces.cli import _mutation
@@ -447,37 +446,6 @@ def test_mutate_wave_close_records_its_write(
 
 
 # ---- agent.pause / agent.resume ----------------------------------------------
-
-
-def test_set_dispatch_paused_refuses_regressed_state_file(tmp_path: Path) -> None:
-    state_path = _seed_state(tmp_path)
-    restored = state_path.read_bytes()
-    ctx = _build_ctx(tmp_path, state_path)
-    _run(lambda: pause(ctx, {}))
-    state_path.write_bytes(restored)
-    before = _snapshot(state_path, tmp_path / "wal")
-    last_event_id = ctx.last_event_id
-
-    with pytest.raises(StateRegressedError) as excinfo:
-        _run(lambda: resume(ctx, {"repo_root": str(tmp_path)}))
-
-    _assert_regressed(excinfo)
-    assert _snapshot(state_path, tmp_path / "wal") == before
-    assert ctx.last_event_id == last_event_id
-
-
-def test_set_dispatch_paused_accepts_successive_toggles(tmp_path: Path) -> None:
-    state_path = _seed_state(tmp_path)
-    ctx = _build_ctx(tmp_path, state_path)
-
-    _run(lambda: pause(ctx, {}))
-    _cli_write(state_path, stamp=True)
-    result = _run(lambda: resume(ctx, {}))
-
-    assert result == {"paused": False}
-    assert State.model_validate_json(state_path.read_bytes()).dispatch_paused is False
-    event_rows = store_path(state_path, StoreKind.EVENT).read_bytes().splitlines()
-    assert len(event_rows) == 2
 
 
 # ---- MethodContext guard -----------------------------------------------------

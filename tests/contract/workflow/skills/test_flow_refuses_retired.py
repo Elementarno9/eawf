@@ -10,7 +10,6 @@ bootstrap must not import a retired skill's module.
 from __future__ import annotations
 
 import ast
-import json
 from pathlib import Path
 from typing import Any
 
@@ -37,19 +36,6 @@ def cli_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("EA_STATE", str(state_path))
     monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(state_dir / "instrument-probe.json"))
     return state_path
-
-
-@pytest.fixture
-def step_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    calls: list[str] = []
-
-    def _record(skill: Any, ctx: Any) -> Any:
-        calls.append(str(skill.name))
-        raise AssertionError(f"retired flow ran {skill.name}")
-
-    monkeypatch.setattr(flow_module, "run_skill", _record)
-    monkeypatch.setattr("eawf.workflow.skills.engine.run_skill", _record)
-    return calls
 
 
 def test_check_flow_runnable_names_every_retired_step_successor() -> None:
@@ -90,35 +76,6 @@ def test_check_flow_runnable_empty_retirement_set_passes(
     )
 
     assert check_flow_runnable() is None
-
-
-def test_flow_run_refuses_before_any_step_runs(cli_state: Path, step_calls: list[str]) -> None:
-    result = CliRunner().invoke(app, ["--json", "flow", "run", "--topic", "demo"])
-
-    assert result.exit_code == UserError.exit_code, result.output
-    payload = json.loads(result.stdout)
-    assert payload["data"]["kind"] == "InvalidInput"
-    for successor in ("/dispatch", "/plan", "/verify", "/release"):
-        assert successor in payload["message"]
-    assert step_calls == []
-    assert not (cli_state.parent / "store" / "flow.jsonl").exists()
-
-
-def test_flow_run_resume_refuses_before_any_step_runs(
-    cli_state: Path, step_calls: list[str]
-) -> None:
-    result = CliRunner().invoke(app, ["--json", "flow", "run", "--resume"])
-
-    assert result.exit_code == UserError.exit_code, result.output
-    assert "skill '/flow' is retired; use /dispatch instead" in result.stdout
-    assert step_calls == []
-
-
-def test_flow_run_stop_after_research_still_refuses(cli_state: Path, step_calls: list[str]) -> None:
-    result = CliRunner().invoke(app, ["--json", "flow", "run", "--stop-after", "research"])
-
-    assert result.exit_code == UserError.exit_code, result.output
-    assert step_calls == []
 
 
 @pytest.mark.parametrize("row", SKILL_CATALOG.retired, ids=lambda row: row.skill_id)

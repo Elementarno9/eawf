@@ -12,13 +12,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-import pytest
-
-from eawf.kernel.state.enums import DecisionStatus
 from eawf.kernel.state.models import State
 from eawf.kernel.validate.invariants import Violation, check_decision_supersede_link
-from eawf.surfaces.cli import errors as cli_errors
-from eawf.workflow.evidence import _io, decision
 
 FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "states" / "valid" / "01-empty-repo.json"
@@ -35,69 +30,7 @@ def _codes(violations: list[Violation]) -> set[str]:
     return {v.code for v in violations}
 
 
-def _seed_two_decisions(tmp_path: Path) -> State:
-    state = _io.load_state(_state_path(tmp_path))
-    decision.add_decision(state, decision_id="D010", scope_id="QR", summary="old", rationale="r1")
-    decision.add_decision(state, decision_id="D011", scope_id="QR", summary="new", rationale="r2")
-    return state
-
-
 # ---- supersede_decision mutator --------------------------------------------
-
-
-def test_supersede_decision_flips_both_ends(tmp_path: Path) -> None:
-    state = _seed_two_decisions(tmp_path)
-
-    record, event = decision.supersede_decision(state, old_id="D010", new_id="D011")
-
-    old = state.decisions["D010"]
-    new = state.decisions["D011"]
-    assert old.status == DecisionStatus.SUPERSEDED
-    assert old.superseded_by == "D011"
-    # The superseding decision is untouched.
-    assert new.status == DecisionStatus.ACTIVE
-    assert new.superseded_by is None
-    assert record.payload["superseded_by"] == "D011"
-    assert event.payload["event_type"] == "decision.supersede"
-    assert "superseded by D011" in event.summary
-
-
-def test_supersede_decision_unknown_old_raises(tmp_path: Path) -> None:
-    state = _seed_two_decisions(tmp_path)
-    with pytest.raises(cli_errors.UserError, match="decision 'D999' not found"):
-        decision.supersede_decision(state, old_id="D999", new_id="D011")
-
-
-def test_supersede_decision_unknown_new_raises(tmp_path: Path) -> None:
-    state = _seed_two_decisions(tmp_path)
-    with pytest.raises(cli_errors.UserError, match="superseding decision 'D999' not found"):
-        decision.supersede_decision(state, old_id="D010", new_id="D999")
-
-
-def test_supersede_decision_self_raises(tmp_path: Path) -> None:
-    state = _seed_two_decisions(tmp_path)
-    with pytest.raises(cli_errors.UserError, match="cannot supersede itself"):
-        decision.supersede_decision(state, old_id="D010", new_id="D010")
-
-
-def test_supersede_decision_already_superseded_raises(tmp_path: Path) -> None:
-    state = _seed_two_decisions(tmp_path)
-    decision.add_decision(state, decision_id="D012", scope_id="QR", summary="newer", rationale="r3")
-    decision.supersede_decision(state, old_id="D010", new_id="D011")
-    with pytest.raises(cli_errors.UserError, match="only ACTIVE decisions can be superseded"):
-        decision.supersede_decision(state, old_id="D010", new_id="D012")
-
-
-def test_supersede_decision_reverse_link_cycle_raises(tmp_path: Path) -> None:
-    # A->B then B->A would close a cycle; the second supersede must reject
-    # because the superseder (A) is already SUPERSEDED.
-    state = _seed_two_decisions(tmp_path)
-    decision.supersede_decision(state, old_id="D010", new_id="D011")
-    with pytest.raises(cli_errors.UserError, match="only ACTIVE decisions can supersede"):
-        decision.supersede_decision(state, old_id="D011", new_id="D010")
-    # State is unchanged by the rejected call: D011 stays the live ACTIVE head.
-    assert state.decisions["D011"].status == DecisionStatus.ACTIVE
-    assert state.decisions["D011"].superseded_by is None
 
 
 # ---- check_decision_supersede_link invariant -------------------------------

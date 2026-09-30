@@ -40,7 +40,6 @@ Design notes:
 from __future__ import annotations
 
 import logging
-import re
 from collections import deque
 from collections.abc import Mapping
 from enum import StrEnum
@@ -56,7 +55,6 @@ from eawf.kernel.state.enums import (
     IncidentStatus,
     WaveStatus,
 )
-from eawf.kernel.state.ids import natural_key
 from eawf.kernel.state.models import (
     Audit,
     BacklogItem,
@@ -71,10 +69,6 @@ from eawf.workflow.estimation.buckets import (
     EFFORT_EU,
     critical_path_eu,
     sum_wave_eu,
-)
-from eawf.workflow.estimation.metrics import (
-    RealisticWallClockMetric,
-    compute_realistic_wall_clock,
 )
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 
@@ -712,16 +706,6 @@ def render_json(
 # ---- Markdown rendering ---------------------------------------------------
 
 
-_WAVE_STATUS_DISPLAY: dict[str, str] = {
-    "pending": "pending",
-    "claimed": "claimed",
-    "in_progress": "in_progress",
-    "closed": "closed",
-    "failed": "failed",
-    "abandoned": "abandoned",
-}
-
-
 def _format_summary(view: PlanView) -> list[str]:
     counts = view.summary.wave_status_counts
     breakdown_pieces = [f"{n} {st}" for st, n in counts.items() if n]
@@ -943,45 +927,6 @@ class EuViewConfig(_StrictModel):
     fields: tuple[EuRollupField, ...] = Field(default=_DEFAULT_EU_ROLLUP_FIELDS, min_length=1)
 
 
-def build_roadmap_rows(state: State, *, phase_id_filter: str | None = None) -> list[RoadmapRow]:
-    """Project *state* into the ordered roadmap-row list.
-
-    Walks ``state.phases`` in ``id`` order (matching :mod:`roadmap` CLI
-    behaviour); when *phase_id_filter* is set only the matching phase is
-    returned. Wave count tallies every wave whose ``iter_id`` belongs to
-    the phase's ``iter_ids``.
-
-    Args:
-        state: The validated state document.
-        phase_id_filter: Restrict the rows to a single phase id, or
-            ``None`` to project every phase.
-
-    Returns:
-        The ordered :class:`RoadmapRow` list (possibly empty).
-    """
-    rows: list[RoadmapRow] = []
-    phases = sorted(state.phases.values(), key=lambda p: natural_key(p.id))
-    if phase_id_filter is not None:
-        phases = [p for p in phases if p.id == phase_id_filter]
-    for phase in phases:
-        iter_ids = [iid for iid in phase.iter_ids if iid in state.iters]
-        iter_id_set = set(iter_ids)
-        wave_count = sum(1 for w in state.waves.values() if w.iter_id in iter_id_set)
-        rows.append(
-            RoadmapRow(
-                id=phase.id,
-                status=phase.status.value,
-                title=phase.title,
-                depends_on=list(phase.depends_on),
-                wave_count=wave_count,
-                iter_ids=iter_ids,
-                source_brief_ids=list(phase.source_brief_ids),
-                release=phase.release,
-            )
-        )
-    return rows
-
-
 def _coerce_eu_rollup_fields(raw: Any) -> Any:
     """Normalise comma strings and hyphenated aliases before strict validation."""
     if isinstance(raw, str):
@@ -1031,295 +976,6 @@ def _phase_waves(state: State, phase_id: str) -> list[Wave]:
             if wave is not None:
                 waves.append(wave)
     return waves
-
-
-def _lookup_by_key_or_scope(rows: Mapping[str, Any], scope_id: str) -> Any | None:
-    """Return a state summary row keyed by *scope_id* or carrying it as ``scope_id``."""
-    direct = rows.get(scope_id)
-    if direct is not None:
-        return direct
-    for row in rows.values():
-        if getattr(row, "scope_id", None) == scope_id:
-            return row
-    return None
-
-
-def _inside_pessimistic_share(state: State, wave_ids: set[str]) -> float | None:
-    """Return calibrated inside-pessimistic share for the given wave ids."""
-    estimates = state.estimates or {}
-    actuals = state.actuals or {}
-    sample_count = 0
-    inside = 0
-    for wave_id in sorted(wave_ids, key=natural_key):
-        est = _lookup_by_key_or_scope(estimates, wave_id)
-        act = _lookup_by_key_or_scope(actuals, wave_id)
-        if est is None or act is None:
-            continue
-        sample_count += 1
-        if act.elapsed_eu <= est.pessimistic_eu:
-            inside += 1
-    if sample_count == 0:
-        return None
-    return inside / sample_count
-
-
-def _positive_int_from_config(
-    config: Mapping[str, Any] | None,
-    *,
-    section: str,
-    key: str,
-    default: int,
-) -> int:
-    """Read a positive integer leaf from nested config or return *default*."""
-    if isinstance(config, Mapping):
-        section_value = config.get(section)
-        if isinstance(section_value, Mapping):
-            raw = section_value.get(key)
-            if isinstance(raw, int) and raw >= 1:
-                return raw
-    return default
-
-
-def _positive_float_from_config(
-    config: Mapping[str, Any] | None,
-    *,
-    section: str,
-    key: str,
-    default: float,
-) -> float:
-    """Read a positive float leaf from nested config or return *default*."""
-    if isinstance(config, Mapping):
-        section_value = config.get(section)
-        if isinstance(section_value, Mapping):
-            raw = section_value.get(key)
-            if isinstance(raw, int | float) and raw > 0:
-                return float(raw)
-    return default
-
-
-def _phase_eu_rollup(
-    state: State,
-    phase_id: str,
-    *,
-    config: Mapping[str, Any] | None,
-) -> RealisticWallClockMetric:
-    """Compute the phase EU rollup used by roadmap markdown."""
-    waves = _phase_waves(state, phase_id)
-    wave_ids = {wave.id for wave in waves}
-    return compute_realistic_wall_clock(
-        waves,
-        max_parallel_waves=_positive_int_from_config(
-            config,
-            section="planning",
-            key="max_parallel_waves",
-            default=4,
-        ),
-        inside_pessimistic_share=_inside_pessimistic_share(state, wave_ids),
-        eu_minutes=_positive_float_from_config(
-            config,
-            section="estimation",
-            key="eu_minutes",
-            default=30.0,
-        ),
-    )
-
-
-def _metric_eu(rollup: RealisticWallClockMetric, field: EuRollupField) -> float:
-    """Return the EU value for one rollup field."""
-    if field == "work_sum":
-        return rollup.work_sum_eu
-    if field == "critical_path":
-        return rollup.critical_path_eu
-    if field == "queue":
-        return rollup.queue_wall_clock_eu
-    return rollup.realistic_wall_clock_eu
-
-
-def _metric_detail(rollup: RealisticWallClockMetric, field: EuRollupField) -> str:
-    """Return explanatory detail for one full-density rollup row."""
-    if field == "work_sum":
-        return "serial wave work"
-    if field == "critical_path":
-        return "longest dependency path"
-    if field == "queue":
-        return f"DAG queue at {rollup.max_parallel_waves} workers"
-    share = (
-        "n/a"
-        if rollup.inside_pessimistic_share is None
-        else f"{rollup.inside_pessimistic_share:.0%}"
-    )
-    return f"queue x {rollup.pessimism_multiplier:g}; inside_pess={share}"
-
-
-def _format_hours(eu: float, eu_minutes: float) -> str:
-    """Render an EU value as hours via the configured EU-minute factor."""
-    return f"{(eu * eu_minutes / 60.0):g}"
-
-
-def _render_eu_rollup_markdown(
-    state: State,
-    rows: list[RoadmapRow],
-    *,
-    config: Mapping[str, Any] | None,
-) -> list[str]:
-    """Render phase-level EU/hour rows for roadmap markdown."""
-    eu_view = _eu_view_config(config)
-    lines: list[str] = ["", "## EU/hour rollup", ""]
-    if eu_view.density == "compact":
-        lines.append("| Phase | Metric | EU | Hours |")
-        lines.append("|---|---|---:|---:|")
-    else:
-        lines.append("| Phase | Metric | EU | Hours | Detail |")
-        lines.append("|---|---|---:|---:|---|")
-    label_by_field: dict[EuRollupField, str] = {
-        "work_sum": "work-sum",
-        "critical_path": "critical-path",
-        "queue": "queue",
-        "realistic": "realistic",
-    }
-    for row in rows:
-        rollup = _phase_eu_rollup(state, row.id, config=config)
-        for field in eu_view.fields:
-            eu = _metric_eu(rollup, field)
-            hours = _format_hours(eu, rollup.eu_minutes)
-            if eu_view.density == "compact":
-                lines.append(f"| `{row.id}` | {label_by_field[field]} | {eu:g} | {hours} |")
-            else:
-                detail = _metric_detail(rollup, field)
-                lines.append(
-                    f"| `{row.id}` | {label_by_field[field]} | {eu:g} | {hours} | {detail} |"
-                )
-    return lines
-
-
-#: Band header for phases that carry no ``release`` version.
-_UNRELEASED_BAND = "Unreleased"
-
-_ROADMAP_TABLE_HEADER: tuple[str, str] = (
-    "| Phase | Status | Waves | Depends on | Title |",
-    "|---|---|---|---|---|",
-)
-
-
-#: Rank of each PEP-440 pre-release marker, lowest first. A final release
-#: (no marker) outranks every pre-release of the same semver core, so under
-#: newest-first ordering ``v0.5.0`` sorts above ``v0.5.0rc1``.
-_PRERELEASE_RANK: dict[str, int] = {"a": 0, "b": 1, "rc": 2, "": 3}
-
-
-def _release_sort_key(release: str) -> tuple[int, int, int, int, int, str]:
-    """Return a totally-ordered sort key for a ``vMAJOR.MINOR.PATCH`` label.
-
-    The key is ``(major, minor, patch, prerelease_rank, prerelease_num,
-    raw)``. The semver core orders first; a final release (rank 3) outranks
-    its pre-releases (``a`` < ``b`` < ``rc``) of the same core so newest-first
-    ordering places ``v0.5.0`` above ``v0.5.0rc1``; the raw string is the
-    final tiebreaker so the order is deterministic. A non-conforming label
-    (which the model pattern rejects on the write path, but a hand-edited
-    state could still carry) yields ``-1`` cores so it sorts last under
-    newest-first and stays visible.
-    """
-    match = re.fullmatch(r"v(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?", release)
-    if match is None:
-        return (-1, -1, -1, -1, -1, release)
-    major, minor, patch = int(match[1]), int(match[2]), int(match[3])
-    marker = match[4] or ""
-    pre_num = int(match[5]) if match[5] is not None else 0
-    return (major, minor, patch, _PRERELEASE_RANK[marker], pre_num, release)
-
-
-def _band_release_labels(rows: list[RoadmapRow]) -> list[str]:
-    """Return the ordered band labels: release versions then ``Unreleased``.
-
-    Release versions sort newest-first by semver core; the ``Unreleased``
-    band (phases with ``release is None``) is always last so in-flight,
-    un-banded work reads at the bottom. The ``Unreleased`` band is only
-    included when at least one row lacks a release.
-    """
-    releases = {row.release for row in rows if row.release is not None}
-    ordered = sorted(releases, key=_release_sort_key, reverse=True)
-    if any(row.release is None for row in rows):
-        ordered.append(_UNRELEASED_BAND)
-    return ordered
-
-
-def _render_phase_table_body(rows: list[RoadmapRow]) -> list[str]:
-    """Render the per-phase markdown body rows (no header) for *rows*."""
-    body: list[str] = []
-    for row in rows:
-        deps = ", ".join(row.depends_on) or "—"
-        body.append(f"| `{row.id}` | `{row.status}` | {row.wave_count} | {deps} | {row.title} |")
-    return body
-
-
-def _render_banded_phase_tables(rows: list[RoadmapRow]) -> list[str]:
-    """Render release-banded phase tables, one ``### <band>`` block per version.
-
-    Each band carries an H3 header (the release version, or ``### Unreleased``
-    for phases without one) above the existing phase table. Used only when at
-    least one phase carries a ``release``; the no-release case renders a single
-    unbanded table so legacy output stays byte-stable.
-    """
-    out: list[str] = []
-    for label in _band_release_labels(rows):
-        if label == _UNRELEASED_BAND:
-            band_rows = [row for row in rows if row.release is None]
-        else:
-            band_rows = [row for row in rows if row.release == label]
-        out.append(f"### {label}")
-        out.append("")
-        out.append(_ROADMAP_TABLE_HEADER[0])
-        out.append(_ROADMAP_TABLE_HEADER[1])
-        out.extend(_render_phase_table_body(band_rows))
-        out.append("")
-    # Drop the trailing blank so the EU-rollup block joins cleanly.
-    if out and out[-1] == "":
-        out.pop()
-    return out
-
-
-def render_roadmap_markdown(
-    state: State,
-    *,
-    phase_id_filter: str | None = None,
-    config: Mapping[str, Any] | None = None,
-) -> str:
-    """Render the roadmap-show markdown table from *state*, banded by release.
-
-    Canonical markdown surface for ``eawf roadmap show --md`` after the
-    P28-W18 unification: the CLI's ``_render_show_md`` thin-wraps this
-    helper so the renderer lives in ``plan_view`` alongside per-iter
-    :func:`render_markdown`. Output is byte-stable: empty-state literal
-    when *state* has no phases (or none match the filter), otherwise a
-    pipe-delimited table with one row per phase.
-
-    When at least one phase carries a :attr:`~eawf.kernel.state.models.Phase.release`
-    version the table is split into ``### <version>`` bands (newest first)
-    with an ``### Unreleased`` band trailing for phases without one. When no
-    phase carries a release the output is a single unbanded table, identical
-    to the pre-banding layout.
-
-    Args:
-        state: The validated state document.
-        phase_id_filter: Restrict the rendered queue to one phase, or
-            ``None`` for the full queue.
-        config: Optional merged layered config. ``tui.eu_view.density`` and
-            ``tui.eu_view.fields`` control the EU/hour rollup table.
-
-    Returns:
-        A markdown string — either the empty-state literal or the
-        rendered table.
-    """
-    rows = build_roadmap_rows(state, phase_id_filter=phase_id_filter)
-    if not rows:
-        return "_(no phases in state)_"
-    if any(row.release is not None for row in rows):
-        out = _render_banded_phase_tables(rows)
-    else:
-        out = [_ROADMAP_TABLE_HEADER[0], _ROADMAP_TABLE_HEADER[1]]
-        out.extend(_render_phase_table_body(rows))
-    out.extend(_render_eu_rollup_markdown(state, rows, config=config))
-    return "\n".join(out)
 
 
 def render_phase_markdown(state: State, phase_id: str) -> str:

@@ -25,10 +25,8 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR, ArtifactPathStr, artifact_path_str
+from eawf.kernel.spec.common import ARTIFACT_KIND_SUBDIR, ArtifactPathStr
 from eawf.platform.lint.eawf023_artifact_placement import check_artifact_path
-from eawf.surfaces.cli import errors as cli_errors
-from eawf.surfaces.cli.commands.draft import _artifact_path, _validate_kind_slug
 
 SRC_ROOT = Path(__file__).resolve().parents[4] / "src" / "eawf"
 
@@ -133,40 +131,6 @@ def test_lint_035_the_scan_finds_a_second_declaration(tmp_path: Path) -> None:
 def test_lint_035_the_scan_of_an_empty_tree_finds_nothing(tmp_path: Path) -> None:
     """The empty boundary: no source, no declaration."""
     assert declarations(tmp_path, frozenset(ARTIFACT_KIND_SUBDIR.values())) == []
-
-
-def _new_kind_accepted() -> None:
-    """Assert every reader of the map places :data:`NEW_KIND` under its sub-directory."""
-    dated = f".ea/artifacts/{NEW_SUBDIR}/2026-09-29-topic.md"
-    assert check_artifact_path(dated) is None
-    _validate_kind_slug(NEW_KIND, "topic")
-    root = Path("/repo")
-    placed = _artifact_path(root, NEW_KIND, "long-term/2026-09-29-topic")
-    assert placed == root / ".ea" / "artifacts" / NEW_SUBDIR / "long-term" / "2026-09-29-topic.md"
-    assert _AnyArtifact(path=dated).path == dated
-
-    class _Pinned(BaseModel):
-        path: artifact_path_str(NEW_KIND)  # type: ignore[valid-type]
-
-    assert _Pinned(path=dated).path == dated
-
-
-def test_lint_035_adding_a_kind_is_one_edit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One row in the map, and the lint, the promoter and both path types all accept it."""
-    monkeypatch.setitem(ARTIFACT_KIND_SUBDIR, NEW_KIND, NEW_SUBDIR)
-    _new_kind_accepted()
-
-
-def test_lint_035_without_the_row_every_reader_refuses_the_kind() -> None:
-    """The one-edit case is not vacuous: before the row lands, each reader refuses."""
-    with pytest.raises(AssertionError):
-        _new_kind_accepted()
-    with pytest.raises(cli_errors.UserError):
-        _validate_kind_slug(NEW_KIND, "topic")
-    with pytest.raises(ValidationError):
-        _AnyArtifact(path=f".ea/artifacts/{NEW_SUBDIR}/2026-09-29-topic.md")
-    with pytest.raises(ValueError, match="unknown artifact kind"):
-        artifact_path_str(NEW_KIND)
 
 
 @pytest.mark.parametrize(

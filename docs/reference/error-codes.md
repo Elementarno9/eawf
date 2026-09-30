@@ -62,7 +62,7 @@ The daemon UDS socket refused the connection or is stale. Bucket: `DAEMON_UNREAC
 
 ### SCOPE_CONFLICT
 
-The requested scope id collides with an existing scope. Bucket: `USER_ERROR (1)`. Pick a unique id, or run `eawf state resolve` to inspect the existing scope.
+The requested scope id collides with an existing scope. Bucket: `USER_ERROR (1)`. Pick a unique id, or run the retired `state resolve` verb to inspect the existing scope.
 
 ### WAVE_DEPS_NOT_SATISFIED
 
@@ -70,7 +70,7 @@ A wave was claimed before its declared dependency waves were closed. Bucket: `US
 
 ### PHASE_NOT_ACTIVE
 
-The verb requires an ACTIVE phase but the target phase is not active. Bucket: `USER_ERROR (1)`. Activate it with `eawf phase activate <id>` (or reopen a CLOSED phase first).
+The verb requires an ACTIVE phase but the target phase is not active. Bucket: `USER_ERROR (1)`. Activate it with `eawf milestone activate` (or reopen a CLOSED phase first).
 
 ### ITER_NOT_ACTIVE
 

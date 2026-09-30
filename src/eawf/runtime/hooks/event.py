@@ -76,7 +76,7 @@ class HookEvent(BaseModel):
         scope_id: Eä scope identifier the event was raised inside (for
             example, a wave or iter ID). Empty string is permitted for
             session-level events that pre-date scope resolution.
-        command: The originating Eä CLI command string ("eawf wave close",
+        command: The originating Eä CLI command string ("eawf task complete",
             etc.). Empty string when the runtime adapter has no
             command-level context (for example, a Claude
             ``SessionStart`` event).

@@ -718,7 +718,7 @@ def remove_wave_plan(state: State, *, wave_id: str) -> None:
     """Delete a PENDING wave from state. Also strips reverse-index entries.
 
     Like :func:`edit_wave_plan`, the PENDING guard here is what makes
-    ``eawf roadmap revise --remove-wave`` safe under an ACTIVE parent
+    ``eawf plan submit`` safe under an ACTIVE parent
     phase: CLOSED/CLAIMED/IN_PROGRESS waves never get
     removed regardless of the parent phase's status.
 
@@ -929,8 +929,7 @@ def claim_wave(
         raise LifecycleError(f"wave {wave_id!r} cannot be claimed (status={wave.status.value!r})")
     if wave.effort_bucket is None:
         raise LifecycleError(
-            f"wave {wave_id!r} has no effort_bucket; set one via "
-            f"`eawf roadmap revise --set-bucket` before claiming"
+            f"wave {wave_id!r} has no effort_bucket; set one via `eawf plan submit` before claiming"
         )
     # The pending -> claimed status move plus its named guards (dependency,
     # sibling-ordering, dispatch-not-paused) live in WAVE_TRANSITIONS now; the
@@ -1003,7 +1002,7 @@ def claim_wave(
     # No estimate row is seeded here. Every wave costs the one effort
     # constant, so persisting it would make ``state.estimates`` a cache of a
     # constant that grew by one row per claim. The map holds only
-    # operator-authored estimates (``eawf estimate set``).
+    # operator-authored estimates (the retired ``estimate set`` verb).
     logger.info(f"claim_wave id={wave_id} session={session_id} out_of_order={out_of_order}")
     return wave
 
@@ -1107,8 +1106,8 @@ def close_wave(
     """Close a claimed/in-progress wave with an outcome string.
 
     Pure status flip + outcome stamp; the wave's commit SHA stays on
-    ``Wave.commit`` when it was pinned via ``eawf wave close --commit
-    <ref>`` (P19-W17 re-introduced the field as ``ShaStr | None`` and
+    ``Wave.commit`` when a close pinned it with ``--commit <ref>``
+    (P19-W17 re-introduced the field as ``ShaStr | None`` and
     normalises any ref shape via ``git rev-parse``). When ``commit`` is
     left ``None``, callers fall back to
     :func:`eawf.workflow.lifecycle.wave_sha.derive_wave_sha`, which walks
@@ -1205,7 +1204,7 @@ def close_wave(
         state.current.active_wave_ids.remove(wave_id)
     # Upsert the ActualSummary so M26 + the wave_closed event payload
     # carry the close-time token tally. Existing records (e.g. seeded
-    # by a manual ``eawf actual stop``) keep their elapsed_eu /
+    # by a manual the retired ``actual stop`` verb) keep their elapsed_eu /
     # attention_eu / runtime_eu fields and only the token rollup is
     # refreshed; auto-created records take the telemetry-derived
     # elapsed_eu when one is supplied (else 0.0 per the docstring note).

@@ -25,9 +25,7 @@ from typing import Any, Final
 from pydantic import BaseModel, ConfigDict, Field
 
 from eawf.kernel.store.envelope import Envelope
-from eawf.kernel.validate.strict import validate_state
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.state_context import state_version
+from eawf.runtime.daemon.methods import MethodContext
 
 #: TTL for cached idempotency results (seconds).
 IDEMPOTENCY_TTL_SECONDS: Final[float] = 60.0
@@ -146,33 +144,6 @@ def publish_envelope(ctx: MethodContext, envelope: Envelope) -> None:
     ctx.last_event_id = envelope.id
 
 
-def validate_post_sync(new_payload: dict[str, Any]) -> str:
-    """Re-validate the post-mutation state payload and return its version.
-
-    Args:
-        new_payload: The candidate ``state.json`` payload after the spec
-            mutation applied.
-
-    Returns:
-        The post-mutation state version digest.
-
-    Raises:
-        DaemonValidationError: When the payload fails schema validation or
-            trips an invariant (mapped to ``-32002``).
-    """
-    post = validate_state(new_payload, strict_optional=False)
-    if post.state is None:
-        raise DaemonValidationError(
-            "validation_failed: post-mutation schema invalid: " + "; ".join(post.schema_errors[:3])
-        )
-    if post.violations:
-        codes = ",".join(v.code for v in post.violations)
-        raise DaemonValidationError(
-            f"validation_failed: post-mutation invariants violated: {codes}"
-        )
-    return state_version(new_payload)
-
-
 __all__ = [
     "IDEMPOTENCY_TTL_SECONDS",
     "CachedSpecMutation",
@@ -181,5 +152,4 @@ __all__ = [
     "idempotency_cache",
     "idempotent_replay",
     "publish_envelope",
-    "validate_post_sync",
 ]

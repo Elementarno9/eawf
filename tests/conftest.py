@@ -310,27 +310,6 @@ def host_session_isolation() -> Iterator[None]:
         monkeypatch.undo()
 
 
-@pytest.fixture(autouse=True)
-def epoch1_cli_surface(request: pytest.FixtureRequest) -> Iterator[None]:
-    """Lift the flag-day CLI gate for a module that tests the retained epoch-1 surface.
-
-    Applies only to the modules :data:`tests._epoch1_cli_surface.EPOCH1_CLI_SURFACE_MODULES`
-    names; everywhere else the gate stays in force. The ``state.json`` chokepoint
-    is untouched, so an epoch-2 tree still refuses an epoch-1 write. A private
-    patcher is used so a test that calls ``monkeypatch.undo()`` keeps the lift.
-    """
-    from tests._epoch1_cli_surface import EPOCH1_CLI_SURFACE_MODULES
-
-    if request.node.path.relative_to(REPO_ROOT).as_posix() not in EPOCH1_CLI_SURFACE_MODULES:
-        yield
-        return
-    from eawf.surfaces.cli import flag_day_gate
-
-    with pytest.MonkeyPatch.context() as patcher:
-        patcher.setattr(flag_day_gate, "enforce", lambda *_args: None)
-        yield
-
-
 # --- daemon leak witness -------------------------------------
 #
 # Every test in a worker shares the worker's runtime dir, so a daemon one

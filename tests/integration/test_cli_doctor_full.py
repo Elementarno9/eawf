@@ -158,7 +158,7 @@ def test_cli_doctor_warns_when_project_record_missing(
     payload = json.loads(res.output)
     entry = next(c for c in payload["checks"] if c["name"] == "project_record_present")
     assert entry["status"] == "warn"
-    assert "project init --upgrade" in entry["detail"]
+    assert "repository create" in entry["detail"]
 
 
 @pytest.mark.integration

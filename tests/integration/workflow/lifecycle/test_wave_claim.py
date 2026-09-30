@@ -149,7 +149,7 @@ def test_claim_wave_rejects_when_effort_bucket_none() -> None:
         claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     # Also assert the operator-facing fix is named in the message so the
     # contract is part of the API surface, not a private string.
-    with pytest.raises(LifecycleError, match="eawf roadmap revise --set-bucket"):
+    with pytest.raises(LifecycleError, match="eawf plan submit"):
         claim_wave(state, wave_id="P01-I01-W01", session_id="SES-1")
     # Status must not flip when the gate rejects.
     assert state.waves["P01-I01-W01"].status == WaveStatus.PENDING

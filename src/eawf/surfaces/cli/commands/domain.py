@@ -868,43 +868,6 @@ def _native_answer(
         raise cli_errors.DaemonUnreachable(f"daemon unavailable for {method}: {exc}") from exc
 
 
-def _call_native_rpc(
-    method: str,
-    params: dict[str, Any],
-    *,
-    flags: GlobalFlags,
-    verb_text: str,
-    gated: bool = False,
-) -> dict[str, Any]:
-    """Send one non-envelope native RPC, mapping a refusal onto the CLI taxonomy.
-
-    Args:
-        method: The dotted JSON-RPC name to send.
-        params: The wire parameters, less ``repo_root``.
-        flags: Resolved global flags.
-        verb_text: The command spelling an operator typed.
-        gated: Whether the verb runs gates inside the request.
-
-    Returns:
-        The daemon's answer, as a JSON-mode mapping.
-
-    Raises:
-        UserError: ``--daemonless`` was asked for.
-        StateConflict: The daemon refused the request. The message
-            carries the daemon's own code and detail unchanged, and the
-            exit status matches :data:`DOMAIN_REFUSAL_EXIT`.
-        DaemonUnreachable: The daemon could not be reached.
-        CliError: The daemon answered a transport-level failure outside
-            the refusal vocabulary.
-    """
-    try:
-        return _native_answer(method, params, flags=flags, verb_text=verb_text, gated=gated)
-    except DaemonRpcError as exc:
-        if exc.code == cli_errors.RPC_VALIDATION_FAILED:
-            raise cli_errors.StateConflict(exc.message) from exc
-        raise cli_errors.cli_error_for_rpc(exc.code, exc.message) from exc
-
-
 # ---- Track ------------------------------------------------------------------
 
 

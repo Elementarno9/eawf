@@ -64,6 +64,9 @@ def tmp_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return state_path
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_add_creates_entry(tmp_state: Path) -> None:
     result = runner.invoke(
         app,
@@ -90,6 +93,9 @@ def test_memory_add_creates_entry(tmp_state: Path) -> None:
     assert payload["id"] in saved["memory_index"]
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_list_returns_added_entry(tmp_state: Path) -> None:
     runner.invoke(
         app,
@@ -110,6 +116,9 @@ def test_memory_list_returns_added_entry(tmp_state: Path) -> None:
     assert payload["count"] == 1
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_list_filter_by_scope(tmp_state: Path) -> None:
     runner.invoke(
         app,
@@ -144,6 +153,9 @@ def test_memory_list_filter_by_scope(tmp_state: Path) -> None:
     assert payload["entries"][0]["scope_id"] == "QR"
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_render_context_with_budget(tmp_state: Path) -> None:
     big_body = " ".join(["lorem"] * 100)
     for i in range(5):
@@ -177,6 +189,9 @@ def test_memory_render_context_with_budget(tmp_state: Path) -> None:
     assert payload["skipped_count"] >= 1
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_view_shows_full_body(tmp_state: Path) -> None:
     add = runner.invoke(
         app,
@@ -206,6 +221,9 @@ def test_memory_view_unknown_returns_not_found(tmp_state: Path) -> None:
     assert result.exit_code == 1  # NOT_FOUND
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_stale_lists_low_confidence_aged(tmp_state: Path) -> None:
     runner.invoke(
         app,
@@ -229,6 +247,9 @@ def test_memory_stale_lists_low_confidence_aged(tmp_state: Path) -> None:
     assert payload["count"] >= 1
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_compact_idempotent(tmp_state: Path) -> None:
     runner.invoke(
         app,
@@ -254,6 +275,9 @@ def test_memory_compact_idempotent(tmp_state: Path) -> None:
     assert pa["records_in"] == pb["records_in"] or pa["records_out"] == pb["records_in"]
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_add_invalid_confidence_returns_invalid_input(tmp_state: Path) -> None:
     result = runner.invoke(
         app,
@@ -273,6 +297,9 @@ def test_memory_add_invalid_confidence_returns_invalid_input(tmp_state: Path) ->
     assert result.exit_code == 1  # INVALID_INPUT
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 def test_memory_full_pipeline_add_list_render_view_stale_compact(tmp_state: Path) -> None:
     """End-to-end: add → list → render-context → view → stale → compact."""
     add = runner.invoke(

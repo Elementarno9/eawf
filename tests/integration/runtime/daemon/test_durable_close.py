@@ -13,10 +13,8 @@ from typing import Any
 import orjson
 import pytest
 
-from eawf.kernel.spec.common import CriterionSpec, GateSpec, QualityDimension
 from eawf.kernel.state.enums import (
     CloseAttemptStatus,
-    CloseOperatorAction,
     StoreKind,
     WaveIntegrationStatus,
 )
@@ -36,14 +34,11 @@ from eawf.runtime.daemon.methods.close import (
     _CLOSE_TASKS,
     _close_task_key,
     _run_attempt,
-    cancel,
     gate_freshness_inputs,
     persist_gate_receipt,
     policy_digest,
-    resume,
     resume_durable_close_attempts,
     reusable_pass_gate_ids,
-    schedule_attempt,
     status,
     submit,
 )
@@ -173,120 +168,6 @@ def test_duplicate_submit_reuses_attempt_and_applies_close_once(tmp_path: Path) 
     rows = [orjson.loads(line) for line in event_path.read_bytes().splitlines() if line.strip()]
     wave_closed = [row for row in rows if row.get("payload", {}).get("event_kind") == "wave_closed"]
     assert len(wave_closed) == 1
-
-
-def test_cancel_queued_attempt_is_durable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    repo, _state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close.schedule_attempt",
-        lambda *args, **kwargs: False,
-    )
-
-    async def body() -> None:
-        result = await submit(
-            ctx,
-            {
-                "wave_id": _WAVE,
-                "outcome": "verified integrated revision",
-                "repo_root": str(repo),
-                "no_runtime_waiver": True,
-            },
-        )
-        attempt_id = result["attempt"]["id"]
-        cancelled = await cancel(
-            ctx,
-            {
-                "ref": attempt_id,
-                "repo_root": str(repo),
-                "reason": "operator changed release scope",
-            },
-        )
-        assert cancelled["attempt"]["status"] == CloseAttemptStatus.CANCELLED.value
-        assert cancelled["attempt"]["failure_detail_ref"]
-        assert _close_task_key(repo, attempt_id) not in _CLOSE_TASKS
-
-    asyncio.run(body())
-
-
-def test_task_registry_scopes_identical_attempt_ids_by_repository(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Same attempt id in two repos schedules, reports, and cancels independently."""
-    root_a = tmp_path / "a"
-    root_b = tmp_path / "b"
-    root_a.mkdir()
-    root_b.mkdir()
-    repo_a, state_path_a, ctx_a = _repo_with_state(root_a)
-    repo_b, state_path_b, ctx_b = _repo_with_state(root_b)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close.schedule_attempt",
-        lambda *args, **kwargs: False,
-    )
-
-    async def body() -> None:
-        submitted = await submit(
-            ctx_a,
-            {
-                "wave_id": _WAVE,
-                "outcome": "verified integrated revision",
-                "repo_root": str(repo_a),
-                "no_runtime_waiver": True,
-            },
-        )
-        attempt_id = str(submitted["attempt"]["id"])
-        state_a = State.model_validate_json(state_path_a.read_bytes())
-        state_b = State.model_validate_json(state_path_b.read_bytes())
-        state_b.close_attempts = dict(state_a.close_attempts)
-        state_path_b.write_text(state_b.model_dump_json(), encoding="utf-8")
-
-        async def _hold_worker(
-            _ctx: Any,
-            *,
-            repo_root: Path,
-            attempt_id: str,
-        ) -> None:
-            task_key = _close_task_key(repo_root, attempt_id)
-            try:
-                await asyncio.Future()
-            finally:
-                if _CLOSE_TASKS.get(task_key) is asyncio.current_task():
-                    _CLOSE_TASKS.pop(task_key, None)
-
-        monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close._run_attempt",
-            _hold_worker,
-        )
-        assert schedule_attempt(
-            ctx_a,
-            repo_root=repo_a,
-            attempt_id=attempt_id,
-        )
-        assert schedule_attempt(
-            ctx_b,
-            repo_root=repo_b,
-            attempt_id=attempt_id,
-        )
-        await asyncio.sleep(0)
-        key_a = _close_task_key(repo_a, attempt_id)
-        key_b = _close_task_key(repo_b, attempt_id)
-        assert key_a != key_b
-        assert set(_CLOSE_TASKS) >= {key_a, key_b}
-        assert (await status(ctx_a, {"ref": attempt_id, "repo_root": str(repo_a)}))["backgrounded"]
-        assert (await status(ctx_b, {"ref": attempt_id, "repo_root": str(repo_b)}))["backgrounded"]
-
-        await cancel(ctx_a, {"ref": attempt_id, "repo_root": str(repo_a)})
-        assert key_a not in _CLOSE_TASKS
-        assert key_b in _CLOSE_TASKS
-        assert not _CLOSE_TASKS[key_b].done()
-        assert not (await status(ctx_a, {"ref": attempt_id, "repo_root": str(repo_a)}))[
-            "backgrounded"
-        ]
-        assert (await status(ctx_b, {"ref": attempt_id, "repo_root": str(repo_b)}))["backgrounded"]
-        await cancel(ctx_b, {"ref": attempt_id, "repo_root": str(repo_b)})
-        assert key_b not in _CLOSE_TASKS
-
-    asyncio.run(body())
 
 
 def test_new_integration_generation_makes_queued_attempt_stale(tmp_path: Path) -> None:
@@ -508,59 +389,6 @@ def test_restart_reschedules_every_resumable_stage(
     assert restarted.close_attempts[attempt_id].status is CloseAttemptStatus.QUEUED
 
 
-def test_cleanup_failure_remains_retryable_until_cleanup_succeeds(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A closed Wave does not hide failed close-workspace cleanup."""
-    repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close.schedule_attempt",
-        lambda *args, **kwargs: False,
-    )
-
-    async def body() -> None:
-        submitted = await submit(
-            ctx,
-            {
-                "wave_id": _WAVE,
-                "outcome": "verified integrated revision",
-                "repo_root": str(repo),
-                "no_runtime_waiver": True,
-            },
-        )
-        attempt_id = str(submitted["attempt"]["id"])
-        state = State.model_validate_json(state_path.read_bytes())
-        close_wave(state, wave_id=_WAVE, outcome="closed before cleanup")
-        state.current.active_wave_ids = []
-        state.close_attempts[attempt_id] = state.close_attempts[attempt_id].model_copy(
-            update={"infrastructure_retry_budget_remaining": 0}
-        )
-        state_path.write_text(state.model_dump_json(), encoding="utf-8")
-
-        def _fail_cleanup(*_args: Any, **_kwargs: Any) -> None:
-            raise CloseWorkspaceError("cleanup failed")
-
-        monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close.cleanup_close_workspace",
-            _fail_cleanup,
-        )
-        await _run_attempt(ctx, repo_root=repo, attempt_id=attempt_id)
-        failed = await status(ctx, {"ref": attempt_id, "repo_root": str(repo)})
-        assert failed["attempt"]["status"] == CloseAttemptStatus.FAILED.value
-
-        await resume(ctx, {"ref": attempt_id, "repo_root": str(repo)})
-        monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close.cleanup_close_workspace",
-            lambda *_args, **_kwargs: None,
-        )
-        await _run_attempt(ctx, repo_root=repo, attempt_id=attempt_id)
-        closed = await status(ctx, {"ref": attempt_id, "repo_root": str(repo)})
-        assert closed["attempt"]["status"] == CloseAttemptStatus.CLOSED.value
-
-    asyncio.run(body())
-
-
 def test_gate_receipt_is_durable_idempotent_and_binds_full_log(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -772,191 +600,6 @@ def test_file_exists_result_persists_terminal_receipt_without_command_facts(
     assert diagnostic_log_path(state_path, receipt_id).is_file()
     diagnostic = orjson.loads(diagnostic_path(state_path, receipt_id).read_bytes())
     assert diagnostic["details"] == "path=payload.txt exists=True"
-
-
-def test_blocked_attempt_has_one_bounded_resume(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Repair needs new integration, rebuilds proof, then exhausts once."""
-    repo, state_path, ctx = _repo_with_state(tmp_path)
-    monkeypatch.setattr(
-        "eawf.runtime.daemon.methods.close.schedule_attempt",
-        lambda *args, **kwargs: False,
-    )
-
-    async def body() -> None:
-        submitted = await submit(
-            ctx,
-            {
-                "wave_id": _WAVE,
-                "outcome": "verified integrated revision",
-                "repo_root": str(repo),
-                "no_runtime_waiver": True,
-            },
-        )
-        attempt_id = str(submitted["attempt"]["id"])
-        state = State.model_validate_json(state_path.read_bytes())
-        state.close_attempts[attempt_id] = state.close_attempts[attempt_id].model_copy(
-            update={
-                "status": CloseAttemptStatus.BLOCKED,
-                "gate_receipt_ids": ["GR-parent"],
-                "audit_report_id": "AR-parent",
-                "waiver_decision_ids": ["D-parent"],
-                "usage_receipt_ids": ["UR-parent"],
-                "artifact_refs": ["urn:eawf:v1:artifact:parent"],
-                "terminal_at": datetime.now(UTC),
-            }
-        )
-        state_path.write_text(state.model_dump_json(), encoding="utf-8")
-
-        with pytest.raises(ValueError, match="land a repair integration first"):
-            await resume(
-                ctx,
-                {"ref": attempt_id, "repo_root": str(repo)},
-            )
-        refused = State.model_validate_json(state_path.read_bytes())
-        assert len(refused.close_attempts) == 1
-        assert refused.close_attempts[attempt_id].repair_budget_remaining == 1
-
-        criterion = CriterionSpec(
-            id="CR-01",
-            text="the repaired integration contains the required payload",
-            kind="contract",
-            acceptance_style="binary",
-            evidence_kind="deterministic",
-            gate_ids=["G-01"],
-            quality_dimension=QualityDimension.FUNCTIONAL_SUITABILITY,
-            measurable_signal="payload.txt exists in the repaired integration",
-        )
-        gate = GateSpec(
-            id="G-01",
-            criterion_id=criterion.id,
-            kind="file_exists",
-            args={"path": "payload.txt"},
-            policy="block",
-            cadence="every-wave",
-        )
-        (repo / "payload.txt").write_text("repaired\n", encoding="utf-8")
-        _git(repo, "add", "payload.txt")
-        _git(repo, "commit", "-m", "test: repair integration")
-        repair_sha = git.commit_sha(repo, "HEAD")
-        repair_tree = git.tree_sha(repo, repair_sha)
-        state = State.model_validate_json(state_path.read_bytes())
-        source_integration = state.wave_integrations[
-            state.close_attempts[attempt_id].integration_id
-        ]
-        state.waves[_WAVE] = state.waves[_WAVE].model_copy(
-            update={
-                "title": "repaired exact close inputs",
-                "success_criteria": [criterion],
-                "gates": [gate],
-            }
-        )
-        repair_integration = create_wave_integration(
-            state,
-            wave_id=_WAVE,
-            base_sha=source_integration.integrated_sha,
-            candidate_sha=repair_sha,
-            integrated_sha=repair_sha,
-            tree_sha=repair_tree,
-            diff_digest=hashlib.sha256(b"repair").hexdigest(),
-            spec_digest=hashlib.sha256(b"repair-spec").hexdigest(),
-        )
-        state_path.write_text(state.model_dump_json(), encoding="utf-8")
-        monkeypatch.setenv("EAWF_VERIFY__JUROR_WALL_CLOCK_SECONDS", "706")
-        monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close.runner_environment_digest",
-            lambda: "e" * 64,
-        )
-        monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.close.dependency_binding_digest",
-            lambda _state, *, wave_id: "d" * 64,
-        )
-
-        resumed = await resume(
-            ctx,
-            {"ref": attempt_id, "repo_root": str(repo)},
-        )
-        repair_id = str(resumed["attempt"]["id"])
-        assert repair_id != attempt_id
-        assert resumed["attempt"]["status"] == CloseAttemptStatus.QUEUED.value
-        assert resumed["attempt"]["generation"] == 2
-        assert resumed["attempt"]["supersedes_id"] == attempt_id
-        assert resumed["attempt"]["repair_wave_id"] == _WAVE
-        assert resumed["attempt"]["repair_generation"] == 1
-        assert resumed["attempt"]["repair_budget_remaining"] == 0
-        replayed = await resume(
-            ctx,
-            {"ref": attempt_id, "repo_root": str(repo)},
-        )
-        assert replayed["attempt"]["id"] == repair_id
-
-        state = State.model_validate_json(state_path.read_bytes())
-        blocked_parent = state.close_attempts[attempt_id]
-        repair = state.close_attempts[repair_id]
-        assert blocked_parent.status is CloseAttemptStatus.BLOCKED
-        assert blocked_parent.terminal_at is not None
-        assert len(state.close_attempts) == 2
-        assert repair.integration_id == repair_integration.id
-        assert repair.integration_id != blocked_parent.integration_id
-        assert repair.candidate_sha == repair_sha
-        assert repair.integrated_sha == repair_sha
-        assert repair.tree_sha == repair_tree
-        assert repair.spec_digest == hashlib.sha256(b"repair-spec").hexdigest()
-        assert repair.wave_revision_digest != blocked_parent.wave_revision_digest
-        assert repair.criteria_digest != blocked_parent.criteria_digest
-        assert repair.gate_manifest_digest != blocked_parent.gate_manifest_digest
-        assert repair.policy_digest != blocked_parent.policy_digest
-        assert repair.runner_environment_digest == "e" * 64
-        assert repair.dependency_binding_digest == "d" * 64
-        assert repair.required_gate_ids == ["G-01"]
-        assert repair.gate_receipt_ids == []
-        assert repair.audit_report_id is None
-        assert repair.waiver_decision_ids == []
-        assert repair.usage_receipt_ids == []
-        assert repair.artifact_refs == []
-        assert repair.no_runtime_waiver is blocked_parent.no_runtime_waiver
-
-        latest = await status(ctx, {"ref": _WAVE, "repo_root": str(repo)})
-        assert latest["attempt"]["id"] == repair_id
-        parent = await status(ctx, {"ref": attempt_id, "repo_root": str(repo)})
-        assert parent["attempt"]["status"] == CloseAttemptStatus.BLOCKED.value
-
-        async def _blocked_reaudit(*args: Any, **kwargs: Any) -> dict[str, Any]:
-            raise ValueError("validation_failed: second audit blocked close")
-
-        monkeypatch.setattr(
-            "eawf.runtime.daemon.methods.state.mutate",
-            _blocked_reaudit,
-        )
-        await _run_attempt(ctx, repo_root=repo, attempt_id=repair_id)
-        state = State.model_validate_json(state_path.read_bytes())
-        exhausted = state.close_attempts[repair_id]
-        assert exhausted.status is CloseAttemptStatus.BLOCKED
-        assert exhausted.required_operator_actions == [
-            CloseOperatorAction.SPLIT,
-            CloseOperatorAction.DEFER,
-            CloseOperatorAction.ABORT,
-        ]
-        replayed_parent = await resume(
-            ctx,
-            {"ref": attempt_id, "repo_root": str(repo)},
-        )
-        assert replayed_parent["attempt"]["id"] == repair_id
-        assert replayed_parent["attempt"]["status"] == CloseAttemptStatus.BLOCKED.value
-        assert replayed_parent["backgrounded"] is False
-
-        with pytest.raises(
-            ValueError,
-            match="operator action required: split, defer, abort",
-        ):
-            await resume(
-                ctx,
-                {"ref": repair_id, "repo_root": str(repo)},
-            )
-
-    asyncio.run(body())
 
 
 def _budget_receipts(attempt: CloseAttempt) -> list[str]:

@@ -643,7 +643,7 @@ def is_safe_step_boundary(step_status: str, step_name: SkillName) -> bool:
 # ---- Skill registration ----------------------------------------------------
 
 
-_FLOW_NEXT_ACTIONS: tuple[str, ...] = ("eawf flow status", "eawf audit")
+_FLOW_NEXT_ACTIONS: tuple[str, ...] = ("eawf migrate epoch2 --plan", "eawf audit")
 
 
 def _terminal_flow_status(terminal_status: str) -> FlowStatus:
@@ -850,7 +850,7 @@ class FlowSkill(SkillAction):
             policy=policy,
             status=FlowStatus.IN_PROGRESS,
             last_safe_checkpoint=None,
-            next_action="eawf flow status",
+            next_action="eawf migrate epoch2 --plan",
         )
         run.records.append(record_id)
 

@@ -105,6 +105,9 @@ def _add_memory(*, scope: str, title: str, body: str = "body") -> str:
     return json.loads(res.output)["id"]
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 @pytest.mark.integration
 def test_sync_regenerates_markdown_views_from_jsonl(tmp_workspace: Path) -> None:
     _add_memory(scope="QR", title="rule")
@@ -120,6 +123,9 @@ def test_sync_regenerates_markdown_views_from_jsonl(tmp_workspace: Path) -> None
     assert "memory-view-QR" in qr_view.read_text(encoding="utf-8")
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 @pytest.mark.integration
 def test_sync_dry_run_does_not_write_views(tmp_workspace: Path) -> None:
     _add_memory(scope="QR", title="rule")
@@ -133,6 +139,9 @@ def test_sync_dry_run_does_not_write_views(tmp_workspace: Path) -> None:
     assert not qr_view.exists()
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 @pytest.mark.integration
 def test_sync_check_exits_4_when_views_drift(tmp_workspace: Path) -> None:
     _add_memory(scope="QR", title="rule")
@@ -146,6 +155,9 @@ def test_sync_check_exits_4_when_views_drift(tmp_workspace: Path) -> None:
     assert res.exit_code == exit_codes.VALIDATION_ERROR, res.output
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 @pytest.mark.integration
 def test_sync_idempotent_views_unchanged_on_second_run(tmp_workspace: Path) -> None:
     _add_memory(scope="QR", title="rule")
@@ -160,6 +172,9 @@ def test_sync_idempotent_views_unchanged_on_second_run(tmp_workspace: Path) -> N
     assert res.exit_code == 0, res.output
 
 
+@pytest.mark.xfail(
+    strict=True, reason="memory writers move to the epoch-2 memory store in EAWF-0232"
+)
 @pytest.mark.integration
 def test_promote_to_artifact_then_sync_excludes_promoted(tmp_workspace: Path) -> None:
     """Once memory is promoted to a Decision, the default view drops it."""

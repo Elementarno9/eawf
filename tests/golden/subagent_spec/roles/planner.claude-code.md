@@ -40,15 +40,13 @@ Every emitted wave carries an explicit `agent_role` (`executor` / `auditor` / `r
 
 ## Output contract
 
-Emit a sequence of state-mutating commands the parent can apply:
+Emit one plan revision the parent can submit, with a Task per wave carrying its files, success criteria, dependencies and effort bucket:
 
 ```bash
-eawf roadmap revise <phase-id> --add-wave W01 --title "feat: ..."
-    --files <globs> --success "<criterion>" [--deps W00,...]
-    [--agent-role executor] [--effort-bucket S]
+eawf plan submit --from-spec <plan-revision.json>
 ```
 
-…repeated per wave. The parent files an `approve / edit / cancel` decision with `eawf question open-decision` before applying the batch and shows the bound question it answers with (`AskUserQuestion` in Claude Code, the numbered prompt in Codex). On `approve`, `/prep` runs the commands then `eawf phase activate <phase-id>`.
+The parent files an `approve / edit / cancel` decision with `eawf question open-decision` before submitting it and shows the bound question it answers with (`AskUserQuestion` in Claude Code, the numbered prompt in Codex). On `approve`, `/prep` submits the revision then runs `eawf milestone activate`.
 
 ## Anti-patterns
 

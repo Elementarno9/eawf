@@ -28,11 +28,9 @@ from typing import Any, cast
 
 import pytest
 import yaml
-from typer.testing import CliRunner
 
 from eawf.kernel.state.enums import ProjectStatus, ScopeKind
 from eawf.kernel.state.models import CurrentPointers, Project, State
-from eawf.surfaces.cli.app import app
 from eawf.workflow.skills.audit import AuditSkill
 from eawf.workflow.skills.bodies.audit import AuditBody
 from eawf.workflow.skills.engine import SkillContext, run_skill
@@ -307,49 +305,3 @@ def test_security_review_missing_cwd_fails_before_any_check_runs(
 
 
 # ---- eawf audit run --checks ---------------------------------------------------
-
-
-def test_audit_run_checks_leave_live_state_byte_identical(
-    live_repo: LiveRepo,
-) -> None:
-    """The verb's checks run sandboxed before its own transaction.
-
-    The verb records an audit row on success, which is a legitimate write, so
-    the byte-identity assertion needs a run whose own write is refused: the
-    audit id already exists. The checks still run first, which is the window
-    in which an in-process check used to rewrite the live ledger.
-    """
-    runner = CliRunner()
-    seeded = runner.invoke(app, ["audit", "run", "AUD-ISO", "--scope-id", "ISO"])
-    assert seeded.exit_code == 0, seeded.output
-    spec = _write_check_file(live_repo.root.parent / "audit.yaml")
-    state_before = live_repo.state_path.read_bytes()
-
-    result = runner.invoke(
-        app,
-        ["audit", "run", "AUD-ISO", "--scope-id", "ISO", "--checks", str(spec)],
-    )
-
-    assert result.exit_code != 0
-    assert "already exists" in result.output
-    live_repo.assert_isolated(state_before=state_before)
-
-
-def test_audit_run_checks_record_the_sandboxed_result(live_repo: LiveRepo) -> None:
-    """The child's result is what the verb records, and only the audit row lands."""
-    spec = _write_check_file(live_repo.root.parent / "audit.yaml")
-    before = json.loads(live_repo.state_path.read_bytes())
-
-    result = CliRunner().invoke(
-        app,
-        ["audit", "run", "AUD-NEW", "--scope-id", "ISO", "--checks", str(spec)],
-    )
-
-    assert result.exit_code == 0, result.output
-    after = json.loads(live_repo.state_path.read_bytes())
-    recorded = after["audits"]["AUD-NEW"]["check_results"]
-    assert [(row["name"], row["passed"]) for row in recorded] == [("probe", True)]
-    assert after["dispatch_paused"] is False
-    assert before.get("audits") in (None, {})
-    assert live_repo.probe_report()["mutated"] is True
-    assert not (live_repo.runtime_dir / _RUNTIME_MARKER).exists()

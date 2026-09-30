@@ -3,7 +3,7 @@
 Holds the append-only ``flow.jsonl`` I/O layer of the
 :mod:`eawf.workflow.skills.flow` package: the ``flow_record`` / ``flow_checkpoint``
 envelope emitters and the read-only stream parsers consumed by
-``eawf flow status`` / ``--resume``. The drift-detection helpers,
+the retired ``flow status`` verb / ``--resume``. The drift-detection helpers,
 ``compute_drift``, and the :class:`FlowSkill` runner live in the package
 ``__init__`` (which re-exports every name here) so the historical flat
 import surface — ``from eawf.workflow.skills.flow import load_flow_records`` —
@@ -181,9 +181,6 @@ def _emit_checkpoint(
     return envelope_id
 
 
-# ---- flow.jsonl readers (read-only) ----------------------------------------
-
-
 def load_flow_records(state_path: Path) -> list[tuple[str, dict[str, Any]]]:
     """Stream-parse ``flow.jsonl`` and return ``(envelope_id, payload)`` pairs.
 
@@ -272,7 +269,7 @@ def latest_active_flow_id(state_path: Path) -> str | None:
 
     Append order in ``flow.jsonl`` reflects chronological order (each
     append is single-writer), so the last seen ``flow_record`` flow_id
-    is the most recently-active flow. Used by ``eawf flow status`` to
+    is the most recently-active flow. Used by the retired ``flow status`` verb to
     pick a deterministic default when the operator did not pass
     ``--flow-id`` and no flow is in-progress.
     """
@@ -286,11 +283,7 @@ def latest_active_flow_id(state_path: Path) -> str | None:
     return out
 
 
-__all__ = [
-    "abort_flow_record",
-    "in_progress_flow_ids",
-    "latest_active_flow_id",
-    "load_flow_records",
-    "load_latest_records_per_flow",
-    "load_latest_safe_checkpoint",
-]
+# ---- flow.jsonl readers (read-only) ----------------------------------------
+
+
+__all__ = []

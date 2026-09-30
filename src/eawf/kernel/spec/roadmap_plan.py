@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Literal
 
-import orjson
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from eawf.kernel.spec.common import CriterionSpec
@@ -141,32 +139,6 @@ class RoadmapPlan(_StrictModel):
                 raise ValueError(f"wave {wave_id!r} has unknown deps: {unknown}")
         _raise_on_dep_cycle(deps_by_wave)
         return self
-
-
-def load_roadmap_plan(path: Path) -> RoadmapPlan:
-    """Load and validate a strict YAML/JSON roadmap plan file.
-
-    Args:
-        path: Plan file path. ``.json`` uses :mod:`orjson`; all other
-            suffixes use ``yaml.safe_load``.
-
-    Raises:
-        OSError: when the file cannot be read.
-        ValueError: when the decoded payload is not a mapping.
-        yaml.YAMLError: when YAML parsing fails.
-        orjson.JSONDecodeError: when JSON parsing fails.
-        pydantic.ValidationError: when strict schema validation fails.
-    """
-    raw = path.read_text(encoding="utf-8")
-    if path.suffix.lower() == ".json":
-        payload: Any = orjson.loads(raw.encode("utf-8"))
-    else:
-        import yaml
-
-        payload = yaml.safe_load(raw)
-    if not isinstance(payload, dict):
-        raise ValueError("roadmap plan must be a mapping")
-    return RoadmapPlan.model_validate(payload)
 
 
 def _raise_on_dep_cycle(deps_by_wave: dict[str, set[str]]) -> None:

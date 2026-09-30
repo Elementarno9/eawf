@@ -36,9 +36,9 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
+from eawf.kernel.state.io import write_state_unlocked
 from eawf.kernel.state.models import State
 from eawf.runtime.lock import portalock
-from eawf.surfaces.cli.commands import lifecycle as lc
 from eawf.workflow.lifecycle._claim_guards import CLAIM_PARALLEL_LIMIT_REACHED
 from eawf.workflow.lifecycle._errors import LifecycleGuardError
 from eawf.workflow.lifecycle.transitions import LifecycleError, claim_wave
@@ -181,7 +181,7 @@ def _claim_in_thread(
                 return 3
             state.updated_at = datetime.now(UTC)
             new_payload = state.model_dump(mode="json")
-            lc._write_state_unlocked(state_path, new_payload)  # type: ignore[attr-defined]
+            write_state_unlocked(state_path, new_payload)  # type: ignore[attr-defined]
             return 0
     except portalock.LockTimeout:
         return 5
@@ -240,7 +240,7 @@ def _claim_final_slot_in_thread(
             except LifecycleError:
                 return 3, None
             state.updated_at = datetime.now(UTC)
-            lc._write_state_unlocked(  # type: ignore[attr-defined]
+            write_state_unlocked(  # type: ignore[attr-defined]
                 state_path,
                 state.model_dump(mode="json"),
             )

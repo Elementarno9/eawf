@@ -186,7 +186,7 @@ def test_new_clauses_land_on_all_four_rendered_surfaces() -> None:
     operator_agent = (golden / "plugin_install" / "claude" / "agents" / "operator.md").read_text(
         encoding="utf-8"
     )
-    assert "dispatch resume" in operator_agent
+    assert "dispatch is paused" in operator_agent
     assert not (golden / "plugin_install" / "claude" / "skills" / "prep").exists()
 
     # The executor's readiness and evidence obligations are embedded in the

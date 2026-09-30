@@ -397,7 +397,7 @@ def _build_initial_state(*, project_code: str, project_title: str) -> dict[str, 
     so the two entry-points produce compatible state files. The wizard
     now seeds the required :class:`~eawf.kernel.state.models.Project`
     record directly; legacy init-only states can be repaired with
-    ``eawf project init --upgrade``.
+    ``eawf repository create``.
     """
     now = datetime.now(UTC)
     timestamp = now.isoformat()
@@ -536,7 +536,7 @@ def run_wizard_no_input(
     3. Acquire the sibling lock on the state path and write the minimal
        state document via :func:`eawf.kernel.state.io.write_state_unlocked`
        (refuses a leak-shaped answer before it lands). The lock prevents a
-       concurrent ``eawf project init`` from racing the write.
+       concurrent ``eawf repository create`` from racing the write.
     4. Write ``.ea/config.yaml`` via :func:`_atomic_write_yaml` (held under
        its own lock).
     5. Materialise ``state_extensions.fields_required`` for every selected

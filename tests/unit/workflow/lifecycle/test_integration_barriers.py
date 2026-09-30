@@ -17,7 +17,6 @@ from eawf.kernel.state.models import (
     WaveIntegration,
     wave_dependency_key,
 )
-from eawf.kernel.state.wave_graph import blocked_by
 from eawf.workflow.lifecycle.integration import (
     DependencyBarrierError,
     bind_start_dependencies,
@@ -223,22 +222,6 @@ def test_create_wave_integration_contract_only_change_appends_generation() -> No
 
     assert second.generation == 2
     assert second.supersedes_id == first.id
-
-
-def test_relaxed_start_updates_live_blocked_by_view() -> None:
-    state = _state()
-    edge_key = wave_dependency_key(_DOWNSTREAM, _UPSTREAM)
-    state.wave_dependency_barriers[edge_key] = WaveDependencyBarrier(
-        wave_id=_DOWNSTREAM,
-        dep_wave_id=_UPSTREAM,
-        start_after=DependencyStage.INTEGRATED,
-        land_after=DependencyStage.VERIFIED,
-        reason="execute after immutable integration and land after proof",
-    )
-
-    assert blocked_by(_DOWNSTREAM, state) == (_UPSTREAM,)
-    _integration(state)
-    assert blocked_by(_DOWNSTREAM, state) == ()
 
 
 def test_execution_continuation_rejects_stale_bound_generation() -> None:

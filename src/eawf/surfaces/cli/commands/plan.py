@@ -53,7 +53,6 @@ from eawf.kernel.state.ids import is_iter_id
 from eawf.kernel.state.resolve import resolve_with_reason
 from eawf.surfaces.cli import errors, exit_codes
 from eawf.surfaces.cli._daemon_client import DaemonClient, DaemonRpcError
-from eawf.surfaces.cli.commands.draft import install_promote_command
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
 from eawf.surfaces.cli.verb_contract import envelope_exit_code, envelope_text, read_spec_document
@@ -129,8 +128,6 @@ plan_app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-
-install_promote_command(plan_app, "plan")
 
 
 @plan_app.command(name="show")

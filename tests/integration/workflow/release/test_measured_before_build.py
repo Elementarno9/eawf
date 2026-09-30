@@ -49,6 +49,7 @@ from eawf.workflow.evidence.measured_contract import (
     LOCAL_SPIKE_ROOT,
     PREFLIGHT_CHECKPOINT_BANDS,
     PREFLIGHT_CONTRACTS,
+    PROMOTION_GAP,
     promote_measured_contract,
     resolve_contract_citation,
 )
@@ -98,7 +99,6 @@ DEV2_UID = UUID(int=372)
 DEV3_MEMBERSHIP = ["milestone://epoch2/native-canary"]
 
 #: The command the refusal must hand the operator.
-PROMOTE_CMD = "eawf artifact promote-contract"
 
 #: The corpus pin the importer contract was extracted from, which is the
 #: same document the cutover rehearsal is judged against.
@@ -241,7 +241,7 @@ def test_a_single_absent_contract_refuses_and_names_it(absent: str) -> None:
     assert excinfo.value.kind == "measured_contract_missing"
     assert absent in message
     assert CONTRACT_LABELS[absent] in message
-    assert f"{PROMOTE_CMD} {absent}" in message
+    assert PROMOTION_GAP in message
 
 
 @pytest.mark.parametrize("absent", DEV3_CONTRACT_IDS)
@@ -277,7 +277,7 @@ def test_dev3_refusal_names_each_missing_contract() -> None:
     for contract_id in DEV3_CONTRACT_IDS:
         assert contract_id in message
         assert CONTRACT_LABELS[contract_id] in message
-        assert f"{PROMOTE_CMD} {contract_id}" in message
+        assert PROMOTION_GAP in message
 
 
 def test_dev3_refusal_names_the_surfaces_in_the_operators_vocabulary() -> None:

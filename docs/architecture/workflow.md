@@ -28,15 +28,15 @@ Parallel implementation is allowed only when:
 - the state write lock is respected,
 - acceptance checks are defined.
 
-Phase close has an explicit scope-collapse guard: when a phase has exactly one closed wave, `eawf phase close` fails unless an active decision tied to that phase records the single-wave / scope-collapse rationale. This keeps phase closeout from silently hiding an accidental all-in-one wave.
+Phase close has an explicit scope-collapse guard: when a phase has exactly one closed wave, `eawf milestone accept` fails unless an active decision tied to that phase records the single-wave / scope-collapse rationale. This keeps phase closeout from silently hiding an accidental all-in-one wave.
 
 ## Required workflow skills
 
 | Skill | Purpose | Default automation |
 |---|---|---|
-| `/research [-f] [message]` | Research topic or current-iter unknowns; propose options, tradeoffs, risks, recommendation; peer-review findings; repeated calls extend same brief | Auto fanout, synthesize, review, update state / artifact refs; `-f` stores typed references and `eawf research show --md` renders the brief |
+| `/research [-f] [message]` | Research topic or current-iter unknowns; propose options, tradeoffs, risks, recommendation; peer-review findings; repeated calls extend same brief | Auto fanout, synthesize, review, update state / artifact refs; `-f` stores typed references and the retired `research show` verb renders the brief |
 | `/prep [p##[-i##]] [-i]` | Plan current / selected iter; `-i` plans fixes after `/audit` or `/review` | Build DAG, define waves, acceptance checks, file scopes, worktree needs, wave tags, and bucket roll-ups |
-| `/audit [scope]` | Full iteration audit: metrics / results, code quality, tests, docs / state evidence, integrity checks | Run configured checks, fanout reviewers, record `Audit` artifact / verdict; `eawf audit show --md` renders the audit chassis |
+| `/audit [scope]` | Full iteration audit: metrics / results, code quality, tests, docs / state evidence, integrity checks | Run configured checks, fanout reviewers, record `Audit` artifact / verdict; the retired `audit show` verb renders the audit chassis |
 | `/ship` | Commit / push / PR open-close controller | Respect auto-commit / auto-push; otherwise create pending-ship artifact and ask; review / promote / prune relevant memories before final state update |
 | `/review` | Review active PR and post templated comment / review | Inspect diff / checks, run focused agents, post only when requested or policy allows |
 | `/polish [-y]` | Whole-repo consistency audit across docs, memory, code, configs, state, agent / subagent memory | Parallel search, grouped cleanup table; promote useful memories, prune obsolete ones; `-y` auto-applies safe tasks |
@@ -73,7 +73,7 @@ Every skill performs `Probe instruments → Resolve scope → Action → Envelop
 5. Build task DAG: task ID, deps, file scope, success criteria, `agent_role`, `effort_bucket`, commands, evidence, risk, expected artifact.
 6. Partition into waves: parallel only for disjoint / controlled scopes; assign worktree policy.
 7. Estimate each wave at the one effort constant and roll up `sum_wave_eu` / `critical_path_eu`; a size label changes no figure.
-8. Allocate IDs: `eawf iter open P13` auto-allocates next `P13-Ixx`; explicit `P13-I04` infers parent.
+8. Allocate IDs: `eawf batch create` auto-allocates next `P13-Ixx`; explicit `P13-I04` infers parent.
 9. Write plan / spec artifact, state wave stubs, and estimate records.
 10. Ask approval if `approval=ask`, risky, destructive, ambiguous, or budget exceeds threshold.
 
@@ -100,7 +100,7 @@ Every skill performs `Probe instruments → Resolve scope → Action → Envelop
 3. Inspect git status / diff / log and state scope.
 4. Review memory: extract durable lessons from session / agent memory, promote useful entries, mark stale / contradicted entries, prune only by policy.
 5. Build pending-ship artifact: commit groups, messages, files, evidence, push / PR action, rollback notes.
-6. Validate durable artifact markdown with `eawf artifact validate`; promotion paths fail closed on scrub findings and non-dense citations.
+6. Validate durable artifact markdown with the retired `artifact validate` verb; promotion paths fail closed on scrub findings and non-dense citations.
 7. Default new-install policy is ask before commit; if auto-commit is explicitly enabled and `--no-commit` is not set, commit using selected template.
 8. Default new-install policy is ask before push; if auto-push is explicitly enabled and `--no-push` is not set, push safely.
 9. PR action: open draft / ready, update body, close / merge only if configured gates pass.

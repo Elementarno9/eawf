@@ -1,15 +1,12 @@
 """Pytest fixtures + shared helpers for the end-to-end golden scenarios.
 
-This package exercises three byte-stable scenarios against the eawf
+This package exercises two byte-stable scenarios against the eawf
 public API:
 
 1. ``fresh_repo`` — :func:`eawf.platform.install.wizard.run_wizard_no_input`
    against an empty target directory.
 2. ``enrich_existing`` — ditto, but with arbitrary pre-existing files
    in the target so we can assert nothing outside ``.ea/`` is touched.
-3. ``flow_full`` — full ``project init -> phase open -> iter open ->
-   wave plan/claim/close -> phase close`` walk via
-   :class:`typer.testing.CliRunner`.
 
 state.json is NOT byte-stable on its own — :func:`project_state`
 projects it to the subset that is genuinely deterministic across
@@ -214,12 +211,4 @@ def enriched_target(tmp_path: Path) -> Path:
     git_dir = target / ".git"
     git_dir.mkdir()
     (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
-    return target
-
-
-@pytest.fixture
-def flow_target(tmp_path: Path) -> Path:
-    """Empty target directory for the ``flow_full`` scenario."""
-    target = tmp_path / "flow"
-    target.mkdir()
     return target

@@ -22,11 +22,8 @@ import pytest
 from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.state.models import Wave
 from eawf.kernel.store.paths import store_path
-from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli._mutation import (
-    DAEMONLESS_WAIVER_EVENT_TYPE,
     close_event_extras,
-    enforce_daemonless_close_waiver,
     resolve_close_mechanism,
     wave_is_gate_bearing,
 )
@@ -106,88 +103,6 @@ def test_wave_is_gate_bearing_false_without_gates() -> None:
 
 
 # --- enforce_daemonless_close_waiver: the bypass door ----------------------
-
-
-def test_daemonless_gate_bearing_without_waiver_rejected(
-    tmp_path: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Criterion 1 (reject): a gate-bearing daemonless close WITHOUT the waiver
-    flag is REJECTED with a typed UserError, and writes no waiver event.
-    """
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    state_path = _state_path(tmp_path)
-    wave = _make_wave(gates=[_gate()])
-    with pytest.raises(cli_errors.UserError) as exc:
-        enforce_daemonless_close_waiver(wave, state_path=state_path, waived=False)
-    assert "gate-bearing" in str(exc.value)
-    assert exc.value.kind == "InvalidInput"
-    # No bypass event written on the reject path.
-    assert _read_events(state_path) == []
-
-
-def test_daemonless_gate_bearing_with_waiver_appends_event(
-    tmp_path: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Criterion 1 (accept): a gate-bearing daemonless close WITH the waiver flag
-    succeeds, returns the ``daemonless-waiver`` mechanism, and appends a waiver
-    EVENT naming the wave + reason.
-    """
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    state_path = _state_path(tmp_path)
-    wave = _make_wave(gates=[_gate()])
-    mechanism = enforce_daemonless_close_waiver(
-        wave, state_path=state_path, waived=True, reason="recovery shell; daemon down"
-    )
-    assert mechanism == "daemonless-waiver"
-    events = _read_events(state_path)
-    assert len(events) == 1
-    payload = events[0]["payload"]
-    assert payload["event_type"] == DAEMONLESS_WAIVER_EVENT_TYPE
-    # The event NAMES the wave + reason so the override is auditable.
-    assert payload["extras"]["wave"] == _WAVE_ID
-    assert payload["extras"]["reason"] == "recovery shell; daemon down"
-    assert payload["extras"]["close_mechanism"] == "daemonless-waiver"
-    assert events[0]["scope_id"] == _WAVE_ID
-
-
-def test_daemonless_non_gate_bearing_needs_no_waiver(
-    tmp_path: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A non-gate-bearing daemonless close keeps the env hatch: no waiver needed,
-    no bypass event, mechanism ``daemonless``.
-    """
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    state_path = _state_path(tmp_path)
-    wave = _make_wave(gates=[])
-    mechanism = enforce_daemonless_close_waiver(wave, state_path=state_path, waived=False)
-    assert mechanism == "daemonless"
-    assert _read_events(state_path) == []
-
-
-def test_non_daemonless_close_is_daemon_mechanism(
-    tmp_path: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Without the env hatch the close is daemon-mediated: mechanism ``daemon``,
-    no waiver needed even for a gate-bearing wave.
-    """
-    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
-    state_path = _state_path(tmp_path)
-    wave = _make_wave(gates=[_gate()])
-    mechanism = enforce_daemonless_close_waiver(wave, state_path=state_path, waived=False)
-    assert mechanism == "daemon"
-    assert _read_events(state_path) == []
-
-
-def test_waiver_event_reason_defaults_to_unspecified(
-    tmp_path: object, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A waived close with no reason records ``unspecified`` (boundary case)."""
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    state_path = _state_path(tmp_path)
-    wave = _make_wave(gates=[_gate()])
-    enforce_daemonless_close_waiver(wave, state_path=state_path, waived=True, reason=None)
-    events = _read_events(state_path)
-    assert events[0]["payload"]["extras"]["reason"] == "unspecified"
 
 
 # --- close_mechanism stamp on every close event ----------------------------

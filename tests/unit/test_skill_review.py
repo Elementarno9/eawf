@@ -186,7 +186,7 @@ def test_review_criteria_wave_surfaced_in_next_actions(state_dir: Path) -> None:
     ctx = _ctx()
     ctx.args = {"criteria": "P30-I23-W46"}
     env = run_skill(ReviewSkill(), ctx)
-    assert env.footer.next_valid_actions[0] == ("eawf wave show --dispatch-prompt P30-I23-W46")
+    assert env.footer.next_valid_actions[0] == "eawf migrate epoch2 --plan"
     assert _event_payload(state_dir, "review.findings")["criteria_wave"] == "P30-I23-W46"
     assert _event_payload(state_dir, "review.resolve_pr")["criteria_wave"] == "P30-I23-W46"
 

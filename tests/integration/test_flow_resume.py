@@ -22,14 +22,12 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError
-from typer.testing import CliRunner
 
 from eawf.kernel.state.enums import FlowStatus, StoreKind
 from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.flow import FlowCheckpointPayload, FlowPayload
 from eawf.kernel.store.paths import store_path
-from eawf.surfaces.cli.app import app
 from eawf.workflow.skills import flow as flow_module
 from eawf.workflow.skills.flow import (
     _canonical_args_per_step_hash,
@@ -387,62 +385,6 @@ def test_in_progress_flow_ids_multiple_in_progress(tmp_path: Path) -> None:
 # ---- CLI exit codes --------------------------------------------------------
 
 
-@pytest.fixture
-def cli_state_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    # The catalog retires /flow, so the CLI refuses every run up front. These
-    # tests exercise the resume machinery behind that refusal, so they lift it.
-    monkeypatch.setattr(flow_module, "check_flow_runnable", lambda: None)
-    state_dir = tmp_path / ".ea"
-    (state_dir / "store").mkdir(parents=True, exist_ok=True)
-    state_path = state_dir / "state.json"
-    state_path.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setenv("EA_INSTRUMENT_PROBE", str(state_dir / "instrument-probe.json"))
-    return state_dir
-
-
-def test_cli_run_resume_exit_code_on_no_flow(cli_state_dir: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    # No flow records exist → NotFound (2).
-    assert result.exit_code == 1, result.stdout
-
-
-def test_cli_run_resume_multiple_flows_requires_flow_id(cli_state_dir: Path) -> None:
-    _append_flow_record(
-        cli_state_dir,
-        flow_id="FL-aaaaaaaaaaaa",
-        status=FlowStatus.IN_PROGRESS,
-        envelope_id="EV-001",
-    )
-    _append_flow_record(
-        cli_state_dir,
-        flow_id="FL-bbbbbbbbbbbb",
-        status=FlowStatus.IN_PROGRESS,
-        envelope_id="EV-002",
-    )
-    runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 1, result.stdout
-
-
-def test_cli_run_resume_no_safe_checkpoint_returns_integrity_violation(
-    cli_state_dir: Path,
-) -> None:
-    fid = "FL-cccccccccccc"
-    _append_flow_record(
-        cli_state_dir,
-        flow_id=fid,
-        status=FlowStatus.IN_PROGRESS,
-        envelope_id="EV-001",
-    )
-    unsafe = _make_checkpoint(flow_id=fid, step_index=0, last_safe=False)
-    _append_checkpoint(cli_state_dir, unsafe, envelope_id="EV-002")
-    runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "run", "--resume"])
-    assert result.exit_code == 3, result.stdout
-
-
 def test_abort_flow_record_appends_abandoned_envelope(tmp_path: Path) -> None:
     state_dir = _make_state_dir(tmp_path)
     state_path = state_dir / "state.json"
@@ -477,63 +419,3 @@ def test_abort_flow_record_appends_abandoned_envelope(tmp_path: Path) -> None:
 
     latest = load_latest_records_per_flow(state_path)[fid]
     assert latest.status is FlowStatus.ABANDONED
-
-
-def test_cli_abort_unknown_flow_returns_not_found(cli_state_dir: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "abort", "--flow-id", "FL-deadbeefcafe"])
-    assert result.exit_code == 1, result.stdout
-
-
-def test_cli_abort_idempotent(cli_state_dir: Path) -> None:
-    fid = "FL-aaaaaaaaaaaa"
-    _append_flow_record(
-        cli_state_dir,
-        flow_id=fid,
-        status=FlowStatus.IN_PROGRESS,
-        envelope_id="EV-001",
-    )
-    runner = CliRunner()
-    # First abort: in_progress → abandoned.
-    result = runner.invoke(app, ["--json", "flow", "abort", "--flow-id", fid, "--reason", "test"])
-    assert result.exit_code == 0, result.stdout
-    import orjson
-
-    payload = orjson.loads(result.stdout)
-    assert payload["new_status"] == "abandoned"
-    assert payload["previous_status"] == "in_progress"
-
-    # Second abort: abandoned → abandoned (idempotent).
-    result = runner.invoke(app, ["--json", "flow", "abort", "--flow-id", fid, "--reason", "test-2"])
-    assert result.exit_code == 0, result.stdout
-    payload = orjson.loads(result.stdout)
-    assert payload["new_status"] == "abandoned"
-    assert payload["previous_status"] == "abandoned"
-
-
-def test_cli_status_emits_structured_json(cli_state_dir: Path) -> None:
-    fid = "FL-aaaaaaaaaaaa"
-    _append_flow_record(
-        cli_state_dir,
-        flow_id=fid,
-        status=FlowStatus.IN_PROGRESS,
-        envelope_id="EV-001",
-    )
-    safe = _make_checkpoint(flow_id=fid, step_index=0, last_safe=True)
-    _append_checkpoint(cli_state_dir, safe, envelope_id="EV-002")
-    runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "status", "--flow-id", fid])
-    assert result.exit_code == 0, result.stdout
-    import orjson
-
-    payload = orjson.loads(result.stdout)
-    assert payload["flow_id"] == fid
-    assert payload["status"] == "in_progress"
-    assert payload["last_safe_checkpoint"]["id"] == "EV-002"
-    assert payload["last_safe_checkpoint"]["step_index"] == 0
-
-
-def test_cli_status_no_flow_returns_not_found(cli_state_dir: Path) -> None:
-    runner = CliRunner()
-    result = runner.invoke(app, ["--json", "flow", "status"])
-    assert result.exit_code == 1, result.stdout

@@ -309,7 +309,7 @@ def start_session(
     """Open a new ``ACTIVE`` session under *(scope_id, runtime)*.
 
     :func:`stage_session` followed by an immediate event append -- the
-    non-transactional surface every standalone caller (``eawf session start``,
+    non-transactional surface every standalone caller (``eawf run start``,
     the jury / verdict paths) wants.
 
     Raises:

@@ -22,7 +22,7 @@ Eä is an agent-driven development framework. The CLI and runtime adapters are o
 : The smallest planned execution unit. Waves have success criteria, file scopes, dependencies, an `agent_role`, and an `effort_bucket`.
 
 **Roadmap**
-: The planned queue of phases, iters, and waves. Roadmap changes go through `eawf roadmap propose`, `revise`, `apply`, and `drop`.
+: The planned queue of phases, iters, and waves. Roadmap changes go through `eawf plan submit`, `revise`, `apply`, and `drop`.
 
 **DAG**
 : The dependency graph that controls which waves can run in parallel. Waves with disjoint scopes and satisfied dependencies can be claimed independently.

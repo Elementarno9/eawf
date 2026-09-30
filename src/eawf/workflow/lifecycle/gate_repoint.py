@@ -210,7 +210,7 @@ def repoint_closed_wave_gates(
     if wave.status != WaveStatus.CLOSED:
         raise LifecycleError(
             f"wave {wave_id!r} is not closed (status={wave.status.value!r}); "
-            "a plan-time gate edit goes through `eawf spec sync`"
+            "a plan-time gate edit goes through a plan revision (`eawf plan submit`)"
         )
     if not wave.gates:
         raise LifecycleError(f"wave {wave_id!r} records no gates to repoint")

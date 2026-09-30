@@ -25,7 +25,7 @@ existing single-command registration in :mod:`eawf.surfaces.cli.app` stays intac
 - ``eawf metrics variance`` — emit the C09 §5.9.6 M26
   ``eawf_estimate_actual_variance_pct`` gauge from ``state.json`` and feed
   the ship-gate Variance section + the C06 VarianceTile. Actuals are
-  measured-only (manual ``eawf actual start/stop`` segments now, per-wave
+  measured-only (manual the retired ``actual start`` verb segments now, per-wave
   token accounting in v0.4); the variance gauge reads the empty state
   until a measured actual exists. The old wall-clock auto-record +
   ``backfill-actuals`` derivation were retired because wall-clock time

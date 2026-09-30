@@ -1,6 +1,6 @@
 <!-- Generated from the eawf profile render block `commit-prefix`. Do not hand-edit: re-run `eawf sync`. -->
 
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.8 hash=e163372c71d78a35 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.9 hash=c7c826a75f177710 -->
 # `commit-prefix`
 
 Wave commits are written ``<type>: <summary>`` plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer; the bracket prefix form still passes but warns, and ``[P<NN>] state:`` keeps its bracket.
@@ -29,7 +29,7 @@ The ``-CORE`` suffix is retired. It survives only in commits already on the trun
 
 Non-final iter closes are still in-phase state bookkeeping: use ``[P<NN>-I<NN>] state: close iter`` while the phase remains ACTIVE. Bare conventional commits are reserved for a queue with nothing PLANNED or ACTIVE, such as a pre-flight chore before ``/roadmap propose``.
 
-**Operational coupling: ship + PR-review ride the phase-co-closing iter.** The final iter of a phase is where the PR-review pass + ship CI happen; review-feedback waves append to that iter (``eawf roadmap revise --add-wave``) rather than opening a fresh iter. This keeps the phase-close mutation attributable to one iter close + the same commit (see ``iter-phase-close-timing``).
+**Operational coupling: ship + PR-review ride the phase-co-closing iter.** The final iter of a phase is where the PR-review pass + ship CI happen; review-feedback waves append to that iter (``eawf plan submit``) rather than opening a fresh iter. This keeps the phase-close mutation attributable to one iter close + the same commit (see ``iter-phase-close-timing``).
 
 Body: 3-6 bullets on what changed and why. Trailers: the ``Eawf-Wave`` scope trailer (written form) and a recognized Claude or Codex ``Co-Authored-By`` trailer.
 <!-- END EAWF:managed id=commit-prefix -->

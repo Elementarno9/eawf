@@ -191,7 +191,9 @@ def test_surf_080_unmounted_groups_are_the_known_gap() -> None:
     """
     mounted = set(_root().commands)
     declared = verb_contract.ENTITY_GROUPS + verb_contract.CROSS_CUTTING_GROUPS
-    assert {group for group in declared if group not in mounted} == {"action"}
+    # ``decision`` has no CLI verb since the flag day retired the epoch-1 decision
+    # verbs; a Decision is opened through ``question open-decision``.
+    assert {group for group in declared if group not in mounted} == {"action", "decision"}
 
 
 # ---- SURF-081 ---------------------------------------------------------------
@@ -495,14 +497,10 @@ def test_surf_084_a_publication_answers_with_its_operation_reference_on_submissi
 _READ_VERBS: tuple[tuple[str, ...], ...] = (
     ("config", "get", "ui.theme"),
     ("config", "validate"),
-    ("decision", "graph"),
-    ("decision", "list"),
     ("memory", "digest"),
     ("memory", "list"),
     ("memory", "stale"),
     ("migrate", "status"),
-    ("question", "list"),
-    ("research", "status"),
     ("workspace", "list"),
 )
 

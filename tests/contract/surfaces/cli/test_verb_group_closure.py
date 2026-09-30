@@ -42,7 +42,6 @@ runner = CliRunner()
 
 _ROOT = "eawf://WS-CANARY/PRJ-CANARY/REP-CANARY"
 _TASK = f"{_ROOT}/task/CANARY-0001"
-_RUN = f"{_ROOT}/run/RUN-00000001"
 _BATCH = f"{_ROOT}/batch/BAT-0001"
 _MILESTONE = f"{_ROOT}/milestone/MLS-0001"
 _RELEASE_KEY = "REL-0.7.0.dev9"
@@ -74,7 +73,7 @@ def _options(*path: str) -> dict[str, click.Parameter]:
     ("group", "verbs"),
     [
         ("campaign", {"new", "run", "cancel"}),
-        ("question", {"add", "resolve", "list", "open-decision", "answer"}),
+        ("question", {"open-decision", "answer"}),
     ],
 )
 def test_surf_080_campaign_and_question_are_root_entity_groups(group: str, verbs: set[str]) -> None:
@@ -82,23 +81,15 @@ def test_surf_080_campaign_and_question_are_root_entity_groups(group: str, verbs
     assert set(_group(group).commands) == verbs
 
 
-def test_surf_080_the_research_group_keeps_only_its_reads() -> None:
-    """The move is clean: no second spelling is left under ``research``."""
-    assert not {"campaign", "question"} & set(_group("research").commands)
+def test_surf_080_the_research_group_is_gone() -> None:
+    """The flag day retired the research reads, so no ``research`` group is left."""
+    assert "research" not in _root().commands
 
 
 def test_surf_080_ui_is_the_root_launch_verb_and_tui_is_gone() -> None:
     mounted = set(_root().commands)
     assert "ui" in mounted
     assert "tui" not in mounted
-
-
-def test_surf_080_a_moved_group_answers_at_its_new_path_only() -> None:
-    """Error path: the old path is an unknown command, the new one is the group."""
-    old = runner.invoke(app, ["research", "question", "list"])
-    assert old.exit_code == click.UsageError("x").exit_code
-    assert "No such command 'question'" in old.output
-    assert "list" in runner.invoke(app, ["question"]).output
 
 
 # ---- SURF-081 ---------------------------------------------------------------
@@ -267,44 +258,6 @@ def test_surf_082_a_document_the_model_refuses_names_the_field(
         verb_contract.request_document(_Request, spec, {})
 
 
-@pytest.fixture
-def research_daemon(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeDaemon:
-    """Point the research verbs at a fake daemon over a bare state root."""
-    fake = FakeDaemon()
-    fake.result = {"question_id": "OQ-1", "status": "blocked", "scope_id": "CANARY"}
-    monkeypatch.setattr("eawf.surfaces.cli._daemon_client.DaemonClient", fake)
-    lay_epoch2_tree(tmp_path)
-    return fake
-
-
-def test_surf_082_question_add_reads_the_whole_question_from_stdin(
-    research_daemon: FakeDaemon, tmp_path: Path
-) -> None:
-    document = {"title": "which model fits", "blocking": True, "urgency": "high"}
-    result = runner.invoke(
-        app,
-        ["--workspace", str(tmp_path), "question", "add", "--from-spec", "-"],
-        input=json.dumps(document),
-    )
-    assert result.exit_code == exit_codes.OK, result.output
-    [(method, params)] = research_daemon.calls
-    assert method == "research.add_question"
-    assert {key: params[key] for key in document} == document
-
-
-def test_surf_082_question_add_refuses_an_undeclared_field_before_the_wire(
-    research_daemon: FakeDaemon, tmp_path: Path
-) -> None:
-    result = runner.invoke(
-        app,
-        ["--workspace", str(tmp_path), "question", "add", "--from-spec", "-"],
-        input=json.dumps({"title": "t", "owner": "someone"}),
-    )
-    assert result.exit_code == exit_codes.USER_ERROR
-    assert "owner" in result.output
-    assert research_daemon.calls == []
-
-
 def test_surf_082_release_create_reads_its_request_from_stdin(
     release_calls: list[tuple[str, dict[str, Any]]],
 ) -> None:
@@ -326,16 +279,6 @@ def test_surf_082_release_create_refuses_a_version_beside_the_spec(
     assert release_calls == []
 
 
-def test_surf_082_decision_add_refuses_a_document_missing_a_field(tmp_path: Path) -> None:
-    result = runner.invoke(app, ["--no-input", "init", "--quick", "--target", str(tmp_path)])
-    assert result.exit_code == exit_codes.OK, result.output
-    result = runner.invoke(
-        app,
-        ["-w", str(tmp_path), "decision", "add", "--from-spec", "-"],
-        input=json.dumps({"decision_id": "D901", "scope_id": "P01", "summary": "Keep the flag"}),
-    )
-    assert result.exit_code == exit_codes.USER_ERROR
-    assert "rationale" in result.output
 
 
 # ---- SURF-083 ---------------------------------------------------------------

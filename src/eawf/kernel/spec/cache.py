@@ -1,7 +1,7 @@
 """Daemon-resident spec cache (authority-map row 10).
 
 Per C03 §5.8 the daemon caches a per-phase spec index so
-``eawf spec show <urn>`` can recover spec bodies after the on-disk file
+the retired ``spec show`` verb can recover spec bodies after the on-disk file
 has been ``git rm``'d in the ARCHIVED transition. The cache is owned
 by the daemon — no other writer touches the file — so every mutation
 flows through :mod:`eawf.kernel.spec.writer` (called from

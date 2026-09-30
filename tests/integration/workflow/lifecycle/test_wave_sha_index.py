@@ -34,7 +34,6 @@ from eawf.workflow.lifecycle.wave_sha import (
     _parse_index,
     build_wave_sha_index,
     commit_identity_digest,
-    commit_matches_wave,
     derive_wave_sha,
     detect_git_state_drift,
 )
@@ -177,15 +176,6 @@ def test_derive_wave_sha_via_index_tries_alt_prefix_form(tmp_path: Path) -> None
     index = build_wave_sha_index(tmp_path)
     # derive_wave_sha consults canonical [P30-W03] first, then alt [P30-I01-W03].
     assert derive_wave_sha("P30-I01-W03", index=index) == sha
-
-
-@_GIT
-def test_commit_matches_wave_rejects_wrong_future_close_pin(tmp_path: Path) -> None:
-    _init_repo(tmp_path)
-    sha = _commit(tmp_path, name="a.txt", msg="[P30-I07-W02] feat: other wave")
-
-    assert commit_matches_wave(sha, "P30-I07-W02", repo_root=tmp_path) is True
-    assert commit_matches_wave(sha, "P30-I07-W01", repo_root=tmp_path) is False
 
 
 @_GIT

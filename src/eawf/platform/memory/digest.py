@@ -40,7 +40,7 @@ from eawf.kernel.state.models import State
 logger = logging.getLogger(__name__)
 
 #: Default cap on the recently-closed-iter list. Five keeps the standup
-#: scannable — the full history is one ``eawf roadmap show`` away.
+#: scannable — the full history is one the retired ``roadmap show`` verb away.
 _DEFAULT_CLOSED_LIMIT: int = 5
 
 #: Default cap on the recent-decision list, matching the ``eawf status``

@@ -43,8 +43,6 @@ from eawf.runtime.daemon import methods
 from eawf.runtime.daemon.churn import CHURN_LEDGER_NAME, ChurnOp, ChurnRecord
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.run_budget import RUN_BUDGET_METER_METHOD
-from eawf.surfaces.cli import exit_codes
-from eawf.surfaces.cli.app import app
 from tests._session_helpers import seed_active_session_on_disk
 from tests.conftest import make_claim_criterion
 from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
@@ -58,6 +56,15 @@ from tests.integration.runtime.daemon._epoch2_transaction_fixtures import (
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
+
+#: A committed epoch-1 state holding one phase, one iter and one wave.
+WAVE_STATE: Final = (
+    Path(__file__).resolve().parents[3]
+    / "fixtures"
+    / "states"
+    / "valid"
+    / "03-phase-iter-wave-active.json"
+)
 
 WAVE_ID: Final = "P01-I01-W01"
 SESSION_ID: Final = "S"
@@ -75,31 +82,20 @@ def canary_runtime_under_tmp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 @pytest.fixture
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """An epoch-1 repository holding one PENDING wave and one ACTIVE session."""
+    """An epoch-1 repository holding one PENDING wave and one ACTIVE session.
+
+    Laid down from a committed state with its wave set back to PENDING: the
+    flag day retired the epoch-1 verbs that used to build it.
+    """
     root = tmp_path / "repo"
-    root.mkdir()
     state_path = root / ".ea" / "state.json"
+    state_path.parent.mkdir(parents=True)
+    payload = orjson.loads(WAVE_STATE.read_bytes())
+    payload["waves"][WAVE_ID]["status"] = "pending"
+    payload["waves"][WAVE_ID]["effort_bucket"] = "M"
+    payload["current"]["active_wave_ids"] = []
+    state_path.write_bytes(orjson.dumps(payload))
     monkeypatch.setenv("EA_STATE", str(state_path))
-    for argv in (
-        ["project", "init", "QR", "--title", "Q", "--domains", "x"],
-        ["phase", "open", "--auto", "--title", "x"],
-        ["iter", "open", "--phase", "P01", "--title", "I1"],
-        [
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            WAVE_ID,
-            "--title",
-            "one",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "M",
-        ],
-    ):
-        result = runner.invoke(app, argv)
-        assert result.exit_code == 0, result.output
     state = State.model_validate(orjson.loads(state_path.read_bytes()))
     for wave in state.waves.values():
         wave.success_criteria = [make_claim_criterion()]
@@ -133,16 +129,6 @@ def _digest(path: Path) -> str | None:
 def _epoch1_digests(repo: Path) -> tuple[str | None, str | None]:
     """Digest ``state.json`` and the epoch-1 event log."""
     return _digest(_ea(repo) / "state.json"), _digest(_ea(repo) / "store" / "event.jsonl")
-
-
-def _fallback_wal(repo: Path) -> list[str]:
-    """List the in-process fallback WAL, which a refusal must not grow."""
-    wal = _ea(repo) / "locks" / "wal"
-    return sorted(path.name for path in wal.iterdir()) if wal.exists() else []
-
-
-def _claim() -> Any:
-    return runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", SESSION_ID])
 
 
 def _mutate(ctx: MethodContext, repo: Path) -> dict[str, Any]:
@@ -191,45 +177,6 @@ def _active_sessions(repo: Path) -> list[str]:
 
 
 # ---- CLI: eawf wave claim ---------------------------------------------------
-
-
-def test_wave_claim_lands_on_an_unmarked_root(repo: Path) -> None:
-    """The control: the same claim writes when no marker is present."""
-    before = _epoch1_digests(repo)
-    result = _claim()
-    assert result.exit_code == exit_codes.OK, result.output
-    assert _epoch1_digests(repo)[0] != before[0]
-
-
-def test_wave_claim_refused_on_a_marked_root(repo: Path) -> None:
-    """The gate: the claim exits with the refusal and moves nothing."""
-    _mark(repo)
-    before = _epoch1_digests(repo)
-    wal_before = _fallback_wal(repo)
-    result = _claim()
-    assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
-    assert LEGACY_OPERATION_REMOVED in result.output
-    assert _epoch1_digests(repo) == before
-    assert _fallback_wal(repo) == wal_before
-
-
-def test_wave_claim_refused_on_a_provisioned_canary(repo: Path) -> None:
-    """A declared, activated tree refuses the epoch-1 claim the same way."""
-    _canary(repo)
-    before = _epoch1_digests(repo)
-    result = _claim()
-    assert result.exit_code == exit_codes.VALIDATION_ERROR, result.output
-    assert LEGACY_OPERATION_REMOVED in result.output
-    assert _epoch1_digests(repo) == before
-
-
-def test_wave_claim_lands_again_after_the_marker_is_removed(repo: Path) -> None:
-    """A rollback that removes the marker hands the tree back to epoch 1."""
-    _mark(repo)
-    assert _claim().exit_code == exit_codes.VALIDATION_ERROR
-    (_ea(repo) / GENERATIONS_DIRNAME / MARKER_FILENAME).unlink()
-    result = _claim()
-    assert result.exit_code == exit_codes.OK, result.output
 
 
 # ---- daemon: state.mutate ---------------------------------------------------

@@ -25,6 +25,7 @@ from eawf.observability.doctor.checks import check_config_resolves
 from eawf.platform.profiles import discovery
 from eawf.surfaces.cli import exit_codes
 from eawf.surfaces.cli.app import app
+from tests._epoch2_helpers import lay_epoch2_tree
 
 runner = CliRunner()
 
@@ -114,7 +115,7 @@ def test_enable_workspace_overlay_shadows_builtin(
         "python",
         "name: python\nstate_extensions:\n  fields_required: [overlay_marker]\n",
     )
-    (ws / ".ea" / "state.json").write_text("{}", encoding="utf-8")
+    lay_epoch2_tree(ws)
     monkeypatch.chdir(ws)
 
     result = runner.invoke(
@@ -123,7 +124,7 @@ def test_enable_workspace_overlay_shadows_builtin(
     )
     assert result.exit_code == 0, result.output
     body = json.loads(result.output)
-    assert body["state_keys_materialised"] == ["overlay_marker"]
+    assert body["state_keys_required"] == ["overlay_marker"]
 
 
 def test_enable_malformed_overlay_refused(

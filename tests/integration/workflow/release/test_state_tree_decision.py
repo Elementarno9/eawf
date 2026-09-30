@@ -5,8 +5,9 @@ written, so that the importer validates against a decided shape instead of
 establishing one as a side effect. The ruling is only useful while it stays
 queryable and keeps naming both of its halves: the target tree shape, and
 the boundary saying where an epoch-1 row that epoch-2 cannot model natively
-is allowed to live. This suite pins the ``eawf decision list`` surface, the
-stored rationale carrying the boundary, and the brief that argues for them.
+is allowed to live. This suite pins the stored decision row, the rationale
+carrying the boundary, and the brief that argues for them. The row is read
+from the committed state directly: the flag day retired ``decision list``.
 """
 
 from __future__ import annotations
@@ -16,9 +17,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from typer.testing import CliRunner
-
-from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
 
@@ -37,8 +35,6 @@ _SHAPE_TERMS = ("compact native tree", "legacy store")
 #: ledger. Losing either term from the rationale loses the boundary.
 _BOUNDARY_TERMS = ("legacy_refs", "legacy record")
 
-runner = CliRunner()
-
 
 def _load_state() -> dict[str, Any]:
     return json.loads(_STATE_PATH.read_text(encoding="utf-8"))
@@ -50,13 +46,16 @@ def _state_tree_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 @pytest.fixture
-def listed_decisions(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
-    """Return ``eawf decision list --json`` rows for the live repo state."""
-    monkeypatch.setenv("EA_STATE", str(_STATE_PATH))
-    result = runner.invoke(app, ["--json", "decision", "list"])
-    assert result.exit_code == 0, result.stdout
-    payload = json.loads(result.stdout)
-    return list(payload["decisions"])
+def listed_decisions() -> list[dict[str, Any]]:
+    """Return every decision the committed repo state holds, as the retired list verb showed it.
+
+    That verb projected each row's ``title`` as its ``summary``; the rows keep
+    the same projection so the matcher below reads the same field.
+    """
+    return [
+        {"id": key, "summary": row.get("title") or "", **row}
+        for key, row in _load_state()["decisions"].items()
+    ]
 
 
 def test_decision_list_returns_active_state_tree_decision(

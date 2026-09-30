@@ -21,7 +21,6 @@ from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
 from eawf.runtime.daemon.methods.agent import _validated_state_payload
-from eawf.runtime.daemon.methods.agent import pause as agent_pause
 
 pytestmark = pytest.mark.unit
 
@@ -91,22 +90,3 @@ def test_validated_state_payload_refuses_an_invariant_violation() -> None:
 
     with pytest.raises(DaemonValidationError, match="validation_failed: t post-mutation"):
         _validated_state_payload(state, writer="t")
-
-
-def test_pause_refuses_to_write_an_invalid_state(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, _payload(phase_id="P99"))
-    before = state_path.read_bytes()
-
-    with pytest.raises(DaemonValidationError, match=r"agent\.pause post-mutation state invalid"):
-        asyncio.run(agent_pause(_ctx(state_path, tmp_path), {}))
-
-    assert state_path.read_bytes() == before
-
-
-def test_pause_writes_a_valid_state(tmp_path: Path) -> None:
-    state_path = _write_state(tmp_path, _payload())
-
-    result = asyncio.run(agent_pause(_ctx(state_path, tmp_path), {}))
-
-    assert result["paused"] is True
-    assert State.model_validate_json(state_path.read_text(encoding="utf-8")).dispatch_paused

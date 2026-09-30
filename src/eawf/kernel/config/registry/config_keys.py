@@ -247,7 +247,7 @@ CONFIG_REGISTRY: tuple[ConfigKey, ...] = (
     ConfigKey(
         tab="planning",
         key="prep.auto_resume",
-        label="Emit `eawf dispatch resume` before each claim batch",
+        label="Lead each claim batch with the dispatch-resume action",
         type="bool",
         default=True,
         description="When True, /prep leads its claim actions with a dispatch-resume command.",

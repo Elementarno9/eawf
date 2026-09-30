@@ -106,7 +106,7 @@ All Pydantic v2 models use `extra="forbid"`. IDs are immutable strings. Timestam
 | `claims` | map[id, Claim] | no | research-campaign claim ledger |
 | `open_questions` | map[id, OpenQuestion] | no | research-campaign unresolved questions |
 | `audits` | map[id, Audit] | no | research profile materializes as `{}` |
-| `incidents` | map[id, Incident] | no | materialized on first `eawf incident open` |
+| `incidents` | map[id, Incident] | no | materialized on first the retired `incident open` verb |
 | `artifacts` | map[id, Artifact] | yes | artifact index |
 | `decisions` | map[id, Decision] | no | materialized on first decision |
 | `backlog` | map[id, BacklogItem] | no | materialized on first backlog item |
@@ -172,18 +172,17 @@ Backlog:       B<NNN>
 
 **Project / Track code regex**: `^[A-Z][A-Z0-9_-]{1,15}$` — uppercase ASCII first character, optional digits / underscore / hyphen, total 2–16 characters. Validates `QR`, `EA`, `COLLAR`, `PLATFORM`, `AO-SERVER`. Rejects `Q` (single char), `qr` (lowercase), `1Q` (digit-leading).
 
-All IDs are strings and immutable. Phase / iter / wave IDs encode parentage; commands do not require redundant parent flags: `eawf iter open P13-I04` implies `phase=P13`. Parent flags are only accepted for auto-allocation: `eawf iter open P13` lets the allocator choose the next `P13-Ixx`.
+All IDs are strings and immutable. Phase / iter / wave IDs encode parentage; commands do not require redundant parent flags: `eawf batch create` implies `phase=P13`. Parent flags are only accepted for auto-allocation: `eawf batch create` lets the allocator choose the next `P13-Ixx`.
 
 ### Phase scoping: project vs Track
 
-Phases are **project-scoped by default**. A phase opened with `eawf phase open P13` belongs to the project, not the current Track pointer. When a Track is active, the lifecycle opener stamps `phases.P13.track_id` so the phase can be reported against that Track, but lifecycle transitions do not require a Track.
+Phases are **project-scoped by default**. A phase opened with `eawf milestone create` belongs to the project, not the current Track pointer. When a Track is active, the lifecycle opener stamps `phases.P13.track_id` so the phase can be reported against that Track, but lifecycle transitions do not require a Track.
 
 Track-focused setup is explicit:
 
 ```bash
-eawf track add COLLAR --kind strategy --title "Collar volatility refit"
-eawf track switch COLLAR
-eawf phase open P13 --title "Collar volatility refit"
+eawf track create <track-urn> --from-spec track.json ...
+eawf milestone create <milestone-urn> --from-spec milestone.json ...
 ```
 
 The first command materializes `tracks.COLLAR`; the second sets `current.track_id = "COLLAR"`; the phase opener records `phases.P13.track_id = "COLLAR"` when the cursor is active. If a Track is added while a project-scoped phase is already open, the open phase stays project-scoped — it does not silently rebind.

@@ -61,7 +61,7 @@ from eawf.workflow.skills.registry import register
 logger = logging.getLogger(__name__)
 
 
-_SHIP_NEXT_ACTIONS: tuple[str, ...] = ("eawf wave close", "eawf audit")
+_SHIP_NEXT_ACTIONS: tuple[str, ...] = ("eawf task complete", "eawf audit")
 _ZERO_ESTIMATE: dict[str, float] = {"estimated_eu": 0.0, "actual_eu": 0.0}
 
 

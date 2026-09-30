@@ -145,7 +145,7 @@ def _refuse_on_conflict(
         f"cherry-pick conflict landing wave {wave_id!r}: "
         f"files={files} conflict_commit={merge_result.conflict_commit}; "
         f"re-run after resolving in {record_path} "
-        f"then run `eawf wave land {wave_id}` again or "
+        f"then run `eawf batch integrate` again or "
         f"`eawf worktree merge-back --wave {wave_id} --continue`"
     )
     raise cli_errors.StateConflict(detail, kind="IntegrityViolation")

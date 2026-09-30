@@ -25,7 +25,7 @@ Two entry points:
 Per the brief the ladder is "first match wins" so a repo-match
 short-circuits the workspace tier even when an active workspace
 state document also exists; this matches the operator's mental
-model: ``cd <repo>; eawf wave claim`` operates on the repo, not on
+model: ``cd <repo>; eawf task claim`` operates on the repo, not on
 its parent workspace.
 
 The ladder is **read-only**. Per ``feedback_explicit_registry_only``

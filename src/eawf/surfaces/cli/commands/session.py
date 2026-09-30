@@ -19,7 +19,7 @@ from typing import Annotated
 import orjson
 import typer
 
-from eawf.kernel.state.enums import AgentSessionRole, AgentSessionStatus, StoreKind
+from eawf.kernel.state.enums import AgentSessionStatus, StoreKind
 from eawf.surfaces.cli import errors as cli_errors
 from eawf.surfaces.cli.flags import GlobalFlags
 from eawf.surfaces.cli.output import emit_json_or_text
@@ -46,16 +46,6 @@ def _events_path_for(state_path: Path) -> Path:
     return store_path(state_path, StoreKind.EVENT)
 
 
-def _resolve_role(raw: str) -> AgentSessionRole:
-    try:
-        return AgentSessionRole(raw.strip().lower())
-    except ValueError as exc:
-        raise cli_errors.UserError(
-            f"--role must be one of {[r.value for r in AgentSessionRole]}; got {raw!r}",
-            kind="InvalidInput",
-        ) from exc
-
-
 def _resolve_close_status(raw: str) -> AgentSessionStatus:
     """Resolve close status — only closed/stale/failed accepted."""
     try:
@@ -75,121 +65,8 @@ def _resolve_close_status(raw: str) -> AgentSessionStatus:
     return status
 
 
-_VALID_RUNTIMES: frozenset[str] = frozenset({"claude", "codex", "opencode", "generic"})
-
-
-def _validate_runtime(runtime: str) -> str:
-    if runtime not in _VALID_RUNTIMES:
-        raise cli_errors.UserError(
-            f"--runtime must be one of {sorted(_VALID_RUNTIMES)}; got {runtime!r}",
-            kind="InvalidInput",
-        )
-    return runtime
-
-
 def _args_hash(args: dict[str, object]) -> str:
     return hashlib.sha256(orjson.dumps(args, option=orjson.OPT_SORT_KEYS)).hexdigest()
-
-
-@session_app.command("start")
-def session_start_cmd(
-    ctx: typer.Context,
-    role: Annotated[str, typer.Option("--role", help="Session role.")],
-    scope: Annotated[str, typer.Option("--scope", help="Scope ID anchor.")],
-    runtime: Annotated[
-        str,
-        typer.Option("--runtime", help="One of claude / codex / opencode / generic."),
-    ],
-) -> None:
-    """Start a new agent session; rejects (scope, runtime) collisions."""
-    from eawf.runtime.session.store import SessionConflict, start_session
-    from eawf.surfaces.cli._mutation import state_transaction
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        role_enum = _resolve_role(role)
-        runtime = _validate_runtime(runtime)
-        state_path = resolve_state_path(flags.workspace)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            try:
-                result = start_session(
-                    state=state,
-                    events_path=events_path,
-                    role=role_enum,
-                    scope_id=scope,
-                    runtime=runtime,
-                )
-            except SessionConflict as exc:
-                raise cli_errors.ValidationError(str(exc)) from exc
-        emit_json_or_text(
-            payload={
-                "id": result.session.id,
-                "role": result.session.role.value,
-                "scope_id": result.session.scope_id,
-                "runtime": result.session.runtime,
-                "status": result.session.status.value,
-            },
-            text=f"session started: {result.session.id}",
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
-
-
-@session_app.command("checkpoint")
-def session_checkpoint_cmd(
-    ctx: typer.Context,
-    session_id: Annotated[str, typer.Argument(help="Session ID, e.g. SES-...")],
-    artifacts: Annotated[
-        list[str] | None,
-        typer.Option(
-            "--artifact",
-            help="Artifact ID to attach (repeatable).",
-        ),
-    ] = None,
-    files: Annotated[
-        list[str] | None,
-        typer.Option("--files", help="File-glob string (repeatable)."),
-    ] = None,
-) -> None:
-    """Append a checkpoint event for an existing session."""
-    from eawf.runtime.session.store import SessionNotFound
-    from eawf.runtime.session.store import checkpoint as checkpoint_session
-    from eawf.surfaces.cli._mutation import state_transaction
-
-    flags: GlobalFlags = ctx.obj
-    try:
-        state_path = resolve_state_path(flags.workspace)
-        events_path = _events_path_for(state_path)
-        with state_transaction(state_path) as state:
-            try:
-                result = checkpoint_session(
-                    state=state,
-                    events_path=events_path,
-                    session_id=session_id,
-                    artifact_ids=list(artifacts or []),
-                    file_globs=list(files or []),
-                )
-            except SessionNotFound as exc:
-                raise cli_errors.UserError(str(exc), kind="NotFound") from exc
-        emit_json_or_text(
-            payload={
-                "id": result.session.id,
-                "status": result.session.status.value,
-                "artifact_ids": list(result.session.artifact_ids),
-                "files": list(files or []),
-                "event_id": result.event.id,
-            },
-            text=f"session checkpointed: {result.session.id} (event {result.event.id})",
-            flags=flags,
-        )
-    except cli_errors.CliError as err:
-        cli_errors.emit_error(err, flags=flags)
-    except FileNotFoundError as err:
-        cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
 
 
 @session_app.command("close")
@@ -303,6 +180,3 @@ def session_recover_cmd(
         cli_errors.emit_error(err, flags=flags)
     except FileNotFoundError as err:
         cli_errors.emit_error(cli_errors.UserError(str(err), kind="NotFound"), flags=flags)
-
-
-__all__ = ["session_app"]

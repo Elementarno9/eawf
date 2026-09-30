@@ -51,9 +51,6 @@ from tests._criteria_helpers import legacy_criteria
 from tests._session_helpers import (
     claim_wave_with_session as claim_wave,
 )
-from tests._session_helpers import (
-    seed_active_session_on_disk,
-)
 from tests.conftest import make_claim_criterion, make_floor_waiver, make_intent
 
 WAVE_ID = "P01-I01-W01"
@@ -112,100 +109,6 @@ def _seed_claimed_wave(state: State, *, criteria: list[str] | None = None) -> No
 
 
 # ---- Seam #1 — CLI _close_and_pin -------------------------------------------
-
-
-def test_close_preflight_calls_compute_before_close_wave(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Daemonless close computes readiness before applying ``close_wave``.
-
-    Drives ``eawf wave close`` via :class:`typer.testing.CliRunner`
-    against a bootstrapped state.json. Patches the live call sites of
-    ``close_wave`` (imported into ``lifecycle_wave``) and ``compute``
-    (re-exported from ``eawf.workflow.verify``) to a recorder; the
-    recorder asserts the lock-free ``compute`` -> ``close_wave``
-    ordering.
-    """
-    from typer.testing import CliRunner
-
-    from eawf.surfaces.cli.app import app
-
-    # Bootstrap a project on disk so the CLI close has real
-    # state.json + .ea/store to land against.
-    state_path = tmp_path / ".ea" / "state.json"
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    runner = CliRunner()
-    assert (
-        runner.invoke(app, ["project", "init", "QR", "--title", "Q", "--domains", "x"]).exit_code
-        == 0
-    )
-    assert runner.invoke(app, ["phase", "open", "--auto", "--title", "x"]).exit_code == 0
-    assert runner.invoke(app, ["iter", "open", "--phase", "P01", "--title", "I1"]).exit_code == 0
-    assert (
-        runner.invoke(
-            app,
-            [
-                "wave",
-                "plan",
-                "P01-I01",
-                "--id",
-                WAVE_ID,
-                "--title",
-                "wave",
-                "--files",
-                "src/",
-                "--success",
-                "legacy criterion fixture text",
-                "--criteria-floor-waiver",
-                "test fixture models a migration-era legacy wave",
-                "--effort-bucket",
-                "M",
-            ],
-        ).exit_code
-        == 0
-    )
-    seed_active_session_on_disk(state_path, session_id="SES-1")
-    assert runner.invoke(app, ["wave", "claim", WAVE_ID, "--session", "SES-1"]).exit_code == 0
-
-    # Patch each function where its caller resolves it: the close runs
-    # through the actual-recording wrapper, which binds close_wave at import.
-    import eawf.workflow.lifecycle.wave_actual as wave_actual_mod
-    import eawf.workflow.verify as verify_pkg
-
-    call_log: list[str] = []
-    original_close = wave_actual_mod.close_wave
-
-    def fake_close_wave(
-        state_arg: State,
-        *,
-        wave_id: str,
-        outcome: str,
-        tokens_consumed: int | None = None,
-        **actuals: Any,
-    ) -> Any:
-        call_log.append(f"close_wave:{wave_id}")
-        return original_close(
-            state_arg,
-            wave_id=wave_id,
-            outcome=outcome,
-            tokens_consumed=tokens_consumed,
-            **actuals,
-        )
-
-    def fake_compute(scope_id: str, **_kwargs: Any) -> CloseReadiness:
-        call_log.append(f"compute:{scope_id}")
-        return CloseReadiness(ready=True, criteria=[], warnings=[], waived_gate_ids=[])
-
-    monkeypatch.setattr(wave_actual_mod, "close_wave", fake_close_wave)
-    monkeypatch.setattr(verify_pkg, "compute", fake_compute)
-
-    result = runner.invoke(app, ["wave", "close", WAVE_ID, "--outcome", "ok"])
-    assert result.exit_code == 0, result.stdout
-
-    # Verification MUST finish before the short locked mutation.
-    assert call_log == [f"compute:{WAVE_ID}", f"close_wave:{WAVE_ID}"], (
-        f"compute must run BEFORE close_wave; got {call_log}"
-    )
 
 
 # ---- Seam #2 — Daemon _apply_wave_close (envelope extras) -------------------

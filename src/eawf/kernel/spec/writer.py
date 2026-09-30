@@ -10,7 +10,7 @@ These functions are invoked from
 * the four lifecycle transitions DRAFT / READY / IMPLEMENTED /
   ARCHIVED,
 * the ``git rm`` step on ARCHIVED + the cache entry that records the
-  archived blob SHA so :func:`eawf spec show <urn> --from-git` can
+  archived blob SHA so the retired ``spec show`` verb could
   recover the body by walking ``git log -- <path>``.
 
 Per D-SUP-01 (authority-map row 10) the daemon is the sole writer for

@@ -100,12 +100,9 @@ def __getattr__(name: str) -> Any:
 # the majority of eawf nouns drive a roadmap / wave / plan workflow.
 COMMAND_PANELS: dict[str, str] = {
     # audit: validation, audit checks, doctor diagnostics, doc-drift checks.
-    "audit": "audit",
-    "backfill": "audit",
     "backup": "audit",
     "doc": "audit",
     "doctor": "audit",
-    "evidence": "audit",
     "migrate": "audit",
     "schema": "audit",
     "snapshot": "audit",
@@ -113,42 +110,22 @@ COMMAND_PANELS: dict[str, str] = {
     "vfl": "audit",
     # estimation: EU estimates / actuals, impact graph, rolling metrics,
     # perf bench harness.
-    "actual": "estimation",
     "bench": "estimation",
-    "estimate": "estimation",
     "impact": "estimation",
     "metrics": "estimation",
     "reflect": "estimation",
     "telemetry": "estimation",
     # planning: roadmap / wave / iter / phase nouns + research + memory.
-    "agent-report": "planning",
-    "artifact": "planning",
-    "backlog": "planning",
     "batch": "planning",
     "campaign": "planning",
-    "close": "planning",
-    "decision": "planning",
-    "draft": "planning",
-    "goal": "planning",
-    "hypothesis": "planning",
-    "incident": "planning",
-    "iter": "planning",
     "memory": "planning",
     "milestone": "planning",
-    "operator": "planning",
-    "outcome": "planning",
-    "phase": "planning",
     "plan": "planning",
-    "project": "planning",
     "question": "planning",
-    "research": "planning",
-    "roadmap": "planning",
     "run": "planning",
     "session": "planning",
-    "spec": "planning",
     "task": "planning",
     "track": "planning",
-    "wave": "planning",
     # runtime: harness adapters, hooks, plugins, skills, MCP, profiles,
     # eawfd daemon.
     "cc": "runtime",
@@ -180,15 +157,12 @@ COMMAND_PANELS: dict[str, str] = {
     "coauthor": "vcs",
     "init": "vcs",
     "repo": "vcs",
-    "state": "vcs",
     "store": "vcs",
     "wal": "vcs",
     "workspace": "vcs",
     # worktrees: per-wave worktree dispatch and the flow skill that drives
     # the parallel-wave loop, plus the headless dispatch pause/resume toggle.
-    "flow": "worktrees",
     "worktree": "worktrees",
-    "dispatch": "worktrees",
 }
 
 

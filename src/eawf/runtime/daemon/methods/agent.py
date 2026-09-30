@@ -51,7 +51,6 @@ not-found (``killed=false`` + ``reason``) rather than faking a kill.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import subprocess
 import time
@@ -63,7 +62,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
-import orjson
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, TypeAdapter
 
 from eawf.kernel.config.layered import merge_config, resolve_runtime_tier_models
@@ -75,7 +73,6 @@ from eawf.kernel.state.enums import (
     DispatchNote,
     EffortBucket,
     ReportSource,
-    StoreKind,
     WaveStatus,
 )
 from eawf.kernel.state.io import state_version, write_state_unlocked
@@ -88,7 +85,6 @@ from eawf.kernel.state.models import (
     State,
     Wave,
 )
-from eawf.kernel.store.append import append_envelope
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import (
     AgentReportBody,
@@ -104,9 +100,7 @@ from eawf.kernel.store.kinds.agent_report import (
     report_record_id,
     store_kind_for_role,
 )
-from eawf.kernel.store.kinds.event import EventPayload
 from eawf.kernel.store.kinds.events.base import RuntimeTriple
-from eawf.kernel.store.paths import store_path
 from eawf.kernel.validate.invariants import check_agent_report_invariants
 from eawf.kernel.validate.strict import validate_state
 from eawf.observability.telemetry.models import RuntimeErrorClass
@@ -126,7 +120,6 @@ from eawf.runtime.daemon.dispatch_runner import (
 from eawf.runtime.daemon.methods import (
     DaemonValidationError,
     MethodContext,
-    note_cross_root_serve,
     register,
 )
 from eawf.runtime.daemon.methods.fleet import kill_lane
@@ -431,33 +424,6 @@ class KillResult(BaseModel):
     killed: bool
     signal: KillSignal
     reason: str | None = None
-
-
-class PauseParams(BaseModel):
-    """Params for :func:`pause` / :func:`resume`.
-
-    Attributes:
-        repo_root: The caller's intended repo root; the toggle persists
-            into that repo's state (multi-root serve). ``None`` (the
-            legacy shape) resolves to the daemon-bound boot root.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    repo_root: str | None = None
-
-
-class PauseResult(BaseModel):
-    """Result of :func:`pause` / :func:`resume` — the persisted flag value.
-
-    Attributes:
-        paused: The durable
-            :attr:`~eawf.kernel.state.models.State.dispatch_paused` value
-            after the mutation — ``True`` after ``agent.pause``, ``False``
-            after ``agent.resume``.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-    paused: bool
 
 
 def _pick_runtime(*, override: str | None, preference: list[str] | None) -> str:
@@ -2400,147 +2366,3 @@ async def kill(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     return KillResult(killed=result.killed, signal=args.signal, reason=result.reason).model_dump(
         mode="json"
     )
-
-
-def _set_dispatch_paused(ctx: MethodContext, *, paused: bool, repo_root: str | None = None) -> bool:
-    """Persist :attr:`~eawf.kernel.state.models.State.dispatch_paused` = *paused*.
-
-    Routes the write through the daemon canonical state/event path:
-    acquire the state sibling lock, load the typed state, set the flag,
-    stamp ``updated_at``, persist ``state.json``, append a matching
-    ``EVENT`` row, then publish that same envelope on the subscription bus.
-    Idempotent -- setting the flag to its current value re-writes the same
-    payload (only ``updated_at`` advances) and emits a fresh event row.
-
-    Args:
-        ctx: Daemon method context — supplies the boot-root ``state_path``
-            fallback and the bus.
-        paused: The value to persist (``True`` to pause, ``False`` to resume).
-        repo_root: Optional per-request repo root; the toggle persists into
-            that repo's state/event files (multi-root serve). ``None`` falls
-            back to the daemon-bound boot root.
-
-    Returns:
-        The persisted flag value (always equal to *paused*).
-
-    Raises:
-        RuntimeError: When neither *repo_root* nor ``ctx.state_path``
-            resolves a state path (the toggle cannot persist without an
-            on-disk state).
-        StateRegressedError: When ``state.json`` is older than the one this
-            daemon process last wrote at the path; nothing is written.
-    """
-    if repo_root:
-        state_path = Path(repo_root) / ".ea" / "state.json"
-        event_path = store_path(state_path, StoreKind.EVENT)
-    elif ctx.state_path is not None:
-        state_path = Path(ctx.state_path)
-        event_path = (
-            Path(ctx.event_path)
-            if ctx.event_path is not None
-            else store_path(state_path, StoreKind.EVENT)
-        )
-    else:
-        raise RuntimeError("state_path not configured on daemon context")
-    command = "agent.pause" if paused else "agent.resume"
-    summary = f"{command} dispatch_paused={paused}"
-    with portalock.acquire(state_path, timeout=5.0):
-        state = load_state(state_path)
-        ctx.refuse_regressed_state(state_path, updated_at=state.updated_at)
-        before_version = state_version(state.model_dump(mode="json"))
-        state.dispatch_paused = paused
-        state.updated_at = datetime.now(UTC)
-        new_payload = _validated_state_payload(state, writer=command)
-        after_version = state_version(new_payload)
-        write_state_unlocked(state_path, new_payload)
-        ctx.note_state_written(state_path, updated_at=state.updated_at)
-        now = datetime.now(UTC)
-        args_hash = hashlib.sha256(
-            orjson.dumps({"paused": paused}, option=orjson.OPT_SORT_KEYS)
-        ).hexdigest()[:16]
-        envelope = Envelope(
-            schema_version="1.0",
-            id=f"EV-{uuid.uuid4().hex[:12]}",
-            kind=StoreKind.EVENT,
-            scope_id=state.urn,
-            created_at=now,
-            updated_at=None,
-            summary=summary,
-            payload=EventPayload(
-                timestamp=now,
-                event_type=f"state.mutate.{command}",
-                event_kind="state_mutated",
-                actor="daemon",
-                command=command,
-                args_hash=args_hash,
-                before_state_version=before_version,
-                after_state_version=after_version,
-                status="ok",
-                message=summary,
-                extras={"dispatch_paused": paused},
-            ).model_dump(mode="json"),
-            blob_refs=[],
-            artifact_ids=[],
-        )
-        append_envelope(event_path, envelope)
-    cross_root = (
-        ctx.state_path is not None and state_path.resolve() != Path(ctx.state_path).resolve()
-    )
-    if not cross_root and ctx.bus is not None and hasattr(ctx.bus, "publish"):
-        ctx.bus.publish(envelope)
-    ctx.last_event_id = envelope.id
-    logger.info(f"_set_dispatch_paused paused={paused} envelope_id={envelope.id!r}")
-    return paused
-
-
-@register("agent.pause")
-async def pause(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Pause dispatch by persisting ``state.dispatch_paused = True``.
-
-    A deliberate operator stop: while the flag is set,
-    :func:`eawf.workflow.lifecycle.wave.claim_wave` rejects every claim
-    (regardless of ``out_of_order``) until ``agent.resume`` clears it. The
-    flag is written through the daemon canonical state writer; the call is
-    idempotent (pausing an already-paused state re-writes the same flag).
-
-    Args:
-        ctx: Server context; ``ctx.state_path`` must be configured.
-        params: JSON-RPC params per :class:`PauseParams`.
-
-    Returns:
-        Dict matching :class:`PauseResult` with ``paused=true``.
-
-    Raises:
-        RuntimeError: When neither ``repo_root`` nor ``ctx.state_path``
-            resolves a state path.
-    """
-    args = PauseParams.model_validate(params)
-    note_cross_root_serve(ctx, repo_root=args.repo_root, command="dispatch pause")
-    paused = _set_dispatch_paused(ctx, paused=True, repo_root=args.repo_root)
-    return PauseResult(paused=paused).model_dump(mode="json")
-
-
-@register("agent.resume")
-async def resume(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Resume dispatch by persisting ``state.dispatch_paused = False``.
-
-    Clears the deliberate operator stop ``agent.pause`` set, so
-    :func:`eawf.workflow.lifecycle.wave.claim_wave` accepts claims again.
-    The flag is written through the daemon canonical state writer; the call
-    is idempotent (resuming an already-running state re-writes the same
-    flag).
-
-    Args:
-        ctx: Server context; ``ctx.state_path`` must be configured.
-        params: JSON-RPC params per :class:`PauseParams` (parameterless).
-
-    Returns:
-        Dict matching :class:`PauseResult` with ``paused=false``.
-
-    Raises:
-        RuntimeError: When ``ctx.state_path`` is unset (e.g. tests).
-    """
-    args = PauseParams.model_validate(params)
-    note_cross_root_serve(ctx, repo_root=args.repo_root, command="dispatch resume")
-    paused = _set_dispatch_paused(ctx, paused=False, repo_root=args.repo_root)
-    return PauseResult(paused=paused).model_dump(mode="json")

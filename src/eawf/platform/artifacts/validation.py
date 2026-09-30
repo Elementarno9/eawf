@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -160,29 +159,6 @@ def validate_text_surface(
         errors.append(f"{surface} scrub findings present: {kinds}")
     errors.extend(_citation_errors_for_text(text, references))
     return TextSurfaceValidationReport(ok=not errors, errors=errors)
-
-
-def sha256_file(path: Path) -> str:
-    """Return the lowercase sha256 hex digest of *path*'s bytes.
-
-    Streams the file in 64 KiB chunks so the call works on artifacts larger
-    than memory. Callers that need to verify a registered ``Artifact.sha256``
-    should normalise the recorded value to lowercase before comparison.
-
-    Args:
-        path: Filesystem path to the artifact body.
-
-    Returns:
-        Lowercase hex digest of the file contents.
-
-    Raises:
-        FileNotFoundError: When *path* does not resolve to a readable file.
-    """
-    digest = hashlib.sha256()
-    with path.open("rb") as fh:
-        for chunk in iter(lambda: fh.read(_SHA256_CHUNK_BYTES), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def validate_markdown_artifact(

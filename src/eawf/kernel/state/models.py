@@ -1537,7 +1537,7 @@ class Incident(_StrictModel):
     closed_at: UtcDatetime | None = None
     root_cause: str | None = None
     #: Typed cause taxonomy (V7). ``UNKNOWN`` until classified at close via
-    #: ``eawf incident close --cause``; the free-text ``root_cause`` carries
+    #: the retired ``incident close`` verb; the free-text ``root_cause`` carries
     #: the operator prose, ``cause`` carries the ``GROUP BY``-able category.
     cause: IncidentCause = IncidentCause.UNKNOWN
     corrective_action_ids: list[str] = Field(default_factory=list)

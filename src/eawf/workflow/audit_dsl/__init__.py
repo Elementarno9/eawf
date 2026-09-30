@@ -1,7 +1,7 @@
 """Audit-check DSL (B019, D02).
 
 Yaml-declarative check spec + check-kind registry. The CLI command
-``eawf audit run --checks <yaml>`` wires this package; the legacy
+``eawf record append`` wires this package; the legacy
 ``--fixture`` escape hatch remains for the v0.2 cycle.
 """
 

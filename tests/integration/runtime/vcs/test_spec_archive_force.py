@@ -21,17 +21,14 @@ import os
 import subprocess
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
-from typer.testing import CliRunner
 
 from eawf import __version__
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
 from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.spec import archive, init
-from eawf.surfaces.cli.app import app
 
 pytestmark = pytest.mark.integration
 
@@ -132,60 +129,6 @@ def test_archive_from_draft_without_force_raises(
             )
 
     _run(body)
-
-
-def test_archive_from_draft_with_force_records_blob_sha_and_recovers(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A forced DRAFT archive succeeds, records the SHA, and round-trips via git."""
-    ctx, repo_root, cache_dir = _build_ctx(tmp_path=tmp_path, monkeypatch=monkeypatch)
-
-    async def setup() -> None:
-        await _init_draft_and_commit(ctx, repo_root, body_text="# Forced recovered body\n")
-        result: dict[str, Any] = await archive(
-            ctx,
-            {
-                "scope_id": "P25",
-                "repo_code": "EAWF",
-                "repo_root": str(repo_root),
-                "force": True,
-            },
-        )
-        # Status flipped to ARCHIVED despite starting from DRAFT.
-        assert result["status"] == "ARCHIVED"
-        # Blob SHA recorded so the body is recoverable from git history.
-        assert result["file_sha"]
-        # File removed from disk and the archived cache row written.
-        spec_path = repo_root / ".ea" / "specs" / "P25" / "spec.md"
-        assert not spec_path.exists()
-        assert (cache_dir / "P25.json").is_file()
-        # Commit the staged removal so the file is gone from HEAD.
-        subprocess.run(
-            ["git", "commit", "--quiet", "-m", "archive"],
-            cwd=repo_root,
-            check=True,
-        )
-
-    _run(setup)
-
-    # `eawf spec show --from-git` recovers the archived body via the
-    # recorded blob SHA history. Force daemonless so the CLI uses the
-    # in-process cache reader.
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    runner = CliRunner()
-    result = runner.invoke(
-        app,
-        [
-            "--workspace",
-            str(repo_root),
-            "spec",
-            "show",
-            "urn:eawf:v1:spec:EAWF/P25",
-            "--from-git",
-        ],
-    )
-    assert result.exit_code == 0, result.output
-    assert "Forced recovered body" in result.output
 
 
 def test_archive_force_still_raises_on_missing_cache_entry(

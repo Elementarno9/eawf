@@ -270,7 +270,7 @@ _DEFAULT_HINTS: dict[str, str] = {
 # Per-``data.kind`` refinement preserves per-cause specificity inside the
 # five buckets.
 _KIND_HINTS: dict[str, str] = {
-    "NotFound": "check the scope id or run `eawf state resolve` to see resolved paths",
+    "NotFound": "check the scope id; `eawf status` shows the tree this command resolved",
     "InvalidInput": "run `eawf <verb> --help` to see option shapes",
     "InstrumentMissing": "install the missing tool then retry; run `eawf doctor` for inventory",
     "UserDeclined": "re-run without --no-input to interact, or pass --yes when supported",
@@ -289,7 +289,7 @@ _KIND_HINTS: dict[str, str] = {
     ),
     "DaemonMutationIndeterminate": (
         "the mutation may or may not have applied; re-check state "
-        "(`eawf state show`) before retrying to avoid a double-apply"
+        "(`eawf status`) before retrying to avoid a double-apply"
     ),
     LEGACY_OPERATION_REMOVED_KIND: (
         "this tree runs on epoch 2, so epoch-1 writes refuse; run the epoch-2 verb the "

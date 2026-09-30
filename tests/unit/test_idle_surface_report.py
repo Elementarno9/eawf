@@ -61,7 +61,11 @@ _CALLER_ROOTS = [_REPO_ROOT / "tools"]
 #: caller when the idle rung-2-to-rung-3 chain it served was removed; it
 #: was removed alongside it, taking its now-unused ``ClaimRung`` and
 #: ``looks_numeric`` helpers with it.
-IDLE_CEILING = 218
+#:
+#: 218 dropped to 214: the flag day deleted the epoch-1 command surface, and
+#: the helpers only those verbs called went with it; the rest of the
+#: epoch-1 library it left without a caller is still counted here.
+IDLE_CEILING = 214
 
 
 def _load_tool() -> Any:

@@ -620,9 +620,9 @@ _ENTRIES: tuple[SkillCatalogEntry, ...] = (
             show=("--scope",),
         ),
         effects=EffectsBoundary(
-            summary="The decision add, supersede, list and graph verbs.",
+            summary="The question open-decision and answer verbs.",
             rpcs=("runtime.question.answer_numbered", "runtime.question.open_decision"),
-            verbs=("decision add", "decision supersede", "decision list", "decision graph"),
+            verbs=("question open-decision", "question answer"),
             canonical_mutates=True,
         ),
         output=_out("DecisionSkillReport", "shown|proposed|superseded|blocked"),

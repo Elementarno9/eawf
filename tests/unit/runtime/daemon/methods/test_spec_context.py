@@ -19,7 +19,7 @@ import pytest
 from pydantic import ValidationError
 
 from eawf import __version__
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.runtime.daemon.methods.spec_context import (
     IDEMPOTENCY_TTL_SECONDS,
     CachedSpecMutation,
@@ -28,7 +28,6 @@ from eawf.runtime.daemon.methods.spec_context import (
     idempotency_cache,
     idempotent_replay,
     publish_envelope,
-    validate_post_sync,
 )
 
 
@@ -196,15 +195,3 @@ def test_publish_envelope_tolerates_a_bus_without_publish() -> None:
     ctx = _ctx(bus=_BusWithoutPublish())
     publish_envelope(ctx, _Envelope("SPEC-ghi789"))
     assert ctx.last_event_id == "SPEC-ghi789"
-
-
-def test_validate_post_sync_rejects_a_schema_invalid_payload() -> None:
-    """An unparseable payload is a ``DaemonValidationError``, not a crash."""
-    with pytest.raises(DaemonValidationError, match="post-mutation schema invalid"):
-        validate_post_sync({"not": "a state document"})
-
-
-def test_validate_post_sync_rejects_an_empty_payload() -> None:
-    """Empty boundary: ``{}`` carries no schema version and is refused."""
-    with pytest.raises(DaemonValidationError, match="post-mutation schema invalid"):
-        validate_post_sync({})

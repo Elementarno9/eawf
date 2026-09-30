@@ -1031,7 +1031,7 @@ def activate_phase(state: State, *, phase_id: str) -> Phase:
 
 
 def archive_phase(state: State, *, phase_id: str) -> Phase:
-    """Move a planned phase to archived. Used by ``eawf roadmap drop``.
+    """Move a planned phase to archived. Used by the retired ``roadmap drop`` verb.
 
     Cascades to the phase's children so archiving never leaves zombie
     non-terminal records behind: every wave under the phase's iters that

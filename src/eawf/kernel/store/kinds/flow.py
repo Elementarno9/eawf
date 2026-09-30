@@ -10,7 +10,7 @@ Two sibling models share the ``flow.jsonl`` file, disambiguated by the
   step boundary inside a run. Carries the parent state hash, parent git
   HEAD, parent profile id list, the canonicalised ``args_per_step`` hash,
   and the ``last_safe`` predicate result. Drift detection on
-  ``eawf flow run --resume`` reads the latest ``last_safe=True`` record
+  the retired ``flow run`` verb reads the latest ``last_safe=True`` record
   for the active flow and compares the parent_* fields against the
   current workspace state.
 
@@ -55,7 +55,7 @@ class FlowPayload(BaseModel):
             envelope id (``EV-...``) that satisfies the safe predicate.
             ``None`` until the first step boundary lands.
         next_action: Human-readable hint for the operator on what to do
-            next (e.g. ``"eawf flow status"``).
+            next (e.g. ``"eawf migrate epoch2 --plan"``).
         status: One of :class:`FlowStatus` (``pending``, ``in_progress``,
             ``paused``, ``blocked``, ``done``, ``abandoned``,
             ``superseded``).

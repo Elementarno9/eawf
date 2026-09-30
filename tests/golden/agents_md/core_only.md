@@ -56,35 +56,35 @@ The rules below apply to every eawf-managed project. Each rule with a non-trivia
 Specs describe intent; state reflects reality. The canonical writer of ``state.json`` is the daemon — see rule 4 for the full mutator-authority statement (operator-facing state CLI, JSON-RPC proxy, portalocker fallback). Do not hand-edit ``state.json`` to make it agree with a spec; drive the state mutation and let the spec follow.
 
 <!-- END EAWF:managed id=state-vs-specs -->
-<!-- BEGIN EAWF:managed id=worktree-discipline version=1.1 hash=74e41b8e1dbda664 -->
+<!-- BEGIN EAWF:managed id=worktree-discipline version=1.2 hash=fc16e8cafc69ce49 -->
 ### Worktree discipline
 
 Worktree subagents MUST branch from the current feature branch HEAD, not ``main``. Their commits are **cherry-picked** into the parent feature branch — never ``git merge``.
 
 Cherry-pick procedure: ``git -C <main-worktree> cherry-pick <worktree-sha>`` per commit, in order. Resolve conflicts in the parent worktree. Worktree teardown only after cherry-pick lands.
 
-Claim order (P19-W02): ``eawf wave claim`` enforces deps + W## monotonic ordering. Each claim rejects when (a) any wave in ``.deps`` is not CLOSED, or (b) a lower-numbered sibling wave under the same iter is still PENDING with its own deps already satisfied. Parallel-worktree dispatch where multiple siblings of the same dep frontier are claimed at once MUST pass ``--out-of-order`` on each claim to opt out of the gate.
+Claim order (P19-W02): ``eawf task claim`` enforces deps + W## monotonic ordering. Each claim rejects when (a) any wave in ``.deps`` is not CLOSED, or (b) a lower-numbered sibling wave under the same iter is still PENDING with its own deps already satisfied. Parallel-worktree dispatch where multiple siblings of the same dep frontier are claimed at once MUST pass ``--out-of-order`` on each claim to opt out of the gate.
 
 <!-- END EAWF:managed id=worktree-discipline -->
-<!-- BEGIN EAWF:managed id=prep-plan-mode version=1.1 hash=26003c3b2acbb354 -->
+<!-- BEGIN EAWF:managed id=prep-plan-mode version=1.2 hash=20d49b70eeea14ba -->
 ### /prep always renders the DAG in plan mode
 
 Both Case A and Case B of ``/prep`` MUST enter Claude Code plan mode (``EnterPlanMode``) with the rendered wave DAG of the target phase's current iter before surfacing the approve / edit / cancel choice. File that choice with ``eawf question open-decision`` so it is a pending action with typed options, then show the bound question the answer carries: ``AskUserQuestion`` in Claude Code, the answer's numbered prompt printed verbatim in Codex. The operator answers by option, in the session or in the console, and the first answer wins; a free-text approval is not consent.
 
 **Case A — PLANNED phase with at least one PENDING wave.**
-Render the plan via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → the bound decision (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
+Render the plan via the retired ``roadmap show`` verb → ``EnterPlanMode`` → the bound decision (``use-as-is`` / ``revise`` / ``replace`` / ``cancel``). On ``revise``, hand back to ``/roadmap revise``; on ``replace``, hand back to ``/roadmap drop`` + ``/roadmap propose``.
 
-**Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf roadmap revise --add-wave`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via ``eawf roadmap show --phase <id> --md`` → ``EnterPlanMode`` → the bound decision (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf phase activate <id>`` (V11 hard gate).
+**Case B — PLANNED phase with empty wave DAG.** Apply the planner's emitted ``eawf plan submit`` commands **first** (waves land as PENDING on the still-PLANNED iter), then render the resulting DAG via the retired ``roadmap show`` verb → ``EnterPlanMode`` → the bound decision (``approve`` / ``edit`` / ``cancel``). The operator reviews the rendered roadmap, not the planner's raw commands. Edits during plan mode are ``/roadmap revise`` calls (PLANNED scope is mutable). On ``approve``, run ``eawf milestone activate`` (V11 hard gate).
 
 The plan-mode-first invariant applies to any future ``/prep`` cases (e.g. mid-flight scope expansion of an ACTIVE iter): the operator-facing surface is always the rendered DAG, not raw mutator commands.
 
 <!-- END EAWF:managed id=prep-plan-mode -->
-<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.1 hash=67c5ac9feba039ca -->
+<!-- BEGIN EAWF:managed id=iter-phase-close-timing version=1.2 hash=78f838f7dfc8ec79 -->
 ### Iter and phase close timing
 
 Iter close is gated on **audit + polish + ship CI + PR review pass**. Do not close an iter the moment its waves finish — run ``/audit`` and ``/polish`` first, then ``/ship`` (which runs the PR review pass + addresses feedback by appending waves to the same iter), then close.
 
-**Append, don't open a second iter.** When ``/audit`` or ``/polish`` surfaces follow-up work that fits the same delivery, append waves to the current iter via ``eawf roadmap revise --add-wave`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and the new waves land PENDING). Opening a second iter under the same phase is reserved for true scope expansions or repair cycles per decision D17 (iter-bump triggers), not for routine follow-ups.
+**Append, don't open a second iter.** When ``/audit`` or ``/polish`` surfaces follow-up work that fits the same delivery, append waves to the current iter via ``eawf plan submit`` (ACTIVE-phase ``add_wave_plan`` keeps the iter ACTIVE and the new waves land PENDING). Opening a second iter under the same phase is reserved for true scope expansions or repair cycles per decision D17 (iter-bump triggers), not for routine follow-ups.
 
 **Phase close goes in the latest commit before merge.** Do not close the phase until ship CI is green AND the review-passed branch is on the remote. The phase-close mutation rides in a single ``[P<NN>] state: close iter + phase (audit=<id>)`` commit that bundles iter close + phase close. Merging that commit ends the phase; pre-merge close keeps ``state.json`` in sync with what reviewers approved.
 
@@ -130,7 +130,7 @@ Agents MAY delete code, configs, or docs IF AND ONLY IF:
 Agents MUST NOT delete: schema files, golden fixtures, MIT ``LICENSE``, ``CHANGELOG.md``, or any uncommitted file. When in doubt, propose the list and wait for explicit confirmation.
 
 <!-- END EAWF:managed id=deletion-rule -->
-<!-- BEGIN EAWF:managed id=verify-before-claim version=1.2 hash=635514562ed918e6 -->
+<!-- BEGIN EAWF:managed id=verify-before-claim version=1.3 hash=8e8f449d202619b6 -->
 ### Verify before claiming
 
 Quantitative or behavioural claims about command I/O, schema fields, exit codes, or rendering output MUST be verified against the actual code path before assertion. The verification ladder, in order:
@@ -143,7 +143,7 @@ Quantitative or behavioural claims about command I/O, schema fields, exit codes,
 
 Design-intent docs (command matrix, schema inventory, ADRs) are the *design intent*; the source tree is the *implementation* — when they drift, quote the implementation. Treat doc/memory citations as a hypothesis to verify, not as ground truth.
 
-Wave commit SHA: ``Wave.commit`` is an optional ``ShaStr`` field on the state model — set by ``eawf wave close --commit <ref>`` when the operator pins a SHA at close time. Quote the SHA via ``eawf wave show --commit <wave-id>``, which prefers the pinned ``Wave.commit`` and falls back to deriving via ``git log --grep '[P##-W##]'`` so cherry-picked or unpinned waves still resolve.
+Wave commit SHA: ``Wave.commit`` is an optional ``ShaStr`` field on the state model — set by ``eawf task complete`` when the operator pins a SHA at close time. Quote the SHA via the retired ``wave show`` verb, which prefers the pinned ``Wave.commit`` and falls back to deriving via ``git log --grep '[P##-W##]'`` so cherry-picked or unpinned waves still resolve.
 
 <!-- END EAWF:managed id=verify-before-claim -->
 <!-- BEGIN EAWF:managed id=branch-currency version=1.0 hash=f38baee54406c2d2 -->
@@ -154,7 +154,7 @@ Before opening or resuming a phase, iter, or wave, verify the current branch is 
 If the working tree is dirty, preserve the dirty/untracked work before rebasing. If the branch intentionally remains behind or forked, record the reason in the plan or handoff before dispatching worktrees or starting new commits.
 
 <!-- END EAWF:managed id=branch-currency -->
-<!-- BEGIN EAWF:managed id=commit-prefix version=1.8 hash=b43803334553edb8 -->
+<!-- BEGIN EAWF:managed id=commit-prefix version=1.9 hash=b43803334553edb8 -->
 `commit-prefix` — Wave commits are written ``<type>: <summary>`` plus an ``Eawf-Wave: P<NN>-I<NN>-W<NN>`` trailer; the bracket prefix form still passes but warns, and ``[P<NN>] state:`` keeps its bracket. Full text: [docs/rules/commit-prefix.md](docs/rules/commit-prefix.md)
 <!-- END EAWF:managed id=commit-prefix -->
 <!-- BEGIN EAWF:managed id=branch-naming version=1.0 hash=8251a99a4f2ce095 -->
@@ -178,7 +178,7 @@ Forward-fix only — once a leak lands in a published commit, history rewrite is
 <!-- BEGIN EAWF:managed id=artifact-chassis version=1.2 hash=a7f65861e1b30e94 -->
 `artifact-chassis` — Durable research, audit, decision, and incident markdown uses the renderer-owned Summary / References / Provenance / Scrub chassis, with dense citations backed by typed rows and no absolute paths. Full text: [docs/rules/artifact-chassis.md](docs/rules/artifact-chassis.md)
 <!-- END EAWF:managed id=artifact-chassis -->
-<!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.1 hash=d2ec84e7cc93e285 -->
+<!-- BEGIN EAWF:managed id=planned-scope-revisability version=1.2 hash=d2ec84e7cc93e285 -->
 `planned-scope-revisability` — Scope mutability is status-tiered: PLANNED scope is freely editable, ACTIVE scope is append-only with PENDING-only wave edits, and CLOSED scope changes only via a reopen. Full text: [docs/rules/planned-scope-revisability.md](docs/rules/planned-scope-revisability.md)
 <!-- END EAWF:managed id=planned-scope-revisability -->
 <!-- BEGIN EAWF:managed id=roadmap-procedure version=1.0 hash=a44fa58c7863325d -->
@@ -221,10 +221,10 @@ Rendered and authored markdown — PR bodies, issue/review comments, audit / res
 The ~72-column wrap convention is reserved for **commit messages** (subject + body), where tooling and ``git log`` assume it. Fenced code blocks keep their own formatting. Skill output contracts inherit this rule: a skill that emits markdown emits unwrapped paragraphs.
 
 <!-- END EAWF:managed id=markdown-no-manual-wrap -->
-<!-- BEGIN EAWF:managed id=release-process version=1.3 hash=e9197d40232446a3 -->
+<!-- BEGIN EAWF:managed id=release-process version=1.4 hash=e9197d40232446a3 -->
 `release-process` — Releases are opt-in per repo via the release cadence setting; the per-phase cadence gates phase close on a changelog section, a version bump, a migration note, and the release annotation. Full text: [docs/rules/release-process.md](docs/rules/release-process.md)
 <!-- END EAWF:managed id=release-process -->
-<!-- BEGIN EAWF:managed id=ship-process version=1.4 hash=ee5fbe64154110e3 -->
+<!-- BEGIN EAWF:managed id=ship-process version=1.5 hash=ee5fbe64154110e3 -->
 `ship-process` — Ship rides the phase-co-closing iter: open the one phase PR, pass CI, address review by appending waves to that same iter, then close and fast-forward main. Full text: [docs/rules/ship-process.md](docs/rules/ship-process.md)
 <!-- END EAWF:managed id=ship-process -->
 <!-- BEGIN EAWF:managed id=agent-report-contract version=1.0 hash=600b85c26e27f28b -->
@@ -269,7 +269,7 @@ Verdicts MUST use ``AgentReportVerdict`` exactly: ``pass``, ``pass-with-followup
 <!-- BEGIN EAWF:managed id=gate-fire-proof-sunset version=1.0 hash=4a0a7685adec45f5 -->
 `gate-fire-proof-sunset` — A new gate ships with a test proving it reds on a real defect, and sunsets at phase close if it never fired. Full text: [docs/rules/gate-fire-proof-sunset.md](docs/rules/gate-fire-proof-sunset.md)
 <!-- END EAWF:managed id=gate-fire-proof-sunset -->
-<!-- BEGIN EAWF:managed id=commit-granularity version=1.2 hash=df917983dc831b9e -->
+<!-- BEGIN EAWF:managed id=commit-granularity version=1.3 hash=df917983dc831b9e -->
 `commit-granularity` — One commit per wave and per deliverable; wave-close bookkeeping rides the wave commit, and a golden refresh rides its cause. Full text: [docs/rules/commit-granularity.md](docs/rules/commit-granularity.md)
 <!-- END EAWF:managed id=commit-granularity -->
 <!-- BEGIN EAWF:managed id=anti-patterns version=1.2 hash=d92fc4c83b8d1338 -->

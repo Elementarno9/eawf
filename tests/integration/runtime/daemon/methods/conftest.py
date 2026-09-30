@@ -63,6 +63,7 @@ from eawf.workflow.release.observation import FrozenManifest
 from eawf.workflow.release.target_machine import advance_target_attempt
 from eawf.workflow.release.train import DEV1_RELEASE_CONFIG_YAML, V07_TRAIN
 from eawf.workflow.verify.release_probes import CHANGELOG_FILENAME, VERSION_MODULE_PATH
+from tests._epoch2_helpers import lay_epoch2_tree
 from tests._release_helpers import recorded_response, stage_passing_receipts
 
 #: Recorded registry answers and the frozen manifest they are judged
@@ -341,7 +342,9 @@ def _build_dev1_checkout(root: Path) -> Path:
         f"# Changelog\n\n## [{DEV1_VERSION}]\n\n### Added\n- The {DEV1_VERSION} checkpoint.\n\n"
         f"### Migration\n- No persisted schema is migrated by {DEV1_VERSION}.\n",
     )
-    _write(repo, ".ea/state.json", json.dumps({}))
+    # Born at epoch 2, as ``eawf init`` leaves a tree: the flag day refuses
+    # every release verb on a plain epoch-1 tree.
+    lay_epoch2_tree(repo)
     shutil.copytree(evidence_dir(REPO_ROOT), repo.joinpath(*REHEARSAL_EVIDENCE_DIR))
     bare = root / "origin.git"
     git(root, "init", "--quiet", "--bare", str(bare))

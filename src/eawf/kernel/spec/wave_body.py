@@ -6,7 +6,7 @@ wave's success criteria and the gates that score them. This module owns
 the typed parse-target that block deserialises into; it does NOT parse
 the surrounding markdown (the extractor that pulls the fenced block out
 of the document is wave W04) nor materialise the parsed rows into
-``state.json`` (the ``eawf spec sync`` command is wave W05). The single
+``state.json`` (the retired ``spec sync`` verb was wave W05). The single
 responsibility here is the strict Pydantic model the structured block
 must validate against — so a malformed criteria/gate row fails at the
 ingestion boundary rather than silently drifting into state.
@@ -138,7 +138,7 @@ class WaveSpecBody(_StrictModel):
         """Build a :class:`WaveSpecBody` from the structured-block mapping.
 
         The thin convenience loader the markdown extractor and the
-        ``eawf spec sync`` command call once they have the parsed
+        the retired ``spec sync`` verb's call once they have the parsed
         YAML mapping in hand. It is a direct ``model_validate`` pass — the
         method exists so callers depend on a named, documented entry
         point rather than reaching for ``model_validate`` directly, and so

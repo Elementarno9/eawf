@@ -1,35 +1,15 @@
-"""CLI integration tests for ``eawf worktree create``.
-
-Each test sets up a real ``git init``-ed repo via ``tmp_path``, seeds an
-``.ea/state.json`` with one CLAIMED wave, then drives the Typer app via
-:class:`typer.testing.CliRunner`. Asserts cover the JSON envelope shape,
-the on-disk worktree, and the post-mutation state file.
-"""
+"""Test helper that seeds a git repository whose tree holds one claimed wave, for worktree tests."""
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
 import orjson
-import pytest
-from typer.testing import CliRunner
-
-from eawf.surfaces.cli.app import app
-
-runner = CliRunner()
-
-pytestmark = pytest.mark.skipif(
-    shutil.which("git") is None,
-    reason="git is required for worktree CLI integration tests",
-)
 
 
-def _seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path, Path]:
+def seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path, Path]:
     """Initialise a git repo + .ea/state.json. Returns (repo_root, state_path)."""
     workdir.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-q", "-b", "main"], cwd=workdir, check=True)
@@ -122,79 +102,16 @@ def _seed_repo_with_state(workdir: Path, *, on_main: bool = False) -> tuple[Path
     return workdir, state_path
 
 
-def test_cli_create_full_cycle(tmp_path: Path) -> None:
-    """Full CLI flow: create a worktree, assert envelope + git state + state.json."""
-    repo, state_path = _seed_repo_with_state(tmp_path / "repo")
-    res = runner.invoke(
-        app,
-        [
-            "-w",
-            str(repo),
-            "worktree",
-            "create",
-            "--wave",
-            "P05-I01-W01",
-        ],
-        env={**os.environ, "EA_STATE": str(state_path)},
-    )
-    assert res.exit_code == 0, res.stdout
-    # Worktree dir created.
-    assert (repo / ".ea" / "worktrees" / "p05-w01").is_dir()
-    # state.json updated with worktree record + wave.worktree_id.
-    payload = orjson.loads(state_path.read_bytes())
-    assert payload["worktrees"]
-    record_id = next(iter(payload["worktrees"]))
-    assert payload["waves"]["P05-I01-W01"]["worktree_id"] == record_id
-    assert payload["worktrees"][record_id]["status"] == "active"
+def create_wave_worktree(repo: Path, state_path: Path, wave_id: str) -> Path:
+    """Create the worktree for ``wave_id`` through the library and return its path.
 
+    The CLI ``worktree create`` verb retired at the flag day, but the exempt
+    ``worktree merge-back`` and ``worktree cleanup`` verbs still need a
+    worktree row to act on, so tests lay one down the way the verb did.
+    """
+    from eawf.runtime.worktree import create_worktree, worktree_registry_lock
+    from eawf.surfaces.cli._mutation import state_transaction
 
-def test_cli_create_json_envelope_keys(tmp_path: Path) -> None:
-    """``--json`` emits the canonical envelope keys with correct types."""
-    repo, state_path = _seed_repo_with_state(tmp_path / "repo")
-    res = runner.invoke(
-        app,
-        [
-            "--json",
-            "-w",
-            str(repo),
-            "worktree",
-            "create",
-            "--wave",
-            "P05-I01-W01",
-        ],
-        env={**os.environ, "EA_STATE": str(state_path)},
-    )
-    assert res.exit_code == 0, res.stdout
-    envelope = json.loads(res.stdout)
-    for key in (
-        "worktree_id",
-        "wave_id",
-        "branch",
-        "base_branch",
-        "path",
-        "status",
-        "created_at",
-    ):
-        assert key in envelope, f"missing key {key!r} in {envelope}"
-    assert envelope["wave_id"] == "P05-I01-W01"
-    assert envelope["branch"] == "feature/eawf-v0.1-p05-w01"
-    assert envelope["status"] == "active"
-
-
-def test_cli_create_exit_3_on_main(tmp_path: Path) -> None:
-    """Operator on ``main`` (project default_branch) gets exit 3."""
-    repo, state_path = _seed_repo_with_state(tmp_path / "repo", on_main=True)
-    res = runner.invoke(
-        app,
-        [
-            "-w",
-            str(repo),
-            "worktree",
-            "create",
-            "--wave",
-            "P05-I01-W01",
-        ],
-        env={**os.environ, "EA_STATE": str(state_path)},
-    )
-    assert res.exit_code == 1, res.stdout
-    assert "refuses to branch from" in res.stdout
+    with worktree_registry_lock(repo, timeout=5.0), state_transaction(state_path) as state:
+        record = create_worktree(state, repo_root=repo, wave_id=wave_id)
+    return repo / record.path

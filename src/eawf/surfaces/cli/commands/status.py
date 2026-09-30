@@ -139,7 +139,7 @@ def _project_summary(state: State) -> dict[str, str] | None:
 
     When ``state.project`` is ``None`` but ``state.current.project_code`` is
     populated (the v0.1 ``eawf init`` contract — project code stamped, full
-    ``Project`` record deferred to ``eawf project init``), fall back to the
+    ``Project`` record deferred to ``eawf repository create``), fall back to the
     current pointer with ``status="uninitialised"`` and the title pulled from
     ``state.indexes`` (empty string when missing). This stops a fresh init
     from rendering ``project: <none>`` even though the code is on disk.

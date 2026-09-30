@@ -29,7 +29,7 @@ re-init the same scope returns the cached entry untouched
 (idempotent). Status transitions ride a small DAG: DRAFT → READY →
 IMPLEMENTED → ARCHIVED (no skips, no backward steps). ``archive``
 atomically ``git rm``'s the source file AND writes a cache entry with
-``file_sha`` pre-populated so :func:`eawf spec show <urn> --from-git`
+``file_sha`` pre-populated so the retired ``spec show`` verb
 can recover the body via ``git log -- <path>``.
 """
 
@@ -48,25 +48,17 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from eawf.kernel.spec import cache as spec_cache
 from eawf.kernel.spec import writer as spec_writer
 from eawf.kernel.spec.common import (
-    CriterionSpec,
     GateSpec,
-    response_from_gate,
-    validate_criterion_gate_refs,
 )
 from eawf.kernel.spec.promotion import (
     SpecPromoteValidationError,
     validate_argv_gates,
 )
 from eawf.kernel.spec.wave_body import WAVE_BODY_FENCE, WaveSpecBody
-from eawf.kernel.state.enums import StoreKind, WaveStatus
-from eawf.kernel.state.writer import atomic_write_json_locked
-from eawf.kernel.store.append import append_envelope
+from eawf.kernel.state.enums import StoreKind
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.event import EventPayload
-from eawf.observability.logging.state_leak import state_leak_refusal
-from eawf.runtime.daemon import wal
 from eawf.runtime.daemon.methods import (
-    DaemonValidationError,
     MethodContext,
     register,
 )
@@ -74,22 +66,7 @@ from eawf.runtime.daemon.methods.spec_context import (
     cache_replay,
     idempotent_replay,
     publish_envelope,
-    validate_post_sync,
 )
-from eawf.runtime.daemon.methods.spec_sync_lints import (
-    find_coverage_gaps,
-    measure_criteria,
-    render_lint_findings,
-    require_resolvable_eawf_verbs,
-    require_transition_coverage_for_ui_transitions,
-)
-from eawf.runtime.daemon.methods.state_context import (
-    read_state,
-    resolve_mutator_paths,
-    state_version,
-)
-from eawf.runtime.daemon.wal import WalRecord
-from eawf.workflow.lifecycle.transitions import LifecycleError, edit_wave_plan
 from eawf.workflow.lifecycle.wave_sha import derive_wave_sha
 from eawf.workflow.verify.gate_conventions import GateConventionError, validate_gate_conventions
 
@@ -183,32 +160,6 @@ class ArchiveParams(BaseModel):
     force: bool = False
 
 
-class SyncParams(BaseModel):
-    """Params for :func:`sync`.
-
-    Attributes:
-        wave_id: Canonical wave id (``P##-I##-W##``) whose typed
-            ``success_criteria`` + ``gates`` are materialised from the
-            spec body.
-        spec_path: Optional repo-relative or absolute path of the spec
-            markdown file. ``None`` resolves the default per-wave spec
-            file (``.ea/specs/<phase>/<iter>/<wave>.md``) via
-            :func:`eawf.kernel.spec.writer.spec_file_path`.
-        repo_root: Optional absolute path of the repo working tree
-            (default ``Path.cwd``). The CLI proxy forwards
-            ``flags.workspace`` here so per-test ``tmp_path``-rooted
-            repos resolve correctly.
-        idempotency_key: Optional caller-supplied retry key.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    wave_id: str = Field(min_length=1)
-    spec_path: str | None = None
-    repo_root: str | None = None
-    idempotency_key: str | None = None
-
-
 class SpecResult(BaseModel):
     """Common result shape for the four spec.* RPCs."""
 
@@ -277,7 +228,7 @@ def _decode_body(body: bytes | str) -> str:
     """Return *body* as text, decoding bytes as UTF-8.
 
     The promote handler feeds raw ``file_path.read_bytes()`` while tests
-    and the ``eawf spec sync`` command pass already-decoded text;
+    and the retired ``spec sync`` verb pass already-decoded text;
     this helper accepts either so the extractors have one entry shape.
 
     Args:
@@ -362,35 +313,6 @@ def _extract_gate_specs(body: bytes | str) -> list[GateSpec]:
     if parsed is None:
         return []
     return parsed.gates
-
-
-def _extract_criterion_specs(body: bytes | str) -> list[CriterionSpec]:
-    """Extract typed :class:`CriterionSpec` rows from a spec markdown body.
-
-    Sibling of :func:`_extract_gate_specs`: parses the same
-    ``eawf-wave-body`` fenced block and returns its ``criteria`` list,
-    each row carrying its ``evidence_kind`` and ``gate_ids``. A body with
-    no such block returns an empty list (back-compat with the legacy
-    scaffold). The ``eawf spec sync`` command materialises these
-    rows onto the wave's typed ``success_criteria`` field.
-
-    Args:
-        body: Raw markdown spec body, as bytes or text.
-
-    Returns:
-        The typed criterion rows, or an empty list when the body carries
-        no ``eawf-wave-body`` fenced block.
-
-    Raises:
-        ValueError: When the fenced block's YAML is not a mapping.
-        yaml.YAMLError: When the fenced block is not well-formed YAML.
-        pydantic.ValidationError: When a criterion / gate row is
-            malformed or a cross-reference does not resolve.
-    """
-    parsed = _parse_wave_body(body)
-    if parsed is None:
-        return []
-    return parsed.criteria
 
 
 def _resolve_cache_dir(override: str | None) -> Path | None:
@@ -790,7 +712,7 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
     ``subprocess.run`` with a fixed argv — the daemon refuses to run when
     the path is outside the repo root. After ``git rm`` succeeds the cache
     entry is written with the blob SHA of the body that was just removed so
-    :func:`eawf spec show <urn> --from-git` can locate the body via ``git
+    the retired ``spec show`` verb could locate the body via ``git
     log -- <path>``. ``force`` only bypasses the status gate; the
     cache-entry lookup still raises when the scope was never initialised.
     """
@@ -883,289 +805,6 @@ async def archive(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
 # ---- spec.sync handler ----------------------------------------------------
 
 
-@register("spec.sync")
-async def sync(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Materialise a wave spec body's criteria + gates onto the wave row.
-
-    The authoring keystone: reads the per-wave spec markdown body, parses
-    its ``eawf-wave-body`` fenced block into typed criteria + gates (via
-    :func:`_extract_criterion_specs` / :func:`_extract_gate_specs`), runs
-    the EAWF021 measurability lint + the EAWF022 coverage lint, and — only
-    when both pass — replaces the target PENDING wave's typed
-    :attr:`~eawf.kernel.state.models.Wave.success_criteria` +
-    :attr:`~eawf.kernel.state.models.Wave.gates` through the daemon's
-    canonical state-write transaction (portalock → WAL → atomic write →
-    event append), per AGENTS rule 4.
-
-    The criteria are written through the lifecycle
-    :func:`~eawf.workflow.lifecycle.wave.edit_wave_plan` transition (which
-    enforces the PENDING-only invariant of planned-scope-revisability);
-    the gates are set on the same wave row and the combined criterion /
-    gate cross-references are checked by
-    :func:`~eawf.kernel.spec.common.validate_criterion_gate_refs` before the
-    write commits.
-
-    Args:
-        ctx: Server context. ``ctx.wal_dir`` MUST be configured.
-        params: JSON-RPC params per :class:`SyncParams`.
-
-    Returns:
-        Dict matching :class:`SpecSyncResult` with the materialised
-        criteria / gate counts + the canonical state event envelope.
-
-    Raises:
-        DaemonValidationError: When the spec body fails to parse, a lint
-            finding rejects the criteria, the target wave is not PENDING,
-            the criterion / gate cross-references do not resolve, a
-            UI-scope ``transitions_to`` response omits a
-            ``transition_coverage`` gate, or
-            the post-mutation state fails schema / invariant validation
-            (mapped to ``-32002`` so the CLI exit code matches a
-            rejected mutation).
-        ValueError: When *wave_id* is not a wave scope, the wave is
-            unknown, or the spec file is missing (mapped to ``-32602``).
-        RuntimeError: When ``ctx.wal_dir`` is unset.
-    """
-    try:
-        args = SyncParams.model_validate(params)
-    except ValidationError as exc:
-        raise ValueError(f"validation_failed: {exc}") from exc
-
-    try:
-        kind = spec_writer.classify_scope(args.wave_id)
-    except ValueError as exc:
-        raise ValueError(f"validation_failed: {exc}") from exc
-    if kind != "wave":
-        raise ValueError(f"validation_failed: spec sync targets a wave scope, got {args.wave_id!r}")
-
-    replay = idempotent_replay(ctx, args.idempotency_key)
-    if replay is not None:
-        logger.info(f"sync idempotent_replay wave={args.wave_id!r}")
-        return replay
-
-    repo_root = _resolve_repo_root(args.repo_root)
-    spec_file = _resolve_sync_spec_file(
-        wave_id=args.wave_id,
-        spec_path=args.spec_path,
-        repo_root=repo_root,
-    )
-    body = spec_file.read_text(encoding="utf-8")
-    try:
-        criteria = _extract_criterion_specs(body)
-        gates = _extract_gate_specs(body)
-    except (ValueError, yaml.YAMLError, ValidationError) as exc:
-        raise DaemonValidationError(f"validation_failed: spec body parse failed: {exc}") from exc
-
-    state_path, event_path, wal_path = resolve_mutator_paths(
-        repo_root=args.repo_root,
-        ctx=ctx,
-    )
-
-    from eawf.runtime.lock import portalock
-
-    ctx.in_flight_mutations += 1
-    try:
-        with portalock.acquire(state_path, timeout=5.0):
-            result = _apply_sync_locked(
-                ctx,
-                args=args,
-                criteria=criteria,
-                gates=gates,
-                repo_root=repo_root,
-                state_path=state_path,
-                event_path=event_path,
-                wal_path=wal_path,
-            )
-        cache_replay(ctx, idempotency_key=args.idempotency_key, result=result)
-        return result
-    finally:
-        ctx.in_flight_mutations = max(0, ctx.in_flight_mutations - 1)
-
-
-def _resolve_sync_spec_file(*, wave_id: str, spec_path: str | None, repo_root: Path) -> Path:
-    """Resolve + verify the on-disk spec file for a sync.
-
-    Args:
-        wave_id: The wave whose default spec path is derived when
-            *spec_path* is ``None``.
-        spec_path: Optional explicit path (repo-relative or absolute).
-        repo_root: Repo working-tree root the relative path resolves under.
-
-    Returns:
-        The existing spec file path.
-
-    Raises:
-        ValueError: When the resolved spec file does not exist (mapped to
-            ``-32602``).
-    """
-    if spec_path is not None:
-        spec_file = Path(spec_path)
-        if not spec_file.is_absolute():
-            spec_file = repo_root / spec_file
-    else:
-        spec_file = spec_writer.spec_file_path(wave_id, repo_root=repo_root)
-    if not spec_file.is_file():
-        raise ValueError(f"validation_failed: spec file missing for wave={wave_id!r}: {spec_file}")
-    return spec_file
-
-
-def _apply_sync_locked(
-    ctx: MethodContext,
-    *,
-    args: SyncParams,
-    criteria: list[CriterionSpec],
-    gates: list[GateSpec],
-    repo_root: Path,
-    state_path: Path,
-    event_path: Path,
-    wal_path: Path,
-) -> dict[str, Any]:
-    """Run the locked spec-sync transaction: lint, mutate, validate, write.
-
-    The caller holds the state-path portalock. This helper reads + validates
-    state, enforces the PENDING-only gate, runs the EAWF021 + EAWF022 lints
-    (rejecting before any mutation), materialises the criteria AND the gates
-    through a single :func:`~eawf.workflow.lifecycle.wave.edit_wave_plan`
-    call so the plan-time floor resolves each criterion's ``gate_ids``
-    against the incoming gates rather than the row's pre-sync ones,
-    re-validates the post-mutation state, then commits through the canonical
-    WAL → atomic-write → event-append sequence and publishes the envelope.
-
-    Args:
-        ctx: Server context (for the publish bus).
-        args: The validated sync params.
-        criteria: Parsed + lint-pending criterion rows.
-        gates: Parsed gate rows.
-        repo_root: The repo working-tree root the wave's
-            ``IntentBrief.source_brief_ids`` paths resolve under (read by the
-            EAWF022 source-brief coverage leg).
-        state_path: Path to ``state.json``.
-        event_path: Path to the event JSONL store.
-        wal_path: Path to the daemon WAL directory.
-
-    Returns:
-        Dict matching :class:`SpecSyncResult`.
-
-    Raises:
-        DaemonValidationError: When the wave is not PENDING, a lint finding
-            rejects the criteria, a gate argv or a ``measurable_signal`` names
-            an eawf verb the command tree does not resolve, the
-            cross-references do not resolve,
-            a UI-scope ``transitions_to`` response omits a
-            ``transition_coverage`` gate, or the post-mutation state fails
-            validation (mapped to ``-32002``).
-        ValueError: When the wave id is unknown (mapped to ``-32602``).
-    """
-    state, payload = read_state(state_path)
-    before_version = state_version(state.model_dump(mode="json"))
-    wave = state.waves.get(args.wave_id)
-    if wave is None:
-        raise ValueError(f"validation_failed: unknown wave: {args.wave_id!r}")
-    if wave.status != WaveStatus.PENDING:
-        raise DaemonValidationError(
-            f"validation_failed: wave {args.wave_id!r} is not pending "
-            f"(status={wave.status.value!r}); only PENDING waves accept a spec sync"
-        )
-
-    measurability = measure_criteria(criteria)
-    coverage = find_coverage_gaps(
-        criteria, wave_id=args.wave_id, intent=wave.intent, repo_root=repo_root
-    )
-    if measurability or coverage:
-        raise DaemonValidationError(render_lint_findings(measurability, coverage))
-
-    # A gate argv or a signal naming a verb the CLI does not have syncs clean
-    # and fails only when the gate runs at close, so resolve every named verb
-    # path against the command tree while the wave row is still untouched.
-    require_resolvable_eawf_verbs(wave_id=args.wave_id, criteria=criteria, gates=gates)
-
-    # A gated criterion that authored no response clause would land untiered,
-    # so derive the clause from its cheapest bound gate first: the validator
-    # below computes the tier from the clause, and only from the clause.
-    for index, criterion in enumerate(criteria):
-        derived = response_from_gate(criterion, gates)
-        if derived is not None:
-            criteria[index] = criterion.model_copy(update={"response": derived})
-
-    # Referential integrity (criterion.gate_ids <-> gate.criterion_id,
-    # deterministic-gate compile) BEFORE any in-place mutation so a malformed
-    # pair leaves the wave row untouched.
-    validate_criterion_gate_refs(criteria, gates)
-
-    require_transition_coverage_for_ui_transitions(
-        wave_id=args.wave_id,
-        file_scopes=wave.file_scopes,
-        criteria=criteria,
-        gates=gates,
-    )
-
-    try:
-        from eawf.workflow.verify.readiness import load_active_waiver_mode
-
-        waiver_mode = load_active_waiver_mode(
-            args.wave_id,
-            state,
-            repo_root=repo_root,
-            config_root=repo_root,
-        )
-        edit_wave_plan(
-            state,
-            wave_id=args.wave_id,
-            success_criteria=criteria,
-            gates=gates,
-            waiver_mode=waiver_mode,
-        )
-    except (LifecycleError, OSError, ValueError, KeyError) as exc:
-        raise DaemonValidationError(f"validation_failed: {exc}") from exc
-
-    state.updated_at = datetime.now(UTC)
-    new_payload = state.model_dump(mode="json")
-    after_version = validate_post_sync(new_payload)
-    # Refuse BEFORE the WAL-pending record lands, mirroring the daemon's
-    # single-lock mutator ordering, so a refused sync leaves no orphaned
-    # PENDING record for the next replay to skip over.
-    if (leak_refusal := state_leak_refusal(payload, new_payload)) is not None:
-        raise DaemonValidationError(f"validation_failed: {leak_refusal}")
-
-    mutation_id = uuid.uuid4().hex
-    envelope = _build_sync_envelope(
-        wave_id=args.wave_id,
-        criteria_count=len(criteria),
-        gates_count=len(gates),
-        before_version=before_version,
-        after_version=after_version,
-    )
-    record = WalRecord(
-        record_id=mutation_id,
-        envelope=envelope,
-        idempotency_key=args.idempotency_key,
-        written_at=datetime.now(UTC),
-        before_state_version=before_version,
-        after_state_version=after_version,
-        state_path=str(state_path),
-    )
-    wal.write_pending(wal_path, record)
-    atomic_write_json_locked(state_path, new_payload)
-    wal.mark_applied(wal_path, mutation_id)
-    append_envelope(event_path, envelope)
-    wal.mark_fsynced(wal_path, mutation_id)
-
-    publish_envelope(ctx, envelope)
-    logger.info(
-        f"sync ok wave={args.wave_id} criteria={len(criteria)} gates={len(gates)} "
-        f"before={before_version} after={after_version}"
-    )
-    return SpecSyncResult(
-        operation="sync",
-        wave_id=args.wave_id,
-        criteria_count=len(criteria),
-        gates_count=len(gates),
-        before_version=before_version,
-        after_version=after_version,
-        envelope=envelope.model_dump(mode="json"),
-    ).model_dump(mode="json")
-
-
 def _build_sync_envelope(
     *,
     wave_id: str,
@@ -1222,6 +861,5 @@ __all__ = [
     "archive",
     "init",
     "promote",
-    "sync",
     "validate",
 ]

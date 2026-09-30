@@ -36,7 +36,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import typer
 from pydantic import ValidationError
 
 from eawf import __version__
@@ -46,9 +45,7 @@ from eawf.kernel.state.models import State
 from eawf.kernel.store.paths import store_path
 from eawf.runtime.daemon import PROTOCOL_VERSION
 from eawf.runtime.daemon.bus import EventBus
-from eawf.runtime.daemon.methods import DaemonValidationError, MethodContext
-from eawf.runtime.daemon.methods.spec_repoint import repoint_gates
-from eawf.surfaces.cli.commands.spec import parse_gate_repoint
+from eawf.runtime.daemon.methods import MethodContext
 from eawf.workflow.lifecycle._errors import LifecycleError
 from eawf.workflow.lifecycle.gate_repoint import (
     GateArgvRepoint,
@@ -464,155 +461,4 @@ def test_repointed_gate_reruns_green(tmp_path: Path) -> None:
 # ---- The daemon transaction that persists the repoint ----------------------
 
 
-def test_repoint_gates_rpc_persists_repoint(tmp_path: Path) -> None:
-    """The daemon mutator writes the repointed argv and an audit envelope."""
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(state_path, _state())
-    ctx = _build_ctx(tmp_path, state_path)
-    live_argv = ["pytest", _LIVE_RELATIVE, "-q"]
-
-    async def body() -> None:
-        result = await repoint_gates(
-            ctx,
-            {
-                "wave_id": _WAVE_ID,
-                "repoints": [{"gate_id": "G-01", "argv": live_argv}],
-                "repo_root": str(repo_root),
-            },
-        )
-        assert result["changed_count"] == 1
-        assert result["changed"][0]["after_argv"] == live_argv
-        assert result["envelope"]["payload"]["event_type"] == "state.mutate.spec_repoint_gates"
-        assert result["envelope"]["payload"]["extras"]["changed_gate_ids"] == "G-01"
-        assert result["before_version"] != result["after_version"]
-
-    _run(body)
-    wave = State.model_validate_json(state_path.read_text(encoding="utf-8")).waves[_WAVE_ID]
-    assert wave.gates[0].args["argv"] == live_argv
-    assert wave.status.value == "closed"
-    assert wave.closed_at == _T0
-    assert wave.outcome == "closed green on the pre-collapse test tree"
-    assert wave.success_criteria[0].id == "CR-01"
-
-
-def test_repoint_gates_rpc_dry_run_writes_nothing(tmp_path: Path) -> None:
-    """``--dry-run`` reports the would-change set with the state bytes intact."""
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(state_path, _state())
-    before_bytes = state_path.read_bytes()
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        result = await repoint_gates(
-            ctx,
-            {
-                "wave_id": _WAVE_ID,
-                "repoints": [{"gate_id": "G-01", "argv": ["pytest", _LIVE_RELATIVE]}],
-                "dry_run": True,
-                "repo_root": str(repo_root),
-            },
-        )
-        assert result["dry_run"] is True
-        assert result["changed_count"] == 1
-        assert result["envelope"] is None
-        assert result["before_version"] is None
-
-    _run(body)
-    assert state_path.read_bytes() == before_bytes
-
-
-def test_repoint_gates_rpc_refuses_pending_wave(tmp_path: Path) -> None:
-    """The daemon maps the non-CLOSED refusal onto a validation error."""
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(state_path, _state(wave_status="pending"))
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        with pytest.raises(DaemonValidationError, match="is not closed"):
-            await repoint_gates(
-                ctx,
-                {
-                    "wave_id": _WAVE_ID,
-                    "repoints": [{"gate_id": "G-01", "argv": ["pytest", _LIVE_RELATIVE]}],
-                    "repo_root": str(repo_root),
-                },
-            )
-
-    _run(body)
-
-
-def test_repoint_gates_rpc_refuses_non_wave_scope(tmp_path: Path) -> None:
-    """A phase scope is refused: a repoint is authorised one wave at a time."""
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(state_path, _state())
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        with pytest.raises(ValueError, match="wave scope"):
-            await repoint_gates(
-                ctx,
-                {
-                    "wave_id": "P31",
-                    "repoints": [{"gate_id": "G-01", "argv": ["pytest", _LIVE_RELATIVE]}],
-                    "repo_root": str(repo_root),
-                },
-            )
-
-    _run(body)
-
-
-def test_repoint_gates_rpc_refuses_empty_repoints(tmp_path: Path) -> None:
-    """The params model floors the request at one repoint row."""
-    repo_root = tmp_path / "repo"
-    repo_root.mkdir()
-    state_path = repo_root / ".ea" / "state.json"
-    _write_state(state_path, _state())
-    ctx = _build_ctx(tmp_path, state_path)
-
-    async def body() -> None:
-        with pytest.raises(ValueError, match="validation_failed"):
-            await repoint_gates(
-                ctx,
-                {"wave_id": _WAVE_ID, "repoints": [], "repo_root": str(repo_root)},
-            )
-
-    _run(body)
-
-
 # ---- The CLI option parser -------------------------------------------------
-
-
-def test_parse_gate_repoint_splits_quoted_argv() -> None:
-    """A quoted argument survives as one argv element."""
-    row = parse_gate_repoint("G-01=uv run pytest tests/x.py -k 'not slow'")
-
-    assert row == {
-        "gate_id": "G-01",
-        "argv": ["uv", "run", "pytest", "tests/x.py", "-k", "not slow"],
-    }
-
-
-def test_parse_gate_repoint_rejects_missing_separator() -> None:
-    """A value with no ``=`` names no gate."""
-    with pytest.raises(typer.BadParameter, match="expected <gate-id>=<argv>"):
-        parse_gate_repoint("uv run pytest tests/x.py")
-
-
-def test_parse_gate_repoint_rejects_empty_gate_id() -> None:
-    """An empty left-hand side is refused rather than defaulted."""
-    with pytest.raises(typer.BadParameter, match="empty gate id"):
-        parse_gate_repoint("=uv run pytest tests/x.py")
-
-
-def test_parse_gate_repoint_rejects_empty_argv() -> None:
-    """An empty right-hand side would clear the gate's argv."""
-    with pytest.raises(typer.BadParameter, match="empty argv"):
-        parse_gate_repoint("G-01=   ")

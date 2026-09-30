@@ -132,8 +132,7 @@ def validate_claim_session(state: State, wave: Wave, session_id: str) -> AgentSe
             CLAIM_SESSION_NOT_FOUND,
             wave.id,
             f"cannot claim wave {wave.id!r}: session {session_id!r} does not exist; "
-            f"start one with `eawf session start --role <role> --scope {wave.id} "
-            f"--runtime <runtime>`",
+            "start one with `eawf run start`",
         )
     if session.status is not AgentSessionStatus.ACTIVE:
         raise LifecycleGuardError(

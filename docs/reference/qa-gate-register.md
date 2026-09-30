@@ -22,7 +22,7 @@ The spawn-substrate domain: cross-vendor session spawn, metering, sandbox safety
 | A spawn argv is rejected when it violates the L0 deny-list policy | `schema_validate` | The argv-bearing `GateSpec` validator routes `args['argv']` through the L0 argv-policy; a denied argv fails `model_validate`. |
 | A runaway wave's process group is reaped under the token cap | `command_exit_zero` | The pgid-threaded cap enforcement asserts the spawned pgid is killed; the negative path asserts an over-cap role is rejected at render. |
 | A `$0`-priced spawn (a pricing-alias miss) is caught, never silently billed | `state_field_equals` | The metering binding-proof asserts the recorded cost field is non-zero on the live spawn path. |
-| The headless `eawf dispatch wave` caller emits a typed `executor_report` body | `schema_validate` | The dispatch render path validates the emitted body against `AgentReportBody`; a malformed body fails validation. |
+| The headless `eawf run create` caller emits a typed `executor_report` body | `schema_validate` | The dispatch render path validates the emitted body against `AgentReportBody`; a malformed body fails validation. |
 
 ## Trust
 

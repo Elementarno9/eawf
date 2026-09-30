@@ -22,77 +22,6 @@ Auto-generated from `eawf.surfaces.cli.app:app`. Every top-level command and sub
 
 ## Command groups
 
-### `eawf actual`
-
-Open / close / recover actual segments for a scope.
-
-| Verb | Summary |
-|---|---|
-| `recover` | Walk active actuals and abandon any segment held by a stale lock holder. |
-| `start` | Open a new actual segment for ``(scope, session)``. |
-| `stop` | Close the latest open segment for *scope* and write the elapsed EU. |
-
-### `eawf agent-report`
-
-Manage typed agent reports.
-
-| Verb | Summary |
-|---|---|
-| `add` | Append a typed agent report. |
-| `list` | List typed agent reports. |
-| `show` | Show a typed agent report. |
-
-### `eawf artifact`
-
-Manage artifacts (add / show / verify).
-
-| Verb | Summary |
-|---|---|
-| `add` | Register a durable artifact. |
-| `file-spike-report` | File a SpikeReport as the artifact a ``submit_evidence`` call resolves. |
-| `promote-contract` | Promote a measured contract onto the evidence path. |
-| `show` | Show artifact metadata. |
-| `submit-evidence` | Submit a verified SpikeReport's measured contracts onto the evidence path. |
-| `update` | Update mutable fields on a registered artifact. |
-| `validate` | Validate one markdown artifact body. |
-| `verify` | Recompute artifact sha256 and compare to the registered hash. |
-
-### `eawf audit`
-
-Manage audits (add / run / integrity / show / list).
-
-| Verb | Summary |
-|---|---|
-| `add` | Register an audit; report-bearing audits land status=complete. |
-| `integrity` | Append an integrity-check result to an existing audit. |
-| `list` | List audits with optional filters. |
-| `promote` | — |
-| `run` | Run an audit. ``--checks`` drives the DSL runner; ``--fixture`` is the |
-| `set-verdict` | Stamp a verdict on an existing audit. |
-| `show` | Show metadata for one audit. |
-
-### `eawf backfill`
-
-Backfill entity titles/descriptions across all five kinds.
-
-| Verb | Summary |
-|---|---|
-| `titles` | Sweep + normalize entity titles across all five kinds. |
-| `wave-intents` | Backfill missing ``Wave.intent`` on explicit closed synced waves. |
-
-### `eawf backlog`
-
-Manage backlog items (add / close).
-
-| Verb | Summary |
-|---|---|
-| `add` | Add a new backlog item. |
-| `backfill-titles` | Sweep + normalize backlog titles to the entity-title rule. |
-| `close` | Close a backlog item; requires --audit of a complete audit. |
-| `correct` | Correct a closed backlog item's commit or resolution; never reopens it. |
-| `edit` | Edit an open backlog item's title, description, and/or intent. |
-| `set-priority` | Update the priority of an open backlog item. |
-
 ### `eawf backup`
 
 Snapshot backups of state.json + config.yaml, plus legacy profile.yaml when present.
@@ -148,19 +77,6 @@ Claude Code adapter (statusline, plugin, hooks).
 
 _No verbs registered._
 
-### `eawf close`
-
-Submit, inspect, follow, resume, or cancel durable wave closure.
-
-| Verb | Summary |
-|---|---|
-| `cancel` | Cancel a close attempt before its APPLYING stage. |
-| `follow` | Follow a close attempt until it reaches a terminal state. |
-| `rereceipt` | Re-run a closed wave's gates at its landed commit and bind receipts. |
-| `resume` | Resume an interrupted or infrastructure-failed close attempt. |
-| `status` | Show durable close status without waiting, never starting a daemon. |
-| `submit` | Submit an idempotent exact-revision close attempt. |
-
 ### `eawf coauthor`
 
 Resolve co-author trailers from VCS config.
@@ -209,28 +125,6 @@ Manage the eawfd background daemon.
 | `status` | Print operational counters from the running daemon, never starting one. |
 | `stop` | Request graceful daemon shutdown. |
 
-### `eawf decision`
-
-Manage decisions (add / supersede / list / graph).
-
-| Verb | Summary |
-|---|---|
-| `add` | Record a durable decision, from flags or from a ``--from-spec`` document. |
-| `graph` | Render the decision graph (text, Graphviz DOT, or Mermaid). |
-| `list` | List decisions filtered by scope. |
-| `promote` | — |
-| `supersede` | Supersede an existing decision by another existing decision. |
-
-### `eawf dispatch`
-
-Pause, resume, and headlessly spawn waves through the dispatch loop.
-
-| Verb | Summary |
-|---|---|
-| `pause` | Pause the dispatch loop by setting ``dispatch_paused`` via ``agent.pause``. |
-| `resume` | Resume the dispatch loop by clearing ``dispatch_paused`` via ``agent.resume``. |
-| `wave` | Spawn + dispatch a wave headlessly via the daemon's ``agent.dispatch``. |
-
 ### `eawf doc`
 
 Read-only documentation drift + state-vs-doc cross-checks.
@@ -244,50 +138,6 @@ Read-only documentation drift + state-vs-doc cross-checks.
 Run install-readiness checks (tools, state, config).
 
 _No verbs registered._
-
-### `eawf draft`
-
-Create and validate local draft artifacts.
-
-| Verb | Summary |
-|---|---|
-| `new` | Create a templated local draft under ``.ea/local/<kind>/``. |
-| `validate` | Validate a local draft artifact. |
-
-### `eawf estimate`
-
-Create or update EU estimates for a scope.
-
-| Verb | Summary |
-|---|---|
-| `set` | Create (or replace) the estimate for *scope*. |
-| `update` | Update the estimate for *scope*, replacing the current summary record. |
-
-### `eawf evidence`
-
-Attest verify-spine evidence (attest).
-
-| Verb | Summary |
-|---|---|
-| `attest` | Append a typed verify-spine evidence row. |
-
-### `eawf flow`
-
-Operator surface for the retired /flow skill (run refuses; status, abort).
-
-| Verb | Summary |
-|---|---|
-| `abort` | Abort a flow run by appending an ``abandoned`` flow_record. |
-| `run` | Run the ``/flow`` skill (fresh or resumed), unless the catalog retired it. |
-| `status` | Print structured status for a flow run (read-only). |
-
-### `eawf goal`
-
-Manage project goals (define).
-
-| Verb | Summary |
-|---|---|
-| `define` | Define a new goal under the current scope. |
 
 ### `eawf help`
 
@@ -328,40 +178,6 @@ Dispatch hook events through the Eä hook runner.
 | `sigil-totality` | Assert every TUI-render status value resolves to a real ratified glyph. |
 | `vale-prose` | Run the Vale prose linter over Markdown and emit the findings. |
 | `validate-prose` | Compose every Layer-2 prose check over changed Markdown — the chokepoint. |
-
-### `eawf hypothesis`
-
-Manage hypotheses (define / verdict / list).
-
-| Verb | Summary |
-|---|---|
-| `define` | Register a new pending hypothesis. |
-| `list` | List hypotheses (read-only). |
-| `promote` | — |
-| `verdict` | Record a hypothesis verdict; requires --audit of a complete audit. |
-
-### `eawf incident`
-
-Manage incidents (open / close / view).
-
-| Verb | Summary |
-|---|---|
-| `close` | Close an incident; requires --audit of a complete audit. |
-| `open` | Open a new incident. |
-| `promote` | — |
-| `view` | View incident metadata + linked artifact ids. |
-
-### `eawf iter`
-
-Iteration lifecycle (open, close).
-
-| Verb | Summary |
-|---|---|
-| `activate` | Flip a PLANNED iter to ACTIVE. |
-| `candidate-tag` | Show or set an iter's proposed release tag. |
-| `close` | Close an active iter. Rejects when child waves are still open. |
-| `open` | Open an iter. Pass an iter ID or a phase id (auto-allocates iter). |
-| `plan` | Stage a PLANNED iter under an open phase without moving the current pointer. |
 
 ### `eawf jury`
 
@@ -429,36 +245,6 @@ Milestone lifecycle (activate, open-review, open-approval, accept, cancel).
 | `open-review` | Open acceptance review on an ACTIVE Milestone. |
 | `seal-approval` | Seal the operator's answer onto a waiting acceptance question. |
 
-### `eawf operator`
-
-Operator report rollups.
-
-| Verb | Summary |
-|---|---|
-| `rollup` | Render a read-only operator rollup for *phase_id*. |
-
-### `eawf outcome`
-
-Manage outcomes (define / set).
-
-| Verb | Summary |
-|---|---|
-| `define` | Define a new pending outcome. |
-| `set` | Record an outcome measurement; status is derived from the sample. |
-
-### `eawf phase`
-
-Phase lifecycle (open, close, reopen).
-
-| Verb | Summary |
-|---|---|
-| `activate` | Flip a PLANNED phase to ACTIVE. |
-| `close` | Close an active phase. Rejects when child iters are still open. |
-| `open` | Open a new phase. Provide an explicit ID or use ``--auto``. |
-| `prepare-close` | Compute a pre-close checklist for *phase_id* without closing it. |
-| `reopen` | Reopen a closed phase. Used for follow-up iters after a phase close. |
-| `retro` | Emit a closure digest joining the phase's waves to their agent reports. |
-
 ### `eawf plan`
 
 Iter plan view (read-only: DAG, waves, checks, risks) plus the submit/approve/apply plan-revision verbs.
@@ -467,7 +253,6 @@ Iter plan view (read-only: DAG, waves, checks, risks) plus the submit/approve/ap
 |---|---|
 | `apply` | Materialise one APPROVED plan revision into its Milestone. |
 | `approve` | Seal a human principal's approval onto a VALIDATED plan revision. |
-| `promote` | — |
 | `show` | Print the active iter plan view (markdown or JSON). |
 | `submit` | Record one planner proposal as a VALIDATED plan revision. |
 
@@ -500,25 +285,14 @@ Profile body scaffolding + trust ledger management.
 | `new` | Scaffold a workspace profile at ``.ea/profiles/<name>.yaml``. |
 | `validate` | Validate a profile (or every profile) against the layered loader. |
 
-### `eawf project`
-
-Project-level lifecycle (init).
-
-| Verb | Summary |
-|---|---|
-| `init` | Create or upgrade a project record at the active state path. |
-
 ### `eawf question`
 
-Add and list open questions, and file operator decisions.
+File and answer operator decisions.
 
 | Verb | Summary |
 |---|---|
-| `add` | Add a research-campaign open question for the active scope. |
 | `answer` | Seal the option a reply to a numbered question prompt chooses. |
-| `list` | List the research-campaign open questions for the active scope. |
 | `open-decision` | File a reversible operator decision the host shows as a typed question. |
-| `resolve` | Resolve a blocking / open research-campaign question for the active scope. |
 
 ### `eawf record`
 
@@ -589,28 +363,6 @@ Repository rows a plan binds its head to (create).
 |---|---|
 | `create` | Admit a repository row at the head its git history holds now. |
 
-### `eawf research`
-
-Show and promote research briefs.
-
-| Verb | Summary |
-|---|---|
-| `promote` | — |
-| `show` | Show one research store record. |
-| `status` | Render the active scope's research campaign + round + checkpoint state. |
-
-### `eawf roadmap`
-
-Roadmap planner (propose / revise / apply / drop / show).
-
-| Verb | Summary |
-|---|---|
-| `apply` | Confirm a PLANNED phase's wave DAG before handing off to ``/prep``. |
-| `drop` | Archive a PLANNED phase (PLANNED → ARCHIVED). Irreversible via the |
-| `propose` | Propose a PLANNED phase from flags or a strict roadmap plan file. |
-| `revise` | Edit a PLANNED or ACTIVE phase's wave plan via structured flags. |
-| `show` | Render the PLANNED queue plus the ACTIVE phase summary. |
-
 ### `eawf rules`
 
 Read, migrate and roll back the projections rendered from .ea/rules.yaml.
@@ -647,10 +399,8 @@ Manage AI/human work sessions.
 
 | Verb | Summary |
 |---|---|
-| `checkpoint` | Append a checkpoint event for an existing session. |
 | `close` | Close a session; required to reach the ``closed/stale/failed`` set. |
 | `recover` | Mark every active/checkpointed session whose heartbeat is older than ``--age`` as stale. |
-| `start` | Start a new agent session; rejects (scope, runtime) collisions. |
 
 ### `eawf skill`
 
@@ -673,32 +423,6 @@ Golden-fixture snapshot surfaces — list and regenerate per --kind.
 |---|---|
 | `list` | List every snapshot surface in the locked inventory. |
 | `update` | Regenerate the golden subset for one snapshot surface. |
-
-### `eawf spec`
-
-Manage phase / iter / wave specs (init / validate / promote / archive / show).
-
-| Verb | Summary |
-|---|---|
-| `archive` | Atomically ``git rm`` the spec file + write the archived cache entry. |
-| `convert-legacy` | Convert a scope's legacy criterion rows to typed, gated rows. |
-| `init` | Scaffold a new spec via daemon proxy (or in-process fallback). |
-| `promote` | Forward-graduate DRAFT → READY → IMPLEMENTED through the daemon. |
-| `repoint-gates` | Rewrite the recorded gate argv of a CLOSED wave after a tree move. |
-| `repoint-scopes` | Re-derive a wave's file scopes and rewrite a named criterion's text. |
-| `rewrite-gate-kind` | Strengthen a CLOSED wave's grep gates into command gates. |
-| `show` | Print a spec body (cache + on-disk; ``--from-git`` walks history). |
-| `sync` | Parse a wave spec body + materialise its criteria + gates onto state. |
-| `validate` | Re-hash the on-disk spec body + refresh the daemon cache row. |
-
-### `eawf state`
-
-Read-only state introspection (resolve, show) + dev-mode raw RPC.
-
-| Verb | Summary |
-|---|---|
-| `resolve` | Print the resolved ``state.json`` path and the reason for selection. |
-| `show` | Print a read-only view of ``state.json``. |
 
 ### `eawf store`
 
@@ -742,10 +466,8 @@ Track lifecycle (add, switch).
 
 | Verb | Summary |
 |---|---|
-| `add` | Add a track under the active project. |
 | `create` | Admit a new Track's create document into the addressed tree. |
 | `retire` | Retire an ACTIVE Track once no Milestone under it is open. |
-| `switch` | Set the active track pointer. |
 | `sync` | Recompute a Track's measured outcome statuses from their samples. |
 
 ### `eawf vfl`
@@ -765,36 +487,6 @@ Inspect the daemon write-ahead log (read-only: status, list, show).
 | `list` | List WAL records (id, status, envelope kind + summary, timestamp). |
 | `show` | Dump one WAL record's decoded envelope by record id. |
 | `status` | Summarise the WAL: per-status counts, newest/oldest, total size. |
-
-### `eawf wave`
-
-Wave lifecycle (plan, claim, close, fail, graph, next-ready).
-
-| Verb | Summary |
-|---|---|
-| `ack-drift` | Acknowledge historical git/state commit drift so ``doctor`` stops warning. |
-| `archive-refs` | Archive every local wave branch head under ``refs/eawf/archive/<phase>/<wave>``. |
-| `autoland` | Cherry-pick closed waves' worktree commits home in dependency order. |
-| `blocks-rebuild` | Rebuild ``Wave.blocks`` reverse-index from sister waves' ``deps``. |
-| `claim` | Claim a pending wave for *session*. Exactly-once across concurrent calls. |
-| `close` | Close a claimed/in-progress wave with an outcome string. |
-| `dispatch` | Render the subagent prompt for *wave_id* (read-only). |
-| `dispatch-batch` | Render prompts for every (or every ready) pending wave under an iter. |
-| `fail` | Mark a claimed/in-progress wave as failed with *reason*. |
-| `fix-ci` | Plan a follow-up wave that targets the failing files in *log*. |
-| `fix-ci-loop` | Plan a chain of CI-fix follow-up waves until convergence or *max_iters*. |
-| `graph` | Print the wave DAG for an iter in topological order. |
-| `land` | Cherry-pick the wave's worktree commits onto the parent branch. |
-| `land-batch` | Apply ``wave land`` to every eligible wave in dep order; stop on failure. |
-| `next-ready` | List pending waves whose every dep is ``closed``. |
-| `plan` | Plan a new pending wave under an open iter. |
-| `prune-branches` | Delete local branch heads that ``wave archive-refs`` has already preserved. |
-| `release` | Release a claimed/in-progress wave back to pending (the inverse of claim). |
-| `review` | Attach review findings to a wave, or render a reviewer prompt. |
-| `show` | Inspect a wave. ``--commit`` prints SHA; ``--dispatch-prompt`` prints prompt. |
-| `update` | Mutate a PENDING/CLAIMED wave's ``file_scopes``. |
-| `verify-commits` | Verify (and optionally repair) every CLOSED wave's commit SHA pin. |
-| `waivers` | Count the daemonless close waivers recorded in this workspace. |
 
 ### `eawf wiki`
 
@@ -824,8 +516,5 @@ Manage per-wave git worktrees (create / list / merge-back / cleanup / reconcile)
 | Verb | Summary |
 |---|---|
 | `cleanup` | Tear down the worktree directory + per-wave branch. |
-| `create` | Create a per-wave worktree branched from the current feature branch. |
-| `list` | Enumerate recorded worktrees with a git-side cross-check column. |
 | `merge-back` | Replay worktree commits onto the parent branch. |
-| `path-fix` | Rewrite WorktreeRecord.path values from absolute to repo-relative. |
 | `reconcile` | Retire active worktree and session rows whose holder is gone. |

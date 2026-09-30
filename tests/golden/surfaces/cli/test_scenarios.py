@@ -1,6 +1,6 @@
-"""End-to-end golden scenarios for the eawf init wizard + lifecycle CLI.
+"""End-to-end golden scenarios for the eawf init wizard.
 
-Three scenarios exercise the public surface from a clean slate and
+Two scenarios exercise the public surface from a clean slate and
 assert byte-stable outputs against the committed golden fixtures in
 this directory:
 
@@ -8,9 +8,6 @@ this directory:
 2. :func:`test_run_wizard_no_input_enrich_existing` — wizard does not
    touch pre-existing files outside ``.ea/`` / ``AGENTS.md`` /
    ``CLAUDE.md``.
-3. :func:`test_lifecycle_flow_full` — ``project init -> phase open ->
-   iter open -> wave plan/claim/close -> phase close`` walk via the
-   Typer CliRunner produces the committed end-state projection.
 
 Goldens are JSON projections (see :func:`conftest.project_state`) plus
 one byte-stable AGENTS.md snapshot from :func:`fresh_repo`. The
@@ -25,15 +22,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import orjson
 import pytest
-from typer.testing import CliRunner
 
-from eawf.kernel.state.models import State
 from eawf.platform.install.wizard import WizardAnswers, run_wizard_no_input
-from eawf.surfaces.cli.app import app
-from tests._session_helpers import seed_active_session_on_disk
-from tests.conftest import make_claim_criterion
 
 from .conftest import (
     assert_or_regen_json,
@@ -180,156 +171,5 @@ def test_run_wizard_no_input_enrich_existing(
     live_state = json.loads(state_path.read_text(encoding="utf-8"))
     assert_or_regen_json(
         scenarios_dir / "enrich_existing" / "state.golden.json",
-        project_state(live_state),
-    )
-
-
-# ---- flow_full scenario ----------------------------------------------------
-
-
-def _invoke(runner: CliRunner, *args: str) -> object:
-    """Invoke the root eawf Typer app with explicit args + return the result.
-
-    A thin wrapper so the scenario test reads as a step-list. Any
-    non-zero exit causes the caller's assertion to fail with the
-    captured stdout in the message.
-    """
-    return runner.invoke(app, list(args))
-
-
-def test_lifecycle_flow_full(
-    flow_target: Path,
-    scenarios_dir: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """End-to-end lifecycle walk via the Typer CliRunner.
-
-    Path traced:
-
-    1. ``project init GOLDENTEST --title golden-test --domains demo`` —
-       creates the state file with a non-null ``project`` (the
-       lifecycle invariants reject ``scope_kind=repo`` with a null
-       project, so the wizard path is not viable for this scenario;
-       see ``flow_full/README`` for the rationale).
-    2. ``phase open P01 --title Bootstrap``.
-    3. ``iter open P01-I01 --title Iter1``.
-    4. ``wave plan P01-I01 --id P01-I01-W01 --title Implement
-       --files src/``.
-    5. ``wave claim P01-I01-W01 --session SES-1``.
-    6. ``wave close P01-I01-W01 --outcome done`` (W04 dropped the
-       ``Wave.commit`` field; the SHA is now derived on demand from
-       ``git log --grep``).
-    7. ``iter close P01-I01 --audit AUD-1``.
-    8. ``decision add D001 --scope-id P01 ...`` records the explicit
-       single-wave scope-collapse rationale required by phase close.
-    9. ``audit run AUD-1 --scope-id P01 --kind ship-gate`` records close evidence.
-    10. ``phase close P01 --audit AUD-1``.
-
-    Asserts the final state projection matches the committed
-    ``flow_full/state.golden.json``. The projection encodes:
-    ``phases.P01.status == "closed"``, ``iters.P01-I01`` present,
-    ``waves.P01-I01-W01`` present, and the ``current.*`` pointer
-    keyset (which stays the same shape across the walk).
-    """
-    state_path = flow_target / ".ea" / "state.json"
-    audit_fixture = flow_target / "audit-checks.json"
-    audit_fixture.write_text(
-        json.dumps(
-            [
-                {
-                    "details": "golden scenario close evidence",
-                    "name": "scenario-close-evidence",
-                    "passed": True,
-                }
-            ],
-            sort_keys=True,
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    runner = CliRunner()
-
-    steps: list[tuple[str, ...]] = [
-        (
-            "project",
-            "init",
-            _PROJECT_CODE,
-            "--title",
-            _PROJECT_TITLE,
-            "--domains",
-            "demo",
-        ),
-        ("phase", "open", "P01", "--title", "Bootstrap"),
-        ("iter", "open", "P01-I01", "--title", "Iter1"),
-        (
-            "wave",
-            "plan",
-            "P01-I01",
-            "--id",
-            "P01-I01-W01",
-            "--title",
-            "Implement",
-            "--files",
-            "src/",
-            "--effort-bucket",
-            "S",
-        ),
-        ("wave", "claim", "P01-I01-W01", "--session", "SES-1"),
-        (
-            "wave",
-            "close",
-            "P01-I01-W01",
-            "--outcome",
-            "done",
-        ),
-        ("iter", "close", "P01-I01", "--audit", "AUD-1"),
-        (
-            "decision",
-            "add",
-            "D001",
-            "--scope-id",
-            "P01",
-            "--summary",
-            "P01 scope collapse: finish as single-wave phase",
-            "--rationale",
-            "scope collapse accepted for minimal lifecycle scenario",
-            "--alternative",
-            "plan a second wave",
-        ),
-        (
-            "audit",
-            "run",
-            "AUD-1",
-            "--scope-id",
-            "P01",
-            "--kind",
-            "ship-gate",
-            "--fixture",
-            str(audit_fixture),
-        ),
-        ("phase", "close", "P01", "--audit", "AUD-1"),
-    ]
-    for step_args in steps:
-        result = _invoke(runner, *step_args)
-        # CliRunner returns Click's Result; .exit_code is the canonical attr.
-        exit_code = getattr(result, "exit_code", None)
-        stdout = getattr(result, "stdout", "")
-        assert exit_code == 0, f"step {step_args} failed: exit={exit_code} stdout={stdout!r}"
-        if step_args[:2] == ("wave", "plan"):
-            state = State.model_validate(orjson.loads(state_path.read_bytes()))
-            state.waves["P01-I01-W01"].success_criteria = [make_claim_criterion()]
-            state_path.write_bytes(orjson.dumps(state.model_dump(mode="json")))
-            seed_active_session_on_disk(state_path, session_id="SES-1")
-
-    assert state_path.exists()
-    live_state = json.loads(state_path.read_text(encoding="utf-8"))
-
-    # Sanity invariant: phase + iter + wave all reach the closed terminal.
-    assert (live_state.get("phases") or {}).get("P01", {}).get("status") == "closed"
-    assert (live_state.get("iters") or {}).get("P01-I01", {}).get("status") == "closed"
-    assert (live_state.get("waves") or {}).get("P01-I01-W01", {}).get("status") == "closed"
-
-    assert_or_regen_json(
-        scenarios_dir / "flow_full" / "state.golden.json",
         project_state(live_state),
     )

@@ -32,6 +32,7 @@ from eawf.runtime.daemon.wal import (
     write_pending,
 )
 from eawf.surfaces.cli.app import app
+from tests._epoch2_helpers import lay_epoch2_tree
 
 pytestmark = pytest.mark.integration
 
@@ -52,10 +53,7 @@ def _redirect_runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 
 def _seed_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
     """Write a stub ``.ea/state.json`` and anchor ``EA_STATE`` at it."""
-    ea_dir = tmp_path / ".ea"
-    ea_dir.mkdir(parents=True, exist_ok=True)
-    state_path = ea_dir / "state.json"
-    state_path.write_bytes(b'{"schema_version": "1.7"}\n')
+    state_path = lay_epoch2_tree(tmp_path, state={"schema_version": "1.7"})
     monkeypatch.setenv("EA_STATE", str(state_path))
     return state_path
 

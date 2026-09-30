@@ -104,7 +104,7 @@ def unvalidated_state_writes(source: str) -> list[int]:
 
 def test_agent_state_writers_validate_before_writing() -> None:
     source = _AGENT_METHODS.read_text(encoding="utf-8")
-    assert len(re.findall(r"\bwrite_state_unlocked\(", source)) >= 4
+    assert len(re.findall(r"\bwrite_state_unlocked\(", source)) >= 3
     assert unvalidated_state_writes(source) == []
 
 

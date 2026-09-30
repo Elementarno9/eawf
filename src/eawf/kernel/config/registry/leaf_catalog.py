@@ -582,7 +582,11 @@ _DECLARED_LEAF_KEYS: tuple[LeafKey, ...] = (
         type="bool",
         default=True,
         writable_layers=_WRITABLE_GWR,
-        description="When True, /prep leads its claim actions with an `eawf dispatch resume`.",
+        description=(
+            "When True, /prep leads its claim actions with the dispatch-resume action, "
+            "which points at `eawf migrate epoch2 --plan` since the flag day retired "
+            "dispatch resume."
+        ),
     ),
     # --- vcs ---------------------------------------------------------------
     LeafKey(

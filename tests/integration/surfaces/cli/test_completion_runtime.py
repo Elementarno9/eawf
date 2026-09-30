@@ -97,7 +97,7 @@ def test_completion_runtime_does_not_crash(shell: str) -> None:
     unpatched zsh script crashed here with a non-zero exit and a ``KeyError``
     traceback on stderr.
     """
-    result = _run_completion(shell, comp_words="eawf wa", comp_cword=1)
+    result = _run_completion(shell, comp_words="eawf wo", comp_cword=1)
     assert result.returncode == 0, (
         f"completion runtime exited {result.returncode} for {shell}\n"
         f"stdout={result.stdout!r}\nstderr={result.stderr!r}"
@@ -109,31 +109,31 @@ def test_completion_runtime_does_not_crash(shell: str) -> None:
 @_requires_console_script
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
 def test_completion_runtime_emits_candidate_for_prefix(shell: str) -> None:
-    """A known prefix (``eawf wa``) offers the ``wave`` subcommand.
+    """A known prefix (``eawf wo``) offers the ``worktree`` subcommand.
 
     Asserts the handshake produces real candidates, not just a clean exit — a
     silently-empty completion would also exit 0 but still be broken.
     """
-    result = _run_completion(shell, comp_words="eawf wa", comp_cword=1)
+    result = _run_completion(shell, comp_words="eawf wo", comp_cword=1)
     assert result.returncode == 0
     assert result.stdout.strip(), f"empty completion output for {shell}: {result.stderr!r}"
-    # bash emits ``plain,wave``; zsh emits a ``plain\nwave\n<help>`` triple.
-    # Both carry the bare ``wave`` token for the ``wa`` prefix.
-    assert "wave" in result.stdout
+    # bash emits ``plain,worktree``; zsh emits a ``plain\nworktree\n<help>``
+    # triple. Both carry the bare ``worktree`` token for the ``wo`` prefix.
+    assert "worktree" in result.stdout
 
 
 @_requires_console_script
 def test_completion_runtime_zsh_advances_to_subcommands() -> None:
-    """``eawf wave <TAB>`` (zsh) advances past the group to its subcommands.
+    """``eawf worktree <TAB>`` (zsh) advances past the group to its subcommands.
 
     Exercises a non-zero ``COMP_CWORD`` so the args-slicing path (``args =
     cwords[1:cword]``) is covered, not just the first-token case.
     """
-    result = _run_completion("zsh", comp_words="eawf wave ", comp_cword=2)
+    result = _run_completion("zsh", comp_words="eawf worktree ", comp_cword=2)
     assert result.returncode == 0
     assert "KeyError" not in result.stderr
-    # The ``wave`` group exposes lifecycle verbs; ``plan`` is one of them.
-    assert "plan" in result.stdout
+    # The ``worktree`` group exposes its migration-support verbs.
+    assert "cleanup" in result.stdout
 
 
 @_requires_console_script
@@ -143,9 +143,9 @@ def test_completion_runtime_bash_unaffected_by_zsh_patch() -> None:
     Guards against the zsh patch accidentally regressing bash (whose Typer
     template already exported ``COMP_WORDS`` / ``COMP_CWORD``).
     """
-    result = _run_completion("bash", comp_words="eawf wa", comp_cword=1)
+    result = _run_completion("bash", comp_words="eawf wo", comp_cword=1)
     assert result.returncode == 0
-    assert "wave" in result.stdout
+    assert "worktree" in result.stdout
 
 
 # --- generated-script content: the fix, asserted in-process -----------------

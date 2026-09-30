@@ -23,7 +23,7 @@ Public API:
 
 The library is I/O-free apart from the termination ladder's process
 signalling; the persistence path lives in the lifecycle CLI
-(``eawf wave budget set|consume|show``), which wraps the state-mutating
+(the retired ``wave budget set`` verb), which wraps the state-mutating
 calls in the canonical state-locked mutation transaction.
 """
 

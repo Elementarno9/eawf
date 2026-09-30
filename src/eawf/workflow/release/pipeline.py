@@ -1146,7 +1146,7 @@ class _PipelineRun:
                 step,
                 PipelineRefusalCode.TRAILER_REPIN_UNDECIDED,
                 detail=f"no single landed commit for {', '.join(undecided)}",
-                remedy="repin those waves by hand with `eawf wave close --commit`",
+                remedy="repin those waves by hand with `eawf task complete`",
             )
         moved = [row.wave_id for row in checked if row.outcome != "unchanged"]
         if moved:

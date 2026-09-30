@@ -26,7 +26,7 @@ the sole mutator). Two lifecycle short-circuits guard the plan path:
   no-op: it returns ``status=ok`` with ``body.no_op=True`` and emits no
   ``prep.build_dag`` event (the phase is already planned + activated).
 - **Closed-phase block** — ``/prep`` on a ``CLOSED`` phase returns
-  ``status=blocked`` with ``repair_commands=["eawf phase reopen <phase>"]``;
+  ``status=blocked`` with ``repair_commands=["eawf migrate epoch2 --plan"]``;
   the operator must reopen before re-planning.
 
 Heavy LLM-fanout (steps 4-5) degrade to ``status=needs_user`` with a typed
@@ -231,7 +231,7 @@ def _build_dag_from_phase(phase: Phase, state: State) -> tuple[list[PrepDagTask]
     return dag, waves
 
 
-_PREP_NEXT_ACTIONS: tuple[str, ...] = ("eawf wave plan", "eawf audit")
+_PREP_NEXT_ACTIONS: tuple[str, ...] = ("eawf task create", "eawf audit")
 
 
 def _render_plan_mode_markdown(inputs: _PrepInputs) -> str | None:
@@ -240,7 +240,7 @@ def _render_plan_mode_markdown(inputs: _PrepInputs) -> str | None:
     The Claude-runtime ``EnterPlanMode`` (and Codex text-prompt) surface
     for ``/prep`` plan-mode draws from
     :func:`eawf.surfaces.render.plan_view.render_phase_markdown` so the
-    skill body, ``eawf roadmap show --md``, and the TUI roadmap tree
+    skill body, the retired ``roadmap show`` verb, and the TUI roadmap tree
     all consume one projection. ``None`` when neither a
     phase nor a state document resolved — the renderer needs both to
     walk iters under the phase.
@@ -271,7 +271,7 @@ class _PrepInputs:
         phase_id: The resolved target phase id, or ``None``.
         phase: The resolved :class:`Phase` record, or ``None``.
         auto_resume: When ``True`` (``prep.auto_resume`` default), the emitted
-            dispatch actions lead with ``eawf dispatch resume`` (SKH-8a gotcha i).
+            dispatch actions lead with the retired ``dispatch resume`` verb (SKH-8a gotcha i).
         out_of_order: Whether the planner selected out-of-order execution;
             recorded in the trace but handled inside daemon dispatch.
         ceremony: The ``--ceremony`` override (``lite`` / ``full``), or ``None``
@@ -343,7 +343,7 @@ class PrepSkill(SkillAction):
 
         An explicit flag wins; with no flag the ``prep.auto_resume`` layered
         leaf (built-in default ``True``) decides whether the emitted claim
-        actions lead with ``eawf dispatch resume``.
+        actions lead with the retired ``dispatch resume`` verb.
         """
         raw = run.args.get("auto_resume")
         if raw is not None:
@@ -388,15 +388,15 @@ class PrepSkill(SkillAction):
     def _next_actions(self, inputs: _PrepInputs) -> list[str]:
         """Build concrete dispatch actions for the dependency-ready frontier.
 
-        ``auto_resume`` leads with ``eawf dispatch resume`` (gotcha i); the
-        canonical plan/audit follow-ups trail one ``eawf dispatch wave`` action
+        ``auto_resume`` leads with the retired ``dispatch resume`` verb (gotcha i); the
+        canonical plan/audit follow-ups trail one ``eawf run create`` action
         per concrete ready wave. No iter id or unresolved session placeholder
         is executable as a claim command.
         """
         actions: list[str] = []
         if inputs.auto_resume:
-            actions.append("eawf dispatch resume")
-        actions.extend(f"eawf dispatch wave {wave_id}" for wave_id in self._frontier(inputs))
+            actions.append("eawf migrate epoch2 --plan")
+        actions.extend("eawf run create" for wave_id in self._frontier(inputs))
         actions.extend(_PREP_NEXT_ACTIONS)
         return actions
 
@@ -450,8 +450,8 @@ class PrepSkill(SkillAction):
                 non_goals=["reopen closed phase implicitly"],
                 blocked=True,
             ).model_dump(mode="json"),
-            next_valid_actions=[f"eawf phase reopen {inputs.phase_id}"],
-            repair_commands=[f"eawf phase reopen {inputs.phase_id}"],
+            next_valid_actions=["eawf migrate epoch2 --plan"],
+            repair_commands=["eawf migrate epoch2 --plan"],
         )
 
     def _noop_active_phase(self, run: ActionRun, inputs: _PrepInputs) -> SkillResult:

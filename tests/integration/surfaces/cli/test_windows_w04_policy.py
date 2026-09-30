@@ -15,27 +15,24 @@ regression runs on the POSIX CI host too; the live windows-latest job
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-from eawf.surfaces.cli import _dispatch
 from eawf.surfaces.cli.app import app
+from tests._epoch2_helpers import lay_epoch2_tree
+
+
+@pytest.fixture(autouse=True)
+def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every CLI verb here from an epoch-2 tree, as the flag day requires."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "epoch2")))
+
 
 pytestmark = pytest.mark.integration
 
 runner = CliRunner()
-
-
-@pytest.fixture
-def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """Temp workspace with ``EA_STATE`` inside; bootstrap runs daemonless."""
-    state_path = tmp_path / ".ea" / "state.json"
-    monkeypatch.setenv("EA_STATE", str(state_path))
-    monkeypatch.setenv("EAWF_DAEMONLESS", "1")
-    yield tmp_path
 
 
 def test_proxy_enabled_is_not_platform_gated(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -54,40 +51,6 @@ def test_proxy_enabled_is_not_platform_gated(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
     # Default config in a fresh cwd: proxy enabled (no daemonless env set).
     assert _proxy_enabled(None) is True
-
-
-def test_phase_open_is_never_daemon_routed(
-    workspace: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """``phase open`` stays in-process by design (gotcha 10).
-
-    Its scope_id is auto-allocated inside the mutator, so ``_run_mutation``
-    is called with ``scope_id_factory`` (no eager ``mutation_kind``) and
-    must NEVER marshal a mutation across ``_mutate_via_daemon`` -- the
-    daemon proxy needs the scope upfront. We spy on the proxy shim and
-    assert it is not called even with proxying enabled.
-    """
-    assert (
-        runner.invoke(
-            app, ["project", "init", "QR", "--title", "Quant", "--domains", "quant"]
-        ).exit_code
-        == 0
-    )
-
-    proxy_calls: list[str] = []
-    real_mutate = _dispatch._mutate_via_daemon
-
-    def _spy(*args: object, **kwargs: object) -> object:
-        proxy_calls.append(str(kwargs.get("verb", "")))
-        return real_mutate(*args, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(_dispatch, "_mutate_via_daemon", _spy)
-    # Enable proxying for this invocation (clear the daemonless env).
-    monkeypatch.delenv("EAWF_DAEMONLESS", raising=False)
-
-    result = runner.invoke(app, ["phase", "open", "--auto", "--title", "P1"])
-    assert result.exit_code == 0, result.output
-    assert proxy_calls == [], f"phase open was daemon-routed: {proxy_calls}"
 
 
 def test_daemon_run_no_longer_refuses_on_win32(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -44,6 +44,7 @@ from eawf.runtime.daemon.methods.release import observe, reconcile
 from eawf.surfaces.cli.app import app
 from eawf.workflow.release.adapters import OBSERVATION_ADAPTERS
 from eawf.workflow.release.registry_readers import HttpReply, PackageIndexReader
+from tests._epoch2_helpers import lay_epoch2_tree
 from tests.integration.runtime.daemon.methods.conftest import (
     ADAPTER_STEMS,
     dev1_config,
@@ -51,6 +52,13 @@ from tests.integration.runtime.daemon.methods.conftest import (
     response_payload,
     walk_to_verifying,
 )
+
+
+@pytest.fixture(autouse=True)
+def _epoch2_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every CLI verb here from an epoch-2 tree, as the flag day requires."""
+    monkeypatch.setenv("EA_STATE", str(lay_epoch2_tree(tmp_path / "epoch2")))
+
 
 pytestmark = pytest.mark.integration
 

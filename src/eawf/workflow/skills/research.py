@@ -368,7 +368,7 @@ class ResearchSkill(SkillAction):
                 recommendation=None,
                 persisted_brief=None,
                 research_plan=research_plan,
-                next_actions=["eawf agent dispatch", "eawf prep", "eawf hypothesis define"],
+                next_actions=["eawf agent dispatch", "eawf prep", "eawf migrate epoch2 --plan"],
             )
         # Step 6 — synthesise options (v0.1 placeholder pair).
         options = self._build_options(run)
@@ -388,7 +388,7 @@ class ResearchSkill(SkillAction):
             options=options,
             recommendation=recommendation,
             persisted_brief=persisted_brief,
-            next_actions=["eawf prep", "eawf hypothesis define"],
+            next_actions=["eawf prep", "eawf migrate epoch2 --plan"],
         )
         blitz_result = self._maybe_blitz(run, inputs, work)
         if blitz_result is not None:

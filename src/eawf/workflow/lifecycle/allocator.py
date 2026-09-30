@@ -15,57 +15,9 @@ from __future__ import annotations
 
 import logging
 
-from eawf.kernel.state.ids import (
-    allocate_next_iter_id,
-    allocate_next_phase_id,
-    allocate_next_wave_id,
-)
 from eawf.kernel.state.models import State
 
 logger = logging.getLogger(__name__)
-
-
-def allocate_phase_id(state: State) -> str:
-    """Return the smallest free phase id (e.g. ``P01``).
-
-    The candidate set is ``state.phases.keys()``; the helper returns the
-    smallest two-digit-padded suffix not already present.
-
-    Raises:
-        ValueError: When all 99 suffixes are taken.
-    """
-    existing = set(state.phases.keys())
-    pid = allocate_next_phase_id(existing)
-    logger.debug(f"allocate_phase_id existing={len(existing)} allocated={pid}")
-    return pid
-
-
-def allocate_iter_id(state: State, phase_id: str) -> str:
-    """Return the smallest free iter id under *phase_id* (e.g. ``P01-I01``).
-
-    Raises:
-        ValueError: When ``phase_id`` is not a valid phase id or when all
-            99 iter suffixes are taken. The phase-id check is delegated
-            to :func:`eawf.kernel.state.ids.allocate_next_iter_id`.
-    """
-    existing = set(state.iters.keys())
-    iid = allocate_next_iter_id(phase_id, existing)
-    logger.debug(f"allocate_iter_id phase={phase_id} allocated={iid}")
-    return iid
-
-
-def allocate_wave_id(state: State, iter_id: str) -> str:
-    """Return the smallest free wave id under *iter_id* (e.g. ``P01-I01-W01``).
-
-    Raises:
-        ValueError: When ``iter_id`` is not a valid iter id or when all
-            99 wave suffixes are taken. The iter-id check is delegated
-            to :func:`eawf.kernel.state.ids.allocate_next_wave_id`.
-    """
-    existing = set(state.waves.keys())
-    wid = allocate_next_wave_id(iter_id, existing)
-    logger.debug(f"allocate_wave_id iter={iter_id} allocated={wid}")
-    return wid
 
 
 _GRANT_ID_PREFIX = "GRANT-"

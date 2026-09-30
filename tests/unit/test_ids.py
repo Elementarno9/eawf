@@ -74,53 +74,6 @@ def test_parents_of_invalid_raises() -> None:
         ids.parents_of("not-an-id")
 
 
-def test_allocate_next_phase_id_picks_smallest_free() -> None:
-    existing = {"P01", "P02", "P04"}
-    assert ids.allocate_next_phase_id(existing) == "P03"
-    assert ids.allocate_next_phase_id({"P01", "P02", "P03"}) == "P04"
-    assert ids.allocate_next_phase_id(set()) == "P01"
-
-
-def test_allocate_next_phase_id_saturation() -> None:
-    saturated = {f"P{n:02d}" for n in range(1, 100)}
-    with pytest.raises(ValueError):
-        ids.allocate_next_phase_id(saturated)
-
-
-def test_allocate_next_iter_id_picks_smallest_free() -> None:
-    existing = {"P13-I01", "P13-I02"}
-    assert ids.allocate_next_iter_id("P13", existing) == "P13-I03"
-    assert ids.allocate_next_iter_id("P13", set()) == "P13-I01"
-
-
-def test_allocate_next_iter_id_saturation() -> None:
-    saturated = {f"P13-I{n:02d}" for n in range(1, 100)}
-    with pytest.raises(ValueError):
-        ids.allocate_next_iter_id("P13", saturated)
-
-
-def test_allocate_next_iter_id_invalid_phase() -> None:
-    with pytest.raises(ValueError):
-        ids.allocate_next_iter_id("not-a-phase", set())
-
-
-def test_allocate_next_wave_id_picks_smallest_free() -> None:
-    existing = {"P13-I04-W01", "P13-I04-W02"}
-    assert ids.allocate_next_wave_id("P13-I04", existing) == "P13-I04-W03"
-    assert ids.allocate_next_wave_id("P13-I04", set()) == "P13-I04-W01"
-
-
-def test_allocate_next_wave_id_saturation() -> None:
-    saturated = {f"P13-I04-W{n:02d}" for n in range(1, 100)}
-    with pytest.raises(ValueError):
-        ids.allocate_next_wave_id("P13-I04", saturated)
-
-
-def test_allocate_next_wave_id_invalid_iter() -> None:
-    with pytest.raises(ValueError):
-        ids.allocate_next_wave_id("P13", set())
-
-
 def test_natural_key_orders_phases_numerically() -> None:
     phases = ["P10", "P9", "P100", "P01", "P2"]
     assert sorted(phases, key=ids.natural_key) == ["P01", "P2", "P9", "P10", "P100"]
@@ -188,12 +141,3 @@ def test_normalize_to_project_code_rejects_invalid() -> None:
         ids.normalize_to_project_code("1q")
     with pytest.raises(ValueError, match="cannot derive valid project_code"):
         ids.normalize_to_project_code("")
-
-
-def test_allocate_next_phase_id_ignores_non_phase_strings() -> None:
-    # The ``existing`` set may contain non-phase ids (the caller passes
-    # ``state.phases`` keys which are pure phase ids, but the contract is
-    # forgiving). Strings that fail :data:`RE_PHASE` are skipped so
-    # allocation still picks the smallest free phase id.
-    existing = {"P01", "P02", "not-a-phase", "P13-I04-W01"}
-    assert ids.allocate_next_phase_id(existing) == "P03"

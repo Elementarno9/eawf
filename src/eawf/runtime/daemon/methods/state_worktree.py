@@ -279,7 +279,7 @@ def commit_worktree_state(
 
 @register("state.wave_land")
 async def wave_land_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf wave land``."""
+    """Daemon-owned implementation of ``eawf batch integrate``."""
     args = WaveLandParams.model_validate(params)
     repo_root = Path(args.repo_root)
 
@@ -365,7 +365,7 @@ async def wave_land_batch_rpc(ctx: MethodContext, params: dict[str, Any]) -> dic
 
 @register("state.wave_autoland")
 async def wave_autoland_rpc(ctx: MethodContext, params: dict[str, Any]) -> dict[str, Any]:
-    """Daemon-owned implementation of ``eawf wave autoland``."""
+    """Daemon-owned implementation of ``eawf batch integrate``."""
     args = WaveAutolandParams.model_validate(params)
     repo_root = Path(args.repo_root)
 

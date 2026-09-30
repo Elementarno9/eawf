@@ -1,6 +1,6 @@
 """Derive a wave's commit SHA from git history via its message wave markers.
 
-The derive step is the fallback path behind ``eawf wave show --commit``:
+The derive step is the fallback path behind the retired ``wave show`` verb:
 when ``Wave.commit`` has not been pinned (via ``wave close --commit
 <ref>``), the commit message is the durable signal: an ``Eawf-Wave:`` line
 anywhere in the body, or the legacy ``[P##-W##]`` subject prefix. Git
@@ -18,7 +18,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -40,7 +39,7 @@ logger = logging.getLogger(__name__)
 # daemon's state-authority rule (AGENTS rule 4) is untouched: this file is
 # never a lifecycle mutation, it is a reviewer-visible record of "yes, these
 # historical closed-wave commit drifts are known and accepted". ``eawf doctor``
-# reads it to suppress the acknowledged rows; ``eawf wave ack-drift`` appends to
+# reads it to suppress the acknowledged rows; the retired ``wave ack-drift`` verb appends to
 # it. The path is relative to the repo root so it travels with the checkout.
 DRIFT_ACKS_DIRNAME: str = ".eawf"
 DRIFT_ACKS_FILENAME: str = "drift-acks.json"
@@ -136,7 +135,7 @@ class Drift:
               checked-out branch) has neither it nor a wave successor.
             - ``pinned_mismatch`` — state and git both produce a SHA,
               but they disagree (suggests a rebase that rewrote the
-              wave commit without ``eawf wave close --commit <ref>``).
+              wave commit without ``eawf task complete``).
             - ``closed_no_pin`` — CLOSED wave with no ``Wave.commit``
               and no derivable SHA from git history (no commit subject
               carries the wave's bracketed prefix).
@@ -201,39 +200,6 @@ def load_drift_acks(repo_root: Path | None = None) -> set[str]:
         logger.warning(f"load_drift_acks path={path} status=malformed")
         return set()
     return {str(w) for w in raw if isinstance(w, str)}
-
-
-def save_drift_acks(acked_wave_ids: set[str], repo_root: Path | None = None) -> Path:
-    """Persist *acked_wave_ids* to ``<repo_root>/.eawf/drift-acks.json``.
-
-    Writes a deterministic, sorted payload (so re-saving the same set is a
-    byte-stable no-op and the committed file stays diff-clean). The write is
-    atomic: a sibling tempfile is ``os.replace``\\d onto the target.
-
-    Args:
-        acked_wave_ids: The full ack set to persist (the caller unions any
-            new acks into the existing set first).
-        repo_root: Repository working directory; defaults to the process cwd.
-
-    Returns:
-        The path the ack file was written to.
-    """
-    path = drift_acks_path(repo_root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(
-        {"acked_wave_ids": sorted(acked_wave_ids)},
-        indent=2,
-        sort_keys=True,
-    )
-    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
-    try:
-        tmp.write_text(payload + "\n", encoding="utf-8")
-        os.replace(tmp, path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-    logger.info(f"save_drift_acks path={path} count={len(acked_wave_ids)}")
-    return path
 
 
 def _resolve_acked_wave_ids(*, repo_root: Path | None, acked_wave_ids: set[str] | None) -> set[str]:
@@ -387,18 +353,6 @@ def _run_git(
 
 def _normalise_commit_message(message: str) -> str:
     return "\n".join(line.rstrip() for line in message.strip().splitlines())
-
-
-def commit_matches_wave(commit: str, wave_id: str, *, repo_root: Path | None = None) -> bool:
-    """Return whether *commit* explicitly identifies *wave_id* by prefix or trailer."""
-    out = _run_git(["show", "-s", "--format=%B", commit], repo_root=repo_root)
-    if out is None or out.returncode != 0:
-        return False
-    message = out.stdout or ""
-    subject = message.splitlines()[0] if message.splitlines() else ""
-    if wave_id in _body_wave_ids(message):
-        return True
-    return any(subject.startswith(prefix) for prefix in _candidate_prefixes(wave_id))
 
 
 def commit_identity_digest(commit: str, *, repo_root: Path | None = None) -> str | None:
@@ -1018,7 +972,7 @@ def detect_git_state_drift(
 
     Acknowledged historical drifts (squashed / cherry-pick-twin / lost
     commits that the operator has reviewed and accepted via
-    ``eawf wave ack-drift``) are filtered out. When *acked_wave_ids* is
+    the retired ``wave ack-drift`` verb) are filtered out. When *acked_wave_ids* is
     supplied, that set is the explicit filter. When it is ``None`` and
     *repo_root* is supplied, the filter is loaded from
     ``<repo_root>/.eawf/drift-acks.json`` so read-only projections such
@@ -1107,7 +1061,7 @@ def _shas_match(a: str, b: str) -> bool:
 # ``detect_git_state_drift`` is the *hard-drift* detector that ``doctor`` and
 # ``status`` consume: it only surfaces a closed wave when its recorded pointer
 # is provably wrong (or indeterminate). The verify/repair scan below is a
-# superset built for ``eawf wave verify-commits``: in addition to the four
+# superset built for the retired ``wave verify-commits`` verb: in addition to the four
 # hard-drift kinds it also flags the *soft* ``unpinned_derivable`` case -- a
 # closed wave with no ``Wave.commit`` whose SHA is still derivable from the
 # bracketed commit subject. That case is silently fine for ``wave show``
@@ -1213,7 +1167,7 @@ def scan_commit_pins(
     ``Wave.commit`` but whose SHA is still derivable from the bracketed
     commit subject. ``detect_git_state_drift`` treats that case as clean
     (the ``wave show`` derive fallback covers it); this scan surfaces it
-    so ``eawf wave verify-commits --repair`` can pin the derivable SHA.
+    so the retired ``wave verify-commits`` verb can pin the derivable SHA.
     Acknowledged historical rows are skipped using the same policy as
     :func:`detect_git_state_drift`: an explicit *acked_wave_ids* set wins;
     otherwise ``<repo_root>/.eawf/drift-acks.json`` is loaded when

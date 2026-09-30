@@ -17,8 +17,7 @@ from eawf.kernel.state.enums import (
     MeasurementStatus,
     WaveStatus,
 )
-from eawf.kernel.state.ids import natural_key
-from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, State, Wave
+from eawf.kernel.state.models import DispatchAnnotation, SessionAttempt, Wave
 from eawf.kernel.store.envelope import Envelope
 from eawf.kernel.store.kinds.agent_report import AgentReportPayload, store_kind_for_role
 from eawf.kernel.store.paths import store_path
@@ -251,90 +250,6 @@ def _retro_wave_row(wave: Wave, reports: list[AgentReportRow]) -> RetroWaveRow:
         report_count=len(reports),
         failed=status_failed or verdict_failed,
     )
-
-
-def phase_retro_digest(state: State, state_path: Path, phase_id: str) -> PhaseRetroDigest:
-    """Build a closure digest for *phase_id* joining waves to agent reports.
-
-    Walks every iter under *phase_id* and every wave under those iters, then
-    joins each wave to its agent-report rows by ``wave.id == base_id`` (see
-    :func:`_retro_wave_row`). Renders honestly empty: when no reports exist for
-    the phase, every wave still appears with ``report_verdict`` ``None`` and the
-    reportless count equals the wave count.
-
-    Args:
-        state: Loaded, validated state supplying the phase/iter/wave tree.
-        state_path: Path to ``state.json``; the report stores resolve under its
-            sibling ``store/`` directory.
-        phase_id: Phase id to digest, e.g. ``P29``.
-
-    Returns:
-        The assembled :class:`PhaseRetroDigest`.
-
-    Raises:
-        ValueError: When *phase_id* is not a known phase in *state*.
-    """
-    if phase_id not in state.phases:
-        raise ValueError(f"unknown phase: {phase_id!r}")
-    iter_ids = {iid for iid, it in state.iters.items() if it.phase_id == phase_id}
-    waves = sorted(
-        (w for w in state.waves.values() if w.iter_id in iter_ids),
-        key=lambda w: natural_key(w.id),
-    )
-    reports_by_wave: dict[str, list[AgentReportRow]] = {}
-    for wave in waves:
-        reports_by_wave[wave.id] = iter_agent_reports(state_path, base_id=wave.id)
-    rows = tuple(_retro_wave_row(wave, reports_by_wave[wave.id]) for wave in waves)
-    closed_count = sum(1 for row in rows if row.status == WaveStatus.CLOSED.value)
-    failed_count = sum(1 for row in rows if row.failed)
-    reportless_count = sum(1 for row in rows if not row.has_report)
-    logger.info(
-        f"phase_retro_digest phase={phase_id} waves={len(rows)} "
-        f"closed={closed_count} failed={failed_count} reportless={reportless_count}"
-    )
-    return PhaseRetroDigest(
-        phase_id=phase_id,
-        waves=rows,
-        wave_count=len(rows),
-        closed_count=closed_count,
-        failed_count=failed_count,
-        reportless_count=reportless_count,
-    )
-
-
-def render_phase_retro_markdown(digest: PhaseRetroDigest) -> str:
-    """Render a :class:`PhaseRetroDigest` as a Markdown closure digest.
-
-    The table lists one row per wave with its status, outcome, joined report
-    verdict (or ``no report``), and a failed marker. An honest-empty phase (no
-    reports) still renders every wave with ``no report`` in the verdict column.
-
-    Args:
-        digest: The digest to render.
-
-    Returns:
-        A Markdown string with a heading, summary line, and per-wave table.
-    """
-    lines = [
-        f"## Phase retro: {digest.phase_id}",
-        "",
-        (
-            f"{digest.wave_count} wave(s): {digest.closed_count} closed, "
-            f"{digest.failed_count} failed, {digest.reportless_count} reportless"
-        ),
-        "",
-    ]
-    if not digest.waves:
-        lines.append("(no waves)")
-        return "\n".join(lines)
-    lines.append("| wave | status | verdict | failed | outcome |")
-    lines.append("| --- | --- | --- | --- | --- |")
-    for row in digest.waves:
-        verdict = row.report_verdict if row.report_verdict is not None else "no report"
-        failed = "yes" if row.failed else "no"
-        outcome = row.outcome if row.outcome else "-"
-        lines.append(f"| {row.wave_id} | {row.status} | {verdict} | {failed} | {outcome} |")
-    return "\n".join(lines)
 
 
 def per_wave_attempt_rollup(
@@ -596,6 +511,4 @@ __all__ = [
     "iter_agent_reports",
     "operator_rollup",
     "per_wave_attempt_rollup",
-    "phase_retro_digest",
-    "render_phase_retro_markdown",
 ]

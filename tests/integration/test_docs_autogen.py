@@ -129,7 +129,7 @@ def test_exit_codes_page_lists_the_five_bucket_surface() -> None:
 def test_cli_page_lists_a_known_command_group() -> None:
     """The CLI inventory surfaces a registered group + verb."""
     body = autogen.cli_page().body
-    assert "### `eawf wave`" in body
+    assert "### `eawf task`" in body
     assert "| `claim` |" in body
 
 

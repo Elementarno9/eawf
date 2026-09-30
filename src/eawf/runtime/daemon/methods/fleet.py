@@ -1235,7 +1235,7 @@ class _LivenessWatcher:
             # whose process group has been dead past the grace window -- UNLESS
             # the agent left a close-ready report. A SANDBOXED headless agent
             # runs to completion in the synchronous dispatch (so its process is
-            # legitimately dead here) but cannot run `eawf wave close` itself, so
+            # legitimately dead here) but cannot run `eawf task complete` itself, so
             # its wave is still IN_PROGRESS; a persisted close-ready report is the
             # evidence it succeeded, so resolve "closed" (DL-5 is applied
             # downstream in _finish_lane) rather than forking a successful wave.
@@ -2531,7 +2531,7 @@ class _Loop:
         """Close a still-open wave whose lane resolved CLOSED -- W49.
 
         A lane the watcher resolved ``"closed"`` from a persisted close-ready
-        report (a SANDBOXED headless agent that could not run ``eawf wave close``
+        report (a SANDBOXED headless agent that could not run ``eawf task complete``
         itself) is still IN_PROGRESS on disk; the gated outcome reaching the
         closed branch of :meth:`_finish_lane` means the DL-5 auto-close gate
         already permitted the close (a high-risk / ui close was downgraded to a
@@ -3594,7 +3594,7 @@ def kill_lane(
 
     When no live fleet lane resolves (no fleet run armed, or no lane for the
     pair) the kill FALLS BACK to the wave's single-wave dispatched session:
-    a wave dispatched via ``eawf dispatch wave`` (no fleet run) records its child
+    a wave dispatched via ``eawf run create`` (no fleet run) records its child
     pid on the matching :class:`~eawf.kernel.state.models.SessionAttempt`, so the
     kill resolves that ``subprocess_pid`` and signals its group -- a single-wave
     spawn is killable even without a fleet run. Only when NEITHER a live lane NOR
@@ -3626,7 +3626,7 @@ def kill_lane(
     lane = resolve_lane(run, wave_id=wave_id, attempt=attempt)
     if lane is None:
         # No live fleet lane: fall back to the single-wave dispatched session's
-        # recorded child pid so a non-fleet ``eawf dispatch wave`` spawn is
+        # recorded child pid so a non-fleet ``eawf run create`` spawn is
         # still killable.
         return _kill_session_pid(
             ctx, wave_id=wave_id, attempt=attempt, hard=hard, signal_group=signal_group
@@ -3657,7 +3657,7 @@ def _kill_session_pid(
 ) -> LaneKillResult:
     """Kill a single-wave dispatched session's spawned process group -- W09.
 
-    The non-fleet kill fallback: a wave dispatched via ``eawf dispatch wave`` (no
+    The non-fleet kill fallback: a wave dispatched via ``eawf run create`` (no
     fleet run) records its spawned child pid on the matching
     :attr:`~eawf.kernel.state.models.SessionAttempt.subprocess_pid` rather than a
     :class:`FleetLane`. This resolves that pid for ``(wave_id, attempt)`` and
